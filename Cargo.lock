@@ -2731,7 +2731,6 @@ dependencies = [
  "sha2",
  "url",
  "wasi",
- "wasi-nn",
  "wit-bindgen",
 ]
 
@@ -3152,15 +3151,6 @@ dependencies = [
  "wasmtime",
  "wiggle",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "wasi-nn"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7031683cc05a71515d9200fb159b28d717ded3c40dbb979d1602cf46f3a68f40"
-dependencies = [
- "thiserror",
 ]
 
 [[package]]
@@ -3885,8 +3875,8 @@ dependencies = [
  "thiserror",
  "tracing",
  "walkdir",
- "wasi-common",
  "wasmtime",
+ "wasmtime-wasi",
  "wiggle",
  "windows",
 ]

@@ -37,6 +37,11 @@ pub mod types {
 }
 pub use gen_::Ml as ML;
 
+pub trait Host:
+    gen::graph::Host + gen::inference::Host + gen::errors::Host + gen::tensor::Host
+{
+}
+
 impl gen::graph::Host for WasiNnCtx {
     /// Load an opaque sequence of bytes to use for inference.
     fn load(

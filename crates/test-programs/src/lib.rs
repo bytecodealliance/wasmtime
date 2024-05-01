@@ -17,3 +17,12 @@ pub mod proxy {
         },
     });
 }
+
+pub mod ml {
+    wit_bindgen::generate!({
+        path: "../wasi-nn/wit",
+        world: "ml",
+        default_bindings_module: "test_programs::ml"
+    });
+    pub use self::wasi::nn::*;
+}

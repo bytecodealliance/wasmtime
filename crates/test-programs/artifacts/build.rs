@@ -89,9 +89,6 @@ fn build_and_generate_tests() {
         }
 
         // Generate a component from each test.
-        if kind == "nn" {
-            continue;
-        }
         let adapter = match target.as_str() {
             "reactor" => &reactor_adapter,
             s if s.starts_with("api_proxy") => &proxy_adapter,
