@@ -751,9 +751,32 @@ and for re-adding support for interface types you can see this issue:
                         self.flag_written_table(TableIndex::from_u32(table));
                     }
                     // Count the `call_indirect` sites so we can
-                    // assign them unique slots (see above).
+                    // assign them unique slots.
+                    //
+                    // We record the value of this counter as a
+                    // start-index as we start to scan each function,
+                    // and that function's compilation (which is
+                    // normally a separate parallel task) counts on
+                    // its own from that start index.
                     Operator::CallIndirect { .. } => {
                         self.result.module.num_call_indirect_caches += 1;
+
+                        // Cap the `num_call_indirect_caches` counter
+                        // at `max_call_indirect_cache_slots` so that
+                        // we don't allocate more than that amount of
+                        // space in the VMContext struct.
+                        //
+                        // Note that we also separately check against
+                        // this limit when emitting code for each
+                        // individual slot because we may cross the
+                        // limit in the middle of a function; also
+                        // once we hit the limit, the start-index for
+                        // each subsequent function will be saturated
+                        // at the limit.
+                        self.result.module.num_call_indirect_caches = core::cmp::min(
+                            self.result.module.num_call_indirect_caches,
+                            self.tunables.max_call_indirect_cache_slots,
+                        );
                     }
 
                     _ => {}

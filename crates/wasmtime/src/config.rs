@@ -152,6 +152,7 @@ struct ConfigTunables {
     relaxed_simd_deterministic: Option<bool>,
     tail_callable: Option<bool>,
     cache_call_indirects: Option<bool>,
+    max_call_indirect_cache_slots: Option<usize>,
 }
 
 /// User-provided configuration for the compiler.
@@ -976,6 +977,31 @@ impl Config {
         self
     }
 
+    /// Configures the "indirect call cache" maximum capacity.
+    ///
+    /// If the [`Config::cache_call_indirects`] configuration option
+    /// is enabled, the engine allocates "cache slots" directly in its
+    /// per-instance state struct for each `call_indirect` in the
+    /// module's code. We place a limit on this count in order to
+    /// avoid inflating the state too much with very large modules. If
+    /// a module exceeds the limit, the first `max` indirect
+    /// call-sites will still have a one-entry cache, but any indirect
+    /// call-sites beyond the limit (in linear order in the module's
+    /// code section) do not participate in the caching, as if the
+    /// option were turned off.
+    ///
+    /// There is also an internal hard cap to this limit:
+    /// configurations with `max` beyond `50_000` will effectively cap
+    /// the limit at `50_000`. This is so that instance state does not
+    /// become unreasonably large.
+    ///
+    /// This is `50_000` by default.
+    pub fn max_call_indirect_cache_slots(&mut self, max: usize) -> &mut Self {
+        const HARD_CAP: usize = 50_000; // See doc-comment above.
+        self.tunables.max_call_indirect_cache_slots = Some(core::cmp::min(max, HARD_CAP));
+        self
+    }
+
     /// Configures which compilation strategy will be used for wasm modules.
     ///
     /// This method can be used to configure which compiler is used for wasm
@@ -1773,6 +1799,7 @@ impl Config {
             relaxed_simd_deterministic
             tail_callable
             cache_call_indirects
+            max_call_indirect_cache_slots
         }
 
         // If we're going to compile with winch, we must use the winch calling convention.

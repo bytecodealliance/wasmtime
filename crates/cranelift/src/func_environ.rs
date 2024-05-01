@@ -1008,14 +1008,35 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    /// Allocate the next CallIndirectSiteIndex for indirect-target caching purposes.
-    fn alloc_call_indirect_index(&mut self) -> CallIndirectSiteIndex {
+    /// Allocate the next CallIndirectSiteIndex for indirect-target
+    /// caching purposes, if slots remain below the slot-count limit.
+    fn alloc_call_indirect_index(&mut self) -> Option<CallIndirectSiteIndex> {
+        // We need to check to see if we have reached the cache-slot
+        // limit.
+        //
+        // There are two kinds of limit behavior:
+        //
+        // 1. Our function's start-index is below the limit, but we
+        //    hit the limit in the middle of the function. We will
+        //    allocate slots up to the limit, then stop exactly when we
+        //    hit it.
+        //
+        // 2. Our function is beyond the limit-count of
+        //    `call_indirect`s. The counting prescan in
+        //    `ModuleEnvironment` that assigns start indices will
+        //    saturate at the limit, and this function's start index
+        //    will be exactly the limit, so we get zero slots and exit
+        //    immediately at every call to this function.
+        if self.call_indirect_index >= self.tunables.max_call_indirect_cache_slots {
+            return None;
+        }
+
         let idx = CallIndirectSiteIndex::from_u32(
             u32::try_from(self.call_indirect_index)
                 .expect("More than 2^32 callsites; should be limited by impl limits"),
         );
         self.call_indirect_index += 1;
-        idx
+        Some(idx)
     }
 }
 
@@ -1212,7 +1233,16 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             false
         };
 
-        let (code_ptr, callee_vmctx) = if caching {
+        // Allocate a call-indirect cache slot if caching is
+        // enabled. Note that this still may be `None` if we run out
+        // of slots.
+        let call_site = if caching {
+            self.env.alloc_call_indirect_index()
+        } else {
+            None
+        };
+
+        let (code_ptr, callee_vmctx) = if let Some(call_site) = call_site {
             // Get a local copy of `vmctx`.
             let vmctx = self.env.vmctx(self.builder.func);
             let vmctx = self
@@ -1220,9 +1250,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .ins()
                 .global_value(self.env.pointer_type(), vmctx);
 
-            // Allocate a cache slot in the vmctx struct and get the
-            // address of this slot.
-            let call_site = self.env.alloc_call_indirect_index();
+            // Get the address of the cache slot in the VMContext
+            // struct.
             let slot = self.call_indirect_cache_slot_addr(call_site, vmctx);
 
             // Create the following CFG and generate code with the following outline:

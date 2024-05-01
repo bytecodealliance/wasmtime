@@ -63,6 +63,10 @@ pub struct Tunables {
     /// Whether we implement a one-entry cache at each call_indirect
     /// site.
     pub cache_call_indirects: bool,
+
+    /// The maximum number of call-indirect cache slots that we will
+    /// allocate for one instance.
+    pub max_call_indirect_cache_slots: usize,
 }
 
 impl Tunables {
@@ -115,6 +119,7 @@ impl Tunables {
             tail_callable: false,
             winch_callable: false,
             cache_call_indirects: false,
+            max_call_indirect_cache_slots: 50_000,
         }
     }
 
