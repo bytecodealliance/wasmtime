@@ -3,8 +3,8 @@ target x86_64 sse42 has_avx has_avx2 has_avx512dq has_avx512vl
 
 function %imul(i64x2, i64x2) -> i64x2, i64x2 {
 block0(v0: i64x2, v1: i64x2):
-  ; Force register allocation to pick a different destination than
-  ; source for at least one of these instructions.
+  ;; Force register allocation to pick a different destination than
+  ;; source for at least one of these instructions.
   v2 = imul v0, v1
   v3 = imul v2, v1
   return v2, v3

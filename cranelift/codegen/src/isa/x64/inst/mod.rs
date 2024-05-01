@@ -1199,7 +1199,7 @@ impl PrettyPrint for Inst {
                 let src3 = src3.pretty_print(8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let op = ljustify(op.to_string());
-                format!("{op} {src1}, {src2}, {src3}, {dst}")
+                format!("{op} {src3}, {src2}, {src1}, {dst}")
             }
 
             Inst::XmmMinMaxSeq {

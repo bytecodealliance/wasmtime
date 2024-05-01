@@ -3,8 +3,8 @@ target x86_64 sse42 has_avx has_avx2 has_avx512f has_avx512vl
 
 function %sshr(i64x2, i64) -> i64x2, i64x2 {
 block0(v0: i64x2, v1: i64):
-  ; Force register allocation to pick a different destination than
-  ; source for at least one of these instructions.
+  ;; Force register allocation to pick a different destination than
+  ;; source for at least one of these instructions.
   v2 = sshr v0, v1
   v3 = sshr v2, v1
   return v2, v3
