@@ -188,7 +188,7 @@ impl Config {
         self.wasmtime.codegen.configure(&mut cfg);
 
         // Determine whether we will actually enable PCC -- this is
-        // disabled if the module erquires memory64, which is not yet
+        // disabled if the module requires memory64, which is not yet
         // compatible (due to the need for dynamic checks).
         let pcc = cfg!(feature = "fuzz-pcc")
             && self.wasmtime.pcc

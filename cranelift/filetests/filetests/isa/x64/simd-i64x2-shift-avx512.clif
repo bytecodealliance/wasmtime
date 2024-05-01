@@ -1,19 +1,26 @@
 test compile precise-output
 target x86_64 sse42 has_avx has_avx2 has_avx512f has_avx512vl
 
-function %sshr(i64x2, i64) -> i64x2 {
+function %sshr(i64x2, i64) -> i64x2, i64x2 {
 block0(v0: i64x2, v1: i64):
+  ;; Force register allocation to pick a different destination than
+  ;; source for at least one of these instructions.
   v2 = sshr v0, v1
-  return v2
+  v3 = sshr v2, v1
+  return v2, v3
 }
 
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   movq    %rdi, %r9
+;   andq    %r9, $63, %r9
+;   vmovd   %r9d, %xmm1
+;   vpsraq  %xmm1, %xmm0, %xmm0
 ;   andq    %rdi, $63, %rdi
-;   vmovd   %edi, %xmm5
-;   vpsraq  %xmm5, %xmm0, %xmm0
+;   vmovd   %edi, %xmm1
+;   vpsraq  %xmm1, %xmm0, %xmm1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -23,9 +30,13 @@ block0(v0: i64x2, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   movq %rdi, %r9
+;   andq $0x3f, %r9
+;   vmovd %r9d, %xmm1
+;   vpsraq %xmm1, %xmm0, %xmm0
 ;   andq $0x3f, %rdi
-;   vmovd %edi, %xmm5
-;   vpsraq %xmm5, %xmm0, %xmm0
+;   vmovd %edi, %xmm1
+;   vpsraq %xmm1, %xmm0, %xmm1
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

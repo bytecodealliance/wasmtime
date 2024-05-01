@@ -438,10 +438,8 @@ pub enum TableInitialValue {
 pub struct TableSegment {
     /// The index of a table to initialize.
     pub table_index: TableIndex,
-    /// Optionally, a global variable giving a base index.
-    pub base: Option<GlobalIndex>,
-    /// The offset to add to the base.
-    pub offset: u32,
+    /// The base offset to start this segment at.
+    pub offset: ConstExpr,
     /// The values to write into the table elements.
     pub elements: TableSegmentElements,
 }
