@@ -491,21 +491,25 @@ impl<'a> CompileInputs<'a> {
             }
         }
 
-        for (interned_index, interned_ty) in types.wasm_types() {
-            if let Some(wasm_func_ty) = interned_ty.as_func() {
-                self.push_input(move |compiler| {
-                    let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
-                    Ok(CompileOutput {
-                        key: CompileKey::wasm_to_native_trampoline(interned_index),
-                        symbol: format!(
-                            "signatures[{}]::wasm_to_native_trampoline",
-                            interned_index.as_u32()
-                        ),
-                        function: CompiledFunction::Function(trampoline),
-                        info: None,
-                    })
-                });
+        let mut trampoline_types_seen = HashSet::new();
+        for (_func_type_index, trampoline_type_index) in types.trampoline_types() {
+            let is_new = trampoline_types_seen.insert(trampoline_type_index);
+            if !is_new {
+                continue;
             }
+            let trampoline_func_ty = types[trampoline_type_index].unwrap_func();
+            self.push_input(move |compiler| {
+                let trampoline = compiler.compile_wasm_to_native_trampoline(trampoline_func_ty)?;
+                Ok(CompileOutput {
+                    key: CompileKey::wasm_to_native_trampoline(trampoline_type_index),
+                    symbol: format!(
+                        "signatures[{}]::wasm_to_native_trampoline",
+                        trampoline_type_index.as_u32()
+                    ),
+                    function: CompiledFunction::Function(trampoline),
+                    info: None,
+                })
+            });
         }
     }
 
@@ -835,17 +839,19 @@ impl FunctionIndices {
                         })
                         .collect();
 
-                let unique_and_sorted_sigs = translation
+                let unique_and_sorted_trampoline_sigs = translation
                     .module
                     .types
                     .iter()
                     .map(|(_, ty)| *ty)
                     .filter(|idx| types[*idx].is_func())
+                    .map(|idx| types.trampoline_type(idx))
                     .collect::<BTreeSet<_>>();
-                let wasm_to_native_trampolines = unique_and_sorted_sigs
+                let wasm_to_native_trampolines = unique_and_sorted_trampoline_sigs
                     .iter()
                     .map(|idx| {
-                        let key = CompileKey::wasm_to_native_trampoline(*idx);
+                        let trampoline = types.trampoline_type(*idx);
+                        let key = CompileKey::wasm_to_native_trampoline(trampoline);
                         let compiled = wasm_to_native_trampolines[&key];
                         (*idx, symbol_ids_and_locs[compiled.unwrap_function()].1)
                     })
