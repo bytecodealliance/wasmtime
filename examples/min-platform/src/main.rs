@@ -10,7 +10,7 @@ fn main() -> Result<()> {
 fn main() -> Result<()> {
     use anyhow::{anyhow, Context};
     use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
-    use object::{Object, ObjectSymbol, SymbolKind};
+    use object::{Object, ObjectSymbol};
     use std::io::Write;
     use wasmtime::{Config, Engine};
 
@@ -44,7 +44,7 @@ fn main() -> Result<()> {
     // running `libembedding.so` in this case requires only minimal
     // dependencies.
     for sym in object.symbols() {
-        if !sym.is_undefined() || sym.is_weak() || sym.kind() == SymbolKind::Null {
+        if !sym.is_undefined() || sym.is_weak() {
             continue;
         }
 

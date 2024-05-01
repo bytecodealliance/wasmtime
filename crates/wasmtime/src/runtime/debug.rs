@@ -127,7 +127,7 @@ fn convert_object_elf_to_loadable_file<E: Endian>(
     let text_range = match sections.section_by_name(e, b".text") {
         Some((i, text)) => {
             let range = text.file_range(e);
-            let off = header.e_shoff.get(e) as usize + i * header.e_shentsize.get(e) as usize;
+            let off = header.e_shoff.get(e) as usize + i.0 * header.e_shentsize.get(e) as usize;
 
             let section: &mut SectionHeader64<E> =
                 object::from_bytes_mut(&mut bytes[off..]).unwrap().0;

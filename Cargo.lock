@@ -781,7 +781,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object 0.33.0",
+ "object 0.36.0",
  "target-lexicon",
 ]
 
@@ -1862,7 +1862,7 @@ version = "22.0.0"
 dependencies = [
  "anyhow",
  "libloading",
- "object 0.33.0",
+ "object 0.36.0",
  "wasmtime",
 ]
 
@@ -1932,9 +1932,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.33.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8dd6c0cdf9429bce006e1362bfce61fa1bfd8c898a643ed8d2b471934701d3d"
+checksum = "576dfe1fc8f9df304abb159d767a29d0476f7750fbf8aa7ad07816004a207434"
 dependencies = [
  "crc32fast",
  "hashbrown 0.14.3",
@@ -3184,7 +3184,7 @@ version = "22.0.0"
 dependencies = [
  "bitflags 2.4.1",
  "byte-array-literals",
- "object 0.33.0",
+ "object 0.36.0",
  "wasi",
  "wasm-encoder",
  "wit-bindgen-rust-macro",
@@ -3392,7 +3392,7 @@ dependencies = [
  "mach2",
  "memfd",
  "memoffset",
- "object 0.33.0",
+ "object 0.36.0",
  "once_cell",
  "paste",
  "postcard",
@@ -3537,7 +3537,7 @@ dependencies = [
  "log",
  "memchr",
  "num_cpus",
- "object 0.33.0",
+ "object 0.36.0",
  "once_cell",
  "rayon",
  "rustix",
@@ -3624,7 +3624,7 @@ dependencies = [
  "cranelift-wasm",
  "gimli",
  "log",
- "object 0.33.0",
+ "object 0.36.0",
  "target-lexicon",
  "thiserror",
  "wasmparser",
@@ -3644,7 +3644,7 @@ dependencies = [
  "gimli",
  "indexmap 2.2.6",
  "log",
- "object 0.33.0",
+ "object 0.36.0",
  "postcard",
  "rustc-demangle",
  "serde",
@@ -3761,7 +3761,7 @@ dependencies = [
 name = "wasmtime-jit-debug"
 version = "22.0.0"
 dependencies = [
- "object 0.33.0",
+ "object 0.36.0",
  "once_cell",
  "rustix",
  "wasmtime-versioned-export-macros",
@@ -3916,7 +3916,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "gimli",
- "object 0.33.0",
+ "object 0.36.0",
  "target-lexicon",
  "wasmparser",
  "wasmtime-cranelift",
