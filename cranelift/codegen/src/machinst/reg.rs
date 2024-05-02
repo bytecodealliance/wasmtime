@@ -288,7 +288,6 @@ pub type RegClass = regalloc2::RegClass;
 #[derive(Debug)]
 pub struct OperandCollector<'a, F: Fn(VReg) -> VReg> {
     operands: &'a mut Vec<Operand>,
-    operands_start: usize,
     clobbers: PRegSet,
 
     /// The subset of physical registers that are allocatable.
@@ -300,10 +299,8 @@ pub struct OperandCollector<'a, F: Fn(VReg) -> VReg> {
 impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Start gathering operands into one flattened operand array.
     pub fn new(operands: &'a mut Vec<Operand>, allocatable: PRegSet, renamer: F) -> Self {
-        let operands_start = operands.len();
         Self {
             operands,
-            operands_start,
             clobbers: PRegSet::default(),
             allocatable,
             renamer,
@@ -313,10 +310,9 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Finish the operand collection and return the tuple giving the
     /// range of indices in the flattened operand array, and the
     /// clobber set.
-    pub fn finish(self) -> ((u32, u32), PRegSet) {
-        let start = self.operands_start as u32;
-        let end = self.operands.len() as u32;
-        ((start, end), self.clobbers)
+    pub fn finish(self) -> (usize, PRegSet) {
+        let end = self.operands.len();
+        (end, self.clobbers)
     }
 }
 

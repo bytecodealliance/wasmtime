@@ -20,6 +20,7 @@
 use crate::ir::pcc::*;
 use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
 use crate::machinst::*;
+use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;
 use crate::CodegenError;
@@ -75,7 +76,7 @@ pub struct VCode<I: VCodeInst> {
     /// Operand index ranges: for each instruction in `insts`, there
     /// is a tuple here providing the range in `operands` for that
     /// instruction's operands.
-    operand_ranges: Vec<(u32, u32)>,
+    operand_ranges: Ranges,
 
     /// Clobbers: a sparse map from instruction indices to clobber masks.
     clobbers: FxHashMap<InsnIndex, PRegSet>,
@@ -88,10 +89,10 @@ pub struct VCode<I: VCodeInst> {
     entry: BlockIndex,
 
     /// Block instruction indices.
-    block_ranges: Vec<(InsnIndex, InsnIndex)>,
+    block_ranges: Ranges,
 
     /// Block successors: index range in the `block_succs` list.
-    block_succ_range: Vec<(u32, u32)>,
+    block_succ_range: Ranges,
 
     /// Block successor lists, concatenated into one vec. The
     /// `block_succ_range` list of tuples above gives (start, end)
@@ -100,7 +101,7 @@ pub struct VCode<I: VCodeInst> {
     block_succs: Vec<regalloc2::Block>,
 
     /// Block predecessors: index range in the `block_preds` list.
-    block_pred_range: Vec<(u32, u32)>,
+    block_pred_range: Ranges,
 
     /// Block predecessor lists, concatenated into one vec. The
     /// `block_pred_range` list of tuples above gives (start, end)
@@ -109,7 +110,7 @@ pub struct VCode<I: VCodeInst> {
     block_preds: Vec<regalloc2::Block>,
 
     /// Block parameters: index range in `block_params` below.
-    block_params_range: Vec<(u32, u32)>,
+    block_params_range: Ranges,
 
     /// Block parameter lists, concatenated into one vec. The
     /// `block_params_range` list of tuples above gives (start, end)
@@ -133,11 +134,11 @@ pub struct VCode<I: VCodeInst> {
     /// for each block are concatenated.
     ///
     /// Indexed by the indices in `branch_block_arg_succ_range`.
-    branch_block_arg_range: Vec<(u32, u32)>,
+    branch_block_arg_range: Ranges,
 
     /// For a given block, indices in `branch_block_arg_range`
     /// corresponding to all of its successors.
-    branch_block_arg_succ_range: Vec<(u32, u32)>,
+    branch_block_arg_succ_range: Ranges,
 
     /// Block-order information.
     block_order: BlockLoweringOrder,
@@ -226,20 +227,6 @@ pub struct VCodeBuilder<I: VCodeInst> {
     /// In what direction is the build occuring?
     direction: VCodeBuildDirection,
 
-    /// Index of the last block-start in the vcode.
-    block_start: usize,
-
-    /// Start of succs for the current block in the concatenated succs list.
-    succ_start: usize,
-
-    /// Start of blockparams for the current block in the concatenated
-    /// blockparams list.
-    block_params_start: usize,
-
-    /// Start of successor blockparam arg list entries in
-    /// the concatenated branch_block_arg_range list.
-    branch_block_arg_succ_start: usize,
-
     /// Debug-value label in-progress map, keyed by label. For each
     /// label, we keep disjoint ranges mapping to vregs. We'll flatten
     /// this into (vreg, range, label) tuples when done.
@@ -270,10 +257,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         VCodeBuilder {
             vcode,
             direction,
-            block_start: 0,
-            succ_start: 0,
-            block_params_start: 0,
-            branch_block_arg_succ_start: 0,
             debug_info: FxHashMap::default(),
         }
     }
@@ -313,32 +296,20 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// End the current basic block. Must be called after emitting vcode insts
     /// for IR insts and prior to ending the function (building the VCode).
     pub fn end_bb(&mut self) {
-        let start_idx = self.block_start;
         let end_idx = self.vcode.insts.len();
-        self.block_start = end_idx;
         // Add the instruction index range to the list of blocks.
-        self.vcode
-            .block_ranges
-            .push((InsnIndex::new(start_idx), InsnIndex::new(end_idx)));
+        self.vcode.block_ranges.push_end(end_idx);
         // End the successors list.
         let succ_end = self.vcode.block_succs.len();
-        self.vcode
-            .block_succ_range
-            .push((self.succ_start as u32, succ_end as u32));
-        self.succ_start = succ_end;
+        self.vcode.block_succ_range.push_end(succ_end);
         // End the blockparams list.
         let block_params_end = self.vcode.block_params.len();
-        self.vcode
-            .block_params_range
-            .push((self.block_params_start as u32, block_params_end as u32));
-        self.block_params_start = block_params_end;
+        self.vcode.block_params_range.push_end(block_params_end);
         // End the branch blockparam args list.
         let branch_block_arg_succ_end = self.vcode.branch_block_arg_range.len();
-        self.vcode.branch_block_arg_succ_range.push((
-            self.branch_block_arg_succ_start as u32,
-            branch_block_arg_succ_end as u32,
-        ));
-        self.branch_block_arg_succ_start = branch_block_arg_succ_end;
+        self.vcode
+            .branch_block_arg_succ_range
+            .push_end(branch_block_arg_succ_end);
     }
 
     pub fn add_block_param(&mut self, param: VirtualReg) {
@@ -346,14 +317,11 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     fn add_branch_args_for_succ(&mut self, args: &[Reg]) {
-        let start = self.vcode.branch_block_args.len();
         self.vcode
             .branch_block_args
             .extend(args.iter().map(|&arg| VReg::from(arg)));
         let end = self.vcode.branch_block_args.len();
-        self.vcode
-            .branch_block_arg_range
-            .push((start as u32, end as u32));
+        self.vcode.branch_block_arg_range.push_end(end);
     }
 
     /// Push an instruction for the current BB and current IR inst
@@ -407,20 +375,20 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             let start = end;
             end += *count;
             *count = start;
-            self.vcode.block_pred_range.push((start, end));
+            self.vcode.block_pred_range.push_end(end as usize);
         }
         let end = end as usize;
         debug_assert_eq!(end, self.vcode.block_succs.len());
 
         // Walk over the successors again, this time grouped by
         // predecessor, and push the predecessor at the current
-        // starting position of each of its successors. Visiting
-        // predecessor groups in ascending order means we build each
-        // group of predecessors in sorted order too.
+        // starting position of each of its successors. We build
+        // each group of predecessors in whatever order Ranges::iter
+        // returns them; regalloc2 doesn't care.
         self.vcode.block_preds.resize(end, BlockIndex::invalid());
-        for (pred, &(start, end)) in self.vcode.block_succ_range.iter().enumerate() {
+        for (pred, range) in self.vcode.block_succ_range.iter() {
             let pred = BlockIndex::new(pred);
-            for succ in &self.vcode.block_succs[start as usize..end as usize] {
+            for succ in &self.vcode.block_succs[range] {
                 let pos = &mut starts[succ.index()];
                 self.vcode.block_preds[*pos as usize] = pred;
                 *pos += 1;
@@ -439,21 +407,22 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
 
         // Reverse the per-block and per-inst sequences.
-        self.vcode.block_ranges.reverse();
+        self.vcode.block_ranges.reverse_index();
+        self.vcode.block_ranges.reverse_target(n_insts);
         // block_params_range is indexed by block (and blocks were
         // traversed in reverse) so we reverse it; but block-param
         // sequences in the concatenated vec can remain in reverse
         // order (it is effectively an arena of arbitrarily-placed
         // referenced sequences).
-        self.vcode.block_params_range.reverse();
+        self.vcode.block_params_range.reverse_index();
         // Likewise, we reverse block_succ_range, but the block_succ
         // concatenated array can remain as-is.
-        self.vcode.block_succ_range.reverse();
+        self.vcode.block_succ_range.reverse_index();
         self.vcode.insts.reverse();
         self.vcode.srclocs.reverse();
         // Likewise, branch_block_arg_succ_range is indexed by block
         // so must be reversed.
-        self.vcode.branch_block_arg_succ_range.reverse();
+        self.vcode.branch_block_arg_succ_range.reverse_index();
 
         // To translate an instruction index *endpoint* in reversed
         // order to forward order, compute `n_insts - i`.
@@ -466,12 +435,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // vice-versa, so e.g. an (inclusive) start of 0 becomes an
         // (exclusive) end of 10.
         let translate = |inst: InsnIndex| InsnIndex::new(n_insts - inst.index());
-
-        // Edit the block-range instruction indices.
-        for tuple in &mut self.vcode.block_ranges {
-            let (start, end) = *tuple;
-            *tuple = (translate(end), translate(start)); // Note reversed order.
-        }
 
         // Generate debug-value labels based on per-label maps.
         for (label, tuples) in &self.debug_info {
@@ -512,7 +475,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                 });
             insn.get_operands(&mut op_collector);
             let (ops, clobbers) = op_collector.finish();
-            self.vcode.operand_ranges.push(ops);
+            self.vcode.operand_ranges.push_end(ops);
 
             if clobbers != PRegSet::default() {
                 self.vcode.clobbers.insert(InsnIndex::new(i), clobbers);
@@ -626,20 +589,20 @@ impl<I: VCodeInst> VCode<I> {
             vreg_types: vec![],
             insts: Vec::with_capacity(10 * n_blocks),
             operands: Vec::with_capacity(30 * n_blocks),
-            operand_ranges: Vec::with_capacity(10 * n_blocks),
+            operand_ranges: Ranges::with_capacity(10 * n_blocks),
             clobbers: FxHashMap::default(),
             srclocs: Vec::with_capacity(10 * n_blocks),
             entry: BlockIndex::new(0),
-            block_ranges: Vec::with_capacity(n_blocks),
-            block_succ_range: Vec::with_capacity(n_blocks),
+            block_ranges: Ranges::with_capacity(n_blocks),
+            block_succ_range: Ranges::with_capacity(n_blocks),
             block_succs: Vec::with_capacity(n_blocks),
-            block_pred_range: Vec::new(),
+            block_pred_range: Ranges::default(),
             block_preds: Vec::new(),
-            block_params_range: Vec::with_capacity(n_blocks),
+            block_params_range: Ranges::with_capacity(n_blocks),
             block_params: Vec::with_capacity(5 * n_blocks),
             branch_block_args: Vec::with_capacity(10 * n_blocks),
-            branch_block_arg_range: Vec::with_capacity(2 * n_blocks),
-            branch_block_arg_succ_range: Vec::with_capacity(n_blocks),
+            branch_block_arg_range: Ranges::with_capacity(2 * n_blocks),
+            branch_block_arg_succ_range: Ranges::with_capacity(n_blocks),
             block_order,
             abi,
             emit_info,
@@ -676,7 +639,7 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
-        for (i, (start, end)) in self.operand_ranges.iter().enumerate() {
+        for (i, range) in self.operand_ranges.iter() {
             // Skip this instruction if not "included in clobbers" as
             // per the MachInst. (Some backends use this to implement
             // ABI specifics; e.g., excluding calls of the same ABI as
@@ -687,10 +650,8 @@ impl<I: VCodeInst> VCode<I> {
                 continue;
             }
 
-            let start = *start as usize;
-            let end = *end as usize;
-            let operands = &self.operands[start..end];
-            let allocs = &regalloc.allocs[start..end];
+            let operands = &self.operands[range.clone()];
+            let allocs = &regalloc.allocs[range];
             for (operand, alloc) in operands.iter().zip(allocs.iter()) {
                 if operand.kind() == OperandKind::Def {
                     if let Some(preg) = alloc.as_reg() {
@@ -787,7 +748,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut ra_edits_per_block: SmallVec<[u32; 64]> = smallvec![];
         let mut edit_idx = 0;
         for block in 0..self.num_blocks() {
-            let end_inst = self.block_ranges[block].1;
+            let end_inst = InsnIndex::new(self.block_ranges.get(block).end);
             let start_edit_idx = edit_idx;
             while edit_idx < regalloc.edits.len() && regalloc.edits[edit_idx].0.inst() < end_inst {
                 edit_idx += 1;
@@ -1004,9 +965,8 @@ impl<I: VCodeInst> VCode<I> {
             // `MachBuffer` to determine if an island is necessary.
             let worst_case_next_bb = if block_order_idx < final_order.len() - 1 {
                 let next_block = final_order[block_order_idx + 1];
-                let next_block_range = self.block_ranges[next_block.index()];
-                let next_block_size =
-                    (next_block_range.1.index() - next_block_range.0.index()) as u32;
+                let next_block_range = self.block_ranges.get(next_block.index());
+                let next_block_size = next_block_range.len() as u32;
                 let next_block_ra_insertions = ra_edits_per_block[next_block.index()];
                 I::worst_case_size() * (next_block_size + next_block_ra_insertions)
             } else {
@@ -1270,18 +1230,18 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn block_insns(&self, block: BlockIndex) -> InstRange {
-        let (start, end) = self.block_ranges[block.index()];
-        InstRange::forward(start, end)
+        let range = self.block_ranges.get(block.index());
+        InstRange::forward(InsnIndex::new(range.start), InsnIndex::new(range.end))
     }
 
     fn block_succs(&self, block: BlockIndex) -> &[BlockIndex] {
-        let (start, end) = self.block_succ_range[block.index()];
-        &self.block_succs[start as usize..end as usize]
+        let range = self.block_succ_range.get(block.index());
+        &self.block_succs[range]
     }
 
     fn block_preds(&self, block: BlockIndex) -> &[BlockIndex] {
-        let (start, end) = self.block_pred_range[block.index()];
-        &self.block_preds[start as usize..end as usize]
+        let range = self.block_pred_range.get(block.index());
+        &self.block_preds[range]
     }
 
     fn block_params(&self, block: BlockIndex) -> &[VReg] {
@@ -1291,16 +1251,15 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
             return &[];
         }
 
-        let (start, end) = self.block_params_range[block.index()];
-        &self.block_params[start as usize..end as usize]
+        let range = self.block_params_range.get(block.index());
+        &self.block_params[range]
     }
 
     fn branch_blockparams(&self, block: BlockIndex, _insn: InsnIndex, succ_idx: usize) -> &[VReg] {
-        let (succ_range_start, succ_range_end) = self.branch_block_arg_succ_range[block.index()];
-        let succ_ranges =
-            &self.branch_block_arg_range[succ_range_start as usize..succ_range_end as usize];
-        let (branch_block_args_start, branch_block_args_end) = succ_ranges[succ_idx];
-        &self.branch_block_args[branch_block_args_start as usize..branch_block_args_end as usize]
+        let succ_range = self.branch_block_arg_succ_range.get(block.index());
+        debug_assert!(succ_idx < succ_range.len());
+        let branch_block_args = self.branch_block_arg_range.get(succ_range.start + succ_idx);
+        &self.branch_block_args[branch_block_args]
     }
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
@@ -1324,8 +1283,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn inst_operands(&self, insn: InsnIndex) -> &[Operand] {
-        let (start, end) = self.operand_ranges[insn.index()];
-        &self.operands[start as usize..end as usize]
+        let range = self.operand_ranges.get(insn.index());
+        &self.operands[range]
     }
 
     fn inst_clobbers(&self, insn: InsnIndex) -> PRegSet {
@@ -1393,8 +1352,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
             for succ in self.block_succs(block) {
                 writeln!(f, "    (successor: Block {})", succ.index())?;
             }
-            let (start, end) = self.block_ranges[block.index()];
-            for inst in start.index()..end.index() {
+            for inst in self.block_ranges.get(block.index()) {
                 writeln!(
                     f,
                     "  Inst {}: {}",
