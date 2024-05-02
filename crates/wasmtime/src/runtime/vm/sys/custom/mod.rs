@@ -22,3 +22,13 @@ fn cvt(rc: i32) -> io::Result<()> {
         code => Err(io::Error::from_raw_os_error(code)),
     }
 }
+
+#[inline]
+pub fn tls_get() -> *mut u8 {
+    unsafe { capi::wasmtime_tls_get() }
+}
+
+#[inline]
+pub fn tls_set(ptr: *mut u8) {
+    unsafe { capi::wasmtime_tls_set(ptr) }
+}

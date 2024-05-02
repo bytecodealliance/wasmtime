@@ -133,3 +133,11 @@ int wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
 void wasmtime_memory_image_free(struct wasmtime_memory_image *image) {
   abort();
 }
+
+// Pretend that this platform doesn't have threads where storing in a static is
+// ok.
+static uint8_t *WASMTIME_TLS = NULL;
+
+uint8_t *wasmtime_tls_get() { return WASMTIME_TLS; }
+
+void wasmtime_tls_set(uint8_t *val) { WASMTIME_TLS = val; }

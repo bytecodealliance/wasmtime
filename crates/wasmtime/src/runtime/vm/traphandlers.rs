@@ -547,32 +547,40 @@ pub(crate) mod tls {
     // these functions are free to be inlined.
     pub(super) mod raw {
         use super::CallThreadState;
-        use std::cell::Cell;
-        use std::ptr;
+        use sptr::Strict;
 
         pub type Ptr = *const CallThreadState;
 
-        // The first entry here is the `Ptr` which is what's used as part of the
-        // public interface of this module. The second entry is a boolean which
-        // allows the runtime to perform per-thread initialization if necessary
-        // for handling traps (e.g. setting up ports on macOS and sigaltstack on
-        // Unix).
-        thread_local!(static PTR: Cell<(Ptr, bool)> = const { Cell::new((ptr::null(), false)) });
+        const _: () = {
+            assert!(core::mem::align_of::<CallThreadState>() > 1);
+        };
+
+        fn tls_get() -> (Ptr, bool) {
+            let mut initialized = false;
+            let p = Strict::map_addr(crate::runtime::vm::sys::tls_get(), |a| {
+                initialized = (a & 1) != 0;
+                a & !1
+            });
+            (p.cast(), initialized)
+        }
+
+        fn tls_set(ptr: Ptr, initialized: bool) {
+            let encoded = Strict::map_addr(ptr, |a| a | usize::from(initialized));
+            crate::runtime::vm::sys::tls_set(encoded.cast_mut().cast::<u8>());
+        }
 
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
         pub fn replace(val: Ptr) -> Ptr {
-            PTR.with(|p| {
-                // When a new value is configured that means that we may be
-                // entering WebAssembly so check to see if this thread has
-                // performed per-thread initialization for traps.
-                let (prev, initialized) = p.get();
-                if !initialized {
-                    super::super::lazy_per_thread_init();
-                }
-                p.set((val, true));
-                prev
-            })
+            // When a new value is configured that means that we may be
+            // entering WebAssembly so check to see if this thread has
+            // performed per-thread initialization for traps.
+            let (prev, initialized) = tls_get();
+            if !initialized {
+                super::super::lazy_per_thread_init();
+            }
+            tls_set(val, true);
+            prev
         }
 
         /// Eagerly initialize thread-local runtime functionality. This will be performed
@@ -580,20 +588,18 @@ pub(crate) mod tls {
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
         pub fn initialize() {
-            PTR.with(|p| {
-                let (state, initialized) = p.get();
-                if initialized {
-                    return;
-                }
-                super::super::lazy_per_thread_init();
-                p.set((state, true));
-            })
+            let (state, initialized) = tls_get();
+            if initialized {
+                return;
+            }
+            super::super::lazy_per_thread_init();
+            tls_set(state, true);
         }
 
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
         pub fn get() -> Ptr {
-            PTR.with(|p| p.get().0)
+            tls_get().0
         }
     }
 
