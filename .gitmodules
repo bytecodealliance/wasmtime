@@ -1,9 +1,6 @@
 [submodule "tests/spec_testsuite"]
 	path = tests/spec_testsuite
 	url = https://github.com/WebAssembly/testsuite
-[submodule "crates/wasi-nn/spec"]
-	path = crates/wasi-nn/spec
-	url = https://github.com/WebAssembly/wasi-nn
 [submodule "tests/wasi_testsuite/wasi-threads"]
 	path = tests/wasi_testsuite/wasi-threads
 	url = https://github.com/WebAssembly/wasi-threads

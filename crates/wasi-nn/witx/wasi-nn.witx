@@ -1,0 +1,92 @@
+;; This WITX version of the wasi-nn API is retained for consistency only. See the `wit/wasi-nn.wit`
+;; version for the official specification and documentation.
+
+(typename $buffer_size u32)
+(typename $nn_errno
+  (enum (@witx tag u16)
+    $success
+    $invalid_argument
+    $invalid_encoding
+    $missing_memory
+    $busy
+    $runtime_error
+    $unsupported_operation
+    $too_large
+    $not_found
+  )
+)
+(typename $tensor_dimensions (list u32))
+(typename $tensor_type
+  (enum (@witx tag u8)
+    $f16
+    $f32
+    $f64
+    $u8
+    $i32
+    $i64
+  )
+)
+(typename $tensor_data (list u8))
+(typename $tensor
+  (record
+    (field $dimensions $tensor_dimensions)
+    (field $type $tensor_type)
+    (field $data $tensor_data)
+  )
+)
+(typename $graph_builder (list u8))
+(typename $graph_builder_array (list $graph_builder))
+(typename $graph (handle))
+(typename $graph_encoding
+  (enum (@witx tag u8)
+    $openvino
+    $onnx
+    $tensorflow
+    $pytorch
+    $tensorflowlite
+    $autodetect
+  )
+)
+(typename $execution_target
+  (enum (@witx tag u8)
+    $cpu
+    $gpu
+    $tpu
+  )
+)
+(typename $graph_execution_context (handle))
+
+(module $wasi_ephemeral_nn
+  (import "memory" (memory))
+  (@interface func (export "load")
+    (param $builder $graph_builder_array)
+    (param $encoding $graph_encoding)
+    (param $target $execution_target)
+    (result $error (expected $graph (error $nn_errno)))
+  )
+  (@interface func (export "load_by_name")
+     (param $name string)
+     (result $error (expected $graph (error $nn_errno)))
+  )
+  (@interface func (export "init_execution_context")
+    (param $graph $graph)
+    (result $error (expected $graph_execution_context (error $nn_errno)))
+  )
+  (@interface func (export "set_input")
+    (param $context $graph_execution_context)
+    (param $index u32)
+    (param $tensor $tensor)
+    (result $error (expected (error $nn_errno)))
+  )
+  (@interface func (export "get_output")
+    (param $context $graph_execution_context)
+    (param $index u32)
+    (param $out_buffer (@witx pointer u8))
+    (param $out_buffer_max_size $buffer_size)
+    (result $error (expected $buffer_size (error $nn_errno)))
+  )
+  (@interface func (export "compute")
+    (param $context $graph_execution_context)
+    (result $error (expected (error $nn_errno)))
+  )
+)
