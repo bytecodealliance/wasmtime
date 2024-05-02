@@ -503,7 +503,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let (offset, escaped) = ConstExpr::from_wasmparser(offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
-                            if offset.is_possibly_zero_i32() {
+                            if !offset.provably_nonzero_i32() {
                                 self.flag_table_possibly_non_null_zero_element(table_index);
                             }
 
