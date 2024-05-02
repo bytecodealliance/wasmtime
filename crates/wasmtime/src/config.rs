@@ -2590,7 +2590,7 @@ impl PoolingAllocationConfig {
     }
 
     /// The maximum table elements for any table defined in a module (default is
-    /// `10000`).
+    /// `20000`).
     ///
     /// If a table's minimum element limit is greater than this value, the
     /// module will fail to instantiate.
