@@ -9,7 +9,6 @@ use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
-use std::path;
 
 use crate::error;
 
@@ -91,15 +90,10 @@ impl Formatter {
     /// Write `self.lines` to a file.
     pub fn update_file(
         &self,
-        filename: impl AsRef<str>,
-        directory: &str,
+        filename: impl AsRef<std::path::Path>,
+        directory: &std::path::Path,
     ) -> Result<(), error::Error> {
-        #[cfg(target_family = "windows")]
-        let path_str = format!("{}\\{}", directory, filename.as_ref());
-        #[cfg(not(target_family = "windows"))]
-        let path_str = format!("{}/{}", directory, filename.as_ref());
-
-        let path = path::Path::new(&path_str);
+        let path = directory.join(&filename);
         eprintln!("Writing generated file: {}", path.display());
         let mut f = fs::File::create(path)?;
 
