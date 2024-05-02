@@ -21,7 +21,7 @@ features = ["component-model"]
 
 [dependencies]
 wasmtime-asm-macros = { workspace = true, optional = true }
-wasmtime-environ = { workspace = true }
+wasmtime-environ = { workspace = true, features = ['std'] }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int", "perf_jitdump"], optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
