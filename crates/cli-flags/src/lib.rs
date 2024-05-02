@@ -421,7 +421,11 @@ impl CommonOptions {
         Ok(())
     }
 
-    pub fn config(&mut self, target: Option<&str>) -> Result<Config> {
+    pub fn config(
+        &mut self,
+        target: Option<&str>,
+        pooling_allocator_default: Option<bool>,
+    ) -> Result<Config> {
         self.configure();
         let mut config = Config::new();
 
@@ -546,7 +550,7 @@ impl CommonOptions {
         }
 
         match_feature! {
-            ["pooling-allocator" : self.opts.pooling_allocator]
+            ["pooling-allocator" : self.opts.pooling_allocator.or(pooling_allocator_default)]
             enable => {
                 if enable {
                     let mut cfg = wasmtime::PoolingAllocationConfig::default();

@@ -1640,36 +1640,50 @@ mod test_programs {
             // all remaining output is left to be captured by future requests
             // send to the server.
             let mut line = String::new();
-            BufReader::new(child.stderr.as_mut().unwrap()).read_line(&mut line)?;
-            let addr_start = line.find("127.0.0.1").unwrap();
-            let addr = &line[addr_start..];
-            let addr_end = addr.find("/").unwrap();
-            let addr = &addr[..addr_end];
-            Ok(WasmtimeServe {
-                child: Some(child),
-                addr: addr.parse().unwrap(),
-            })
+            let mut reader = BufReader::new(child.stderr.take().unwrap());
+            reader.read_line(&mut line)?;
+
+            match line.find("127.0.0.1").and_then(|addr_start| {
+                let addr = &line[addr_start..];
+                let addr_end = addr.find("/")?;
+                addr[..addr_end].parse().ok()
+            }) {
+                Some(addr) => {
+                    child.stderr = Some(reader.into_inner());
+                    Ok(WasmtimeServe {
+                        child: Some(child),
+                        addr,
+                    })
+                }
+                None => {
+                    child.kill()?;
+                    child.wait()?;
+                    reader.read_to_string(&mut line)?;
+                    bail!("failed to start child: {line}")
+                }
+            }
         }
 
         /// Completes this server gracefully by printing the output on failure.
-        fn finish(mut self) -> Result<()> {
+        fn finish(mut self) -> Result<String> {
             let mut child = self.child.take().unwrap();
 
             // If the child process has already exited then collect the output
             // and test if it succeeded. Otherwise it's still running so kill it
             // and then reap it. Assume that if it's still running then the test
             // has otherwise passed so no need to print the output.
-            if child.try_wait()?.is_some() {
-                let output = child.wait_with_output()?;
-                if output.status.success() {
-                    return Ok(());
-                }
-                bail!("child failed {output:?}");
+            let known_failure = if child.try_wait()?.is_some() {
+                false
             } else {
                 child.kill()?;
-                child.wait_with_output()?;
+                true
+            };
+            let output = child.wait_with_output()?;
+            if !known_failure && !output.status.success() {
+                bail!("child failed {output:?}");
             }
-            Ok(())
+
+            Ok(String::from_utf8_lossy(&output.stderr).into_owned())
         }
 
         /// Send a request to this server and wait for the response.
@@ -1773,6 +1787,30 @@ mod test_programs {
         assert_eq!(headers.get("env"), None);
 
         server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_respect_pooling_options() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("-Opooling-total-memories=0").arg("-Scli");
+        })?;
+
+        let result = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+        assert!(result.is_err());
+        let stderr = server.finish()?;
+        assert!(
+            stderr.contains("maximum concurrent memory limit of 0 reached"),
+            "bad stderr: {stderr}",
+        );
         Ok(())
     }
 }
