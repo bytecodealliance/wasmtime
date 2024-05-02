@@ -429,8 +429,6 @@ impl<'a> CompileInputs<'a> {
             ),
         >,
     ) {
-        let mut sigs = BTreeSet::new();
-
         for (module, translation, functions) in translations {
             for (def_func_index, func_body) in functions {
                 self.push_input(move |compiler| {
@@ -490,19 +488,17 @@ impl<'a> CompileInputs<'a> {
                     });
                 }
             }
-
-            sigs.extend(translation.module.types.iter().map(|(_, ty)| *ty));
         }
 
-        for signature in sigs {
-            if let Some(wasm_func_ty) = types[signature].as_func() {
+        for (interned_index, interned_ty) in types.wasm_types() {
+            if let Some(wasm_func_ty) = interned_ty.as_func() {
                 self.push_input(move |compiler| {
                     let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
                     Ok(CompileOutput {
-                        key: CompileKey::wasm_to_native_trampoline(signature),
+                        key: CompileKey::wasm_to_native_trampoline(interned_index),
                         symbol: format!(
                             "signatures[{}]::wasm_to_native_trampoline",
-                            signature.as_u32()
+                            interned_index.as_u32()
                         ),
                         function: CompiledFunction::Function(trampoline),
                         info: None,
