@@ -1,12 +1,22 @@
 //! Internal dependency of Wasmtime and Cranelift that defines types for
 //! WebAssembly.
 
-use smallvec::SmallVec;
+#![no_std]
+
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
 pub use wasmparser;
 
+#[doc(hidden)]
+pub use alloc::format as __format;
+
+use alloc::boxed::Box;
+use core::{fmt, ops::Range};
 use cranelift_entity::entity_impl;
 use serde_derive::{Deserialize, Serialize};
-use std::{fmt, ops::Range};
+use smallvec::SmallVec;
 
 mod error;
 pub use error::*;

@@ -13,8 +13,10 @@ cranelift-entity = { workspace = true, features = ['enable-serde'] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 smallvec = { workspace = true, features = ["serde"] }
-thiserror = { workspace = true }
 wasmparser = { workspace = true }
 
 [lints]
 workspace = true
+
+[features]
+std = ['wasmparser/std']

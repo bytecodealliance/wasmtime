@@ -375,6 +375,9 @@ jobs:
     - run: cargo check -p wasmtime-slab
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
+    - run: cargo check -p wasmtime-types
+      env:
+        CARGO_BUILD_TARGET: x86_64-unknown-none
 
     # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
     # for specifically panic=abort there.
