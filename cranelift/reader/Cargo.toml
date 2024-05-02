@@ -16,4 +16,4 @@ workspace = true
 anyhow = { workspace = true, features = ['std'] }
 cranelift-codegen = { workspace = true }
 smallvec = { workspace = true }
-target-lexicon = { workspace = true }
+target-lexicon = { workspace = true, features = ['std'] }

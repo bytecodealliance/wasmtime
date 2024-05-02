@@ -1,11 +1,12 @@
 //! Definitions of runtime structures and metadata which are serialized into ELF
 //! with `bincode` as part of a module's compilation process.
 
+use crate::prelude::*;
 use crate::{DefinedFuncIndex, FilePos, FuncIndex, Module, PrimaryMap, StackMap};
+use core::fmt;
+use core::ops::Range;
+use core::str;
 use serde_derive::{Deserialize, Serialize};
-use std::fmt;
-use std::ops::Range;
-use std::str;
 use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Secondary in-memory results of function compilation.

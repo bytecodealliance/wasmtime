@@ -1,4 +1,5 @@
 use crate::component::*;
+use crate::prelude::*;
 use crate::Module;
 use crate::ScopeVec;
 use crate::{

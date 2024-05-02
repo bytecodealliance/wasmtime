@@ -21,7 +21,7 @@ features = ["component-model"]
 
 [dependencies]
 wasmtime-asm-macros = { workspace = true, optional = true }
-wasmtime-environ = { workspace = true }
+wasmtime-environ = { workspace = true, features = ['std'] }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int", "perf_jitdump"], optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
@@ -50,12 +50,12 @@ indexmap = { workspace = true }
 paste = "1.0.3"
 once_cell = { workspace = true }
 rayon = { version = "1.0", optional = true }
-object = { workspace = true }
+object = { workspace = true, features = ['std'] }
 async-trait = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
 bumpalo = "3.11.0"
 fxprof-processed-profile = { version = "0.6.0", optional = true }
-gimli = { workspace = true }
+gimli = { workspace = true, features = ['std'] }
 # Support address-to-file/line information in traps when wasm files have DWARF
 # debugging information.
 addr2line = { version = "0.21.0", default-features = false, optional = true }

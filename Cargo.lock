@@ -3664,7 +3664,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "target-lexicon",
- "thiserror",
  "wasm-encoder 0.206.0",
  "wasmparser 0.206.0",
  "wasmprinter",

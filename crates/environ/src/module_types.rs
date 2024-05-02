@@ -1,6 +1,6 @@
 use crate::PrimaryMap;
+use core::ops::{Index, Range};
 use serde_derive::{Deserialize, Serialize};
-use std::ops::{Index, Range};
 use wasmtime_types::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, WasmSubType};
 
 /// All types used in a core wasm module.

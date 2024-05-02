@@ -366,16 +366,13 @@ jobs:
     - run: cargo check -p wasmtime-jit-icache-coherence
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
-    - run: cargo check -p wasmtime-component-util
-      env:
-        CARGO_BUILD_TARGET: x86_64-unknown-none
     - run: cargo check -p wasmtime-asm-macros
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
     - run: cargo check -p wasmtime-slab
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
-    - run: cargo check -p wasmtime-types
+    - run: cargo check -p wasmtime-environ --features gc,component-model
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
 

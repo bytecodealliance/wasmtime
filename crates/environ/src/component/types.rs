@@ -1,9 +1,9 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
+use crate::prelude::*;
 use crate::{EntityType, ModuleTypes, PrimaryMap};
-use indexmap::{IndexMap, IndexSet};
+use core::hash::{Hash, Hasher};
+use core::ops::Index;
 use serde_derive::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
-use std::ops::Index;
 use wasmparser::types;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_types::ModuleInternedTypeIndex;
@@ -285,7 +285,7 @@ impl ComponentTypes {
 
 macro_rules! impl_index {
     ($(impl Index<$ty:ident> for ComponentTypes { $output:ident => $field:ident })*) => ($(
-        impl std::ops::Index<$ty> for ComponentTypes {
+        impl core::ops::Index<$ty> for ComponentTypes {
             type Output = $output;
             #[inline]
             fn index(&self, idx: $ty) -> &$output {
@@ -294,7 +294,7 @@ macro_rules! impl_index {
         }
 
         #[cfg(feature = "compile")]
-        impl std::ops::Index<$ty> for super::ComponentTypesBuilder {
+        impl core::ops::Index<$ty> for super::ComponentTypesBuilder {
             type Output = $output;
             #[inline]
             fn index(&self, idx: $ty) -> &$output {

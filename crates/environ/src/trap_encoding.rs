@@ -1,5 +1,5 @@
+use core::fmt;
 use object::{Bytes, LittleEndian, U32Bytes};
-use std::fmt;
 
 /// Information about trap.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -149,6 +149,7 @@ impl fmt::Display for Trap {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Trap {}
 
 /// Decodes the provided trap information section and attempts to find the trap

@@ -5,6 +5,79 @@
 
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
+#![no_std]
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+extern crate alloc;
+
+/// Rust module prelude for Wasmtime crates.
+///
+/// Wasmtime crates that use `no_std` use `core::prelude::*` by default which
+/// does not include `alloc`-related functionality such as `String` and `Vec`.
+/// To have similar ergonomics to `std` and additionally group up some common
+/// functionality this module is intended to be imported at the top of all
+/// modules with:
+///
+/// ```rust,ignore
+/// use crate::*;
+/// ```
+///
+/// Externally for crates that depend on `wasmtime-environ` they should have
+/// this in the root of the crate:
+///
+/// ```rust,ignore
+/// use wasmtime_environ::prelude;
+/// ```
+///
+/// and then `use crate::*` works as usual.
+pub mod prelude {
+    pub use crate::Err2Anyhow;
+    pub use alloc::borrow::ToOwned;
+    pub use alloc::boxed::Box;
+    pub use alloc::format;
+    pub use alloc::string::{String, ToString};
+    pub use alloc::vec;
+    pub use alloc::vec::Vec;
+    pub use wasmparser::map::{IndexMap, IndexSet};
+}
+
+/// Convenience trait for converting `Result<T, E>` into `anyhow::Result<T>`
+///
+/// Typically this is automatically done with the `?` operator in Rust and
+/// by default this trait isn't necessary. With the `anyhow` crate's `std`
+/// feature disabled, however, the `?` operator won't work because the `Error`
+/// trait is not defined. This trait helps to bridge this gap.
+///
+/// This does the same thing as `?` when the `std` feature is enabled, and when
+/// `std` is disabled it'll use different trait bounds to create an
+/// `anyhow::Error`.
+///
+/// This trait is not suitable as a public interface because features change
+/// what implements the trait. It's good enough for a wasmtime internal
+/// implementation detail, however.
+pub trait Err2Anyhow<T> {
+    /// Convert `self` to `anyhow::Result<T>`.
+    fn err2anyhow(self) -> anyhow::Result<T>;
+}
+
+#[cfg(feature = "std")]
+impl<T, E: Into<anyhow::Error>> Err2Anyhow<T> for Result<T, E> {
+    fn err2anyhow(self) -> anyhow::Result<T> {
+        self.map_err(|e| e.into())
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl<T, E> Err2Anyhow<T> for Result<T, E>
+where
+    E: core::fmt::Display + core::fmt::Debug + Send + Sync + 'static,
+{
+    fn err2anyhow(self) -> anyhow::Result<T> {
+        self.map_err(anyhow::Error::msg)
+    }
+}
 
 mod address_map;
 mod builtin;

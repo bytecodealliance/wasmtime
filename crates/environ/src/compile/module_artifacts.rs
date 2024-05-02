@@ -1,6 +1,7 @@
 //! Definitions of runtime structures and metadata which are serialized into ELF
 //! with `postcard` as part of a module's compilation process.
 
+use crate::prelude::*;
 use crate::{
     obj, CompiledFunctionInfo, CompiledModuleInfo, DebugInfoData, DefinedFuncIndex, FunctionLoc,
     FunctionName, MemoryInitialization, Metadata, ModuleTranslation, PrimaryMap, Tunables,

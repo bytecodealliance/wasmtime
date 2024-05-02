@@ -96,7 +96,7 @@ toml = { workspace = true }
 similar = { workspace = true }
 libtest-mimic = "0.7.0"
 capstone = { workspace = true }
-object = { workspace = true }
+object = { workspace = true, features = ['std'] }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
@@ -215,7 +215,7 @@ byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-arra
 regalloc2 = "0.9.3"
 
 # cap-std family:
-target-lexicon = { version = "0.12.13", default-features = false, features = ["std"] }
+target-lexicon = "0.12.13"
 cap-std = "3.0.0"
 cap-rand = { version = "3.0.0", features = ["small_rng"] }
 cap-fs-ext = "3.0.0"
@@ -244,8 +244,8 @@ wit-component = "0.206.0"
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
 cc = "1.0"
-object = { version = "0.33", default-features = false, features = ['read_core', 'elf', 'std'] }
-gimli = { version = "0.28.0", default-features = false, features = ['read', 'std'] }
+object = { version = "0.33", default-features = false, features = ['read_core', 'elf'] }
+gimli = { version = "0.28.0", default-features = false, features = ['read'] }
 anyhow = { version = "1.0.22", default-features = false }
 windows-sys = "0.52.0"
 env_logger = "0.10"
@@ -288,7 +288,7 @@ http-body = "1.0.0"
 http-body-util = "0.1.0"
 bytes = "1.4"
 futures = { version = "0.3.27", default-features = false }
-indexmap = "2.0.0"
+indexmap = { version = "2.0.0", default-features = false }
 pretty_env_logger = "0.5.0"
 syn = "2.0.25"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
