@@ -1375,12 +1375,13 @@ where
         // This code assumes that [`Self::emit_lazy_init_funcref`] will
         // push the funcref to the value stack.
         match self.env.translation.module.table_plans[table_index].style {
-            TableStyle::CallerChecksSignature => {
+            TableStyle::CallerChecksSignature { lazy_init: true } => {
                 let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
                 self.masm
                     .trapz(funcref_ptr.into(), TrapCode::IndirectCallToNull);
                 self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
             }
+            _ => unimplemented!("Support for eager table init"),
         }
 
         let callee = self.env.funcref(type_index);
@@ -1428,7 +1429,10 @@ where
 
         match heap_type {
             WasmHeapType::Func => match style {
-                TableStyle::CallerChecksSignature => self.emit_lazy_init_funcref(table_index),
+                TableStyle::CallerChecksSignature { lazy_init: true } => {
+                    self.emit_lazy_init_funcref(table_index)
+                }
+                _ => unimplemented!("Support for eager table init"),
             },
             t => unimplemented!("Support for WasmHeapType: {t}"),
         }
@@ -1501,7 +1505,7 @@ where
         let plan = self.env.table_plan(table_index);
         match plan.table.wasm_ty.heap_type {
             WasmHeapType::Func => match plan.style {
-                TableStyle::CallerChecksSignature => {
+                TableStyle::CallerChecksSignature { lazy_init: true } => {
                     let value = self.context.pop_to_reg(self.masm, None);
                     let index = self.context.pop_to_reg(self.masm, None);
                     let base = self.context.any_gpr(self.masm);
@@ -1521,6 +1525,7 @@ where
                     self.context.free_reg(index);
                     self.context.free_reg(base);
                 }
+                _ => unimplemented!("Support for eager table init"),
             },
             ty => unimplemented!("Support for WasmHeapType: {ty}"),
         };

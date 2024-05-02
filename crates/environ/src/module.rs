@@ -310,13 +310,18 @@ pub trait InitMemory {
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub enum TableStyle {
     /// Signatures are stored in the table and checked in the caller.
-    CallerChecksSignature,
+    CallerChecksSignature {
+        /// TODO
+        lazy_init: bool,
+    },
 }
 
 impl TableStyle {
     /// Decide on an implementation style for the given `Table`.
-    pub fn for_table(_table: Table, _tunables: &Tunables) -> Self {
-        Self::CallerChecksSignature
+    pub fn for_table(_table: Table, tunables: &Tunables) -> Self {
+        Self::CallerChecksSignature {
+            lazy_init: tunables.table_lazy_init,
+        }
     }
 }
 

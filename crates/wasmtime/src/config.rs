@@ -149,6 +149,7 @@ struct ConfigTunables {
     epoch_interruption: Option<bool>,
     static_memory_bound_is_maximum: Option<bool>,
     guard_before_linear_memory: Option<bool>,
+    table_lazy_init: Option<bool>,
     generate_address_map: Option<bool>,
     debug_adapter_modules: Option<bool>,
     relaxed_simd_deterministic: Option<bool>,
@@ -1541,6 +1542,19 @@ impl Config {
         self
     }
 
+    /// Indicates whether to initialize tables lazily, so that instantiation
+    /// is fast but indirect calls are a little slower. If false, tables
+    /// are initialized eagerly during instantiation from any active element
+    /// segments that apply to them.
+    ///
+    /// ## Default
+    ///
+    /// This value defaults to `true`.
+    pub fn table_lazy_init(&mut self, table_lazy_init: bool) -> &mut Self {
+        self.tunables.table_lazy_init = Some(table_lazy_init);
+        self
+    }
+
     /// Configure the version information used in serialized and deserialzied [`crate::Module`]s.
     /// This effects the behavior of [`crate::Module::serialize()`], as well as
     /// [`crate::Module::deserialize()`] and related functions.
@@ -1810,6 +1824,7 @@ impl Config {
             epoch_interruption
             static_memory_bound_is_maximum
             guard_before_linear_memory
+            table_lazy_init
             generate_address_map
             debug_adapter_modules
             relaxed_simd_deterministic

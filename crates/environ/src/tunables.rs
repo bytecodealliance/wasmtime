@@ -42,6 +42,12 @@ pub struct Tunables {
     /// beginning of the allocation in addition to the end.
     pub guard_before_linear_memory: bool,
 
+    /// Whether to initialize tables lazily, so that instantiation is fast but
+    /// indirect calls are a little slower. If false, tables are initialized
+    /// eagerly from any active element segments that apply to them during
+    /// instantiation.
+    pub table_lazy_init: bool,
+
     /// Indicates whether an address map from compiled native code back to wasm
     /// offsets in the original file is generated.
     pub generate_address_map: bool,
@@ -113,6 +119,7 @@ impl Tunables {
             epoch_interruption: false,
             static_memory_bound_is_maximum: false,
             guard_before_linear_memory: true,
+            table_lazy_init: true,
             generate_address_map: true,
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
