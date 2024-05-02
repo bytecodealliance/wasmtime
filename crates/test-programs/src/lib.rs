@@ -1,4 +1,5 @@
 pub mod http;
+pub mod nn;
 pub mod preview1;
 pub mod sockets;
 
