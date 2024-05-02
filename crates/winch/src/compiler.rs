@@ -95,7 +95,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let index = translation.module.func_index(index);
         let sig = translation.module.functions[index].signature;
         let ty = types[sig].unwrap_func();
-        let FunctionBodyData { body, validator } = data;
+        let FunctionBodyData {
+            body, validator, ..
+        } = data;
         let mut context = self.get_context(translation);
         let mut validator = validator.into_validator(mem::take(&mut context.allocations));
         let func = self

@@ -973,6 +973,12 @@ entity_impl!(TagIndex);
 pub struct StaticModuleIndex(u32);
 entity_impl!(StaticModuleIndex);
 
+/// Index of a `call_indirect` instruction in a module, used for
+/// caching that callsite's target in the VMContext.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct CallIndirectSiteIndex(u32);
+entity_impl!(CallIndirectSiteIndex);
+
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub enum EntityIndex {
@@ -1193,6 +1199,34 @@ impl ConstExpr {
     /// Get the opcodes that make up this const expression.
     pub fn ops(&self) -> &[ConstOp] {
         &self.ops
+    }
+
+    /// Is this ConstExpr a provably nonzero integer value?
+    ///
+    /// This must be conservative: if the expression *might* be zero,
+    /// it must return `false`. It is always allowed to return `false`
+    /// for some expression kind that we don't support. However, if it
+    /// returns `true`, the expression must be actually nonzero.
+    ///
+    /// We use this for certain table optimizations that rely on
+    /// knowing for sure that index 0 is not referenced.
+    pub fn provably_nonzero_i32(&self) -> bool {
+        assert!(self.ops.len() > 0);
+        if self.ops.len() > 1 {
+            // Compound expressions not yet supported: conservatively
+            // return `false` (we can't prove nonzero).
+            return false;
+        }
+        // Exactly one op at this point.
+        match self.ops[0] {
+            // An actual zero value -- definitely not nonzero!
+            ConstOp::I32Const(0) => false,
+            // Any other constant value -- provably nonzero, if above
+            // did not match.
+            ConstOp::I32Const(_) => true,
+            // Anything else: we can't prove anything.
+            _ => false,
+        }
     }
 }
 

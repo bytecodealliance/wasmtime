@@ -244,6 +244,15 @@ wasmtime_option_group! {
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
         pub gc: Option<bool>,
+        /// Whether to enable call-indirect caching.
+        pub cache_call_indirects: Option<bool>,
+        /// The maximum call-indirect cache slot count.
+        ///
+        /// One slot is allocated per indirect callsite; if the module
+        /// has more indirect callsites than this limit, then the
+        /// first callsites in linear order in the code section, up to
+        /// the limit, will receive a cache slot.
+        pub max_call_indirect_cache_slots: Option<usize>,
     }
 
     enum Wasm {
@@ -543,6 +552,12 @@ impl CommonOptions {
         }
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
+        }
+        if let Some(enable) = self.wasm.cache_call_indirects {
+            config.cache_call_indirects(enable);
+        }
+        if let Some(max) = self.wasm.max_call_indirect_cache_slots {
+            config.max_call_indirect_cache_slots(max);
         }
 
         match_feature! {
