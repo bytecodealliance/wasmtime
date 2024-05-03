@@ -1708,6 +1708,24 @@ impl Config {
         self
     }
 
+    pub(crate) fn conditionally_enable_defaults(&mut self) {
+        // If tail calls were not explicitly enabled/disabled (i.e. tail_callable is None), enable
+        // them if we are targeting a backend that supports them. Currently the Cranelift
+        // compilation strategy is the only one that supports tail calls, but not targeting s390x.
+        if self.tunables.tail_callable.is_none() {
+            #[cfg(feature = "cranelift")]
+            let default_tail_calls = self.compiler_config.strategy == Strategy::Cranelift
+                && self.compiler_config.target.as_ref().map_or_else(
+                    || target_lexicon::Triple::host().architecture,
+                    |triple| triple.architecture,
+                ) != Architecture::S390x;
+            #[cfg(not(feature = "cranelift"))]
+            let default_tail_calls = false;
+
+            self.wasm_tail_call(default_tail_calls);
+        }
+    }
+
     pub(crate) fn validate(&self) -> Result<Tunables> {
         if self.features.contains(WasmFeatures::REFERENCE_TYPES)
             && !self.features.contains(WasmFeatures::BULK_MEMORY)
