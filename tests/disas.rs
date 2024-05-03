@@ -190,7 +190,7 @@ impl Test {
         // Use wasmtime::Config with its `emit_clif` option to get Wasmtime's
         // code generator to jettison CLIF out the back.
         let tempdir = TempDir::new().context("failed to make a tempdir")?;
-        let mut config = self.opts.config(Some(&self.config.target))?;
+        let mut config = self.opts.config(Some(&self.config.target), None)?;
         match self.config.test {
             TestKind::Clif | TestKind::Optimize => {
                 config.emit_clif(tempdir.path());
