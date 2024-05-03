@@ -12,7 +12,6 @@ use alloc::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use core::marker;
 use core::ptr::{self, NonNull};
-use wasmtime_environ::prelude::IndexMap;
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 
