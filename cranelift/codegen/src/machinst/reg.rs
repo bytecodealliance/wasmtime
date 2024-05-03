@@ -503,7 +503,8 @@ pub trait PrettyPrint {
 pub struct AllocationConsumer;
 
 impl AllocationConsumer {
-    pub fn new(_allocs: &[Allocation]) -> Self {
+    pub fn new(allocs: &[Allocation]) -> Self {
+        debug_assert!(allocs.is_empty());
         Self
     }
 
