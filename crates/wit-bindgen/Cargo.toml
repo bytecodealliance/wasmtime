@@ -16,3 +16,6 @@ anyhow = { workspace = true }
 heck = { workspace = true }
 wit-parser = { workspace = true }
 indexmap = { workspace = true }
+
+[features]
+std = []
