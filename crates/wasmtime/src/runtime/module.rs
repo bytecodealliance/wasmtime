@@ -339,11 +339,7 @@ impl Module {
     /// This is because the file is mapped into memory and lazily loaded pages
     /// reflect the current state of the file, not necessarily the original
     /// state of the file.
-<<<<<<< HEAD
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-=======
     #[cfg(all(feature = "std", any(feature = "cranelift", feature = "winch")))]
->>>>>>> 025923159 (Add `#![no_std]` support to the `wasmtime` crate)
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
         if &mmap[0..4] == b"\x7fELF" {
