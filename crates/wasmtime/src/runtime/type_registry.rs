@@ -20,7 +20,7 @@ use std::{
 };
 use wasmtime_environ::{
     iter_entity_range, EngineOrModuleTypeIndex, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
-    TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
+    SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
 };
 use wasmtime_slab::{Id as SlabId, Slab};
 
@@ -293,7 +293,7 @@ impl RegisteredType {
             let inner = engine.signatures().0.read().unwrap();
 
             let ty = inner.types.get(id)?.clone();
-            let entry = inner.type_to_rec_group[&index].clone();
+            let entry = inner.type_to_rec_group[index].clone().unwrap();
 
             // NB: make sure to incref while the lock is held to prevent:
             //
@@ -436,7 +436,7 @@ struct TypeRegistryInner {
 
     // A map that lets you walk backwards from a `VMSharedTypeIndex` to its
     // `RecGroupEntry`.
-    type_to_rec_group: HashMap<VMSharedTypeIndex, RecGroupEntry>,
+    type_to_rec_group: SecondaryMap<VMSharedTypeIndex, Option<RecGroupEntry>>,
 
     // An explicit stack of entries that we are in the middle of dropping. Used
     // to avoid recursion when dropping a type that is holding the last
@@ -543,7 +543,7 @@ impl TypeRegistryInner {
         // while this rec group is still alive.
         hash_consing_key
             .trace_engine_indices::<_, ()>(&mut |index| {
-                let entry = &self.type_to_rec_group[&index];
+                let entry = &self.type_to_rec_group[index].as_ref().unwrap();
                 entry.incref(
                     "new cross-group type reference to existing type in `register_rec_group`",
                 );
@@ -583,11 +583,11 @@ impl TypeRegistryInner {
         let is_new_entry = self.hash_consing_map.insert(entry.clone());
         debug_assert!(is_new_entry);
 
-        // Now that we've construct the entry, we can update the reverse
+        // Now that we've constructed the entry, we can update the reverse
         // type-to-rec-group map.
-        for ty in entry.0.shared_type_indices.iter() {
-            let old_entry = self.type_to_rec_group.insert(*ty, entry.clone());
-            debug_assert!(old_entry.is_none());
+        for ty in entry.0.shared_type_indices.iter().copied() {
+            debug_assert!(self.type_to_rec_group[ty].is_none());
+            self.type_to_rec_group[ty] = Some(entry.clone());
         }
 
         entry
@@ -714,12 +714,12 @@ impl TypeRegistryInner {
                 .0
                 .hash_consing_key
                 .trace_engine_indices::<_, ()>(&mut |other_index| {
-                    let other_entry = self.type_to_rec_group[&other_index].clone();
+                    let other_entry = self.type_to_rec_group[other_index].as_ref().unwrap();
                     if other_entry.decref(
                         "referenced by dropped entry in \
                          `TypeCollection::unregister_entry`",
                     ) {
-                        self.drop_stack.push(other_entry);
+                        self.drop_stack.push(other_entry.clone());
                     }
                     Ok(())
                 })
@@ -734,13 +734,13 @@ impl TypeRegistryInner {
 
             // Similarly, remove the rec group's types from the registry, as
             // well as their entries from the reverse type-to-rec-group map.
-            for ty in entry.0.shared_type_indices.iter() {
+            for ty in entry.0.shared_type_indices.iter().copied() {
                 log::trace!("removing {ty:?} from registry");
 
-                let removed_entry = self.type_to_rec_group.remove(ty);
+                let removed_entry = self.type_to_rec_group[ty].take();
                 debug_assert_eq!(removed_entry.unwrap(), entry);
 
-                let id = shared_type_index_to_slab_id(*ty);
+                let id = shared_type_index_to_slab_id(ty);
                 self.types.dealloc(id);
             }
 
@@ -769,7 +769,7 @@ impl Drop for TypeRegistryInner {
             "type registry not empty: types slab is not empty"
         );
         assert!(
-            type_to_rec_group.is_empty(),
+            type_to_rec_group.is_empty() || type_to_rec_group.values().all(|x| x.is_none()),
             "type registry not empty: type-to-rec-group map is not empty"
         );
         assert!(
