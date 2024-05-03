@@ -1728,30 +1728,24 @@ impl Config {
         self
     }
 
-    pub(crate) fn validate(mut self) -> Result<(Self, Tunables)> {
+    pub(crate) fn conditionally_enable_defaults(&mut self) {
         // Enable tail calls by default when cranelift is going to be used as the compilation
         // strategy, and we're not targeting s390x, which currently lacks tail-call support.
-        match self.tunables.tail_callable {
-            None => {
-                #[cfg(feature = "cranelift")]
-                let default_tail_calls = self.compiler_config.strategy == Strategy::Cranelift
-                    && self.compiler_config.target.as_ref().map_or_else(
-                        || target_lexicon::Triple::host().architecture,
-                        |triple| triple.architecture,
-                    ) != Architecture::S390x;
-                #[cfg(not(feature = "cranelift"))]
-                let default_tail_calls = false;
+        if self.tunables.tail_callable.is_none() {
+            #[cfg(feature = "cranelift")]
+            let default_tail_calls = self.compiler_config.strategy == Strategy::Cranelift
+                && self.compiler_config.target.as_ref().map_or_else(
+                    || target_lexicon::Triple::host().architecture,
+                    |triple| triple.architecture,
+                ) != Architecture::S390x;
+            #[cfg(not(feature = "cranelift"))]
+            let default_tail_calls = false;
 
-                self.features
-                    .set(WasmFeatures::TAIL_CALL, default_tail_calls);
-                self.tunables.tail_callable = Some(default_tail_calls);
-            }
-
-            Some(val) => {
-                self.features.set(WasmFeatures::TAIL_CALL, val);
-            }
+            self.wasm_tail_call(default_tail_calls);
         }
+    }
 
+    pub(crate) fn validate(&self) -> Result<Tunables> {
         if self.features.contains(WasmFeatures::REFERENCE_TYPES)
             && !self.features.contains(WasmFeatures::BULK_MEMORY)
         {
@@ -1843,7 +1837,7 @@ impl Config {
             bail!("static memory guard size cannot be smaller than dynamic memory guard size");
         }
 
-        Ok((self, tunables))
+        Ok(tunables)
     }
 
     #[cfg(feature = "runtime")]
