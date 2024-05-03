@@ -409,43 +409,6 @@ impl FpuOPRR {
         }
     }
 
-    pub(crate) fn float_convert_2_int_op(from: Type, is_type_signed: bool, to: Type) -> Self {
-        let type_32 = to.bits() <= 32;
-        match from {
-            F32 => {
-                if is_type_signed {
-                    if type_32 {
-                        Self::FcvtWS
-                    } else {
-                        Self::FcvtLS
-                    }
-                } else {
-                    if type_32 {
-                        Self::FcvtWuS
-                    } else {
-                        Self::FcvtLuS
-                    }
-                }
-            }
-            F64 => {
-                if is_type_signed {
-                    if type_32 {
-                        Self::FcvtWD
-                    } else {
-                        Self::FcvtLD
-                    }
-                } else {
-                    if type_32 {
-                        Self::FcvtWuD
-                    } else {
-                        Self::FcvtLuD
-                    }
-                }
-            }
-            _ => unreachable!("from type:{}", from),
-        }
-    }
-
     pub(crate) fn op_code(self) -> u32 {
         match self {
             FpuOPRR::FsqrtS
@@ -1606,27 +1569,6 @@ impl Inst {
     }
 }
 
-impl FloatRoundOP {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            FloatRoundOP::Nearest => "nearest",
-            FloatRoundOP::Ceil => "ceil",
-            FloatRoundOP::Floor => "floor",
-            FloatRoundOP::Trunc => "trunc",
-        }
-    }
-
-    pub(crate) fn to_frm(self) -> FRM {
-        match self {
-            FloatRoundOP::Nearest => FRM::RNE,
-            FloatRoundOP::Ceil => FRM::RUP,
-            FloatRoundOP::Floor => FRM::RDN,
-            FloatRoundOP::Trunc => FRM::RTZ,
-        }
-    }
-}
-
-///
 pub(crate) fn f32_cvt_to_int_bounds(signed: bool, out_bits: u32) -> (f32, f32) {
     match (signed, out_bits) {
         (true, 8) => (i8::min_value() as f32 - 1., i8::max_value() as f32 + 1.),

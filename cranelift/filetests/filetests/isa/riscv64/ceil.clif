@@ -11,27 +11,27 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   fmv.d fa5,fa0
-;   ceil fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f32
+;   lui a2,307200
+;   fmv.w.x fa4,a2
+;   fabs.s fa1,fa0
+;   flt.s a2,fa1,fa4
+;   fcvt.w.s a4,fa0,rup
+;   fcvt.s.w fa1,a4,rup
+;   fsgnj.s fa2,fa1,fa0
+;   select fa0,fa0,fa2##condition=(a2 eq zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmv.d fa5, fa0
-;   feq.s a3, fa5, fa5
-;   beqz a3, 0x28
-;   lui t6, 0x4b800
-;   fmv.w.x fa4, t6
-;   fabs.s fa0, fa5
-;   flt.s a3, fa4, fa0
-;   bnez a3, 0x1c
-;   fcvt.l.s a3, fa5, rup ; trap: bad_toint
-;   fcvt.s.l fa0, a3, rup
-;   fsgnj.s fa0, fa0, fa5
-;   j 0x10
-;   fadd.s fa0, fa5, fa5, rne
-;   j 8
-;   fmv.s fa0, fa5
+;   lui a2, 0x4b000
+;   fmv.w.x fa4, a2
+;   fabs.s fa1, fa0
+;   flt.s a2, fa1, fa4
+;   fcvt.w.s a4, fa0, rup ; trap: bad_toint
+;   fcvt.s.w fa1, a4, rup
+;   fsgnj.s fa2, fa1, fa0
+;   beqz a2, 8
+;   fmv.d fa0, fa2
 ;   ret
 
 function %ceil_f64(f64) -> f64 {
@@ -42,29 +42,27 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   fmv.d fa5,fa0
-;   ceil fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f64
+;   lui a2,1075
+;   slli a4,a2,40
+;   fmv.d.x fa1,a4
+;   fabs.d fa2,fa0
+;   flt.d a4,fa2,fa1
+;   fcvt.l.d a0,fa0,rup
+;   fcvt.d.l fa2,a0,rup
+;   fsgnj.d fa4,fa2,fa0
+;   select fa0,fa0,fa4##condition=(a4 eq zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmv.d fa5, fa0
-;   feq.d a3, fa5, fa5
-;   beqz a3, 0x38
-;   auipc t6, 0
-;   ld t6, 0xc(t6) ; trap: heap_oob
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x40, 0x43
-;   fmv.d.x fa4, t6
-;   fabs.d fa0, fa5
-;   flt.d a3, fa4, fa0
-;   bnez a3, 0x1c
-;   fcvt.l.d a3, fa5, rup ; trap: bad_toint
-;   fcvt.d.l fa0, a3, rup
-;   fsgnj.d fa0, fa0, fa5
-;   j 0x10
-;   fadd.d fa0, fa5, fa5, rne
-;   j 8
-;   fmv.d fa0, fa5
+;   lui a2, 0x433
+;   slli a4, a2, 0x28
+;   fmv.d.x fa1, a4
+;   fabs.d fa2, fa0
+;   flt.d a4, fa2, fa1
+;   fcvt.l.d a0, fa0, rup ; trap: bad_toint
+;   fcvt.d.l fa2, a0, rup
+;   fsgnj.d fa4, fa2, fa0
+;   beqz a4, 8
+;   fmv.d fa0, fa4
 ;   ret

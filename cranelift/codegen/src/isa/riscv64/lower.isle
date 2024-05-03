@@ -2429,28 +2429,28 @@
 
 ;;;;;  Rules for `ceil`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (ceil x)))
-  (gen_float_round (FloatRoundOP.Ceil) x ty))
+  (gen_float_round (FRM.RUP) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ceil x)))
   (gen_vec_round x (FRM.RUP) ty))
 
 ;;;;;  Rules for `floor`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (floor x)))
-  (gen_float_round (FloatRoundOP.Floor) x ty))
+  (gen_float_round (FRM.RDN) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (floor x)))
   (gen_vec_round x (FRM.RDN) ty))
 
 ;;;;;  Rules for `trunc`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (trunc x)))
-  (gen_float_round (FloatRoundOP.Trunc) x ty))
+  (gen_float_round (FRM.RTZ) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (trunc x)))
   (gen_vec_round x (FRM.RTZ) ty))
 
 ;;;;;  Rules for `nearest`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (nearest x)))
-  (gen_float_round (FloatRoundOP.Nearest) x ty))
+  (gen_float_round (FRM.RNE) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (nearest x)))
   (gen_vec_round x (FRM.RNE) ty))

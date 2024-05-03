@@ -249,14 +249,6 @@
     ;; A dummy use, useful to keep a value alive.
        (DummyUse
         (reg Reg))
-    ;;;
-    (FloatRound
-      (op FloatRoundOP)
-      (rd WritableReg)
-      (int_tmp WritableReg)
-      (f_tmp WritableReg)
-      (rs Reg)
-      (ty Type))
 
     ;; popcnt  if target doesn't support extension B
     ;; use iteration to implement.
@@ -356,14 +348,6 @@
       (flags MemFlags)
       (mask VecOpMasking)
       (vstate VState))
-))
-
-
-(type FloatRoundOP (enum
-  (Nearest)
-  (Ceil)
-  (Floor)
-  (Trunc)
 ))
 
 (type AtomicOP (enum
@@ -1058,16 +1042,6 @@
 
 (decl pure has_zbs () bool)
 (extern constructor has_zbs has_zbs)
-
-(decl gen_float_round (FloatRoundOP Reg Type) Reg)
-(rule
-  (gen_float_round op rs ty)
-  (let
-    ((rd WritableReg (temp_writable_reg ty))
-      (tmp WritableXReg (temp_writable_xreg))
-      (tmp2 WritableFReg (temp_writable_freg))
-      (_ Unit (emit (MInst.FloatRound op rd tmp tmp2 rs ty))))
-    (writable_reg_to_reg rd)))
 
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2487,6 +2461,32 @@
   (gen_atomic_store p ty src)
   (side_effect (SideEffectNoResult.Inst (MInst.AtomicStore src ty p)))
 )
+
+
+;; Rounds a FReg by converting the value into an integer and back with a specified
+;; float rounding mode.
+(decl float_round_fcvt (Type FRM FReg) FReg)
+(rule (float_round_fcvt $F32 frm rs) (rv_fcvtsw frm (rv_fcvtws frm rs)))
+(rule (float_round_fcvt $F64 frm rs) (rv_fcvtdl frm (rv_fcvtld frm rs)))
+
+(decl gen_float_round (FRM FReg Type) FReg)
+(rule (gen_float_round frm rs ty)
+  (let (;; if rs is NaN/+-Infinity/+-Zero or if the exponent is larger than # of bits
+        ;; in mantissa, the result is the same as src, check for these cases first.
+        (max FReg (imm ty (float_int_max ty)))
+        (abs FReg (rv_fabs ty rs))
+        (exact XReg (rv_flt ty abs max))
+
+        ;; Manually round the value using the fcvt instructions
+        ;; to move the value to an integer register and back.
+        (fcvt FReg (float_round_fcvt ty frm rs))
+        ;; Restore the sign bit from the initial value.
+        (rounded FReg (rv_fsgnj ty fcvt rs)))
+
+    ;; Check if the value cannot be rounded exactly and return the source input if so
+    (gen_select_freg (cmp_eqz exact) rs rounded)))
+
+
 
 
 (decl gen_stack_addr (StackSlot Offset32) Reg)
