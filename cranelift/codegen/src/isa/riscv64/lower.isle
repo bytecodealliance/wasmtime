@@ -1744,13 +1744,19 @@
         (min FReg (rv_fmin ty x y)))
     (gen_select_freg is_ordered min nan)))
 
+;; With Zfa we can use the special `fminm` that precisely matches the expected
+;; NaN behavior.
+(rule 1 (lower (has_type (ty_scalar_float ty) (fmin x y)))
+  (if-let $true (has_zfa))
+  (rv_fminm ty x y))
+
 ;; vfmin does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmin returns the
 ;; number input instead.
 ;;
 ;; TODO: We can improve this by using a masked `fmin` instruction that modifies
 ;; the canonical nan register. That way we could avoid the `vmerge.vv` instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmin x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmin x y)))
   (let ((is_not_nan VReg (gen_fcmp_mask ty (FloatCC.Ordered) x y))
         (nan XReg (imm $I64 (canonical_nan_u64 (lane_type ty))))
         (vec_nan VReg (rv_vmv_vx nan ty))
@@ -1770,6 +1776,11 @@
         (max FReg (rv_fmax ty x y)))
     (gen_select_freg is_ordered max nan)))
 
+;; With Zfa we can use the special `fmaxm` that precisely matches the expected
+;; NaN behavior.
+(rule 1 (lower (has_type (ty_scalar_float ty) (fmax x y)))
+  (if-let $true (has_zfa))
+  (rv_fmaxm ty x y))
 
 ;; vfmax does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmax returns the
@@ -1777,7 +1788,7 @@
 ;;
 ;; TODO: We can improve this by using a masked `fmax` instruction that modifies
 ;; the canonical nan register. That way we could avoid the `vmerge.vv` instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmax x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmax x y)))
   (let ((is_not_nan VReg (gen_fcmp_mask ty (FloatCC.Ordered) x y))
         (nan XReg (imm $I64 (canonical_nan_u64 (lane_type ty))))
         (vec_nan VReg (rv_vmv_vx nan ty))

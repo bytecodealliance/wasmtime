@@ -56,6 +56,14 @@ pub(crate) fn define() -> TargetIsa {
         "Double-precision floating point",
         true,
     );
+
+    let _has_zfa = setting.add_bool(
+        "has_zfa",
+        "has extension Zfa?",
+        "Zfa: Extension for Additional Floating-Point Instructions",
+        false,
+    );
+
     let _has_v = setting.add_bool(
         "has_v",
         "has extension V?",

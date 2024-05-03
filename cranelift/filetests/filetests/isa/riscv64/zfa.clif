@@ -1,0 +1,70 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zfa
+
+
+function %fminm_s(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmin.f32 v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fminm.s fa0,fa0,fa1,rdn
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x25, 0xb5, 0x28
+;   ret
+
+
+function %fminm_d(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmin.f64 v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fminm.d fa0,fa0,fa1,rdn
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x25, 0xb5, 0x2a
+;   ret
+
+function %fmaxm_s(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmax.f32 v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fmaxm.s fa0,fa0,fa1,rup
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x35, 0xb5, 0x28
+;   ret
+
+function %fmaxm_d(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmax.f64 v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fmaxm.d fa0,fa0,fa1,rup
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x35, 0xb5, 0x2a
+;   ret
+

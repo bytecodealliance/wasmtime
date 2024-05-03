@@ -361,6 +361,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_m()
     }
 
+    fn has_zfa(&mut self) -> bool {
+        self.backend.isa_flags.has_zfa()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }

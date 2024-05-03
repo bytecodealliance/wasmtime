@@ -575,6 +575,10 @@ impl FpuOPRRR {
             Self::FeqD => "feq.d",
             Self::FltD => "flt.d",
             Self::FleD => "fle.d",
+            Self::FminmS => "fminm.s",
+            Self::FmaxmS => "fmaxm.s",
+            Self::FminmD => "fminm.d",
+            Self::FmaxmD => "fmaxm.d",
         }
     }
 
@@ -591,7 +595,9 @@ impl FpuOPRRR {
             | Self::FmaxS
             | Self::FeqS
             | Self::FltS
-            | Self::FleS => 0b1010011,
+            | Self::FleS
+            | Self::FminmS
+            | Self::FmaxmS => 0b1010011,
 
             Self::FaddD
             | Self::FsubD
@@ -604,7 +610,9 @@ impl FpuOPRRR {
             | Self::FmaxD
             | Self::FeqD
             | Self::FltD
-            | Self::FleD => 0b1010011,
+            | Self::FleD
+            | Self::FminmD
+            | Self::FmaxmD => 0b1010011,
         }
     }
 
@@ -636,6 +644,11 @@ impl FpuOPRRR {
             Self::FeqD => 0b1010001,
             Self::FltD => 0b1010001,
             Self::FleD => 0b1010001,
+
+            Self::FminmS => 0b0010100,
+            Self::FmaxmS => 0b0010100,
+            Self::FminmD => 0b0010101,
+            Self::FmaxmD => 0b0010101,
         }
     }
     pub fn is_32(self) -> bool {
