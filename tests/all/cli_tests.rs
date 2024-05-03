@@ -1649,6 +1649,7 @@ mod test_programs {
                 addr[..addr_end].parse().ok()
             }) {
                 Some(addr) => {
+                    assert!(reader.buffer().is_empty());
                     child.stderr = Some(reader.into_inner());
                     Ok(WasmtimeServe {
                         child: Some(child),
@@ -1791,6 +1792,10 @@ mod test_programs {
     }
 
     #[tokio::test]
+    #[ignore] // TODO: printing stderr in the child and killing the child at the
+              // end of this test race so the stderr may be present or not. Need
+              // to implement a more graceful shutdown routine for `wasmtime
+              // serve`.
     async fn cli_serve_respect_pooling_options() -> Result<()> {
         let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Opooling-total-memories=0").arg("-Scli");
