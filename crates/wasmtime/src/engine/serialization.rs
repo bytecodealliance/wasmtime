@@ -633,13 +633,16 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(format!("{:?}", e).starts_with(
-                "\
+            Err(e) => assert!(
+                format!("{e:?}").starts_with(
+                    "\
 compilation settings of module incompatible with native host
 
 Caused by:
-    cannot test if target-specific flag \"not_a_flag\" is available at runtime",
-            )),
+    don't know how to test for target-specific flag \"not_a_flag\" at runtime",
+                ),
+                "bad error {e:?}",
+            ),
         }
 
         Ok(())
