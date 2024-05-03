@@ -3,8 +3,6 @@
 //! This module is purely here for backwards compatibility in the Wasmtime CLI.
 //! You probably want to use [`preview1`](crate::preview1) instead.
 
-#![cfg_attr(docsrs, doc(cfg(feature = "preview1")))]
-
 use crate::preview0::types::Error;
 use crate::preview1::types as snapshot1_types;
 use crate::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;

@@ -235,7 +235,6 @@ impl Module {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         crate::CodeBuilder::new(engine)
             .wasm(bytes.as_ref(), None)?
@@ -271,7 +270,6 @@ impl Module {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         crate::CodeBuilder::new(engine)
             .wasm_file(file.as_ref())?
@@ -310,7 +308,6 @@ impl Module {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         crate::CodeBuilder::new(engine)
             .wasm(binary, None)?
@@ -340,7 +337,6 @@ impl Module {
     /// reflect the current state of the file, not necessarily the original
     /// state of the file.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
         if &mmap[0..4] == b"\x7fELF" {
@@ -550,7 +546,6 @@ impl Module {
     /// this method can be useful to get the serialized version without
     /// compiling twice.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn serialize(&self) -> Result<Vec<u8>> {
         // The current representation of compiled modules within a compiled
         // component means that it cannot be serialized. The mmap returned here

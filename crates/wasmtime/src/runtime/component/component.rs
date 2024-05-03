@@ -147,7 +147,6 @@ impl Component {
     /// # Ok(())
     /// # }
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         crate::CodeBuilder::new(engine)
             .wasm(bytes.as_ref(), None)?
@@ -160,7 +159,6 @@ impl Component {
     /// This is a convenience function for reading the contents of `file` on
     /// disk and then calling [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
         crate::CodeBuilder::new(engine)
             .wasm_file(file.as_ref())?
@@ -177,7 +175,6 @@ impl Component {
     ///
     /// For more information on semantics and errors see [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
         crate::CodeBuilder::new(engine)
             .wasm(binary, None)?

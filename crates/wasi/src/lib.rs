@@ -178,7 +178,7 @@
 //! [`wasi:sockets/udp`]: bindings::sockets::udp::Host
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use wasmtime::component::Linker;
 

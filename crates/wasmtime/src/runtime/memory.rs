@@ -237,7 +237,6 @@ impl Memory {
         Self::_new(store.as_context_mut().0, ty)
     }
 
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Memory::new`]. You must use this variant with
     /// [`Store`](`crate::Store`)s which have a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
@@ -519,7 +518,6 @@ impl Memory {
         }
     }
 
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Memory::grow`]. Required when using a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
@@ -726,7 +724,6 @@ impl SharedMemory {
     /// `maximum` number of 64K-sized pages. This call allocates the necessary
     /// pages on the system.
     #[cfg(feature = "threads")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "threads")))]
     pub fn new(engine: &Engine, ty: MemoryType) -> Result<Self> {
         if !ty.is_shared() {
             bail!("shared memory must have the `shared` flag enabled on its memory type")

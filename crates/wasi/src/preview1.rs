@@ -63,8 +63,6 @@
 //! }
 //! ```
 
-#![cfg_attr(docsrs, doc(cfg(feature = "preview1")))]
-
 use crate::bindings::{
     cli::{
         stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,

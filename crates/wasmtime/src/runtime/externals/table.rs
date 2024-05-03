@@ -77,7 +77,6 @@ impl Table {
         Table::_new(store.as_context_mut().0, ty, init)
     }
 
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Table::new`]. You must use this variant with
     /// [`Store`](`crate::Store`)s which have a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
@@ -265,7 +264,6 @@ impl Table {
         }
     }
 
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Table::grow`]. Required when using a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///

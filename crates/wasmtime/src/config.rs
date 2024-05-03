@@ -303,7 +303,6 @@ impl Config {
     ///
     /// This method will error if the given target triple is not supported.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         self.compiler_config.target =
             Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
@@ -414,7 +413,6 @@ impl Config {
     /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
     /// feel free to open an issue!
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn async_support(&mut self, enable: bool) -> &mut Self {
         self.async_support = enable;
         self
@@ -691,7 +689,6 @@ impl Config {
     /// The `Engine::new` method will fail if the value for this option is
     /// smaller than the [`Config::max_wasm_stack`] option.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
         self
@@ -732,7 +729,6 @@ impl Config {
     /// [threads]: https://github.com/webassembly/threads
     /// [wasi-threads]: https://github.com/webassembly/wasi-threads
     #[cfg(feature = "threads")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "threads")))]
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::THREADS, enable);
         self
@@ -755,7 +751,6 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     #[cfg(feature = "gc")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::REFERENCE_TYPES, enable);
         self
@@ -775,7 +770,6 @@ impl Config {
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
     #[cfg(feature = "gc")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::FUNCTION_REFERENCES, enable);
         self
@@ -797,7 +791,6 @@ impl Config {
     ///
     /// [proposal]: https://github.com/WebAssembly/gc
     #[cfg(feature = "gc")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::GC, enable);
         self
@@ -1010,7 +1003,6 @@ impl Config {
     ///
     /// The default value for this is `Strategy::Auto`.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
         self.compiler_config.strategy = strategy;
         self
@@ -1044,7 +1036,6 @@ impl Config {
     ///
     /// The default value for this is `false`
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -1061,7 +1052,6 @@ impl Config {
     ///
     /// The default value for this is `OptLevel::None`.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
             OptLevel::None => "none",
@@ -1088,7 +1078,6 @@ impl Config {
     ///
     /// The default value for this is `false`
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -1111,7 +1100,6 @@ impl Config {
     /// over a trail of "breadcrumbs" or facts at each intermediate
     /// value. Thus, it is appropriate to enable in production.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn cranelift_pcc(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -1137,7 +1125,6 @@ impl Config {
     /// cause `Engine::new` fail if the flag's name does not exist, or the value is not appropriate
     /// for the flag type.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> &mut Self {
         self.compiler_config.flags.insert(flag.to_string());
         self
@@ -1163,7 +1150,6 @@ impl Config {
     /// For example, feature `wasm_backtrace` will set `unwind_info` to `true`, but if it's
     /// manually set to false then it will fail.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> &mut Self {
         self.compiler_config
             .settings
@@ -1190,7 +1176,6 @@ impl Config {
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
     pub fn cache_config_load(&mut self, path: impl AsRef<Path>) -> Result<&mut Self> {
         self.cache_config = CacheConfig::from_file(Some(path.as_ref()))?;
         Ok(self)
@@ -1207,7 +1192,6 @@ impl Config {
     /// This method is only available when the `cache` feature of this crate is
     /// enabled.
     #[cfg(feature = "cache")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
     pub fn disable_cache(&mut self) -> &mut Self {
         self.cache_config = CacheConfig::new_cache_disabled();
         self
@@ -1235,7 +1219,6 @@ impl Config {
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
     pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
         self.cache_config = CacheConfig::from_file(None)?;
         Ok(self)
@@ -1256,7 +1239,6 @@ impl Config {
     /// Custom memory creators are used when creating creating async instance stacks for
     /// the on-demand instance allocation strategy.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn with_host_stack(&mut self, stack_creator: Arc<dyn StackCreator>) -> &mut Self {
         self.stack_creator = Some(Arc::new(StackCreatorProxy(stack_creator)));
         self
@@ -1568,7 +1550,6 @@ impl Config {
     ///
     /// By default parallel compilation is enabled.
     #[cfg(feature = "parallel-compilation")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "parallel-compilation")))]
     pub fn parallel_compilation(&mut self, parallel: bool) -> &mut Self {
         self.parallel_compilation = parallel;
         self
@@ -1672,7 +1653,6 @@ impl Config {
     ///
     /// This option is disabled by default.
     #[cfg(feature = "coredump")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "coredump")))]
     pub fn coredump_on_trap(&mut self, enable: bool) -> &mut Self {
         self.coredump_on_trap = enable;
         self
@@ -2372,7 +2352,6 @@ impl PoolingAllocationConfig {
     ///
     /// [`call_async`]: crate::TypedFunc::call_async
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
         self.config.async_stack_zeroing = enable;
         self
@@ -2390,7 +2369,6 @@ impl PoolingAllocationConfig {
     /// Note that when using this option the memory with async stacks will
     /// never be decommitted.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn async_stack_keep_resident(&mut self, size: usize) -> &mut Self {
         let size = round_up_to_pages(size as u64) as usize;
         self.config.async_stack_keep_resident = size;
@@ -2770,7 +2748,6 @@ impl PoolingAllocationConfig {
     /// entry in the pool contains the space needed for each GC heap used by a
     /// store.
     #[cfg(feature = "gc")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn total_gc_heaps(&mut self, count: u32) -> &mut Self {
         self.config.limits.total_gc_heaps = count;
         self

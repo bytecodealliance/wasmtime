@@ -368,7 +368,6 @@ macro_rules! generate_wrap_async_func {
         /// This function will panic if called with a non-asynchronous store.
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
         pub fn [<wrap $num _async>]<T, $($args,)* R>(
             store: impl AsContextMut<Data = T>,
             func: impl for<'a> Fn(Caller<'a, T>, $($args),*) -> Box<dyn Future<Output = R> + Send + 'a> + Send + Sync + 'static,
@@ -445,7 +444,6 @@ impl Func {
     /// Panics if the given function type is not associated with this store's
     /// engine.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -489,7 +487,6 @@ impl Func {
     /// Panics if the given function type is not associated with this store's
     /// engine.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -574,7 +571,6 @@ impl Func {
     /// # }
     /// ```
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
@@ -1113,7 +1109,6 @@ impl Func {
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -2080,7 +2075,6 @@ impl<T> Caller<'_, T> {
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
     #[cfg(feature = "gc")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn gc(&mut self) {
         self.store.gc()
     }
@@ -2089,7 +2083,6 @@ impl<T> Caller<'_, T> {
     ///
     /// Same as [`Store::gc_async`](crate::Store::gc_async).
     #[cfg(all(feature = "async", feature = "gc"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub async fn gc_async(&mut self)
     where
         T: Send,
