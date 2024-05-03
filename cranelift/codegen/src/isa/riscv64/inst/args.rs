@@ -113,7 +113,7 @@ pub enum AMode {
 }
 
 impl AMode {
-    pub(crate) fn with_allocs(self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+    pub(crate) fn with_allocs(self, _allocs: &mut AllocationConsumer) -> Self {
         self
     }
 
@@ -177,7 +177,7 @@ impl AMode {
         }
     }
 
-    pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
+    pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer) -> String {
         format!("{}", self.clone().with_allocs(allocs))
     }
 }

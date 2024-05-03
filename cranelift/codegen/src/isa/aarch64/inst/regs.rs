@@ -176,7 +176,7 @@ fn show_reg(reg: Reg) -> String {
     }
 }
 
-pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> String {
+pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer) -> String {
     let reg = allocs.next(reg);
     show_reg(reg)
 }
@@ -254,11 +254,7 @@ pub fn show_vreg_element(reg: Reg, idx: u8, size: ScalarSize) -> String {
     format!("{}{}[{}]", s, suffix, idx)
 }
 
-pub fn pretty_print_ireg(
-    reg: Reg,
-    size: OperandSize,
-    allocs: &mut AllocationConsumer<'_>,
-) -> String {
+pub fn pretty_print_ireg(reg: Reg, size: OperandSize, allocs: &mut AllocationConsumer) -> String {
     let reg = allocs.next(reg);
     show_ireg_sized(reg, size)
 }
@@ -266,7 +262,7 @@ pub fn pretty_print_ireg(
 pub fn pretty_print_vreg_scalar(
     reg: Reg,
     size: ScalarSize,
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
 ) -> String {
     let reg = allocs.next(reg);
     show_vreg_scalar(reg, size)
@@ -275,7 +271,7 @@ pub fn pretty_print_vreg_scalar(
 pub fn pretty_print_vreg_vector(
     reg: Reg,
     size: VectorSize,
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
 ) -> String {
     let reg = allocs.next(reg);
     show_vreg_vector(reg, size)
@@ -285,7 +281,7 @@ pub fn pretty_print_vreg_element(
     reg: Reg,
     idx: usize,
     size: ScalarSize,
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
 ) -> String {
     let reg = allocs.next(reg);
     show_vreg_element(reg, idx as u8, size)

@@ -462,13 +462,25 @@ impl<'a, F: Fn(VReg) -> VReg> OperandVisitor for OperandCollector<'a, F> {
     }
 }
 
+impl<T: FnMut(&mut Reg, OperandConstraint, OperandKind, OperandPos)> OperandVisitor for T {
+    fn add_operand(
+        &mut self,
+        reg: &mut Reg,
+        constraint: OperandConstraint,
+        kind: OperandKind,
+        pos: OperandPos,
+    ) {
+        self(reg, constraint, kind, pos)
+    }
+}
+
 /// Pretty-print part of a disassembly, with knowledge of
 /// operand/instruction size, and optionally with regalloc
 /// results. This can be used, for example, to print either `rax` or
 /// `eax` for the register by those names on x86-64, depending on a
 /// 64- or 32-bit context.
 pub trait PrettyPrint {
-    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer<'_>) -> String;
+    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer) -> String;
 
     fn pretty_print_default(&self) -> String {
         self.pretty_print(0, &mut AllocationConsumer::new(&[]))
@@ -488,15 +500,11 @@ pub trait PrettyPrint {
 /// instruction, provide it the Regs in the same order as they were
 /// provided to the OperandCollector.
 #[derive(Clone)]
-pub struct AllocationConsumer<'a> {
-    allocs: std::slice::Iter<'a, Allocation>,
-}
+pub struct AllocationConsumer;
 
-impl<'a> AllocationConsumer<'a> {
-    pub fn new(allocs: &'a [Allocation]) -> Self {
-        Self {
-            allocs: allocs.iter(),
-        }
+impl AllocationConsumer {
+    pub fn new(_allocs: &[Allocation]) -> Self {
+        Self
     }
 
     pub fn next_fixed_nonallocatable(&mut self, _preg: PReg) {}
@@ -508,37 +516,10 @@ impl<'a> AllocationConsumer<'a> {
     pub fn next_writable(&mut self, pre_regalloc_reg: Writable<Reg>) -> Writable<Reg> {
         pre_regalloc_reg
     }
-
-    pub fn done(mut self) -> bool {
-        self.allocs.next().is_none()
-    }
 }
 
-impl<'a> std::default::Default for AllocationConsumer<'a> {
+impl std::default::Default for AllocationConsumer {
     fn default() -> Self {
-        Self { allocs: [].iter() }
-    }
-}
-
-impl OperandVisitor for AllocationConsumer<'_> {
-    fn add_operand(
-        &mut self,
-        reg: &mut Reg,
-        constraint: OperandConstraint,
-        _kind: OperandKind,
-        _pos: OperandPos,
-    ) {
-        let alloc = self
-            .allocs
-            .next()
-            .expect("enough allocations for all operands")
-            .as_reg()
-            .expect("only register allocations, not stack allocations")
-            .into();
-
-        if let OperandConstraint::FixedReg(rreg) = constraint {
-            debug_assert_eq!(Reg::from(rreg), alloc);
-        }
-        *reg = alloc;
+        Self::new(&[])
     }
 }

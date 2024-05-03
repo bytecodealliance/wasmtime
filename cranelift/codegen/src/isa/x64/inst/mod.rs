@@ -673,7 +673,7 @@ impl Inst {
 // Instructions: printing
 
 impl PrettyPrint for Inst {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer) -> String {
         fn ljustify(s: String) -> String {
             let w = 7;
             if s.len() >= w {

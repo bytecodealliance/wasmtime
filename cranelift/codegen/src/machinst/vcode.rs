@@ -25,8 +25,8 @@ use crate::trace;
 use crate::CodegenError;
 use crate::{LabelValueLoc, ValueLocRange};
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand, OperandKind,
-    PRegSet, RegClass,
+    Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand,
+    OperandConstraint, OperandKind, PRegSet, RegClass,
 };
 use rustc_hash::FxHashMap;
 
@@ -947,10 +947,23 @@ impl<I: VCodeInst> VCode<I> {
                         } else {
                             // Update the operands for this inst using the
                             // allocations from the regalloc result.
-                            let allocs = regalloc.inst_allocs(iix);
-                            let mut consumer = AllocationConsumer::new(allocs);
-                            self.insts[iix.index()].get_operands(&mut consumer);
-                            debug_assert!(consumer.done());
+                            let mut allocs = regalloc.inst_allocs(iix).iter();
+                            self.insts[iix.index()].get_operands(
+                                &mut |reg: &mut Reg, constraint, _kind, _pos| {
+                                    let alloc = allocs
+                                        .next()
+                                        .expect("enough allocations for all operands")
+                                        .as_reg()
+                                        .expect("only register allocations, not stack allocations")
+                                        .into();
+
+                                    if let OperandConstraint::FixedReg(rreg) = constraint {
+                                        debug_assert_eq!(Reg::from(rreg), alloc);
+                                    }
+                                    *reg = alloc;
+                                },
+                            );
+                            debug_assert!(allocs.next().is_none());
 
                             // Emit the instruction!
                             do_emit(

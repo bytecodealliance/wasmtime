@@ -99,12 +99,12 @@ pub fn maybe_show_fpr(reg: Reg) -> Option<String> {
     None
 }
 
-pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> String {
+pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer) -> String {
     let reg = allocs.next(reg);
     show_reg(reg)
 }
 
-pub fn pretty_print_regpair(pair: RegPair, allocs: &mut AllocationConsumer<'_>) -> String {
+pub fn pretty_print_regpair(pair: RegPair, allocs: &mut AllocationConsumer) -> String {
     let hi = allocs.next(pair.hi);
     let lo = allocs.next(pair.lo);
     if let Some(hi_reg) = hi.to_real_reg() {
@@ -122,11 +122,7 @@ pub fn pretty_print_regpair(pair: RegPair, allocs: &mut AllocationConsumer<'_>) 
     format!("{}/{}", show_reg(hi), show_reg(lo))
 }
 
-pub fn pretty_print_reg_mod(
-    rd: Writable<Reg>,
-    ri: Reg,
-    allocs: &mut AllocationConsumer<'_>,
-) -> String {
+pub fn pretty_print_reg_mod(rd: Writable<Reg>, ri: Reg, allocs: &mut AllocationConsumer) -> String {
     let output = allocs.next_writable(rd).to_reg();
     let input = allocs.next(ri);
     if output == input {
@@ -139,7 +135,7 @@ pub fn pretty_print_reg_mod(
 pub fn pretty_print_regpair_mod(
     rd: WritableRegPair,
     ri: RegPair,
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
 ) -> String {
     let rd_hi = allocs.next(rd.hi.to_reg());
     let rd_lo = allocs.next(rd.lo.to_reg());
@@ -161,7 +157,7 @@ pub fn pretty_print_regpair_mod(
 pub fn pretty_print_regpair_mod_lo(
     rd: WritableRegPair,
     ri: Reg,
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
 ) -> String {
     let rd_hi = allocs.next(rd.hi.to_reg());
     let rd_lo = allocs.next(rd.lo.to_reg());
@@ -178,7 +174,7 @@ pub fn pretty_print_regpair_mod_lo(
     }
 }
 
-pub fn pretty_print_fpr(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> (String, Option<String>) {
+pub fn pretty_print_fpr(reg: Reg, allocs: &mut AllocationConsumer) -> (String, Option<String>) {
     let reg = allocs.next(reg);
     (show_reg(reg), maybe_show_fpr(reg))
 }

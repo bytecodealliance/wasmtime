@@ -170,7 +170,7 @@ macro_rules! newtype_of_reg {
                 }
             }
             impl PrettyPrint for $newtype_reg_mem {
-                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
                     self.0.pretty_print(size, allocs)
                 }
             }
@@ -236,7 +236,7 @@ macro_rules! newtype_of_reg {
             }
 
             impl PrettyPrint for $newtype_reg_mem_imm {
-                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
                     self.0.pretty_print(size, allocs)
                 }
             }
@@ -407,7 +407,7 @@ impl Amode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
         self.clone()
     }
 
@@ -428,7 +428,7 @@ impl Amode {
 }
 
 impl PrettyPrint for Amode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             Amode::ImmReg { simm32, base, .. } => {
                 // Note: size is always 8; the address is 64 bits,
@@ -539,7 +539,7 @@ impl SyntheticAmode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
         self.clone()
     }
 
@@ -566,7 +566,7 @@ impl Into<SyntheticAmode> for VCodeConstant {
 }
 
 impl PrettyPrint for SyntheticAmode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             // See note in `Amode` regarding constant size of `8`.
             SyntheticAmode::Real(addr) => addr.pretty_print(8, allocs),
@@ -637,7 +637,7 @@ impl RegMemImm {
         }
     }
 
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
         self.clone()
     }
 }
@@ -658,7 +658,7 @@ impl From<Reg> for RegMemImm {
 }
 
 impl PrettyPrint for RegMemImm {
-    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             Self::Reg { reg } => pretty_print_reg(*reg, size, allocs),
             Self::Mem { addr } => addr.pretty_print(size, allocs),
@@ -735,7 +735,7 @@ impl RegMem {
         }
     }
 
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
         self.clone()
     }
 }
@@ -753,7 +753,7 @@ impl From<Writable<Reg>> for RegMem {
 }
 
 impl PrettyPrint for RegMem {
-    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             RegMem::Reg { reg } => pretty_print_reg(*reg, size, allocs),
             RegMem::Mem { addr, .. } => addr.pretty_print(size, allocs),
