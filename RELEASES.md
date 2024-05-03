@@ -10,6 +10,17 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 20.0.1
+
+Released 2024-05-03.
+
+### Added
+
+* Make the c-api CMakeLists.txt easier to import.
+  [#8496](https://github.com/bytecodealliance/wasmtime/issues/8496)
+
+--------------------------------------------------------------------------------
+
 ## 20.0.0
 
 Released 2024-04-22
