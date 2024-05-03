@@ -269,6 +269,14 @@
 // most features enabled. This will present warnings in stripped-down doc builds
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
+#![no_std]
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+extern crate alloc;
+
+use wasmtime_environ::prelude;
 
 #[cfg(feature = "runtime")]
 mod runtime;
@@ -286,6 +294,16 @@ mod profiling_agent;
 
 pub use crate::config::*;
 pub use crate::engine::*;
+
+#[cfg(feature = "std")]
+mod sync_std;
+#[cfg(feature = "std")]
+use sync_std as sync;
+
+#[cfg_attr(feature = "std", allow(dead_code))]
+mod sync_nostd;
+#[cfg(not(feature = "std"))]
+use sync_nostd as sync;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.
 ///

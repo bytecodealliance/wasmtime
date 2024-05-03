@@ -3,15 +3,13 @@
 use crate::code::CodeObject;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
+use crate::prelude::*;
 use crate::runtime::vm::VMWasmCallFunction;
+use crate::sync::{OnceLock, RwLock};
 use crate::{code_memory::CodeMemory, FrameInfo, Module, Trap};
-use once_cell::sync::Lazy;
-use std::collections::btree_map::Entry;
-use std::{
-    collections::BTreeMap,
-    ptr::NonNull,
-    sync::{Arc, RwLock},
-};
+use alloc::collections::btree_map::{BTreeMap, Entry};
+use alloc::sync::Arc;
+use core::ptr::NonNull;
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// Used for registering modules with a store.
@@ -249,7 +247,10 @@ impl LoadedCode {
 // it is also automatically registered with the singleton global module
 // registry. When a `ModuleRegistry` is destroyed then all of its entries
 // are removed from the global registry.
-static GLOBAL_CODE: Lazy<RwLock<GlobalRegistry>> = Lazy::new(Default::default);
+fn global_code() -> &'static RwLock<GlobalRegistry> {
+    static GLOBAL_CODE: OnceLock<RwLock<GlobalRegistry>> = OnceLock::new();
+    GLOBAL_CODE.get_or_init(Default::default)
+}
 
 type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
@@ -257,7 +258,7 @@ type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
 /// is a wasm trap or not.
 pub fn get_wasm_trap(pc: usize) -> Option<Trap> {
     let (code, text_offset) = {
-        let all_modules = GLOBAL_CODE.read().unwrap();
+        let all_modules = global_code().read();
 
         let (end, (start, module)) = match all_modules.range(pc..).next() {
             Some(info) => info,
@@ -287,10 +288,7 @@ pub fn register_code(code: &Arc<CodeMemory>) {
     }
     let start = text.as_ptr() as usize;
     let end = start + text.len() - 1;
-    let prev = GLOBAL_CODE
-        .write()
-        .unwrap()
-        .insert(end, (start, code.clone()));
+    let prev = global_code().write().insert(end, (start, code.clone()));
     assert!(prev.is_none());
 }
 
@@ -303,7 +301,7 @@ pub fn unregister_code(code: &Arc<CodeMemory>) {
         return;
     }
     let end = (text.as_ptr() as usize) + text.len() - 1;
-    let code = GLOBAL_CODE.write().unwrap().remove(&end);
+    let code = global_code().write().remove(&end);
     assert!(code.is_some());
 }
 

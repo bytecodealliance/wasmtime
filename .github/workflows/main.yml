@@ -323,6 +323,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
     - run: cargo check -p wasmtime --no-default-features --features component-model
+    - run: cargo check -p wasmtime --no-default-features --features runtime,component-model
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
     - run: cargo check -p wasmtime --no-default-features --features winch
     - run: cargo check -p wasmtime --no-default-features --features wmemcheck
@@ -363,16 +364,7 @@ jobs:
     # Checks for no_std support, ensure that crates can build on a no_std
     # target
     - run: rustup target add x86_64-unknown-none
-    - run: cargo check -p wasmtime-jit-icache-coherence
-      env:
-        CARGO_BUILD_TARGET: x86_64-unknown-none
-    - run: cargo check -p wasmtime-asm-macros
-      env:
-        CARGO_BUILD_TARGET: x86_64-unknown-none
-    - run: cargo check -p wasmtime-slab
-      env:
-        CARGO_BUILD_TARGET: x86_64-unknown-none
-    - run: cargo check -p wasmtime-environ --features gc,component-model
+    - run: cargo check -p wasmtime --no-default-features --features gc,component-model
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
 

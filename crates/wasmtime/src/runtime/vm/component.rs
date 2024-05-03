@@ -10,16 +10,16 @@ use crate::runtime::vm::{
     SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
     VMNativeCallFunction, VMOpaqueContext, VMWasmCallFunction, ValRaw,
 };
+use alloc::alloc::Layout;
+use alloc::sync::Arc;
 use anyhow::Result;
+use core::any::Any;
+use core::marker;
+use core::mem;
+use core::ops::Deref;
+use core::ptr::{self, NonNull};
 use memoffset::offset_of;
 use sptr::Strict;
-use std::alloc::{self, Layout};
-use std::any::Any;
-use std::marker;
-use std::mem;
-use std::ops::Deref;
-use std::ptr::{self, NonNull};
-use std::sync::Arc;
 use wasmtime_environ::component::*;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
@@ -222,7 +222,7 @@ impl ComponentInstance {
     }
 
     fn vmctx(&self) -> *mut VMComponentContext {
-        let addr = std::ptr::addr_of!(self.vmctx);
+        let addr = core::ptr::addr_of!(self.vmctx);
         Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
     }
 
@@ -499,7 +499,7 @@ impl ComponentInstance {
     }
 
     /// Get the canonical ABI's `realloc` function's runtime type.
-    pub fn realloc_func_ty(&self) -> &Arc<dyn std::any::Any + Send + Sync> {
+    pub fn realloc_func_ty(&self) -> &Arc<dyn Any + Send + Sync> {
         self.runtime_info.realloc_func_type()
     }
 
@@ -672,7 +672,7 @@ impl OwnedComponentInstance {
             // in the context, but to help protect against possible bugs a
             // zeroed allocation is done here to try to contain
             // use-before-initialized issues.
-            let ptr = alloc::alloc_zeroed(layout) as *mut ComponentInstance;
+            let ptr = alloc::alloc::alloc_zeroed(layout) as *mut ComponentInstance;
             let ptr = NonNull::new(ptr).unwrap();
 
             ComponentInstance::new_at(
@@ -768,7 +768,7 @@ impl Drop for OwnedComponentInstance {
         let layout = ComponentInstance::alloc_layout(&self.offsets);
         unsafe {
             ptr::drop_in_place(self.ptr.as_ptr());
-            alloc::dealloc(self.ptr.as_ptr().cast(), layout);
+            alloc::alloc::dealloc(self.ptr.as_ptr().cast(), layout);
         }
     }
 }
@@ -856,5 +856,5 @@ pub trait ComponentRuntimeInfo: Send + Sync + 'static {
     fn component_types(&self) -> &Arc<ComponentTypes>;
 
     /// Get the `wasmtime::FuncType` for the canonical ABI's `realloc` function.
-    fn realloc_func_type(&self) -> &Arc<dyn std::any::Any + Send + Sync>;
+    fn realloc_func_type(&self) -> &Arc<dyn Any + Send + Sync>;
 }

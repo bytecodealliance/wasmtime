@@ -1,10 +1,10 @@
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use rustix::mm::{mprotect, MprotectFlags};
-use std::fs::File;
 use std::ops::Range;
-use std::path::Path;
 use std::ptr::{self, NonNull};
+#[cfg(feature = "std")]
+use std::{fs::File, path::Path};
 
 #[derive(Debug)]
 pub struct Mmap {
@@ -47,13 +47,16 @@ impl Mmap {
         Ok(Mmap { memory })
     }
 
+    #[cfg(feature = "std")]
     pub fn from_file(path: &Path) -> Result<(Self, File)> {
+        use anyhow::Context;
+
         let file = File::open(path).context("failed to open file")?;
         let len = file
             .metadata()
             .context("failed to get file metadata")?
             .len();
-        let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
+        let len = usize::try_from(len).map_err(|_| anyhow::anyhow!("file too large to map"))?;
         let ptr = unsafe {
             rustix::mm::mmap(
                 ptr::null_mut(),

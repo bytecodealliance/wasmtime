@@ -3,11 +3,12 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
+use crate::prelude::*;
 use crate::runtime::vm::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
+use alloc::sync::Arc;
 use anyhow::Result;
-use std::str;
-use std::sync::Arc;
+use core::str;
 use wasmtime_environ::{
     CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FuncIndex, FunctionLoc,
     FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap, StackMapInformation,

@@ -137,6 +137,9 @@ pub mod __internal {
     pub use super::matching::InstanceType;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
+    pub use alloc::boxed::Box;
+    pub use alloc::string::String;
+    pub use alloc::vec::Vec;
     pub use anyhow;
     #[cfg(feature = "async")]
     pub use async_trait::async_trait;

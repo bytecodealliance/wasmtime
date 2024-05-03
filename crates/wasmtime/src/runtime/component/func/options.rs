@@ -1,15 +1,16 @@
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::ResourceType;
+use crate::prelude::*;
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{FuncType, StoreContextMut};
+use alloc::sync::Arc;
 use anyhow::{bail, Result};
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::ptr::NonNull;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
 
 /// Runtime representation of canonical ABI options in the component model.
@@ -89,10 +90,10 @@ impl Options {
         let realloc = self.realloc.unwrap();
 
         let params = (
-            u32::try_from(old)?,
-            u32::try_from(old_size)?,
+            u32::try_from(old).err2anyhow()?,
+            u32::try_from(old_size).err2anyhow()?,
             old_align,
-            u32::try_from(new_size)?,
+            u32::try_from(new_size).err2anyhow()?,
         );
 
         type ReallocFunc = crate::TypedFunc<(u32, u32, u32, u32), u32>;
@@ -108,7 +109,7 @@ impl Options {
         if result % old_align != 0 {
             bail!("realloc return: result not aligned");
         }
-        let result = usize::try_from(result)?;
+        let result = usize::try_from(result).err2anyhow()?;
 
         let memory = self.memory_mut(store.0);
 
@@ -138,7 +139,7 @@ impl Options {
         // is an optional configuration in canonical ABI options.
         unsafe {
             let memory = self.memory.unwrap().as_ref();
-            std::slice::from_raw_parts(memory.base, memory.current_length())
+            core::slice::from_raw_parts(memory.base, memory.current_length())
         }
     }
 
@@ -149,7 +150,7 @@ impl Options {
         // See comments in `memory` about the unsafety
         unsafe {
             let memory = self.memory.unwrap().as_ref();
-            std::slice::from_raw_parts_mut(memory.base, memory.current_length())
+            core::slice::from_raw_parts_mut(memory.base, memory.current_length())
         }
     }
 

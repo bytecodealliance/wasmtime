@@ -1,11 +1,11 @@
 use super::cvt;
 use crate::runtime::vm::sys::capi;
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::{bail, Result};
-use std::fs::File;
-use std::ops::Range;
-use std::path::Path;
-use std::ptr::{self, NonNull};
+use anyhow::Result;
+use core::ops::Range;
+use core::ptr::{self, NonNull};
+#[cfg(feature = "std")]
+use std::{fs::File, path::Path};
 
 #[derive(Debug)]
 pub struct Mmap {
@@ -24,7 +24,7 @@ impl Mmap {
         cvt(unsafe {
             capi::wasmtime_mmap_new(size, capi::PROT_READ | capi::PROT_WRITE, &mut ptr)
         })?;
-        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = ptr::slice_from_raw_parts_mut(ptr.cast(), size);
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
@@ -32,13 +32,14 @@ impl Mmap {
     pub fn reserve(size: usize) -> Result<Self> {
         let mut ptr = ptr::null_mut();
         cvt(unsafe { capi::wasmtime_mmap_new(size, 0, &mut ptr) })?;
-        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = ptr::slice_from_raw_parts_mut(ptr.cast(), size);
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
 
+    #[cfg(feature = "std")]
     pub fn from_file(_path: &Path) -> Result<(Self, File)> {
-        bail!("not supported on this platform");
+        anyhow::bail!("not supported on this platform");
     }
 
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {

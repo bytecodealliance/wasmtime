@@ -3,14 +3,15 @@ use crate::component::matching::InstanceType;
 use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
+use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::runtime::vm::VMFuncRef;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
+use alloc::sync::Arc;
 use anyhow::{anyhow, Context, Result};
-use std::marker;
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::marker;
+use core::ptr::{self, NonNull};
 use wasmtime_environ::prelude::IndexMap;
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
@@ -164,7 +165,7 @@ impl InstanceData {
             CoreDef::InstanceFlags(idx) => {
                 crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
-                    vmctx: std::ptr::null_mut(),
+                    vmctx: ptr::null_mut(),
                     global: Global {
                         wasm_ty: WasmValType::I32,
                         mutability: true,

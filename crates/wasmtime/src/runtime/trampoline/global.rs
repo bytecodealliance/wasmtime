@@ -1,7 +1,7 @@
 use crate::runtime::vm::{StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
-use std::ptr;
+use core::ptr;
 
 #[repr(C)]
 pub struct VMHostGlobalContext {
@@ -62,7 +62,7 @@ pub fn generate_global_export(
     store.host_globals().push(ctx);
     Ok(crate::runtime::vm::ExportGlobal {
         definition,
-        vmctx: std::ptr::null_mut(),
+        vmctx: ptr::null_mut(),
         global,
     })
 }

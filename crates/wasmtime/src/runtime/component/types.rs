@@ -2,9 +2,9 @@
 
 use crate::component::matching::InstanceType;
 use crate::{Engine, ExternType, FuncType};
-use std::fmt;
-use std::ops::Deref;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use core::fmt;
+use core::ops::Deref;
 use wasmtime_environ::component::{
     ComponentTypes, InterfaceType, ResourceIndex, TypeComponentIndex, TypeComponentInstanceIndex,
     TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex, TypeListIndex, TypeModuleIndex,

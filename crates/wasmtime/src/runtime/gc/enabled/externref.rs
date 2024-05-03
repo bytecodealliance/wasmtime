@@ -1,5 +1,6 @@
 //! Implementation of `externref` in Wasmtime.
 
+use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
@@ -7,8 +8,9 @@ use crate::{
     Result, RootSet, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
 };
 use anyhow::Context;
-use std::any::Any;
-use std::num::NonZeroU64;
+use core::any::Any;
+use core::mem;
+use core::num::NonZeroU64;
 
 /// An opaque, GC-managed reference to some host data that can be passed to
 /// WebAssembly.
@@ -114,7 +116,7 @@ unsafe impl GcRefImpl for ExternRef {
     #[allow(private_interfaces)]
     fn transmute_ref(index: &GcRootIndex) -> &Self {
         // Safety: `ExternRef` is a newtype of a `GcRootIndex`.
-        let me: &Self = unsafe { std::mem::transmute(index) };
+        let me: &Self = unsafe { mem::transmute(index) };
 
         // Assert we really are just a newtype of a `GcRootIndex`.
         assert!(matches!(
@@ -201,8 +203,10 @@ impl ExternRef {
         let gc_ref = ctx
             .gc_store_mut()?
             .alloc_externref(value)
+            .err2anyhow()
             .context("unrecoverable error when allocating new `externref`")?
             .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
+            .err2anyhow()
             .context("failed to allocate `externref`")?;
 
         let mut ctx = AutoAssertNoGc::new(ctx);
@@ -253,8 +257,10 @@ impl ExternRef {
         let gc_ref = ctx
             .gc_store_mut()?
             .alloc_externref(value)
+            .err2anyhow()
             .context("unrecoverable error when allocating new `externref`")?
             .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
+            .err2anyhow()
             .context("failed to allocate `externref`")?;
 
         let mut ctx = AutoAssertNoGc::new(ctx);

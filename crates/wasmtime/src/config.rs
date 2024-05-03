@@ -1,11 +1,12 @@
+use crate::prelude::*;
+use alloc::sync::Arc;
 use anyhow::{bail, ensure, Result};
+use core::fmt;
+use core::str::FromStr;
+use hashbrown::{HashMap, HashSet};
 use serde_derive::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::fmt;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
 use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
@@ -85,8 +86,8 @@ impl Default for ModuleVersionStrategy {
     }
 }
 
-impl std::hash::Hash for ModuleVersionStrategy {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+impl core::hash::Hash for ModuleVersionStrategy {
+    fn hash<H: core::hash::Hasher>(&self, hasher: &mut H) {
         match self {
             Self::WasmtimeVersion => env!("CARGO_PKG_VERSION").hash(hasher),
             Self::Custom(s) => s.hash(hasher),
@@ -474,8 +475,10 @@ impl Config {
     /// filename/line number for each wasm frame in the stack trace.
     ///
     /// By default this option is `WasmBacktraceDetails::Environment`, meaning
-    /// that wasm will read `WASMTIME_BACKTRACE_DETAILS` to indicate whether details
-    /// should be parsed.
+    /// that wasm will read `WASMTIME_BACKTRACE_DETAILS` to indicate whether
+    /// details should be parsed. Note that the `std` feature of this crate must
+    /// be active to read environment variables, otherwise this is disabled by
+    /// default.
     pub fn wasm_backtrace_details(&mut self, enable: WasmBacktraceDetails) -> &mut Self {
         self.wasm_backtrace_details_env_used = false;
         self.tunables.parse_wasm_debuginfo = match enable {
@@ -483,9 +486,16 @@ impl Config {
             WasmBacktraceDetails::Disable => Some(false),
             WasmBacktraceDetails::Environment => {
                 self.wasm_backtrace_details_env_used = true;
-                std::env::var("WASMTIME_BACKTRACE_DETAILS")
-                    .map(|s| Some(s == "1"))
-                    .unwrap_or(Some(false))
+                #[cfg(feature = "std")]
+                {
+                    std::env::var("WASMTIME_BACKTRACE_DETAILS")
+                        .map(|s| Some(s == "1"))
+                        .unwrap_or(Some(false))
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    Some(false)
+                }
             }
         };
         self

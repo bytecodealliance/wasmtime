@@ -2,8 +2,8 @@
 
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use anyhow::{anyhow, Result};
-use std::cell::Cell;
-use std::slice;
+use core::cell::Cell;
+use core::slice;
 use wasmtime_environ::component::TypeResourceTableIndex;
 
 const UTF16_TAG: usize = 1 << 31;
@@ -189,9 +189,9 @@ mod trampolines {
 /// can overlap.
 fn assert_no_overlap<T, U>(a: &[T], b: &[U]) {
     let a_start = a.as_ptr() as usize;
-    let a_end = a_start + (a.len() * std::mem::size_of::<T>());
+    let a_end = a_start + (a.len() * core::mem::size_of::<T>());
     let b_start = b.as_ptr() as usize;
-    let b_end = b_start + (b.len() * std::mem::size_of::<U>());
+    let b_end = b_start + (b.len() * core::mem::size_of::<U>());
 
     if a_start < b_start {
         assert!(a_end < b_start);
@@ -210,7 +210,7 @@ unsafe fn utf8_to_utf8(src: *mut u8, len: usize, dst: *mut u8) -> Result<()> {
     let dst = slice::from_raw_parts_mut(dst, len);
     assert_no_overlap(src, dst);
     log::trace!("utf8-to-utf8 {len}");
-    let src = std::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
+    let src = core::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
     dst.copy_from_slice(src.as_bytes());
     Ok(())
 }
@@ -233,7 +233,7 @@ unsafe fn utf16_to_utf16(src: *mut u16, len: usize, dst: *mut u16) -> Result<()>
 /// the latin1 space.
 fn run_utf16_to_utf16(src: &[u16], mut dst: &mut [u16]) -> Result<bool> {
     let mut all_latin1 = true;
-    for ch in std::char::decode_utf16(src.iter().map(|i| u16::from_le(*i))) {
+    for ch in core::char::decode_utf16(src.iter().map(|i| u16::from_le(*i))) {
         let ch = ch.map_err(|_| anyhow!("invalid utf16 encoding"))?;
         all_latin1 = all_latin1 && u8::try_from(u32::from(ch)).is_ok();
         let result = ch.encode_utf16(dst);
@@ -289,7 +289,7 @@ unsafe fn utf8_to_utf16(src: *mut u8, len: usize, dst: *mut u16) -> Result<usize
 }
 
 fn run_utf8_to_utf16(src: &[u8], dst: &mut [u16]) -> Result<usize> {
-    let src = std::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
+    let src = core::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
     let mut amt = 0;
     for (i, dst) in src.encode_utf16().zip(dst) {
         *dst = i.to_le();
@@ -326,7 +326,7 @@ unsafe fn utf16_to_utf8(
     let mut src_read = 0;
     let mut dst_written = 0;
 
-    for ch in std::char::decode_utf16(src_iter) {
+    for ch in core::char::decode_utf16(src_iter) {
         let ch = ch.map_err(|_| anyhow!("invalid utf16 encoding"))?;
 
         // If the destination doesn't have enough space for this character

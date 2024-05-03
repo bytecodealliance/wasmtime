@@ -21,13 +21,14 @@
 //! other random ELF files, as well as provide better error messages for
 //! using wasmtime artifacts across versions.
 
+use crate::prelude::*;
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, ensure, Context, Result};
+use core::str::FromStr;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
 use serde_derive::{Deserialize, Serialize};
-use std::str::FromStr;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
 
@@ -55,7 +56,9 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     // structured well enough to make this easy and additionally it's not really
     // a perf issue right now so doing that is left for another day's
     // refactoring.
-    let obj = File::parse(mmap).context("failed to parse precompiled artifact as an ELF")?;
+    let obj = File::parse(mmap)
+        .err2anyhow()
+        .context("failed to parse precompiled artifact as an ELF")?;
     let expected_e_flags = match expected {
         ObjectKind::Module => obj::EF_WASMTIME_MODULE,
         ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
@@ -72,7 +75,8 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     let data = obj
         .section_by_name(obj::ELF_WASM_ENGINE)
         .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
-        .data()?;
+        .data()
+        .err2anyhow()?;
     let (first, data) = data
         .split_first()
         .ok_or_else(|| anyhow!("invalid engine section"))?;
@@ -91,7 +95,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
 
     match &engine.config().module_version {
         ModuleVersionStrategy::WasmtimeVersion => {
-            let version = std::str::from_utf8(version)?;
+            let version = core::str::from_utf8(version).err2anyhow()?;
             if version != env!("CARGO_PKG_VERSION") {
                 bail!(
                     "Module was compiled with incompatible Wasmtime version '{}'",
@@ -100,7 +104,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
             }
         }
         ModuleVersionStrategy::Custom(v) => {
-            let version = std::str::from_utf8(&version)?;
+            let version = core::str::from_utf8(&version).err2anyhow()?;
             if version != v {
                 bail!(
                     "Module was compiled with incompatible version '{}'",
@@ -110,7 +114,9 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         }
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
-    postcard::from_bytes::<Metadata<'_>>(data)?.check_compatible(engine)
+    postcard::from_bytes::<Metadata<'_>>(data)
+        .err2anyhow()?
+        .check_compatible(engine)
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -160,6 +166,7 @@ pub fn detect_precompiled_bytes(bytes: &[u8]) -> Option<Precompiled> {
     detect_precompiled(File::parse(bytes).ok()?)
 }
 
+#[cfg(feature = "std")]
 pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Option<Precompiled>> {
     let read_cache = object::ReadCache::new(std::fs::File::open(path)?);
     let obj = File::parse(&read_cache)?;
@@ -311,7 +318,7 @@ impl Metadata<'_> {
         Ok(())
     }
 
-    fn check_int<T: Eq + std::fmt::Display>(found: T, expected: T, feature: &str) -> Result<()> {
+    fn check_int<T: Eq + core::fmt::Display>(found: T, expected: T, feature: &str) -> Result<()> {
         if found == expected {
             return Ok(());
         }

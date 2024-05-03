@@ -2,14 +2,15 @@ use crate::component::instance::{Instance, InstanceData};
 use crate::component::storage::storage_as_slice;
 use crate::component::types::Type;
 use crate::component::values::Val;
+use crate::prelude::*;
 use crate::runtime::vm::component::ResourceTables;
 use crate::runtime::vm::{Export, ExportFunction};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
+use alloc::sync::Arc;
 use anyhow::{bail, Context, Result};
-use std::mem::{self, MaybeUninit};
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::mem::{self, MaybeUninit};
+use core::ptr::NonNull;
 use wasmtime_environ::component::{
     CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
     TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
@@ -45,12 +46,12 @@ macro_rules! map_maybe_uninit {
             unsafe {
                 use $crate::component::__internal::MaybeUninitExt;
 
-                let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
+                let m: &mut core::mem::MaybeUninit<_> = $maybe_uninit;
                 // Note the usage of `addr_of_mut!` here which is an attempt to "stay
                 // safe" here where we never accidentally create `&mut T` where `T` is
                 // actually uninitialized, hopefully appeasing the Rust unsafe
                 // guidelines gods.
-                m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
+                m.map(|p| core::ptr::addr_of_mut!((*p)$($field)*))
             }
         }
     })
@@ -68,7 +69,7 @@ pub trait MaybeUninitExt<T> {
 impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
     unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U) -> &mut MaybeUninit<U> {
         let new_ptr = f(self.as_mut_ptr());
-        std::mem::transmute::<*mut U, &mut MaybeUninit<U>>(new_ptr)
+        core::mem::transmute::<*mut U, &mut MaybeUninit<U>>(new_ptr)
     }
 }
 
@@ -720,11 +721,11 @@ impl Func {
         cx: &mut LiftContext<'_>,
         results_ty: &TypeTuple,
         results: &mut [Val],
-        src: &mut std::slice::Iter<'_, ValRaw>,
+        src: &mut core::slice::Iter<'_, ValRaw>,
     ) -> Result<()> {
         // FIXME: needs to read an i64 for memory64
-        let ptr = usize::try_from(src.next().unwrap().get_u32())?;
-        if ptr % usize::try_from(results_ty.abi.align32)? != 0 {
+        let ptr = usize::try_from(src.next().unwrap().get_u32()).err2anyhow()?;
+        if ptr % usize::try_from(results_ty.abi.align32).err2anyhow()? != 0 {
             bail!("return pointer not aligned");
         }
 

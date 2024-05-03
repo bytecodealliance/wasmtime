@@ -1,16 +1,18 @@
+use crate::prelude::*;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
 use crate::runtime::vm::GcRuntime;
+use crate::sync::OnceLock;
 use crate::Config;
+use alloc::sync::Arc;
 use anyhow::{Context, Result};
+use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
-use once_cell::sync::OnceCell;
+#[cfg(feature = "std")]
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -64,7 +66,8 @@ struct EngineInner {
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
-    compatible_with_native_host: OnceCell<Result<(), String>>,
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    compatible_with_native_host: OnceLock<Result<(), String>>,
 }
 
 impl Default for Engine {
@@ -123,7 +126,8 @@ impl Engine {
                 epoch: AtomicU64::new(0),
                 #[cfg(feature = "runtime")]
                 unique_id_allocator: crate::runtime::vm::CompiledModuleIdAllocator::new(),
-                compatible_with_native_host: OnceCell::new(),
+                #[cfg(any(feature = "cranelift", feature = "winch"))]
+                compatible_with_native_host: OnceLock::new(),
                 config,
                 tunables,
             }),
@@ -203,6 +207,7 @@ impl Engine {
     }
 
     /// Like [`Engine::detect_precompiled`], but performs the detection on a file.
+    #[cfg(feature = "std")]
     pub fn detect_precompiled_file(&self, path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
         serialization::detect_precompiled_file(path)
     }
@@ -227,11 +232,18 @@ impl Engine {
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
-        self.inner
-            .compatible_with_native_host
-            .get_or_init(|| self._check_compatible_with_native_host())
-            .clone()
-            .map_err(anyhow::Error::msg)
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            self.inner
+                .compatible_with_native_host
+                .get_or_init(|| self._check_compatible_with_native_host())
+                .clone()
+                .map_err(anyhow::Error::msg)
+        }
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        {
+            Ok(())
+        }
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
@@ -516,6 +528,7 @@ impl Engine {
         serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self))
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
@@ -669,6 +682,7 @@ impl Engine {
     }
 
     /// Like `load_code_bytes`, but creates a mmap from a file on disk.
+    #[cfg(feature = "std")]
     pub(crate) fn load_code_file(
         &self,
         path: &Path,
@@ -697,13 +711,13 @@ impl Engine {
 /// A weak reference to an [`Engine`].
 #[derive(Clone)]
 pub struct EngineWeak {
-    inner: std::sync::Weak<EngineInner>,
+    inner: alloc::sync::Weak<EngineInner>,
 }
 
 impl EngineWeak {
     /// Upgrade this weak reference into an [`Engine`]. Returns `None` if
     /// strong references (the [`Engine`] type itself) no longer exist.
     pub fn upgrade(&self) -> Option<Engine> {
-        std::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
+        alloc::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
     }
 }

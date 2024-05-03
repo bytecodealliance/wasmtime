@@ -8,7 +8,7 @@
 //! For more information about this see `./examples/min-platform` as well as
 //! `./docs/examples-minimal.md`.
 
-use std::io;
+use anyhow::{bail, Result};
 
 pub mod capi;
 pub mod mmap;
@@ -16,10 +16,10 @@ pub mod traphandlers;
 pub mod unwind;
 pub mod vm;
 
-fn cvt(rc: i32) -> io::Result<()> {
+fn cvt(rc: i32) -> Result<()> {
     match rc {
         0 => Ok(()),
-        code => Err(io::Error::from_raw_os_error(code)),
+        code => bail!("os error {code}"),
     }
 }
 

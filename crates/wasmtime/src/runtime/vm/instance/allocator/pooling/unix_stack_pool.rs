@@ -178,6 +178,7 @@ impl StackPool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
     use crate::runtime::vm::InstanceLimits;
 
     #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]

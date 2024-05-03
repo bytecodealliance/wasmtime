@@ -5,7 +5,7 @@ use crate::{
     ValType, V128,
 };
 use anyhow::{bail, Context, Result};
-use std::ptr;
+use core::ptr;
 
 pub use crate::runtime::vm::ValRaw;
 

@@ -21,7 +21,7 @@ features = ["component-model"]
 
 [dependencies]
 wasmtime-asm-macros = { workspace = true, optional = true }
-wasmtime-environ = { workspace = true, features = ['std'] }
+wasmtime-environ = { workspace = true }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int", "perf_jitdump"], optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
@@ -50,16 +50,18 @@ indexmap = { workspace = true }
 paste = "1.0.3"
 once_cell = { workspace = true }
 rayon = { version = "1.0", optional = true }
-object = { workspace = true, features = ['std'] }
+object = { workspace = true }
 async-trait = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
 bumpalo = "3.11.0"
 fxprof-processed-profile = { version = "0.6.0", optional = true }
 gimli = { workspace = true, optional = true }
 addr2line = { workspace = true, optional = true }
-semver = { version = "1.0.17", optional = true }
+semver = { version = "1.0.17", optional = true, default-features = false }
 smallvec = { workspace = true, optional = true }
 memoffset = { workspace = true, optional = true }
+hashbrown = { workspace = true }
+libm = "0.2.7"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -125,21 +127,22 @@ default = [
   'runtime',
   'component-model',
   'threads',
+  'std',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of
 # Wasmtime. If disabled then WebAssembly modules can only be created from
 # precompiled WebAssembly modules.
-cranelift = ["dep:wasmtime-cranelift"]
+cranelift = ["dep:wasmtime-cranelift", "std"]
 
 # Enables support for winch, the WebAssembly baseline compiler. The Winch compiler
 # strategy in `Config` will be available. It is currently in active development
 # and shouldn't be used in production applications.
-winch = ["dep:wasmtime-winch"]
+winch = ["dep:wasmtime-winch", "std"]
 
 # Enables support for incremental compilation cache to be enabled in `Config`.
-incremental-cache = ["wasmtime-cranelift?/incremental-cache"]
+incremental-cache = ["wasmtime-cranelift?/incremental-cache", "std"]
 
 # Enables support for profiling guest modules.
 profiling = [
@@ -149,13 +152,14 @@ profiling = [
   "dep:rustix",
   "rustix/thread",
   "dep:serde_json",
+  "std",
 ]
 
 # Enables parallel compilation of WebAssembly code.
-parallel-compilation = ["dep:rayon"]
+parallel-compilation = ["dep:rayon", "std"]
 
 # Enables support for automatic cache configuration to be enabled in `Config`.
-cache = ["dep:wasmtime-cache"]
+cache = ["dep:wasmtime-cache", "std"]
 
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.
@@ -164,10 +168,11 @@ async = [
   "dep:async-trait",
   "wasmtime-component-macro?/async",
   "runtime",
+  "std",
 ]
 
 # Enables support for the pooling instance allocation strategy
-pooling-allocator = ["runtime"]
+pooling-allocator = ["runtime", "std"]
 
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
@@ -191,18 +196,19 @@ wmemcheck = [
   "dep:wasmtime-wmemcheck",
   "wasmtime-cranelift?/wmemcheck",
   "wasmtime-environ/wmemcheck",
+  "std",
 ]
 
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
-demangle = ["wasmtime-environ/demangle"]
+demangle = ["wasmtime-environ/demangle", "std"]
 
 # Enable support for generating core dumps on traps.
-coredump = ["dep:wasm-encoder", "runtime"]
+coredump = ["dep:wasm-encoder", "runtime", "std"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["dep:wasmtime-jit-debug"]
+debug-builtins = ["dep:wasmtime-jit-debug", "std"]
 
 # Enable support for executing compiled Wasm modules.
 runtime = [
@@ -238,9 +244,22 @@ runtime = [
 gc = ["wasmtime-environ/gc", "wasmtime-cranelift?/gc"]
 
 # Enable runtime support for the WebAssembly threads proposal.
-threads = ["wasmtime-cranelift?/threads"]
+threads = ["wasmtime-cranelift?/threads", "std"]
 
 # Controls whether backtraces will attempt to parse DWARF information in
 # WebAssembly modules and components to provide filenames and line numbers in
 # stack traces.
-addr2line = ["dep:addr2line", "dep:gimli"]
+addr2line = ["dep:addr2line", "dep:gimli", "std"]
+
+# Enables support for the Rust standard library, enabling APIs that require
+# types and traits from Rust's `std` such as `Path` and `Error`.
+#
+# Many features of the Wasmtime crate implicitly require this `std` feature.
+# This will be automatically enabled if necessary.
+std = [
+  'postcard/use-std',
+  'wasmtime-component-macro?/std',
+  'wasmtime-environ/std',
+  'object/std',
+  'once_cell/std',
+]

@@ -1,6 +1,9 @@
+use crate::prelude::*;
 use crate::runtime::vm::{GcHeap, GcStore, I31};
 use anyhow::{Context, Result};
-use std::num::NonZeroU32;
+use core::fmt;
+use core::marker;
+use core::num::NonZeroU32;
 use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
 /// The common header for all objects allocated in a GC heap.
@@ -98,11 +101,12 @@ impl VMGcHeader {
 #[cfg(test)]
 mod vm_gc_header_tests {
     use super::*;
+    use std::mem;
 
     #[test]
     fn size_align() {
-        assert_eq!(std::mem::size_of::<VMGcHeader>(), 8);
-        assert_eq!(std::mem::align_of::<VMGcHeader>(), 8);
+        assert_eq!(mem::size_of::<VMGcHeader>(), 8);
+        assert_eq!(mem::align_of::<VMGcHeader>(), 8);
     }
 }
 
@@ -142,20 +146,20 @@ impl<T> From<TypedGcRef<T>> for VMGcRef {
     }
 }
 
-impl std::fmt::LowerHex for VMGcRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::LowerHex for VMGcRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl std::fmt::UpperHex for VMGcRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::UpperHex for VMGcRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl std::fmt::Pointer for VMGcRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Pointer for VMGcRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#x}", self)
     }
 }
@@ -229,6 +233,7 @@ impl VMGcRef {
     /// type on 64-bit platforms. We should instead have a `from_r32` method.
     pub fn from_r64(raw: u64) -> Result<Option<Self>> {
         let raw = u32::try_from(raw & (u32::MAX as u64))
+            .err2anyhow()
             .with_context(|| format!("invalid r64: {raw:#x} cannot be converted into a u32"))?;
         Ok(Self::from_raw_u32(raw))
     }
@@ -294,7 +299,7 @@ impl VMGcRef {
         if T::is(gc_heap.header(&self)) {
             Ok(TypedGcRef {
                 gc_ref: self,
-                _phantom: std::marker::PhantomData,
+                _phantom: marker::PhantomData,
             })
         } else {
             Err(self)
@@ -314,7 +319,7 @@ impl VMGcRef {
         debug_assert!(!self.is_i31());
         TypedGcRef {
             gc_ref: self,
-            _phantom: std::marker::PhantomData,
+            _phantom: marker::PhantomData,
         }
     }
 
@@ -442,7 +447,7 @@ pub unsafe trait GcHeapObject: Send + Sync {
 #[repr(transparent)]
 pub struct TypedGcRef<T> {
     gc_ref: VMGcRef,
-    _phantom: std::marker::PhantomData<*mut T>,
+    _phantom: marker::PhantomData<*mut T>,
 }
 
 impl<T> TypedGcRef<T>
@@ -453,7 +458,7 @@ where
     pub fn clone(&self, gc_store: &mut GcStore) -> Self {
         Self {
             gc_ref: gc_store.clone_gc_ref(&self.gc_ref),
-            _phantom: std::marker::PhantomData,
+            _phantom: marker::PhantomData,
         }
     }
 
@@ -473,7 +478,7 @@ where
     pub fn unchecked_copy(&self) -> Self {
         Self {
             gc_ref: self.gc_ref.unchecked_copy(),
-            _phantom: std::marker::PhantomData,
+            _phantom: marker::PhantomData,
         }
     }
 }

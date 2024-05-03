@@ -3,11 +3,11 @@
 
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
 use crate::runtime::vm::{MmapVec, SendSyncPtr};
+use alloc::sync::Arc;
 use anyhow::Result;
-use std::ffi::c_void;
-use std::ops::Range;
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::ffi::c_void;
+use core::ops::Range;
+use core::ptr::{self, NonNull};
 use wasmtime_environ::{
     DefinedMemoryIndex, MemoryInitialization, MemoryPlan, MemoryStyle, Module, PrimaryMap,
 };
@@ -100,6 +100,7 @@ impl MemoryImage {
             assert_eq!((data_end as u32) % page_size, 0);
             assert_eq!((mmap.original_offset() as u32) % page_size, 0);
 
+            #[cfg(feature = "std")]
             if let Some(file) = mmap.original_file() {
                 if let Some(source) = MemoryImageSource::from_file(file) {
                     return Ok(Some(MemoryImage {
@@ -526,13 +527,13 @@ impl MemoryImageSlot {
                         (keep_resident - image.linear_memory_offset).min(mem_after_image);
 
                     // This is memset (1)
-                    std::ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
+                    ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
 
                     // This is madvise (2)
                     self.madvise_reset(image.linear_memory_offset, image.len)?;
 
                     // This is memset (3)
-                    std::ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
+                    ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
 
                     // This is madvise (4)
                     self.madvise_reset(
@@ -560,7 +561,7 @@ impl MemoryImageSlot {
                     // Note that the memset may be zero bytes here.
 
                     // This is memset (1)
-                    std::ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
+                    ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
 
                     // This is madvise (2)
                     self.madvise_reset(keep_resident, self.accessible - keep_resident)?;
@@ -572,7 +573,7 @@ impl MemoryImageSlot {
             // the rest.
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
-                std::ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
+                ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
                 self.madvise_reset(size_to_memset, self.accessible - size_to_memset)?;
             }
         }

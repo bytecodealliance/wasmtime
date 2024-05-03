@@ -5,14 +5,15 @@ use crate::component::types;
 use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
+use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
+use alloc::sync::Arc;
 use anyhow::{bail, Context, Result};
+use core::future::Future;
+use core::marker;
+use core::pin::Pin;
+use hashbrown::hash_map::{Entry, HashMap};
 use semver::Version;
-use std::collections::hash_map::{Entry, HashMap};
-use std::future::Future;
-use std::marker;
-use std::pin::Pin;
-use std::sync::Arc;
 use wasmtime_environ::PrimaryMap;
 
 /// A type used to instantiate [`Component`]s.
@@ -641,7 +642,7 @@ impl NameMap {
         let (alternate_name, _version) = alternate_lookup_key(name)?;
         let alternate_key = strings.lookup(alternate_name)?;
         let (exact_key, _version) = self.alternate_lookups.get(&alternate_key)?;
-        self.definitions.get(&exact_key)
+        self.definitions.get(exact_key)
     }
 
     /// Inserts the `name` specified into this map.

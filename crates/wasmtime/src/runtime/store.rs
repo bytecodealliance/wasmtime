@@ -79,6 +79,7 @@
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::{BareModuleInfo, RegisteredModuleId};
+use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     Backtrace, ExportGlobal, GcHeapAllocationIndex, GcRootsList, GcStore,
@@ -89,20 +90,19 @@ use crate::trampoline::VMHostGlobalContext;
 use crate::RootSet;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory, RootScope, Table};
+use alloc::sync::Arc;
 use anyhow::{anyhow, bail, Result};
-use once_cell::sync::OnceCell;
-use std::cell::UnsafeCell;
-use std::fmt;
-use std::future::Future;
-use std::marker;
-use std::mem::{self, ManuallyDrop};
-use std::num::NonZeroU64;
-use std::ops::{Deref, DerefMut};
-use std::pin::Pin;
-use std::ptr;
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::future::Future;
+use core::marker;
+use core::mem::{self, ManuallyDrop};
+use core::num::NonZeroU64;
+use core::ops::{Deref, DerefMut};
+use core::pin::Pin;
+use core::ptr;
+use core::sync::atomic::AtomicU64;
+use core::task::{Context, Poll};
 
 mod context;
 pub use self::context::*;
@@ -414,7 +414,7 @@ impl<'a> AutoAssertNoGc<'a> {
     }
 }
 
-impl std::ops::Deref for AutoAssertNoGc<'_> {
+impl core::ops::Deref for AutoAssertNoGc<'_> {
     type Target = StoreOpaque;
 
     #[inline]
@@ -423,7 +423,7 @@ impl std::ops::Deref for AutoAssertNoGc<'_> {
     }
 }
 
-impl std::ops::DerefMut for AutoAssertNoGc<'_> {
+impl core::ops::DerefMut for AutoAssertNoGc<'_> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.store
@@ -557,7 +557,7 @@ impl<T> Store<T> {
             // the `Store` itself, and is a variant that we have to maintain
             // throughout Wasmtime.
             unsafe {
-                let traitobj = std::mem::transmute::<
+                let traitobj = mem::transmute::<
                     *mut (dyn crate::runtime::vm::Store + '_),
                     *mut (dyn crate::runtime::vm::Store + 'static),
                 >(&mut *inner);
@@ -611,7 +611,7 @@ impl<T> Store<T> {
         // there is a comment indicating this as well.
         unsafe {
             let mut inner = ManuallyDrop::take(&mut self.inner);
-            std::mem::forget(self);
+            core::mem::forget(self);
             ManuallyDrop::take(&mut inner.data)
         }
     }
@@ -1185,10 +1185,10 @@ fn set_fuel(
     let interval = yield_interval.unwrap_or(NonZeroU64::MAX).get();
     // If we're yielding periodically we only store the "active" amount of fuel into consumed_ptr
     // for the VM to use.
-    let injected = std::cmp::min(interval, new_fuel_amount);
+    let injected = core::cmp::min(interval, new_fuel_amount);
     // Fuel in the VM is stored as an i64, so we have to cap the amount of fuel we inject into the
     // VM at once to be i64 range.
-    let injected = std::cmp::min(injected, i64::MAX as u64);
+    let injected = core::cmp::min(injected, i64::MAX as u64);
     // Add whatever is left over after injection to the reserve for later use.
     *fuel_reserve = new_fuel_amount - injected;
     // Within the VM we increment to count fuel, so inject a negative amount. The VM will halt when
@@ -1427,7 +1427,7 @@ impl StoreOpaque {
             for global in temp.host_globals.iter() {
                 let export = ExportGlobal {
                     definition: &mut (*global.get()).global as *mut _,
-                    vmctx: std::ptr::null_mut(),
+                    vmctx: core::ptr::null_mut(),
                     global: (*global.get()).ty.to_wasm_type(),
                 };
                 let global = Global::from_wasmtime_global(export, temp.store);
@@ -1456,7 +1456,7 @@ impl StoreOpaque {
 
     #[inline(never)]
     pub(crate) fn allocate_gc_heap(&mut self) -> Result<()> {
-        assert!(self.gc_store.as_mut().is_none());
+        assert!(self.gc_store.is_none());
         let gc_store = allocate_gc_store(self.engine())?;
         self.gc_store = Some(gc_store);
         return Ok(());
@@ -1547,7 +1547,7 @@ impl StoreOpaque {
 
         // Take the GC roots out of `self` so we can borrow it mutably but still
         // call mutable methods on `self`.
-        let mut roots = std::mem::take(&mut self.gc_roots_list);
+        let mut roots = core::mem::take(&mut self.gc_roots_list);
 
         self.trace_roots(&mut roots);
         self.unwrap_gc_store_mut().gc(unsafe { roots.iter() });
@@ -1637,7 +1637,7 @@ impl StoreOpaque {
 
     #[cfg(feature = "gc")]
     fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
-        use std::ptr::NonNull;
+        use core::ptr::NonNull;
 
         use crate::runtime::vm::{ModuleInfoLookup, SendSyncPtr};
 
@@ -1661,7 +1661,7 @@ impl StoreOpaque {
                 Some(sm) => sm,
                 None => {
                     log::trace!("No stack map for this Wasm frame");
-                    return std::ops::ControlFlow::Continue(());
+                    return core::ops::ControlFlow::Continue(());
                 }
             };
             log::trace!(
@@ -1684,7 +1684,7 @@ impl StoreOpaque {
                     continue;
                 }
 
-                let gc_ref = unsafe { std::ptr::read(stack_slot) };
+                let gc_ref = unsafe { core::ptr::read(stack_slot) };
                 log::trace!("Stack slot @ {stack_slot:p} = {gc_ref:#x}");
 
                 let gc_ref = VMGcRef::from_r64(gc_ref)
@@ -1699,7 +1699,7 @@ impl StoreOpaque {
                 }
             }
 
-            std::ops::ControlFlow::Continue(())
+            core::ops::ControlFlow::Continue(())
         });
 
         log::trace!("End trace GC roots :: Wasm stack");
@@ -1933,8 +1933,12 @@ impl StoreOpaque {
             return fault;
         }
 
-        eprintln!(
-            "\
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "std")] {
+                // With the standard library a rich error can be printed here
+                // to stderr and the native abort path is used.
+                eprintln!(
+                    "\
 Wasmtime caught a segfault for a wasm program because the faulting instruction
 is allowed to segfault due to how linear memories are implemented. The address
 that was accessed, however, is not known to any linear memory in use within this
@@ -1952,8 +1956,22 @@ from going any further and to alert what's going on. If this is a security
 issue please reach out to the Wasmtime team via its security policy
 at https://bytecodealliance.org/security.
 "
-        );
-        std::process::abort();
+                );
+                std::process::abort();
+            } else if #[cfg(panic = "abort")] {
+                // Without the standard library but with `panic=abort` then
+                // it's safe to panic as that's known to halt execution. For
+                // now avoid the above error message as well since without
+                // `std` it's probably best to be a bit more size-conscious.
+                let _ = pc;
+                panic!("invalid fault");
+            } else {
+                // Without `std` and with `panic = "unwind"` there's no way to
+                // abort the process portably, so flag a compile time error.
+                compile_error!("either `std` or `panic=abort` must be enabled");
+                None
+            }
+        }
     }
 
     /// Retrieve the store's protection key.
@@ -2192,7 +2210,7 @@ impl<T> StoreContextMut<'_, T> {
                 unsafe {
                     let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
                     *self.current_poll_cx =
-                        std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
+                        core::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
                     // After that's set up we resume execution of the fiber, which
                     // may also start the fiber for the first time. This either
@@ -2459,7 +2477,7 @@ unsafe impl<T> crate::runtime::vm::Store for StoreInner<T> {
 
     fn out_of_gas(&mut self) -> Result<()> {
         if !self.refuel() {
-            return Err(Trap::OutOfFuel.into());
+            return Err(Trap::OutOfFuel).err2anyhow();
         }
         #[cfg(feature = "async")]
         if self.fuel_yield_interval.is_some() {
@@ -2473,7 +2491,7 @@ unsafe impl<T> crate::runtime::vm::Store for StoreInner<T> {
         // multiple times.
         let mut behavior = self.epoch_deadline_behavior.take();
         let delta_result = match &mut behavior {
-            None => Err(Trap::Interrupt.into()),
+            None => Err(Trap::Interrupt).err2anyhow(),
             Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
                 let delta = match update {
                     UpdateDeadline::Continue(delta) => delta,

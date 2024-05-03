@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
 use crate::{instantiate::CompiledModule, AsContext, Module};
 #[allow(unused_imports)]

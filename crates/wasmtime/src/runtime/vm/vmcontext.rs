@@ -3,16 +3,16 @@
 
 mod vm_host_func_context;
 
+pub use self::vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
 use crate::runtime::vm::{GcStore, VMGcRef};
+use core::cell::UnsafeCell;
+use core::ffi::c_void;
+use core::fmt;
+use core::marker;
+use core::mem;
+use core::ptr::{self, NonNull};
+use core::sync::atomic::{AtomicUsize, Ordering};
 use sptr::Strict;
-use std::cell::UnsafeCell;
-use std::ffi::c_void;
-use std::marker;
-use std::mem;
-use std::ptr::{self, NonNull};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::u32;
-pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMSharedTypeIndex, WasmHeapTopType,
     WasmValType, VMCONTEXT_MAGIC,
@@ -1100,8 +1100,8 @@ pub union ValRaw {
 // are some simple assertions about the shape of the type which are additionally
 // matched in C.
 const _: () = {
-    assert!(std::mem::size_of::<ValRaw>() == 16);
-    assert!(std::mem::align_of::<ValRaw>() == 8);
+    assert!(mem::size_of::<ValRaw>() == 16);
+    assert!(mem::align_of::<ValRaw>() == 8);
 };
 
 // This type is just a bag-of-bits so it's up to the caller to figure out how
@@ -1109,12 +1109,12 @@ const _: () = {
 unsafe impl Send for ValRaw {}
 unsafe impl Sync for ValRaw {}
 
-impl std::fmt::Debug for ValRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for ValRaw {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         struct Hex<T>(T);
-        impl<T: std::fmt::LowerHex> std::fmt::Debug for Hex<T> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let bytes = std::mem::size_of::<T>();
+        impl<T: fmt::LowerHex> fmt::Debug for Hex<T> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let bytes = mem::size_of::<T>();
                 let hex_digits_per_byte = 2;
                 let hex_digits = bytes * hex_digits_per_byte;
                 write!(f, "0x{:0width$x}", self.0, width = hex_digits)

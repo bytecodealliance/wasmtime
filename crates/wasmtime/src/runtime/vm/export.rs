@@ -1,7 +1,7 @@
 use crate::runtime::vm::vmcontext::{
     VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
-use std::ptr::NonNull;
+use core::ptr::NonNull;
 use wasmtime_environ::{DefinedMemoryIndex, Global, MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.
