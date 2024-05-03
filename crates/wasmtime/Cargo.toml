@@ -43,7 +43,7 @@ log = { workspace = true }
 wat = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, optional = true }
 sptr = { workspace = true }
 postcard = { workspace = true }
 indexmap = { workspace = true }
@@ -149,7 +149,8 @@ profiling = [
   "dep:wasmtime-jit-debug",
   "dep:ittapi",
   "dep:rustix",
-  "rustix/thread"
+  "rustix/thread",
+  "dep:serde_json",
 ]
 
 # Enables parallel compilation of WebAssembly code.

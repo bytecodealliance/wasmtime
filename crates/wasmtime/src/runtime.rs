@@ -12,7 +12,6 @@ pub(crate) mod limits;
 pub(crate) mod linker;
 pub(crate) mod memory;
 pub(crate) mod module;
-pub(crate) mod profiling;
 pub(crate) mod resources;
 pub(crate) mod store;
 pub(crate) mod trampoline;
@@ -68,6 +67,8 @@ pub use values::*;
 
 pub(crate) use uninhabited::*;
 
+#[cfg(feature = "profiling")]
+mod profiling;
 #[cfg(feature = "profiling")]
 pub use profiling::GuestProfiler;
 
