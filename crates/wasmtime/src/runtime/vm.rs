@@ -253,7 +253,7 @@ pub fn page_size() -> usize {
     };
 }
 
-/// Result of [`Memory::atomic_wait32`] and [`Memory::atomic_wait64`]
+/// Result of `Memory::atomic_wait32` and `Memory::atomic_wait64`
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum WaitResult {
     /// Indicates that a `wait` completed by being awoken by a different thread.

@@ -285,7 +285,7 @@ impl ResourceTable {
     }
 
     /// Zip the values of the map with mutable references to table entries corresponding to each
-    /// key. As the keys in the [HashMap] are unique, this iterator can give mutable references
+    /// key. As the keys in the `HashMap` are unique, this iterator can give mutable references
     /// with the same lifetime as the mutable reference to the [ResourceTable].
     #[cfg(feature = "std")]
     pub fn iter_entries<'a, T>(
