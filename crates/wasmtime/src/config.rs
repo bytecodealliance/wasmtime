@@ -2877,6 +2877,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
 
     #[allow(unreachable_code)]
     {
+        let _ = feature;
         return None;
     }
 }
