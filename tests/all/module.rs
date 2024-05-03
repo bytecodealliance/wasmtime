@@ -250,3 +250,22 @@ fn compile_a_component() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn call_indirect_caching_and_memory64() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_memory64(true);
+    config.cache_call_indirects(true);
+    let engine = Engine::new(&config)?;
+    Module::new(
+        &engine,
+        "(module
+            (memory i64 1)
+            (func (param i64) (result i32)
+                local.get 0
+                i32.load offset=0x100000000
+            )
+        )",
+    )?;
+    Ok(())
+}
