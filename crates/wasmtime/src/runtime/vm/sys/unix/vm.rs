@@ -174,11 +174,11 @@ impl MemoryImageSource {
     }
 
     fn as_file(&self) -> &File {
-        match self {
+        match *self {
             #[cfg(feature = "std")]
-            MemoryImageSource::Mmap(file) => file,
+            MemoryImageSource::Mmap(ref file) => file,
             #[cfg(target_os = "linux")]
-            MemoryImageSource::Memfd(memfd) => memfd.as_file(),
+            MemoryImageSource::Memfd(ref memfd) => memfd.as_file(),
         }
     }
 
