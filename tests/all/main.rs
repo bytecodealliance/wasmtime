@@ -7,6 +7,7 @@ mod code_too_large;
 mod component_model;
 mod coredump;
 mod debug;
+mod defaults;
 mod epoch_interruption;
 mod externals;
 mod fuel;

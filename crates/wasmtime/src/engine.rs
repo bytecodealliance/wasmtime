@@ -101,8 +101,7 @@ impl Engine {
             crate::runtime::vm::debug_builtins::ensure_exported();
         }
 
-        let config = config.clone();
-        let tunables = config.validate()?;
+        let (config, tunables) = config.clone().validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let (config, compiler) = config.build_compiler(&tunables)?;
