@@ -597,6 +597,12 @@
   (FeqD)
   (FltD)
   (FleD)
+
+  ;; Zfa Extension
+  (FminmS)
+  (FmaxmS)
+  (FminmD)
+  (FmaxmD)
 ))
 
 
@@ -1034,6 +1040,9 @@
 
 (decl pure has_v () bool)
 (extern constructor has_v has_v)
+
+(decl pure has_zfa () bool)
+(extern constructor has_zfa has_zfa)
 
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
@@ -1554,6 +1563,17 @@
 (rule (rv_fmax $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxS) $F32 (FRM.RTZ) rs1 rs2))
 (rule (rv_fmax $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxD) $F64 (FRM.RTZ) rs1 rs2))
 
+;; `Zfa` Extension Instructions
+
+;; Helper for emitting the `fminm` instruction.
+(decl rv_fminm (Type FReg FReg) FReg)
+(rule (rv_fminm $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FminmS) $F32 (FRM.RDN) rs1 rs2))
+(rule (rv_fminm $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FminmD) $F64 (FRM.RDN) rs1 rs2))
+
+;; Helper for emitting the `fmaxm` instruction.
+(decl rv_fmaxm (Type FReg FReg) FReg)
+(rule (rv_fmaxm $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxmS) $F32 (FRM.RUP) rs1 rs2))
+(rule (rv_fmaxm $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxmD) $F64 (FRM.RUP) rs1 rs2))
 
 ;; `Zba` Extension Instructions
 
