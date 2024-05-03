@@ -46,7 +46,8 @@ pub struct Context {
     pub cfg: ControlFlowGraph,
 
     /// Dominator tree for `func`.
-    pub domtree: DominatorTree, domtree_preorder: DominatorTreePreorder,
+    pub domtree: DominatorTree, 
+    domtree_preorder: DominatorTreePreorder,
 
 
     /// Loop analysis of `func`.
