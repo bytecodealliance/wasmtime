@@ -1,5 +1,5 @@
 ;;! target = "x86_64"
-;;! flags = [ "-Wcache-call-indirects=y" ]
+;;! flags = [ "-Ocache-call-indirects=y" ]
 
 ;; This test checks that we get the indirect-call caching optimization
 ;; where it should be applicable (immutable table, null 0-index).
