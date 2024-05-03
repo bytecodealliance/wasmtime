@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
-use wasmparser::OperatorsReader;
 use wasmparser::{
     types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeRef,
@@ -544,6 +543,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
             Payload::CodeSectionEntry(mut body) => {
                 let validator = self.validator.code_section_entry(&body)?;
+                body.allow_memarg64(self.validator.features().contains(WasmFeatures::MEMORY64));
                 let func_index =
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
@@ -568,7 +568,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             params: sig.params().into(),
                         });
                 }
-                self.prescan_code_section(body.get_operators_reader()?)?;
+                self.prescan_code_section(&body)?;
                 body.allow_memarg64(self.validator.features().contains(WasmFeatures::MEMORY64));
                 self.result.function_body_inputs.push(FunctionBodyData {
                     validator,
@@ -722,9 +722,9 @@ and for re-adding support for interface types you can see this issue:
     ///   index in this count for each function, so we can generate
     ///   its code (with accesses to its own `call_indirect` callsite
     ///   caches) in parallel.
-    fn prescan_code_section(&mut self, reader: OperatorsReader<'data>) -> Result<()> {
+    fn prescan_code_section(&mut self, body: &FunctionBody<'_>) -> Result<()> {
         if self.tunables.cache_call_indirects {
-            for op in reader {
+            for op in body.get_operators_reader()? {
                 let op = op?;
                 match op {
                     // Check whether a table may be mutated by any

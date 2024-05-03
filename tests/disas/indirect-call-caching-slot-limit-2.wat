@@ -1,5 +1,5 @@
 ;;! target = "x86_64"
-;;! flags = [ "-Wcache-call-indirects=y", "-Wmax-call-indirect-cache-slots=2" ]
+;;! flags = [ "-Ocache-call-indirects=y", "-Omax-call-indirect-cache-slots=2" ]
 
 ;; This test checks that we properly bound the number of call-indirect
 ;; cache slots. The second case (here) is when the limit falls
