@@ -314,7 +314,7 @@ pub struct StoreOpaque {
     host_globals: Vec<StoreBox<VMHostGlobalContext>>,
 
     // GC-related fields.
-    gc_store: OnceCell<GcStore>,
+    gc_store: Option<GcStore>,
     gc_roots: RootSet,
     gc_roots_list: GcRootsList,
 
@@ -403,7 +403,7 @@ pub struct AutoAssertNoGc<'a> {
 impl<'a> AutoAssertNoGc<'a> {
     #[inline]
     pub fn new(store: &'a mut StoreOpaque) -> Self {
-        let entered = if let Some(gc_store) = store.gc_store.get_mut() {
+        let entered = if let Some(gc_store) = store.gc_store.as_mut() {
             gc_store.gc_heap.enter_no_gc_scope();
             true
         } else {
@@ -487,7 +487,7 @@ impl<T> Store<T> {
                 #[cfg(feature = "component-model")]
                 num_component_instances: 0,
                 signal_handler: None,
-                gc_store: OnceCell::new(),
+                gc_store: None,
                 gc_roots: RootSet::default(),
                 gc_roots_list: GcRootsList::default(),
                 modules: ModuleRegistry::default(),
@@ -1456,9 +1456,9 @@ impl StoreOpaque {
 
     #[inline(never)]
     pub(crate) fn allocate_gc_heap(&mut self) -> Result<()> {
-        assert!(self.gc_store.get_mut().is_none());
+        assert!(self.gc_store.as_mut().is_none());
         let gc_store = allocate_gc_store(self.engine())?;
-        let _ = self.gc_store.set(gc_store);
+        self.gc_store = Some(gc_store);
         return Ok(());
 
         #[cfg(feature = "gc")]
@@ -1492,15 +1492,15 @@ impl StoreOpaque {
     #[inline]
     #[cfg(feature = "gc")]
     pub(crate) fn gc_store(&self) -> Result<&GcStore> {
-        match self.gc_store.get() {
+        match &self.gc_store {
             Some(gc_store) => Ok(gc_store),
-            None => Err(anyhow!("GC heap not initialized yet")),
+            None => bail!("GC heap not initialized yet"),
         }
     }
 
     #[inline]
     pub(crate) fn gc_store_mut(&mut self) -> Result<&mut GcStore> {
-        if self.gc_store.get_mut().is_none() {
+        if self.gc_store.is_none() {
             self.allocate_gc_heap()?;
         }
         Ok(self.unwrap_gc_store_mut())
@@ -1510,14 +1510,14 @@ impl StoreOpaque {
     #[cfg(feature = "gc")]
     pub(crate) fn unwrap_gc_store(&self) -> &GcStore {
         self.gc_store
-            .get()
+            .as_ref()
             .expect("attempted to access the store's GC heap before it has been allocated")
     }
 
     #[inline]
     pub(crate) fn unwrap_gc_store_mut(&mut self) -> &mut GcStore {
         self.gc_store
-            .get_mut()
+            .as_mut()
             .expect("attempted to access the store's GC heap before it has been allocated")
     }
 
@@ -1533,7 +1533,7 @@ impl StoreOpaque {
 
     #[inline]
     pub(crate) fn exit_gc_lifo_scope(&mut self, scope: usize) {
-        if let Some(gc_store) = self.gc_store.get_mut() {
+        if let Some(gc_store) = self.gc_store.as_mut() {
             self.gc_roots.exit_lifo_scope(gc_store, scope);
         }
     }
@@ -1541,7 +1541,7 @@ impl StoreOpaque {
     #[cfg(feature = "gc")]
     pub fn gc(&mut self) {
         // If the GC heap hasn't been initialized, there is nothing to collect.
-        if self.gc_store.get_mut().is_none() {
+        if self.gc_store.is_none() {
             return;
         }
 
@@ -1589,7 +1589,7 @@ impl StoreOpaque {
         );
 
         // If the GC heap hasn't been initialized, there is nothing to collect.
-        if self.gc_store.get_mut().is_none() {
+        if self.gc_store.is_none() {
             return;
         }
 
@@ -2361,7 +2361,7 @@ unsafe impl<T> crate::runtime::vm::Store for StoreInner<T> {
     }
 
     fn maybe_gc_store(&mut self) -> Option<&mut GcStore> {
-        self.gc_store.get_mut()
+        self.gc_store.as_mut()
     }
 
     fn memory_growing(
