@@ -1,5 +1,3 @@
-#![cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
-
 #[macro_use]
 pub(crate) mod func;
 

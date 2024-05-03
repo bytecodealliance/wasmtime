@@ -591,7 +591,6 @@ impl<T> InstancePre<T> {
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,

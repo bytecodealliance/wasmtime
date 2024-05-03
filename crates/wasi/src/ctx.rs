@@ -515,7 +515,6 @@ impl WasiCtxBuilder {
     /// usage of this method is not allowed and should use a second builder
     /// instead.
     #[cfg(feature = "preview1")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "preview1")))]
     pub fn build_p1(&mut self) -> crate::preview1::WasiP1Ctx {
         let wasi = self.build();
         crate::preview1::WasiP1Ctx::new(wasi)

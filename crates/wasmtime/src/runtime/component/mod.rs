@@ -97,7 +97,6 @@
 //!
 //! See the docs for [`bindgen!`] for more information on how to use it.
 
-#![cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
 // rustdoc appears to lie about a warning above, so squelch it for now.
 #![allow(rustdoc::redundant_explicit_links)]
 

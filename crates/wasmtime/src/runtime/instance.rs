@@ -145,7 +145,6 @@ impl Instance {
     /// This function will also panic, like [`Instance::new`], if any [`Extern`]
     /// specified does not belong to `store`.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn new_async<T>(
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
@@ -888,7 +887,6 @@ impl<T> InstancePre<T> {
     /// Panics if any import closed over by this [`InstancePre`] isn't owned by
     /// `store`, or if `store` does not have async support enabled.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,

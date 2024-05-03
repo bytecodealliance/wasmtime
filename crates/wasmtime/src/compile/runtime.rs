@@ -78,7 +78,6 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// Note that this method will cache compilations if the `cache` feature is
     /// enabled and turned on in [`Config`](crate::Config).
-    #[cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
     pub fn compile_module(&self) -> Result<Module> {
         let (code, info_and_types) = self.compile_cached(super::build_artifacts)?;
         Module::from_parts(self.engine, code, info_and_types)
@@ -87,10 +86,6 @@ impl<'a> CodeBuilder<'a> {
     /// Same as [`CodeBuilder::compile_module`] except that it compiles a
     /// [`Component`] instead of a module.
     #[cfg(feature = "component-model")]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "runtime", feature = "component-model")))
-    )]
     pub fn compile_component(&self) -> Result<Component> {
         let (code, artifacts) = self.compile_cached(super::build_component_artifacts)?;
         Component::from_parts(self.engine, code, artifacts)

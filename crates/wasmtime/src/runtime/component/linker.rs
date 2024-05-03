@@ -319,7 +319,6 @@ impl<T> Linker<T> {
     /// can return an error if something goes wrong during instantiation such as
     /// a runtime trap or a runtime limit being exceeded.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         store: impl AsContextMut<Data = T>,
@@ -384,7 +383,6 @@ impl<T> LinkerInstance<'_, T> {
     /// This is exactly like [`Self::func_wrap`] except it takes an async
     /// host function.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: for<'a> Fn(
@@ -522,7 +520,6 @@ impl<T> LinkerInstance<'_, T> {
     /// This is exactly like [`Self::func_new`] except it takes an async
     /// host function.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn func_new_async<F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: for<'a> Fn(
