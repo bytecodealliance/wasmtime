@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use cranelift_entity::packed_option::ReservedValue;
+use cranelift_entity::EntityRef;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::mem;
@@ -737,7 +738,14 @@ and for re-adding support for interface types you can see this issue:
                     | Operator::TableCopy {
                         dst_table: table, ..
                     } => {
-                        self.flag_written_table(TableIndex::from_u32(table));
+                        // We haven't yet validated the body during
+                        // this pre-scan, so we need to check that
+                        // `dst_table` is in bounds. Ignore if not:
+                        // we'll catch the error later.
+                        let table = TableIndex::from_u32(table);
+                        if table.index() < self.result.module.table_plans.len() {
+                            self.flag_written_table(table);
+                        }
                     }
                     // Count the `call_indirect` sites so we can
                     // assign them unique slots.
