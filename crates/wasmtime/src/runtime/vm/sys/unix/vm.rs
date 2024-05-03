@@ -127,6 +127,7 @@ impl MemoryImageSource {
         // in-memory file to represent the heap image. This anonymous
         // file is then used as the basis for further mmaps.
 
+        use crate::prelude::*;
         use std::io::{ErrorKind, Write};
 
         // Create the memfd. It needs a name, but the documentation for
