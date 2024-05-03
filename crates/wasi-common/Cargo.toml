@@ -15,7 +15,7 @@ include = ["src/**/*", "tests/**/*", "witx", "README.md", "LICENSE", "build.rs"]
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 thiserror = { workspace = true }
 wiggle = { workspace = true }
 tracing = { workspace = true }
