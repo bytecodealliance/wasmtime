@@ -1,0 +1,69 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %nearest_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   nearest fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.s a3, fa5, fa5
+;   beqz a3, 0x28
+;   lui t6, 0x4b800
+;   fmv.w.x fa4, t6
+;   fabs.s fa0, fa5
+;   flt.s a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.s a3, fa5, rne ; trap: bad_toint
+;   fcvt.s.l fa0, a3, rne
+;   fsgnj.s fa0, fa0, fa5
+;   j 0x10
+;   fadd.s fa0, fa5, fa5, rne
+;   j 8
+;   fmv.s fa0, fa5
+;   ret
+
+function %nearest_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   nearest fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f64
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.d a3, fa5, fa5
+;   beqz a3, 0x38
+;   auipc t6, 0
+;   ld t6, 0xc(t6) ; trap: heap_oob
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x40, 0x43
+;   fmv.d.x fa4, t6
+;   fabs.d fa0, fa5
+;   flt.d a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.d a3, fa5, rne ; trap: bad_toint
+;   fcvt.d.l fa0, a3, rne
+;   fsgnj.d fa0, fa0, fa5
+;   j 0x10
+;   fadd.d fa0, fa5, fa5, rne
+;   j 8
+;   fmv.d fa0, fa5
+;   ret
