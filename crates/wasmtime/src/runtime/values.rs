@@ -248,7 +248,10 @@ impl Val {
 
                     HeapType::Extern => ExternRef::from_raw(store, raw.get_externref()).into(),
 
+                    HeapType::NoExtern => Ref::Extern(None),
+
                     HeapType::Any
+                    | HeapType::Eq
                     | HeapType::I31
                     | HeapType::Array
                     | HeapType::ConcreteArray(_)

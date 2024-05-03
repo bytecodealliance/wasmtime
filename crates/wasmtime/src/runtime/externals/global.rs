@@ -133,7 +133,10 @@ impl Global {
                                 .into(),
                         ),
 
+                        HeapType::NoExtern => Ref::Extern(None),
+
                         HeapType::Any
+                        | HeapType::Eq
                         | HeapType::I31
                         | HeapType::Struct
                         | HeapType::ConcreteStruct(_)

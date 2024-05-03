@@ -248,11 +248,15 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
         (H::NoFunc | H::ConcreteFunc(_) | H::Func, H::Func) => true,
         (_, H::Func) => false,
 
-        (H::Extern, H::Extern) => true,
+        (H::Extern | H::NoExtern, H::Extern) => true,
         (_, H::Extern) => false,
+
+        (H::NoExtern, H::NoExtern) => true,
+        (_, H::NoExtern) => false,
 
         (
             H::Any
+            | H::Eq
             | H::I31
             | H::Array
             | H::ConcreteArray(_)
@@ -262,6 +266,18 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
             H::Any,
         ) => true,
         (_, H::Any) => false,
+
+        (
+            H::Eq
+            | H::I31
+            | H::Array
+            | H::ConcreteArray(_)
+            | H::Struct
+            | H::ConcreteStruct(_)
+            | H::None,
+            H::Eq,
+        ) => true,
+        (_, H::Eq) => false,
 
         (H::I31 | H::None, H::I31) => true,
         (_, H::I31) => false,

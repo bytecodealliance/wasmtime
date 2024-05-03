@@ -390,6 +390,7 @@ impl EngineOrModuleTypeIndex {
 pub enum WasmHeapType {
     // External types.
     Extern,
+    NoExtern,
 
     // Function types.
     Func,
@@ -398,6 +399,7 @@ pub enum WasmHeapType {
 
     // Internal types.
     Any,
+    Eq,
     I31,
     Array,
     ConcreteArray(EngineOrModuleTypeIndex),
@@ -421,10 +423,12 @@ impl fmt::Display for WasmHeapType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Extern => write!(f, "extern"),
+            Self::NoExtern => write!(f, "noextern"),
             Self::Func => write!(f, "func"),
             Self::ConcreteFunc(i) => write!(f, "func {i}"),
             Self::NoFunc => write!(f, "nofunc"),
             Self::Any => write!(f, "any"),
+            Self::Eq => write!(f, "eq"),
             Self::I31 => write!(f, "i31"),
             Self::Array => write!(f, "array"),
             Self::ConcreteArray(i) => write!(f, "array {i}"),
@@ -489,13 +493,14 @@ impl WasmHeapType {
     #[inline]
     pub fn top(&self) -> WasmHeapTopType {
         match self {
-            WasmHeapType::Extern => WasmHeapTopType::Extern,
+            WasmHeapType::Extern | WasmHeapType::NoExtern => WasmHeapTopType::Extern,
 
             WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 WasmHeapTopType::Func
             }
 
             WasmHeapType::Any
+            | WasmHeapType::Eq
             | WasmHeapType::I31
             | WasmHeapType::Array
             | WasmHeapType::ConcreteArray(_)
@@ -1541,19 +1546,18 @@ pub trait TypeConvert {
     fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmHeapType {
         match ty {
             wasmparser::HeapType::Extern => WasmHeapType::Extern,
+            wasmparser::HeapType::NoExtern => WasmHeapType::NoExtern,
             wasmparser::HeapType::Func => WasmHeapType::Func,
             wasmparser::HeapType::NoFunc => WasmHeapType::NoFunc,
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
             wasmparser::HeapType::Any => WasmHeapType::Any,
+            wasmparser::HeapType::Eq => WasmHeapType::Eq,
             wasmparser::HeapType::I31 => WasmHeapType::I31,
             wasmparser::HeapType::Array => WasmHeapType::Array,
             wasmparser::HeapType::Struct => WasmHeapType::Struct,
             wasmparser::HeapType::None => WasmHeapType::None,
 
-            wasmparser::HeapType::Exn
-            | wasmparser::HeapType::NoExn
-            | wasmparser::HeapType::NoExtern
-            | wasmparser::HeapType::Eq => {
+            wasmparser::HeapType::Exn | wasmparser::HeapType::NoExn => {
                 unimplemented!("unsupported heap type {ty:?}");
             }
         }
