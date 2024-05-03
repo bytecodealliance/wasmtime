@@ -135,6 +135,8 @@ impl Global {
 
                         HeapType::Any
                         | HeapType::I31
+                        | HeapType::Struct
+                        | HeapType::ConcreteStruct(_)
                         | HeapType::Array
                         | HeapType::ConcreteArray(_) => definition
                             .as_gc_ref()

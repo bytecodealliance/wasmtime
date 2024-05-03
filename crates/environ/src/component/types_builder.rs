@@ -173,13 +173,12 @@ impl ComponentTypesBuilder {
     pub fn find_resource_drop_signature(&self) -> Option<ModuleInternedTypeIndex> {
         self.module_types
             .wasm_types()
-            .find(|(_, ty)| match &ty.composite_type {
-                wasmtime_types::WasmCompositeType::Array(_) => false,
-                wasmtime_types::WasmCompositeType::Func(sig) => {
+            .find(|(_, ty)| {
+                ty.as_func().map_or(false, |sig| {
                     sig.params().len() == 1
                         && sig.returns().len() == 0
                         && sig.params()[0] == WasmValType::I32
-                }
+                })
             })
             .map(|(i, _)| i)
     }

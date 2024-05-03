@@ -22,7 +22,7 @@ use wasmparser::{
     FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeRef,
     Validator, ValidatorResources, WasmFeatures,
 };
-use wasmtime_types::{ConstExpr, ConstOp, ModuleInternedTypeIndex};
+use wasmtime_types::{ConstExpr, ConstOp, ModuleInternedTypeIndex, WasmHeapTopType};
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'a, 'data> {
@@ -1268,19 +1268,15 @@ impl ModuleTranslation<'_> {
                 .table
                 .wasm_ty
                 .heap_type
+                .top()
             {
-                WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {}
+                WasmHeapTopType::Func => {}
                 // If this is not a funcref table, then we can't support a
                 // pre-computed table of function indices. Technically this
                 // initializer won't trap so we could continue processing
                 // segments, but that's left as a future optimization if
                 // necessary.
-                WasmHeapType::Extern
-                | WasmHeapType::Any
-                | WasmHeapType::I31
-                | WasmHeapType::Array
-                | WasmHeapType::ConcreteArray(_)
-                | WasmHeapType::None => break,
+                WasmHeapTopType::Any | WasmHeapTopType::Extern => break,
             }
 
             // Function indices can be optimized here, but fully general
