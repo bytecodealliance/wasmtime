@@ -12,7 +12,7 @@ use anyhow::{bail, format_err, Result};
 use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::Duration;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
@@ -684,10 +684,10 @@ impl Memory {
         &mut self,
         addr: u64,
         expected: u32,
-        deadline: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
-            Some(m) => m.atomic_wait32(addr, expected, deadline),
+            Some(m) => m.atomic_wait32(addr, expected, timeout),
             None => {
                 validate_atomic_addr(&self.vmmemory(), addr, 4, 4)?;
                 Err(Trap::AtomicWaitNonSharedMemory)
@@ -700,10 +700,10 @@ impl Memory {
         &mut self,
         addr: u64,
         expected: u64,
-        deadline: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
-            Some(m) => m.atomic_wait64(addr, expected, deadline),
+            Some(m) => m.atomic_wait64(addr, expected, timeout),
             None => {
                 validate_atomic_addr(&self.vmmemory(), addr, 8, 8)?;
                 Err(Trap::AtomicWaitNonSharedMemory)

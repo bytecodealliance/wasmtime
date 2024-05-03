@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use wasmtime::*;
 
 fn module(engine: &Engine) -> Result<Module> {
@@ -587,7 +587,7 @@ fn shared_memory_basics() -> Result<()> {
     assert_eq!(memory.atomic_wait64(8, 1, None), Ok(WaitResult::Mismatch));
 
     // timeout
-    let near_future = Instant::now() + Duration::new(0, 100);
+    let near_future = Duration::new(0, 100);
     assert_eq!(
         memory.atomic_wait32(8, 0, Some(near_future)),
         Ok(WaitResult::TimedOut)

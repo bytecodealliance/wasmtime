@@ -61,7 +61,7 @@ use crate::runtime::vm::{Instance, TrapReason, VMGcRef};
 use anyhow::bail;
 use anyhow::Result;
 #[cfg(feature = "threads")]
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -475,8 +475,7 @@ fn memory_atomic_wait32(
     expected: u32,
     timeout: u64,
 ) -> Result<u32, Trap> {
-    // convert timeout to Instant, before any wait happens on locking
-    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+    let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
     Ok(instance
         .get_runtime_memory(memory)
@@ -492,8 +491,7 @@ fn memory_atomic_wait64(
     expected: u64,
     timeout: u64,
 ) -> Result<u32, Trap> {
-    // convert timeout to Instant, before any wait happens on locking
-    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+    let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
     Ok(instance
         .get_runtime_memory(memory)

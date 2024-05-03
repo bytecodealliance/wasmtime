@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
 use std::ops::Range;
 use std::slice;
-use std::time::Instant;
+use std::time::Duration;
 use wasmtime_environ::MemoryPlan;
 
 pub use crate::runtime::vm::WaitResult;
@@ -842,9 +842,8 @@ impl SharedMemory {
     /// the byte address `addr` specified. The `addr` specified is an index
     /// into this linear memory.
     ///
-    /// The optional `timeout` argument is the point in time after which the
-    /// calling thread is guaranteed to be woken up. Blocking will not occur
-    /// past this point.
+    /// The optional `timeout` argument is the maximum amount of time to block
+    /// the current thread. If not specified the thread may sleep indefinitely.
     ///
     /// This function returns one of three possible values:
     ///
@@ -868,7 +867,7 @@ impl SharedMemory {
         &self,
         addr: u64,
         expected: u32,
-        timeout: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         self.0.atomic_wait32(addr, expected, timeout)
     }
@@ -886,7 +885,7 @@ impl SharedMemory {
         &self,
         addr: u64,
         expected: u64,
-        timeout: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         self.0.atomic_wait64(addr, expected, timeout)
     }

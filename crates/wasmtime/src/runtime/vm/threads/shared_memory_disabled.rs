@@ -46,7 +46,7 @@ impl SharedMemory {
         &self,
         _addr_index: u64,
         _expected: u32,
-        _timeout: Option<Instant>,
+        _timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match *self {}
     }
@@ -55,7 +55,7 @@ impl SharedMemory {
         &self,
         _addr_index: u64,
         _expected: u64,
-        _timeout: Option<Instant>,
+        _timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match *self {}
     }
