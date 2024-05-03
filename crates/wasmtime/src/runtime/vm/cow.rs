@@ -1,6 +1,7 @@
 //! Copy-on-write initialization support: creation of backing images for
 //! modules, and logic to support mapping these backing images into memory.
 
+use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
 use crate::runtime::vm::{MmapVec, SendSyncPtr};
 use alloc::sync::Arc;
@@ -116,7 +117,7 @@ impl MemoryImage {
 
         // If `mmap` doesn't come from a file then platform-specific mechanisms
         // may be used to place the data in a form that's amenable to an mmap.
-        if let Some(source) = MemoryImageSource::from_data(data)? {
+        if let Some(source) = MemoryImageSource::from_data(data).err2anyhow()? {
             return Ok(Some(MemoryImage {
                 source,
                 source_offset: 0,
@@ -129,17 +130,20 @@ impl MemoryImage {
     }
 
     unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
-        self.source.map_at(
-            base.add(self.linear_memory_offset),
-            self.len,
-            self.source_offset,
-        )?;
+        self.source
+            .map_at(
+                base.add(self.linear_memory_offset),
+                self.len,
+                self.source_offset,
+            )
+            .err2anyhow()?;
         Ok(())
     }
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
         self.source
-            .remap_as_zeros_at(base.add(self.linear_memory_offset), self.len)?;
+            .remap_as_zeros_at(base.add(self.linear_memory_offset), self.len)
+            .err2anyhow()?;
         Ok(())
     }
 }
@@ -587,7 +591,7 @@ impl MemoryImageSlot {
         if len == 0 {
             return Ok(());
         }
-        vm::madvise_dontneed(self.base.as_ptr().add(base), len)?;
+        vm::madvise_dontneed(self.base.as_ptr().add(base), len).err2anyhow()?;
         Ok(())
     }
 
@@ -601,9 +605,9 @@ impl MemoryImageSlot {
         unsafe {
             let start = self.base.as_ptr().add(range.start);
             if readwrite {
-                vm::expose_existing_mapping(start, range.len())?;
+                vm::expose_existing_mapping(start, range.len()).err2anyhow()?;
             } else {
-                vm::hide_existing_mapping(start, range.len())?;
+                vm::hide_existing_mapping(start, range.len()).err2anyhow()?;
             }
         }
 
@@ -629,7 +633,7 @@ impl MemoryImageSlot {
         }
 
         unsafe {
-            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size)?;
+            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size).err2anyhow()?;
         }
 
         self.image = None;

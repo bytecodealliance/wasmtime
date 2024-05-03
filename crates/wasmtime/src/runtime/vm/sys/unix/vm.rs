@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use rustix::fd::AsRawFd;
 use rustix::mm::{mmap, mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
 use std::fs::File;
@@ -142,9 +143,9 @@ impl MemoryImageSource {
             Err(memfd::Error::Create(err)) if err.kind() == ErrorKind::Unsupported => {
                 return Ok(None)
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e.into_anyhow()),
         };
-        memfd.as_file().write_all(data)?;
+        memfd.as_file().write_all(data).err2anyhow()?;
 
         // Seal the memfd's data and length.
         //
@@ -161,12 +162,14 @@ impl MemoryImageSource {
         // extra-super-sure that it never changes, and because
         // this costs very little, we use the kernel's "seal" API
         // to make the memfd image permanently read-only.
-        memfd.add_seals(&[
-            memfd::FileSeal::SealGrow,
-            memfd::FileSeal::SealShrink,
-            memfd::FileSeal::SealWrite,
-            memfd::FileSeal::SealSeal,
-        ])?;
+        memfd
+            .add_seals(&[
+                memfd::FileSeal::SealGrow,
+                memfd::FileSeal::SealShrink,
+                memfd::FileSeal::SealWrite,
+                memfd::FileSeal::SealSeal,
+            ])
+            .err2anyhow()?;
 
         Ok(Some(MemoryImageSource::Memfd(memfd)))
     }

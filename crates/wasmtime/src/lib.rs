@@ -271,7 +271,7 @@
 #![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
 #![no_std]
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", unix, windows))]
 #[macro_use]
 extern crate std;
 extern crate alloc;
