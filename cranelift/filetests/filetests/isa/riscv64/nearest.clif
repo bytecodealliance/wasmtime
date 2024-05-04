@@ -1,0 +1,78 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %nearest_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lui a2,307200
+;   fmv.w.x fa4,a2
+;   fabs.s fa1,fa0
+;   flt.s a2,fa1,fa4
+;   fcvt.w.s a4,fa0,rne
+;   fcvt.s.w fa1,a4,rne
+;   fsgnj.s fa2,fa1,fa0
+;   fmv.w.x fa4,zero
+;   fadd.s fa0,fa0,fa4,rne
+;   select fa0,fa0,fa2##condition=(a2 eq zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a2, 0x4b000
+;   fmv.w.x fa4, a2
+;   fabs.s fa1, fa0
+;   flt.s a2, fa1, fa4
+;   fcvt.w.s a4, fa0, rne ; trap: bad_toint
+;   fcvt.s.w fa1, a4, rne
+;   fsgnj.s fa2, fa1, fa0
+;   fmv.w.x fa4, zero
+;   fadd.s fa0, fa0, fa4, rne
+;   beqz a2, 8
+;   fmv.d fa0, fa2
+;   ret
+
+function %nearest_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lui a2,1075
+;   slli a4,a2,40
+;   fmv.d.x fa1,a4
+;   fabs.d fa2,fa0
+;   flt.d a4,fa2,fa1
+;   fcvt.l.d a0,fa0,rne
+;   fcvt.d.l fa2,a0,rne
+;   fsgnj.d fa4,fa2,fa0
+;   fmv.d.x fa1,zero
+;   fadd.d fa2,fa0,fa1,rne
+;   select fa0,fa2,fa4##condition=(a4 eq zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a2, 0x433
+;   slli a4, a2, 0x28
+;   fmv.d.x fa1, a4
+;   fabs.d fa2, fa0
+;   flt.d a4, fa2, fa1
+;   fcvt.l.d a0, fa0, rne ; trap: bad_toint
+;   fcvt.d.l fa2, a0, rne
+;   fsgnj.d fa4, fa2, fa0
+;   fmv.d.x fa1, zero
+;   fadd.d fa2, fa0, fa1, rne
+;   bnez a4, 0xc
+;   fmv.d fa0, fa2
+;   j 8
+;   fmv.d fa0, fa4
+;   ret
+

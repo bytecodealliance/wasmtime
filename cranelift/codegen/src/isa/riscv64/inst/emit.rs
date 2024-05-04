@@ -141,35 +141,6 @@ impl Inst {
         }
     }
 
-    // emit a float is not a nan.
-    pub(crate) fn emit_not_nan(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
-        Inst::FpuRRR {
-            alu_op: if ty == F32 {
-                FpuOPRRR::FeqS
-            } else {
-                FpuOPRRR::FeqD
-            },
-            frm: FRM::RDN,
-            rd: rd,
-            rs1: rs,
-            rs2: rs,
-        }
-    }
-
-    pub(crate) fn emit_fabs(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
-        Inst::FpuRRR {
-            alu_op: if ty == F32 {
-                FpuOPRRR::FsgnjxS
-            } else {
-                FpuOPRRR::FsgnjxD
-            },
-            frm: FRM::RDN,
-            rd: rd,
-            rs1: rs,
-            rs2: rs,
-        }
-    }
-
     /// Returns Some(VState) if this insturction is expecting a specific vector state
     /// before emission.
     fn expected_vstate(&self) -> Option<&VState> {
@@ -219,7 +190,6 @@ impl Inst {
             | Inst::TrapIf { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
-            | Inst::FloatRound { .. }
             | Inst::Popcnt { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
@@ -2089,142 +2059,6 @@ impl Inst {
                     src,
                 }
                 .emit(&[], sink, emit_info, state);
-            }
-            &Inst::FloatRound {
-                op,
-                rd,
-                int_tmp,
-                f_tmp,
-                rs,
-                ty,
-            } => {
-                // this code is port from glibc ceil floor ... implementation.
-                let label_nan = sink.get_label();
-                let label_x = sink.get_label();
-                let label_jump_over = sink.get_label();
-                // check if is nan.
-                Inst::emit_not_nan(int_tmp, rs, ty).emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: int_tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                fn max_value_need_round(ty: Type) -> u64 {
-                    match ty {
-                        F32 => {
-                            let x: u64 = 1 << f32::MANTISSA_DIGITS;
-                            let x = x as f32;
-                            let x = u32::from_le_bytes(x.to_le_bytes());
-                            x as u64
-                        }
-                        F64 => {
-                            let x: u64 = 1 << f64::MANTISSA_DIGITS;
-                            let x = x as f64;
-                            u64::from_le_bytes(x.to_le_bytes())
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                // load max value need to round.
-                if ty == F32 {
-                    Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32, &mut |_| {
-                        writable_spilltmp_reg()
-                    })
-                } else {
-                    Inst::load_fp_constant64(f_tmp, max_value_need_round(ty), &mut |_| {
-                        writable_spilltmp_reg()
-                    })
-                }
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                // get abs value.
-                Inst::emit_fabs(rd, rs, ty).emit(&[], sink, emit_info, state);
-
-                // branch if f_tmp < rd
-                Inst::FpuRRR {
-                    frm: FRM::RTZ,
-                    alu_op: if ty == F32 {
-                        FpuOPRRR::FltS
-                    } else {
-                        FpuOPRRR::FltD
-                    },
-                    rd: int_tmp,
-                    rs1: f_tmp.to_reg(),
-                    rs2: rd.to_reg(),
-                }
-                .emit(&[], sink, emit_info, state);
-
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_x),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: int_tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-
-                //convert to int.
-                Inst::FpuRR {
-                    alu_op: FpuOPRR::float_convert_2_int_op(ty, true, I64),
-                    frm: op.to_frm(),
-                    rd: int_tmp,
-                    rs: rs,
-                }
-                .emit(&[], sink, emit_info, state);
-                //convert back.
-                Inst::FpuRR {
-                    alu_op: if ty == F32 {
-                        FpuOPRR::FcvtSL
-                    } else {
-                        FpuOPRR::FcvtDL
-                    },
-                    frm: op.to_frm(),
-                    rd,
-                    rs: int_tmp.to_reg(),
-                }
-                .emit(&[], sink, emit_info, state);
-                // copy sign.
-                Inst::FpuRRR {
-                    alu_op: if ty == F32 {
-                        FpuOPRRR::FsgnjS
-                    } else {
-                        FpuOPRRR::FsgnjD
-                    },
-                    frm: FRM::RNE,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: rs,
-                }
-                .emit(&[], sink, emit_info, state);
-                // jump over.
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here is nan.
-                sink.bind_label(label_nan, &mut state.ctrl_plane);
-                Inst::FpuRRR {
-                    alu_op: if ty == F32 {
-                        FpuOPRRR::FaddS
-                    } else {
-                        FpuOPRRR::FaddD
-                    },
-                    frm: FRM::RNE,
-                    rd: rd,
-                    rs1: rs,
-                    rs2: rs,
-                }
-                .emit(&[], sink, emit_info, state);
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here select origin x.
-                sink.bind_label(label_x, &mut state.ctrl_plane);
-                Inst::gen_move(rd, rs, ty).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 
             &Inst::Popcnt {

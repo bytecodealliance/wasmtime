@@ -2120,14 +2120,65 @@ fn riscv64_worst_case_instruction_size() {
     //there are all candidates potential generate a lot of bytes.
     let mut candidates: Vec<MInst> = vec![];
 
-    candidates.push(Inst::FloatRound {
-        op: FloatRoundOP::Trunc,
-        int_tmp: writable_a0(),
-        f_tmp: writable_a0(),
-        rd: writable_fa0(),
-        rs: fa0(),
-        ty: F64,
+    candidates.push(Inst::Popcnt {
+        sum: writable_a0(),
+        tmp: writable_a0(),
+        step: writable_a0(),
+        rs: a0(),
+        ty: I64,
     });
+
+    candidates.push(Inst::Cltz {
+        sum: writable_a0(),
+        tmp: writable_a0(),
+        step: writable_a0(),
+        rs: a0(),
+        leading: true,
+        ty: I64,
+    });
+
+    candidates.push(Inst::Brev8 {
+        rd: writable_a0(),
+        tmp: writable_a0(),
+        step: writable_a0(),
+        tmp2: writable_a0(),
+        rs: a0(),
+        ty: I64,
+    });
+
+    candidates.push(Inst::AtomicCas {
+        offset: a0(),
+        t0: writable_a0(),
+        dst: writable_a0(),
+        e: a0(),
+        addr: a0(),
+        v: a0(),
+        ty: I64,
+    });
+
+    candidates.push(Inst::AtomicCas {
+        offset: a0(),
+        t0: writable_a0(),
+        dst: writable_a0(),
+        e: a0(),
+        addr: a0(),
+        v: a0(),
+        ty: I16,
+    });
+
+    candidates.extend(
+        crate::ir::AtomicRmwOp::all()
+            .iter()
+            .map(|op| Inst::AtomicRmwLoop {
+                op: *op,
+                offset: a0(),
+                dst: writable_a0(),
+                ty: I16,
+                p: a0(),
+                x: a0(),
+                t0: writable_a0(),
+            }),
+    );
 
     let mut max: (u32, MInst) = (0, Inst::Nop0);
     for i in candidates {
