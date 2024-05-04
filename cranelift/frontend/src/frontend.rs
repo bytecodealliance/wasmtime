@@ -19,7 +19,7 @@ use cranelift_codegen::packed_option::PackedOption;
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
-/// `FunctionBuilderContext` holds various data structures which are cleared between
+/// [`FunctionBuilderContext`] holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
 #[derive(Default)]
 pub struct FunctionBuilderContext {
@@ -28,7 +28,7 @@ pub struct FunctionBuilderContext {
     types: SecondaryMap<Variable, Type>,
 }
 
-/// Temporary object used to build a single Cranelift IR `Function`.
+/// Temporary object used to build a single Cranelift IR [`Function`].
 pub struct FunctionBuilder<'a> {
     /// The function currently being built.
     /// This field is public so the function can be re-borrowed.
@@ -53,8 +53,8 @@ enum BlockStatus {
 }
 
 impl FunctionBuilderContext {
-    /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after
-    /// each [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
+    /// Creates a [`FunctionBuilderContext`] structure. The structure is automatically cleared after
+    /// each [`FunctionBuilder`] completes translating a function.
     pub fn new() -> Self {
         Self::default()
     }
@@ -70,7 +70,7 @@ impl FunctionBuilderContext {
     }
 }
 
-/// Implementation of the [`InstBuilder`](cranelift_codegen::ir::InstBuilder) that has
+/// Implementation of the [`InstBuilder`] that has
 /// one convenience method per Cranelift IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short> {
     builder: &'short mut FunctionBuilder<'long>,
@@ -223,7 +223,7 @@ pub enum DefVariableError {
     ///
     /// note: to obtain the type of the value, you can call
     /// [`cranelift_codegen::ir::dfg::DataFlowGraph::value_type`] (using the
-    /// [`FunctionBuilder.func.dfg`] field)
+    /// `FunctionBuilder.func.dfg` field)
     TypeMismatch(Variable, Value),
     /// The value was defined (in a call to [`FunctionBuilder::def_var`]) before
     /// it was declared (in a call to [`FunctionBuilder::declare_var`]).
@@ -261,7 +261,7 @@ impl fmt::Display for DefVariableError {
 /// The module is parametrized by one type which is the representation of variables in your
 /// origin language. It offers a way to conveniently append instruction to your program flow.
 /// You are responsible to split your instruction flow into extended blocks (declared with
-/// `create_block`) whose properties are:
+/// [`create_block`](Self::create_block)) whose properties are:
 ///
 /// - branch and jump instructions can only point at the top of extended blocks;
 /// - the last instruction of each block is a terminator instruction which has no natural successor,
@@ -269,28 +269,27 @@ impl fmt::Display for DefVariableError {
 ///
 /// The parameters of Cranelift IR instructions are Cranelift IR values, which can only be created
 /// as results of other Cranelift IR instructions. To be able to create variables redefined multiple
-/// times in your program, use the `def_var` and `use_var` command, that will maintain the
-/// correspondence between your variables and Cranelift IR SSA values.
+/// times in your program, use the [`def_var`](Self::def_var) and [`use_var`](Self::use_var) command,
+/// that will maintain the correspondence between your variables and Cranelift IR SSA values.
 ///
-/// The first block for which you call `switch_to_block` will be assumed to be the beginning of
-/// the function.
+/// The first block for which you call [`switch_to_block`](Self::switch_to_block) will be assumed to
+/// be the beginning of the function.
 ///
-/// At creation, a `FunctionBuilder` instance borrows an already allocated `Function` which it
+/// At creation, a [`FunctionBuilder`] instance borrows an already allocated `Function` which it
 /// modifies with the information stored in the mutable borrowed
-/// [`FunctionBuilderContext`](struct.FunctionBuilderContext.html). The function passed in
-/// argument should be newly created with
-/// [`Function::with_name_signature()`](Function::with_name_signature), whereas the
-/// `FunctionBuilderContext` can be kept as is between two function translations.
+/// [`FunctionBuilderContext`]. The function passed in argument should be newly created with
+/// [`Function::with_name_signature()`], whereas the [`FunctionBuilderContext`] can be kept as is
+/// between two function translations.
 ///
 /// # Errors
 ///
 /// The functions below will panic in debug mode whenever you try to modify the Cranelift IR
 /// function in a way that violate the coherence of the code. For instance: switching to a new
-/// `Block` when you haven't filled the current one with a terminator instruction, inserting a
+/// [`Block`] when you haven't filled the current one with a terminator instruction, inserting a
 /// return instruction with arguments that don't match the function's signature.
 impl<'a> FunctionBuilder<'a> {
-    /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
-    /// `FunctionBuilderContext`.
+    /// Creates a new [`FunctionBuilder`] structure that will operate on a [`Function`] using a
+    /// [`FunctionBuilderContext`].
     pub fn new(func: &'a mut Function, func_ctx: &'a mut FunctionBuilderContext) -> Self {
         debug_assert!(func_ctx.is_empty());
         Self {
@@ -311,7 +310,7 @@ impl<'a> FunctionBuilder<'a> {
         self.srcloc = srcloc;
     }
 
-    /// Creates a new `Block` and returns its reference.
+    /// Creates a new [`Block`] and returns its reference.
     pub fn create_block(&mut self) -> Block {
         let block = self.func.dfg.make_block();
         self.func_ctx.ssa.declare_block(block);
@@ -332,7 +331,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// After the call to this function, new instructions will be inserted into the designated
-    /// block, in the order they are declared. You must declare the types of the Block arguments
+    /// block, in the order they are declared. You must declare the types of the [`Block`] arguments
     /// you will use here.
     ///
     /// When inserting the terminator instruction (which doesn't have a fallthrough to its immediate
@@ -367,9 +366,9 @@ impl<'a> FunctionBuilder<'a> {
         self.handle_ssa_side_effects(side_effects);
     }
 
-    /// Effectively calls seal_block on all unsealed blocks in the function.
+    /// Effectively calls [seal_block](Self::seal_block) on all unsealed blocks in the function.
     ///
-    /// It's more efficient to seal `Block`s as soon as possible, during
+    /// It's more efficient to seal [`Block`]s as soon as possible, during
     /// translation, but for frontends where this is impractical to do, this
     /// function can be used at the end of translating all blocks to ensure
     /// that everything is sealed.
@@ -473,9 +472,10 @@ impl<'a> FunctionBuilder<'a> {
             })
     }
 
-    /// Set label for Value
+    /// Set label for [`Value`]
     ///
-    /// This will not do anything unless `func.dfg.collect_debug_info` is called first.
+    /// This will not do anything unless
+    /// [`func.dfg.collect_debug_info`](DataFlowGraph::collect_debug_info) is called first.
     pub fn set_val_label(&mut self, val: Value, label: ValueLabel) {
         if let Some(values_labels) = self.func.stencil.dfg.values_labels.as_mut() {
             use alloc::collections::btree_map::Entry;
@@ -497,19 +497,21 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Creates a jump table in the function, to be used by `br_table` instructions.
+    /// Creates a jump table in the function, to be used by [`br_table`](InstBuilder::br_table) instructions.
     pub fn create_jump_table(&mut self, data: JumpTableData) -> JumpTable {
         self.func.create_jump_table(data)
     }
 
-    /// Creates a sized stack slot in the function, to be used by `stack_load`, `stack_store` and
-    /// `stack_addr` instructions.
+    /// Creates a sized stack slot in the function, to be used by [`stack_load`](InstBuilder::stack_load),
+    /// [`stack_store`](InstBuilder::stack_store) and [`stack_addr`](InstBuilder::stack_addr) instructions.
     pub fn create_sized_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
         self.func.create_sized_stack_slot(data)
     }
 
-    /// Creates a dynamic stack slot in the function, to be used by `dynamic_stack_load`,
-    /// `dynamic_stack_store` and `dynamic_stack_addr` instructions.
+    /// Creates a dynamic stack slot in the function, to be used by
+    /// [`dynamic_stack_load`](InstBuilder::dynamic_stack_load),
+    /// [`dynamic_stack_store`](InstBuilder::dynamic_stack_store) and
+    /// [`dynamic_stack_addr`](InstBuilder::dynamic_stack_addr) instructions.
     pub fn create_dynamic_stack_slot(&mut self, data: DynamicStackSlotData) -> DynamicStackSlot {
         self.func.create_dynamic_stack_slot(data)
     }
@@ -529,8 +531,8 @@ impl<'a> FunctionBuilder<'a> {
         self.func.create_global_value(data)
     }
 
-    /// Returns an object with the [`InstBuilder`](cranelift_codegen::ir::InstBuilder)
-    /// trait that allows to conveniently append an instruction to the current `Block` being built.
+    /// Returns an object with the [`InstBuilder`]
+    /// trait that allows to conveniently append an instruction to the current [`Block`] being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a> {
         let block = self
             .position
@@ -554,10 +556,10 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Returns a `FuncCursor` pointed at the current position ready for inserting instructions.
+    /// Returns a [`FuncCursor`] pointed at the current position ready for inserting instructions.
     ///
     /// This can be used to insert SSA code that doesn't need to access locals and that doesn't
-    /// need to know about `FunctionBuilder` at all.
+    /// need to know about [`FunctionBuilder`] at all.
     pub fn cursor(&mut self) -> FuncCursor {
         self.ensure_inserted_block();
         FuncCursor::new(self.func)
@@ -565,7 +567,7 @@ impl<'a> FunctionBuilder<'a> {
             .at_bottom(self.position.unwrap())
     }
 
-    /// Append parameters to the given `Block` corresponding to the function
+    /// Append parameters to the given [`Block`] corresponding to the function
     /// parameters. This can be used to set up the block parameters for the
     /// entry block.
     pub fn append_block_params_for_function_params(&mut self, block: Block) {
@@ -589,7 +591,7 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Append parameters to the given `Block` corresponding to the function
+    /// Append parameters to the given [`Block`] corresponding to the function
     /// return values. This can be used to set up the block parameters for a
     /// function exit block.
     pub fn append_block_params_for_function_returns(&mut self, block: Block) {
@@ -610,7 +612,7 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Declare that translation of the current function is complete.
     ///
-    /// This resets the state of the `FunctionBuilderContext` in preparation to
+    /// This resets the state of the [`FunctionBuilderContext`] in preparation to
     /// be used for another function.
     pub fn finalize(self) {
         // Check that all the `Block`s are filled and sealed.
@@ -659,18 +661,19 @@ impl<'a> FunctionBuilder<'a> {
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
 impl<'a> FunctionBuilder<'a> {
-    /// Retrieves all the parameters for a `Block` currently inferred from the jump instructions
+    /// Retrieves all the parameters for a [`Block`] currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
     pub fn block_params(&self, block: Block) -> &[Value] {
         self.func.dfg.block_params(block)
     }
 
-    /// Retrieves the signature with reference `sigref` previously added with `import_signature`.
+    /// Retrieves the signature with reference `sigref` previously added with
+    /// [`import_signature`](Self::import_signature).
     pub fn signature(&self, sigref: SigRef) -> Option<&Signature> {
         self.func.dfg.signatures.get(sigref)
     }
 
-    /// Creates a parameter for a specific `Block` by appending it to the list of already existing
+    /// Creates a parameter for a specific [`Block`] by appending it to the list of already existing
     /// parameters.
     ///
     /// **Note:** this function has to be called at the creation of the `Block` before adding
@@ -703,7 +706,7 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Returns `true` if and only if the current `Block` is sealed and has no predecessors declared.
+    /// Returns `true` if and only if the current [`Block`] is sealed and has no predecessors declared.
     ///
     /// The entry block of a function is never unreachable.
     pub fn is_unreachable(&self) -> bool {
@@ -720,13 +723,13 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Returns `true` if and only if no instructions have been added since the last call to
-    /// `switch_to_block`.
+    /// [`switch_to_block`](Self::switch_to_block).
     fn is_pristine(&self, block: Block) -> bool {
         self.func_ctx.status[block] == BlockStatus::Empty
     }
 
     /// Returns `true` if and only if a terminator instruction has been inserted since the
-    /// last call to `switch_to_block`.
+    /// last call to [`switch_to_block`](Self::switch_to_block).
     fn is_filled(&self, block: Block) -> bool {
         self.func_ctx.status[block] == BlockStatus::Filled
     }
