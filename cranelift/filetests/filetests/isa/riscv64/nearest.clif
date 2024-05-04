@@ -17,6 +17,8 @@ block0(v0: f32):
 ;   fcvt.w.s a4,fa0,rne
 ;   fcvt.s.w fa1,a4,rne
 ;   fsgnj.s fa2,fa1,fa0
+;   fmv.w.x fa4,zero
+;   fadd.s fa0,fa0,fa4,rne
 ;   select fa0,fa0,fa2##condition=(a2 eq zero)
 ;   ret
 ;
@@ -29,6 +31,8 @@ block0(v0: f32):
 ;   fcvt.w.s a4, fa0, rne ; trap: bad_toint
 ;   fcvt.s.w fa1, a4, rne
 ;   fsgnj.s fa2, fa1, fa0
+;   fmv.w.x fa4, zero
+;   fadd.s fa0, fa0, fa4, rne
 ;   beqz a2, 8
 ;   fmv.d fa0, fa2
 ;   ret
@@ -49,7 +53,9 @@ block0(v0: f64):
 ;   fcvt.l.d a0,fa0,rne
 ;   fcvt.d.l fa2,a0,rne
 ;   fsgnj.d fa4,fa2,fa0
-;   select fa0,fa0,fa4##condition=(a4 eq zero)
+;   fmv.d.x fa1,zero
+;   fadd.d fa2,fa0,fa1,rne
+;   select fa0,fa2,fa4##condition=(a4 eq zero)
 ;   ret
 ;
 ; Disassembled:
@@ -62,7 +68,11 @@ block0(v0: f64):
 ;   fcvt.l.d a0, fa0, rne ; trap: bad_toint
 ;   fcvt.d.l fa2, a0, rne
 ;   fsgnj.d fa4, fa2, fa0
-;   beqz a4, 8
+;   fmv.d.x fa1, zero
+;   fadd.d fa2, fa0, fa1, rne
+;   bnez a4, 0xc
+;   fmv.d fa0, fa2
+;   j 8
 ;   fmv.d fa0, fa4
 ;   ret
 

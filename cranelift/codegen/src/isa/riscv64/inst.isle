@@ -2481,10 +2481,15 @@
         ;; to move the value to an integer register and back.
         (fcvt FReg (float_round_fcvt ty frm rs))
         ;; Restore the sign bit from the initial value.
-        (rounded FReg (rv_fsgnj ty fcvt rs)))
+        (rounded FReg (rv_fsgnj ty fcvt rs))
+
+        ;; We want to return a arithmetic nan if the input is a canonical nan.
+        ;; Convert them by adding 0.0 to the input.
+        (float_zero FReg (gen_bitcast (zero_reg) (float_int_of_same_size ty) ty))
+        (corrected_nan FReg (rv_fadd ty (FRM.RNE) rs float_zero)))
 
     ;; Check if the value cannot be rounded exactly and return the source input if so
-    (gen_select_freg (cmp_eqz exact) rs rounded)))
+    (gen_select_freg (cmp_eqz exact) corrected_nan rounded)))
 
 
 
