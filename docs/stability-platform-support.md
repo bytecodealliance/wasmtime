@@ -69,8 +69,11 @@ elsewhere.
 
 Wasmtime's support for no\_std requires the embedder to implement the equivalent
 of a C header file to indicate how to perform basic OS operations such as
-allocating virtual memory. This API can be found at
-`examples/min-platform/embedding/wasmtime-platform.h` in the source tree.
+allocating virtual memory. This API can be found as `wasmtime-platform.h` in
+Wasmtime's release artifacts or at
+`examples/min-platform/embedding/wasmtime-platform.h` in the source tree. Note
+that this API is not guaranteed to be stable at this time, it'll need to be
+updated when Wasmtime is updated.
 
 Wasmtime's runtime will use the symbols defined in this file meaning that if
 they're not defined then a link-time error will be generated. Embedders are
