@@ -1968,6 +1968,10 @@ at https://bytecodealliance.org/security.
             } else {
                 // Without `std` and with `panic = "unwind"` there's no way to
                 // abort the process portably, so flag a compile time error.
+                //
+                // NB: if this becomes a problem in the future one option would
+                // be to extend the `capi.rs` module for no_std platforms, but
+                // it remains yet to be seen at this time if this is hit much.
                 compile_error!("either `std` or `panic=abort` must be enabled");
                 None
             }

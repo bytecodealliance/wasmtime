@@ -2,10 +2,15 @@
 //!
 //! These primitives are intended for use in `no_std` contexts are are not as
 //! full-featured as the `std` brethren. Namely these panic and/or return an
-//! error on contention. This serves to continue to be correct in the fact of
+//! error on contention. This serves to continue to be correct in the face of
 //! actual multiple threads, but if a system actually has multiple threads then
 //! something will need to change in the Wasmtime crate to enable the external
 //! system to perform necessary synchronization.
+//!
+//! In the future if these primitives are not suitable we can switch to putting
+//! relevant functions in the `capi.rs` module where we basically require
+//! embedders to implement them instead of doing it ourselves here. It's unclear
+//! if this will be necessary, so this is the chosen starting point.
 //!
 //! See a brief overview of this module in `sync_std.rs` as well.
 
@@ -49,9 +54,10 @@ impl<T> OnceLock<T> {
     }
 
     fn get(&self) -> Option<&T> {
-        match self.state.load(Ordering::Acquire) {
-            INITIALIZED => Some(unsafe { (*self.val.get()).assume_init_ref() }),
-            _ => None,
+        if self.state.load(Ordering::Acquire) == INITIALIZED {
+            Some(unsafe { (*self.val.get()).assume_init_ref() })
+        } else {
+            None
         }
     }
 
