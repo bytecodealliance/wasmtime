@@ -4,12 +4,15 @@
 
 #![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
 
+use crate::prelude::*;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::runtime::vm::{GcStore, SendSyncPtr, Store, VMGcRef};
 use anyhow::{bail, ensure, format_err, Error, Result};
+use core::cmp;
+use core::ops::Range;
+use core::ptr::{self, NonNull};
+use core::slice;
 use sptr::Strict;
-use std::ops::Range;
-use std::ptr::{self, NonNull};
 use wasmtime_environ::{
     TablePlan, Trap, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
 };
@@ -302,7 +305,7 @@ impl Table {
                 );
                 let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
                     data.as_non_null().cast::<FuncTableElem>(),
-                    std::cmp::min(len, max),
+                    cmp::min(len, max),
                 ));
                 Ok(Self::from(StaticFuncTable { data, size }))
             }
@@ -322,7 +325,7 @@ impl Table {
                 );
                 let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
                     data.as_non_null().cast::<Option<VMGcRef>>(),
-                    std::cmp::min(len, max),
+                    cmp::min(len, max),
                 ));
                 Ok(Self::from(StaticGcRefTable { data, size }))
             }
@@ -705,10 +708,10 @@ impl Table {
         assert_eq!(self.element_type(), TableElementType::Func);
         match self {
             Self::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => unsafe {
-                std::slice::from_raw_parts(elements.as_ptr().cast(), elements.len())
+                slice::from_raw_parts(elements.as_ptr().cast(), elements.len())
             },
             Self::Static(StaticTable::Func(StaticFuncTable { data, size })) => unsafe {
-                std::slice::from_raw_parts(data.as_ptr().cast(), usize::try_from(*size).unwrap())
+                slice::from_raw_parts(data.as_ptr().cast(), usize::try_from(*size).unwrap())
             },
             _ => unreachable!(),
         }
@@ -718,13 +721,10 @@ impl Table {
         assert_eq!(self.element_type(), TableElementType::Func);
         match self {
             Self::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => unsafe {
-                std::slice::from_raw_parts_mut(elements.as_mut_ptr().cast(), elements.len())
+                slice::from_raw_parts_mut(elements.as_mut_ptr().cast(), elements.len())
             },
             Self::Static(StaticTable::Func(StaticFuncTable { data, size })) => unsafe {
-                std::slice::from_raw_parts_mut(
-                    data.as_ptr().cast(),
-                    usize::try_from(*size).unwrap(),
-                )
+                slice::from_raw_parts_mut(data.as_ptr().cast(), usize::try_from(*size).unwrap())
             },
             _ => unreachable!(),
         }

@@ -2,7 +2,7 @@ use crate::runtime::vm::VMGcRef;
 use crate::{
     store::AutoAssertNoGc, AsContextMut, GcRefImpl, Result, Rooted, StoreContext, StoreContextMut,
 };
-use std::any::Any;
+use core::any::Any;
 
 /// Support for `externref` disabled at compile time because the `gc` cargo
 /// feature was not enabled.

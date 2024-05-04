@@ -6,7 +6,7 @@ use crate::runtime::vm::{
 use crate::type_registry::RegisteredType;
 use crate::{code_memory::CodeMemory, Engine, FuncType, ValRaw};
 use anyhow::Result;
-use std::ptr::NonNull;
+use core::ptr::NonNull;
 
 struct TrampolineState<F> {
     func: F,
@@ -54,7 +54,7 @@ unsafe extern "C" fn array_call_shim<F>(
         let state = (*vmctx).host_state();
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
-        let values_vec = std::slice::from_raw_parts_mut(values_vec, values_vec_len);
+        let values_vec = core::slice::from_raw_parts_mut(values_vec, values_vec_len);
         (state.func)(VMContext::from_opaque(caller_vmctx), values_vec)
     });
 
@@ -80,6 +80,7 @@ where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
     use crate::compile::finish_object;
+    use crate::prelude::*;
     use std::ptr;
 
     let mut obj = engine

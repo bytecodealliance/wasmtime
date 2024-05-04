@@ -5,6 +5,7 @@
 
 #![allow(missing_docs)]
 
+use crate::prelude::*;
 use crate::runtime::vm::{GcHeap, GcRuntime};
 use anyhow::Result;
 

@@ -61,7 +61,7 @@ use crate::runtime::vm::{Instance, TrapReason, VMGcRef};
 use anyhow::bail;
 use anyhow::Result;
 #[cfg(feature = "threads")]
-use std::time::{Duration, Instant};
+use core::time::Duration;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -121,7 +121,7 @@ pub mod raw {
                     }
                     $(
                         #[cfg(not($attr))]
-                        std::process::abort();
+                        unreachable!();
                     )?
                 }
 
@@ -365,7 +365,7 @@ unsafe fn table_get_lazy_init_func_ref(
     index: u32,
 ) -> *mut u8 {
     let table_index = TableIndex::from_u32(table_index);
-    let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
+    let table = instance.get_table_with_lazy_init(table_index, core::iter::once(index));
     let gc_store = (*instance.store()).gc_store();
     let elem = (*table)
         .get(gc_store, index)
@@ -406,7 +406,7 @@ unsafe fn gc(instance: &mut Instance, gc_ref: *mut u8) -> Result<*mut u8> {
     }
 
     match (*instance.store()).gc(gc_ref)? {
-        None => Ok(std::ptr::null_mut()),
+        None => Ok(core::ptr::null_mut()),
         Some(r) => {
             let r64 = r.as_r64();
             (*instance.store()).gc_store().expose_gc_ref_to_wasm(r);
@@ -418,7 +418,7 @@ unsafe fn gc(instance: &mut Instance, gc_ref: *mut u8) -> Result<*mut u8> {
 // Perform a Wasm `global.get` for GC reference globals.
 #[cfg(feature = "gc")]
 unsafe fn gc_ref_global_get(instance: &mut Instance, index: u32) -> Result<*mut u8> {
-    use std::num::NonZeroUsize;
+    use core::num::NonZeroUsize;
 
     let index = wasmtime_environ::GlobalIndex::from_u32(index);
     let global = instance.defined_or_imported_global_ptr(index);
@@ -432,7 +432,7 @@ unsafe fn gc_ref_global_get(instance: &mut Instance, index: u32) -> Result<*mut 
     }
 
     match (*global).as_gc_ref() {
-        None => Ok(std::ptr::null_mut()),
+        None => Ok(core::ptr::null_mut()),
         Some(gc_ref) => {
             let gc_ref = gc_store.clone_gc_ref(gc_ref);
             let ret = usize::try_from(gc_ref.as_r64()).unwrap() as *mut u8;
@@ -475,8 +475,7 @@ fn memory_atomic_wait32(
     expected: u32,
     timeout: u64,
 ) -> Result<u32, Trap> {
-    // convert timeout to Instant, before any wait happens on locking
-    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+    let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
     Ok(instance
         .get_runtime_memory(memory)
@@ -492,8 +491,7 @@ fn memory_atomic_wait64(
     expected: u64,
     timeout: u64,
 ) -> Result<u32, Trap> {
-    // convert timeout to Instant, before any wait happens on locking
-    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+    let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
     Ok(instance
         .get_runtime_memory(memory)
@@ -648,28 +646,61 @@ fn update_mem_size(instance: &mut Instance, num_pages: u32) {
 /// standard library generally for implementing these.
 #[allow(missing_docs)]
 pub mod relocs {
+    macro_rules! float_function {
+        (std: $std:path, core: $core:path,) => {{
+            #[cfg(feature = "std")]
+            let func = $std;
+            #[cfg(not(feature = "std"))]
+            let func = $core;
+            func
+        }};
+    }
     pub extern "C" fn floorf32(f: f32) -> f32 {
-        f.floor()
+        let func = float_function! {
+            std: f32::floor,
+            core: libm::floorf,
+        };
+        func(f)
     }
 
     pub extern "C" fn floorf64(f: f64) -> f64 {
-        f.floor()
+        let func = float_function! {
+            std: f64::floor,
+            core: libm::floor,
+        };
+        func(f)
     }
 
     pub extern "C" fn ceilf32(f: f32) -> f32 {
-        f.ceil()
+        let func = float_function! {
+            std: f32::ceil,
+            core: libm::ceilf,
+        };
+        func(f)
     }
 
     pub extern "C" fn ceilf64(f: f64) -> f64 {
-        f.ceil()
+        let func = float_function! {
+            std: f64::ceil,
+            core: libm::ceil,
+        };
+        func(f)
     }
 
     pub extern "C" fn truncf32(f: f32) -> f32 {
-        f.trunc()
+        let func = float_function! {
+            std: f32::trunc,
+            core: libm::truncf,
+        };
+        func(f)
     }
 
     pub extern "C" fn truncf64(f: f64) -> f64 {
-        f.trunc()
+        let func = float_function! {
+            std: f64::trunc,
+            core: libm::trunc,
+        };
+        func(f)
     }
 
     const TOINT_32: f32 = 1.0 / f32::EPSILON;
@@ -696,7 +727,16 @@ pub mod relocs {
             }
             x
         } else {
-            (x.abs() + TOINT_32 - TOINT_32).copysign(x)
+            let abs = float_function! {
+                std: f32::abs,
+                core: libm::fabsf,
+            };
+            let copysign = float_function! {
+                std: f32::copysign,
+                core: libm::copysignf,
+            };
+
+            copysign(abs(x) + TOINT_32 - TOINT_32, x)
         }
     }
 
@@ -715,22 +755,39 @@ pub mod relocs {
             }
             x
         } else {
-            (x.abs() + TOINT_64 - TOINT_64).copysign(x)
+            let abs = float_function! {
+                std: f64::abs,
+                core: libm::fabs,
+            };
+            let copysign = float_function! {
+                std: f64::copysign,
+                core: libm::copysign,
+            };
+
+            copysign(abs(x) + TOINT_64 - TOINT_64, x)
         }
     }
 
     pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
-        a.mul_add(b, c)
+        let func = float_function! {
+            std: f32::mul_add,
+            core: libm::fmaf,
+        };
+        func(a, b, c)
     }
 
     pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
-        a.mul_add(b, c)
+        let func = float_function! {
+            std: f64::mul_add,
+            core: libm::fma,
+        };
+        func(a, b, c)
     }
 
     // This intrinsic is only used on x86_64 platforms as an implementation of
     // the `pshufb` instruction when SSSE3 is not available.
     #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::__m128i;
+    use core::arch::x86_64::__m128i;
     #[cfg(target_arch = "x86_64")]
     #[allow(improper_ctypes_definitions)]
     pub extern "C" fn x86_pshufb(a: __m128i, b: __m128i) -> __m128i {

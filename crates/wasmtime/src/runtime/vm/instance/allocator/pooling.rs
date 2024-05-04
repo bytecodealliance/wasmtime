@@ -39,21 +39,22 @@ cfg_if::cfg_if! {
     }
 }
 
+use self::memory_pool::MemoryPool;
+use self::table_pool::TablePool;
 use super::{
     InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
 };
+use crate::prelude::*;
 use crate::runtime::vm::{
     instance::Instance,
     mpk::{self, MpkEnabled, ProtectionKey, ProtectionMask},
     CompiledModuleId, Memory, Table,
 };
 use anyhow::{bail, Result};
-use memory_pool::MemoryPool;
 use std::{
     mem,
     sync::atomic::{AtomicU64, Ordering},
 };
-use table_pool::TablePool;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, Tunables,
     VMOffsets,

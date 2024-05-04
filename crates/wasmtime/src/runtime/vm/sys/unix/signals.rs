@@ -308,7 +308,7 @@ pub fn lazy_per_thread_init() {
     // This thread local is purely used to register a `Stack` to get deallocated
     // when the thread exists. Otherwise this function is only ever called at
     // most once per-thread.
-    thread_local! {
+    std::thread_local! {
         static STACK: RefCell<Option<Stack>> = const { RefCell::new(None) };
     }
 

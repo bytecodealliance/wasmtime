@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
 use anyhow::{anyhow, bail, Context, Result};
 use std::fs::{File, OpenOptions};
@@ -69,10 +70,12 @@ impl Mmap {
                 .access_mode(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE)
                 .share_mode(FILE_SHARE_READ)
                 .open(path)
+                .err2anyhow()
                 .context("failed to open file")?;
 
             let len = file
                 .metadata()
+                .err2anyhow()
                 .context("failed to get file metadata")?
                 .len();
             let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
@@ -92,7 +95,8 @@ impl Mmap {
                 ptr::null(),
             );
             if mapping == 0 {
-                return Err(io::Error::last_os_error()).context("failed to create file mapping");
+                return Err(io::Error::last_os_error().into_anyhow())
+                    .context("failed to create file mapping");
             }
 
             // Create a view for the entire file using all our requisite
@@ -109,7 +113,8 @@ impl Mmap {
             let err = io::Error::last_os_error();
             CloseHandle(mapping);
             if ptr.is_null() {
-                return Err(err).context(format!("failed to create map view of {:#x} bytes", len));
+                return Err(err.into_anyhow())
+                    .context(format!("failed to create map view of {:#x} bytes", len));
             }
 
             let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
@@ -123,7 +128,7 @@ impl Mmap {
             // remove the execute bit)
             let mut old = 0;
             if VirtualProtect(ret.as_mut_ptr().cast(), ret.len(), PAGE_WRITECOPY, &mut old) == 0 {
-                return Err(io::Error::last_os_error())
+                return Err(io::Error::last_os_error().into_anyhow())
                     .context("failed change pages to `PAGE_READONLY`");
             }
 

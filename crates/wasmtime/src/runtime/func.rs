@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::{
     ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
     VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext,
@@ -9,14 +10,14 @@ use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, Ref,
     StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
+use alloc::sync::Arc;
 use anyhow::{bail, Context as _, Error, Result};
-use std::ffi::c_void;
-use std::future::Future;
-use std::mem;
-use std::num::NonZeroUsize;
-use std::pin::Pin;
-use std::ptr::{self, NonNull};
-use std::sync::Arc;
+use core::ffi::c_void;
+use core::future::Future;
+use core::mem;
+use core::num::NonZeroUsize;
+use core::pin::Pin;
+use core::ptr::{self, NonNull};
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// A reference to the abstract `nofunc` heap value.
@@ -1539,7 +1540,7 @@ impl Func {
     /// multiple times and becomes multiple `wasmtime::Func`s, this hash key
     /// will be consistent across all of these functions.
     #[allow(dead_code)] // Not used yet, but added for consistency.
-    pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl std::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl core::hash::Hash + Eq {
         self.vm_func_ref(store).as_ptr() as usize
     }
 }
@@ -1931,7 +1932,7 @@ macro_rules! impl_host_abi {
             unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
                 // Create space to store all the return values and then invoke
                 // the function.
-                let mut space = std::mem::MaybeUninit::uninit();
+                let mut space = core::mem::MaybeUninit::uninit();
                 let t = f(space.as_mut_ptr());
                 let space = space.assume_init();
 
@@ -2534,8 +2535,8 @@ use self::rooted::*;
 mod rooted {
     use super::HostFunc;
     use crate::runtime::vm::{SendSyncPtr, VMFuncRef};
-    use std::ptr::NonNull;
-    use std::sync::Arc;
+    use alloc::sync::Arc;
+    use core::ptr::NonNull;
 
     /// A variant of a pointer-to-a-host-function used in `FuncKind::RootedHost`
     /// above.

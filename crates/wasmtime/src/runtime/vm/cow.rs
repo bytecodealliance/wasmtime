@@ -1,13 +1,14 @@
 //! Copy-on-write initialization support: creation of backing images for
 //! modules, and logic to support mapping these backing images into memory.
 
+use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
 use crate::runtime::vm::{MmapVec, SendSyncPtr};
+use alloc::sync::Arc;
 use anyhow::Result;
-use std::ffi::c_void;
-use std::ops::Range;
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::ffi::c_void;
+use core::ops::Range;
+use core::ptr::{self, NonNull};
 use wasmtime_environ::{
     DefinedMemoryIndex, MemoryInitialization, MemoryPlan, MemoryStyle, Module, PrimaryMap,
 };
@@ -100,6 +101,7 @@ impl MemoryImage {
             assert_eq!((data_end as u32) % page_size, 0);
             assert_eq!((mmap.original_offset() as u32) % page_size, 0);
 
+            #[cfg(feature = "std")]
             if let Some(file) = mmap.original_file() {
                 if let Some(source) = MemoryImageSource::from_file(file) {
                     return Ok(Some(MemoryImage {
@@ -115,7 +117,7 @@ impl MemoryImage {
 
         // If `mmap` doesn't come from a file then platform-specific mechanisms
         // may be used to place the data in a form that's amenable to an mmap.
-        if let Some(source) = MemoryImageSource::from_data(data)? {
+        if let Some(source) = MemoryImageSource::from_data(data).err2anyhow()? {
             return Ok(Some(MemoryImage {
                 source,
                 source_offset: 0,
@@ -128,17 +130,20 @@ impl MemoryImage {
     }
 
     unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
-        self.source.map_at(
-            base.add(self.linear_memory_offset),
-            self.len,
-            self.source_offset,
-        )?;
+        self.source
+            .map_at(
+                base.add(self.linear_memory_offset),
+                self.len,
+                self.source_offset,
+            )
+            .err2anyhow()?;
         Ok(())
     }
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
         self.source
-            .remap_as_zeros_at(base.add(self.linear_memory_offset), self.len)?;
+            .remap_as_zeros_at(base.add(self.linear_memory_offset), self.len)
+            .err2anyhow()?;
         Ok(())
     }
 }
@@ -526,13 +531,13 @@ impl MemoryImageSlot {
                         (keep_resident - image.linear_memory_offset).min(mem_after_image);
 
                     // This is memset (1)
-                    std::ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
+                    ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
 
                     // This is madvise (2)
                     self.madvise_reset(image.linear_memory_offset, image.len)?;
 
                     // This is memset (3)
-                    std::ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
+                    ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
 
                     // This is madvise (4)
                     self.madvise_reset(
@@ -560,7 +565,7 @@ impl MemoryImageSlot {
                     // Note that the memset may be zero bytes here.
 
                     // This is memset (1)
-                    std::ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
+                    ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
 
                     // This is madvise (2)
                     self.madvise_reset(keep_resident, self.accessible - keep_resident)?;
@@ -572,7 +577,7 @@ impl MemoryImageSlot {
             // the rest.
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
-                std::ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
+                ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
                 self.madvise_reset(size_to_memset, self.accessible - size_to_memset)?;
             }
         }
@@ -586,7 +591,7 @@ impl MemoryImageSlot {
         if len == 0 {
             return Ok(());
         }
-        vm::madvise_dontneed(self.base.as_ptr().add(base), len)?;
+        vm::madvise_dontneed(self.base.as_ptr().add(base), len).err2anyhow()?;
         Ok(())
     }
 
@@ -600,9 +605,9 @@ impl MemoryImageSlot {
         unsafe {
             let start = self.base.as_ptr().add(range.start);
             if readwrite {
-                vm::expose_existing_mapping(start, range.len())?;
+                vm::expose_existing_mapping(start, range.len()).err2anyhow()?;
             } else {
-                vm::hide_existing_mapping(start, range.len())?;
+                vm::hide_existing_mapping(start, range.len()).err2anyhow()?;
             }
         }
 
@@ -628,7 +633,7 @@ impl MemoryImageSlot {
         }
 
         unsafe {
-            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size)?;
+            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size).err2anyhow()?;
         }
 
         self.image = None;

@@ -1,19 +1,21 @@
 use crate::func::HostFunc;
 use crate::instance::InstancePre;
+use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
     Instance, IntoFunc, Module, StoreContextMut, Val, ValRaw, ValType,
 };
+use alloc::sync::Arc;
 use anyhow::{bail, Context, Result};
+use core::fmt;
+#[cfg(feature = "async")]
+use core::future::Future;
+use core::marker;
+#[cfg(feature = "async")]
+use core::pin::Pin;
+use hashbrown::hash_map::{Entry, HashMap};
 use log::warn;
-use std::collections::hash_map::{Entry, HashMap};
-#[cfg(feature = "async")]
-use std::future::Future;
-use std::marker;
-#[cfg(feature = "async")]
-use std::pin::Pin;
-use std::sync::Arc;
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -1205,7 +1207,8 @@ impl<T> Linker<T> {
         let mut imports = module
             .imports()
             .map(|import| self._get_by_import(&import))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .err2anyhow()?;
         if let Some(store) = store {
             for import in imports.iter_mut() {
                 import.update_size(store);
@@ -1489,8 +1492,8 @@ impl UnknownImportError {
     }
 }
 
-impl std::fmt::Display for UnknownImportError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for UnknownImportError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "unknown import: `{}::{}` has not been defined",
@@ -1499,4 +1502,5 @@ impl std::fmt::Display for UnknownImportError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for UnknownImportError {}

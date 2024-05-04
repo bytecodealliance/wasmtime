@@ -3,11 +3,11 @@
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
 
+use alloc::sync::Arc;
 use anyhow::{Error, Result};
-use std::fmt;
-use std::ptr::NonNull;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
+use core::fmt;
+use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleInternedTypeIndex, VMOffsets,
     VMSharedTypeIndex,
@@ -253,7 +253,7 @@ pub fn page_size() -> usize {
     };
 }
 
-/// Result of [`Memory::atomic_wait32`] and [`Memory::atomic_wait64`]
+/// Result of `Memory::atomic_wait32` and `Memory::atomic_wait64`
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum WaitResult {
     /// Indicates that a `wait` completed by being awoken by a different thread.

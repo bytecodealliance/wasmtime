@@ -1,10 +1,11 @@
+use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use rustix::mm::{mprotect, MprotectFlags};
-use std::fs::File;
 use std::ops::Range;
-use std::path::Path;
 use std::ptr::{self, NonNull};
+#[cfg(feature = "std")]
+use std::{fs::File, path::Path};
 
 #[derive(Debug)]
 pub struct Mmap {
@@ -25,7 +26,8 @@ impl Mmap {
                 size,
                 rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
                 rustix::mm::MapFlags::PRIVATE,
-            )?
+            )
+            .err2anyhow()?
         };
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
@@ -39,7 +41,8 @@ impl Mmap {
                 size,
                 rustix::mm::ProtFlags::empty(),
                 rustix::mm::MapFlags::PRIVATE,
-            )?
+            )
+            .err2anyhow()?
         };
 
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
@@ -47,13 +50,19 @@ impl Mmap {
         Ok(Mmap { memory })
     }
 
+    #[cfg(feature = "std")]
     pub fn from_file(path: &Path) -> Result<(Self, File)> {
-        let file = File::open(path).context("failed to open file")?;
+        use anyhow::Context;
+
+        let file = File::open(path)
+            .err2anyhow()
+            .context("failed to open file")?;
         let len = file
             .metadata()
+            .err2anyhow()
             .context("failed to get file metadata")?
             .len();
-        let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
+        let len = usize::try_from(len).map_err(|_| anyhow::anyhow!("file too large to map"))?;
         let ptr = unsafe {
             rustix::mm::mmap(
                 ptr::null_mut(),
@@ -63,6 +72,7 @@ impl Mmap {
                 &file,
                 0,
             )
+            .err2anyhow()
             .context(format!("mmap failed to allocate {:#x} bytes", len))?
         };
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
@@ -78,7 +88,8 @@ impl Mmap {
                 ptr.byte_add(start).cast(),
                 len,
                 MprotectFlags::READ | MprotectFlags::WRITE,
-            )?;
+            )
+            .err2anyhow()?;
         }
 
         Ok(())
@@ -122,7 +133,7 @@ impl Mmap {
             flags
         };
 
-        mprotect(base, len, flags)?;
+        mprotect(base, len, flags).err2anyhow()?;
 
         Ok(())
     }
@@ -131,7 +142,7 @@ impl Mmap {
         let base = self.memory.as_ptr().byte_add(range.start).cast();
         let len = range.end - range.start;
 
-        mprotect(base, len, MprotectFlags::READ)?;
+        mprotect(base, len, MprotectFlags::READ).err2anyhow()?;
 
         Ok(())
     }

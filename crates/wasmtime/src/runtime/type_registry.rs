@@ -3,21 +3,22 @@
 //! Helps implement fast indirect call signature checking, reference type
 //! downcasting, and etc...
 
+use crate::prelude::*;
+use crate::sync::RwLock;
 use crate::Engine;
-use std::{
+use alloc::sync::Arc;
+use core::iter;
+use core::{
     borrow::Borrow,
-    collections::{HashMap, HashSet},
-    fmt::Debug,
+    fmt::{self, Debug},
     hash::{Hash, Hasher},
     ops::Range,
-    sync::{
-        atomic::{
-            AtomicUsize,
-            Ordering::{AcqRel, Acquire},
-        },
-        Arc, RwLock,
+    sync::atomic::{
+        AtomicUsize,
+        Ordering::{AcqRel, Acquire},
     },
 };
+use hashbrown::{HashMap, HashSet};
 use wasmtime_environ::{
     iter_entity_range, EngineOrModuleTypeIndex, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
     SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
@@ -88,7 +89,7 @@ pub struct TypeCollection {
 }
 
 impl Debug for TypeCollection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let TypeCollection {
             engine: _,
             rec_groups,
@@ -107,7 +108,7 @@ impl TypeCollection {
     pub fn new_for_module(engine: &Engine, types: &ModuleTypes) -> Self {
         let engine = engine.clone();
         let registry = engine.signatures();
-        let (rec_groups, types) = registry.0.write().unwrap().register_module_types(types);
+        let (rec_groups, types) = registry.0.write().register_module_types(types);
         let reverse_types = types.iter().map(|(k, v)| (*v, k)).collect();
 
         Self {
@@ -146,7 +147,6 @@ impl Drop for TypeCollection {
                 .signatures()
                 .0
                 .write()
-                .unwrap()
                 .unregister_type_collection(self);
         }
     }
@@ -178,7 +178,7 @@ pub struct RegisteredType {
 }
 
 impl Debug for RegisteredType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let RegisteredType {
             engine: _,
             entry: _,
@@ -211,13 +211,12 @@ impl Drop for RegisteredType {
                 .signatures()
                 .0
                 .write()
-                .unwrap()
                 .unregister_entry(self.entry.clone());
         }
     }
 }
 
-impl std::ops::Deref for RegisteredType {
+impl core::ops::Deref for RegisteredType {
     type Target = WasmSubType;
 
     fn deref(&self) -> &Self::Target {
@@ -258,7 +257,7 @@ impl RegisteredType {
         let (entry, index, ty) = {
             log::trace!("RegisteredType::new({ty:?})");
 
-            let mut inner = engine.signatures().0.write().unwrap();
+            let mut inner = engine.signatures().0.write();
 
             // It shouldn't be possible for users to construct non-canonical
             // types via the embedding API, and the only other types they can
@@ -290,7 +289,7 @@ impl RegisteredType {
     pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
         let (entry, ty) = {
             let id = shared_type_index_to_slab_id(index);
-            let inner = engine.signatures().0.read().unwrap();
+            let inner = engine.signatures().0.read();
 
             let ty = inner.types.get(id)?.clone();
             let entry = inner.type_to_rec_group[index].clone().unwrap();
@@ -349,10 +348,10 @@ impl RegisteredType {
 struct RecGroupEntry(Arc<RecGroupEntryInner>);
 
 impl Debug for RecGroupEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         struct Ptr<'a, P>(&'a P);
-        impl<P: std::fmt::Pointer> Debug for Ptr<'_, P> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl<P: fmt::Pointer> Debug for Ptr<'_, P> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write!(f, "{:#p}", *self.0)
             }
         }
@@ -662,7 +661,7 @@ impl TypeRegistryInner {
         let range = ModuleInternedTypeIndex::from_bits(u32::MAX - 1)
             ..ModuleInternedTypeIndex::from_bits(u32::MAX);
 
-        self.register_rec_group(&map, range, std::iter::once(ty))
+        self.register_rec_group(&map, range, iter::once(ty))
     }
 
     /// Unregister all of a type collection's rec groups.
@@ -802,7 +801,7 @@ impl TypeRegistry {
     /// other mechanism already keeping the type registered.
     pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmSubType>> {
         let id = shared_type_index_to_slab_id(index);
-        let inner = self.0.read().unwrap();
+        let inner = self.0.read();
         inner.types.get(id).cloned()
     }
 }

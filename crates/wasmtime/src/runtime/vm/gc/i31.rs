@@ -1,6 +1,7 @@
 //! Implementation of unboxed 31-bit integers.
 
 use super::VMGcRef;
+use core::fmt;
 
 /// A 31-bit integer for use with `i31ref`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -13,8 +14,8 @@ impl Default for I31 {
     }
 }
 
-impl std::fmt::Debug for I31 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for I31 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("I31")
             .field("as_u32", &self.get_u32())
             .field("as_i32", &self.get_i32())

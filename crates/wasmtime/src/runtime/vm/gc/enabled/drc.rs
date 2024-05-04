@@ -42,20 +42,22 @@
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
 use super::free_list::FreeList;
+use crate::prelude::*;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
     GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
 };
 use anyhow::Result;
-use std::{
+use core::ops::{Deref, DerefMut};
+use core::{
     alloc::Layout,
     any::Any,
     cell::UnsafeCell,
-    collections::HashSet,
     mem,
     num::NonZeroUsize,
     ptr::{self, NonNull},
 };
+use hashbrown::HashSet;
 use wasmtime_environ::VMGcKind;
 
 /// The deferred reference-counting (DRC) collector.
@@ -105,13 +107,13 @@ impl DrcHeap {
     fn heap_slice(&self) -> &[UnsafeCell<u8>] {
         let ptr = self.heap.as_ptr().cast::<UnsafeCell<u8>>();
         let len = self.heap.len();
-        unsafe { std::slice::from_raw_parts(ptr, len) }
+        unsafe { core::slice::from_raw_parts(ptr, len) }
     }
 
     fn heap_slice_mut(&mut self) -> &mut [u8] {
         let ptr = self.heap.as_mut_ptr();
         let len = self.heap.len();
-        unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+        unsafe { core::slice::from_raw_parts_mut(ptr, len) }
     }
 
     /// Index into this heap and get a shared reference to the `T` that `gc_ref`
@@ -124,11 +126,11 @@ impl DrcHeap {
     where
         T: GcHeapObject,
     {
-        assert!(!std::mem::needs_drop::<T>());
+        assert!(!mem::needs_drop::<T>());
         let gc_ref = gc_ref.as_untyped();
         let start = gc_ref.as_heap_index().unwrap().get();
         let start = usize::try_from(start).unwrap();
-        let len = std::mem::size_of::<T>();
+        let len = mem::size_of::<T>();
         let slice = &self.heap_slice()[start..][..len];
         unsafe { &*(slice.as_ptr().cast::<T>()) }
     }
@@ -143,11 +145,11 @@ impl DrcHeap {
     where
         T: GcHeapObject,
     {
-        assert!(!std::mem::needs_drop::<T>());
+        assert!(!mem::needs_drop::<T>());
         let gc_ref = gc_ref.as_untyped();
         let start = gc_ref.as_heap_index().unwrap().get();
         let start = usize::try_from(start).unwrap();
-        let len = std::mem::size_of::<T>();
+        let len = mem::size_of::<T>();
         let slice = &mut self.heap_slice_mut()[start..][..len];
         unsafe { &mut *(slice.as_mut_ptr().cast::<T>()) }
     }
@@ -844,7 +846,7 @@ struct DebugOnly<T> {
     inner: T,
 }
 
-impl<T> std::ops::Deref for DebugOnly<T> {
+impl<T> Deref for DebugOnly<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -859,7 +861,7 @@ impl<T> std::ops::Deref for DebugOnly<T> {
     }
 }
 
-impl<T> std::ops::DerefMut for DebugOnly<T> {
+impl<T> DerefMut for DebugOnly<T> {
     fn deref_mut(&mut self) -> &mut T {
         if cfg!(debug_assertions) {
             &mut self.inner

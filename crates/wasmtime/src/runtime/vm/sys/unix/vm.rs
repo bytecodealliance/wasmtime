@@ -2,6 +2,7 @@ use rustix::fd::AsRawFd;
 use rustix::mm::{mmap, mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
 use std::fs::File;
 use std::io;
+#[cfg(feature = "std")]
 use std::sync::Arc;
 
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
@@ -103,12 +104,14 @@ pub unsafe fn madvise_dontneed(ptr: *mut u8, len: usize) -> io::Result<()> {
 
 #[derive(Debug)]
 pub enum MemoryImageSource {
+    #[cfg(feature = "std")]
     Mmap(Arc<File>),
     #[cfg(target_os = "linux")]
     Memfd(memfd::Memfd),
 }
 
 impl MemoryImageSource {
+    #[cfg(feature = "std")]
     pub fn from_file(file: &Arc<File>) -> Option<MemoryImageSource> {
         Some(MemoryImageSource::Mmap(file.clone()))
     }
@@ -124,6 +127,7 @@ impl MemoryImageSource {
         // in-memory file to represent the heap image. This anonymous
         // file is then used as the basis for further mmaps.
 
+        use crate::prelude::*;
         use std::io::{ErrorKind, Write};
 
         // Create the memfd. It needs a name, but the documentation for
@@ -139,9 +143,9 @@ impl MemoryImageSource {
             Err(memfd::Error::Create(err)) if err.kind() == ErrorKind::Unsupported => {
                 return Ok(None)
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e.into_anyhow()),
         };
-        memfd.as_file().write_all(data)?;
+        memfd.as_file().write_all(data).err2anyhow()?;
 
         // Seal the memfd's data and length.
         //
@@ -158,21 +162,24 @@ impl MemoryImageSource {
         // extra-super-sure that it never changes, and because
         // this costs very little, we use the kernel's "seal" API
         // to make the memfd image permanently read-only.
-        memfd.add_seals(&[
-            memfd::FileSeal::SealGrow,
-            memfd::FileSeal::SealShrink,
-            memfd::FileSeal::SealWrite,
-            memfd::FileSeal::SealSeal,
-        ])?;
+        memfd
+            .add_seals(&[
+                memfd::FileSeal::SealGrow,
+                memfd::FileSeal::SealShrink,
+                memfd::FileSeal::SealWrite,
+                memfd::FileSeal::SealSeal,
+            ])
+            .err2anyhow()?;
 
         Ok(Some(MemoryImageSource::Memfd(memfd)))
     }
 
     fn as_file(&self) -> &File {
-        match self {
-            MemoryImageSource::Mmap(file) => file,
+        match *self {
+            #[cfg(feature = "std")]
+            MemoryImageSource::Mmap(ref file) => file,
             #[cfg(target_os = "linux")]
-            MemoryImageSource::Memfd(memfd) => memfd.as_file(),
+            MemoryImageSource::Memfd(ref memfd) => memfd.as_file(),
         }
     }
 

@@ -1,9 +1,9 @@
+use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
 use crate::{instantiate::CompiledModule, AsContext, Module};
 #[allow(unused_imports)]
 use anyhow::bail;
 use anyhow::Result;
-#[cfg(feature = "profiling")]
 use fxprof_processed_profile::{
     debugid::DebugId, CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, Profile,
     ReferenceTimestamp, Symbol, SymbolTable, Timestamp,
@@ -72,7 +72,6 @@ use wasmtime_environ::demangle_function_name_or_index;
 /// where they don't already have the WebAssembly module binary available this
 /// could theoretically lead to an undesirable information disclosure. So you
 /// should only include user-provided modules in profiles.
-#[cfg(feature = "profiling")]
 #[derive(Debug)]
 pub struct GuestProfiler {
     profile: Profile,
@@ -82,7 +81,6 @@ pub struct GuestProfiler {
     start: Instant,
 }
 
-#[cfg(feature = "profiling")]
 impl GuestProfiler {
     /// Begin profiling a new guest. When this function is called, the current
     /// wall-clock time is recorded as the start time for the guest.
@@ -189,7 +187,6 @@ impl GuestProfiler {
     }
 }
 
-#[cfg(feature = "profiling")]
 fn module_symbols(name: String, compiled: &CompiledModule) -> Option<LibraryInfo> {
     let symbols = Vec::from_iter(compiled.finished_functions().map(|(defined_idx, _)| {
         let loc = compiled.func_loc(defined_idx);

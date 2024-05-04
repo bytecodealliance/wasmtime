@@ -1,9 +1,10 @@
 #![allow(missing_docs)]
 
+use crate::prelude::*;
 use crate::runtime::vm::{RuntimeLinearMemory, Store, VMMemoryDefinition, WaitResult};
 use anyhow::{bail, Result};
-use std::ops::Range;
-use std::time::Instant;
+use core::ops::Range;
+use core::time::Duration;
 use wasmtime_environ::{MemoryPlan, Trap};
 
 #[derive(Clone)]
@@ -46,7 +47,7 @@ impl SharedMemory {
         &self,
         _addr_index: u64,
         _expected: u32,
-        _timeout: Option<Instant>,
+        _timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match *self {}
     }
@@ -55,7 +56,7 @@ impl SharedMemory {
         &self,
         _addr_index: u64,
         _expected: u64,
-        _timeout: Option<Instant>,
+        _timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match *self {}
     }
@@ -90,7 +91,7 @@ impl RuntimeLinearMemory for SharedMemory {
         match *self {}
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
         match *self {}
     }
 

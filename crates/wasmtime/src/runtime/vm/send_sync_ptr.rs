@@ -1,6 +1,6 @@
-use std::fmt;
-use std::hash::Hash;
-use std::ptr::NonNull;
+use core::fmt;
+use core::hash::{Hash, Hasher};
+use core::ptr::{self, NonNull};
 
 /// A helper type in Wasmtime to store a raw pointer to `T` while automatically
 /// inferring the `Send` and `Sync` traits for the container based on the
@@ -93,14 +93,14 @@ impl<T: ?Sized> Copy for SendSyncPtr<T> {}
 impl<T: ?Sized> PartialEq for SendSyncPtr<T> {
     #[inline]
     fn eq(&self, other: &SendSyncPtr<T>) -> bool {
-        std::ptr::eq(self.0.as_ptr(), other.0.as_ptr())
+        ptr::eq(self.0.as_ptr(), other.0.as_ptr())
     }
 }
 
 impl<T: ?Sized> Eq for SendSyncPtr<T> {}
 
 impl<T: ?Sized> Hash for SendSyncPtr<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_ptr().hash(state);
     }
 }

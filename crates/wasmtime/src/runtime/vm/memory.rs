@@ -2,17 +2,18 @@
 //!
 //! `RuntimeLinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
+use crate::prelude::*;
 use crate::runtime::vm::mmap::Mmap;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{
     MemoryImage, MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
 };
+use alloc::sync::Arc;
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
-use std::ops::Range;
-use std::ptr::NonNull;
-use std::sync::Arc;
-use std::time::Instant;
+use core::ops::Range;
+use core::ptr::NonNull;
+use core::time::Duration;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
@@ -152,7 +153,7 @@ pub trait RuntimeLinearMemory: Send + Sync {
     fn needs_init(&self) -> bool;
 
     /// Used for optional dynamic downcasting.
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any;
 
     /// Returns the range of addresses that may be reached by WebAssembly.
     ///
@@ -349,7 +350,7 @@ impl RuntimeLinearMemory for MmapMemory {
         self.memory_image.is_none()
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
         self
     }
 
@@ -448,7 +449,7 @@ impl RuntimeLinearMemory for StaticMemory {
         !self.memory_image.has_image()
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
         self
     }
 
@@ -654,7 +655,7 @@ impl Memory {
     #[cfg(feature = "pooling-allocator")]
     pub fn unwrap_static_image(mut self) -> MemoryImageSlot {
         let mem = self.0.as_any_mut().downcast_mut::<StaticMemory>().unwrap();
-        std::mem::replace(&mut mem.memory_image, MemoryImageSlot::dummy())
+        core::mem::replace(&mut mem.memory_image, MemoryImageSlot::dummy())
     }
 
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to
@@ -684,10 +685,10 @@ impl Memory {
         &mut self,
         addr: u64,
         expected: u32,
-        deadline: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
-            Some(m) => m.atomic_wait32(addr, expected, deadline),
+            Some(m) => m.atomic_wait32(addr, expected, timeout),
             None => {
                 validate_atomic_addr(&self.vmmemory(), addr, 4, 4)?;
                 Err(Trap::AtomicWaitNonSharedMemory)
@@ -700,10 +701,10 @@ impl Memory {
         &mut self,
         addr: u64,
         expected: u64,
-        deadline: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
-            Some(m) => m.atomic_wait64(addr, expected, deadline),
+            Some(m) => m.atomic_wait64(addr, expected, timeout),
             None => {
                 validate_atomic_addr(&self.vmmemory(), addr, 8, 8)?;
                 Err(Trap::AtomicWaitNonSharedMemory)

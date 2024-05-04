@@ -1,18 +1,19 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
+use crate::prelude::*;
 use crate::runtime::vm::sys::mmap;
 use anyhow::{Context, Result};
-use std::fs::File;
-use std::ops::Range;
-use std::path::Path;
-use std::sync::Arc;
+use core::ops::Range;
+#[cfg(feature = "std")]
+use std::{fs::File, path::Path, sync::Arc};
 
 /// A simple struct consisting of a page-aligned pointer to page-aligned
 /// and initially-zeroed memory and a length.
 #[derive(Debug)]
 pub struct Mmap {
     sys: mmap::Mmap,
+    #[cfg(feature = "std")]
     file: Option<Arc<File>>,
 }
 
@@ -34,6 +35,7 @@ impl Mmap {
     ///
     /// The memory mapping and the length of the file within the mapping are
     /// returned.
+    #[cfg(feature = "std")]
     pub fn from_file(path: &Path) -> Result<Self> {
         let (sys, file) = mmap::Mmap::from_file(path)?;
         Ok(Mmap {
@@ -59,18 +61,21 @@ impl Mmap {
         if mapping_size == 0 {
             Ok(Mmap {
                 sys: mmap::Mmap::new_empty(),
+                #[cfg(feature = "std")]
                 file: None,
             })
         } else if accessible_size == mapping_size {
             Ok(Mmap {
                 sys: mmap::Mmap::new(mapping_size)
                     .context(format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
+                #[cfg(feature = "std")]
                 file: None,
             })
         } else {
             let mut result = Mmap {
                 sys: mmap::Mmap::reserve(mapping_size)
                     .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
+                #[cfg(feature = "std")]
                 file: None,
             };
             if accessible_size > 0 {
@@ -114,7 +119,7 @@ impl Mmap {
     pub unsafe fn slice(&self, range: Range<usize>) -> &[u8] {
         assert!(range.start <= range.end);
         assert!(range.end <= self.len());
-        std::slice::from_raw_parts(self.as_ptr().add(range.start), range.end - range.start)
+        core::slice::from_raw_parts(self.as_ptr().add(range.start), range.end - range.start)
     }
 
     /// Return the allocated memory as a mutable slice of u8.
@@ -130,7 +135,7 @@ impl Mmap {
     pub unsafe fn slice_mut(&mut self, range: Range<usize>) -> &mut [u8] {
         assert!(range.start <= range.end);
         assert!(range.end <= self.len());
-        std::slice::from_raw_parts_mut(self.as_mut_ptr().add(range.start), range.end - range.start)
+        core::slice::from_raw_parts_mut(self.as_mut_ptr().add(range.start), range.end - range.start)
     }
 
     /// Return the allocated memory as a pointer to u8.
@@ -203,6 +208,7 @@ impl Mmap {
     }
 
     /// Returns the underlying file that this mmap is mapping, if present.
+    #[cfg(feature = "std")]
     pub fn original_file(&self) -> Option<&Arc<File>> {
         self.file.as_ref()
     }

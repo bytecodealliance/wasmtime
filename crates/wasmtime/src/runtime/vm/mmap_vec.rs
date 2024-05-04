@@ -1,9 +1,10 @@
+use crate::prelude::*;
 use crate::runtime::vm::Mmap;
-use anyhow::{Context, Result};
-use std::fs::File;
-use std::ops::{Deref, DerefMut, Range};
-use std::path::Path;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use anyhow::Result;
+use core::ops::{Deref, DerefMut, Range};
+#[cfg(feature = "std")]
+use std::{fs::File, path::Path};
 
 /// A type akin to `Vec<u8>`, but backed by `mmap` and able to be split.
 ///
@@ -61,7 +62,10 @@ impl MmapVec {
     /// then use that file to learn about its size and map the full contents
     /// into memory. This will return an error if the file doesn't exist or if
     /// it's too large to be fully mapped into memory.
+    #[cfg(feature = "std")]
     pub fn from_file(path: &Path) -> Result<MmapVec> {
+        use anyhow::Context;
+
         let mmap = Mmap::from_file(path)
             .with_context(|| format!("failed to create mmap for file: {}", path.display()))?;
         let len = mmap.len();
@@ -91,6 +95,7 @@ impl MmapVec {
     }
 
     /// Returns the underlying file that this mmap is mapping, if present.
+    #[cfg(feature = "std")]
     pub fn original_file(&self) -> Option<&Arc<File>> {
         self.mmap.original_file()
     }
@@ -132,7 +137,7 @@ impl DerefMut for MmapVec {
         // mutable access to these bytes if so desired.
         unsafe {
             let slice =
-                std::slice::from_raw_parts_mut(self.mmap.as_ptr().cast_mut(), self.mmap.len());
+                core::slice::from_raw_parts_mut(self.mmap.as_ptr().cast_mut(), self.mmap.len());
             &mut slice[self.range.clone()]
         }
     }

@@ -1,4 +1,5 @@
 use crate::linker::{Definition, DefinitionType};
+use crate::prelude::*;
 use crate::runtime::vm::{
     Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
     VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext, VMTableImport,
@@ -9,10 +10,10 @@ use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
     StoreContext, StoreContextMut, Table, TypedFunc,
 };
+use alloc::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
-use std::mem;
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::mem;
+use core::ptr::NonNull;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::{
     EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TypeTrace,
@@ -780,7 +781,7 @@ pub struct InstancePre<T> {
     /// This is an `Arc<[T]>` for the same reason as `items`.
     func_refs: Arc<[VMFuncRef]>,
 
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: core::marker::PhantomData<fn() -> T>,
 }
 
 /// InstancePre's clone does not require T: Clone
@@ -835,7 +836,7 @@ impl<T> InstancePre<T> {
             items: items.into(),
             host_funcs,
             func_refs: func_refs.into(),
-            _marker: std::marker::PhantomData,
+            _marker: core::marker::PhantomData,
         })
     }
 

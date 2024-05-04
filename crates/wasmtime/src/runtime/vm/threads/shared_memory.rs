@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::memory::{validate_atomic_addr, MmapMemory};
 use crate::runtime::vm::threads::parking_spot::{ParkingSpot, Waiter};
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
@@ -8,7 +9,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap};
 
 /// For shared memory (and only for shared memory), this lock-version restricts
@@ -126,7 +127,7 @@ impl SharedMemory {
         &self,
         addr_index: u64,
         expected: u32,
-        timeout: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         let addr = validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
         log::trace!(
@@ -137,10 +138,11 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU32>() == 4);
         assert!(std::mem::align_of::<AtomicU32>() <= 4);
         let atomic = unsafe { AtomicU32::from_ptr(addr.cast()) };
+        let deadline = timeout.map(|d| Instant::now() + d);
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();
-            Ok(self.0.spot.wait32(atomic, expected, timeout, &mut waiter))
+            Ok(self.0.spot.wait32(atomic, expected, deadline, &mut waiter))
         })
     }
 
@@ -149,7 +151,7 @@ impl SharedMemory {
         &self,
         addr_index: u64,
         expected: u64,
-        timeout: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         let addr = validate_atomic_addr(&self.0.def.0, addr_index, 8, 8)?;
         log::trace!(
@@ -160,10 +162,11 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU64>() == 8);
         assert!(std::mem::align_of::<AtomicU64>() <= 8);
         let atomic = unsafe { AtomicU64::from_ptr(addr.cast()) };
+        let deadline = timeout.map(|d| Instant::now() + d);
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();
-            Ok(self.0.spot.wait64(atomic, expected, timeout, &mut waiter))
+            Ok(self.0.spot.wait64(atomic, expected, deadline, &mut waiter))
         })
     }
 }

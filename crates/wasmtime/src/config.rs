@@ -1,11 +1,12 @@
+use crate::prelude::*;
+use alloc::sync::Arc;
 use anyhow::{bail, ensure, Result};
+use core::fmt;
+use core::str::FromStr;
+use hashbrown::{HashMap, HashSet};
 use serde_derive::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::fmt;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
 use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
@@ -85,8 +86,8 @@ impl Default for ModuleVersionStrategy {
     }
 }
 
-impl std::hash::Hash for ModuleVersionStrategy {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+impl core::hash::Hash for ModuleVersionStrategy {
+    fn hash<H: core::hash::Hasher>(&self, hasher: &mut H) {
         match self {
             Self::WasmtimeVersion => env!("CARGO_PKG_VERSION").hash(hasher),
             Self::Custom(s) => s.hash(hasher),
@@ -133,6 +134,7 @@ pub struct Config {
     pub(crate) wmemcheck: bool,
     pub(crate) coredump_on_trap: bool,
     pub(crate) macos_use_mach_ports: bool,
+    pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
 }
 
 #[derive(Default, Clone)]
@@ -251,6 +253,10 @@ impl Config {
             wmemcheck: false,
             coredump_on_trap: false,
             macos_use_mach_ports: !cfg!(miri),
+            #[cfg(feature = "std")]
+            detect_host_feature: Some(detect_host_feature),
+            #[cfg(not(feature = "std"))]
+            detect_host_feature: None,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
@@ -469,8 +475,10 @@ impl Config {
     /// filename/line number for each wasm frame in the stack trace.
     ///
     /// By default this option is `WasmBacktraceDetails::Environment`, meaning
-    /// that wasm will read `WASMTIME_BACKTRACE_DETAILS` to indicate whether details
-    /// should be parsed.
+    /// that wasm will read `WASMTIME_BACKTRACE_DETAILS` to indicate whether
+    /// details should be parsed. Note that the `std` feature of this crate must
+    /// be active to read environment variables, otherwise this is disabled by
+    /// default.
     pub fn wasm_backtrace_details(&mut self, enable: WasmBacktraceDetails) -> &mut Self {
         self.wasm_backtrace_details_env_used = false;
         self.tunables.parse_wasm_debuginfo = match enable {
@@ -478,9 +486,16 @@ impl Config {
             WasmBacktraceDetails::Disable => Some(false),
             WasmBacktraceDetails::Environment => {
                 self.wasm_backtrace_details_env_used = true;
-                std::env::var("WASMTIME_BACKTRACE_DETAILS")
-                    .map(|s| Some(s == "1"))
-                    .unwrap_or(Some(false))
+                #[cfg(feature = "std")]
+                {
+                    std::env::var("WASMTIME_BACKTRACE_DETAILS")
+                        .map(|s| Some(s == "1"))
+                        .unwrap_or(Some(false))
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    Some(false)
+                }
             }
         };
         self
@@ -2040,6 +2055,43 @@ impl Config {
         self.macos_use_mach_ports = mach_ports;
         self
     }
+
+    /// Configures an embedder-provided function, `detect`, which is used to
+    /// determine if an ISA-specific feature is available on the current host.
+    ///
+    /// This function is used to verify that any features enabled for a compiler
+    /// backend, such as AVX support on x86\_64, are also available on the host.
+    /// It is undefined behavior to execute an AVX instruction on a host that
+    /// doesn't support AVX instructions, for example.
+    ///
+    /// When the `std` feature is active on this crate then this function is
+    /// configured to a default implementation that uses the standard library's
+    /// feature detection. When the `std` feature is disabled then there is no
+    /// default available and this method must be called to configure a feature
+    /// probing function.
+    ///
+    /// The `detect` function provided is given a string name of an ISA feature.
+    /// The function should then return:
+    ///
+    /// * `Some(true)` - indicates that the feature was found on the host and it
+    ///   is supported.
+    /// * `Some(false)` - the feature name was recognized but it was not
+    ///   detected on the host, for example the CPU is too old.
+    /// * `None` - the feature name was not recognized and it's not known
+    ///   whether it's on the host or not.
+    ///
+    /// Feature names passed to `detect` match the same feature name used in the
+    /// Rust standard library. For example `"sse4.2"` is used on x86\_64.
+    ///
+    /// # Unsafety
+    ///
+    /// This function is `unsafe` because it is undefined behavior to execute
+    /// instructions that a host does not support. This means that the result of
+    /// `detect` must be correct for memory safe execution at runtime.
+    pub unsafe fn detect_host_feature(&mut self, detect: fn(&str) -> Option<bool>) -> &mut Self {
+        self.detect_host_feature = Some(detect);
+        self
+    }
 }
 
 /// If building without the runtime feature we can't determine the page size of
@@ -2777,4 +2829,73 @@ pub(crate) fn probestack_supported(arch: Architecture) -> bool {
         arch,
         Architecture::X86_64 | Architecture::Aarch64(_) | Architecture::Riscv64(_)
     )
+}
+
+#[cfg(feature = "std")]
+fn detect_host_feature(feature: &str) -> Option<bool> {
+    #[cfg(target_arch = "aarch64")]
+    {
+        return match feature {
+            "lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
+            "paca" => Some(std::arch::is_aarch64_feature_detected!("paca")),
+
+            _ => None,
+        };
+    }
+
+    // There is no is_s390x_feature_detected macro yet, so for now
+    // we use getauxval from the libc crate directly.
+    #[cfg(all(target_arch = "s390x", target_os = "linux"))]
+    {
+        let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
+        const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
+
+        return match feature {
+            // There is no separate HWCAP bit for mie2, so assume
+            // that any machine with vxrs_ext2 also has mie2.
+            "vxrs_ext2" | "mie2" => Some((v & HWCAP_S390X_VXRS_EXT2) != 0),
+
+            _ => None,
+        };
+    }
+
+    #[cfg(target_arch = "riscv64")]
+    {
+        return match feature {
+            // due to `is_riscv64_feature_detected` is not stable.
+            // we cannot use it. For now lie and say all features are always
+            // found to keep tests working.
+            _ => Some(true),
+        };
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        return match feature {
+            "sse3" => Some(std::is_x86_feature_detected!("sse3")),
+            "ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
+            "sse4.1" => Some(std::is_x86_feature_detected!("sse4.1")),
+            "sse4.2" => Some(std::is_x86_feature_detected!("sse4.2")),
+            "popcnt" => Some(std::is_x86_feature_detected!("popcnt")),
+            "avx" => Some(std::is_x86_feature_detected!("avx")),
+            "avx2" => Some(std::is_x86_feature_detected!("avx2")),
+            "fma" => Some(std::is_x86_feature_detected!("fma")),
+            "bmi1" => Some(std::is_x86_feature_detected!("bmi1")),
+            "bmi2" => Some(std::is_x86_feature_detected!("bmi2")),
+            "avx512bitalg" => Some(std::is_x86_feature_detected!("avx512bitalg")),
+            "avx512dq" => Some(std::is_x86_feature_detected!("avx512dq")),
+            "avx512f" => Some(std::is_x86_feature_detected!("avx512f")),
+            "avx512vl" => Some(std::is_x86_feature_detected!("avx512vl")),
+            "avx512vbmi" => Some(std::is_x86_feature_detected!("avx512vbmi")),
+            "lzcnt" => Some(std::is_x86_feature_detected!("lzcnt")),
+
+            _ => None,
+        };
+    }
+
+    #[allow(unreachable_code)]
+    {
+        let _ = feature;
+        return None;
+    }
 }

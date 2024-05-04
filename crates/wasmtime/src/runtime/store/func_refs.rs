@@ -2,8 +2,10 @@
 //! trampolines.
 
 use crate::module::ModuleRegistry;
+use crate::prelude::*;
 use crate::runtime::vm::{SendSyncPtr, VMFuncRef, VMNativeCallHostFuncContext};
-use std::{ptr::NonNull, sync::Arc};
+use alloc::sync::Arc;
+use core::ptr::NonNull;
 
 /// An arena of `VMFuncRef`s.
 ///

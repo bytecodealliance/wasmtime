@@ -9,6 +9,7 @@ use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     HeapType, RefType, Result, ValType, WasmTy,
 };
+use core::fmt;
 
 /// A 31-bit integer.
 ///
@@ -76,8 +77,8 @@ use crate::{
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct I31(crate::runtime::vm::I31);
 
-impl std::fmt::Debug for I31 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for I31 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("I31")
             .field("as_u32", &self.get_u32())
             .field("as_i32", &self.get_i32())

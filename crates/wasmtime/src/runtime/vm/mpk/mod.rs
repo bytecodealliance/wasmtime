@@ -30,7 +30,7 @@
 //! the public interface.
 
 cfg_if::cfg_if! {
-    if #[cfg(all(target_arch = "x86_64", target_os = "linux", not(miri)))] {
+    if #[cfg(all(target_arch = "x86_64", target_os = "linux", feature = "std", not(miri)))] {
         mod enabled;
         mod pkru;
         mod sys;

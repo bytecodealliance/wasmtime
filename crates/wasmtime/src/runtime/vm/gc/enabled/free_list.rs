@@ -1,5 +1,8 @@
+use crate::prelude::*;
+use alloc::collections::BTreeMap;
 use anyhow::{anyhow, ensure, Context, Result};
-use std::{alloc::Layout, collections::BTreeMap, num::NonZeroU32, ops::Bound};
+use core::cmp;
+use core::{alloc::Layout, num::NonZeroU32, ops::Bound};
 
 /// A very simple first-fit free list for use by our garbage collectors.
 pub(crate) struct FreeList {
@@ -31,7 +34,7 @@ impl FreeList {
     }
 
     fn max_size(&self) -> usize {
-        let cap = std::cmp::min(self.capacity, usize::try_from(u32::MAX).unwrap());
+        let cap = cmp::min(self.capacity, usize::try_from(u32::MAX).unwrap());
         round_usize_down_to_pow2(cap.saturating_sub(ALIGN_USIZE), ALIGN_USIZE)
     }
 
@@ -52,6 +55,7 @@ impl FreeList {
         );
 
         let alloc_size = u32::try_from(layout.size())
+            .err2anyhow()
             .context("requested allocation's size does not fit in a u32")?;
         alloc_size
             .checked_next_multiple_of(ALIGN_U32)

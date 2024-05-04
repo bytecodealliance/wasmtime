@@ -1,9 +1,10 @@
 //! Module for System V ABI unwind registry.
 
+use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
 use anyhow::Result;
-use std::ptr::{self, NonNull};
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use core::ptr::{self, NonNull};
+use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 /// Represents a registration of function unwind information for System V ABI.
 pub struct UnwindRegistration {

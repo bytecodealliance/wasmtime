@@ -12,15 +12,16 @@ pub(crate) use memory::MemoryCreatorProxy;
 use self::memory::create_memory;
 use self::table::create_table;
 use crate::module::BareModuleInfo;
+use crate::prelude::*;
 use crate::runtime::vm::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
     StorePtr, VMFunctionImport,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use crate::{MemoryType, TableType};
+use alloc::sync::Arc;
 use anyhow::Result;
-use std::any::Any;
-use std::sync::Arc;
+use core::any::Any;
 use wasmtime_environ::{MemoryIndex, Module, TableIndex, VMSharedTypeIndex};
 
 fn create_handle(

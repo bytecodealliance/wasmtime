@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::imports::Imports;
 use crate::runtime::vm::instance::{Instance, InstanceHandle};
@@ -5,8 +6,9 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, Store, VMFuncRef, VMGcRef};
+use alloc::sync::Arc;
 use anyhow::{bail, Result};
-use std::{alloc, any::Any, mem, ptr, sync::Arc};
+use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, Trap,
@@ -418,7 +420,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         let layout = Instance::alloc_layout(handle.instance().offsets());
         let ptr = handle.instance.take().unwrap();
         ptr::drop_in_place(ptr.as_ptr());
-        alloc::dealloc(ptr.as_ptr().cast(), layout);
+        alloc::alloc::dealloc(ptr.as_ptr().cast(), layout);
 
         self.decrement_core_instance_count();
     }
@@ -575,7 +577,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                         let gc_store = unsafe { (*instance.store()).gc_store() };
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
+                        table.init_gc_refs(0, items).err2anyhow()?;
                     }
 
                     WasmHeapTopType::Any => {
@@ -583,13 +585,13 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                         let gc_store = unsafe { (*instance.store()).gc_store() };
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
+                        table.init_gc_refs(0, items).err2anyhow()?;
                     }
 
                     WasmHeapTopType::Func => {
                         let funcref = raw.get_funcref().cast::<VMFuncRef>();
                         let items = (0..table.size()).map(|_| funcref);
-                        table.init_func(0, items)?;
+                        table.init_func(0, items).err2anyhow()?;
                     }
                 }
             }
@@ -610,14 +612,16 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 .eval(&mut context, &segment.offset)
                 .expect("const expression should be valid")
         };
-        instance.table_init_segment(
-            &mut const_evaluator,
-            segment.table_index,
-            &segment.elements,
-            start.get_u32(),
-            0,
-            segment.elements.len(),
-        )?;
+        instance
+            .table_init_segment(
+                &mut const_evaluator,
+                segment.table_index,
+                &segment.elements,
+                start.get_u32(),
+                0,
+                segment.elements.len(),
+            )
+            .err2anyhow()?;
     }
 
     Ok(())
@@ -740,7 +744,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
             const_evaluator: ConstExprEvaluator::default(),
         });
     if !ok {
-        return Err(Trap::MemoryOutOfBounds.into());
+        return Err(Trap::MemoryOutOfBounds).err2anyhow();
     }
 
     Ok(())

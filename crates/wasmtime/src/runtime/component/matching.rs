@@ -1,12 +1,13 @@
 use crate::component::func::HostFunc;
 use crate::component::linker::{Definition, NameMap, Strings};
 use crate::component::ResourceType;
+use crate::prelude::*;
 use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
 use crate::Module;
+use alloc::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
-use std::any::Any;
-use std::sync::Arc;
+use core::any::Any;
 use wasmtime_environ::component::{
     ComponentTypes, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex, TypeModule,
     TypeResourceTableIndex,

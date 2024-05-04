@@ -1,16 +1,18 @@
+use crate::prelude::*;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
 use crate::runtime::vm::GcRuntime;
+use crate::sync::OnceLock;
 use crate::Config;
+use alloc::sync::Arc;
 use anyhow::{Context, Result};
+use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
-use once_cell::sync::OnceCell;
+#[cfg(feature = "std")]
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -64,7 +66,8 @@ struct EngineInner {
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
-    compatible_with_native_host: OnceCell<Result<(), String>>,
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    compatible_with_native_host: OnceLock<Result<(), String>>,
 }
 
 impl Default for Engine {
@@ -128,7 +131,8 @@ impl Engine {
                 epoch: AtomicU64::new(0),
                 #[cfg(feature = "runtime")]
                 unique_id_allocator: crate::runtime::vm::CompiledModuleIdAllocator::new(),
-                compatible_with_native_host: OnceCell::new(),
+                #[cfg(any(feature = "cranelift", feature = "winch"))]
+                compatible_with_native_host: OnceLock::new(),
                 config,
                 tunables,
             }),
@@ -208,6 +212,7 @@ impl Engine {
     }
 
     /// Like [`Engine::detect_precompiled`], but performs the detection on a file.
+    #[cfg(feature = "std")]
     pub fn detect_precompiled_file(&self, path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
         serialization::detect_precompiled_file(path)
     }
@@ -232,11 +237,18 @@ impl Engine {
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
-        self.inner
-            .compatible_with_native_host
-            .get_or_init(|| self._check_compatible_with_native_host())
-            .clone()
-            .map_err(anyhow::Error::msg)
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            self.inner
+                .compatible_with_native_host
+                .get_or_init(|| self._check_compatible_with_native_host())
+                .clone()
+                .map_err(anyhow::Error::msg)
+        }
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        {
+            Ok(())
+        }
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
@@ -391,112 +403,80 @@ impl Engine {
             }
         }
 
-        #[allow(unused_assignments)]
-        let mut enabled = None;
+        let host_feature = match flag {
+            // aarch64 features to detect
+            "has_lse" => "lse",
+            "has_pauth" => "paca",
 
-        #[cfg(target_arch = "aarch64")]
-        {
-            enabled = match flag {
-                "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
-                // No effect on its own, but in order to simplify the code on a
-                // platform without pointer authentication support we fail if
-                // "has_pauth" is enabled, but "sign_return_address" is not.
-                "has_pauth" => Some(std::arch::is_aarch64_feature_detected!("paca")),
-                // No effect on its own.
-                "sign_return_address_all" => Some(true),
-                // The pointer authentication instructions act as a `NOP` when
-                // unsupported (but keep in mind "has_pauth" as well), so it is
-                // safe to enable them.
-                "sign_return_address" => Some(true),
-                // No effect on its own.
-                "sign_return_address_with_bkey" => Some(true),
-                // The `BTI` instruction acts as a `NOP` when unsupported, so it
-                // is safe to enable it.
-                "use_bti" => Some(true),
-                // fall through to the very bottom to indicate that support is
-                // not enabled to test whether this feature is enabled on the
-                // host.
-                _ => None,
-            };
-        }
+            // aarch64 features which don't need detection
+            // No effect on its own.
+            "sign_return_address_all" => return Ok(()),
+            // The pointer authentication instructions act as a `NOP` when
+            // unsupported, so it is safe to enable them.
+            "sign_return_address" => return Ok(()),
+            // No effect on its own.
+            "sign_return_address_with_bkey" => return Ok(()),
+            // The `BTI` instruction acts as a `NOP` when unsupported, so it
+            // is safe to enable it regardless of whether the host supports it
+            // or not.
+            "use_bti" => return Ok(()),
 
-        // There is no is_s390x_feature_detected macro yet, so for now
-        // we use getauxval from the libc crate directly.
-        #[cfg(all(target_arch = "s390x", target_os = "linux"))]
-        {
-            let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
-            const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
+            // s390x features to detect
+            "has_vxrs_ext2" => "vxrs_ext2",
+            "has_mie2" => "mie2",
 
-            enabled = match flag {
-                // There is no separate HWCAP bit for mie2, so assume
-                // that any machine with vxrs_ext2 also has mie2.
-                "has_vxrs_ext2" | "has_mie2" => Some((v & HWCAP_S390X_VXRS_EXT2) != 0),
-                // fall through to the very bottom to indicate that support is
-                // not enabled to test whether this feature is enabled on the
-                // host.
-                _ => None,
-            }
-        }
+            // x64 features to detect
+            "has_sse3" => "sse3",
+            "has_ssse3" => "ssse3",
+            "has_sse41" => "sse4.1",
+            "has_sse42" => "sse4.2",
+            "has_popcnt" => "popcnt",
+            "has_avx" => "avx",
+            "has_avx2" => "avx2",
+            "has_fma" => "fma",
+            "has_bmi1" => "bmi1",
+            "has_bmi2" => "bmi2",
+            "has_avx512bitalg" => "avx512bitalg",
+            "has_avx512dq" => "avx512dq",
+            "has_avx512f" => "avx512f",
+            "has_avx512vl" => "avx512vl",
+            "has_avx512vbmi" => "avx512vbmi",
+            "has_lzcnt" => "lzcnt",
 
-        #[cfg(target_arch = "riscv64")]
-        {
-            enabled = match flag {
-                // make sure `test_isa_flags_mismatch` test pass.
-                "not_a_flag" => None,
-                // due to `is_riscv64_feature_detected` is not stable.
-                // we cannot use it.
-                _ => Some(true),
-            }
-        }
-
-        #[cfg(target_arch = "x86_64")]
-        {
-            enabled = match flag {
-                "has_sse3" => Some(std::is_x86_feature_detected!("sse3")),
-                "has_ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
-                "has_sse41" => Some(std::is_x86_feature_detected!("sse4.1")),
-                "has_sse42" => Some(std::is_x86_feature_detected!("sse4.2")),
-                "has_popcnt" => Some(std::is_x86_feature_detected!("popcnt")),
-                "has_avx" => Some(std::is_x86_feature_detected!("avx")),
-                "has_avx2" => Some(std::is_x86_feature_detected!("avx2")),
-                "has_fma" => Some(std::is_x86_feature_detected!("fma")),
-                "has_bmi1" => Some(std::is_x86_feature_detected!("bmi1")),
-                "has_bmi2" => Some(std::is_x86_feature_detected!("bmi2")),
-                "has_avx512bitalg" => Some(std::is_x86_feature_detected!("avx512bitalg")),
-                "has_avx512dq" => Some(std::is_x86_feature_detected!("avx512dq")),
-                "has_avx512f" => Some(std::is_x86_feature_detected!("avx512f")),
-                "has_avx512vl" => Some(std::is_x86_feature_detected!("avx512vl")),
-                "has_avx512vbmi" => Some(std::is_x86_feature_detected!("avx512vbmi")),
-                "has_lzcnt" => Some(std::is_x86_feature_detected!("lzcnt")),
-
-                // fall through to the very bottom to indicate that support is
-                // not enabled to test whether this feature is enabled on the
-                // host.
-                _ => None,
-            };
-        }
-
-        #[cfg(target_family = "wasm")]
-        {
-            let _ = &mut enabled;
-        }
-
-        match enabled {
-            Some(true) => return Ok(()),
-            Some(false) => {
+            _ => {
+                // FIXME: should enumerate risc-v features and plumb them
+                // through to the `detect_host_feature` function.
+                if cfg!(target_arch = "riscv64") && flag != "not_a_flag" {
+                    return Ok(());
+                }
                 return Err(format!(
-                    "compilation setting {:?} is enabled, but not available on the host",
-                    flag
+                    "don't know how to test for target-specific flag {flag:?} at runtime"
+                ));
+            }
+        };
+
+        let detect = match self.config().detect_host_feature {
+            Some(detect) => detect,
+            None => {
+                return Err(format!(
+                    "cannot determine if host feature {host_feature:?} is \
+                     available at runtime, configure a probing function with \
+                     `Config::detect_host_feature`"
                 ))
             }
-            // fall through
-            None => {}
-        }
+        };
 
-        Err(format!(
-            "cannot test if target-specific flag {:?} is available at runtime",
-            flag
-        ))
+        match detect(host_feature) {
+            Some(true) => Ok(()),
+            Some(false) => Err(format!(
+                "compilation setting {flag:?} is enabled, but not \
+                 available on the host",
+            )),
+            None => Err(format!(
+                "failed to detect if target-specific flag {flag:?} is \
+                 available at runtime"
+            )),
+        }
     }
 }
 
@@ -553,6 +533,7 @@ impl Engine {
         serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self))
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
@@ -706,6 +687,7 @@ impl Engine {
     }
 
     /// Like `load_code_bytes`, but creates a mmap from a file on disk.
+    #[cfg(feature = "std")]
     pub(crate) fn load_code_file(
         &self,
         path: &Path,
@@ -734,13 +716,13 @@ impl Engine {
 /// A weak reference to an [`Engine`].
 #[derive(Clone)]
 pub struct EngineWeak {
-    inner: std::sync::Weak<EngineInner>,
+    inner: alloc::sync::Weak<EngineInner>,
 }
 
 impl EngineWeak {
     /// Upgrade this weak reference into an [`Engine`]. Returns `None` if
     /// strong references (the [`Engine`] type itself) no longer exist.
     pub fn upgrade(&self) -> Option<Engine> {
-        std::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
+        alloc::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
     }
 }

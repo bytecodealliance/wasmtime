@@ -3,8 +3,9 @@
 //! Keep in sync with `wasmtime_environ::VMHostFuncOffsets`.
 
 use super::VMOpaqueContext;
+use crate::prelude::*;
 use crate::runtime::vm::{StoreBox, VMFuncRef};
-use std::any::Any;
+use core::any::Any;
 use wasmtime_environ::{VM_ARRAY_CALL_HOST_FUNC_MAGIC, VM_NATIVE_CALL_HOST_FUNC_MAGIC};
 
 /// The `VM*Context` for array-call host functions.

@@ -74,6 +74,7 @@ pub fn pkey_mprotect(addr: usize, len: usize, prot: u32, key: u32) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[ignore = "cannot be run when keys() has already allocated all keys"]
     #[test]
