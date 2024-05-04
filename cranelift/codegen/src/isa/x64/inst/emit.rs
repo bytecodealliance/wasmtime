@@ -107,7 +107,7 @@ fn emit_reloc(sink: &mut MachBuffer<Inst>, kind: Reloc, name: &ExternalName, add
 ///   care?)
 pub(crate) fn emit(
     inst: &Inst,
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
@@ -4255,7 +4255,7 @@ pub(crate) fn emit(
 ///
 /// * Move the return address into its stack slot.
 fn emit_return_call_common_sequence(
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,

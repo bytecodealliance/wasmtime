@@ -940,30 +940,26 @@ pub fn reg_name(reg: Reg) -> String {
 }
 
 impl Inst {
-    fn print_with_state(
-        &self,
-        _state: &mut EmitState,
-        allocs: &mut AllocationConsumer<'_>,
-    ) -> String {
-        let format_reg = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
+    fn print_with_state(&self, _state: &mut EmitState, allocs: &mut AllocationConsumer) -> String {
+        let format_reg = |reg: Reg, allocs: &mut AllocationConsumer| -> String {
             let reg = allocs.next(reg);
             reg_name(reg)
         };
 
-        let format_vec_amode = |amode: &VecAMode, allocs: &mut AllocationConsumer<'_>| -> String {
+        let format_vec_amode = |amode: &VecAMode, allocs: &mut AllocationConsumer| -> String {
             match amode {
                 VecAMode::UnitStride { base } => base.to_string_with_alloc(allocs),
             }
         };
 
-        let format_mask = |mask: &VecOpMasking, allocs: &mut AllocationConsumer<'_>| -> String {
+        let format_mask = |mask: &VecOpMasking, allocs: &mut AllocationConsumer| -> String {
             match mask {
                 VecOpMasking::Enabled { reg } => format!(",{}.t", format_reg(*reg, allocs)),
                 VecOpMasking::Disabled => format!(""),
             }
         };
 
-        let format_regs = |regs: &[Reg], allocs: &mut AllocationConsumer<'_>| -> String {
+        let format_regs = |regs: &[Reg], allocs: &mut AllocationConsumer| -> String {
             let mut x = if regs.len() > 1 {
                 String::from("[")
             } else {

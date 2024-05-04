@@ -168,7 +168,7 @@ fn enc_cbr(op_31_24: u32, off_18_0: u32, op_4: u32, cond: u32) -> u32 {
 fn enc_conditional_br(
     taken: BranchTarget,
     kind: CondBrKind,
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
 ) -> u32 {
     match kind {
         CondBrKind::Zero(reg) => {
@@ -3793,7 +3793,7 @@ impl MachInstEmit for Inst {
 }
 
 fn emit_return_call_common_sequence(
-    allocs: &mut AllocationConsumer<'_>,
+    allocs: &mut AllocationConsumer,
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,

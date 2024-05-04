@@ -178,25 +178,25 @@ impl UImm32Shifted {
 }
 
 impl PrettyPrint for UImm12 {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         format!("{}", self.value)
     }
 }
 
 impl PrettyPrint for SImm20 {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         format!("{}", self.value)
     }
 }
 
 impl PrettyPrint for UImm16Shifted {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         format!("{}", self.bits)
     }
 }
 
 impl PrettyPrint for UImm32Shifted {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         format!("{}", self.bits)
     }
 }
