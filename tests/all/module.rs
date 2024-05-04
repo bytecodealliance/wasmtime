@@ -250,3 +250,50 @@ fn compile_a_component() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn call_indirect_caching_and_memory64() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_memory64(true);
+    config.cache_call_indirects(true);
+    let engine = Engine::new(&config)?;
+    Module::new(
+        &engine,
+        "(module
+            (memory i64 1)
+            (func (param i64) (result i32)
+                local.get 0
+                i32.load offset=0x100000000
+            )
+        )",
+    )?;
+    Ok(())
+}
+
+#[test]
+fn call_indirect_caching_out_of_bounds_table_index() -> Result<()> {
+    let mut config = Config::new();
+    config.cache_call_indirects(true);
+    let engine = Engine::new(&config)?;
+    // Test an out-of-bounds table index: this is exposed to the prescan
+    // that call-indirect caching must perform during compilation, so we
+    // need to make sure the error is properly handled by the validation
+    // that comes later.
+    let err = Module::new(
+        &engine,
+        "(module
+            (func (param i32)
+                ref.null func
+                local.get 0
+                table.set 32  ;; out-of-bounds table index
+            )
+        )",
+    )
+    .unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("table index out of bounds"),
+        "bad error: {err}"
+    );
+    Ok(())
+}

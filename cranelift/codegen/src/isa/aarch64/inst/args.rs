@@ -146,63 +146,16 @@ impl AMode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        // This should match `memarg_operands()`.
-        match self {
-            &AMode::Unscaled { rn, simm9 } => AMode::Unscaled {
-                rn: allocs.next(rn),
-                simm9,
-            },
-            &AMode::UnsignedOffset { rn, uimm12 } => AMode::UnsignedOffset {
-                rn: allocs.next(rn),
-                uimm12,
-            },
-            &AMode::RegReg { rn, rm } => AMode::RegReg {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-            },
-            &AMode::RegScaled { rn, rm } => AMode::RegScaled {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-            },
-            &AMode::RegScaledExtended { rn, rm, extendop } => AMode::RegScaledExtended {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-                extendop,
-            },
-            &AMode::RegExtended { rn, rm, extendop } => AMode::RegExtended {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-                extendop,
-            },
-            &AMode::RegOffset { rn, off } => AMode::RegOffset {
-                rn: allocs.next(rn),
-                off,
-            },
-            &AMode::SPPreIndexed { .. }
-            | &AMode::SPPostIndexed { .. }
-            | &AMode::FPOffset { .. }
-            | &AMode::SPOffset { .. }
-            | &AMode::IncomingArg { .. }
-            | &AMode::NominalSPOffset { .. }
-            | &AMode::Const { .. }
-            | AMode::Label { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
+        self.clone()
     }
 }
 
 pub use crate::isa::aarch64::lower::isle::generated_code::PairAMode;
 
 impl PairAMode {
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        // Should match `pairmemarg_operands()`.
-        match self {
-            &PairAMode::SignedOffset { reg, simm7 } => PairAMode::SignedOffset {
-                reg: allocs.next(reg),
-                simm7,
-            },
-            &PairAMode::SPPreIndexed { .. } | &PairAMode::SPPostIndexed { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
+        self.clone()
     }
 }
 
@@ -357,19 +310,19 @@ impl BranchTarget {
 }
 
 impl PrettyPrint for ShiftOpAndAmt {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         format!("{:?} {}", self.op(), self.amt().value())
     }
 }
 
 impl PrettyPrint for ExtendOp {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         format!("{:?}", self)
     }
 }
 
 impl PrettyPrint for MemLabel {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         match self {
             MemLabel::PCRel(off) => format!("pc+{}", off),
             MemLabel::Mach(off) => format!("label({})", off.get()),
@@ -389,7 +342,7 @@ fn shift_for_type(size_bytes: u8) -> usize {
 }
 
 impl PrettyPrint for AMode {
-    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer) -> String {
         debug_assert!(size_bytes != 0);
         match self {
             &AMode::Unscaled { rn, simm9 } => {
@@ -466,7 +419,7 @@ impl PrettyPrint for AMode {
 }
 
 impl PrettyPrint for PairAMode {
-    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             &PairAMode::SignedOffset { reg, simm7 } => {
                 let reg = pretty_print_reg(reg, allocs);
@@ -490,7 +443,7 @@ impl PrettyPrint for PairAMode {
 }
 
 impl PrettyPrint for Cond {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         let mut s = format!("{:?}", self);
         s.make_ascii_lowercase();
         s
@@ -498,7 +451,7 @@ impl PrettyPrint for Cond {
 }
 
 impl PrettyPrint for BranchTarget {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
         match self {
             &BranchTarget::Label(label) => format!("label{:?}", label.get()),
             &BranchTarget::ResolvedOffset(off) => format!("{}", off),

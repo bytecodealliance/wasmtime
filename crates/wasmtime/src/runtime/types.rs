@@ -432,6 +432,132 @@ impl RefType {
 
 /// The heap types that can Wasm can have references to.
 ///
+/// # Subtyping Hierarchy
+///
+/// Wasm has three different heap type hierarchies:
+///
+/// 1. Function types
+/// 2. External types
+/// 3. Internal types
+///
+/// Each hierarchy has a top type (the common supertype of which everything else
+/// in its hierarchy is a subtype of) and a bottom type (the common subtype of
+/// which everything else in its hierarchy is supertype of).
+///
+/// ## Function Types Hierarchy
+///
+/// The top of the function types hierarchy is `func`; the bottom is
+/// `nofunc`. In between are all the concrete function types.
+///
+/// ```text
+///                          func
+///                       /  /  \  \
+///      ,----------------  /    \  -------------------------.
+///     /                  /      \                           \
+///    |              ,----        -----------.                |
+///    |              |                       |                |
+///    |              |                       |                |
+/// (func)    (func (param i32))    (func (param i32 i32))    ...
+///    |              |                       |                |
+///    |              |                       |                |
+///    |              `---.        ,----------'                |
+///     \                  \      /                           /
+///      `---------------.  \    /  ,------------------------'
+///                       \  \  /  /
+///                         nofunc
+/// ```
+///
+/// Additionally, some concrete function types are sub- or supertypes of other
+/// concrete function types. For simplicity, this isn't depicted in the diagram
+/// above. Specifically, this is based on their parameter and result types, and
+/// whether those types are in a subtyping relationship:
+///
+/// * Parameters are contravariant: `(func (param $a) (result $c))` is a subtype
+///   of `(func (param $b) (result $c))` when `$b` is a subtype of `$a`.
+///
+///   For example, we can substitute `(func (param $cat))` with `(func (param
+///   $animal))` because `$cat` is a subtype of `$animal` and so the new
+///   function is still prepared to accept all `$cat` arguments that any caller
+///   might pass in.
+///
+///   We can't do the opposite and replace `(func (param $animal))` with `(func
+///   (param $cat))`. What would the new function do when given a `$dog`? It is
+///   invalid.
+///
+/// * Results are covariant: `(func (result $a))` is a subtype of `(func (result
+///   $b))` when `$a` is a subtype of `$b`.
+///
+///   For example, we can substitute a `(func (result $animal))` with a
+///   `(func (result $cat))` because callers expect to be returned an
+///   `$animal` and all `$cat`s are `$animal`s.
+///
+///   We cannot do the opposite and substitute a `(func (result $cat))` with a
+///   `(func (result $animal))`, since callers expect a `$cat` but the new
+///   function could return a `$dog`.
+///
+/// As always, Wikipedia is also helpful:
+/// https:///en.wikipedia.org/wiki/Covariance_and_contravariance_(computer_science)
+///
+/// ## External
+///
+/// The top of the external types hierarchy is `extern`; the bottom is
+/// `noextern`. There are no concrete types in this hierarchy.
+///
+/// ```text
+///  extern
+///    |
+/// noextern
+/// ```
+///
+/// ## Internal
+///
+/// The top of the internal types hierarchy is `any`; the bottom is `none`. The
+/// `eq` type is the common supertype of all types that can be compared for
+/// equality. The `struct` and `array` types are the common supertypes of all
+/// concrete struct and array types respectively. The `i31` type represents
+/// unboxed 31-bit integers.
+///
+/// ```text
+///                                   any
+///                                  / | \
+///    ,----------------------------'  |  `--------------------------.
+///   /                                |                              \
+///  |                        .--------'                               |
+///  |                        |                                        |
+///  |                      struct                                   array
+///  |                     /  |   \                                 /  |   \
+/// i31             ,-----'   |    '-----.                   ,-----'   |    `-----.
+///  |             /          |           \                 /          |           \
+///  |            |           |            |               |           |            |
+///  |        (struct)    (struct i32)    ...        (array i32)    (array i64)    ...
+///  |            |           |            |               |           |            |
+///  |             \          |           /                 \          |           /
+///   \             `-----.   |    ,-----'                   `-----.   |    ,-----'
+///    \                   \  |   /                                 \  |   /
+///     \                   \ |  /                                   \ |  /
+///      \                   \| /                                     \| /
+///       \                   |/                                       |/
+///        \                  |                                        |
+///         \                 |                                       /
+///          \                '--------.                             /
+///           \                        |                            /
+///            `--------------------.  |   ,-----------------------'
+///                                  \ |  /
+///                                   none
+/// ```
+///
+/// Additionally, concrete struct and array types can be subtypes of other
+/// concrete struct and array types respectively. Once again, this is omitted
+/// from the above diagram for simplicity. Specifically:
+///
+/// * Array types are covariant with their element type: `(array $a)` is a
+///   subtype of `(array $b)` if `$a` is a subtype of `$b`. For example, `(array
+///   $cat)` is a subtype of `(array $animal)`.
+///
+/// * Struct types are covariant with their field types, and subtypes may
+///   additionally have appended fields that do not appear in the supertype. For
+///   example, `(struct $cat $dog)` is a subtype of `(struct $animal)`.
+///
 /// # Subtyping and Equality
 ///
 /// `HeapType` does not implement `Eq`, because heap types have a subtyping
@@ -443,7 +569,17 @@ impl RefType {
 #[derive(Debug, Clone, Hash)]
 pub enum HeapType {
     /// The abstract `extern` heap type represents external host data.
+    ///
+    /// This is the top type for the external type hierarchy, and therefore is
+    /// the common supertype of all external reference types.
     Extern,
+
+    /// The abstract `noextern` heap type represents the null external
+    /// reference.
+    ///
+    /// This is the bottom type for the external type hierarchy, and therefore
+    /// is the common subtype of all external reference types.
+    NoExtern,
 
     /// The abstract `func` heap type represents a reference to any kind of
     /// function.
@@ -466,47 +602,46 @@ pub enum HeapType {
     /// The abstract `any` heap type represents all internal Wasm data.
     ///
     /// This is the top type of the internal type hierarchy, and is therefore a
-    /// supertype of all internal types (such as `i31`, `struct`s, and
+    /// supertype of all internal types (such as `eq`, `i31`, `struct`s, and
     /// `array`s).
     Any,
 
+    /// The abstract `eq` heap type represenets all internal Wasm references
+    /// that can be compared for equality.
+    ///
+    /// This is a subtype of `any` and a supertype of `i31`, `array`, `struct`,
+    /// and `none` heap types.
+    Eq,
+
     /// The `i31` heap type represents unboxed 31-bit integers.
     ///
-    /// This is a subtype of `any` and a supertype of `none`.
+    /// This is a subtype of `any` and `eq`, and a supertype of `none`.
     I31,
 
     /// The abstract `array` heap type represents a reference to any kind of
     /// array.
     ///
-    /// This is a subtype of `any` and a supertype of all concrete array types,
-    /// as well as a supertype of the abstract `none` heap type.
-    //
-    // TODO: add docs for subtype of `eq` once we add that heap type
+    /// This is a subtype of `any` and `eq`, and a supertype of all concrete
+    /// array types, as well as a supertype of the abstract `none` heap type.
     Array,
 
     /// A reference to an array of a specific, concrete type.
     ///
     /// These are subtypes of the `array` heap type (therefore also a subtype of
-    /// `any`) and supertypes of the `none` heap type.
-    //
-    // TODO: add docs for subtype of `eq` once we add that heap type
+    /// `any` and `eq`) and supertypes of the `none` heap type.
     ConcreteArray(ArrayType),
 
     /// The abstract `struct` heap type represents a reference to any kind of
     /// struct.
     ///
-    /// This is a subtype of `any` and a supertype of all concrete struct types,
-    /// as well as a supertype of the abstract `none` heap type.
-    //
-    // TODO: add docs for subtype of `eq` once we add that heap type
+    /// This is a subtype of `any` and `eq`, and a supertype of all concrete
+    /// struct types, as well as a supertype of the abstract `none` heap type.
     Struct,
 
     /// A reference to an struct of a specific, concrete type.
     ///
     /// These are subtypes of the `struct` heap type (therefore also a subtype
-    /// of `any`) and supertypes of the `none` heap type.
-    //
-    // TODO: add docs for subtype of `eq` once we add that heap type
+    /// of `any` and `eq`) and supertypes of the `none` heap type.
     ConcreteStruct(StructType),
 
     /// The abstract `none` heap type represents the null internal reference.
@@ -520,9 +655,11 @@ impl Display for HeapType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             HeapType::Extern => write!(f, "extern"),
+            HeapType::NoExtern => write!(f, "noextern"),
             HeapType::Func => write!(f, "func"),
             HeapType::NoFunc => write!(f, "nofunc"),
             HeapType::Any => write!(f, "any"),
+            HeapType::Eq => write!(f, "eq"),
             HeapType::I31 => write!(f, "i31"),
             HeapType::Array => write!(f, "array"),
             HeapType::Struct => write!(f, "struct"),
@@ -645,9 +782,10 @@ impl HeapType {
         match self {
             HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::Func,
 
-            HeapType::Extern => HeapType::Extern,
+            HeapType::Extern | HeapType::NoExtern => HeapType::Extern,
 
             HeapType::Any
+            | HeapType::Eq
             | HeapType::I31
             | HeapType::Array
             | HeapType::ConcreteArray(_)
@@ -658,9 +796,41 @@ impl HeapType {
     }
 
     /// Is this the top type within its type hierarchy?
+    #[inline]
     pub fn is_top(&self) -> bool {
         match self {
             HeapType::Any | HeapType::Extern | HeapType::Func => true,
+            _ => false,
+        }
+    }
+
+    /// Get the bottom type of this heap type's type hierarchy.
+    ///
+    /// The returned heap type is a subtype of all types in this heap type's
+    /// type hierarchy.
+    #[inline]
+    pub fn bottom(&self) -> HeapType {
+        match self {
+            HeapType::Extern | HeapType::NoExtern => HeapType::NoExtern,
+
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::NoFunc,
+
+            HeapType::Any
+            | HeapType::Eq
+            | HeapType::I31
+            | HeapType::Array
+            | HeapType::ConcreteArray(_)
+            | HeapType::Struct
+            | HeapType::ConcreteStruct(_)
+            | HeapType::None => HeapType::None,
+        }
+    }
+
+    /// Is this the bottom type within its type hierarchy?
+    #[inline]
+    pub fn is_bottom(&self) -> bool {
+        match self {
+            HeapType::None | HeapType::NoExtern | HeapType::NoFunc => true,
             _ => false,
         }
     }
@@ -677,6 +847,9 @@ impl HeapType {
         match (self, other) {
             (HeapType::Extern, HeapType::Extern) => true,
             (HeapType::Extern, _) => false,
+
+            (HeapType::NoExtern, HeapType::NoExtern | HeapType::Extern) => true,
+            (HeapType::NoExtern, _) => false,
 
             (HeapType::NoFunc, HeapType::NoFunc | HeapType::ConcreteFunc(_) | HeapType::Func) => {
                 true
@@ -698,26 +871,30 @@ impl HeapType {
                 | HeapType::ConcreteStruct(_)
                 | HeapType::Struct
                 | HeapType::I31
+                | HeapType::Eq
                 | HeapType::Any,
             ) => true,
             (HeapType::None, _) => false,
 
-            (HeapType::ConcreteArray(_), HeapType::Array | HeapType::Any) => true,
+            (HeapType::ConcreteArray(_), HeapType::Array | HeapType::Eq | HeapType::Any) => true,
             (HeapType::ConcreteArray(a), HeapType::ConcreteArray(b)) => a.matches(b),
             (HeapType::ConcreteArray(_), _) => false,
 
-            (HeapType::Array, HeapType::Array | HeapType::Any) => true,
+            (HeapType::Array, HeapType::Array | HeapType::Eq | HeapType::Any) => true,
             (HeapType::Array, _) => false,
 
-            (HeapType::ConcreteStruct(_), HeapType::Struct | HeapType::Any) => true,
+            (HeapType::ConcreteStruct(_), HeapType::Struct | HeapType::Eq | HeapType::Any) => true,
             (HeapType::ConcreteStruct(a), HeapType::ConcreteStruct(b)) => a.matches(b),
             (HeapType::ConcreteStruct(_), _) => false,
 
-            (HeapType::Struct, HeapType::Struct | HeapType::Any) => true,
+            (HeapType::Struct, HeapType::Struct | HeapType::Eq | HeapType::Any) => true,
             (HeapType::Struct, _) => false,
 
-            (HeapType::I31, HeapType::I31 | HeapType::Any) => true,
+            (HeapType::I31, HeapType::I31 | HeapType::Eq | HeapType::Any) => true,
             (HeapType::I31, _) => false,
+
+            (HeapType::Eq, HeapType::Eq | HeapType::Any) => true,
+            (HeapType::Eq, _) => false,
 
             (HeapType::Any, HeapType::Any) => true,
             (HeapType::Any, _) => false,
@@ -751,9 +928,11 @@ impl HeapType {
     pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
         match self {
             HeapType::Extern
+            | HeapType::NoExtern
             | HeapType::Func
             | HeapType::NoFunc
             | HeapType::Any
+            | HeapType::Eq
             | HeapType::I31
             | HeapType::Array
             | HeapType::Struct
@@ -767,9 +946,11 @@ impl HeapType {
     pub(crate) fn to_wasm_type(&self) -> WasmHeapType {
         match self {
             HeapType::Extern => WasmHeapType::Extern,
+            HeapType::NoExtern => WasmHeapType::NoExtern,
             HeapType::Func => WasmHeapType::Func,
             HeapType::NoFunc => WasmHeapType::NoFunc,
             HeapType::Any => WasmHeapType::Any,
+            HeapType::Eq => WasmHeapType::Eq,
             HeapType::I31 => WasmHeapType::I31,
             HeapType::Array => WasmHeapType::Array,
             HeapType::Struct => WasmHeapType::Struct,
@@ -789,9 +970,11 @@ impl HeapType {
     pub(crate) fn from_wasm_type(engine: &Engine, ty: &WasmHeapType) -> HeapType {
         match ty {
             WasmHeapType::Extern => HeapType::Extern,
+            WasmHeapType::NoExtern => HeapType::NoExtern,
             WasmHeapType::Func => HeapType::Func,
             WasmHeapType::NoFunc => HeapType::NoFunc,
             WasmHeapType::Any => HeapType::Any,
+            WasmHeapType::Eq => HeapType::Eq,
             WasmHeapType::I31 => HeapType::I31,
             WasmHeapType::Array => HeapType::Array,
             WasmHeapType::Struct => HeapType::Struct,
@@ -824,9 +1007,11 @@ impl HeapType {
             HeapType::ConcreteStruct(a) => Some(&a.registered_type),
 
             HeapType::Extern
+            | HeapType::NoExtern
             | HeapType::Func
             | HeapType::NoFunc
             | HeapType::Any
+            | HeapType::Eq
             | HeapType::I31
             | HeapType::Array
             | HeapType::Struct

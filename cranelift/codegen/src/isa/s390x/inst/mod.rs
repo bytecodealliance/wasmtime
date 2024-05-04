@@ -1185,14 +1185,7 @@ fn mem_finalize_for_show(mem: &MemArg, state: &EmitState, mi: MemInstType) -> (S
 }
 
 impl Inst {
-    fn print_with_state(
-        &self,
-        state: &mut EmitState,
-        allocs: &mut AllocationConsumer<'_>,
-    ) -> String {
-        // N.B.: order of consumption of `allocs` must match the order
-        // in `s390x_get_operands()`.
-
+    fn print_with_state(&self, state: &mut EmitState, allocs: &mut AllocationConsumer) -> String {
         let mut empty_allocs = AllocationConsumer::new(&[]);
 
         match self {

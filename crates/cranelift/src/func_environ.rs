@@ -1467,7 +1467,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(_))
             | WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::RecGroup(_))
             | WasmHeapType::Extern
+            | WasmHeapType::NoExtern
             | WasmHeapType::Any
+            | WasmHeapType::Eq
             | WasmHeapType::I31
             | WasmHeapType::Array
             | WasmHeapType::ConcreteArray(_)

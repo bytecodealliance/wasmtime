@@ -23,7 +23,7 @@ impl WastCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
-        let config = self.common.config(None)?;
+        let config = self.common.config(None, None)?;
         let store = Store::new(&Engine::new(&config)?, ());
         let mut wast_context = WastContext::new(store);
 

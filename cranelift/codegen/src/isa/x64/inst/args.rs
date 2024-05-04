@@ -170,7 +170,7 @@ macro_rules! newtype_of_reg {
                 }
             }
             impl PrettyPrint for $newtype_reg_mem {
-                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
                     self.0.pretty_print(size, allocs)
                 }
             }
@@ -236,7 +236,7 @@ macro_rules! newtype_of_reg {
             }
 
             impl PrettyPrint for $newtype_reg_mem_imm {
-                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
                     self.0.pretty_print(size, allocs)
                 }
             }
@@ -407,41 +407,8 @@ impl Amode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        // The order in which we consume allocs here must match the
-        // order in which we produce operands in get_operands() above.
-        match self {
-            &Amode::ImmReg {
-                simm32,
-                base,
-                flags,
-            } => {
-                let base = if base == regs::rsp() || base == regs::rbp() {
-                    base
-                } else {
-                    allocs.next(base)
-                };
-                Amode::ImmReg {
-                    simm32,
-                    flags,
-                    base,
-                }
-            }
-            &Amode::ImmRegRegShift {
-                simm32,
-                base,
-                index,
-                shift,
-                flags,
-            } => Amode::ImmRegRegShift {
-                simm32,
-                shift,
-                flags,
-                base: Gpr::new(allocs.next(*base)).unwrap(),
-                index: Gpr::new(allocs.next(*index)).unwrap(),
-            },
-            &Amode::RipRelative { target } => Amode::RipRelative { target },
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
+        self.clone()
     }
 
     /// Offset the amode by a fixed offset.
@@ -461,7 +428,7 @@ impl Amode {
 }
 
 impl PrettyPrint for Amode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             Amode::ImmReg { simm32, base, .. } => {
                 // Note: size is always 8; the address is 64 bits,
@@ -572,13 +539,8 @@ impl SyntheticAmode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            SyntheticAmode::Real(addr) => SyntheticAmode::Real(addr.with_allocs(allocs)),
-            &SyntheticAmode::IncomingArg { .. }
-            | &SyntheticAmode::NominalSPOffset { .. }
-            | &SyntheticAmode::ConstantOffset { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
+        self.clone()
     }
 
     pub(crate) fn aligned(&self) -> bool {
@@ -604,7 +566,7 @@ impl Into<SyntheticAmode> for VCodeConstant {
 }
 
 impl PrettyPrint for SyntheticAmode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             // See note in `Amode` regarding constant size of `8`.
             SyntheticAmode::Real(addr) => addr.pretty_print(8, allocs),
@@ -675,16 +637,8 @@ impl RegMemImm {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            Self::Reg { reg } => Self::Reg {
-                reg: allocs.next(*reg),
-            },
-            Self::Mem { addr } => Self::Mem {
-                addr: addr.with_allocs(allocs),
-            },
-            Self::Imm { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
+        self.clone()
     }
 }
 
@@ -704,7 +658,7 @@ impl From<Reg> for RegMemImm {
 }
 
 impl PrettyPrint for RegMemImm {
-    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             Self::Reg { reg } => pretty_print_reg(*reg, size, allocs),
             Self::Mem { addr } => addr.pretty_print(size, allocs),
@@ -781,15 +735,8 @@ impl RegMem {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            RegMem::Reg { reg } => RegMem::Reg {
-                reg: allocs.next(*reg),
-            },
-            RegMem::Mem { addr } => RegMem::Mem {
-                addr: addr.with_allocs(allocs),
-            },
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
+        self.clone()
     }
 }
 
@@ -806,7 +753,7 @@ impl From<Writable<Reg>> for RegMem {
 }
 
 impl PrettyPrint for RegMem {
-    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
         match self {
             RegMem::Reg { reg } => pretty_print_reg(*reg, size, allocs),
             RegMem::Mem { addr, .. } => addr.pretty_print(size, allocs),

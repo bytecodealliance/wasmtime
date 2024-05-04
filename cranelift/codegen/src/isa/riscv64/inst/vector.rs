@@ -1,4 +1,3 @@
-use crate::isa::riscv64::inst::AllocationConsumer;
 use crate::isa::riscv64::lower::isle::generated_code::VecAluOpRRRR;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAvl,
@@ -247,15 +246,6 @@ impl VecOpMasking {
         match self {
             VecOpMasking::Enabled { .. } => 0,
             VecOpMasking::Disabled => 1,
-        }
-    }
-
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            VecOpMasking::Enabled { reg } => VecOpMasking::Enabled {
-                reg: allocs.next(*reg),
-            },
-            VecOpMasking::Disabled => VecOpMasking::Disabled,
         }
     }
 }
@@ -1073,14 +1063,6 @@ impl VecAMode {
     pub fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             VecAMode::UnitStride { base, .. } => base.get_operands(collector),
-        }
-    }
-
-    pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            VecAMode::UnitStride { base } => VecAMode::UnitStride {
-                base: base.with_allocs(allocs),
-            },
         }
     }
 

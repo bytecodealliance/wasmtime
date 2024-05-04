@@ -5,7 +5,10 @@ set(WASMTIME_USER_CARGO_BUILD_OPTIONS "" CACHE STRING "Additional cargo flags (s
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(WASMTIME_ALWAYS_BUILD "If cmake should always invoke cargo to build wasmtime" ON)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
+	CMAKE_BUILD_TYPE STREQUAL "MinSizeRel" OR
+	CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"
+)
 	set(WASMTIME_BUILD_TYPE_FLAG "--release")
 	set(WASMTIME_BUILD_TYPE "release")
 else()

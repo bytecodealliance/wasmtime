@@ -113,20 +113,11 @@ pub enum AMode {
 }
 
 impl AMode {
-    pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            AMode::RegOffset(reg, offset) => AMode::RegOffset(allocs.next(reg), offset),
-            AMode::SPOffset(..)
-            | AMode::FPOffset(..)
-            | AMode::NominalSPOffset(..)
-            | AMode::IncomingArg(..)
-            | AMode::Const(..)
-            | AMode::Label(..) => self,
-        }
+    pub(crate) fn with_allocs(self, _allocs: &mut AllocationConsumer) -> Self {
+        self
     }
 
     /// Add the registers referenced by this AMode to `collector`.
-    /// Keep this in sync with `with_allocs`.
     pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             AMode::RegOffset(reg, ..) => collector.reg_use(reg),
@@ -186,7 +177,7 @@ impl AMode {
         }
     }
 
-    pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
+    pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer) -> String {
         format!("{}", self.clone().with_allocs(allocs))
     }
 }
@@ -415,43 +406,6 @@ impl FpuOPRR {
             F32 => Self::FmvWX,
             F64 => Self::FmvDX,
             _ => unreachable!("ty:{:?}", ty),
-        }
-    }
-
-    pub(crate) fn float_convert_2_int_op(from: Type, is_type_signed: bool, to: Type) -> Self {
-        let type_32 = to.bits() <= 32;
-        match from {
-            F32 => {
-                if is_type_signed {
-                    if type_32 {
-                        Self::FcvtWS
-                    } else {
-                        Self::FcvtLS
-                    }
-                } else {
-                    if type_32 {
-                        Self::FcvtWuS
-                    } else {
-                        Self::FcvtLuS
-                    }
-                }
-            }
-            F64 => {
-                if is_type_signed {
-                    if type_32 {
-                        Self::FcvtWD
-                    } else {
-                        Self::FcvtLD
-                    }
-                } else {
-                    if type_32 {
-                        Self::FcvtWuD
-                    } else {
-                        Self::FcvtLuD
-                    }
-                }
-            }
-            _ => unreachable!("from type:{}", from),
         }
     }
 
@@ -1615,27 +1569,6 @@ impl Inst {
     }
 }
 
-impl FloatRoundOP {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            FloatRoundOP::Nearest => "nearest",
-            FloatRoundOP::Ceil => "ceil",
-            FloatRoundOP::Floor => "floor",
-            FloatRoundOP::Trunc => "trunc",
-        }
-    }
-
-    pub(crate) fn to_frm(self) -> FRM {
-        match self {
-            FloatRoundOP::Nearest => FRM::RNE,
-            FloatRoundOP::Ceil => FRM::RUP,
-            FloatRoundOP::Floor => FRM::RDN,
-            FloatRoundOP::Trunc => FRM::RTZ,
-        }
-    }
-}
-
-///
 pub(crate) fn f32_cvt_to_int_bounds(signed: bool, out_bits: u32) -> (f32, f32) {
     match (signed, out_bits) {
         (true, 8) => (i8::min_value() as f32 - 1., i8::max_value() as f32 + 1.),

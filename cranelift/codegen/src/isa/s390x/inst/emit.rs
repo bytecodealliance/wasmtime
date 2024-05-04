@@ -1384,7 +1384,7 @@ impl MachInstEmit for Inst {
 impl Inst {
     fn emit_with_alloc_consumer(
         &self,
-        allocs: &mut AllocationConsumer<'_>,
+        allocs: &mut AllocationConsumer,
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
         state: &mut EmitState,

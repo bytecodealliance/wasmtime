@@ -435,7 +435,7 @@ impl BenchState {
         execution_end: extern "C" fn(*mut u8),
         make_wasi_cx: impl FnMut() -> Result<WasiCtx> + 'static,
     ) -> Result<Self> {
-        let mut config = options.config(Some(&Triple::host().to_string()))?;
+        let mut config = options.config(Some(&Triple::host().to_string()), None)?;
         // NB: always disable the compilation cache.
         config.disable_cache();
         let engine = Engine::new(&config)?;
