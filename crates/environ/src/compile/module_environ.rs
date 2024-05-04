@@ -619,24 +619,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         } => {
                             let range = mk_range(&mut self.result.total_data)?;
                             let memory_index = MemoryIndex::from_u32(memory_index);
-                            let mut offset_expr_reader = offset_expr.get_binary_reader();
-                            let (base, offset) = match offset_expr_reader.read_operator()? {
-                                Operator::I32Const { value } => (None, value.unsigned().into()),
-                                Operator::I64Const { value } => (None, value.unsigned()),
-                                Operator::GlobalGet { global_index } => {
-                                    (Some(GlobalIndex::from_u32(global_index)), 0)
-                                }
-                                s => {
-                                    bail!(WasmError::Unsupported(format!(
-                                        "unsupported init expr in data section: {:?}",
-                                        s
-                                    )));
-                                }
-                            };
+                            let (offset, escaped) = ConstExpr::from_wasmparser(offset_expr)?;
+                            debug_assert!(escaped.is_empty());
 
                             initializers.push(MemoryInitializer {
                                 memory_index,
-                                base,
                                 offset,
                                 data: range,
                             });
@@ -1039,11 +1026,27 @@ impl ModuleTranslation<'_> {
                 segments: Vec::new(),
             });
         }
-        let mut idx = 0;
-        let ok = self.module.memory_initialization.init_memory(
-            &mut (),
-            InitMemory::CompileTime(&self.module),
-            |(), memory, init| {
+
+        struct InitMemoryAtCompileTime<'a> {
+            module: &'a Module,
+            info: &'a mut PrimaryMap<MemoryIndex, Memory>,
+            idx: usize,
+        }
+        impl InitMemory for InitMemoryAtCompileTime<'_> {
+            fn memory_size_in_pages(&mut self, memory_index: MemoryIndex) -> u64 {
+                self.module.memory_plans[memory_index].memory.minimum
+            }
+
+            fn eval_offset(&mut self, memory_index: MemoryIndex, expr: &ConstExpr) -> Option<u64> {
+                let mem64 = self.module.memory_plans[memory_index].memory.memory64;
+                match expr.ops() {
+                    &[ConstOp::I32Const(offset)] if !mem64 => Some(offset.unsigned().into()),
+                    &[ConstOp::I64Const(offset)] if mem64 => Some(offset.unsigned()),
+                    _ => None,
+                }
+            }
+
+            fn write(&mut self, memory: MemoryIndex, init: &StaticMemoryInitializer) -> bool {
                 // Currently `Static` only applies to locally-defined memories,
                 // so if a data segment references an imported memory then
                 // transitioning to a `Static` memory initializer is not
@@ -1051,18 +1054,26 @@ impl ModuleTranslation<'_> {
                 if self.module.defined_memory_index(memory).is_none() {
                     return false;
                 };
-                let info = &mut info[memory];
+                let info = &mut self.info[memory];
                 let data_len = u64::from(init.data.end - init.data.start);
                 if data_len > 0 {
                     info.data_size += data_len;
                     info.min_addr = info.min_addr.min(init.offset);
                     info.max_addr = info.max_addr.max(init.offset + data_len);
-                    info.segments.push((idx, init.clone()));
+                    info.segments.push((self.idx, init.clone()));
                 }
-                idx += 1;
+                self.idx += 1;
                 true
-            },
-        );
+            }
+        }
+        let ok = self
+            .module
+            .memory_initialization
+            .init_memory(&mut InitMemoryAtCompileTime {
+                idx: 0,
+                module: &self.module,
+                info: &mut info,
+            });
         if !ok {
             return;
         }

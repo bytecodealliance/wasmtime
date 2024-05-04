@@ -102,10 +102,8 @@ impl MemoryPlan {
 pub struct MemoryInitializer {
     /// The index of a linear memory to initialize.
     pub memory_index: MemoryIndex,
-    /// Optionally, a global variable giving a base index.
-    pub base: Option<GlobalIndex>,
-    /// The offset to add to the base.
-    pub offset: u64,
+    /// The base offset to start this segment at.
+    pub offset: ConstExpr,
     /// The range of the data to write within the linear memory.
     ///
     /// This range indexes into a separately stored data section which will be
@@ -201,24 +199,6 @@ impl MemoryInitialization {
     /// only be called as part of initialization, however, as it's structured to
     /// allow learning about memory ahead-of-time at compile time possibly.
     ///
-    /// The various callbacks provided here are used to drive the smaller bits
-    /// of initialization, such as:
-    ///
-    /// * `get_cur_size_in_pages` - gets the current size, in wasm pages, of the
-    ///   memory specified. For compile-time purposes this would be the memory
-    ///   type's minimum size.
-    ///
-    /// * `get_global` - gets the value of the global specified. This is
-    ///   statically, via validation, a pointer to the global of the correct
-    ///   type (either u32 or u64 depending on the memory), but the value
-    ///   returned here is `u64`. A `None` value can be returned to indicate
-    ///   that the global's value isn't known yet.
-    ///
-    /// * `write` - a callback used to actually write data. This indicates that
-    ///   the specified memory must receive the specified range of data at the
-    ///   specified offset. This can internally return an false error if it
-    ///   wants to fail.
-    ///
     /// This function will return true if all memory initializers are processed
     /// successfully. If any initializer hits an error or, for example, a
     /// global value is needed but `None` is returned, then false will be
@@ -226,12 +206,7 @@ impl MemoryInitialization {
     /// question needs to be deferred to runtime, and at runtime this means
     /// that an invalid initializer has been found and a trap should be
     /// generated.
-    pub fn init_memory<T>(
-        &self,
-        state: &mut T,
-        init: InitMemory<'_, T>,
-        mut write: impl FnMut(&mut T, MemoryIndex, &StaticMemoryInitializer) -> bool,
-    ) -> bool {
+    pub fn init_memory(&self, state: &mut dyn InitMemory) -> bool {
         let initializers = match self {
             // Fall through below to the segmented memory one-by-one
             // initialization.
@@ -245,7 +220,7 @@ impl MemoryInitialization {
             MemoryInitialization::Static { map } => {
                 for (index, init) in map {
                     if let Some(init) = init {
-                        let result = write(state, index, init);
+                        let result = state.write(index, init);
                         if !result {
                             return result;
                         }
@@ -256,28 +231,18 @@ impl MemoryInitialization {
         };
 
         for initializer in initializers {
-            let MemoryInitializer {
+            let &MemoryInitializer {
                 memory_index,
-                base,
-                offset,
+                ref offset,
                 ref data,
-            } = *initializer;
+            } = initializer;
 
             // First up determine the start/end range and verify that they're
             // in-bounds for the initial size of the memory at `memory_index`.
             // Note that this can bail if we don't have access to globals yet
             // (e.g. this is a task happening before instantiation at
             // compile-time).
-            let base = match base {
-                Some(index) => match &init {
-                    InitMemory::Runtime {
-                        get_global_as_u64, ..
-                    } => get_global_as_u64(state, index),
-                    InitMemory::CompileTime(_) => return false,
-                },
-                None => 0,
-            };
-            let start = match base.checked_add(offset) {
+            let start = match state.eval_offset(memory_index, offset) {
                 Some(start) => start,
                 None => return false,
             };
@@ -287,13 +252,7 @@ impl MemoryInitialization {
                 None => return false,
             };
 
-            let cur_size_in_pages = match &init {
-                InitMemory::CompileTime(module) => module.memory_plans[memory_index].memory.minimum,
-                InitMemory::Runtime {
-                    memory_size_in_pages,
-                    ..
-                } => memory_size_in_pages(state, memory_index),
-            };
+            let cur_size_in_pages = state.memory_size_in_pages(memory_index);
 
             // Note that this `minimum` can overflow if `minimum` is
             // `1 << 48`, the maximum number of minimum pages for 64-bit
@@ -318,7 +277,7 @@ impl MemoryInitialization {
                 offset: start,
                 data: data.clone(),
             };
-            let result = write(state, memory_index, &init);
+            let result = state.write(memory_index, &init);
             if !result {
                 return result;
             }
@@ -328,25 +287,23 @@ impl MemoryInitialization {
     }
 }
 
-/// Argument to [`MemoryInitialization::init_memory`] indicating the current
-/// status of the instance.
-pub enum InitMemory<'a, T> {
-    /// This evaluation of memory initializers is happening at compile time.
-    /// This means that the current state of memories is whatever their initial
-    /// state is, and additionally globals are not available if data segments
-    /// have global offsets.
-    CompileTime(&'a Module),
+/// The various callbacks provided here are used to drive the smaller bits of
+/// memory initialization.
+pub trait InitMemory {
+    /// Returns the size, in wasm pages, of the the memory specified. For
+    /// compile-time purposes this would be the memory type's minimum size.
+    fn memory_size_in_pages(&mut self, memory_index: MemoryIndex) -> u64;
 
-    /// Evaluation of memory initializers is happening at runtime when the
-    /// instance is available, and callbacks are provided to learn about the
-    /// instance's state.
-    Runtime {
-        /// Returns the size, in wasm pages, of the the memory specified.
-        memory_size_in_pages: &'a dyn Fn(&mut T, MemoryIndex) -> u64,
-        /// Returns the value of the global, as a `u64`. Note that this may
-        /// involve zero-extending a 32-bit global to a 64-bit number.
-        get_global_as_u64: &'a dyn Fn(&mut T, GlobalIndex) -> u64,
-    },
+    /// Returns the value of the constant expression, as a `u64`. Note that
+    /// this may involve zero-extending a 32-bit global to a 64-bit number. May
+    /// return `None` to indicate that the expression involves a value which is
+    /// not available yet.
+    fn eval_offset(&mut self, memory_index: MemoryIndex, expr: &ConstExpr) -> Option<u64>;
+
+    /// A callback used to actually write data. This indicates that the
+    /// specified memory must receive the specified range of data at the
+    /// specified offset. This can return false on failure.
+    fn write(&mut self, memory_index: MemoryIndex, init: &StaticMemoryInitializer) -> bool;
 }
 
 /// Implementation styles for WebAssembly tables.
