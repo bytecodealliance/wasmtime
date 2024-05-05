@@ -68,3 +68,139 @@ block0(v0: f64, v1: f64):
 ;   .byte 0x53, 0x35, 0xb5, 0x2a
 ;   ret
 
+
+
+function %ceil_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = ceil v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.s fa0,fa0,rup
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x35, 0x45, 0x40
+;   ret
+
+
+function %ceil_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = ceil v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.d fa0,fa0,rup
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x35, 0x45, 0x42
+;   ret
+
+
+function %floor_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = floor v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.s fa0,fa0,rdn
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x25, 0x45, 0x40
+;   ret
+
+
+function %floor_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = floor v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.d fa0,fa0,rdn
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x25, 0x45, 0x42
+;   ret
+
+
+function %trunc_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = trunc v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.s fa0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x15, 0x45, 0x40
+;   ret
+
+
+function %trunc_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = trunc v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.d fa0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x15, 0x45, 0x42
+;   ret
+
+
+function %nearest_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.s fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x45, 0x40
+;   ret
+
+
+function %nearest_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fround.d fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x45, 0x42
+;   ret

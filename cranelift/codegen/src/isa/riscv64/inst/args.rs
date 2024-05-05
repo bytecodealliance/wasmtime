@@ -384,6 +384,8 @@ impl FpuOPRR {
             Self::FcvtWuD => "fcvt.wu.d",
             Self::FcvtDW => "fcvt.d.w",
             Self::FcvtDWU => "fcvt.d.wu",
+            Self::FroundS => "fround.s",
+            Self::FroundD => "fround.d",
         }
     }
 
@@ -436,7 +438,9 @@ impl FpuOPRR {
             | FpuOPRR::FcvtWD
             | FpuOPRR::FcvtWuD
             | FpuOPRR::FcvtDW
-            | FpuOPRR::FcvtDWU => 0b1010011,
+            | FpuOPRR::FcvtDWU
+            | FpuOPRR::FroundS
+            | FpuOPRR::FroundD => 0b1010011,
         }
     }
 
@@ -468,6 +472,8 @@ impl FpuOPRR {
             FpuOPRR::FcvtDW => 0b00000,
             FpuOPRR::FcvtDWU => 0b00001,
             FpuOPRR::FsqrtD => 0b00000,
+            FpuOPRR::FroundS => 0b00100,
+            FpuOPRR::FroundD => 0b00100,
         }
     }
     pub(crate) fn funct7(self) -> u32 {
@@ -490,8 +496,8 @@ impl FpuOPRR {
             FpuOPRR::FcvtDL => 0b1101001,
             FpuOPRR::FcvtDLu => 0b1101001,
             FpuOPRR::FmvDX => 0b1111001,
-            FpuOPRR::FcvtSD => 0b0100000,
-            FpuOPRR::FcvtDS => 0b0100001,
+            FpuOPRR::FcvtSD | FpuOPRR::FroundS => 0b0100000,
+            FpuOPRR::FcvtDS | FpuOPRR::FroundD => 0b0100001,
             FpuOPRR::FclassD => 0b1110001,
             FpuOPRR::FcvtWD => 0b1100001,
             FpuOPRR::FcvtWuD => 0b1100001,

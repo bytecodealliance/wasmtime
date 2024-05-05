@@ -447,8 +447,10 @@
   (FcvtWuD)
   (FcvtDW)
   (FcvtDWU)
-  ;; bitmapip
 
+  ;; Zfa Extension
+  (FroundS)
+  (FroundD)
 ))
 
 (type LoadOP (enum
@@ -1549,6 +1551,11 @@
 (rule (rv_fmaxm $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxmS) $F32 (FRM.RUP) rs1 rs2))
 (rule (rv_fmaxm $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxmD) $F64 (FRM.RUP) rs1 rs2))
 
+;; Helper for emitting the `fround` instruction.
+(decl rv_fround (Type FRM FReg) FReg)
+(rule (rv_fround $F32 frm rs) (fpu_rr (FpuOPRR.FroundS) $F32 frm rs))
+(rule (rv_fround $F64 frm rs) (fpu_rr (FpuOPRR.FroundD) $F64 frm rs))
+
 ;; `Zba` Extension Instructions
 
 ;; Helper for emitting the `adduw` ("Add Unsigned Word") instruction.
@@ -2470,7 +2477,7 @@
 (rule (float_round_fcvt $F64 frm rs) (rv_fcvtdl frm (rv_fcvtld frm rs)))
 
 (decl gen_float_round (FRM FReg Type) FReg)
-(rule (gen_float_round frm rs ty)
+(rule 0 (gen_float_round frm rs ty)
   (let (;; if rs is NaN/+-Infinity/+-Zero or if the exponent is larger than # of bits
         ;; in mantissa, the result is the same as src, check for these cases first.
         (max FReg (imm ty (float_int_max ty)))
@@ -2491,6 +2498,10 @@
     ;; Check if the value cannot be rounded exactly and return the source input if so
     (gen_select_freg (cmp_eqz exact) corrected_nan rounded)))
 
+;; With Zfa we can use the dedicated `fround` instruction.
+(rule 1 (gen_float_round frm rs ty)
+  (if-let $true (has_zfa))
+  (rv_fround ty frm rs))
 
 
 
