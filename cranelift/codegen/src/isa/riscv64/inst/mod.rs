@@ -236,42 +236,6 @@ impl Inst {
             .expect("code range is too big.")
     }
 
-    /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u32,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let mut insts = SmallVec::new();
-        let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
-        insts.push(Inst::FpuRR {
-            frm: FRM::RNE,
-            alu_op: FpuOPRR::move_x_to_f_op(F32),
-            rd,
-            rs: tmp.to_reg(),
-        });
-        insts
-    }
-
-    /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u64,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let mut insts = SmallInstVec::new();
-        let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u64(tmp, const_data));
-        insts.push(Inst::FpuRR {
-            frm: FRM::RNE,
-            alu_op: FpuOPRR::move_x_to_f_op(F64),
-            rd,
-            rs: tmp.to_reg(),
-        });
-        insts
-    }
-
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
         if ty.is_vector() {

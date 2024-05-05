@@ -402,14 +402,6 @@ impl FpuOPRR {
             _ => false,
         }
     }
-    // move from x register to float register.
-    pub(crate) fn move_x_to_f_op(ty: Type) -> Self {
-        match ty {
-            F32 => Self::FmvWX,
-            F64 => Self::FmvDX,
-            _ => unreachable!("ty:{:?}", ty),
-        }
-    }
 
     pub(crate) fn op_code(self) -> u32 {
         match self {
