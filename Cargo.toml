@@ -449,3 +449,8 @@ incremental = false
 debug-assertions = false
 overflow-checks = false
 opt-level = 's'
+
+[profile.fastest-runtime]
+inherits = "release"
+codegen-units = 1
+lto = true
