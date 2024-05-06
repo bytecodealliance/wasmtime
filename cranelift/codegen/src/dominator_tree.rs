@@ -464,6 +464,20 @@ impl DominatorTreePreorder {
         }
     }
 
+    /// Checks if one instruction dominates another.
+    pub fn dominates_inst(&self, a: Inst, b: Inst, layout: &Layout) -> bool {
+        match (layout.inst_block(a), layout.inst_block(b)) {
+            (Some(block_a), Some(block_b)) => {
+                if block_a == block_b {
+                    layout.pp_cmp(a, b) != Ordering::Greater
+                } else {
+                    self.dominates(block_a, block_b)
+                }
+            }
+            _ => false,
+        }
+    }
+
     /// Recompute this data structure to match `domtree`.
     pub fn compute(&mut self, domtree: &DominatorTree, layout: &Layout) {
         self.nodes.clear();

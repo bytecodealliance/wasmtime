@@ -334,20 +334,17 @@ impl<'a> AliasAnalysis<'a> {
                             value.index(),
                             def_inst.index()
                         );
-                        if let (Some(def_block), Some(inst_block)) = (
-                            func.layout.inst_block(def_inst),
-                            func.layout.inst_block(inst),
-                        ) {
-                            if self.domtree.dominates(def_block, inst_block) {
-                                trace!(
-                                    " -> dominates; value equiv from v{} to v{} inserted",
-                                    load_result.index(),
-                                    value.index()
-                                );
-                                Some(value)
-                            } else {
-                                None
-                            }
+                        if self.domtree.dominates_inst(def_inst, inst, &func.layout) {
+                            let _inst_block = func
+                                .layout
+                                .inst_block(inst)
+                                .expect("Instruction not in layout.");
+                            trace!(
+                                " -> dominates; value equiv from v{} to v{} inserted",
+                                load_result.index(),
+                                value.index()
+                            );
+                            Some(value)
                         } else {
                             None
                         }
