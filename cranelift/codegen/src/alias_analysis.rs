@@ -275,12 +275,12 @@ impl<'a> AliasAnalysis<'a> {
             state,
             func.dfg.insts[inst],
         );
-    
+
         let replacing_value = if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst)
         {
             let address = func.dfg.resolve_aliases(address);
             let opcode = func.dfg.insts[inst].opcode();
-    
+
             if opcode.can_store() {
                 let store_data = inst_store_data(func, inst).unwrap();
                 let store_data = func.dfg.resolve_aliases(store_data);
@@ -298,7 +298,7 @@ impl<'a> AliasAnalysis<'a> {
                     mem_loc
                 );
                 self.mem_values.insert(mem_loc, (inst, store_data));
-    
+
                 None
             } else if opcode.can_load() {
                 let last_store = state.get_last_store(func, inst);
@@ -316,7 +316,7 @@ impl<'a> AliasAnalysis<'a> {
                     last_store.map(|inst| inst.index()).unwrap_or(usize::MAX),
                     mem_loc
                 );
-    
+
                 // Is there a Value already known to be stored
                 // at this specific memory location?  If so,
                 // we can alias the load result to this
@@ -327,33 +327,34 @@ impl<'a> AliasAnalysis<'a> {
                 // load (stores will always dominate though if
                 // their `last_store` survives through
                 // meet-points to this use-site).
-                let aliased = if let Some((def_inst, value)) = self.mem_values.get(&mem_loc).cloned() {
-                    trace!(
-                        " -> sees known value v{} from inst{}",
-                        value.index(),
-                        def_inst.index()
-                    );
-                    if let (Some(def_block), Some(inst_block)) = (
-                        func.layout.inst_block(def_inst),
-                        func.layout.inst_block(inst),
-                    ) {
-                        if self.domtree.dominates(def_block, inst_block) {
-                            trace!(
-                                " -> dominates; value equiv from v{} to v{} inserted",
-                                load_result.index(),
-                                value.index()
-                            );
-                            Some(value)
+                let aliased =
+                    if let Some((def_inst, value)) = self.mem_values.get(&mem_loc).cloned() {
+                        trace!(
+                            " -> sees known value v{} from inst{}",
+                            value.index(),
+                            def_inst.index()
+                        );
+                        if let (Some(def_block), Some(inst_block)) = (
+                            func.layout.inst_block(def_inst),
+                            func.layout.inst_block(inst),
+                        ) {
+                            if self.domtree.dominates(def_block, inst_block) {
+                                trace!(
+                                    " -> dominates; value equiv from v{} to v{} inserted",
+                                    load_result.index(),
+                                    value.index()
+                                );
+                                Some(value)
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
-    
+                    };
+
                 // Otherwise, we can keep *this* load around
                 // as a new equivalent value.
                 if aliased.is_none() {
@@ -364,7 +365,7 @@ impl<'a> AliasAnalysis<'a> {
                     );
                     self.mem_values.insert(mem_loc, (inst, load_result));
                 }
-    
+
                 aliased
             } else {
                 None
@@ -372,12 +373,11 @@ impl<'a> AliasAnalysis<'a> {
         } else {
             None
         };
-    
+
         state.update(func, inst);
-    
+
         replacing_value
     }
-    
 
     /// Make a pass and update known-redundant loads to aliased
     /// values. We interleave the updates with the memory-location
@@ -408,4 +408,3 @@ fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
         _ => Some(op),
     }
 }
-

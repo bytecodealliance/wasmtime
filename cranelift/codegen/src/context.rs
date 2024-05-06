@@ -46,9 +46,8 @@ pub struct Context {
     pub cfg: ControlFlowGraph,
 
     /// Dominator tree for `func`.
-    pub domtree: DominatorTree, 
+    pub domtree: DominatorTree,
     domtree_preorder: DominatorTreePreorder,
-
 
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
@@ -397,4 +396,3 @@ impl Context {
         self.verify_if(fisa)
     }
 }
-
