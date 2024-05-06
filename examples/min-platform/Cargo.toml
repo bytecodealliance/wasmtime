@@ -12,3 +12,4 @@ workspace = true
 anyhow = { workspace = true, features = ['std'] }
 libloading = "0.8"
 object = { workspace = true, features = ['std'] }
+wasmtime = { workspace = true, features = ['cranelift', 'wat'] }
