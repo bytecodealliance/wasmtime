@@ -129,6 +129,7 @@ impl DiffEngine for V8Engine {
                 return verify_v8(&[
                     "table initializer is out of bounds",
                     "table index is out of bounds",
+                    "element segment out of bounds",
                 ])
             }
             Trap::BadSignature => return verify_v8(&["function signature mismatch"]),
