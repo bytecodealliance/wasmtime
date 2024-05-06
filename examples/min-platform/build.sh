@@ -42,6 +42,7 @@ cargo build \
   --target $target \
   --release
 cc \
+  -Wl,--gc-sections \
   -Wl,--whole-archive \
   ../../target/$target/release/libembedding.a \
   -Wl,--no-whole-archive \
