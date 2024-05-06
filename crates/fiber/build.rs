@@ -10,7 +10,7 @@ fn main() {
     // `#![feature]` but sort of abuse the fact that cfgs are "leaked" through
     // into Cargo ungated via `--print cfg`. Translate that to `cfg(asan)` for
     // us to write down in the code.
-    println!("cargo::rustc-check-cfg=cfg(asan)");
+    println!("cargo:rustc-check-cfg=cfg(asan)");
     match env::var("CARGO_CFG_SANITIZE") {
         Ok(s) if s == "address" => {
             println!("cargo:rustc-cfg=asan");
