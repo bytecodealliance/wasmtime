@@ -14,12 +14,12 @@ anyhow = { workspace = true }
 # Note that default-features of wasmtime are disabled and only those required
 # are enabled, in this case compilation is done in the guest from the wasm text
 # format so `cranelift` and `wat` are enabled.
-wasmtime = { workspace = true, features = ['cranelift', 'wat', 'runtime'] }
+wasmtime = { workspace = true, features = ['runtime'] }
 
 # Memory allocator used in this example (not required, however)
 dlmalloc = "0.2.4"
 
 [lib]
-crate-type = ['cdylib']
+crate-type = ['staticlib']
 test = false
 doctest = false
