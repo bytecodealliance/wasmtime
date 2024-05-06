@@ -30,6 +30,10 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
         Err(e) => return Err(Error::new(Span::call_site(), e.to_string())),
     };
 
+    if input.opts.stringify {
+        return Ok(quote::quote!(#src));
+    }
+
     // If a magical `WASMTIME_DEBUG_BINDGEN` environment variable is set then
     // place a formatted version of the expanded code into a file. This file
     // will then show up in rustc error messages for any codegen issues and can
@@ -144,6 +148,7 @@ impl Parse for Config {
                             .map(|p| p.into_token_stream().to_string())
                             .collect()
                     }
+                    Opt::Stringify(val) => opts.stringify = val,
                 }
             }
         } else {
@@ -213,6 +218,7 @@ mod kw {
     syn::custom_keyword!(only_imports);
     syn::custom_keyword!(trappable_imports);
     syn::custom_keyword!(additional_derives);
+    syn::custom_keyword!(stringify);
 }
 
 enum Opt {
@@ -227,6 +233,7 @@ enum Opt {
     With(HashMap<String, String>),
     TrappableImports(TrappableImports),
     AdditionalDerives(Vec<syn::Path>),
+    Stringify(bool),
 }
 
 impl Parse for Opt {
@@ -367,6 +374,10 @@ impl Parse for Opt {
             syn::bracketed!(contents in input);
             let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
             Ok(Opt::AdditionalDerives(list.iter().cloned().collect()))
+        } else if l.peek(kw::stringify) {
+            input.parse::<kw::stringify>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::Stringify(input.parse::<syn::LitBool>()?.value))
         } else {
             Err(l.error())
         }

@@ -119,6 +119,10 @@ pub struct Opts {
     ///
     /// These derive attributes will be added to any generated structs or enums
     pub additional_derive_attributes: Vec<String>,
+
+    /// Evaluate to a string literal containing the generated code rather than the generated tokens
+    /// themselves. Mostly useful for Wasmtime internal debugging and development.
+    pub stringify: bool,
 }
 
 #[derive(Debug, Clone)]
