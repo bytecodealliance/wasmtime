@@ -22,6 +22,7 @@ use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
 use core::mem::{self, align_of, forget, size_of, ManuallyDrop, MaybeUninit};
+use core::num::NonZeroUsize;
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
 use core::slice;
@@ -185,168 +186,229 @@ pub unsafe extern "C" fn cabi_import_realloc(
     }
     let mut ptr = null_mut::<u8>();
     State::with(|state| {
-        ptr = state.import_alloc.alloc(align, new_size);
+        let mut alloc = state.import_alloc.replace(ImportAlloc::None);
+        ptr = alloc.alloc(align, new_size);
+        state.import_alloc.set(alloc);
         Ok(())
     });
     ptr
 }
 
-/// Bump-allocated memory arena. This is a singleton - the
-/// memory will be sized according to `bump_arena_size()`.
-pub struct BumpArena {
-    data: MaybeUninit<[u8; bump_arena_size()]>,
-    position: Cell<usize>,
-}
+/// Different ways that calling imports can allocate memory.
+///
+/// This behavior is used to customize the behavior of `cabi_import_realloc`.
+/// This is configured within `State` whenever an import is called that may
+/// invoke `cabi_import_realloc`.
+///
+/// The general idea behind these various behaviors of import allocation is
+/// that we're limited for space in the adapter here to 1 page of memory but
+/// that may not fit the total sum of arguments, environment variables, and
+/// preopens. WASIp1 APIs all provide user-provided buffers as well for these
+/// allocations so we technically don't need to store them in the adapter
+/// itself. Instead what this does is it tries to copy strings and such directly
+/// into their destination pointers where possible.
+///
+/// The types requiring allocation in the WASIp2 APIs that the WASIp1 APIs call
+/// are relatively simple. They all look like `list<T>` where `T` only has
+/// indirections in the form of `String`. This means that we can apply a
+/// "clever" hack where the alignment of an allocation is used to disambiguate
+/// whether we're allocating a string or allocating the `list<T>` allocation.
+/// This signal with alignment means that we can configure where everything
+/// goes.
+///
+/// For example consider `args_sizes_get` and `args_get`. When `args_sizes_get`
+/// is called the `list<T>` allocation happens first with alignment 4. This
+/// must be valid for the rest of the strings since the canonical ABI will fill
+/// it in, so it's allocated from `State::temporary_data`. Next all other
+/// arguments will be `string` type with alignment 1. These are also allocated
+/// within `State::temporary_data` but they're "allocated on top of one
+/// another" meaning that internal allocator state isn't updated after a string
+/// is allocated. While these strings are discarded their sizes are all summed
+/// up and returned from `args_sizes_get`.
+///
+/// Later though when `args_get` is called it's a similar allocation strategy
+/// except that strings are instead redirected to the allocation provided to
+/// `args_get` itself. This enables strings to be directly allocated into their
+/// destinations.
+///
+/// Overall this means that we're limiting the maximum number of arguments plus
+/// the size of the largest string, but otherwise we're not limiting the total
+/// size of all arguments (or env vars, preopens, etc).
+enum ImportAlloc {
+    /// A single allocation from the provided `BumpAlloc` is supported. After
+    /// the single allocation is performed all future allocations will fail.
+    OneAlloc(BumpAlloc),
 
-impl BumpArena {
-    fn new() -> Self {
-        BumpArena {
-            data: MaybeUninit::uninit(),
-            position: Cell::new(0),
-        }
-    }
-    fn alloc(&self, align: usize, size: usize) -> *mut u8 {
-        let start = self.data.as_ptr() as usize;
-        let next = start + self.position.get();
-        let alloc = align_to(next, align);
-        let offset = alloc - start;
-        if offset + size > bump_arena_size() {
-            unreachable!("out of memory");
-        }
-        self.position.set(offset + size);
-        alloc as *mut u8
-    }
-}
-fn align_to(ptr: usize, align: usize) -> usize {
-    (ptr + (align - 1)) & !(align - 1)
-}
+    /// An allocator intended for `list<T>` where `T` has string types but no
+    /// other indirections. String allocations are discarded but counted for
+    /// size.
+    ///
+    /// This allocator will use `alloc` for all allocations. Any string-related
+    /// allocation, detected via an alignment of 1, is considered "temporary"
+    /// and doesn't affect the internal state of the allocator. The allocation
+    /// is assumed to not be used after the import call returns.
+    ///
+    /// The total sum of all string sizes, however, is accumulated within
+    /// `strings_size`.
+    CountAndDiscardStrings {
+        strings_size: usize,
+        alloc: BumpAlloc,
+    },
 
-// Invariant: buffer not-null and arena is-some are never true at the same
-// time. We did not use an enum to make this invalid behavior unrepresentable
-// because we can't use RefCell to borrow() the variants of the enum - only
-// Cell provides mutability without pulling in panic machinery - so it would
-// make the accessors a lot more awkward to write.
-pub struct ImportAlloc {
-    // When not-null, allocator should use this buffer/len pair at most once
-    // to satisfy allocations.
-    buffer: Cell<*mut u8>,
-    len: Cell<usize>,
-    // When not-empty, allocator should use this arena to satisfy allocations.
-    arena: Cell<Option<&'static BumpArena>>,
+    /// An allocator intended for `list<T>` where `T` has string types but no
+    /// other indirections. String allocations go into `strings` and the
+    /// `list<..>` allocation goes into `pointers`.
+    ///
+    /// This allocator enables placing strings within a caller-supplied buffer
+    /// configured with `strings`. The `pointers` allocation is
+    /// `State::temporary_data`.
+    ///
+    /// This will additionally over-allocate strings with one extra byte to be
+    /// nul-terminated or `=`-terminated in the case of env vars.
+    SeparateStringsAndPointers {
+        strings: BumpAlloc,
+        pointers: BumpAlloc,
+    },
+
+    /// An allocator specifically for getting the nth string allocation used
+    /// for preopens.
+    ///
+    /// This will allocate the `nth` string allocation within the `path`
+    /// allocator. Otherwise all string allocations are discarded but
+    /// temoprarily placed into `alloc`.
+    GetPreopenPath {
+        path: Option<BumpAlloc>,
+        nth: u32,
+        alloc: BumpAlloc,
+    },
+
+    /// No import allocator is configured and if an allocation happens then
+    /// this will abort.
+    None,
 }
 
 impl ImportAlloc {
-    fn new() -> Self {
-        ImportAlloc {
-            buffer: Cell::new(std::ptr::null_mut()),
-            len: Cell::new(0),
-            arena: Cell::new(None),
-        }
-    }
-
-    /// Expect at most one import allocation during execution of the provided closure.
-    /// Use the provided buffer to satisfy that import allocation. The user is responsible
-    /// for making sure allocated imports are not used beyond the lifetime of the buffer.
-    fn with_buffer<T>(&self, buffer: *mut u8, len: usize, f: impl FnOnce() -> T) -> T {
-        if self.arena.get().is_some() {
-            unreachable!("arena mode")
-        }
-        let prev = self.buffer.replace(buffer);
-        if !prev.is_null() {
-            unreachable!("overwrote another buffer")
-        }
-        self.len.set(len);
-        let r = f();
-        self.buffer.set(std::ptr::null_mut());
-        r
-    }
-
-    /// Permit many import allocations during execution of the provided closure.
-    /// Use the provided BumpArena to satisfry those allocations. The user is responsible
-    /// for making sure allocated imports are not used beyond the lifetime of the arena.
-    fn with_arena<T>(&self, arena: &BumpArena, f: impl FnOnce() -> T) -> T {
-        if !self.buffer.get().is_null() {
-            unreachable!("buffer mode")
-        }
-        let prev = self.arena.replace(Some(unsafe {
-            // Safety: Need to erase the lifetime to store in the arena cell.
-            std::mem::transmute::<&'_ BumpArena, &'static BumpArena>(arena)
-        }));
-        if prev.is_some() {
-            unreachable!("overwrote another arena")
-        }
-        let r = f();
-        self.arena.set(None);
-        r
-    }
-
     /// To be used by cabi_import_realloc only!
-    fn alloc(&self, align: usize, size: usize) -> *mut u8 {
-        if let Some(arena) = self.arena.get() {
-            arena.alloc(align, size)
-        } else {
-            let buffer = self.buffer.get();
-            if buffer.is_null() {
-                unreachable!("buffer not provided, or already used")
+    unsafe fn alloc(&mut self, align: usize, size: usize) -> *mut u8 {
+        match self {
+            ImportAlloc::OneAlloc(alloc) => {
+                let ret = alloc.alloc(align, size);
+                *self = ImportAlloc::None;
+                ret
             }
-            let buffer = buffer as usize;
-            let alloc = align_to(buffer, align);
-            if alloc.checked_add(size).trapping_unwrap()
-                > buffer.checked_add(self.len.get()).trapping_unwrap()
-            {
-                unreachable!("out of memory")
+            ImportAlloc::SeparateStringsAndPointers { strings, pointers } => {
+                if align == 1 {
+                    strings.alloc(align, size + 1)
+                } else {
+                    pointers.alloc(align, size)
+                }
             }
-            self.buffer.set(std::ptr::null_mut());
-            alloc as *mut u8
+            ImportAlloc::CountAndDiscardStrings {
+                strings_size,
+                alloc,
+            } => {
+                if align == 1 {
+                    *strings_size += size;
+                    alloc.clone().alloc(align, size)
+                } else {
+                    alloc.alloc(align, size)
+                }
+            }
+            ImportAlloc::GetPreopenPath { path, nth, alloc } => {
+                if align == 1 {
+                    if *nth == 0 {
+                        if let Some(a) = path {
+                            let ret = a.alloc(align, size);
+                            *path = None;
+                            return ret;
+                        }
+                    } else {
+                        *nth -= 1;
+                    }
+                    alloc.clone().alloc(align, size)
+                } else {
+                    alloc.alloc(align, size)
+                }
+            }
+            ImportAlloc::None => unreachable!("no allocator configured"),
         }
     }
 }
 
-/// This allocator is only used for the `run` entrypoint.
+/// Helper type to manage allocations from a `base`/`len` combo.
 ///
-/// The implementation here is a bump allocator into `State::long_lived_arena` which
-/// traps when it runs out of data. This means that the total size of
-/// arguments/env/etc coming into a component is bounded by the current 64k
-/// (ish) limit. That's just an implementation limit though which can be lifted
-/// by dynamically calling the main module's allocator as necessary for more data.
-#[no_mangle]
-pub unsafe extern "C" fn cabi_export_realloc(
-    old_ptr: *mut u8,
-    old_size: usize,
-    align: usize,
-    new_size: usize,
-) -> *mut u8 {
-    if !old_ptr.is_null() || old_size != 0 {
-        unreachable!();
+/// This isn't really used much in an arena-style per se but it's used in
+/// combination with the `ImportAlloc` flavors above.
+#[derive(Clone)]
+struct BumpAlloc {
+    base: *mut u8,
+    len: usize,
+}
+
+impl BumpAlloc {
+    unsafe fn alloc(&mut self, align: usize, size: usize) -> *mut u8 {
+        self.align_to(align);
+        if size > self.len {
+            unreachable!("allocation size is too large")
+        }
+        self.len -= size;
+        let ret = self.base;
+        self.base = ret.add(size);
+        ret
     }
-    let mut ret = null_mut::<u8>();
-    State::with(|state| {
-        ret = state.long_lived_arena.alloc(align, new_size);
-        Ok(())
-    });
-    ret
+
+    unsafe fn align_to(&mut self, align: usize) {
+        if !align.is_power_of_two() {
+            unreachable!("invalid alignment");
+        }
+        let align_offset = self.base.align_offset(align);
+        if align_offset >= self.len {
+            unreachable!("failed to allocate")
+        }
+        self.len -= align_offset;
+        self.base = self.base.add(align_offset);
+    }
+}
+
+#[cfg(not(feature = "proxy"))]
+#[link(wasm_import_module = "wasi:cli/environment@0.2.0")]
+extern "C" {
+    #[link_name = "get-arguments"]
+    fn wasi_cli_get_arguments(rval: *mut WasmStrList);
+    #[link_name = "get-environment"]
+    fn wasi_cli_get_environment(rval: *mut StrTupleList);
 }
 
 /// Read command-line argument data.
 /// The size of the array should match that returned by `args_sizes_get`
 #[no_mangle]
-pub unsafe extern "C" fn args_get(mut argv: *mut *mut u8, mut argv_buf: *mut u8) -> Errno {
+pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errno {
     State::with(|state| {
         #[cfg(not(feature = "proxy"))]
         {
-            for arg in state.get_args() {
-                // Copy the argument into `argv_buf` which must be sized
-                // appropriately by the caller.
-                ptr::copy_nonoverlapping(arg.ptr, argv_buf, arg.len);
-                *argv_buf.add(arg.len) = 0;
+            let alloc = ImportAlloc::SeparateStringsAndPointers {
+                strings: BumpAlloc {
+                    base: argv_buf,
+                    len: usize::MAX,
+                },
+                pointers: state.temporary_alloc(),
+            };
+            let (list, _) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = WasmStrList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_arguments(&mut list);
+                list
+            });
 
-                // Copy the argument pointer into the `argv` buf
-                *argv = argv_buf;
-
-                // Update our pointers past what's written to prepare for the
-                // next argument.
-                argv = argv.add(1);
-                argv_buf = argv_buf.add(arg.len + 1);
+            // Fill in `argv` by walking over the returned `list` and then
+            // additionally apply the nul-termination for each argument itself
+            // here.
+            for i in 0..list.len {
+                let s = list.base.add(i).read();
+                *argv.add(i) = s.ptr.cast_mut();
+                *s.ptr.add(s.len).cast_mut() = 0;
             }
         }
         Ok(())
@@ -364,11 +426,30 @@ pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Siz
         }
         #[cfg(not(feature = "proxy"))]
         {
-            let args = state.get_args();
-            *argc = args.len();
-            // Add one to each length for the terminating nul byte added by
-            // the `args_get` function.
-            *argv_buf_size = args.iter().map(|s| s.len + 1).sum();
+            let alloc = ImportAlloc::CountAndDiscardStrings {
+                strings_size: 0,
+                alloc: state.temporary_alloc(),
+            };
+            let (len, alloc) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = WasmStrList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_arguments(&mut list);
+                list.len
+            });
+            match alloc {
+                ImportAlloc::CountAndDiscardStrings {
+                    strings_size,
+                    alloc: _,
+                } => {
+                    *argc = len;
+                    // add in bytes needed for a 0-byte at the end of each
+                    // argument.
+                    *argv_buf_size = strings_size + len;
+                }
+                _ => unreachable!(),
+            }
         }
         Ok(())
     })
@@ -377,27 +458,35 @@ pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Siz
 /// Read environment variable data.
 /// The sizes of the buffers should match that returned by `environ_sizes_get`.
 #[no_mangle]
-pub unsafe extern "C" fn environ_get(environ: *mut *mut u8, environ_buf: *mut u8) -> Errno {
+pub unsafe extern "C" fn environ_get(environ: *mut *const u8, environ_buf: *mut u8) -> Errno {
     State::with(|state| {
         #[cfg(not(feature = "proxy"))]
         {
-            let mut offsets = environ;
-            let mut buffer = environ_buf;
-            for var in state.get_environment() {
-                ptr::write(offsets, buffer);
-                offsets = offsets.add(1);
+            let alloc = ImportAlloc::SeparateStringsAndPointers {
+                strings: BumpAlloc {
+                    base: environ_buf,
+                    len: usize::MAX,
+                },
+                pointers: state.temporary_alloc(),
+            };
+            let (list, _) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = StrTupleList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_environment(&mut list);
+                list
+            });
 
-                ptr::copy_nonoverlapping(var.key.ptr, buffer, var.key.len);
-                buffer = buffer.add(var.key.len);
-
-                ptr::write(buffer, b'=');
-                buffer = buffer.add(1);
-
-                ptr::copy_nonoverlapping(var.value.ptr, buffer, var.value.len);
-                buffer = buffer.add(var.value.len);
-
-                ptr::write(buffer, 0);
-                buffer = buffer.add(1);
+            // Fill in `environ` by walking over the returned `list`. Strings
+            // are guaranteed to be allocated next to each other with one
+            // extra byte at the end, so also insert the `=` between keys and
+            // the `\0` at the end of the env var.
+            for i in 0..list.len {
+                let s = list.base.add(i).read();
+                *environ.add(i) = s.key.ptr;
+                *s.key.ptr.add(s.key.len).cast_mut() = b'=';
+                *s.value.ptr.add(s.value.len).cast_mut() = 0;
             }
         }
 
@@ -428,15 +517,30 @@ pub unsafe extern "C" fn environ_sizes_get(
         }
         #[cfg(not(feature = "proxy"))]
         {
-            let vars = state.get_environment();
-            *environc = vars.len();
-            *environ_buf_size = {
-                let mut sum = 0;
-                for var in vars {
-                    sum += var.key.len + var.value.len + 2;
-                }
-                sum
+            let alloc = ImportAlloc::CountAndDiscardStrings {
+                strings_size: 0,
+                alloc: state.temporary_alloc(),
             };
+            let (len, alloc) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = StrTupleList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_environment(&mut list);
+                list.len
+            });
+            match alloc {
+                ImportAlloc::CountAndDiscardStrings {
+                    strings_size,
+                    alloc: _,
+                } => {
+                    *environc = len;
+                    // Account for `=` between keys and a 0-byte at the end of
+                    // each key.
+                    *environ_buf_size = strings_size + 2 * len;
+                }
+                _ => unreachable!(),
+            }
         }
 
         Ok(())
@@ -881,8 +985,7 @@ pub unsafe extern "C" fn fd_pread(
             let ds = state.descriptors();
             let file = ds.get_file(fd)?;
             let (data, end) = state
-                .import_alloc
-                .with_buffer(ptr, len, || file.fd.read(len as u64, offset))?;
+                .with_one_import_alloc(ptr, len, || file.fd.read(len as u64, offset))?;
             assert_eq!(data.as_ptr(), ptr);
             assert!(data.len() <= len);
 
@@ -918,19 +1021,26 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
             let ds = state.descriptors();
-            if let Some(preopen) = ds.get_preopen(fd) {
-                buf.write(Prestat {
-                    tag: 0,
-                    u: PrestatU {
-                        dir: PrestatDir {
-                            pr_name_len: preopen.path.len,
+            match ds.get(fd)? {
+                Descriptor::Streams(Streams {
+                    type_: StreamType::File(File {
+                        preopen_name_len: Some(len),
+                        ..
+                    }),
+                    ..
+                }) => {
+                    buf.write(Prestat {
+                        tag: 0,
+                        u: PrestatU {
+                            dir: PrestatDir {
+                                pr_name_len: len.get(),
+                            },
                         },
-                    },
-                });
+                    });
 
-                Ok(())
-            } else {
-                Err(ERRNO_BADF)
+                    Ok(())
+                }
+                _ => Err(ERRNO_BADF),
             }
         })
     }
@@ -942,16 +1052,22 @@ pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_max_len
     cfg_filesystem_available! {
         State::with(|state| {
             let ds = state.descriptors();
-            if let Some(preopen) = ds.get_preopen(fd) {
-                if preopen.path.len > path_max_len {
-                    Err(ERRNO_NAMETOOLONG)
-                } else {
-                    ptr::copy_nonoverlapping(preopen.path.ptr, path, preopen.path.len);
-                    Ok(())
-                }
-            } else {
-                Err(ERRNO_NOTDIR)
+            let preopen_len = match ds.get(fd)? {
+                Descriptor::Streams(Streams {
+                    type_: StreamType::File(File {
+                        preopen_name_len: Some(len),
+                        ..
+                    }),
+                    ..
+                }) => len.get(),
+                _ => return Err(ERRNO_BADF),
+            };
+            if preopen_len > path_max_len {
+                return Err(ERRNO_NAMETOOLONG)
             }
+
+            ds.get_preopen_path(state, fd, path, path_max_len);
+            Ok(())
         })
     }
 }
@@ -1028,8 +1144,7 @@ pub unsafe extern "C" fn fd_read(
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
                 let data = match state
-                    .import_alloc
-                    .with_buffer(ptr, len, || blocking_mode.read(wasi_stream, read_len))
+                    .with_one_import_alloc(ptr, len, || blocking_mode.read(wasi_stream, read_len))
                 {
                     Ok(data) => data,
                     Err(streams::StreamError::Closed) => {
@@ -1288,11 +1403,9 @@ pub unsafe extern "C" fn fd_readdir(
                     Ok((dirent, buffer))
                 });
             }
-            let entry = self.state.import_alloc.with_buffer(
-                self.state.path_buf.get().cast(),
-                PATH_MAX,
-                || self.stream.0.read_directory_entry(),
-            );
+            let entry = self
+                .state
+                .with_one_temporary_alloc(|| self.stream.0.read_directory_entry());
             let entry = match entry {
                 Ok(Some(entry)) => entry,
                 Ok(None) => return None,
@@ -1315,7 +1428,7 @@ pub unsafe extern "C" fn fd_readdir(
             // Extend the lifetime of `name` to the `self.state` lifetime for
             // this iterator since the data for the name lives within state.
             let name = unsafe {
-                assert_eq!(name.as_ptr(), self.state.path_buf.get().cast());
+                assert_eq!(name.as_ptr(), self.state.temporary_data.get().cast());
                 slice::from_raw_parts(name.as_ptr().cast(), name.len())
             };
             Some(Ok((dirent, name)))
@@ -1652,6 +1765,7 @@ pub unsafe extern "C" fn path_open(
                     } else {
                         BlockingMode::NonBlocking
                     },
+                    preopen_name_len: None,
                 }),
             });
 
@@ -1686,14 +1800,12 @@ pub unsafe extern "C" fn path_readlink(
             let file = ds.get_dir(fd)?;
             let path = if use_state_buf {
                 state
-                    .import_alloc
-                    .with_buffer(state.path_buf.get().cast(), PATH_MAX, || {
+                    .with_one_temporary_alloc( || {
                         file.fd.readlink_at(path)
                     })?
             } else {
                 state
-                    .import_alloc
-                    .with_buffer(buf, buf_len, || file.fd.readlink_at(path))?
+                    .with_one_import_alloc(buf, buf_len, || file.fd.readlink_at(path))?
             };
 
             if use_state_buf {
@@ -1960,7 +2072,7 @@ pub unsafe extern "C" fn poll_oneoff(
             len: 0,
         };
 
-        state.import_alloc.with_buffer(
+        state.with_one_import_alloc(
             results.cast(),
             nsubscriptions
                 .checked_mul(size_of::<u32>())
@@ -2106,8 +2218,7 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
         State::with(|state| {
             assert_eq!(buf_len as u32 as Size, buf_len);
             let result = state
-                .import_alloc
-                .with_buffer(buf, buf_len, || random::get_random_bytes(buf_len as u64));
+                .with_one_import_alloc(buf, buf_len, || random::get_random_bytes(buf_len as u64));
             assert_eq!(result.as_ptr(), buf);
 
             // The returned buffer's memory was allocated in `buf`, so don't separately
@@ -2386,6 +2497,9 @@ pub struct File {
     /// blocking_check_write on the underlying streams. When false, read and write
     /// dispatch to stream's plain read and check_write.
     blocking_mode: BlockingMode,
+
+    /// TODO
+    preopen_name_len: Option<NonZeroUsize>,
 }
 
 #[cfg(not(feature = "proxy"))]
@@ -2418,7 +2532,7 @@ struct State {
     magic1: u32,
 
     /// Used to coordinate allocations of `cabi_import_realloc`
-    import_alloc: ImportAlloc,
+    import_alloc: Cell<ImportAlloc>,
 
     /// Storage of mapping from preview1 file descriptors to preview2 file
     /// descriptors.
@@ -2427,27 +2541,8 @@ struct State {
     /// lazy initialization happens.
     descriptors: RefCell<Option<Descriptors>>,
 
-    /// Auxiliary storage to handle the `path_readlink` function.
-    #[cfg(not(feature = "proxy"))]
-    path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
-
-    /// Long-lived bump allocated memory arena.
-    ///
-    /// This is used for the cabi_export_realloc to allocate data passed to the
-    /// `run` entrypoint. Allocations in this arena are safe to use for
-    /// the lifetime of the State struct. It may also be used for import allocations
-    /// which need to be long-lived, by using `import_alloc.with_arena`.
-    long_lived_arena: BumpArena,
-
-    /// Arguments. Initialized lazily. Access with `State::get_args` to take care of
-    /// initialization.
-    #[cfg(not(feature = "proxy"))]
-    args: Cell<Option<&'static [WasmStr]>>,
-
-    /// Environment variables. Initialized lazily. Access with `State::get_environment`
-    /// to take care of initialization.
-    #[cfg(not(feature = "proxy"))]
-    env_vars: Cell<Option<&'static [StrTuple]>>,
+    /// TODO
+    temporary_data: UnsafeCell<MaybeUninit<[u8; temporary_data_size()]>>,
 
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
@@ -2507,7 +2602,7 @@ pub struct ReadyList {
     len: usize,
 }
 
-const fn bump_arena_size() -> usize {
+const fn temporary_data_size() -> usize {
     // The total size of the struct should be a page, so start there
     let mut start = PAGE_SIZE;
 
@@ -2515,12 +2610,11 @@ const fn bump_arena_size() -> usize {
     start -= size_of::<Descriptors>();
     #[cfg(not(feature = "proxy"))]
     {
-        start -= PATH_MAX;
         start -= size_of::<DirentCache>();
     }
 
     // Remove miscellaneous metadata also stored in state.
-    let misc = if cfg!(feature = "proxy") { 7 } else { 14 };
+    let misc = if cfg!(feature = "proxy") { 9 } else { 12 };
     start -= misc * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
@@ -2618,15 +2712,9 @@ impl State {
         state.write(State {
             magic1: MAGIC,
             magic2: MAGIC,
-            import_alloc: ImportAlloc::new(),
+            import_alloc: Cell::new(ImportAlloc::None),
             descriptors: RefCell::new(None),
-            #[cfg(not(feature = "proxy"))]
-            path_buf: UnsafeCell::new(MaybeUninit::uninit()),
-            long_lived_arena: BumpArena::new(),
-            #[cfg(not(feature = "proxy"))]
-            args: Cell::new(None),
-            #[cfg(not(feature = "proxy"))]
-            env_vars: Cell::new(None),
+            temporary_data: UnsafeCell::new(MaybeUninit::uninit()),
             #[cfg(not(feature = "proxy"))]
             dirent_cache: DirentCache {
                 stream: Cell::new(None),
@@ -2652,7 +2740,7 @@ impl State {
             .try_borrow_mut()
             .unwrap_or_else(|_| unreachable!());
         if d.is_none() {
-            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+            *d = Some(Descriptors::new(self));
         }
         RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
@@ -2664,58 +2752,47 @@ impl State {
             .try_borrow_mut()
             .unwrap_or_else(|_| unreachable!());
         if d.is_none() {
-            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+            *d = Some(Descriptors::new(self));
         }
         RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
 
-    #[cfg(not(feature = "proxy"))]
-    fn get_environment(&self) -> &[StrTuple] {
-        if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0")]
-            extern "C" {
-                #[link_name = "get-environment"]
-                fn get_environment_import(rval: *mut StrTupleList);
-            }
-            let mut list = StrTupleList {
-                base: std::ptr::null(),
-                len: 0,
-            };
-            self.import_alloc
-                .with_arena(&self.long_lived_arena, || unsafe {
-                    get_environment_import(&mut list as *mut _)
-                });
-            self.env_vars.set(Some(unsafe {
-                /* allocation comes from long lived arena, so it is safe to
-                 * cast this to a &'static slice: */
-                std::slice::from_raw_parts(list.base, list.len)
-            }));
+    unsafe fn temporary_alloc(&self) -> BumpAlloc {
+        BumpAlloc {
+            base: self.temporary_data.get().cast(),
+            len: mem::size_of_val(&self.temporary_data),
         }
-        self.env_vars.get().trapping_unwrap()
     }
 
-    #[cfg(not(feature = "proxy"))]
-    fn get_args(&self) -> &[WasmStr] {
-        if self.args.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0")]
-            extern "C" {
-                #[link_name = "get-arguments"]
-                fn get_args_import(rval: *mut WasmStrList);
-            }
-            let mut list = WasmStrList {
-                base: std::ptr::null(),
-                len: 0,
-            };
-            self.import_alloc
-                .with_arena(&self.long_lived_arena, || unsafe {
-                    get_args_import(&mut list as *mut _)
-                });
-            self.args.set(Some(unsafe {
-                /* allocation comes from long lived arena, so it is safe to
-                 * cast this to a &'static slice: */
-                std::slice::from_raw_parts(list.base, list.len)
-            }));
+    /// Configure that `cabi_import_realloc` will allocate once from
+    /// `self.temporary_data` for the duration of the closure `f`.
+    ///
+    /// Panics if the import allocator is already configured.
+    fn with_one_temporary_alloc<T>(&self, f: impl FnOnce() -> T) -> T {
+        let alloc = unsafe { self.temporary_alloc() };
+        self.with_import_alloc(ImportAlloc::OneAlloc(alloc), f).0
+    }
+
+    /// Configure that `cabi_import_realloc` will allocate once from
+    /// `base` with at most `len` bytes for the duration of `f`.
+    ///
+    /// Panics if the import allocator is already configured.
+    fn with_one_import_alloc<T>(&self, base: *mut u8, len: usize, f: impl FnOnce() -> T) -> T {
+        let alloc = BumpAlloc { base, len };
+        self.with_import_alloc(ImportAlloc::OneAlloc(alloc), f).0
+    }
+
+    /// Configures the `alloc` specified to be the allocator for
+    /// `cabi_import_realloc` for the duration of `f`.
+    ///
+    /// Panics if the import allocator is already configured.
+    fn with_import_alloc<T>(&self, alloc: ImportAlloc, f: impl FnOnce() -> T) -> (T, ImportAlloc) {
+        match self.import_alloc.replace(alloc) {
+            ImportAlloc::None => {}
+            _ => unreachable!("import allocator already set"),
         }
-        self.args.get().trapping_unwrap()
+        let r = f();
+        let alloc = self.import_alloc.replace(ImportAlloc::None);
+        (r, alloc)
     }
 }
