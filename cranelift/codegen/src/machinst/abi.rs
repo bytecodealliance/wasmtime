@@ -38,28 +38,20 @@
 //! We assume that a prologue first pushes the frame pointer (and
 //! return address above that, if the machine does not do that in
 //! hardware). We set FP to point to this two-word frame record. We
-//! store all other frame slots below this two-word frame record, with
-//! the stack pointer remaining at or below this fixed frame storage
-//! for the rest of the function. We can then access frame storage
-//! slots using positive offsets from SP. In order to allow codegen
-//! for the latter before knowing how SP might be adjusted around
-//! callsites, we implement a "nominal SP" tracking feature by which a
-//! fixup (distance between actual SP and a "nominal" SP) is known at
-//! each instruction. When the prologue is finished, SP is expected
-//! to point at the bottom of the outgoing argument area, and will
-//! only move again directly around function calls. This allows the
-//! use of fixed offsets from SP for the rest of the function body.
+//! store all other frame slots below this two-word frame record, as
+//! well as enough space for arguments to the largest possible
+//! function call. The stack pointer then remains at this position
+//! for the duration of the function, allowing us to address all
+//! frame storage at positive offsets from SP.
 //!
 //! Note that if we ever support dynamic stack-space allocation (for
 //! `alloca`), we will need a way to reference spill slots and stack
-//! slots without "nominal SP", because we will no longer be able to
-//! know a static offset from SP to the slots at any particular
+//! slots relative to a dynamic SP, because we will no longer be able
+//! to know a static offset from SP to the slots at any particular
 //! program point. Probably the best solution at that point will be to
 //! revert to using the frame pointer as the reference for all slots,
-//! and creating a "nominal FP" synthetic addressing mode (analogous
-//! to "nominal SP" today) to allow generating spill/reload and
-//! stackslot accesses before we know how large the clobber-saves will
-//! be.
+//! to allow generating spill/reload and stackslot accesses before we
+//! know how large the clobber-saves will be.
 //!
 //! # Stack Layout
 //!
@@ -83,16 +75,16 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | spill slots               |
-//!                              | (accessed via nominal SP) |
+//!                              | (accessed via SP)         |
 //!                              |          ...              |
 //!                              | stack slots               |
-//!                              | (accessed via nominal SP) |
-//! nominal SP --------------->  | (alloc'd by prologue)     |
+//!                              | (accessed via SP)         |
+//!                              | (alloc'd by prologue)     |
 //!                              +---------------------------+
 //!                              | [alignment as needed]     |
 //!                              |          ...              |
-//!                              | args for call             |
-//! SP ----------------------->  | (pushed at callsite)      |
+//!                              | args for largest call     |
+//! SP ----------------------->  | (alloc'd by prologue)     |
 //!                              +---------------------------+
 //!
 //!   (low address)
