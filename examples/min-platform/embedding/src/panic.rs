@@ -1,3 +1,5 @@
+#![cfg(not(unix))] // gets `cargo clippy` working
+
 use core::panic::PanicInfo;
 
 #[panic_handler]
