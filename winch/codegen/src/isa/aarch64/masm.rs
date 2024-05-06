@@ -312,8 +312,14 @@ impl Masm for MacroAssembler {
         self.asm.fmax_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_copysign(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
+    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        let max_shift = match size {
+            OperandSize::S32 => 0x1f,
+            OperandSize::S64 => 0x3f,
+            _ => unreachable!(),
+        };
+        self.asm.fushr_rri(rhs, rhs, max_shift, size);
+        self.asm.fsli_rri_mod(lhs, rhs, dst, max_shift, size);
     }
 
     fn float_neg(&mut self, dst: Reg, size: OperandSize) {

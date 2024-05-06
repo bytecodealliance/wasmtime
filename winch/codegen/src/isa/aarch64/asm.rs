@@ -3,7 +3,11 @@
 use super::{address::Address, regs};
 use crate::masm::RoundingMode;
 use crate::{masm::OperandSize, reg::Reg};
-use cranelift_codegen::isa::aarch64::inst::{FPUOp1, FPUOp2, FpuRoundMode, ScalarSize};
+use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
+use cranelift_codegen::isa::aarch64::inst::{
+    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
+    ScalarSize,
+};
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
@@ -296,6 +300,35 @@ impl Assembler {
         self.emit_fpu_round(fpu_mode, rn, rd)
     }
 
+    /// Float unsigned shift right with two registers and an immediate.
+    pub fn fushr_rri(&mut self, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
+        let imm = FPURightShiftImm {
+            amount: amount,
+            lane_size_in_bits: size.num_bits(),
+        };
+        let ushr = match size {
+            OperandSize::S32 => UShr32(imm),
+            OperandSize::S64 => UShr64(imm),
+            _ => unreachable!(),
+        };
+        self.emit_fpu_rri(ushr, rn, rd)
+    }
+
+    /// Float unsigned shift left and insert with three registers
+    /// and an immediate.
+    pub fn fsli_rri_mod(&mut self, ri: Reg, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
+        let imm = FPULeftShiftImm {
+            amount: amount,
+            lane_size_in_bits: size.num_bits(),
+        };
+        let sli = match size {
+            OperandSize::S32 => FPUOpRIMod::Sli32(imm),
+            OperandSize::S64 => FPUOpRIMod::Sli64(imm),
+            _ => unreachable!(),
+        };
+        self.emit_fpu_rri_mod(sli, ri, rn, rd)
+    }
+
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {});
@@ -342,6 +375,23 @@ impl Assembler {
             rd: Writable::from_reg(rd.into()),
             rn: rn.into(),
             rm: rm.into(),
+        });
+    }
+
+    fn emit_fpu_rri(&mut self, op: FPUOpRI, rn: Reg, rd: Reg) {
+        self.emit(Inst::FpuRRI {
+            fpu_op: op,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
+    fn emit_fpu_rri_mod(&mut self, op: FPUOpRIMod, ri: Reg, rn: Reg, rd: Reg) {
+        self.emit(Inst::FpuRRIMod {
+            fpu_op: op,
+            rd: Writable::from_reg(rd.into()),
+            ri: ri.into(),
+            rn: rn.into(),
         });
     }
 
