@@ -11,16 +11,15 @@ fn main() -> Result<()> {
     use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
     use object::{Object, ObjectSymbol, SymbolKind};
     use std::io::Write;
-    use std::path::Path;
+    use wasmtime::{Config, Engine};
 
     let target = std::env::args().nth(1).unwrap();
-    let target = Path::new(&target).file_stem().unwrap().to_str().unwrap();
     // Path to the artifact which is the build of the embedding.
     //
     // In this example this is a dynamic library intended to be run on Linux.
     // Note that this is just an example of an artifact and custom build
     // processes can produce different kinds of artifacts.
-    let lib = format!("../../target/{target}/release/libembedding.so");
+    let lib = format!("./libembedding.so");
     let binary = std::fs::read(&lib)?;
     let object = object::File::parse(&binary[..])?;
 
@@ -47,6 +46,34 @@ fn main() -> Result<()> {
         }
     }
 
+    // Precompile modules for the embedding. Right now Wasmtime in no_std mode
+    // does not have support for Cranelift meaning that AOT mode must be used.
+    // Modules are compiled here and then given to the embedding via the `run`
+    // function below.
+    //
+    // Note that `Config::target` is used here to enable cross-compilation.
+    let mut config = Config::new();
+    config.target(&target)?;
+    let engine = Engine::new(&config)?;
+    let smoke = engine.precompile_module(b"(module)")?;
+    let simple_add = engine.precompile_module(
+        br#"
+            (module
+                (func (export "add") (param i32 i32) (result i32)
+                    (i32.add (local.get 0) (local.get 1)))
+            )
+        "#,
+    )?;
+    let simple_host_fn = engine.precompile_module(
+        br#"
+            (module
+                (import "host" "multiply" (func $multiply (param i32 i32) (result i32)))
+                (func (export "add_and_mul") (param i32 i32 i32) (result i32)
+                    (i32.add (call $multiply (local.get 0) (local.get 1)) (local.get 2)))
+            )
+        "#,
+    )?;
+
     // Next is an example of running this embedding, which also serves as test
     // that basic functionality actually works.
     //
@@ -70,13 +97,33 @@ fn main() -> Result<()> {
             Library::open(Some("./libwasmtime-platform.so"), RTLD_NOW | RTLD_GLOBAL)?;
 
         let lib = Library::new(&lib)?;
-        let run: Symbol<extern "C" fn(*mut u8, usize) -> usize> = lib.get(b"run")?;
+        let run: Symbol<
+            extern "C" fn(
+                *mut u8,
+                usize,
+                *const u8,
+                usize,
+                *const u8,
+                usize,
+                *const u8,
+                usize,
+            ) -> usize,
+        > = lib.get(b"run")?;
 
-        let mut buf = Vec::with_capacity(1024);
-        let len = run(buf.as_mut_ptr(), buf.capacity());
-        buf.set_len(len);
+        let mut error_buf = Vec::with_capacity(1024);
+        let len = run(
+            error_buf.as_mut_ptr(),
+            error_buf.capacity(),
+            smoke.as_ptr(),
+            smoke.len(),
+            simple_add.as_ptr(),
+            simple_add.len(),
+            simple_host_fn.as_ptr(),
+            simple_host_fn.len(),
+        );
+        error_buf.set_len(len);
 
-        std::io::stderr().write_all(&buf).unwrap();
+        std::io::stderr().write_all(&error_buf).unwrap();
     }
     Ok(())
 }

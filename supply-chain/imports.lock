@@ -847,6 +847,13 @@ user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
 
+[[publisher.indexmap]]
+version = "2.2.6"
+when = "2024-03-23"
+user-id = 539
+user-login = "cuviper"
+user-name = "Josh Stone"
+
 [[publisher.io-extras]]
 version = "0.18.1"
 when = "2023-12-01"

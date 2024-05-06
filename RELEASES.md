@@ -6,7 +6,79 @@ Unreleased.
 
 ### Added
 
+* The `wasmtime explore` subcommand now supports `*.wat` files.
+  [#8314](https://github.com/bytecodealliance/wasmtime/issues/8314)
+
+* Wasmtime now supports DWARF Fission `*.dwp` files.
+  [#8055](https://github.com/bytecodealliance/wasmtime/issues/8055)
+
+* The `wasmtime` crate now supports `#![no_std]`, and more information about
+  this transition can be found in
+  [#8341](https://github.com/bytecodealliance/wasmtime/issues/8341).
+  [#8463](https://github.com/bytecodealliance/wasmtime/issues/8463)
+  [#8483](https://github.com/bytecodealliance/wasmtime/issues/8483)
+  [#8485](https://github.com/bytecodealliance/wasmtime/issues/8485)
+  [#8528](https://github.com/bytecodealliance/wasmtime/issues/8528)
+  [#8533](https://github.com/bytecodealliance/wasmtime/issues/8533)
+
+* A `Config` knob is now available for one-entry `call_indirect` caching to
+  speed up modules with lots of `call_indirect` instructions.
+  [#8509](https://github.com/bytecodealliance/wasmtime/issues/8509)
+
+* Cranelift's riscv64 backend has initial support for the Zfa Extension.
+  [#8536](https://github.com/bytecodealliance/wasmtime/issues/8536)
+
+* The WebAssembly `tail-calls` proposal is now enabled by default when using the
+  Cranelift backend, except for the s390x architecture.
+  [#8540](https://github.com/bytecodealliance/wasmtime/issues/8540)
+
 ### Changed
+
+* Support for NaN canonicalization on x64 has been optimized to avoid branches.
+  [#8313](https://github.com/bytecodealliance/wasmtime/issues/8313)
+
+* The `bindgen!` macro now defaults to assuming imports cannot trap, but this
+  behavior is configurable at macro-generation time.
+  [#8310](https://github.com/bytecodealliance/wasmtime/issues/8310)
+
+* The `fd_{read,write}` implementations in wasmtime-wasi have been optimized.
+  [#8303](https://github.com/bytecodealliance/wasmtime/issues/8303)
+
+* The `wasmtime-wasi-http` crate has been refactored and has improved
+  documentation.
+  [#8332](https://github.com/bytecodealliance/wasmtime/issues/8332)
+  [#8347](https://github.com/bytecodealliance/wasmtime/issues/8347)
+
+* Unused `with` parameters in `bindgen!` now generate an error.
+  [#8371](https://github.com/bytecodealliance/wasmtime/issues/8371)
+
+* The `fd_read` implementation in wasmtime-wasi now only reads into a single
+  iovec per call.
+  [#8415](https://github.com/bytecodealliance/wasmtime/issues/8415)
+
+* The `wasmtime_val_t` type in the C API no longer holds any allocations. This
+  type must still be manually managed to properly unroot values, however.
+  [#8451](https://github.com/bytecodealliance/wasmtime/issues/8451)
+
+* Add an optimized "sleep" path for `poll_oneoff` to wasmtime-wasi.
+  [#8429](https://github.com/bytecodealliance/wasmtime/issues/8429)
+
+* The Wasmtime-internal `wasmtime-runtime` crate has been removed.
+  [#8501](https://github.com/bytecodealliance/wasmtime/issues/8501)
+
+* The pooling allocator now allows twice as many elements as before.
+  [#8527](https://github.com/bytecodealliance/wasmtime/issues/8527)
+
+* Using CMake to build the C API has been improved along a number of axes.
+  [#8490](https://github.com/bytecodealliance/wasmtime/issues/8490)
+  [#8497](https://github.com/bytecodealliance/wasmtime/issues/8497)
+  [#8549](https://github.com/bytecodealliance/wasmtime/issues/8549)
+
+### Fixed
+
+* Pooling allocator CLI options are now respected with the `wasmtime serve`
+  subcommand.
+  [#8525](https://github.com/bytecodealliance/wasmtime/issues/8525)
 
 --------------------------------------------------------------------------------
 
