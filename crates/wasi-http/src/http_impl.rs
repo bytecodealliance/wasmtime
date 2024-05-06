@@ -54,23 +54,16 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             },
         });
 
-        let (use_tls, scheme, port) = match req.scheme.unwrap_or(Scheme::Https) {
-            Scheme::Http => (false, http::uri::Scheme::HTTP, 80),
-            Scheme::Https => (true, http::uri::Scheme::HTTPS, 443),
+        let (use_tls, scheme) = match req.scheme.unwrap_or(Scheme::Https) {
+            Scheme::Http => (false, http::uri::Scheme::HTTP),
+            Scheme::Https => (true, http::uri::Scheme::HTTPS),
 
             // We can only support http/https
             Scheme::Other(_) => return Err(types::ErrorCode::HttpProtocolError.into()),
         };
 
-        let authority = if let Some(authority) = req.authority {
-            if authority.find(':').is_some() {
-                authority
-            } else {
-                format!("{}:{port}", authority)
-            }
-        } else {
-            String::new()
-        };
+        let authority = req.authority.unwrap_or_else(String::new);
+
         builder = builder.header(hyper::header::HOST, &authority);
 
         let mut uri = http::Uri::builder()
