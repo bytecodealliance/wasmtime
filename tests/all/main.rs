@@ -101,7 +101,6 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
         config.memory_protection_keys(wasmtime::MpkEnabled::Enable);
     }
 
-    #[cfg(feature = "async")]
     config.total_stacks(1);
 
     config

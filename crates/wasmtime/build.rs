@@ -10,6 +10,7 @@ fn build_c_helpers() {
     use wasmtime_versioned_export_macros::versioned_suffix;
 
     // NB: duplicating a workaround in the wasmtime-fiber build script.
+    println!("cargo:rustc-check-cfg=cfg(asan)");
     match std::env::var("CARGO_CFG_SANITIZE") {
         Ok(s) if s == "address" => {
             println!("cargo:rustc-cfg=asan");
