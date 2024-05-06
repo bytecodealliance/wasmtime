@@ -42,7 +42,6 @@ For explanations of what each tier means see below.
 | WASI Proposal        | [`wasi-clocks`]                            |
 | WASI Proposal        | [`wasi-filesystem`]                        |
 | WASI Proposal        | [`wasi-random`]                            |
-| WASI Proposal        | [`wasi-poll`]                              |
 | WASI Proposal        | [`wasi-sockets`]                           |
 | WASI Proposal        | [`wasi-http`]                              |
 | WASI Proposal        | `wasi_snapshot_preview1`                   |
@@ -59,7 +58,6 @@ For explanations of what each tier means see below.
 [`wasi-filesystem`]: https://github.com/WebAssembly/wasi-filesystem
 [`wasi-io`]: https://github.com/WebAssembly/wasi-io
 [`wasi-random`]: https://github.com/WebAssembly/wasi-random
-[`wasi-poll`]: https://github.com/WebAssembly/wasi-poll
 [`wasi-sockets`]: https://github.com/WebAssembly/wasi-sockets
 [`wasi-http`]: https://github.com/WebAssembly/wasi-http
 [`tail-call`]: https://github.com/WebAssembly/tail-call/blob/main/proposals/tail-call/Overview.md
