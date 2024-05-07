@@ -1,5 +1,23 @@
 --------------------------------------------------------------------------------
 
+## 20.0.2
+
+Released 2024-05-07.
+
+### Added
+
+* Improve error in CMake for when Cargo is not found.
+  [#8497](https://github.com/bytecodealliance/wasmtime/issues/8497)
+
+* Use `--release` in CMake with MinSizeRel and RelWithDebInfo.
+  [#8549](https://github.com/bytecodealliance/wasmtime/issues/8549)
+
+* Add a `WASMTIME_FASTEST_RUNTIME` configuration option for CMake which enables
+  LTO and other related optimization options.
+  [#8554](https://github.com/bytecodealliance/wasmtime/issues/8554)
+
+--------------------------------------------------------------------------------
+
 ## 20.0.1
 
 Released 2024-05-03.
