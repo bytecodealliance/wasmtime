@@ -55,8 +55,11 @@ WASI_API_EXTERN own wasi_config_t *wasi_config_new();
  *
  * The arguments are copied into the `config` object as part of this function
  * call, so the `argv` pointer only needs to stay alive for this function call.
+ *
+ * This function returns `true` if all arguments were registered successfully,
+ * or `false` if an argument was not valid UTF-8.
  */
-WASI_API_EXTERN void wasi_config_set_argv(wasi_config_t *config, int argc,
+WASI_API_EXTERN bool wasi_config_set_argv(wasi_config_t *config, size_t argc,
                                           const char *argv[]);
 
 /**
@@ -76,8 +79,12 @@ WASI_API_EXTERN void wasi_config_inherit_argv(wasi_config_t *config);
  * The env vars are copied into the `config` object as part of this function
  * call, so the `names` and `values` pointers only need to stay alive for this
  * function call.
+ *
+ * This function returns `true` if all environment variables were successfully
+ * registered. This returns `false` if environment variables are not valid
+ * UTF-8.
  */
-WASI_API_EXTERN void wasi_config_set_env(wasi_config_t *config, int envc,
+WASI_API_EXTERN bool wasi_config_set_env(wasi_config_t *config, size_t envc,
                                          const char *names[],
                                          const char *values[]);
 
