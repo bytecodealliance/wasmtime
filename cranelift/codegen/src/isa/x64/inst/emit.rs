@@ -28,10 +28,11 @@ fn emit_signed_cvt(
     } else {
         SseOpcode::Cvtsi2ss
     };
+    let dst = WritableXmm::from_writable_reg(dst).unwrap();
     Inst::CvtIntToFloat {
         op,
-        dst: Writable::from_reg(Xmm::new(dst.to_reg()).unwrap()),
-        src1: Xmm::new(dst.to_reg()).unwrap(),
+        dst,
+        src1: dst.to_reg(),
         src2: GprMem::new(RegMem::reg(src)).unwrap(),
         src2_size: OperandSize::Size64,
     }
@@ -235,15 +236,16 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::AluConstOp { op, size, dst } => {
-            let dst = allocs.next(dst.to_reg().to_reg());
+        &Inst::AluConstOp { op, size, dst } => {
+            let dst = WritableGpr::from_writable_reg(allocs.next_writable(dst.to_writable_reg()))
+                .unwrap();
             emit(
                 &Inst::AluRmiR {
-                    size: *size,
-                    op: *op,
-                    dst: Writable::from_reg(Gpr::new(dst).unwrap()),
-                    src1: Gpr::new(dst).unwrap(),
-                    src2: Gpr::new(dst).unwrap().into(),
+                    size,
+                    op,
+                    dst,
+                    src1: dst.to_reg(),
+                    src2: dst.to_reg().into(),
                 },
                 allocs,
                 sink,
@@ -890,8 +892,8 @@ pub(crate) fn emit(
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));
             let src = Gpr::new(src).unwrap();
             let size = OperandSize::Size64;
-            let dst = allocs.next(dst.to_reg().to_reg());
-            let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            let dst = WritableGpr::from_writable_reg(allocs.next_writable(dst.to_writable_reg()))
+                .unwrap();
             Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
         }
 
@@ -1426,8 +1428,8 @@ pub(crate) fn emit(
             dst,
         } => {
             let alternative = allocs.next(alternative.to_reg());
-            let dst = allocs.next(dst.to_reg().to_reg());
-            debug_assert_eq!(alternative, dst);
+            let dst = allocs.next_writable(dst.to_writable_reg());
+            debug_assert_eq!(alternative, dst.to_reg());
             let consequent = allocs.next(consequent.clone().to_reg());
 
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
@@ -1447,7 +1449,7 @@ pub(crate) fn emit(
                     SseOpcode::Movdqa
                 }
             };
-            let inst = Inst::xmm_unary_rm_r(op, consequent.into(), Writable::from_reg(dst));
+            let inst = Inst::xmm_unary_rm_r(op, consequent.into(), dst);
             inst.emit(&[], sink, info, state);
 
             sink.bind_label(next, state.ctrl_plane_mut());
@@ -1806,17 +1808,17 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::JmpTableSeq {
+        &Inst::JmpTableSeq {
             idx,
             tmp1,
             tmp2,
             ref targets,
-            default_target,
+            ref default_target,
             ..
         } => {
-            let idx = allocs.next(*idx);
-            let tmp1 = Writable::from_reg(allocs.next(tmp1.to_reg()));
-            let tmp2 = Writable::from_reg(allocs.next(tmp2.to_reg()));
+            let idx = allocs.next(idx);
+            let tmp1 = allocs.next_writable(tmp1);
+            let tmp2 = allocs.next_writable(tmp2);
 
             // This sequence is *one* instruction in the vcode, and is expanded only here at
             // emission time, because we cannot allow the regalloc to insert spills/reloads in
@@ -2941,8 +2943,8 @@ pub(crate) fn emit(
         } => {
             let rhs = allocs.next(rhs.to_reg());
             let lhs = allocs.next(lhs.to_reg());
-            let dst = allocs.next(dst.to_reg().to_reg());
-            debug_assert_eq!(rhs, dst);
+            let dst = allocs.next_writable(dst.to_writable_reg());
+            debug_assert_eq!(rhs, dst.to_reg());
 
             // Generates the following sequence:
             // cmpss/cmpsd %lhs, %rhs_dst
@@ -2993,7 +2995,7 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, dst, RegMem::reg(lhs));
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, dst.to_reg(), RegMem::reg(lhs));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
@@ -3003,7 +3005,7 @@ pub(crate) fn emit(
             // and negative zero. These instructions merge the sign bits in that
             // case, and are no-ops otherwise.
             let op = if *is_min { or_op } else { and_op };
-            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs), Writable::from_reg(dst));
+            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs), dst);
             inst.emit(&[], sink, info, state);
 
             let inst = Inst::jmp_known(done);
@@ -3013,14 +3015,14 @@ pub(crate) fn emit(
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
             sink.bind_label(propagate_nan, state.ctrl_plane_mut());
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs), Writable::from_reg(dst));
+            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs), dst);
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::P, done);
 
             sink.bind_label(do_min_max, state.ctrl_plane_mut());
 
-            let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(lhs), Writable::from_reg(dst));
+            let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(lhs), dst);
             inst.emit(&[], sink, info, state);
 
             sink.bind_label(done, state.ctrl_plane_mut());
@@ -3297,9 +3299,9 @@ pub(crate) fn emit(
             tmp_gpr2,
         } => {
             let src = allocs.next(src.to_reg());
-            let dst = allocs.next(dst.to_reg().to_reg());
-            let tmp_gpr1 = allocs.next(tmp_gpr1.to_reg().to_reg());
-            let tmp_gpr2 = allocs.next(tmp_gpr2.to_reg().to_reg());
+            let dst = allocs.next_writable(dst.to_writable_reg());
+            let tmp_gpr1 = allocs.next_writable(tmp_gpr1.to_writable_reg());
+            let tmp_gpr2 = allocs.next_writable(tmp_gpr2.to_writable_reg());
 
             // Note: this sequence is specific to 64-bit mode; a 32-bit mode would require a
             // different sequence.
@@ -3325,9 +3327,8 @@ pub(crate) fn emit(
             //
             //  done:
 
-            assert_ne!(src, tmp_gpr1);
-            assert_ne!(src, tmp_gpr2);
-            assert_ne!(tmp_gpr1, tmp_gpr2);
+            assert_ne!(src, tmp_gpr1.to_reg());
+            assert_ne!(src, tmp_gpr2.to_reg());
 
             let handle_negative = sink.get_label();
             let done = sink.get_label();
@@ -3347,7 +3348,7 @@ pub(crate) fn emit(
                 info,
                 state,
                 src,
-                Writable::from_reg(dst),
+                dst,
                 *dst_size == OperandSize::Size64,
             );
 
@@ -3358,7 +3359,7 @@ pub(crate) fn emit(
 
             // Divide x by two to get it in range for the signed conversion, keep the LSB, and
             // scale it back up on the FP side.
-            let inst = Inst::gen_move(Writable::from_reg(tmp_gpr1), src, types::I64);
+            let inst = Inst::gen_move(tmp_gpr1, src, types::I64);
             inst.emit(&[], sink, info, state);
 
             // tmp_gpr1 := src >> 1
@@ -3366,27 +3367,27 @@ pub(crate) fn emit(
                 OperandSize::Size64,
                 ShiftKind::ShiftRightLogical,
                 Imm8Gpr::new(Imm8Reg::Imm8 { imm: 1 }).unwrap(),
+                tmp_gpr1.to_reg(),
                 tmp_gpr1,
-                Writable::from_reg(tmp_gpr1),
             );
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::gen_move(Writable::from_reg(tmp_gpr2), src, types::I64);
+            let inst = Inst::gen_move(tmp_gpr2, src, types::I64);
             inst.emit(&[], sink, info, state);
 
             let inst = Inst::alu_rmi_r(
                 OperandSize::Size64,
                 AluRmiROpcode::And,
                 RegMemImm::imm(1),
-                Writable::from_reg(tmp_gpr2),
+                tmp_gpr2,
             );
             inst.emit(&[], sink, info, state);
 
             let inst = Inst::alu_rmi_r(
                 OperandSize::Size64,
                 AluRmiROpcode::Or,
-                RegMemImm::reg(tmp_gpr1),
-                Writable::from_reg(tmp_gpr2),
+                RegMemImm::reg(tmp_gpr1.to_reg()),
+                tmp_gpr2,
             );
             inst.emit(&[], sink, info, state);
 
@@ -3394,8 +3395,8 @@ pub(crate) fn emit(
                 sink,
                 info,
                 state,
-                tmp_gpr2,
-                Writable::from_reg(dst),
+                tmp_gpr2.to_reg(),
+                dst,
                 *dst_size == OperandSize::Size64,
             );
 
@@ -3404,7 +3405,7 @@ pub(crate) fn emit(
             } else {
                 SseOpcode::Addss
             };
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(dst), Writable::from_reg(dst));
+            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(dst.to_reg()), dst);
             inst.emit(&[], sink, info, state);
 
             sink.bind_label(done, state.ctrl_plane_mut());
@@ -3420,9 +3421,9 @@ pub(crate) fn emit(
             tmp_xmm,
         } => {
             let src = allocs.next(src.to_reg());
-            let dst = allocs.next(dst.to_reg().to_reg());
-            let tmp_gpr = allocs.next(tmp_gpr.to_reg().to_reg());
-            let tmp_xmm = allocs.next(tmp_xmm.to_reg().to_reg());
+            let dst = allocs.next_writable(dst.to_writable_reg());
+            let tmp_gpr = allocs.next_writable(tmp_gpr.to_writable_reg());
+            let tmp_xmm = allocs.next_writable(tmp_xmm.to_writable_reg());
 
             // Emits the following common sequence:
             //
@@ -3479,11 +3480,11 @@ pub(crate) fn emit(
             let done = sink.get_label();
 
             // The truncation.
-            let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
+            let inst = Inst::xmm_to_gpr(trunc_op, src, dst, *dst_size);
             inst.emit(&[], sink, info, state);
 
             // Compare against 1, in case of overflow the dst operand was INT_MIN.
-            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(1));
+            let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(1));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NO, done); // no overflow => done
@@ -3501,8 +3502,8 @@ pub(crate) fn emit(
                 let inst = Inst::alu_rmi_r(
                     *dst_size,
                     AluRmiROpcode::Xor,
-                    RegMemImm::reg(dst),
-                    Writable::from_reg(dst),
+                    RegMemImm::reg(dst.to_reg()),
+                    dst,
                 );
                 inst.emit(&[], sink, info, state);
 
@@ -3514,14 +3515,10 @@ pub(crate) fn emit(
                 // If the input was positive, saturate to INT_MAX.
 
                 // Zero out tmp_xmm.
-                let inst = Inst::xmm_rm_r(
-                    SseOpcode::Xorpd,
-                    RegMem::reg(tmp_xmm),
-                    Writable::from_reg(tmp_xmm),
-                );
+                let inst = Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::reg(tmp_xmm.to_reg()), tmp_xmm);
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm, RegMem::reg(src));
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm.to_reg(), RegMem::reg(src));
                 inst.emit(&[], sink, info, state);
 
                 // Jump if >= to done.
@@ -3529,14 +3526,10 @@ pub(crate) fn emit(
 
                 // Otherwise, put INT_MAX.
                 if *dst_size == OperandSize::Size64 {
-                    let inst = Inst::imm(
-                        OperandSize::Size64,
-                        0x7fffffffffffffff,
-                        Writable::from_reg(dst),
-                    );
+                    let inst = Inst::imm(OperandSize::Size64, 0x7fffffffffffffff, dst);
                     inst.emit(&[], sink, info, state);
                 } else {
-                    let inst = Inst::imm(OperandSize::Size32, 0x7fffffff, Writable::from_reg(dst));
+                    let inst = Inst::imm(OperandSize::Size32, 0x7fffffff, dst);
                     inst.emit(&[], sink, info, state);
                 }
             } else {
@@ -3554,8 +3547,7 @@ pub(crate) fn emit(
                 match *src_size {
                     OperandSize::Size32 => {
                         let cst = Ieee32::pow2(output_bits - 1).neg().bits();
-                        let inst =
-                            Inst::imm(OperandSize::Size32, cst as u64, Writable::from_reg(tmp_gpr));
+                        let inst = Inst::imm(OperandSize::Size32, cst as u64, tmp_gpr);
                         inst.emit(&[], sink, info, state);
                     }
                     OperandSize::Size64 => {
@@ -3567,22 +3559,17 @@ pub(crate) fn emit(
                         } else {
                             Ieee64::pow2(output_bits - 1).neg()
                         };
-                        let inst =
-                            Inst::imm(OperandSize::Size64, cst.bits(), Writable::from_reg(tmp_gpr));
+                        let inst = Inst::imm(OperandSize::Size64, cst.bits(), tmp_gpr);
                         inst.emit(&[], sink, info, state);
                     }
                     _ => unreachable!(),
                 }
 
-                let inst = Inst::gpr_to_xmm(
-                    cast_op,
-                    RegMem::reg(tmp_gpr),
-                    *src_size,
-                    Writable::from_reg(tmp_xmm),
-                );
+                let inst =
+                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, tmp_xmm);
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm));
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm.to_reg()));
                 inst.emit(&[], sink, info, state);
 
                 // no trap if src >= or > threshold
@@ -3592,14 +3579,10 @@ pub(crate) fn emit(
                 // If positive, it was a real overflow.
 
                 // Zero out the tmp_xmm register.
-                let inst = Inst::xmm_rm_r(
-                    SseOpcode::Xorpd,
-                    RegMem::reg(tmp_xmm),
-                    Writable::from_reg(tmp_xmm),
-                );
+                let inst = Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::reg(tmp_xmm.to_reg()), tmp_xmm);
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm, RegMem::reg(src));
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm.to_reg(), RegMem::reg(src));
                 inst.emit(&[], sink, info, state);
 
                 // no trap if 0 >= src
@@ -3621,10 +3604,10 @@ pub(crate) fn emit(
             tmp_xmm2,
         } => {
             let src = allocs.next(src.to_reg());
-            let dst = allocs.next(dst.to_reg().to_reg());
-            let tmp_gpr = allocs.next(tmp_gpr.to_reg().to_reg());
-            let tmp_xmm = allocs.next(tmp_xmm.to_reg().to_reg());
-            let tmp_xmm2 = allocs.next(tmp_xmm2.to_reg().to_reg());
+            let dst = allocs.next_writable(dst.to_writable_reg());
+            let tmp_gpr = allocs.next_writable(tmp_gpr.to_writable_reg());
+            let tmp_xmm = allocs.next_writable(tmp_xmm.to_writable_reg());
+            let tmp_xmm2 = allocs.next_writable(tmp_xmm2.to_writable_reg());
 
             // The only difference in behavior between saturating and non-saturating is how we
             // handle errors. Emits the following sequence:
@@ -3660,7 +3643,7 @@ pub(crate) fn emit(
             //
             // done:
 
-            assert_ne!(tmp_xmm, src, "tmp_xmm clobbers src!");
+            assert_ne!(tmp_xmm.to_reg(), src, "tmp_xmm clobbers src!");
 
             let (sub_op, cast_op, cmp_op, trunc_op) = match src_size {
                 OperandSize::Size32 => (
@@ -3686,18 +3669,13 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let inst = Inst::imm(*src_size, cst, Writable::from_reg(tmp_gpr));
+            let inst = Inst::imm(*src_size, cst, tmp_gpr);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::gpr_to_xmm(
-                cast_op,
-                RegMem::reg(tmp_gpr),
-                *src_size,
-                Writable::from_reg(tmp_xmm),
-            );
+            let inst = Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, tmp_xmm);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm));
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm.to_reg()));
             inst.emit(&[], sink, info, state);
 
             let handle_large = sink.get_label();
@@ -3710,8 +3688,8 @@ pub(crate) fn emit(
                 let inst = Inst::alu_rmi_r(
                     *dst_size,
                     AluRmiROpcode::Xor,
-                    RegMemImm::reg(dst),
-                    Writable::from_reg(dst),
+                    RegMemImm::reg(dst.to_reg()),
+                    dst,
                 );
                 inst.emit(&[], sink, info, state);
 
@@ -3727,10 +3705,10 @@ pub(crate) fn emit(
             // Actual truncation for small inputs: if the result is not positive, then we had an
             // overflow.
 
-            let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
+            let inst = Inst::xmm_to_gpr(trunc_op, src, dst, *dst_size);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(0));
+            let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
@@ -3741,8 +3719,8 @@ pub(crate) fn emit(
                 let inst = Inst::alu_rmi_r(
                     *dst_size,
                     AluRmiROpcode::Xor,
-                    RegMemImm::reg(dst),
-                    Writable::from_reg(dst),
+                    RegMemImm::reg(dst.to_reg()),
+                    dst,
                 );
                 inst.emit(&[], sink, info, state);
 
@@ -3758,16 +3736,16 @@ pub(crate) fn emit(
 
             sink.bind_label(handle_large, state.ctrl_plane_mut());
 
-            let inst = Inst::gen_move(Writable::from_reg(tmp_xmm2), src, types::F64);
+            let inst = Inst::gen_move(tmp_xmm2, src, types::F64);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm), Writable::from_reg(tmp_xmm2));
+            let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm.to_reg()), tmp_xmm2);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2, Writable::from_reg(dst), *dst_size);
+            let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2.to_reg(), dst, *dst_size);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(0));
+            let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             if *is_saturating {
@@ -3783,7 +3761,7 @@ pub(crate) fn emit(
                     } else {
                         u32::max_value() as u64
                     },
-                    Writable::from_reg(dst),
+                    dst,
                 );
                 inst.emit(&[], sink, info, state);
 
@@ -3796,14 +3774,14 @@ pub(crate) fn emit(
             }
 
             if *dst_size == OperandSize::Size64 {
-                let inst = Inst::imm(OperandSize::Size64, 1 << 63, Writable::from_reg(tmp_gpr));
+                let inst = Inst::imm(OperandSize::Size64, 1 << 63, tmp_gpr);
                 inst.emit(&[], sink, info, state);
 
                 let inst = Inst::alu_rmi_r(
                     OperandSize::Size64,
                     AluRmiROpcode::Add,
-                    RegMemImm::reg(tmp_gpr),
-                    Writable::from_reg(dst),
+                    RegMemImm::reg(tmp_gpr.to_reg()),
+                    dst,
                 );
                 inst.emit(&[], sink, info, state);
             } else {
@@ -3811,7 +3789,7 @@ pub(crate) fn emit(
                     OperandSize::Size32,
                     AluRmiROpcode::Add,
                     RegMemImm::imm(1 << 31),
-                    Writable::from_reg(dst),
+                    dst,
                 );
                 inst.emit(&[], sink, info, state);
             }
