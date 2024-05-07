@@ -397,7 +397,6 @@ impl Inst {
 // Instructions: get_regs
 
 fn memarg_operands(memarg: &mut AMode, collector: &mut impl OperandVisitor) {
-    // This should match `AMode::with_allocs()`.
     match memarg {
         AMode::Unscaled { rn, .. } | AMode::UnsignedOffset { rn, .. } => {
             collector.reg_use(rn);
@@ -421,7 +420,6 @@ fn memarg_operands(memarg: &mut AMode, collector: &mut impl OperandVisitor) {
 }
 
 fn pairmemarg_operands(pairmemarg: &mut PairAMode, collector: &mut impl OperandVisitor) {
-    // This should match `PairAMode::with_allocs()`.
     match pairmemarg {
         PairAMode::SignedOffset { reg, .. } => {
             collector.reg_use(reg);
@@ -1265,9 +1263,6 @@ impl Inst {
             }
         }
 
-        // N.B.: order of `allocs` consumption (via register
-        // pretty-printing or memarg.with_allocs()) needs to match the
-        // order in `aarch64_get_operands` above.
         match self {
             &Inst::Nop0 => "nop-zero-len".to_string(),
             &Inst::Nop4 => "nop".to_string(),
@@ -1416,7 +1411,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
 
@@ -1443,7 +1438,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_ireg(rd, size, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
 
@@ -1454,7 +1449,7 @@ impl Inst {
             } => {
                 let rt = pretty_print_ireg(rt, OperandSize::Size64, allocs);
                 let rt2 = pretty_print_ireg(rt2, OperandSize::Size64, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let mem = mem.pretty_print_default();
                 format!("stp {}, {}, {}", rt, rt2, mem)
             }
@@ -1463,7 +1458,7 @@ impl Inst {
             } => {
                 let rt = pretty_print_ireg(rt.to_reg(), OperandSize::Size64, allocs);
                 let rt2 = pretty_print_ireg(rt2.to_reg(), OperandSize::Size64, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let mem = mem.pretty_print_default();
                 format!("ldp {}, {}, {}", rt, rt2, mem)
             }
@@ -1474,12 +1469,10 @@ impl Inst {
             }
             &Inst::MovFromPReg { rd, rm } => {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
-                allocs.next_fixed_nonallocatable(rm);
                 let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovToPReg { rd, rm } => {
-                allocs.next_fixed_nonallocatable(rd);
                 let rd = show_ireg_sized(rd.into(), OperandSize::Size64);
                 let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
                 format!("mov {}, {}", rd, rm)
@@ -1832,14 +1825,14 @@ impl Inst {
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
@@ -1847,21 +1840,21 @@ impl Inst {
             &Inst::FpuLoad128 { rd, ref mem, .. } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rd = "q".to_string() + &rd[1..];
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size32, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size64, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
@@ -1869,7 +1862,7 @@ impl Inst {
             &Inst::FpuStore128 { rd, ref mem, .. } => {
                 let rd = pretty_print_reg(rd, allocs);
                 let rd = "q".to_string() + &rd[1..];
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
@@ -1879,7 +1872,7 @@ impl Inst {
             } => {
                 let rt = pretty_print_vreg_scalar(rt.to_reg(), ScalarSize::Size64, allocs);
                 let rt2 = pretty_print_vreg_scalar(rt2.to_reg(), ScalarSize::Size64, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
                 format!("ldp {}, {}, {}", rt, rt2, mem)
@@ -1889,7 +1882,7 @@ impl Inst {
             } => {
                 let rt = pretty_print_vreg_scalar(rt, ScalarSize::Size64, allocs);
                 let rt2 = pretty_print_vreg_scalar(rt2, ScalarSize::Size64, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
                 format!("stp {}, {}, {}", rt, rt2, mem)
@@ -1899,7 +1892,7 @@ impl Inst {
             } => {
                 let rt = pretty_print_vreg_scalar(rt.to_reg(), ScalarSize::Size128, allocs);
                 let rt2 = pretty_print_vreg_scalar(rt2.to_reg(), ScalarSize::Size128, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
                 format!("ldp {}, {}, {}", rt, rt2, mem)
@@ -1909,7 +1902,7 @@ impl Inst {
             } => {
                 let rt = pretty_print_vreg_scalar(rt, ScalarSize::Size128, allocs);
                 let rt2 = pretty_print_vreg_scalar(rt2, ScalarSize::Size128, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
                 format!("stp {}, {}, {}", rt, rt2, mem)
@@ -2781,7 +2774,7 @@ impl Inst {
                 // expansion stage (i.e., legalization, but without the slow edit-in-place
                 // of the existing legalization framework).
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_insts, mem) = mem_finalize(None, &mem, I8, state);
                 let mut ret = String::new();
                 for inst in mem_insts.into_iter() {

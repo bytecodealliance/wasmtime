@@ -145,19 +145,9 @@ impl AMode {
             extendop: op,
         }
     }
-
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
-    }
 }
 
 pub use crate::isa::aarch64::lower::isle::generated_code::PairAMode;
-
-impl PairAMode {
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
-    }
-}
 
 //=============================================================================
 // Instruction sub-components (conditions, branches and branch targets):

@@ -113,10 +113,6 @@ pub enum AMode {
 }
 
 impl AMode {
-    pub(crate) fn with_allocs(self, _allocs: &mut AllocationConsumer) -> Self {
-        self
-    }
-
     /// Add the registers referenced by this AMode to `collector`.
     pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
@@ -175,10 +171,6 @@ impl AMode {
             | &AMode::IncomingArg(..)
             | &AMode::NominalSPOffset(..) => None,
         }
-    }
-
-    pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer) -> String {
-        format!("{}", self.clone().with_allocs(allocs))
     }
 }
 

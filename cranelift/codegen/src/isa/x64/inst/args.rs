@@ -407,10 +407,6 @@ impl Amode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
-    }
-
     /// Offset the amode by a fixed offset.
     pub(crate) fn offset(&self, offset: i32) -> Self {
         let mut ret = self.clone();
@@ -539,10 +535,6 @@ impl SyntheticAmode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
-    }
-
     pub(crate) fn aligned(&self) -> bool {
         match self {
             SyntheticAmode::Real(addr) => addr.aligned(),
@@ -635,10 +627,6 @@ impl RegMemImm {
             Self::Mem { addr } => addr.get_operands(collector),
             Self::Imm { .. } => {}
         }
-    }
-
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
     }
 }
 
@@ -733,10 +721,6 @@ impl RegMem {
             RegMem::Reg { reg } => collector.reg_use(reg),
             RegMem::Mem { addr, .. } => addr.get_operands(collector),
         }
-    }
-
-    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
     }
 }
 

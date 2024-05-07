@@ -504,8 +504,6 @@ impl AllocationConsumer {
         Self
     }
 
-    pub fn next_fixed_nonallocatable(&mut self, _preg: PReg) {}
-
     pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {
         pre_regalloc_reg
     }

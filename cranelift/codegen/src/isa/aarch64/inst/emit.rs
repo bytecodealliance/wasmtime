@@ -997,7 +997,7 @@ impl MachInstEmit for Inst {
             | &Inst::FpuLoad64 { rd, ref mem, flags }
             | &Inst::FpuLoad128 { rd, ref mem, flags } => {
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, access_ty, state);
 
@@ -1138,7 +1138,7 @@ impl MachInstEmit for Inst {
             | &Inst::FpuStore64 { rd, ref mem, flags }
             | &Inst::FpuStore128 { rd, ref mem, flags } => {
                 let rd = allocs.next(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, access_ty, state);
 
@@ -1233,7 +1233,7 @@ impl MachInstEmit for Inst {
             } => {
                 let rt = allocs.next(rt);
                 let rt2 = allocs.next(rt2);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.clone();
                 if let Some(trap_code) = flags.trap_code() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(trap_code);
@@ -1264,7 +1264,7 @@ impl MachInstEmit for Inst {
             } => {
                 let rt = allocs.next(rt.to_reg());
                 let rt2 = allocs.next(rt2.to_reg());
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.clone();
                 if let Some(trap_code) = flags.trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
@@ -1302,7 +1302,7 @@ impl MachInstEmit for Inst {
             } => {
                 let rt = allocs.next(rt.to_reg());
                 let rt2 = allocs.next(rt2.to_reg());
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.clone();
 
                 if let Some(trap_code) = flags.trap_code() {
                     // Register the offset at which the actual load instruction starts.
@@ -1347,7 +1347,7 @@ impl MachInstEmit for Inst {
             } => {
                 let rt = allocs.next(rt);
                 let rt2 = allocs.next(rt2);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.clone();
 
                 if let Some(trap_code) = flags.trap_code() {
                     // Register the offset at which the actual store instruction starts.
@@ -1416,7 +1416,6 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovFromPReg { rd, rm } => {
                 let rd = allocs.next_writable(rd);
-                allocs.next_fixed_nonallocatable(rm);
                 let rm: Reg = rm.into();
                 debug_assert!([
                     regs::fp_reg(),
@@ -1431,7 +1430,6 @@ impl MachInstEmit for Inst {
                 Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
             }
             &Inst::MovToPReg { rd, rm } => {
-                allocs.next_fixed_nonallocatable(rd);
                 let rd: Writable<Reg> = Writable::from_reg(rd.into());
                 let rm = allocs.next(rm);
                 debug_assert!([
@@ -3454,7 +3452,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.clone();
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, I8, state);
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);

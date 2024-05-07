@@ -1333,7 +1333,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_reg_mod(rd, ri, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1615,7 +1615,7 @@ impl Inst {
                 };
 
                 let rn = pretty_print_reg(rn, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1725,7 +1725,7 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rn = pretty_print_reg(rn, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1760,7 +1760,7 @@ impl Inst {
 
                 let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rn = pretty_print_reg(rn, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1817,7 +1817,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1857,7 +1857,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_reg(rd, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1880,7 +1880,7 @@ impl Inst {
                 format!("{}{} {}, {}", mem_str, op.unwrap(), rd, mem)
             }
             &Inst::StoreImm8 { imm, ref mem } => {
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1904,7 +1904,7 @@ impl Inst {
             &Inst::StoreImm16 { imm, ref mem }
             | &Inst::StoreImm32SExt16 { imm, ref mem }
             | &Inst::StoreImm64SExt16 { imm, ref mem } => {
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1931,8 +1931,8 @@ impl Inst {
                 ref src,
                 len_minus_one,
             } => {
-                let dst = dst.with_allocs(allocs);
-                let src = src.with_allocs(allocs);
+                let dst = dst.clone();
+                let src = src.clone();
                 format!(
                     "mvc {}({},{}), {}({})",
                     dst.disp.pretty_print_default(),
@@ -1943,7 +1943,7 @@ impl Inst {
                 )
             }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -1961,7 +1961,7 @@ impl Inst {
                 format!("{}lmg {}, {}, {}", mem_str, rt, rt2, mem)
             }
             &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -2671,7 +2671,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -2707,7 +2707,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_reg(rd, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -2736,7 +2736,7 @@ impl Inst {
                 };
 
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -2857,7 +2857,7 @@ impl Inst {
 
                 let (rd, _) = pretty_print_fpr(rd.to_reg(), allocs);
                 let _ri = allocs.next(ri);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
@@ -2896,7 +2896,7 @@ impl Inst {
                 };
 
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
                     let (mem_str, mem) = mem_finalize_for_show(
                         &mem,
@@ -2956,7 +2956,7 @@ impl Inst {
                 };
 
                 let (rd, rd_fpr) = pretty_print_fpr(rd, allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
                     let (mem_str, mem) = mem_finalize_for_show(
                         &mem,
@@ -3246,7 +3246,7 @@ impl Inst {
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let mem = mem.with_allocs(allocs);
+                let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
