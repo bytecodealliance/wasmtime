@@ -5,7 +5,7 @@
 //! support for WASIp2 available at [the crate root](crate), but that's just an
 //! internal implementation detail.
 //!
-//! Unlike the crate root support for WASIp1 centers around two APIs:
+//! Unlike the crate root, support for WASIp1 centers around two APIs:
 //!
 //! * [`WasiP1Ctx`]
 //! * [`add_to_linker_sync`] (or [`add_to_linker_async`])
