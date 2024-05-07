@@ -223,17 +223,13 @@ impl MachInstEmit for Inst {
 
     fn emit(
         &self,
-        allocs: &[Allocation],
+        _allocs: &[Allocation],
         sink: &mut MachBuffer<Inst>,
         emit_info: &Self::Info,
         state: &mut EmitState,
     ) {
-        // Transform this into a instruction with all the physical regs
-        let mut allocs = AllocationConsumer::new(allocs);
-        let inst = self.clone().allocate(&mut allocs);
-
         // Check if we need to update the vector state before emitting this instruction
-        if let Some(expected) = inst.expected_vstate() {
+        if let Some(expected) = self.expected_vstate() {
             if state.vstate != EmitVState::Known(expected.clone()) {
                 // Update the vector state.
                 Inst::VecSetState {
@@ -252,10 +248,10 @@ impl MachInstEmit for Inst {
         let mut start_off = sink.cur_offset();
 
         // First try to emit this as a compressed instruction
-        let res = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
+        let res = self.try_emit_compressed(sink, emit_info, state, &mut start_off);
         if res.is_none() {
             // If we can't lets emit it as a normal instruction
-            inst.emit_uncompressed(sink, emit_info, state, &mut start_off);
+            self.emit_uncompressed(sink, emit_info, state, &mut start_off);
         }
 
         let end_off = sink.cur_offset();
@@ -2604,10 +2600,6 @@ impl Inst {
                 ));
             }
         };
-    }
-
-    fn allocate(self, _allocs: &mut AllocationConsumer) -> Self {
-        self
     }
 }
 

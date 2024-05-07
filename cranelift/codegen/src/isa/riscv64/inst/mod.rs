@@ -934,9 +934,9 @@ impl Inst {
             reg_name(reg)
         };
 
-        let format_vec_amode = |amode: &VecAMode, allocs: &mut AllocationConsumer| -> String {
+        let format_vec_amode = |amode: &VecAMode, _allocs: &mut AllocationConsumer| -> String {
             match amode {
-                VecAMode::UnitStride { base } => base.to_string_with_alloc(allocs),
+                VecAMode::UnitStride { base } => base.to_string(),
             }
         };
 
@@ -1346,7 +1346,7 @@ impl Inst {
                 from,
                 flags: _flags,
             } => {
-                let base = from.to_string_with_alloc(allocs);
+                let base = from.to_string();
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", op.op_name(), rd, base,)
             }
@@ -1356,7 +1356,7 @@ impl Inst {
                 op,
                 flags: _flags,
             } => {
-                let base = to.to_string_with_alloc(allocs);
+                let base = to.to_string();
                 let src = format_reg(src, allocs);
                 format!("{} {},{}", op.op_name(), src, base,)
             }
@@ -1497,7 +1497,7 @@ impl Inst {
                 format!("elf_tls_get_addr {rd},{}", name.display(None))
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
-                let rs = mem.to_string_with_alloc(allocs);
+                let rs = mem.to_string();
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_addr {},{}", rd, rs)
             }

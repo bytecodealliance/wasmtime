@@ -101,11 +101,6 @@ impl MemArg {
             MemArg::NominalSPOffset { .. } => MemFlags::trusted(),
         }
     }
-
-    /// Edit registers with allocations.
-    pub fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
-    }
 }
 
 /// A memory argument for an instruction with two memory operands.
@@ -152,11 +147,6 @@ impl MemArgPair {
             }
             _ => None,
         }
-    }
-
-    /// Edit registers with allocations.
-    pub fn with_allocs(&self, _allocs: &mut AllocationConsumer) -> Self {
-        self.clone()
     }
 }
 

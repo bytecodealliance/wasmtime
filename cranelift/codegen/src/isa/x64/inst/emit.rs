@@ -156,7 +156,7 @@ pub(crate) fn emit(
             let src1 = allocs.next(src1.to_reg());
             let reg_g = allocs.next(reg_g.to_reg().to_reg());
             debug_assert_eq!(src1, reg_g);
-            let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
+            let src2 = src2.clone().to_reg_mem_imm().clone();
 
             let prefix = if *size == OperandSize::Size16 {
                 LegacyPrefixes::_66
@@ -261,7 +261,7 @@ pub(crate) fn emit(
             op,
         } => {
             let src2 = allocs.next(src2.to_reg());
-            let src1_dst = src1_dst.finalize(state, sink).with_allocs(allocs);
+            let src1_dst = src1_dst.finalize(state, sink).clone();
 
             let opcode = match op {
                 AluRmiROpcode::Add => 0x01,
@@ -305,7 +305,7 @@ pub(crate) fn emit(
 
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -369,7 +369,7 @@ pub(crate) fn emit(
                     emit_std_reg_reg(sink, prefix, opcode, num_opcodes, dst, src, rex_flags);
                 }
                 RegMem::Mem { addr: src } => {
-                    let amode = src.finalize(state, sink).with_allocs(allocs);
+                    let amode = src.finalize(state, sink).clone();
                     emit_std_reg_mem(sink, prefix, opcode, num_opcodes, dst, &amode, rex_flags, 0);
                 }
             }
@@ -377,7 +377,7 @@ pub(crate) fn emit(
 
         Inst::UnaryRmRVex { size, op, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+            let src = match src.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -408,7 +408,7 @@ pub(crate) fn emit(
             imm,
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+            let src = match src.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -476,7 +476,7 @@ pub(crate) fn emit(
             divisor,
             ..
         } => {
-            let divisor = divisor.clone().to_reg_mem().with_allocs(allocs);
+            let divisor = divisor.clone().to_reg_mem().clone();
             let size = match inst {
                 Inst::Div {
                     size,
@@ -562,7 +562,7 @@ pub(crate) fn emit(
             debug_assert_eq!(src1, regs::rax());
             debug_assert_eq!(dst_lo, regs::rax());
             debug_assert_eq!(dst_hi, regs::rdx());
-            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
+            let src2 = src2.clone().to_reg_mem().clone();
 
             let rex_flags = RexFlags::from(*size);
             let prefix = match size {
@@ -594,7 +594,7 @@ pub(crate) fn emit(
             let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(src1, regs::rax());
             debug_assert_eq!(dst, regs::rax());
-            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
+            let src2 = src2.clone().to_reg_mem().clone();
 
             let mut rex_flags = RexFlags::from(OperandSize::Size8);
             let prefix = LegacyPrefixes::None;
@@ -633,7 +633,7 @@ pub(crate) fn emit(
             let src1 = allocs.next(src1.to_reg());
             let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(src1, dst);
-            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
+            let src2 = src2.clone().to_reg_mem().clone();
 
             let rex = RexFlags::from(*size);
             let prefix = LegacyPrefixes::None;
@@ -656,7 +656,7 @@ pub(crate) fn emit(
             dst,
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src1 = src1.clone().to_reg_mem().with_allocs(allocs);
+            let src1 = src1.clone().to_reg_mem().clone();
 
             let rex = RexFlags::from(*size);
             let prefix = match size {
@@ -847,7 +847,7 @@ pub(crate) fn emit(
         }
 
         Inst::MovImmM { size, simm32, dst } => {
-            let dst = &dst.finalize(state, sink).with_allocs(allocs);
+            let dst = &dst.finalize(state, sink).clone();
             let default_rex = RexFlags::clear_w();
             let default_opcode = 0xC7;
             let bytes = size.to_bytes();
@@ -887,7 +887,6 @@ pub(crate) fn emit(
         }
 
         Inst::MovFromPReg { src, dst } => {
-            allocs.next_fixed_nonallocatable(*src);
             let src: Reg = (*src).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));
             let src = Gpr::new(src).unwrap();
@@ -900,7 +899,6 @@ pub(crate) fn emit(
         Inst::MovToPReg { src, dst } => {
             let src = allocs.next(src.to_reg());
             let src = Gpr::new(src).unwrap();
-            allocs.next_fixed_nonallocatable(*dst);
             let dst: Reg = (*dst).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
@@ -963,7 +961,7 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr: src } => {
-                    let src = &src.finalize(state, sink).with_allocs(allocs);
+                    let src = &src.finalize(state, sink).clone();
 
                     emit_std_reg_mem(
                         sink,
@@ -981,7 +979,7 @@ pub(crate) fn emit(
 
         Inst::Mov64MR { src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = &src.finalize(state, sink).with_allocs(allocs);
+            let src = &src.finalize(state, sink).clone();
 
             emit_std_reg_mem(
                 sink,
@@ -997,7 +995,7 @@ pub(crate) fn emit(
 
         Inst::LoadEffectiveAddress { addr, dst, size } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let amode = addr.finalize(state, sink).with_allocs(allocs);
+            let amode = addr.finalize(state, sink).clone();
 
             // If this `lea` can actually get encoded as an `add` then do that
             // instead. Currently all candidate `iadd`s become an `lea`
@@ -1122,7 +1120,7 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr: src } => {
-                    let src = &src.finalize(state, sink).with_allocs(allocs);
+                    let src = &src.finalize(state, sink).clone();
 
                     emit_std_reg_mem(
                         sink,
@@ -1140,7 +1138,7 @@ pub(crate) fn emit(
 
         Inst::MovRM { size, src, dst } => {
             let src = allocs.next(src.to_reg());
-            let dst = &dst.finalize(state, sink).with_allocs(allocs);
+            let dst = &dst.finalize(state, sink).clone();
 
             let prefix = match size {
                 OperandSize::Size16 => LegacyPrefixes::_66,
@@ -1270,7 +1268,7 @@ pub(crate) fn emit(
                         emit_std_reg_reg(sink, prefix, opcode_bytes, 2, dst, reg, rex);
                     }
                     RegMemImm::Mem { addr } => {
-                        let addr = &addr.finalize(state, sink).with_allocs(allocs);
+                        let addr = &addr.finalize(state, sink).clone();
                         emit_std_reg_mem(sink, prefix, opcode_bytes, 2, dst, addr, rex, 0);
                     }
                     RegMemImm::Imm { .. } => unreachable!(),
@@ -1318,7 +1316,7 @@ pub(crate) fn emit(
                 }
 
                 RegMemImm::Mem { addr } => {
-                    let addr = &addr.finalize(state, sink).with_allocs(allocs);
+                    let addr = &addr.finalize(state, sink).clone();
                     // Whereas here we revert to the "normal" G-E ordering for CMP.
                     let opcode = match (*size, is_cmp) {
                         (OperandSize::Size8, true) => 0x3A,
@@ -1414,7 +1412,7 @@ pub(crate) fn emit(
                     emit_std_reg_reg(sink, prefix, opcode, 2, dst, reg, rex_flags);
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state, sink).with_allocs(allocs);
+                    let addr = &addr.finalize(state, sink).clone();
                     emit_std_reg_mem(sink, prefix, opcode, 2, dst, addr, rex_flags, 0);
                 }
             }
@@ -1456,7 +1454,7 @@ pub(crate) fn emit(
         }
 
         Inst::Push64 { src } => {
-            let src = src.clone().to_reg_mem_imm().with_allocs(allocs);
+            let src = src.clone().to_reg_mem_imm().clone();
 
             match src {
                 RegMemImm::Reg { reg } => {
@@ -1661,7 +1659,7 @@ pub(crate) fn emit(
         }
 
         Inst::CallUnknown { dest, opcode, info } => {
-            let dest = dest.with_allocs(allocs);
+            let dest = dest.clone();
 
             let start_offset = sink.cur_offset();
             match dest {
@@ -1776,7 +1774,7 @@ pub(crate) fn emit(
         }
 
         Inst::JmpUnknown { target } => {
-            let target = target.with_allocs(allocs);
+            let target = target.clone();
 
             match target {
                 RegMem::Reg { reg } => {
@@ -1938,7 +1936,7 @@ pub(crate) fn emit(
             dst: reg_g,
         } => {
             let reg_g = allocs.next(reg_g.to_reg().to_reg());
-            let src_e = src_e.clone().to_reg_mem().with_allocs(allocs);
+            let src_e = src_e.clone().to_reg_mem().clone();
 
             let rex = RexFlags::clear_w();
 
@@ -1991,7 +1989,7 @@ pub(crate) fn emit(
 
         Inst::XmmUnaryRmRImm { op, src, dst, imm } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = src.clone().to_reg_mem().with_allocs(allocs);
+            let src = src.clone().to_reg_mem().clone();
             let rex = RexFlags::clear_w();
 
             let (prefix, opcode, len) = match op {
@@ -2019,7 +2017,7 @@ pub(crate) fn emit(
 
         Inst::XmmUnaryRmREvex { op, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+            let src = match src.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2046,7 +2044,7 @@ pub(crate) fn emit(
 
         Inst::XmmUnaryRmRImmEvex { op, src, dst, imm } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+            let src = match src.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2097,7 +2095,7 @@ pub(crate) fn emit(
         } => {
             let src1 = allocs.next(src1.to_reg());
             let reg_g = allocs.next(reg_g.to_reg().to_reg());
-            let src_e = src_e.clone().to_reg_mem().with_allocs(allocs);
+            let src_e = src_e.clone().to_reg_mem().clone();
             debug_assert_eq!(src1, reg_g);
 
             let rex = RexFlags::clear_w();
@@ -2236,7 +2234,7 @@ pub(crate) fn emit(
             debug_assert_eq!(mask, regs::xmm0());
             let reg_g = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(src1, reg_g);
-            let src_e = src2.clone().to_reg_mem().with_allocs(allocs);
+            let src_e = src2.clone().to_reg_mem().clone();
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, length) = match op {
@@ -2268,7 +2266,7 @@ pub(crate) fn emit(
 
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
+            let src2 = src2.clone().to_reg_mem_imm().clone();
 
             // When the opcode is commutative, src1 is xmm{0..7}, and src2 is
             // xmm{8..15}, then we can swap the operands to save one byte on the
@@ -2458,7 +2456,7 @@ pub(crate) fn emit(
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2497,7 +2495,7 @@ pub(crate) fn emit(
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2536,7 +2534,7 @@ pub(crate) fn emit(
             let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(src1, dst);
             let src2 = allocs.next(src2.to_reg());
-            let src3 = match src3.clone().to_reg_mem().with_allocs(allocs) {
+            let src3 = match src3.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2587,7 +2585,7 @@ pub(crate) fn emit(
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2616,7 +2614,7 @@ pub(crate) fn emit(
 
         Inst::XmmUnaryRmRVex { op, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+            let src = match src.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2680,7 +2678,7 @@ pub(crate) fn emit(
 
         Inst::XmmUnaryRmRImmVex { op, src, dst, imm } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+            let src = match src.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2720,7 +2718,7 @@ pub(crate) fn emit(
 
         Inst::XmmMovRMVex { op, src, dst } => {
             let src = allocs.next(src.to_reg());
-            let dst = dst.with_allocs(allocs).finalize(state, sink);
+            let dst = dst.clone().finalize(state, sink);
 
             let (prefix, map, opcode) = match op {
                 AvxOpcode::Vmovdqu => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x7F),
@@ -2742,7 +2740,7 @@ pub(crate) fn emit(
 
         Inst::XmmMovRMImmVex { op, src, dst, imm } => {
             let src = allocs.next(src.to_reg());
-            let dst = dst.with_allocs(allocs).finalize(state, sink);
+            let dst = dst.clone().finalize(state, sink);
 
             let (w, prefix, map, opcode) = match op {
                 AvxOpcode::Vpextrb => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x14),
@@ -2833,7 +2831,7 @@ pub(crate) fn emit(
             src_size,
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+            let src = match src.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2862,7 +2860,7 @@ pub(crate) fn emit(
 
         Inst::XmmCmpRmRVex { op, src1, src2 } => {
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2904,7 +2902,7 @@ pub(crate) fn emit(
                 _ => None,
             };
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -3038,7 +3036,7 @@ pub(crate) fn emit(
         } => {
             let src1 = allocs.next(*src1);
             let dst = allocs.next(dst.to_reg());
-            let src2 = src2.with_allocs(allocs);
+            let src2 = src2.clone();
             debug_assert_eq!(src1, dst);
 
             let (prefix, opcode, len) = match op {
@@ -3092,7 +3090,7 @@ pub(crate) fn emit(
 
         Inst::XmmMovRM { op, src, dst } => {
             let src = allocs.next(src.to_reg());
-            let dst = dst.with_allocs(allocs);
+            let dst = dst.clone();
 
             let (prefix, opcode) = match op {
                 SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F29),
@@ -3110,7 +3108,7 @@ pub(crate) fn emit(
 
         Inst::XmmMovRMImm { op, src, dst, imm } => {
             let src = allocs.next(src.to_reg());
-            let dst = dst.with_allocs(allocs);
+            let dst = dst.clone();
 
             let (w, prefix, opcode) = match op {
                 SseOpcode::Pextrb => (false, LegacyPrefixes::_66, 0x0F3A14),
@@ -3182,7 +3180,7 @@ pub(crate) fn emit(
             src_size,
         } => {
             let reg_g = allocs.next(reg_g.to_reg().to_reg());
-            let src_e = src_e.clone().to_reg_mem().with_allocs(allocs);
+            let src_e = src_e.clone().to_reg_mem().clone();
 
             let (prefix, opcode) = match op {
                 // Movd and movq use the same opcode; the presence of the REX prefix (set below)
@@ -3204,7 +3202,7 @@ pub(crate) fn emit(
 
         Inst::XmmCmpRmR { op, src1, src2 } => {
             let src1 = allocs.next(src1.to_reg());
-            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
+            let src2 = src2.clone().to_reg_mem().clone();
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, len) = match op {
@@ -3235,7 +3233,7 @@ pub(crate) fn emit(
             let src1 = allocs.next(src1.to_reg());
             let dst = allocs.next(dst.to_reg().to_reg());
             assert_eq!(src1, dst);
-            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
+            let src2 = src2.clone().to_reg_mem().clone();
 
             let (prefix, opcode) = match op {
                 SseOpcode::Cvtsi2ss => (LegacyPrefixes::_F3, 0x0F2A),
@@ -3263,7 +3261,7 @@ pub(crate) fn emit(
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().clone() {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -3859,7 +3857,7 @@ pub(crate) fn emit(
             let replacement = allocs.next(*replacement);
             let expected = allocs.next(*expected);
             let dst_old = allocs.next(dst_old.to_reg());
-            let mem = mem.with_allocs(allocs);
+            let mem = mem.clone();
 
             debug_assert_eq!(expected, regs::rax());
             debug_assert_eq!(dst_old, regs::rax());
@@ -3890,7 +3888,7 @@ pub(crate) fn emit(
             let temp = allocs.next_writable(*temp);
             let dst_old = allocs.next_writable(*dst_old);
             debug_assert_eq!(dst_old.to_reg(), regs::rax());
-            let mem = mem.finalize(state, sink).with_allocs(allocs);
+            let mem = mem.finalize(state, sink).clone();
 
             // Emit this:
             //    mov{zbq,zwq,zlq,q}     (%r_address), %rax    // rax = old value
