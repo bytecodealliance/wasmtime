@@ -4,12 +4,23 @@ project(wasmtime C)
 set(WASMTIME_USER_CARGO_BUILD_OPTIONS "" CACHE STRING "Additional cargo flags (such as --features) to apply to the build command")
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(WASMTIME_ALWAYS_BUILD "If cmake should always invoke cargo to build wasmtime" ON)
+option(WASMTIME_FASTEST_RUNTIME "Set flags designed to optimize runtime performance" OFF)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-	set(WASMTIME_BUILD_TYPE_FLAG "--release")
-	set(WASMTIME_BUILD_TYPE "release")
+if(WASMTIME_FASTEST_RUNTIME)
+	set(WASMTIME_BUILD_TYPE_FLAG "--profile=fastest-runtime")
+	set(WASMTIME_BUILD_TYPE "fastest-runtime")
+	set(CARGO_PROFILE_PANIC CARGO_PROFILE_RELEASE_PANIC)
 else()
-	set(WASMTIME_BUILD_TYPE "debug")
+	if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
+	    CMAKE_BUILD_TYPE STREQUAL "MinSizeRel" OR
+	    CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+		set(WASMTIME_BUILD_TYPE_FLAG "--release")
+		set(WASMTIME_BUILD_TYPE "release")
+		set(CARGO_PROFILE_PANIC CARGO_PROFILE_RELEASE_PANIC)
+	else()
+		set(WASMTIME_BUILD_TYPE "debug")
+		set(CARGO_PROFILE_PANIC CARGO_PROFILE_DEBUG_PANIC)
+    endif()
 endif()
 
 if(ANDROID)
@@ -78,12 +89,17 @@ if(ANDROID)
 endif()
 include(ExternalProject)
 find_program(WASMTIME_CARGO_BINARY cargo)
+if(NOT WASMTIME_CARGO_BINARY)
+    message(FATAL_ERROR [["cargo" was not found. Ensure "cargo" is in PATH. Aborting...]])
+endif()
 ExternalProject_Add(
 	wasmtime-crate
 	DOWNLOAD_COMMAND ""
 	CONFIGURE_COMMAND ""
 	INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
-        BUILD_COMMAND ${WASMTIME_PREBUILD_COMMAND} ${WASMTIME_CARGO_BINARY} build ${WASMTIME_BUILD_TYPE_FLAG} ${WASMTIME_USER_CARGO_BUILD_OPTIONS} ${WASMTIME_BUILD_TARGET}
+        BUILD_COMMAND
+            ${CMAKE_COMMAND} -E env ${CARGO_PROFILE_PANIC}=abort
+            ${WASMTIME_PREBUILD_COMMAND} ${WASMTIME_CARGO_BINARY} build ${WASMTIME_BUILD_TYPE_FLAG} ${WASMTIME_USER_CARGO_BUILD_OPTIONS} ${WASMTIME_BUILD_TARGET}
 	USES_TERMINAL_BUILD TRUE
 	BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/artifact
         BUILD_ALWAYS ${WASMTIME_ALWAYS_BUILD}
