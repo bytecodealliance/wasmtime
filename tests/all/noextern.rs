@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_wrap_no_extern() -> Result<()> {
     let mut config = Config::default();
     config.wasm_function_references(true);
@@ -41,6 +42,7 @@ fn func_wrap_no_extern() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_typed_no_extern() -> Result<()> {
     let mut config = Config::default();
     config.wasm_function_references(true);
