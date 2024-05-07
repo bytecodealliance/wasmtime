@@ -216,7 +216,7 @@ impl Global {
 
     pub(crate) fn trace_root(&self, store: &mut StoreOpaque, gc_roots_list: &mut GcRootsList) {
         if let Some(ref_ty) = self._ty(store).content().as_ref() {
-            if !ref_ty.is_gc_heap_type() {
+            if !ref_ty.is_vmgcref_type_and_points_to_object() {
                 return;
             }
 

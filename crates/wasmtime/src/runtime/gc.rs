@@ -8,6 +8,9 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 pub use disabled::*;
 
+mod noextern;
+pub use noextern::NoExtern;
+
 use core::fmt;
 use core::ops::Deref;
 
