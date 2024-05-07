@@ -152,7 +152,6 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
     config: &mut wasi_config_t,
     path: *const c_char,
 ) -> bool {
-    config.builder.inherit_stderr();
     let file = match create_file(path) {
         Some(f) => f,
         None => return false,
