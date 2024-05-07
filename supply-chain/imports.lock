@@ -1199,9 +1199,30 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.prettyplease]]
+version = "0.2.19"
+when = "2024-04-15"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.proc-macro2]]
+version = "1.0.81"
+when = "2024-04-17"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.quote]]
 version = "1.0.29"
 when = "2023-06-29"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.quote]]
+version = "1.0.36"
+when = "2024-04-10"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1320,6 +1341,13 @@ user-name = "David Tolnay"
 [[publisher.syn]]
 version = "2.0.32"
 when = "2023-09-10"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.syn]]
+version = "2.0.60"
+when = "2024-04-17"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
