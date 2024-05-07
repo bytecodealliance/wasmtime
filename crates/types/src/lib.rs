@@ -1445,12 +1445,15 @@ pub trait TypeConvert {
     }
 
     /// Converts a wasmparser table type into a wasmtime type
-    fn convert_table_type(&self, ty: &wasmparser::TableType) -> Table {
-        Table {
-            wasm_ty: self.convert_ref_type(ty.element_type),
-            minimum: ty.initial,
-            maximum: ty.maximum,
+    fn convert_table_type(&self, ty: &wasmparser::TableType) -> WasmResult<Table> {
+        if ty.table64 {
+            return Err(wasm_unsupported!("wasm memory64: 64-bit table type"));
         }
+        Ok(Table {
+            wasm_ty: self.convert_ref_type(ty.element_type),
+            minimum: ty.initial.try_into().unwrap(),
+            maximum: ty.maximum.map(|i| i.try_into().unwrap()),
+        })
     }
 
     fn convert_sub_type(&self, ty: &wasmparser::SubType) -> WasmResult<WasmSubType> {
