@@ -99,14 +99,13 @@ pub fn maybe_show_fpr(reg: Reg) -> Option<String> {
     None
 }
 
-pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer) -> String {
-    let reg = allocs.next(reg);
+pub fn pretty_print_reg(reg: Reg, _allocs: &mut AllocationConsumer) -> String {
     show_reg(reg)
 }
 
-pub fn pretty_print_regpair(pair: RegPair, allocs: &mut AllocationConsumer) -> String {
-    let hi = allocs.next(pair.hi);
-    let lo = allocs.next(pair.lo);
+pub fn pretty_print_regpair(pair: RegPair, _allocs: &mut AllocationConsumer) -> String {
+    let hi = pair.hi;
+    let lo = pair.lo;
     if let Some(hi_reg) = hi.to_real_reg() {
         if let Some(lo_reg) = lo.to_real_reg() {
             assert!(
@@ -122,9 +121,13 @@ pub fn pretty_print_regpair(pair: RegPair, allocs: &mut AllocationConsumer) -> S
     format!("{}/{}", show_reg(hi), show_reg(lo))
 }
 
-pub fn pretty_print_reg_mod(rd: Writable<Reg>, ri: Reg, allocs: &mut AllocationConsumer) -> String {
-    let output = allocs.next_writable(rd).to_reg();
-    let input = allocs.next(ri);
+pub fn pretty_print_reg_mod(
+    rd: Writable<Reg>,
+    ri: Reg,
+    _allocs: &mut AllocationConsumer,
+) -> String {
+    let output = rd.to_reg();
+    let input = ri;
     if output == input {
         show_reg(output)
     } else {
@@ -135,12 +138,12 @@ pub fn pretty_print_reg_mod(rd: Writable<Reg>, ri: Reg, allocs: &mut AllocationC
 pub fn pretty_print_regpair_mod(
     rd: WritableRegPair,
     ri: RegPair,
-    allocs: &mut AllocationConsumer,
+    _allocs: &mut AllocationConsumer,
 ) -> String {
-    let rd_hi = allocs.next(rd.hi.to_reg());
-    let rd_lo = allocs.next(rd.lo.to_reg());
-    let ri_hi = allocs.next(ri.hi);
-    let ri_lo = allocs.next(ri.lo);
+    let rd_hi = rd.hi.to_reg();
+    let rd_lo = rd.lo.to_reg();
+    let ri_hi = ri.hi;
+    let ri_lo = ri.lo;
     if rd_hi == ri_hi {
         show_reg(rd_hi)
     } else {
@@ -157,11 +160,10 @@ pub fn pretty_print_regpair_mod(
 pub fn pretty_print_regpair_mod_lo(
     rd: WritableRegPair,
     ri: Reg,
-    allocs: &mut AllocationConsumer,
+    _allocs: &mut AllocationConsumer,
 ) -> String {
-    let rd_hi = allocs.next(rd.hi.to_reg());
-    let rd_lo = allocs.next(rd.lo.to_reg());
-    let ri = allocs.next(ri);
+    let rd_hi = rd.hi.to_reg();
+    let rd_lo = rd.lo.to_reg();
     if rd_lo == ri {
         show_reg(rd_hi)
     } else {
@@ -174,7 +176,6 @@ pub fn pretty_print_regpair_mod_lo(
     }
 }
 
-pub fn pretty_print_fpr(reg: Reg, allocs: &mut AllocationConsumer) -> (String, Option<String>) {
-    let reg = allocs.next(reg);
+pub fn pretty_print_fpr(reg: Reg, _allocs: &mut AllocationConsumer) -> (String, Option<String>) {
     (show_reg(reg), maybe_show_fpr(reg))
 }
