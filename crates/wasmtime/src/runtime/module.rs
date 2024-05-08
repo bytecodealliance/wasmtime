@@ -172,8 +172,8 @@ impl fmt::Debug for Module {
     }
 }
 
-impl std::fmt::Debug for ModuleInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for ModuleInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ModuleInner")
             .field("name", &self.module.module().name.as_ref())
             .finish_non_exhaustive()
