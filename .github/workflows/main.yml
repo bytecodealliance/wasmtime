@@ -364,7 +364,7 @@ jobs:
     # Checks for no_std support, ensure that crates can build on a no_std
     # target
     - run: rustup target add x86_64-unknown-none
-    - run: cargo check -p wasmtime --no-default-features --features gc,component-model
+    - run: cargo check -p wasmtime --no-default-features --features runtime,gc,component-model
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
 
