@@ -15,7 +15,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-wasmparser = { workspace = true }
+wasmparser = { workspace = true, features = ['validate'] }
 cranelift-codegen = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-frontend = { workspace = true }

@@ -379,7 +379,7 @@ impl ComponentTypesBuilder {
                     .intern_type(&module, types, *id)?
                     .into()
             }),
-            types::EntityType::Table(ty) => EntityType::Table(self.convert_table_type(ty)),
+            types::EntityType::Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
             types::EntityType::Memory(ty) => EntityType::Memory(ty.clone().into()),
             types::EntityType::Global(ty) => EntityType::Global(self.convert_global_type(ty)),
             types::EntityType::Tag(_) => bail!("exceptions proposal not implemented"),
