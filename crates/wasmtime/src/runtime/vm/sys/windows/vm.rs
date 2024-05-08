@@ -1,3 +1,4 @@
+use crate::vm::sys::DecommitBehavior;
 use std::fs::File;
 use std::io;
 use std::mem::MaybeUninit;
@@ -36,7 +37,6 @@ pub unsafe fn commit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     expose_existing_mapping(addr, len)
 }
 
-#[cfg(feature = "pooling-allocator")]
 pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     erase_existing_mapping(addr, len)
 }
@@ -49,12 +49,8 @@ pub fn get_page_size() -> usize {
     }
 }
 
-pub fn supports_madvise_dontneed() -> bool {
-    false
-}
-
-pub unsafe fn madvise_dontneed(_ptr: *mut u8, _len: usize) -> io::Result<()> {
-    unreachable!()
+pub fn decommit_behavior() -> DecommitBehavior {
+    DecommitBehavior::Zero
 }
 
 #[derive(PartialEq, Debug)]

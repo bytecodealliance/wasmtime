@@ -1,3 +1,4 @@
+use crate::vm::sys::DecommitBehavior;
 use std::fs::File;
 use std::io;
 use std::sync::Arc;
@@ -23,7 +24,6 @@ pub unsafe fn commit_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "pooling-allocator")]
 pub unsafe fn decommit_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
     std::ptr::write_bytes(ptr, 0, len);
     Ok(())
@@ -33,12 +33,8 @@ pub fn get_page_size() -> usize {
     4096
 }
 
-pub fn supports_madvise_dontneed() -> bool {
-    false
-}
-
-pub unsafe fn madvise_dontneed(_ptr: *mut u8, _len: usize) -> io::Result<()> {
-    unreachable!()
+pub fn decommit_behavior() -> DecommitBehavior {
+    DecommitBehavior::Zero
 }
 
 #[derive(PartialEq, Debug)]

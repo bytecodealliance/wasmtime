@@ -1,3 +1,4 @@
+use crate::runtime::vm::sys::DecommitBehavior;
 use rustix::fd::AsRawFd;
 use rustix::mm::{mmap, mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
 use std::fs::File;
@@ -27,6 +28,12 @@ pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()>
 }
 
 #[cfg(feature = "pooling-allocator")]
+pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
+    // Pages are always READ | WRITE so there's nothing that needs to be done
+    // here.
+    Ok(())
+}
+
 pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     if len == 0 {
         return Ok(());
@@ -58,30 +65,15 @@ pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "pooling-allocator")]
-pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
-    // Pages are always READ | WRITE so there's nothing that needs to be done
-    // here.
-    Ok(())
-}
-
 pub fn get_page_size() -> usize {
     unsafe { libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap() }
 }
 
-pub fn supports_madvise_dontneed() -> bool {
-    cfg!(target_os = "linux")
-}
-
-pub unsafe fn madvise_dontneed(ptr: *mut u8, len: usize) -> io::Result<()> {
-    cfg_if::cfg_if! {
-        if #[cfg(target_os = "linux")] {
-            rustix::mm::madvise(ptr.cast(), len, rustix::mm::Advice::LinuxDontNeed)?;
-            Ok(())
-        } else {
-            let _ = (ptr, len);
-            unreachable!();
-        }
+pub fn decommit_behavior() -> DecommitBehavior {
+    if cfg!(target_os = "linux") {
+        DecommitBehavior::RestoreOriginalMapping
+    } else {
+        DecommitBehavior::Zero
     }
 }
 
