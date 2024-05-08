@@ -113,7 +113,7 @@ impl ModuleTypesBuilder {
             let ty = &validator_types[id];
             let wasm_ty = WasmparserTypeConverter::new(self, module)
                 .with_rec_group(validator_types, rec_group_id)
-                .convert_sub_type(ty)?;
+                .convert_sub_type(ty);
             self.wasm_sub_type_in_rec_group(id, wasm_ty);
         }
 
@@ -161,6 +161,8 @@ impl ModuleTypesBuilder {
                 // `trampoline_types` so we can reuse it in the future.
                 Cow::Owned(f) => {
                     let idx = self.types.push(WasmSubType {
+                        is_final: true,
+                        supertype: None,
                         composite_type: WasmCompositeType::Func(f.clone()),
                     });
 
@@ -432,6 +434,21 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
                 }
             }
 
+            UnpackedIndex::RecGroup(_) => unreachable!(),
+        }
+    }
+
+    fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
+        match index {
+            UnpackedIndex::Id(id) => {
+                let interned = self.types.wasmparser_to_wasmtime[&id];
+                EngineOrModuleTypeIndex::Module(interned)
+            }
+            UnpackedIndex::Module(module_index) => {
+                let module_index = TypeIndex::from_u32(module_index);
+                let interned = self.module.types[module_index];
+                EngineOrModuleTypeIndex::Module(interned)
+            }
             UnpackedIndex::RecGroup(_) => unreachable!(),
         }
     }

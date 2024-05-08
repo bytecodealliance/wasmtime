@@ -24,7 +24,7 @@ use std::path::Path;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
-    ObjectKind, VMOffsets, VMSharedTypeIndex,
+    ObjectKind, TypeTrace, VMOffsets, VMSharedTypeIndex,
 };
 mod registry;
 
@@ -687,7 +687,12 @@ impl Module {
         let engine = self.engine();
         module
             .imports()
-            .map(move |(module, field, ty)| ImportType::new(module, field, ty, types, engine))
+            .map(move |(imp_mod, imp_field, mut ty)| {
+                ty.canonicalize_for_runtime_usage(&mut |i| {
+                    self.signatures().shared_type(i).unwrap()
+                });
+                ImportType::new(imp_mod, imp_field, ty, types, engine)
+            })
             .collect::<Vec<_>>()
             .into_iter()
     }

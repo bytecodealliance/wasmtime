@@ -703,6 +703,13 @@ impl TypeConvert for ComponentTypesBuilder {
     fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
         panic!("heap types are not supported yet")
     }
+
+    fn lookup_type_index(
+        &self,
+        _index: wasmparser::UnpackedIndex,
+    ) -> wasmtime_types::EngineOrModuleTypeIndex {
+        panic!("typed references are not supported yet")
+    }
 }
 
 fn intern<T, U>(map: &mut HashMap<T, U>, list: &mut PrimaryMap<U, T>, item: T) -> U

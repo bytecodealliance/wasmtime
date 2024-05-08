@@ -965,6 +965,13 @@ impl TypeConvert for ModuleEnvironment<'_, '_> {
     fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
         WasmparserTypeConverter::new(&self.types, &self.result.module).lookup_heap_type(index)
     }
+
+    fn lookup_type_index(
+        &self,
+        index: wasmparser::UnpackedIndex,
+    ) -> wasmtime_types::EngineOrModuleTypeIndex {
+        WasmparserTypeConverter::new(&self.types, &self.result.module).lookup_type_index(index)
+    }
 }
 
 impl ModuleTranslation<'_> {

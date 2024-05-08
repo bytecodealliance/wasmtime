@@ -1642,6 +1642,11 @@ impl TypeConvert for FuncEnvironment<'_> {
     fn lookup_heap_type(&self, ty: wasmparser::UnpackedIndex) -> WasmHeapType {
         wasmtime_environ::WasmparserTypeConverter::new(self.types, self.module).lookup_heap_type(ty)
     }
+
+    fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, self.module)
+            .lookup_type_index(index)
+    }
 }
 
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {

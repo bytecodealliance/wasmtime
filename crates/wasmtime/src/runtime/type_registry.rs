@@ -456,6 +456,17 @@ struct TypeRegistryInner {
     // `RecGroupEntry`.
     type_to_rec_group: SecondaryMap<VMSharedTypeIndex, Option<RecGroupEntry>>,
 
+    // A map from a registered type to its complete list of supertypes.
+    //
+    // The supertypes are ordered from super- to subtype, i.e. the immediate
+    // parent supertype is the last element and the least-upper-bound of all
+    // supertypes is the first element.
+    //
+    // Types without any supertypes are omitted from this map. This means that
+    // we never allocate any backing storage for this map when Wasm GC is not in
+    // use.
+    type_to_supertypes: SecondaryMap<VMSharedTypeIndex, Option<Box<[VMSharedTypeIndex]>>>,
+
     // A map from each registered function type to its trampoline type.
     //
     // Note that when a function type is its own trampoline type, then we omit
@@ -634,6 +645,8 @@ impl TypeRegistryInner {
                         // registration, but at most once since trampoline
                         // function types are their own trampoline type.
                         let trampoline_entry = self.register_singleton_rec_group(WasmSubType {
+                            is_final: true,
+                            supertype: None,
                             composite_type: wasmtime_environ::WasmCompositeType::Func(trampoline),
                         });
                         let trampoline_index = trampoline_entry.0.shared_type_indices[0];
@@ -689,13 +702,40 @@ impl TypeRegistryInner {
             "type is not canonicalized for runtime usage: {ty:?}"
         );
 
+        // Add the type to our slab.
         let id = self.types.alloc(Arc::new(ty));
         let engine_index = slab_id_to_shared_type_index(id);
         log::trace!(
             "registered type {module_index:?} as {engine_index:?} = {:?}",
             &self.types[id]
         );
+
+        // Create the supertypes list for this type.
+        if let Some(supertype) = self.types[id].supertype {
+            let supertype = supertype.unwrap_engine_type_index();
+            let supers_supertypes = self.supertypes(supertype);
+            let mut supertypes = Vec::with_capacity(supers_supertypes.len() + 1);
+            supertypes.extend(
+                supers_supertypes
+                    .iter()
+                    .copied()
+                    .chain(iter::once(supertype)),
+            );
+            self.type_to_supertypes[engine_index] = Some(supertypes.into_boxed_slice());
+        }
+
         engine_index
+    }
+
+    /// Get the supertypes list for the given type.
+    ///
+    /// The supertypes are listed in super-to-sub order. `ty` itself is not
+    /// included in the list.
+    fn supertypes(&self, ty: VMSharedTypeIndex) -> &[VMSharedTypeIndex] {
+        self.type_to_supertypes
+            .get(ty)
+            .and_then(|s| s.as_deref())
+            .unwrap_or(&[])
     }
 
     /// Register a rec group consisting of a single type.
@@ -800,6 +840,7 @@ impl TypeRegistryInner {
                 let removed_entry = self.type_to_rec_group[ty].take();
                 debug_assert_eq!(removed_entry.unwrap(), entry);
 
+                // Remove the associated trampoline type, if any.
                 if let Some(trampoline_ty) =
                     self.type_to_trampoline.get(ty).and_then(|x| x.expand())
                 {
@@ -810,6 +851,14 @@ impl TypeRegistryInner {
                     {
                         self.drop_stack.push(trampoline_entry.clone());
                     }
+                }
+
+                // Remove the type's supertypes list, if any. Take care to guard
+                // this assignment so that we don't accidentally force the
+                // secondary map to allocate even when we never actually use
+                // Wasm GC.
+                if self.type_to_supertypes.get(ty).is_some() {
+                    self.type_to_supertypes[ty] = None;
                 }
 
                 let id = shared_type_index_to_slab_id(ty);
@@ -831,6 +880,7 @@ impl Drop for TypeRegistryInner {
             hash_consing_map,
             types,
             type_to_rec_group,
+            type_to_supertypes,
             type_to_trampoline,
             drop_stack,
         } = self;
@@ -845,6 +895,10 @@ impl Drop for TypeRegistryInner {
         assert!(
             type_to_rec_group.is_empty() || type_to_rec_group.values().all(|x| x.is_none()),
             "type registry not empty: type-to-rec-group map is not empty: {type_to_rec_group:#?}"
+        );
+        assert!(
+            type_to_supertypes.is_empty() || type_to_supertypes.values().all(|x| x.is_none()),
+            "type registry not empty: type-to-supertypes map is not empty: {type_to_supertypes:#?}"
         );
         assert!(
             type_to_trampoline.is_empty() || type_to_trampoline.values().all(|x| x.is_none()),
@@ -906,5 +960,56 @@ impl TypeRegistry {
         };
         log::trace!("TypeRegistry::trampoline_type({index:?}) -> {trampoline_ty:?}");
         trampoline_ty
+    }
+
+    /// Is type `sub` a subtype of `sup`?
+    pub fn is_subtype(&self, sub: VMSharedTypeIndex, sup: VMSharedTypeIndex) -> bool {
+        if sub == sup {
+            return true;
+        }
+
+        // Do the O(1) subtype checking trick:
+        //
+        // In a type system with single inheritance, the subtyping relationships
+        // between all types form a set of trees. The root of each tree is a
+        // type that has no supertype; each node's immediate children are the
+        // types that directly subtype that node.
+        //
+        // For example, consider these types:
+        //
+        //     class Base {}
+        //     class A subtypes Base {}
+        //     class B subtypes Base {}
+        //     class C subtypes A {}
+        //     class D subtypes A {}
+        //     class E subtypes C {}
+        //
+        // These types produce the following tree:
+        //
+        //                Base
+        //               /    \
+        //              A      B
+        //             / \
+        //            C   D
+        //           /
+        //          E
+        //
+        // Note the following properties:
+        //
+        // 1. If `sub` is a subtype of `sup` (either directly or transitively)
+        //    then `sup` *must* be on the path from `sub` up to the root of
+        //    `sub`'s tree.
+        //
+        // 2. Additionally, `sup` *must* be the `i`th node down from the root in
+        //    that path, where `i` is the length of the path from `sup` to its
+        //    tree's root.
+        //
+        // Therefore, if we have the path to the root for each type (we do) then
+        // we can simply check if `sup` is at index `supertypes(sup).len()`
+        // within `supertypes(sub)`.
+        let inner = self.0.read();
+        let sub_supertypes = inner.supertypes(sub);
+        let sup_supertypes = inner.supertypes(sup);
+        sub_supertypes.get(sup_supertypes.len()) == Some(&sup)
     }
 }
