@@ -15,6 +15,10 @@ if [ "$target" = "" ]; then
   exit 1
 fi
 
+REPO_DIR=$(dirname $0)/../..
+HOST_DIR=$REPO_DIR/examples/min-platform
+EMBEDDING_DIR=$HOST_DIR/embedding
+
 set -ex
 
 # First compile the C implementation of the platform symbols that will be
@@ -25,9 +29,9 @@ set -ex
 #   cargo install cbindgen
 #
 # which ensures that Rust & C agree on types and such.
-cbindgen ../../crates/wasmtime/src/runtime/vm/sys/custom/capi.rs \
-    --config embedding/cbindgen.toml > embedding/wasmtime-platform.h
-clang -shared -O2 -o libwasmtime-platform.so ./embedding/wasmtime-platform.c \
+cbindgen "$REPO_DIR/crates/wasmtime/src/runtime/vm/sys/custom/capi.rs" \
+    --config "$EMBEDDING_DIR/cbindgen.toml" > "$EMBEDDING_DIR/wasmtime-platform.h"
+clang -shared -O2 -o "$HOST_DIR/libwasmtime-platform.so" "$EMBEDDING_DIR/wasmtime-platform.c" \
   -D_GNU_SOURCE
 
 # Next the embedding itself is built.
@@ -38,17 +42,20 @@ clang -shared -O2 -o libwasmtime-platform.so ./embedding/wasmtime-platform.c \
 # don't support dynamic libraries so this is a bit of a dance to get around the
 # fact that we're pretending this examples in't being compiled for linux.
 cargo build \
-  --manifest-path embedding/Cargo.toml \
+  --manifest-path $EMBEDDING_DIR/Cargo.toml \
   --target $target \
   --release
 cc \
   -Wl,--gc-sections \
   -Wl,--whole-archive \
-  ../../target/$target/release/libembedding.a \
+  "$REPO_DIR/target/$target/release/libembedding.a" \
   -Wl,--no-whole-archive \
   -shared \
-  -o libembedding.so
+  -o "$HOST_DIR/libembedding.so"
 
 # The final step here is running the host, in the current directory, which will
 # load the embedding and execute it.
-cargo run --release -- $target
+cargo run --manifest-path "$HOST_DIR/Cargo.toml" --release -- \
+  "$target" \
+  "$HOST_DIR/libembedding.so" \
+  "$HOST_DIR/libwasmtime-platform.so"
