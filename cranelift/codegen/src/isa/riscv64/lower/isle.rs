@@ -189,6 +189,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm12::from_i16(imm.as_i16() & (x as i16))
     }
 
+    fn fli_constant_from_u64(&mut self, ty: Type, imm: u64) -> Option<FliConstant> {
+        FliConstant::maybe_from_u64(ty, imm)
+    }
+
     fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
         MInst::generate_imm(imm as u64)
     }

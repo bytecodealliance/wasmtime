@@ -310,6 +310,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::Auipc { rd, .. } => collector.reg_def(rd),
         Inst::Lui { rd, .. } => collector.reg_def(rd),
+        Inst::Fli { rd, .. } => collector.reg_def(rd),
         Inst::LoadInlineConst { rd, .. } => collector.reg_def(rd),
         Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
@@ -1135,6 +1136,17 @@ impl Inst {
                     format_reg(rd.to_reg(), allocs),
                     imm.as_i32()
                 )
+            }
+            &Inst::Fli { rd, ty, imm } => {
+                let rd_s = format_reg(rd.to_reg(), allocs);
+                let imm_s = imm.format();
+                let suffix = match ty {
+                    F32 => "s",
+                    F64 => "d",
+                    _ => unreachable!(),
+                };
+
+                format!("fli.{suffix} {rd_s},{imm_s}")
             }
             &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg(), allocs);

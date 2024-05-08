@@ -19,6 +19,11 @@
       (rd WritableReg)
       (imm Imm20))
 
+    (Fli
+      (ty Type)
+      (imm FliConstant)
+      (rd WritableReg))
+
     ;; An ALU operation with one register sources and a register destination.
     (FpuRR
       (alu_op FpuOPRR)
@@ -410,6 +415,8 @@
   ;; 9 rs1 is a quiet NaN.
   (QNaN)
 ))
+
+(type FliConstant (primitive FliConstant))
 
 (type FpuOPRR (enum
   ;; RV32F Standard Extension
@@ -1556,6 +1563,15 @@
 (rule (rv_fround $F32 frm rs) (fpu_rr (FpuOPRR.FroundS) $F32 frm rs))
 (rule (rv_fround $F64 frm rs) (fpu_rr (FpuOPRR.FroundD) $F64 frm rs))
 
+;; Helper for emitting the `fli` instruction.
+(decl rv_fli (Type FliConstant) FReg)
+(rule (rv_fli ty imm)
+      (let ((dst WritableFReg (temp_writable_freg))
+            (_ Unit (emit (MInst.Fli ty
+                                     imm
+                                     dst))))
+        dst))
+
 ;; `Zba` Extension Instructions
 
 ;; Helper for emitting the `adduw` ("Add Unsigned Word") instruction.
@@ -1785,6 +1801,10 @@
 
 
 
+;; Helper for generating a FliConstant from a u64 constant
+(decl pure partial fli_constant_from_u64 (Type u64) FliConstant)
+(extern constructor fli_constant_from_u64 fli_constant_from_u64)
+
 ;; Helper for generating a i64 from a pair of Imm20 and Imm12 constants
 (decl i64_generate_imm (Imm20 Imm12) i64)
 (extern extractor i64_generate_imm i64_generate_imm)
@@ -1802,13 +1822,19 @@
 ;; TODO: Load floats using `fld` instead of `ld`
 (decl imm (Type u64) Reg)
 
+;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
+(rule 6 (imm (ty_scalar_float ty) imm)
+  (if-let $true (has_zfa))
+  (if-let const (fli_constant_from_u64 ty imm))
+  (rv_fli ty const))
+
+;; Otherwise floats get loaded as integers and then moved into an F register.
+(rule 5 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
+(rule 5 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
+
 ;; Refs get loaded as integers.
 (rule 5 (imm $R32 c) (imm $I32 c))
 (rule 5 (imm $R64 c) (imm $I64 c))
-
-;; Floats get loaded as integers and then moved into an F register.
-(rule 5 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
-(rule 5 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
 
 ;; Try to match just an imm12
 (rule 4 (imm (ty_int ty) c)

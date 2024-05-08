@@ -2084,6 +2084,26 @@ fn test_riscv64_binemit() {
         0x22b59553,
     ));
 
+    insns.push(TestUnit::new(
+        Inst::Fli {
+            ty: F32,
+            rd: writable_fa0(),
+            imm: FliConstant::new(0),
+        },
+        "fli.s fa0,-1.0",
+        0xf0100553,
+    ));
+
+    insns.push(TestUnit::new(
+        Inst::Fli {
+            ty: F64,
+            rd: writable_fa0(),
+            imm: FliConstant::new(13),
+        },
+        "fli.d fa0,0.625",
+        0xf2168553,
+    ));
+
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
 
