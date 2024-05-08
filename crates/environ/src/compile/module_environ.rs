@@ -322,7 +322,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                         TypeRef::Table(ty) => {
                             self.result.module.num_imported_tables += 1;
-                            EntityType::Table(self.convert_table_type(&ty))
+                            EntityType::Table(self.convert_table_type(&ty)?)
                         }
 
                         // doesn't get past validation
@@ -353,7 +353,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
                 for entry in tables {
                     let wasmparser::Table { ty, init } = entry?;
-                    let table = self.convert_table_type(&ty);
+                    let table = self.convert_table_type(&ty)?;
                     let plan = TablePlan::for_table(table, &self.tunables);
                     self.result.module.table_plans.push(plan);
                     let init = match init {

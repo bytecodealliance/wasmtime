@@ -264,6 +264,9 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
+        // Not yet implemented in Wasmtime
+        ret.features.set(WasmFeatures::EXTENDED_CONST, false);
+
         // Conditionally enabled features depending on compile-time crate
         // features. Note that if these features are disabled then `Config` has
         // no way of re-enabling them.
