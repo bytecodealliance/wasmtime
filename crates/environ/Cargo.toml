@@ -19,7 +19,7 @@ postcard = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true }
 wasmtime-types = { workspace = true }
-wasmparser = { workspace = true }
+wasmparser = { workspace = true, features = ['validate'] }
 indexmap = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
