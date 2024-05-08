@@ -1192,10 +1192,6 @@ impl Inst {
             &Inst::Nop0 => "nop-zero-len".to_string(),
             &Inst::Nop2 => "nop".to_string(),
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-                let rm = allocs.next(rm);
-
                 let (op, have_rr) = match alu_op {
                     ALUOp::Add32 => ("ark", true),
                     ALUOp::Add64 => ("agrk", true),
@@ -1245,9 +1241,6 @@ impl Inst {
                 rn,
                 imm,
             } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
                 if rd.to_reg() == rn {
                     let inst = Inst::AluRSImm16 {
                         alu_op,
@@ -2109,7 +2102,7 @@ impl Inst {
             }
             &Inst::FpuCMov32 { rd, cond, ri, rm } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
-                let _ri = allocs.next(ri);
+                let _ri = ri;
                 let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -2121,7 +2114,7 @@ impl Inst {
             }
             &Inst::FpuCMov64 { rd, cond, ri, rm } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
-                let _ri = allocs.next(ri);
+                let _ri = ri;
                 let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -2856,7 +2849,7 @@ impl Inst {
                 };
 
                 let (rd, _) = pretty_print_fpr(rd.to_reg(), allocs);
-                let _ri = allocs.next(ri);
+                let _ri = ri;
                 let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,

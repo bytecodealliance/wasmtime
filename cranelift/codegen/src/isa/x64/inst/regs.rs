@@ -270,7 +270,6 @@ pub fn show_ireg_sized(reg: Reg, size: u8) -> String {
 // words, we can't pretty-print a `Reg` all by itself in a build that
 // may have multiple backends; but we can pretty-print one as part of
 // an x64 Inst or x64 RegMemImm.)
-pub fn pretty_print_reg(reg: Reg, size: u8, allocs: &mut AllocationConsumer) -> String {
-    let reg = allocs.next(reg);
+pub fn pretty_print_reg(reg: Reg, size: u8, _allocs: &mut AllocationConsumer) -> String {
     show_ireg_sized(reg, size)
 }

@@ -2773,7 +2773,6 @@ impl Inst {
                 // this logic between `emit()` and `show_rru()` -- a separate 1-to-N
                 // expansion stage (i.e., legalization, but without the slow edit-in-place
                 // of the existing legalization framework).
-                let rd = allocs.next_writable(rd);
                 let mem = mem.clone();
                 let (mem_insts, mem) = mem_finalize(None, &mem, I8, state);
                 let mut ret = String::new();

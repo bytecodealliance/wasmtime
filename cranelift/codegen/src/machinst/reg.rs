@@ -503,14 +503,6 @@ impl AllocationConsumer {
         debug_assert!(allocs.is_empty());
         Self
     }
-
-    pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {
-        pre_regalloc_reg
-    }
-
-    pub fn next_writable(&mut self, pre_regalloc_reg: Writable<Reg>) -> Writable<Reg> {
-        pre_regalloc_reg
-    }
 }
 
 impl std::default::Default for AllocationConsumer {

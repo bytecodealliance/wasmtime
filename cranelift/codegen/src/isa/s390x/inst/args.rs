@@ -216,13 +216,11 @@ impl Cond {
 }
 
 impl PrettyPrint for MemArg {
-    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer) -> String {
+    fn pretty_print(&self, _: u8, _allocs: &mut AllocationConsumer) -> String {
         match self {
             &MemArg::BXD12 {
                 base, index, disp, ..
             } => {
-                let base = allocs.next(base);
-                let index = allocs.next(index);
                 if base != zero_reg() {
                     if index != zero_reg() {
                         format!(
@@ -245,8 +243,6 @@ impl PrettyPrint for MemArg {
             &MemArg::BXD20 {
                 base, index, disp, ..
             } => {
-                let base = allocs.next(base);
-                let index = allocs.next(index);
                 if base != zero_reg() {
                     if index != zero_reg() {
                         format!(

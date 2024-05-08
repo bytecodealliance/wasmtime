@@ -1083,7 +1083,7 @@ impl PrettyPrint for Inst {
                 dst,
             } => {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
-                let mask = allocs.next(mask.to_reg());
+                let mask = mask.to_reg();
                 let mask = if mask.is_virtual() {
                     format!(" <{}>", show_ireg_sized(mask, 8))
                 } else {
@@ -1862,7 +1862,7 @@ impl PrettyPrint for Inst {
                 tmp,
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let tmp = allocs.next(tmp.to_reg().to_reg());
+                let tmp = tmp.to_reg().to_reg();
 
                 let mut s = format!("{dst} = coff_tls_get_addr {symbol:?}");
                 if tmp.is_virtual() {
