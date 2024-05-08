@@ -312,6 +312,116 @@ impl IntegerCompare {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FliConstant(u8);
+
+impl FliConstant {
+    pub(crate) fn new(value: u8) -> Self {
+        debug_assert!(value <= 31, "Invalid FliConstant: {}", value);
+        Self(value)
+    }
+
+    pub(crate) fn maybe_from_u64(ty: Type, imm: u64) -> Option<Self> {
+        // Convert the value into an F64, this allows us to represent
+        // values from both f32 and f64 in the same value.
+        let value = match ty {
+            F32 => f32::from_bits(imm as u32) as f64,
+            F64 => f64::from_bits(imm),
+            _ => unimplemented!(),
+        };
+
+        Some(match (ty, value) {
+            (_, f) if f == -1.0 => Self::new(0),
+
+            // Since f64 can represent all f32 values, f32::min_positive won't be
+            // the same as f64::min_positive, so we need to check for both indepenendtly
+            (F32, f) if f == (f32::MIN_POSITIVE as f64) => Self::new(1),
+            (F64, f) if f == f64::MIN_POSITIVE => Self::new(1),
+
+            (_, f) if f == 2.0f64.powi(-16) => Self::new(2),
+            (_, f) if f == 2.0f64.powi(-15) => Self::new(3),
+            (_, f) if f == 2.0f64.powi(-8) => Self::new(4),
+            (_, f) if f == 2.0f64.powi(-7) => Self::new(5),
+            (_, f) if f == 0.0625 => Self::new(6),
+            (_, f) if f == 0.125 => Self::new(7),
+            (_, f) if f == 0.25 => Self::new(8),
+            (_, f) if f == 0.3125 => Self::new(9),
+            (_, f) if f == 0.375 => Self::new(10),
+            (_, f) if f == 0.4375 => Self::new(11),
+            (_, f) if f == 0.5 => Self::new(12),
+            (_, f) if f == 0.625 => Self::new(13),
+            (_, f) if f == 0.75 => Self::new(14),
+            (_, f) if f == 0.875 => Self::new(15),
+            (_, f) if f == 1.0 => Self::new(16),
+            (_, f) if f == 1.25 => Self::new(17),
+            (_, f) if f == 1.5 => Self::new(18),
+            (_, f) if f == 1.75 => Self::new(19),
+            (_, f) if f == 2.0 => Self::new(20),
+            (_, f) if f == 2.5 => Self::new(21),
+            (_, f) if f == 3.0 => Self::new(22),
+            (_, f) if f == 4.0 => Self::new(23),
+            (_, f) if f == 8.0 => Self::new(24),
+            (_, f) if f == 16.0 => Self::new(25),
+            (_, f) if f == 128.0 => Self::new(26),
+            (_, f) if f == 256.0 => Self::new(27),
+            (_, f) if f == 32768.0 => Self::new(28),
+            (_, f) if f == 65536.0 => Self::new(29),
+            (_, f) if f == f64::INFINITY => Self::new(30),
+
+            // NaN's are not guaranteed to preserve the sign / payload bits, so we need to check
+            // the original bits directly.
+            (F32, f) if f.is_nan() && imm == 0x7fc0_0000 => Self::new(31), // Canonical NaN
+            (F64, f) if f.is_nan() && imm == 0x7ff8_0000_0000_0000 => Self::new(31), // Canonical NaN
+            _ => return None,
+        })
+    }
+
+    pub(crate) fn format(self) -> &'static str {
+        // The preferred assembly syntax for entries 1, 30, and 31 is min, inf, and nan, respectively.
+        // For entries 0 through 29 (including entry 1), the assembler will accept decimal constants
+        // in C-like syntax.
+        match self.0 {
+            0 => "-1.0",
+            1 => "min",
+            2 => "2^-16",
+            3 => "2^-15",
+            4 => "2^-8",
+            5 => "2^-7",
+            6 => "0.0625",
+            7 => "0.125",
+            8 => "0.25",
+            9 => "0.3125",
+            10 => "0.375",
+            11 => "0.4375",
+            12 => "0.5",
+            13 => "0.625",
+            14 => "0.75",
+            15 => "0.875",
+            16 => "1.0",
+            17 => "1.25",
+            18 => "1.5",
+            19 => "1.75",
+            20 => "2.0",
+            21 => "2.5",
+            22 => "3.0",
+            23 => "4.0",
+            24 => "8.0",
+            25 => "16.0",
+            26 => "128.0",
+            27 => "256.0",
+            28 => "32768.0",
+            29 => "65536.0",
+            30 => "inf",
+            31 => "nan",
+            _ => panic!("Invalid FliConstant"),
+        }
+    }
+
+    pub(crate) fn bits(self) -> u8 {
+        self.0
+    }
+}
+
 impl FpuOPRRRR {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
@@ -376,6 +486,8 @@ impl FpuOPRR {
             Self::FcvtWuD => "fcvt.wu.d",
             Self::FcvtDW => "fcvt.d.w",
             Self::FcvtDWU => "fcvt.d.wu",
+            Self::FroundS => "fround.s",
+            Self::FroundD => "fround.d",
         }
     }
 
@@ -390,14 +502,6 @@ impl FpuOPRR {
             | Self::FcvtLD
             | Self::FcvtLuD => true,
             _ => false,
-        }
-    }
-    // move from x register to float register.
-    pub(crate) fn move_x_to_f_op(ty: Type) -> Self {
-        match ty {
-            F32 => Self::FmvWX,
-            F64 => Self::FmvDX,
-            _ => unreachable!("ty:{:?}", ty),
         }
     }
 
@@ -428,7 +532,9 @@ impl FpuOPRR {
             | FpuOPRR::FcvtWD
             | FpuOPRR::FcvtWuD
             | FpuOPRR::FcvtDW
-            | FpuOPRR::FcvtDWU => 0b1010011,
+            | FpuOPRR::FcvtDWU
+            | FpuOPRR::FroundS
+            | FpuOPRR::FroundD => 0b1010011,
         }
     }
 
@@ -460,6 +566,8 @@ impl FpuOPRR {
             FpuOPRR::FcvtDW => 0b00000,
             FpuOPRR::FcvtDWU => 0b00001,
             FpuOPRR::FsqrtD => 0b00000,
+            FpuOPRR::FroundS => 0b00100,
+            FpuOPRR::FroundD => 0b00100,
         }
     }
     pub(crate) fn funct7(self) -> u32 {
@@ -482,8 +590,8 @@ impl FpuOPRR {
             FpuOPRR::FcvtDL => 0b1101001,
             FpuOPRR::FcvtDLu => 0b1101001,
             FpuOPRR::FmvDX => 0b1111001,
-            FpuOPRR::FcvtSD => 0b0100000,
-            FpuOPRR::FcvtDS => 0b0100001,
+            FpuOPRR::FcvtSD | FpuOPRR::FroundS => 0b0100000,
+            FpuOPRR::FcvtDS | FpuOPRR::FroundD => 0b0100001,
             FpuOPRR::FclassD => 0b1110001,
             FpuOPRR::FcvtWD => 0b1100001,
             FpuOPRR::FcvtWuD => 0b1100001,

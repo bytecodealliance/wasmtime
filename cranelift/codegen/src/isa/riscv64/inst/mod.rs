@@ -236,42 +236,6 @@ impl Inst {
             .expect("code range is too big.")
     }
 
-    /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u32,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let mut insts = SmallVec::new();
-        let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
-        insts.push(Inst::FpuRR {
-            frm: FRM::RNE,
-            alu_op: FpuOPRR::move_x_to_f_op(F32),
-            rd,
-            rs: tmp.to_reg(),
-        });
-        insts
-    }
-
-    /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u64,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let mut insts = SmallInstVec::new();
-        let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u64(tmp, const_data));
-        insts.push(Inst::FpuRR {
-            frm: FRM::RNE,
-            alu_op: FpuOPRR::move_x_to_f_op(F64),
-            rd,
-            rs: tmp.to_reg(),
-        });
-        insts
-    }
-
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
         if ty.is_vector() {
@@ -346,6 +310,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::Auipc { rd, .. } => collector.reg_def(rd),
         Inst::Lui { rd, .. } => collector.reg_def(rd),
+        Inst::Fli { rd, .. } => collector.reg_def(rd),
         Inst::LoadInlineConst { rd, .. } => collector.reg_def(rd),
         Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
@@ -1171,6 +1136,17 @@ impl Inst {
                     format_reg(rd.to_reg(), allocs),
                     imm.as_i32()
                 )
+            }
+            &Inst::Fli { rd, ty, imm } => {
+                let rd_s = format_reg(rd.to_reg(), allocs);
+                let imm_s = imm.format();
+                let suffix = match ty {
+                    F32 => "s",
+                    F64 => "d",
+                    _ => unreachable!(),
+                };
+
+                format!("fli.{suffix} {rd_s},{imm_s}")
             }
             &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg(), allocs);

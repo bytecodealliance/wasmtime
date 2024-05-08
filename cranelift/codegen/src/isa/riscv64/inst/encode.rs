@@ -652,3 +652,24 @@ pub fn encode_zcbmem_load(op: ZcbMemOp, rd: WritableReg, base: Reg, imm: Uimm2) 
 pub fn encode_zcbmem_store(op: ZcbMemOp, src: Reg, base: Reg, imm: Uimm2) -> u16 {
     encode_zcbmem_bits(op, src, base, imm)
 }
+
+pub fn encode_fli(ty: Type, imm: FliConstant, rd: WritableReg) -> u32 {
+    // FLI.{S,D} is encoded as a FMV.{W,D} instruction with rs2 set to the
+    // immediate value to be loaded.
+    let op = match ty {
+        F32 => FpuOPRR::FmvWX,
+        F64 => FpuOPRR::FmvDX,
+        _ => unreachable!(),
+    };
+    let frm = 0; // FRM is hard coded to 0 in both instructions
+    let rs2 = 1; // rs2 set to 1 is what differentiates FLI from FMV
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op_code(), 7);
+    bits |= reg_to_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(frm, 3) << 12;
+    bits |= unsigned_field_width(imm.bits() as u32, 5) << 15;
+    bits |= unsigned_field_width(rs2, 6) << 20;
+    bits |= unsigned_field_width(op.funct7(), 7) << 25;
+    bits
+}

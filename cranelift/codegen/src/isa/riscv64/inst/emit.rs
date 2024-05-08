@@ -149,6 +149,7 @@ impl Inst {
             | Inst::Nop4
             | Inst::BrTable { .. }
             | Inst::Auipc { .. }
+            | Inst::Fli { .. }
             | Inst::Lui { .. }
             | Inst::LoadInlineConst { .. }
             | Inst::AluRRR { .. }
@@ -874,6 +875,9 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.bits() << 12);
                 sink.put4(x);
+            }
+            &Inst::Fli { rd, ty, imm } => {
+                sink.put4(encode_fli(ty, imm, rd));
             }
             &Inst::LoadInlineConst { rd, ty, imm } => {
                 let data = &imm.to_le_bytes()[..ty.bytes() as usize];
