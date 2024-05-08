@@ -18,13 +18,13 @@ pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()>
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn commit_table_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
+pub unsafe fn commit_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
     std::ptr::write_bytes(ptr, 0, len);
     Ok(())
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn decommit_table_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
+pub unsafe fn decommit_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
     std::ptr::write_bytes(ptr, 0, len);
     Ok(())
 }

@@ -27,7 +27,7 @@ pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()>
 }
 
 #[cfg(feature = "pooling-allocator")]
-unsafe fn decommit(addr: *mut u8, len: usize) -> io::Result<()> {
+pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     if len == 0 {
         return Ok(());
     }
@@ -59,27 +59,10 @@ unsafe fn decommit(addr: *mut u8, len: usize) -> io::Result<()> {
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn commit_table_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
-    // Table pages are always READ | WRITE so there's nothing that needs to be
-    // done here.
+pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
+    // Pages are always READ | WRITE so there's nothing that needs to be done
+    // here.
     Ok(())
-}
-
-#[cfg(feature = "pooling-allocator")]
-pub unsafe fn decommit_table_pages(addr: *mut u8, len: usize) -> io::Result<()> {
-    decommit(addr, len)
-}
-
-#[cfg(all(feature = "pooling-allocator", feature = "async"))]
-pub unsafe fn commit_stack_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
-    // Like table pages stack pages are always READ | WRITE so nothing extra
-    // needs to be done to ensure they can be committed.
-    Ok(())
-}
-
-#[cfg(all(feature = "pooling-allocator", feature = "async"))]
-pub unsafe fn reset_stack_pages_to_zero(addr: *mut u8, len: usize) -> io::Result<()> {
-    decommit(addr, len)
 }
 
 pub fn get_page_size() -> usize {

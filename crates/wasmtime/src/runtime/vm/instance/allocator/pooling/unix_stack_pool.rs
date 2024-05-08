@@ -4,7 +4,7 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
 };
-use crate::runtime::vm::sys::vm::{commit_stack_pages, reset_stack_pages_to_zero};
+use crate::runtime::vm::sys::vm::{commit_pages, decommit_pages};
 use crate::runtime::vm::{Mmap, PoolingInstanceAllocatorConfig};
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -110,7 +110,7 @@ impl StackPool {
                 .add((index * self.stack_size) + self.page_size)
                 .cast_mut();
 
-            commit_stack_pages(bottom_of_stack, size_without_guard)?;
+            commit_pages(bottom_of_stack, size_without_guard)?;
 
             let stack =
                 wasmtime_fiber::FiberStack::from_raw_parts(bottom_of_stack, size_without_guard)?;
@@ -170,7 +170,7 @@ impl StackPool {
             );
 
             // Use the system to reset remaining stack pages to zero.
-            reset_stack_pages_to_zero(bottom as _, size - size_to_memset).unwrap();
+            decommit_pages(bottom as _, size - size_to_memset).unwrap();
         }
     }
 }

@@ -23,14 +23,14 @@ pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> Result<()> {
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn commit_table_pages(_addr: *mut u8, _len: usize) -> Result<()> {
-    // Table pages are always READ | WRITE so there's nothing that needs to be
+pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+    // Pages are always READ | WRITE so there's nothing that needs to be
     // done here.
     Ok(())
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> Result<()> {
     if len == 0 {
         return Ok(());
     }
