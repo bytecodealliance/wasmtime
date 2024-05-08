@@ -172,6 +172,14 @@ impl fmt::Debug for Module {
     }
 }
 
+impl fmt::Debug for ModuleInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ModuleInner")
+            .field("name", &self.module.module().name.as_ref())
+            .finish_non_exhaustive()
+    }
+}
+
 impl Module {
     /// Creates a new WebAssembly `Module` from the given in-memory `bytes`.
     ///
@@ -1104,10 +1112,28 @@ impl crate::runtime::vm::ModuleRuntimeInfo for ModuleInner {
         &self,
         signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>> {
-        let sig = self.code.signatures().module_local_type(signature)?;
+        log::trace!("Looking up trampoline for {signature:?}");
+        let trampoline_shared_ty = self.engine.signatures().trampoline_type(signature);
+        let trampoline_module_ty = self
+            .code
+            .signatures()
+            .trampoline_type(trampoline_shared_ty)?;
+        debug_assert!(self
+            .engine
+            .signatures()
+            .borrow(
+                self.code
+                    .signatures()
+                    .shared_type(trampoline_module_ty)
+                    .unwrap()
+            )
+            .unwrap()
+            .unwrap_func()
+            .is_trampoline_type());
+
         let ptr = self
             .module
-            .wasm_to_native_trampoline(sig)
+            .wasm_to_native_trampoline(trampoline_module_ty)
             .as_ptr()
             .cast::<VMWasmCallFunction>()
             .cast_mut();

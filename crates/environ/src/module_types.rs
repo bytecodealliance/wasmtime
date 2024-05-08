@@ -1,12 +1,10 @@
 use crate::PrimaryMap;
 use core::ops::{Index, Range};
+use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_types::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, WasmSubType};
 
 /// All types used in a core wasm module.
-///
-/// At this time this only contains function types. Note, though, that function
-/// types are deduplicated within this [`ModuleTypes`].
 ///
 /// Note that accesing this type is primarily done through the `Index`
 /// implementations for this type.
@@ -14,6 +12,7 @@ use wasmtime_types::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, WasmS
 pub struct ModuleTypes {
     rec_groups: PrimaryMap<ModuleInternedRecGroupIndex, Range<ModuleInternedTypeIndex>>,
     wasm_types: PrimaryMap<ModuleInternedTypeIndex, WasmSubType>,
+    trampoline_types: SecondaryMap<ModuleInternedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
 }
 
 impl ModuleTypes {
@@ -56,6 +55,55 @@ impl ModuleTypes {
     /// Adds a new type to this interned list of types.
     pub fn push(&mut self, ty: WasmSubType) -> ModuleInternedTypeIndex {
         self.wasm_types.push(ty)
+    }
+
+    /// Iterate over the trampoline function types that this module requires.
+    ///
+    /// Yields pairs of (1) a function type and (2) its associated trampoline
+    /// type. They might be the same.
+    ///
+    /// See the docs for `WasmFuncType::trampoline_type` for details on
+    /// trampoline types.
+    pub fn trampoline_types(
+        &self,
+    ) -> impl Iterator<Item = (ModuleInternedTypeIndex, ModuleInternedTypeIndex)> + '_ {
+        self.trampoline_types
+            .iter()
+            .filter_map(|(k, v)| v.expand().map(|v| (k, v)))
+    }
+
+    /// Get the trampoline type for the given function type.
+    ///
+    /// See the docs for `WasmFuncType::trampoline_type` for details on
+    /// trampoline types.
+    pub fn trampoline_type(&self, ty: ModuleInternedTypeIndex) -> ModuleInternedTypeIndex {
+        debug_assert!(self[ty].is_func());
+        self.trampoline_types[ty].unwrap()
+    }
+}
+
+/// Methods that only exist for `ModuleTypesBuilder`.
+#[cfg(feature = "compile")]
+impl ModuleTypes {
+    /// Associate `trampoline_ty` as the trampoline type for `for_ty`.
+    ///
+    /// This is really only for use by the `ModuleTypesBuilder`.
+    pub fn set_trampoline_type(
+        &mut self,
+        for_ty: ModuleInternedTypeIndex,
+        trampoline_ty: ModuleInternedTypeIndex,
+    ) {
+        use cranelift_entity::packed_option::ReservedValue;
+
+        debug_assert!(!for_ty.is_reserved_value());
+        debug_assert!(!trampoline_ty.is_reserved_value());
+        debug_assert!(self.wasm_types[for_ty].is_func());
+        debug_assert!(self.trampoline_types[for_ty].is_none());
+        debug_assert!(self.wasm_types[trampoline_ty]
+            .unwrap_func()
+            .is_trampoline_type());
+
+        self.trampoline_types[for_ty] = Some(trampoline_ty).into();
     }
 
     /// Adds a new rec group to this interned list of types.

@@ -34,7 +34,7 @@ pub struct WasmFunctionInfo {
 
 /// Description of where a function is located in the text section of a
 /// compiled image.
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct FunctionLoc {
     /// The byte offset from the start of the text section where this
     /// function starts.

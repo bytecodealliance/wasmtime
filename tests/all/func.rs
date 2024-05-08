@@ -2136,3 +2136,123 @@ fn call_func_with_funcref_both_typed_and_untyped() -> Result<()> {
     f1.call(&mut store, &[Val::FuncRef(Some(f2))], &mut [])?;
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn wasm_to_host_trampolines_and_subtyping() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $ty (func (result (ref null extern))))
+
+                (import "" "a" (func $imported_func (type $ty)))
+                (import "" "return_func" (func $return_func (result (ref $ty))))
+                (global $g (export "g") (mut (ref null $ty)) (ref.null $ty))
+                (table $t (export "t") 10 10 (ref null $ty))
+
+                (func (export "f")
+                    (drop (call $imported_func))
+                    (drop (call_ref $ty (call $return_func)))
+                    (drop (call_ref $ty (global.get $g)))
+                    (drop (call_ref $ty (table.get $t (i32.const 0))))
+                )
+            )
+        "#,
+    )?;
+
+    // This defines functions of type `(func (result (ref extern)))` and not of
+    // type `(func (result (ref null extern)))` that the Wasm imports. But it is
+    // still a subtype of the Wasm import's type, so we should be able to use
+    // the Wasm's precompiled trampolines with this host function.
+    //
+    // But this means we also need to look up the trampoline by the caller's
+    // type, rather than the callee's type.
+    //
+    // So take each kind of function we can define, and give it to Wasm in every
+    // way that Wasm can receive a function, and make sure we find the correct
+    // trampolines in all cases and everything works.
+    //
+    // Note that we create multiple versions of the same function by calling
+    // these constructors multiple times in the loop below. This is to avoid the
+    // scenario where we reuse the function, the first time it is exposed to
+    // Wasm its trampoline is filled in, and then all subsequent uses don't
+    // actually exercise their associated code paths for finding and
+    // initializing their trampoline.
+    let func_ty = FuncType::new(&engine, [], [RefType::new(false, HeapType::Extern).into()]);
+    let func_ctors: Vec<Box<dyn Fn(&mut Store<_>) -> Func>> = vec![
+        Box::new(|store| {
+            Func::wrap(store, |mut caller: Caller<'_, ()>| {
+                ExternRef::new(&mut caller, 100)
+            })
+        }),
+        Box::new(|store| {
+            Func::new(
+                store,
+                func_ty.clone(),
+                |mut caller: Caller<'_, ()>, _args, results| {
+                    results[0] = ExternRef::new(&mut caller, 200)?.into();
+                    Ok(())
+                },
+            )
+        }),
+    ];
+
+    let return_func_ty = FuncType::new(
+        &engine,
+        [],
+        [RefType::new(false, HeapType::ConcreteFunc(func_ty.clone())).into()],
+    );
+
+    for make_func in func_ctors {
+        let mut store = Store::new(&engine, ());
+
+        let imported_func = make_func(&mut store);
+        assert!(FuncType::eq(&imported_func.ty(&store), &func_ty));
+
+        let returned_func = make_func(&mut store);
+        assert!(FuncType::eq(&returned_func.ty(&store), &func_ty));
+
+        let return_func = Func::new(
+            &mut store,
+            return_func_ty.clone(),
+            move |_caller, _args, results| {
+                results[0] = returned_func.clone().into();
+                Ok(())
+            },
+        );
+
+        let instance = Instance::new(
+            &mut store,
+            &module,
+            &[imported_func.into(), return_func.into()],
+        )?;
+
+        let g = make_func(&mut store);
+        assert!(FuncType::eq(&g.ty(&store), &func_ty));
+        instance
+            .get_global(&mut store, "g")
+            .unwrap()
+            .set(&mut store, g.into())?;
+
+        let t = make_func(&mut store);
+        assert!(FuncType::eq(&t.ty(&store), &func_ty));
+        instance
+            .get_table(&mut store, "t")
+            .unwrap()
+            .set(&mut store, 0, t.into())?;
+
+        let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+        f.call(&mut store, ())?;
+    }
+
+    Ok(())
+}

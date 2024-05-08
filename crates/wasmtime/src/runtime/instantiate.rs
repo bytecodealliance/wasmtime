@@ -192,10 +192,14 @@ impl CompiledModule {
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
     pub fn wasm_to_native_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
-        let idx = self
+        let idx = match self
             .wasm_to_native_trampolines
             .binary_search_by_key(&signature, |entry| entry.0)
-            .expect("should have a Wasm-to-native trampline for all signatures");
+        {
+            Ok(idx) => idx,
+            Err(_) => panic!("missing trampoline for {signature:?}"),
+        };
+
         let (_, loc) = self.wasm_to_native_trampolines[idx];
         &self.text()[loc.start as usize..][..loc.length as usize]
     }

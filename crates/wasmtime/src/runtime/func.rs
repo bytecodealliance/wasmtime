@@ -1304,8 +1304,8 @@ impl Func {
 
                     let sig = self.type_index(store.store_data());
                     module.runtime_info().wasm_to_native_trampoline(sig).expect(
-                        "must have a wasm-to-native trampoline for this signature if the Wasm \
-                         module is importing a function of this signature",
+                        "if the wasm is importing a function of a given type, it must have the \
+                         type's trampoline",
                     )
                 },
                 native_call: f.as_ref().native_call,
