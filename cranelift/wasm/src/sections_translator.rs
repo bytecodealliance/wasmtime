@@ -85,7 +85,7 @@ pub fn parse_import_section<'data>(
                 environ.declare_global_import(ty, import.module, import.name)?;
             }
             TypeRef::Table(ty) => {
-                let ty = environ.convert_table_type(&ty);
+                let ty = environ.convert_table_type(&ty)?;
                 environ.declare_table_import(ty, import.module, import.name)?;
             }
         }
@@ -124,7 +124,7 @@ pub fn parse_table_section(
     environ.reserve_tables(tables.count())?;
 
     for entry in tables {
-        let ty = environ.convert_table_type(&entry?.ty);
+        let ty = environ.convert_table_type(&entry?.ty)?;
         environ.declare_table(ty)?;
     }
 
