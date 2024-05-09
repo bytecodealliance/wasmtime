@@ -1508,41 +1508,55 @@
   (rv_vfsgnj_vf x y (unmasked) ty))
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; fmadd: rs1 * rs2 + rs3
 (rule 0 (lower (has_type (ty_scalar_float ty) (fma x y z)))
   (rv_fmadd ty (FRM.RNE) x y z))
+
+;; fmsub: rs1 * rs2 - rs3
+(rule 1 (lower (has_type (ty_scalar_float ty) (fma x y (fneg z))))
+  (rv_fmsub ty (FRM.RNE) x y z))
+
+;; fnmsub: -rs1 * rs2 + rs3
+(rule 2 (lower (has_type (ty_scalar_float ty) (fma (fneg x) y z)))
+  (rv_fnmsub ty (FRM.RNE) x y z))
+
+;; fnmadd: -rs1 * rs2 - rs3
+(rule 3 (lower (has_type (ty_scalar_float ty) (fma (fneg x) y (fneg z))))
+  (rv_fnmadd ty (FRM.RNE) x y z))
 
 ;; (fma x y z) computes x * y + z
 ;; vfmacc computes vd[i] = +(vs1[i] * vs2[i]) + vd[i]
 ;; We need to reverse the order of the arguments
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fma x y z)))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (fma x y z)))
   (rv_vfmacc_vv z y x (unmasked) ty))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y z)))
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y z)))
   (rv_vfmacc_vf z y x (unmasked) ty))
 
 ;; vfmsac computes vd[i] = +(vs1[i] * vs2[i]) - vd[i]
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fma x y (fneg z))))
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma x y (fneg z))))
   (rv_vfmsac_vv z y x (unmasked) ty))
 
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y (fneg z))))
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y (fneg z))))
   (rv_vfmsac_vf z y x (unmasked) ty))
 
 ;; vfnmacc computes vd[i] = -(vs1[i] * vs2[i]) - vd[i]
 
-(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y (fneg z))))
+(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y (fneg z))))
   (rv_vfnmacc_vv z y x (unmasked) ty))
 
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y (fneg z))))
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y (fneg z))))
   (rv_vfnmacc_vf z y x (unmasked) ty))
 
 ;; vfnmsac computes vd[i] = -(vs1[i] * vs2[i]) + vd[i]
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y z)))
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y z)))
   (rv_vfnmsac_vv z y x (unmasked) ty))
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y z)))
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y z)))
   (rv_vfnmsac_vf z y x (unmasked) ty))
 
 

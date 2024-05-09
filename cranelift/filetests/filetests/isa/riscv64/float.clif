@@ -259,38 +259,6 @@ block0(v0: f64):
 ;   ret
 
 
-function %f29(f32, f32, f32) -> f32 {
-block0(v0: f32, v1: f32, v2: f32):
-  v3 = fma v0, v1, v2
-  return v3
-}
-
-; VCode:
-; block0:
-;   fmadd.s fa0,fa0,fa1,fa2,rne
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   fmadd.s fa0, fa0, fa1, fa2, rne
-;   ret
-
-function %f30(f64, f64, f64) -> f64 {
-block0(v0: f64, v1: f64, v2: f64):
-  v3 = fma v0, v1, v2
-  return v3
-}
-
-; VCode:
-; block0:
-;   fmadd.d fa0,fa0,fa1,fa2,rne
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   fmadd.d fa0, fa0, fa1, fa2, rne
-;   ret
-
 function %f31(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
   v2 = fcopysign v0, v1

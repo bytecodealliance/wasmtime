@@ -1372,6 +1372,21 @@
 (rule (rv_fmadd $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddS) $F32 frm rs1 rs2 rs3))
 (rule (rv_fmadd $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 frm rs1 rs2 rs3))
 
+;; Helper for emitting the `fmsub` instruction.
+(decl rv_fmsub (Type FRM FReg FReg FReg) FReg)
+(rule (rv_fmsub $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmsubS) $F32 frm rs1 rs2 rs3))
+(rule (rv_fmsub $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmsubD) $F64 frm rs1 rs2 rs3))
+
+;; Helper for emitting the `fnmadd` instruction.
+(decl rv_fnmadd (Type FRM FReg FReg FReg) FReg)
+(rule (rv_fnmadd $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmaddS) $F32 frm rs1 rs2 rs3))
+(rule (rv_fnmadd $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmaddD) $F64 frm rs1 rs2 rs3))
+
+;; Helper for emitting the `fnmsub` instruction.
+(decl rv_fnmsub (Type FRM FReg FReg FReg) FReg)
+(rule (rv_fnmsub $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmsubS) $F32 frm rs1 rs2 rs3))
+(rule (rv_fnmsub $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmsubD) $F64 frm rs1 rs2 rs3))
+
 ;; Helper for emitting the `fmv.x.w` instruction.
 (decl rv_fmvxw (FReg) XReg)
 (rule (rv_fmvxw r) (fpu_rr (FpuOPRR.FmvXW) $I32 (FRM.RNE) r))
