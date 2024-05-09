@@ -2405,6 +2405,20 @@ impl PoolingAllocationConfig {
         self
     }
 
+    /// The target number of decommits to do per batch.
+    ///
+    /// This is not precise, as we can queue up decommits at times when we
+    /// aren't prepared to immediately flush them, and so we may go over this
+    /// target size occasionally.
+    ///
+    /// A batch size of one effectively disables batching.
+    ///
+    /// Defaults to `1`.
+    pub fn decommit_batch_size(&mut self, batch_size: usize) -> &mut Self {
+        self.config.decommit_batch_size = batch_size;
+        self
+    }
+
     /// Configures whether or not stacks used for async futures are reset to
     /// zero after usage.
     ///

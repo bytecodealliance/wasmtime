@@ -31,6 +31,7 @@ impl SimpleIndexAllocator {
         SimpleIndexAllocator(ModuleAffinityIndexAllocator::new(capacity, 0))
     }
 
+    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -175,6 +176,7 @@ impl ModuleAffinityIndexAllocator {
     }
 
     /// Are zero slots in use right now?
+    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         let inner = self.0.lock().unwrap();
         !inner

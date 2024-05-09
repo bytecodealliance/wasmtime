@@ -55,7 +55,8 @@ pub use crate::runtime::vm::instance::{
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
-    InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
+    InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
+    PoolingInstanceAllocatorConfig,
 };
 pub use crate::runtime::vm::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::runtime::vm::mmap::Mmap;

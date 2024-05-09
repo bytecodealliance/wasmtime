@@ -61,6 +61,9 @@ pub use values::*;
 
 pub(crate) use uninhabited::*;
 
+#[cfg(feature = "pooling-allocator")]
+pub use vm::PoolConcurrencyLimitError;
+
 #[cfg(feature = "profiling")]
 mod profiling;
 #[cfg(feature = "profiling")]

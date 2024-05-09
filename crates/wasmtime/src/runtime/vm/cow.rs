@@ -470,11 +470,15 @@ impl MemoryImageSlot {
     /// process's memory on Linux. Up to that much memory will be `memset` to
     /// zero where the rest of it will be reset or released with `madvise`.
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
-    pub(crate) fn clear_and_remain_ready(&mut self, keep_resident: usize) -> Result<()> {
+    pub(crate) fn clear_and_remain_ready(
+        &mut self,
+        keep_resident: usize,
+        decommit: impl FnMut(*mut u8, usize),
+    ) -> Result<()> {
         assert!(self.dirty);
 
         unsafe {
-            self.reset_all_memory_contents(keep_resident)?;
+            self.reset_all_memory_contents(keep_resident, decommit)?;
         }
 
         self.dirty = false;
@@ -482,7 +486,11 @@ impl MemoryImageSlot {
     }
 
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
-    unsafe fn reset_all_memory_contents(&mut self, keep_resident: usize) -> Result<()> {
+    unsafe fn reset_all_memory_contents(
+        &mut self,
+        keep_resident: usize,
+        decommit: impl FnMut(*mut u8, usize),
+    ) -> Result<()> {
         match vm::decommit_behavior() {
             DecommitBehavior::Zero => {
                 // If we're not on Linux then there's no generic platform way to
@@ -494,13 +502,18 @@ impl MemoryImageSlot {
                 self.reset_with_anon_memory()
             }
             DecommitBehavior::RestoreOriginalMapping => {
-                self.reset_with_original_mapping(keep_resident)
+                self.reset_with_original_mapping(keep_resident, decommit);
+                Ok(())
             }
         }
     }
 
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
-    unsafe fn reset_with_original_mapping(&mut self, keep_resident: usize) -> Result<()> {
+    unsafe fn reset_with_original_mapping(
+        &mut self,
+        keep_resident: usize,
+        mut decommit: impl FnMut(*mut u8, usize),
+    ) {
         match &self.image {
             Some(image) => {
                 assert!(self.accessible >= image.linear_memory_offset + image.len);
@@ -544,7 +557,11 @@ impl MemoryImageSlot {
                     ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
 
                     // This is madvise (2)
-                    self.restore_original_mapping(image.linear_memory_offset, image.len)?;
+                    self.restore_original_mapping(
+                        image.linear_memory_offset,
+                        image.len,
+                        &mut decommit,
+                    );
 
                     // This is memset (3)
                     ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
@@ -553,7 +570,8 @@ impl MemoryImageSlot {
                     self.restore_original_mapping(
                         image_end + remaining_memset,
                         mem_after_image - remaining_memset,
-                    )?;
+                        &mut decommit,
+                    );
                 } else {
                     // If the image starts after the `keep_resident` threshold
                     // then we memset the start of linear memory and then use
@@ -578,7 +596,11 @@ impl MemoryImageSlot {
                     ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
 
                     // This is madvise (2)
-                    self.restore_original_mapping(keep_resident, self.accessible - keep_resident)?;
+                    self.restore_original_mapping(
+                        keep_resident,
+                        self.accessible - keep_resident,
+                        decommit,
+                    );
                 }
             }
 
@@ -588,26 +610,32 @@ impl MemoryImageSlot {
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
                 ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
-                self.restore_original_mapping(size_to_memset, self.accessible - size_to_memset)?;
+                self.restore_original_mapping(
+                    size_to_memset,
+                    self.accessible - size_to_memset,
+                    decommit,
+                );
             }
         }
-
-        Ok(())
     }
 
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
-    unsafe fn restore_original_mapping(&self, base: usize, len: usize) -> Result<()> {
+    unsafe fn restore_original_mapping(
+        &self,
+        base: usize,
+        len: usize,
+        mut decommit: impl FnMut(*mut u8, usize),
+    ) {
         assert!(base + len <= self.accessible);
         if len == 0 {
-            return Ok(());
+            return;
         }
 
         assert_eq!(
             vm::decommit_behavior(),
             DecommitBehavior::RestoreOriginalMapping
         );
-        vm::decommit_pages(self.base.as_ptr().add(base), len).err2anyhow()?;
-        Ok(())
+        decommit(self.base.as_ptr().add(base), len);
     }
 
     fn set_protection(&self, range: Range<usize>, readwrite: bool) -> Result<()> {
@@ -699,11 +727,11 @@ impl Drop for MemoryImageSlot {
 
 #[cfg(all(test, target_os = "linux", not(miri)))]
 mod test {
-    use std::sync::Arc;
-
     use super::{MemoryImage, MemoryImageSlot, MemoryImageSource, MemoryPlan, MemoryStyle};
     use crate::runtime::vm::mmap::Mmap;
+    use crate::runtime::vm::sys::vm::decommit_pages;
     use anyhow::Result;
+    use std::sync::Arc;
     use wasmtime_environ::Memory;
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
@@ -762,7 +790,9 @@ mod test {
         assert_eq!(0, slice[131071]);
         // instantiate again; we should see zeroes, even as the
         // reuse-anon-mmap-opt kicks in
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
         assert!(!memfd.is_dirty());
         memfd.instantiate(64 << 10, None, &plan).unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
@@ -786,31 +816,41 @@ mod test {
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         slice[4096] = 5;
         // Clear and re-instantiate same image
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         // Should not see mutation from above
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         // Clear and re-instantiate no image
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
         memfd.instantiate(64 << 10, None, &plan).unwrap();
         assert!(!memfd.has_image());
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[0, 0, 0, 0], &slice[4096..4100]);
         // Clear and re-instantiate image again
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         // Create another image with different data.
         let image2 = Arc::new(create_memfd_with_data(4096, &[10, 11, 12, 13]).unwrap());
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
         memfd.instantiate(128 << 10, Some(&image2), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[10, 11, 12, 13], &slice[4096..4100]);
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
@@ -838,7 +878,11 @@ mod test {
                 assert_eq!(&[1, 2, 3, 4], &slice[image_off..][..4]);
                 slice[image_off] = 5;
                 assert_eq!(&[5, 2, 3, 4], &slice[image_off..][..4]);
-                memfd.clear_and_remain_ready(amt_to_memset).unwrap();
+                memfd
+                    .clear_and_remain_ready(amt_to_memset, |ptr, len| unsafe {
+                        decommit_pages(ptr, len).unwrap()
+                    })
+                    .unwrap();
             }
         }
 
@@ -850,7 +894,11 @@ mod test {
                 assert_eq!(chunk[0], 0);
                 chunk[0] = 5;
             }
-            memfd.clear_and_remain_ready(amt_to_memset).unwrap();
+            memfd
+                .clear_and_remain_ready(amt_to_memset, |ptr, len| unsafe {
+                    decommit_pages(ptr, len).unwrap()
+                })
+                .unwrap();
         }
     }
 
@@ -873,7 +921,9 @@ mod test {
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         slice[4096] = 5;
         assert_eq!(&[5, 2, 3, 4], &slice[4096..4100]);
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
 
         // Re-instantiate make sure it preserves memory. Grow a bit and set data
@@ -884,7 +934,9 @@ mod test {
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
         slice[initial] = 100;
         assert_eq!(&[100, 0], &slice[initial..initial + 2]);
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
 
         // Test that memory is still accessible, but it's been reset
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
@@ -897,7 +949,9 @@ mod test {
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
         slice[initial] = 100;
         assert_eq!(&[100, 0], &slice[initial..initial + 2]);
-        memfd.clear_and_remain_ready(0).unwrap();
+        memfd
+            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .unwrap();
 
         // Reset the image to none and double-check everything is back to zero
         memfd.instantiate(64 << 10, None, &plan).unwrap();

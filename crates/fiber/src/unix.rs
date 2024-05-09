@@ -41,7 +41,7 @@ pub struct FiberStack {
 
     /// Stored here to ensure that when this `FiberStack` the backing storage,
     /// if any, is additionally dropped.
-    _storage: FiberStackStorage,
+    storage: FiberStackStorage,
 }
 
 enum FiberStackStorage {
@@ -66,7 +66,7 @@ impl FiberStack {
         Ok(FiberStack {
             base: stack.mapping_base.wrapping_byte_add(page_size),
             len: stack.mapping_len - page_size,
-            _storage: FiberStackStorage::Mmap(stack),
+            storage: FiberStackStorage::Mmap(stack),
         })
     }
 
@@ -79,8 +79,12 @@ impl FiberStack {
         Ok(FiberStack {
             base,
             len,
-            _storage: FiberStackStorage::Unmanaged,
+            storage: FiberStackStorage::Unmanaged,
         })
+    }
+
+    pub fn is_from_raw_parts(&self) -> bool {
+        matches!(self.storage, FiberStackStorage::Unmanaged)
     }
 
     pub fn from_custom(custom: Box<dyn RuntimeFiberStack>) -> io::Result<Self> {
@@ -99,7 +103,7 @@ impl FiberStack {
         Ok(FiberStack {
             base: start_ptr,
             len: range.len(),
-            _storage: FiberStackStorage::Custom(custom),
+            storage: FiberStackStorage::Custom(custom),
         })
     }
 

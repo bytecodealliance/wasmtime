@@ -27,6 +27,7 @@ pub struct PoolingAllocationConfig {
     pub table_keep_resident: usize,
     pub linear_memory_keep_resident: usize,
 
+    pub decommit_batch_size: usize,
     pub max_unused_warm_slots: u32,
 
     pub async_stack_zeroing: bool,
@@ -61,6 +62,7 @@ impl PoolingAllocationConfig {
         cfg.table_keep_resident(self.table_keep_resident);
         cfg.linear_memory_keep_resident(self.linear_memory_keep_resident);
 
+        cfg.decommit_batch_size(self.decommit_batch_size);
         cfg.max_unused_warm_slots(self.max_unused_warm_slots);
 
         cfg.async_stack_zeroing(self.async_stack_zeroing);
@@ -106,6 +108,7 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
             table_keep_resident: u.int_in_range(0..=1 << 20)?,
             linear_memory_keep_resident: u.int_in_range(0..=1 << 20)?,
 
+            decommit_batch_size: u.int_in_range(1..=1000)?,
             max_unused_warm_slots: u.int_in_range(0..=total_memories + 10)?,
 
             async_stack_zeroing: u.arbitrary()?,

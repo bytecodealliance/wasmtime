@@ -66,6 +66,10 @@ wasmtime_option_group! {
         /// Enable the pooling allocator, in place of the on-demand allocator.
         pub pooling_allocator: Option<bool>,
 
+        /// The number of decommits to do per batch. A batch size of 1
+        /// effectively disables decommit batching. (default: 1)
+        pub pooling_decommit_batch_size: Option<u32>,
+
         /// How many bytes to keep resident between instantiations for the
         /// pooling allocator in linear memories.
         pub pooling_memory_keep_resident: Option<usize>,

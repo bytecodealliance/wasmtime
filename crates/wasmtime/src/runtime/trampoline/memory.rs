@@ -248,7 +248,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     }
 
     #[cfg(feature = "async")]
-    unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
+    unsafe fn deallocate_fiber_stack(&self, _stack: wasmtime_fiber::FiberStack) {
         unreachable!()
     }
 

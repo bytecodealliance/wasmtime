@@ -30,7 +30,10 @@ pub use self::on_demand::OnDemandInstanceAllocator;
 #[cfg(feature = "pooling-allocator")]
 mod pooling;
 #[cfg(feature = "pooling-allocator")]
-pub use self::pooling::{InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig};
+pub use self::pooling::{
+    InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
+    PoolingInstanceAllocatorConfig,
+};
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
@@ -290,7 +293,7 @@ pub unsafe trait InstanceAllocatorImpl {
     /// The provided stack is required to have been allocated with
     /// `allocate_fiber_stack`.
     #[cfg(feature = "async")]
-    unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
+    unsafe fn deallocate_fiber_stack(&self, stack: wasmtime_fiber::FiberStack);
 
     /// Allocate a GC heap for allocating Wasm GC objects within.
     #[cfg(feature = "gc")]

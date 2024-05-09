@@ -1,6 +1,6 @@
 #![cfg_attr(not(asan), allow(dead_code))]
 
-use crate::runtime::vm::PoolingInstanceAllocatorConfig;
+use crate::{runtime::vm::PoolingInstanceAllocatorConfig, PoolConcurrencyLimitError};
 use anyhow::{bail, Result};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -31,6 +31,7 @@ impl StackPool {
         })
     }
 
+    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         self.live_stacks.load(Ordering::Acquire) == 0
     }
@@ -43,10 +44,11 @@ impl StackPool {
         let old_count = self.live_stacks.fetch_add(1, Ordering::AcqRel);
         if old_count >= self.stack_limit {
             self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-            bail!(
-                "maximum concurrent fiber limit of {} reached",
-                self.stack_limit
-            );
+            return Err(PoolConcurrencyLimitError::new(
+                usize::try_from(self.stack_limit).unwrap(),
+                "fibers",
+            )
+            .into());
         }
 
         match wasmtime_fiber::FiberStack::new(self.stack_size) {
@@ -58,9 +60,19 @@ impl StackPool {
         }
     }
 
-    pub unsafe fn deallocate(&self, stack: &wasmtime_fiber::FiberStack) {
+    pub unsafe fn zero_stack(
+        &self,
+        _stack: &mut wasmtime_fiber::FiberStack,
+        _decommit: impl FnMut(*mut u8, usize),
+    ) {
+        // No need to actually zero the stack, since the stack won't ever be
+        // reused on non-unix systems.
+    }
+
+    /// Safety: see the unix implementation.
+    pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack) {
         self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-        // A no-op as we don't own the fiber stack on Windows.
+        // A no-op as we don't actually own the fiber stack on Windows.
         let _ = stack;
     }
 }

@@ -4,7 +4,7 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
 };
-use crate::runtime::vm::sys::vm::{commit_pages, decommit_pages};
+use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{Mmap, PoolingInstanceAllocatorConfig};
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -77,6 +77,7 @@ impl StackPool {
     }
 
     /// Are there zero slots in use right now?
+    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         self.index_allocator.is_empty()
     }
@@ -90,12 +91,7 @@ impl StackPool {
         let index = self
             .index_allocator
             .alloc()
-            .ok_or_else(|| {
-                anyhow!(
-                    "maximum concurrent fiber limit of {} reached",
-                    self.max_stacks
-                )
-            })?
+            .ok_or_else(|| super::PoolConcurrencyLimitError::new(self.max_stacks, "fibers"))?
             .index();
 
         assert!(index < self.max_stacks);
@@ -118,13 +114,75 @@ impl StackPool {
         }
     }
 
+    /// Zero the given stack, if we are configured to do so.
+    ///
+    /// This will call the given `decommit` function for each region of memory
+    /// that should be decommitted. It is the caller's responsibility to ensure
+    /// that those decommits happen before this stack is reused.
+    ///
+    /// # Safety
+    ///
+    /// The stack must no longer be in use, and ready for returning to the pool
+    /// after it is zeroed and decommitted.
+    pub unsafe fn zero_stack(
+        &self,
+        stack: &mut wasmtime_fiber::FiberStack,
+        mut decommit: impl FnMut(*mut u8, usize),
+    ) {
+        assert!(stack.is_from_raw_parts());
+
+        if !self.async_stack_zeroing {
+            return;
+        }
+
+        let top = stack
+            .top()
+            .expect("fiber stack not allocated from the pool") as usize;
+
+        let base = self.mapping.as_ptr() as usize;
+        let len = self.mapping.len();
+        assert!(
+            top > base && top <= (base + len),
+            "fiber stack top pointer not in range"
+        );
+
+        // Remove the guard page from the size
+        let stack_size = self.stack_size - self.page_size;
+        let bottom_of_stack = top - stack_size;
+        let start_of_stack = bottom_of_stack - self.page_size;
+        assert!(start_of_stack >= base && start_of_stack < (base + len));
+        assert!((start_of_stack - base) % self.stack_size == 0);
+
+        // Manually zero the top of the stack to keep the pages resident in
+        // memory and avoid future page faults. Use the system to deallocate
+        // pages past this. This hopefully strikes a reasonable balance between:
+        //
+        // * memset for the whole range is probably expensive
+        // * madvise for the whole range incurs expensive future page faults
+        // * most threads probably don't use most of the stack anyway
+        let size_to_memset = stack_size.min(self.async_stack_keep_resident);
+        std::ptr::write_bytes(
+            (bottom_of_stack + stack_size - size_to_memset) as *mut u8,
+            0,
+            size_to_memset,
+        );
+
+        // Use the system to reset remaining stack pages to zero.
+        decommit(bottom_of_stack as _, stack_size - size_to_memset);
+    }
+
     /// Deallocate a previously-allocated fiber.
     ///
     /// # Safety
     ///
     /// The fiber must have been allocated by this pool, must be in an allocated
     /// state, and must never be used again.
-    pub unsafe fn deallocate(&self, stack: &wasmtime_fiber::FiberStack) {
+    ///
+    /// The caller must have already called `zero_stack` on the fiber stack and
+    /// flushed any enqueued decommits for this stack's memory.
+    pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack) {
+        assert!(stack.is_from_raw_parts());
+
         let top = stack
             .top()
             .expect("fiber stack not allocated from the pool") as usize;
@@ -146,32 +204,7 @@ impl StackPool {
         let index = (start_of_stack - base) / self.stack_size;
         assert!(index < self.max_stacks);
 
-        if self.async_stack_zeroing {
-            self.zero_stack(bottom_of_stack, stack_size);
-        }
-
         self.index_allocator.free(SlotId(index as u32));
-    }
-
-    fn zero_stack(&self, bottom: usize, size: usize) {
-        // Manually zero the top of the stack to keep the pages resident in
-        // memory and avoid future page faults. Use the system to deallocate
-        // pages past this. This hopefully strikes a reasonable balance between:
-        //
-        // * memset for the whole range is probably expensive
-        // * madvise for the whole range incurs expensive future page faults
-        // * most threads probably don't use most of the stack anyway
-        let size_to_memset = size.min(self.async_stack_keep_resident);
-        unsafe {
-            std::ptr::write_bytes(
-                (bottom + size - size_to_memset) as *mut u8,
-                0,
-                size_to_memset,
-            );
-
-            // Use the system to reset remaining stack pages to zero.
-            decommit_pages(bottom as _, size - size_to_memset).unwrap();
-        }
     }
 }
 
@@ -220,7 +253,7 @@ mod tests {
 
         for stack in stacks {
             unsafe {
-                pool.deallocate(&stack);
+                pool.deallocate(stack);
             }
         }
 

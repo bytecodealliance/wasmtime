@@ -19,6 +19,10 @@ impl FiberStack {
         Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
     }
 
+    pub fn is_from_raw_parts(&self) -> bool {
+        false
+    }
+
     pub fn from_custom(_custom: Box<dyn RuntimeFiberStack>) -> io::Result<Self> {
         Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
     }

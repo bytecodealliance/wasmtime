@@ -109,29 +109,33 @@ pub struct MemoryPool {
     /// will contain one stripe per available key; otherwise, a single stripe
     /// with an empty key.
     stripes: Vec<Stripe>,
-    // If using a copy-on-write allocation scheme, the slot management. We
-    // dynamically transfer ownership of a slot to a Memory when in
-    // use.
+
+    /// If using a copy-on-write allocation scheme, the slot management. We
+    /// dynamically transfer ownership of a slot to a Memory when in use.
     image_slots: Vec<Mutex<Option<MemoryImageSlot>>>,
+
     /// A description of the various memory sizes used in allocating the
     /// `mapping` slab.
     layout: SlabLayout,
-    // The maximum number of memories that a single core module instance may
-    // use.
-    //
-    // NB: this is needed for validation but does not affect the pool's size.
+
+    /// The maximum number of memories that a single core module instance may
+    /// use.
+    ///
+    /// NB: this is needed for validation but does not affect the pool's size.
     memories_per_instance: usize,
-    // How much linear memory, in bytes, to keep resident after resetting for
-    // use with the next instance. This much memory will be `memset` to zero
-    // when a linear memory is deallocated.
-    //
-    // Memory exceeding this amount in the wasm linear memory will be released
-    // with `madvise` back to the kernel.
-    //
-    // Only applicable on Linux.
-    keep_resident: usize,
-    // Keep track of protection keys handed out to initialized stores; this
-    // allows us to round-robin the assignment of stores to stripes.
+
+    /// How much linear memory, in bytes, to keep resident after resetting for
+    /// use with the next instance. This much memory will be `memset` to zero
+    /// when a linear memory is deallocated.
+    ///
+    /// Memory exceeding this amount in the wasm linear memory will be released
+    /// with `madvise` back to the kernel.
+    ///
+    /// Only applicable on Linux.
+    pub(super) keep_resident: usize,
+
+    /// Keep track of protection keys handed out to initialized stores; this
+    /// allows us to round-robin the assignment of stores to stripes.
     next_available_pkey: AtomicUsize,
 }
 
@@ -293,6 +297,7 @@ impl MemoryPool {
     }
 
     /// Are zero slots in use right now?
+    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         self.stripes.iter().all(|s| s.allocator.is_empty())
     }
@@ -321,10 +326,9 @@ impl MemoryPool {
             )
             .map(|slot| StripedAllocationIndex(u32::try_from(slot.index()).unwrap()))
             .ok_or_else(|| {
-                anyhow!(
-                    "maximum concurrent memory limit of {} reached for stripe {}",
+                super::PoolConcurrencyLimitError::new(
                     self.stripes[stripe_index].allocator.len(),
-                    stripe_index
+                    format!("memory stripe {stripe_index}"),
                 )
             })?;
         let allocation_index =
@@ -390,16 +394,15 @@ impl MemoryPool {
     /// The memory must have been previously allocated from this pool and
     /// assigned the given index, must currently be in an allocated state, and
     /// must never be used again.
-    pub unsafe fn deallocate(&self, allocation_index: MemoryAllocationIndex, memory: Memory) {
-        let mut image = memory.unwrap_static_image();
-
-        // Reset the image slot. If there is any error clearing the
-        // image, just drop it here, and let the drop handler for the
-        // slot unmap in a way that retains the address space
-        // reservation.
-        if image.clear_and_remain_ready(self.keep_resident).is_ok() {
-            self.return_memory_image_slot(allocation_index, image);
-        }
+    ///
+    /// The caller must have already called `clear_and_remain_ready` on the
+    /// memory's image and flushed any enqueued decommits for this memory.
+    pub unsafe fn deallocate(
+        &self,
+        allocation_index: MemoryAllocationIndex,
+        image: MemoryImageSlot,
+    ) {
+        self.return_memory_image_slot(allocation_index, image);
 
         let (stripe_index, striped_allocation_index) =
             StripedAllocationIndex::from_unstriped_slot_index(allocation_index, self.stripes.len());
