@@ -1218,23 +1218,19 @@ fn mem_finalize_for_show(mem: &AMode, access_ty: Type, state: &EmitState) -> (St
     let (mem_insts, mem) = mem_finalize(None, mem, access_ty, state);
     let mut mem_str = mem_insts
         .into_iter()
-        .map(|inst| {
-            inst.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]))
-        })
+        .map(|inst| inst.print_with_state(&mut EmitState::default()))
         .collect::<Vec<_>>()
         .join(" ; ");
     if !mem_str.is_empty() {
         mem_str += " ; ";
     }
 
-    let mem = mem.pretty_print(access_ty.bytes() as u8, &mut AllocationConsumer::new(&[]));
+    let mem = mem.pretty_print(access_ty.bytes() as u8);
     (mem_str, mem)
 }
 
 impl Inst {
-    fn print_with_state(&self, state: &mut EmitState, allocs: &mut AllocationConsumer) -> String {
-        let mut empty_allocs = AllocationConsumer::default();
-
+    fn print_with_state(&self, state: &mut EmitState) -> String {
         fn op_name(alu_op: ALUOp) -> &'static str {
             match alu_op {
                 ALUOp::Add => "add",
@@ -1274,9 +1270,9 @@ impl Inst {
                 rm,
             } => {
                 let op = op_name(alu_op);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let rm = pretty_print_ireg(rm, size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
+                let rm = pretty_print_ireg(rm, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::AluRRRR {
@@ -1293,10 +1289,10 @@ impl Inst {
                     ALUOp3::UMAddL => ("umaddl", OperandSize::Size64),
                     ALUOp3::SMAddL => ("smaddl", OperandSize::Size64),
                 };
-                let rd = pretty_print_ireg(rd.to_reg(), da_size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let rm = pretty_print_ireg(rm, size, allocs);
-                let ra = pretty_print_ireg(ra, da_size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), da_size);
+                let rn = pretty_print_ireg(rn, size);
+                let rm = pretty_print_ireg(rm, size);
+                let ra = pretty_print_ireg(ra, da_size);
 
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
@@ -1308,14 +1304,14 @@ impl Inst {
                 ref imm12,
             } => {
                 let op = op_name(alu_op);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
 
                 if imm12.bits == 0 && alu_op == ALUOp::Add && size.is64() {
                     // special-case MOV (used for moving into SP).
                     format!("mov {}, {}", rd, rn)
                 } else {
-                    let imm12 = imm12.pretty_print(0, allocs);
+                    let imm12 = imm12.pretty_print(0);
                     format!("{} {}, {}, {}", op, rd, rn, imm12)
                 }
             }
@@ -1327,9 +1323,9 @@ impl Inst {
                 ref imml,
             } => {
                 let op = op_name(alu_op);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let imml = imml.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
+                let imml = imml.pretty_print(0);
                 format!("{} {}, {}, {}", op, rd, rn, imml)
             }
             &Inst::AluRRImmShift {
@@ -1340,9 +1336,9 @@ impl Inst {
                 ref immshift,
             } => {
                 let op = op_name(alu_op);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let immshift = immshift.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
+                let immshift = immshift.pretty_print(0);
                 format!("{} {}, {}, {}", op, rd, rn, immshift)
             }
             &Inst::AluRRRShift {
@@ -1354,10 +1350,10 @@ impl Inst {
                 ref shiftop,
             } => {
                 let op = op_name(alu_op);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let rm = pretty_print_ireg(rm, size, allocs);
-                let shiftop = shiftop.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
+                let rm = pretty_print_ireg(rm, size);
+                let shiftop = shiftop.pretty_print(0);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, shiftop)
             }
             &Inst::AluRRRExtend {
@@ -1369,16 +1365,16 @@ impl Inst {
                 ref extendop,
             } => {
                 let op = op_name(alu_op);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let rm = pretty_print_ireg(rm, size, allocs);
-                let extendop = extendop.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
+                let rm = pretty_print_ireg(rm, size);
+                let extendop = extendop.pretty_print(0);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, extendop)
             }
             &Inst::BitRR { op, size, rd, rn } => {
                 let op = op.op_str();
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::ULoad8 { rd, ref mem, .. }
@@ -1410,7 +1406,7 @@ impl Inst {
                     _ => unreachable!(),
                 };
 
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
@@ -1437,7 +1433,7 @@ impl Inst {
                     _ => unreachable!(),
                 };
 
-                let rd = pretty_print_ireg(rd, size, allocs);
+                let rd = pretty_print_ireg(rd, size);
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
@@ -1447,8 +1443,8 @@ impl Inst {
             &Inst::StoreP64 {
                 rt, rt2, ref mem, ..
             } => {
-                let rt = pretty_print_ireg(rt, OperandSize::Size64, allocs);
-                let rt2 = pretty_print_ireg(rt2, OperandSize::Size64, allocs);
+                let rt = pretty_print_ireg(rt, OperandSize::Size64);
+                let rt2 = pretty_print_ireg(rt2, OperandSize::Size64);
                 let mem = mem.clone();
                 let mem = mem.pretty_print_default();
                 format!("stp {}, {}, {}", rt, rt2, mem)
@@ -1456,25 +1452,25 @@ impl Inst {
             &Inst::LoadP64 {
                 rt, rt2, ref mem, ..
             } => {
-                let rt = pretty_print_ireg(rt.to_reg(), OperandSize::Size64, allocs);
-                let rt2 = pretty_print_ireg(rt2.to_reg(), OperandSize::Size64, allocs);
+                let rt = pretty_print_ireg(rt.to_reg(), OperandSize::Size64);
+                let rt2 = pretty_print_ireg(rt2.to_reg(), OperandSize::Size64);
                 let mem = mem.clone();
                 let mem = mem.pretty_print_default();
                 format!("ldp {}, {}, {}", rt, rt2, mem)
             }
             &Inst::Mov { size, rd, rm } => {
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rm = pretty_print_ireg(rm, size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rm = pretty_print_ireg(rm, size);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovFromPReg { rd, rm } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64);
                 let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovToPReg { rd, rm } => {
                 let rd = show_ireg_sized(rd.into(), OperandSize::Size64);
-                let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
+                let rm = pretty_print_ireg(rm, OperandSize::Size64);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovWide {
@@ -1487,8 +1483,8 @@ impl Inst {
                     MoveWideOp::MovZ => "movz",
                     MoveWideOp::MovN => "movn",
                 };
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let imm = imm.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let imm = imm.pretty_print(0);
                 format!("{} {}, {}", op_str, rd, imm)
             }
             &Inst::MovK {
@@ -1497,33 +1493,33 @@ impl Inst {
                 ref imm,
                 size,
             } => {
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let imm = imm.pretty_print(0, allocs);
+                let rn = pretty_print_ireg(rn, size);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let imm = imm.pretty_print(0);
                 format!("movk {}, {}, {}", rd, rn, imm)
             }
             &Inst::CSel { rd, rn, rm, cond } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
-                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
-                let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
+                let rm = pretty_print_ireg(rm, OperandSize::Size64);
+                let cond = cond.pretty_print(0);
                 format!("csel {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::CSNeg { rd, rn, rm, cond } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
-                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
-                let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
+                let rm = pretty_print_ireg(rm, OperandSize::Size64);
+                let cond = cond.pretty_print(0);
                 format!("csneg {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::CSet { rd, cond } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64);
+                let cond = cond.pretty_print(0);
                 format!("cset {}, {}", rd, cond)
             }
             &Inst::CSetm { rd, cond } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64);
+                let cond = cond.pretty_print(0);
                 format!("csetm {}, {}", rd, cond)
             }
             &Inst::CCmp {
@@ -1533,10 +1529,10 @@ impl Inst {
                 nzcv,
                 cond,
             } => {
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let rm = pretty_print_ireg(rm, size, allocs);
-                let nzcv = nzcv.pretty_print(0, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rn = pretty_print_ireg(rn, size);
+                let rm = pretty_print_ireg(rm, size);
+                let nzcv = nzcv.pretty_print(0);
+                let cond = cond.pretty_print(0);
                 format!("ccmp {}, {}, {}, {}", rn, rm, nzcv, cond)
             }
             &Inst::CCmpImm {
@@ -1546,10 +1542,10 @@ impl Inst {
                 nzcv,
                 cond,
             } => {
-                let rn = pretty_print_ireg(rn, size, allocs);
-                let imm = imm.pretty_print(0, allocs);
-                let nzcv = nzcv.pretty_print(0, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rn = pretty_print_ireg(rn, size);
+                let imm = imm.pretty_print(0);
+                let nzcv = nzcv.pretty_print(0);
+                let cond = cond.pretty_print(0);
                 format!("ccmp {}, {}, {}, {}", rn, imm, nzcv, cond)
             }
             &Inst::AtomicRMW {
@@ -1568,9 +1564,9 @@ impl Inst {
                 };
 
                 let size = OperandSize::from_ty(ty);
-                let rs = pretty_print_ireg(rs, size, allocs);
-                let rt = pretty_print_ireg(rt.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
+                let rs = pretty_print_ireg(rs, size);
+                let rt = pretty_print_ireg(rt.to_reg(), size);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
 
                 let ty_suffix = match ty {
                     I8 => "b",
@@ -1602,11 +1598,11 @@ impl Inst {
                     AtomicRMWLoopOp::Umax => "umax",
                     AtomicRMWLoopOp::Xchg => "xchg",
                 };
-                let addr = pretty_print_ireg(addr, OperandSize::Size64, allocs);
-                let operand = pretty_print_ireg(operand, OperandSize::Size64, allocs);
-                let oldval = pretty_print_ireg(oldval.to_reg(), OperandSize::Size64, allocs);
-                let scratch1 = pretty_print_ireg(scratch1.to_reg(), OperandSize::Size64, allocs);
-                let scratch2 = pretty_print_ireg(scratch2.to_reg(), OperandSize::Size64, allocs);
+                let addr = pretty_print_ireg(addr, OperandSize::Size64);
+                let operand = pretty_print_ireg(operand, OperandSize::Size64);
+                let oldval = pretty_print_ireg(oldval.to_reg(), OperandSize::Size64);
+                let scratch1 = pretty_print_ireg(scratch1.to_reg(), OperandSize::Size64);
+                let scratch2 = pretty_print_ireg(scratch2.to_reg(), OperandSize::Size64);
                 format!(
                     "atomic_rmw_loop_{}_{} addr={} operand={} oldval={} scratch1={} scratch2={}",
                     op,
@@ -1628,10 +1624,10 @@ impl Inst {
                     _ => panic!("Unsupported type: {}", ty),
                 };
                 let size = OperandSize::from_ty(ty);
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let rs = pretty_print_ireg(rs, size, allocs);
-                let rt = pretty_print_ireg(rt, size, allocs);
-                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rs = pretty_print_ireg(rs, size);
+                let rt = pretty_print_ireg(rt, size);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
 
                 format!("{} {}, {}, {}, [{}]", op, rd, rs, rt, rn)
             }
@@ -1644,11 +1640,11 @@ impl Inst {
                 scratch,
                 ..
             } => {
-                let addr = pretty_print_ireg(addr, OperandSize::Size64, allocs);
-                let expected = pretty_print_ireg(expected, OperandSize::Size64, allocs);
-                let replacement = pretty_print_ireg(replacement, OperandSize::Size64, allocs);
-                let oldval = pretty_print_ireg(oldval.to_reg(), OperandSize::Size64, allocs);
-                let scratch = pretty_print_ireg(scratch.to_reg(), OperandSize::Size64, allocs);
+                let addr = pretty_print_ireg(addr, OperandSize::Size64);
+                let expected = pretty_print_ireg(expected, OperandSize::Size64);
+                let replacement = pretty_print_ireg(replacement, OperandSize::Size64);
+                let oldval = pretty_print_ireg(oldval.to_reg(), OperandSize::Size64);
+                let scratch = pretty_print_ireg(scratch.to_reg(), OperandSize::Size64);
                 format!(
                     "atomic_cas_loop_{} addr={}, expect={}, replacement={}, oldval={}, scratch={}",
                     ty.bits(),
@@ -1670,8 +1666,8 @@ impl Inst {
                     _ => panic!("Unsupported type: {}", access_ty),
                 };
                 let size = OperandSize::from_ty(ty);
-                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
-                let rt = pretty_print_ireg(rt.to_reg(), size, allocs);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
+                let rt = pretty_print_ireg(rt.to_reg(), size);
                 format!("{} {}, [{}]", op, rt, rn)
             }
             &Inst::StoreRelease {
@@ -1685,8 +1681,8 @@ impl Inst {
                     _ => panic!("Unsupported type: {}", access_ty),
                 };
                 let size = OperandSize::from_ty(ty);
-                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
-                let rt = pretty_print_ireg(rt, size, allocs);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
+                let rt = pretty_print_ireg(rt, size);
                 format!("{} {}, [{}]", op, rt, rn)
             }
             &Inst::Fence {} => {
@@ -1696,28 +1692,28 @@ impl Inst {
                 format!("csdb")
             }
             &Inst::FpuMove32 { rd, rn } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32, allocs);
-                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size32, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32);
+                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size32);
                 format!("fmov {}, {}", rd, rn)
             }
             &Inst::FpuMove64 { rd, rn } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
-                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size64, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64);
+                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size64);
                 format!("fmov {}, {}", rd, rn)
             }
             &Inst::FpuMove128 { rd, rn } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let rd = pretty_print_reg(rd.to_reg());
+                let rn = pretty_print_reg(rn);
                 format!("mov {}.16b, {}.16b", rd, rn)
             }
             &Inst::FpuMoveFromVec { rd, rn, idx, size } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size.lane_size(), allocs);
-                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size(), allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size.lane_size());
+                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size());
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::FpuExtend { rd, rn, size } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_scalar(rn, size, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
+                let rn = pretty_print_vreg_scalar(rn, size);
                 format!("fmov {}, {}", rd, rn)
             }
             &Inst::FpuRR {
@@ -1737,8 +1733,8 @@ impl Inst {
                     FPUOp1::Cvt64To32 => ScalarSize::Size32,
                     _ => size,
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), dst_size, allocs);
-                let rn = pretty_print_vreg_scalar(rn, size, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), dst_size);
+                let rn = pretty_print_vreg_scalar(rn, size);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::FpuRRR {
@@ -1756,47 +1752,47 @@ impl Inst {
                     FPUOp2::Max => "fmax",
                     FPUOp2::Min => "fmin",
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_scalar(rn, size, allocs);
-                let rm = pretty_print_vreg_scalar(rm, size, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
+                let rn = pretty_print_vreg_scalar(rn, size);
+                let rm = pretty_print_vreg_scalar(rm, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::FpuRRI { fpu_op, rd, rn } => {
                 let (op, imm, vector) = match fpu_op {
-                    FPUOpRI::UShr32(imm) => ("ushr", imm.pretty_print(0, allocs), true),
-                    FPUOpRI::UShr64(imm) => ("ushr", imm.pretty_print(0, allocs), false),
+                    FPUOpRI::UShr32(imm) => ("ushr", imm.pretty_print(0), true),
+                    FPUOpRI::UShr64(imm) => ("ushr", imm.pretty_print(0), false),
                 };
 
                 let (rd, rn) = if vector {
                     (
-                        pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size32x2, allocs),
-                        pretty_print_vreg_vector(rn, VectorSize::Size32x2, allocs),
+                        pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size32x2),
+                        pretty_print_vreg_vector(rn, VectorSize::Size32x2),
                     )
                 } else {
                     (
-                        pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs),
-                        pretty_print_vreg_scalar(rn, ScalarSize::Size64, allocs),
+                        pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64),
+                        pretty_print_vreg_scalar(rn, ScalarSize::Size64),
                     )
                 };
                 format!("{} {}, {}, {}", op, rd, rn, imm)
             }
             &Inst::FpuRRIMod { fpu_op, rd, ri, rn } => {
                 let (op, imm, vector) = match fpu_op {
-                    FPUOpRIMod::Sli32(imm) => ("sli", imm.pretty_print(0, allocs), true),
-                    FPUOpRIMod::Sli64(imm) => ("sli", imm.pretty_print(0, allocs), false),
+                    FPUOpRIMod::Sli32(imm) => ("sli", imm.pretty_print(0), true),
+                    FPUOpRIMod::Sli64(imm) => ("sli", imm.pretty_print(0), false),
                 };
 
                 let (rd, ri, rn) = if vector {
                     (
-                        pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size32x2, allocs),
-                        pretty_print_vreg_vector(ri, VectorSize::Size32x2, allocs),
-                        pretty_print_vreg_vector(rn, VectorSize::Size32x2, allocs),
+                        pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size32x2),
+                        pretty_print_vreg_vector(ri, VectorSize::Size32x2),
+                        pretty_print_vreg_vector(rn, VectorSize::Size32x2),
                     )
                 } else {
                     (
-                        pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs),
-                        pretty_print_vreg_scalar(ri, ScalarSize::Size64, allocs),
-                        pretty_print_vreg_scalar(rn, ScalarSize::Size64, allocs),
+                        pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64),
+                        pretty_print_vreg_scalar(ri, ScalarSize::Size64),
+                        pretty_print_vreg_scalar(rn, ScalarSize::Size64),
                     )
                 };
                 format!("{} {}, {}, {}, {}", op, rd, ri, rn, imm)
@@ -1812,33 +1808,33 @@ impl Inst {
                 let op = match fpu_op {
                     FPUOp3::MAdd => "fmadd",
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_scalar(rn, size, allocs);
-                let rm = pretty_print_vreg_scalar(rm, size, allocs);
-                let ra = pretty_print_vreg_scalar(ra, size, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
+                let rn = pretty_print_vreg_scalar(rn, size);
+                let rm = pretty_print_vreg_scalar(rm, size);
+                let ra = pretty_print_vreg_scalar(ra, size);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
             &Inst::FpuCmp { size, rn, rm } => {
-                let rn = pretty_print_vreg_scalar(rn, size, allocs);
-                let rm = pretty_print_vreg_scalar(rm, size, allocs);
+                let rn = pretty_print_vreg_scalar(rn, size);
+                let rm = pretty_print_vreg_scalar(rm, size);
                 format!("fcmp {}, {}", rn, rm)
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32);
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64);
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad128 { rd, ref mem, .. } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg(rd.to_reg());
                 let rd = "q".to_string() + &rd[1..];
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
@@ -1846,21 +1842,21 @@ impl Inst {
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
-                let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size32, allocs);
+                let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size32);
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
-                let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size64, allocs);
+                let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size64);
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore128 { rd, ref mem, .. } => {
-                let rd = pretty_print_reg(rd, allocs);
+                let rd = pretty_print_reg(rd);
                 let rd = "q".to_string() + &rd[1..];
                 let mem = mem.clone();
                 let access_ty = self.mem_type().unwrap();
@@ -1870,8 +1866,8 @@ impl Inst {
             &Inst::FpuLoadP64 {
                 rt, rt2, ref mem, ..
             } => {
-                let rt = pretty_print_vreg_scalar(rt.to_reg(), ScalarSize::Size64, allocs);
-                let rt2 = pretty_print_vreg_scalar(rt2.to_reg(), ScalarSize::Size64, allocs);
+                let rt = pretty_print_vreg_scalar(rt.to_reg(), ScalarSize::Size64);
+                let rt2 = pretty_print_vreg_scalar(rt2.to_reg(), ScalarSize::Size64);
                 let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
@@ -1880,8 +1876,8 @@ impl Inst {
             &Inst::FpuStoreP64 {
                 rt, rt2, ref mem, ..
             } => {
-                let rt = pretty_print_vreg_scalar(rt, ScalarSize::Size64, allocs);
-                let rt2 = pretty_print_vreg_scalar(rt2, ScalarSize::Size64, allocs);
+                let rt = pretty_print_vreg_scalar(rt, ScalarSize::Size64);
+                let rt2 = pretty_print_vreg_scalar(rt2, ScalarSize::Size64);
                 let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
@@ -1890,8 +1886,8 @@ impl Inst {
             &Inst::FpuLoadP128 {
                 rt, rt2, ref mem, ..
             } => {
-                let rt = pretty_print_vreg_scalar(rt.to_reg(), ScalarSize::Size128, allocs);
-                let rt2 = pretty_print_vreg_scalar(rt2.to_reg(), ScalarSize::Size128, allocs);
+                let rt = pretty_print_vreg_scalar(rt.to_reg(), ScalarSize::Size128);
+                let rt2 = pretty_print_vreg_scalar(rt2.to_reg(), ScalarSize::Size128);
                 let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
@@ -1900,8 +1896,8 @@ impl Inst {
             &Inst::FpuStoreP128 {
                 rt, rt2, ref mem, ..
             } => {
-                let rt = pretty_print_vreg_scalar(rt, ScalarSize::Size128, allocs);
-                let rt2 = pretty_print_vreg_scalar(rt2, ScalarSize::Size128, allocs);
+                let rt = pretty_print_vreg_scalar(rt, ScalarSize::Size128);
+                let rt2 = pretty_print_vreg_scalar(rt2, ScalarSize::Size128);
                 let mem = mem.clone();
                 let mem = mem.pretty_print_default();
 
@@ -1918,8 +1914,8 @@ impl Inst {
                     FpuToIntOp::F64ToI64 => ("fcvtzs", ScalarSize::Size64, OperandSize::Size64),
                     FpuToIntOp::F64ToU64 => ("fcvtzu", ScalarSize::Size64, OperandSize::Size64),
                 };
-                let rd = pretty_print_ireg(rd.to_reg(), sizedest, allocs);
-                let rn = pretty_print_vreg_scalar(rn, sizesrc, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), sizedest);
+                let rn = pretty_print_vreg_scalar(rn, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::IntToFpu { op, rd, rn } => {
@@ -1933,22 +1929,22 @@ impl Inst {
                     IntToFpuOp::I64ToF64 => ("scvtf", OperandSize::Size64, ScalarSize::Size64),
                     IntToFpuOp::U64ToF64 => ("ucvtf", OperandSize::Size64, ScalarSize::Size64),
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), sizedest, allocs);
-                let rn = pretty_print_ireg(rn, sizesrc, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), sizedest);
+                let rn = pretty_print_ireg(rn, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32, allocs);
-                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size32, allocs);
-                let rm = pretty_print_vreg_scalar(rm, ScalarSize::Size32, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32);
+                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size32);
+                let rm = pretty_print_vreg_scalar(rm, ScalarSize::Size32);
+                let cond = cond.pretty_print(0);
                 format!("fcsel {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::FpuCSel64 { rd, rn, rm, cond } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
-                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size64, allocs);
-                let rm = pretty_print_vreg_scalar(rm, ScalarSize::Size64, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64);
+                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size64);
+                let rm = pretty_print_vreg_scalar(rm, ScalarSize::Size64);
+                let cond = cond.pretty_print(0);
                 format!("fcsel {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::FpuRound { op, rd, rn } => {
@@ -1962,19 +1958,19 @@ impl Inst {
                     FpuRoundMode::Nearest32 => ("frintn", ScalarSize::Size32),
                     FpuRoundMode::Nearest64 => ("frintn", ScalarSize::Size64),
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_scalar(rn, size, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
+                let rn = pretty_print_vreg_scalar(rn, size);
                 format!("{} {}, {}", inst, rd, rn)
             }
             &Inst::MovToFpu { rd, rn, size } => {
                 let operand_size = size.operand_size();
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, operand_size, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, operand_size);
                 format!("fmov {}, {}", rd, rn)
             }
             &Inst::FpuMoveFPImm { rd, imm, size } => {
-                let imm = imm.pretty_print(0, allocs);
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
+                let imm = imm.pretty_print(0);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
 
                 format!("fmov {}, {}", rd, imm)
             }
@@ -1985,10 +1981,9 @@ impl Inst {
                 idx,
                 size,
             } => {
-                let rd =
-                    pretty_print_vreg_element(rd.to_reg(), idx as usize, size.lane_size(), allocs);
-                let ri = pretty_print_vreg_element(ri, idx as usize, size.lane_size(), allocs);
-                let rn = pretty_print_ireg(rn, size.operand_size(), allocs);
+                let rd = pretty_print_vreg_element(rd.to_reg(), idx as usize, size.lane_size());
+                let ri = pretty_print_vreg_element(ri, idx as usize, size.lane_size());
+                let rn = pretty_print_ireg(rn, size.operand_size());
                 format!("mov {}, {}, {}", rd, ri, rn)
             }
             &Inst::MovFromVec { rd, rn, idx, size } => {
@@ -1999,8 +1994,8 @@ impl Inst {
                     ScalarSize::Size64 => "mov",
                     _ => unimplemented!(),
                 };
-                let rd = pretty_print_ireg(rd.to_reg(), size.operand_size(), allocs);
-                let rn = pretty_print_vreg_element(rn, idx as usize, size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), size.operand_size());
+                let rn = pretty_print_vreg_element(rn, idx as usize, size);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::MovFromVecSigned {
@@ -2010,23 +2005,23 @@ impl Inst {
                 size,
                 scalar_size,
             } => {
-                let rd = pretty_print_ireg(rd.to_reg(), scalar_size, allocs);
-                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size(), allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), scalar_size);
+                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size());
                 format!("smov {}, {}", rd, rn)
             }
             &Inst::VecDup { rd, rn, size } => {
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_ireg(rn, size.operand_size(), allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size.operand_size());
                 format!("dup {}, {}", rd, rn)
             }
             &Inst::VecDupFromFpu { rd, rn, size, lane } => {
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_element(rn, lane.into(), size.lane_size(), allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let rn = pretty_print_vreg_element(rn, lane.into(), size.lane_size());
                 format!("dup {}, {}", rd, rn)
             }
             &Inst::VecDupFPImm { rd, imm, size } => {
-                let imm = imm.pretty_print(0, allocs);
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let imm = imm.pretty_print(0);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
 
                 format!("fmov {}, {}", rd, imm)
             }
@@ -2036,9 +2031,9 @@ impl Inst {
                 invert,
                 size,
             } => {
-                let imm = imm.pretty_print(0, allocs);
+                let imm = imm.pretty_print(0);
                 let op = if invert { "mvni" } else { "movi" };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
 
                 format!("{} {}, {}", op, rd, imm)
             }
@@ -2058,8 +2053,8 @@ impl Inst {
                     (VecExtendOp::Uxtl, false) => ("uxtl", vec64),
                     (VecExtendOp::Uxtl, true) => ("uxtl2", vec128),
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size, allocs);
-                let rn = pretty_print_vreg_vector(rn, rn_size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size);
+                let rn = pretty_print_vreg_vector(rn, rn_size);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::VecMovElement {
@@ -2070,14 +2065,10 @@ impl Inst {
                 src_idx,
                 size,
             } => {
-                let rd = pretty_print_vreg_element(
-                    rd.to_reg(),
-                    dest_idx as usize,
-                    size.lane_size(),
-                    allocs,
-                );
-                let ri = pretty_print_vreg_element(ri, dest_idx as usize, size.lane_size(), allocs);
-                let rn = pretty_print_vreg_element(rn, src_idx as usize, size.lane_size(), allocs);
+                let rd =
+                    pretty_print_vreg_element(rd.to_reg(), dest_idx as usize, size.lane_size());
+                let ri = pretty_print_vreg_element(ri, dest_idx as usize, size.lane_size());
+                let rn = pretty_print_vreg_element(rn, src_idx as usize, size.lane_size());
                 format!("mov {}, {}, {}", rd, ri, rn)
             }
             &Inst::VecRRLong {
@@ -2118,8 +2109,8 @@ impl Inst {
                         ("shll2", VectorSize::Size64x2, VectorSize::Size32x4, ", #32")
                     }
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size, allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size);
+                let rn = pretty_print_vreg_vector(rn, size);
 
                 format!("{} {}, {}{}", op, rd, rn, suffix)
             }
@@ -2157,12 +2148,12 @@ impl Inst {
                     (VecRRNarrowOp::Fcvtn, false) => ("fcvtn", vec64),
                     (VecRRNarrowOp::Fcvtn, true) => ("fcvtn2", vec128),
                 };
-                let rn = pretty_print_vreg_vector(rn, rn_size, allocs);
-                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size, allocs);
+                let rn = pretty_print_vreg_vector(rn, rn_size);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size);
                 let ri = match self {
                     &Inst::VecRRNarrowLow { .. } => "".to_string(),
                     &Inst::VecRRNarrowHigh { ri, .. } => {
-                        format!("{}, ", pretty_print_vreg_vector(ri, rd_size, allocs))
+                        format!("{}, ", pretty_print_vreg_vector(ri, rd_size))
                     }
                     _ => unreachable!(),
                 };
@@ -2173,8 +2164,8 @@ impl Inst {
                 let op = match op {
                     VecPairOp::Addp => "addp",
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
-                let rn = pretty_print_vreg_vector(rn, VectorSize::Size64x2, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64);
+                let rn = pretty_print_vreg_vector(rn, VectorSize::Size64x2);
 
                 format!("{} {}, {}", op, rd, rn)
             }
@@ -2193,8 +2184,8 @@ impl Inst {
                         ("uaddlp", VectorSize::Size32x4, VectorSize::Size16x8)
                     }
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), dest, allocs);
-                let rn = pretty_print_vreg_vector(rn, src, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), dest);
+                let rn = pretty_print_vreg_vector(rn, src);
 
                 format!("{} {}, {}", op, rd, rn)
             }
@@ -2248,9 +2239,9 @@ impl Inst {
                     VecALUOp::Trn1 => ("trn1", size),
                     VecALUOp::Trn2 => ("trn2", size),
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
-                let rm = pretty_print_vreg_vector(rm, size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let rn = pretty_print_vreg_vector(rn, size);
+                let rm = pretty_print_vreg_vector(rm, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::VecRRRMod {
@@ -2266,10 +2257,10 @@ impl Inst {
                     VecALUModOp::Fmla => ("fmla", size),
                     VecALUModOp::Fmls => ("fmls", size),
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let ri = pretty_print_vreg_vector(ri, size, allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
-                let rm = pretty_print_vreg_vector(rm, size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let ri = pretty_print_vreg_vector(ri, size);
+                let rn = pretty_print_vreg_vector(rn, size);
+                let rm = pretty_print_vreg_vector(rm, size);
                 format!("{} {}, {}, {}, {}", op, rd, ri, rn, rm)
             }
             &Inst::VecFmlaElem {
@@ -2286,10 +2277,10 @@ impl Inst {
                     VecALUModOp::Fmls => ("fmls", size),
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let ri = pretty_print_vreg_vector(ri, size, allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
-                let rm = pretty_print_vreg_element(rm, idx.into(), size.lane_size(), allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let ri = pretty_print_vreg_vector(ri, size);
+                let rn = pretty_print_vreg_vector(rn, size);
+                let rm = pretty_print_vreg_element(rm, idx.into(), size.lane_size());
                 format!("{} {}, {}, {}, {}", op, rd, ri, rn, rm)
             }
             &Inst::VecRRRLong {
@@ -2337,9 +2328,9 @@ impl Inst {
                         ("umull2", VectorSize::Size64x2, VectorSize::Size32x4)
                     }
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), dest_size, allocs);
-                let rn = pretty_print_vreg_vector(rn, src_size, allocs);
-                let rm = pretty_print_vreg_vector(rm, src_size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), dest_size);
+                let rn = pretty_print_vreg_vector(rn, src_size);
+                let rm = pretty_print_vreg_vector(rm, src_size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::VecRRRLongMod {
@@ -2370,10 +2361,10 @@ impl Inst {
                         ("umlal2", VectorSize::Size64x2, VectorSize::Size32x4)
                     }
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), dest_size, allocs);
-                let ri = pretty_print_vreg_vector(ri, dest_size, allocs);
-                let rn = pretty_print_vreg_vector(rn, src_size, allocs);
-                let rm = pretty_print_vreg_vector(rm, src_size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), dest_size);
+                let ri = pretty_print_vreg_vector(ri, dest_size);
+                let rn = pretty_print_vreg_vector(rn, src_size);
+                let rm = pretty_print_vreg_vector(rm, src_size);
                 format!("{} {}, {}, {}, {}", op, rd, ri, rn, rm)
             }
             &Inst::VecMisc { op, rd, rn, size } => {
@@ -2415,8 +2406,8 @@ impl Inst {
                     VecMisc2::Fcmle0 => ("fcmle", size, ", #0.0"),
                     VecMisc2::Fcmlt0 => ("fcmlt", size, ", #0.0"),
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let rn = pretty_print_vreg_vector(rn, size);
                 format!("{} {}, {}{}", op, rd, rn, suffix)
             }
             &Inst::VecLanes { op, rd, rn, size } => {
@@ -2424,8 +2415,8 @@ impl Inst {
                     VecLanesOp::Uminv => "uminv",
                     VecLanesOp::Addv => "addv",
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), size.lane_size(), allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), size.lane_size());
+                let rn = pretty_print_vreg_vector(rn, size);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::VecShiftImm {
@@ -2440,8 +2431,8 @@ impl Inst {
                     VecShiftImmOp::Ushr => "ushr",
                     VecShiftImmOp::Sshr => "sshr",
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let rn = pretty_print_vreg_vector(rn, size);
                 format!("{} {}, {}, #{}", op, rd, rn, imm)
             }
             &Inst::VecShiftImmMod {
@@ -2455,35 +2446,35 @@ impl Inst {
                 let op = match op {
                     VecShiftImmModOp::Sli => "sli",
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let ri = pretty_print_vreg_vector(ri, size, allocs);
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let ri = pretty_print_vreg_vector(ri, size);
+                let rn = pretty_print_vreg_vector(rn, size);
                 format!("{} {}, {}, {}, #{}", op, rd, ri, rn, imm)
             }
             &Inst::VecExtract { rd, rn, rm, imm4 } => {
-                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16, allocs);
-                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16, allocs);
-                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16);
+                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16);
+                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16);
                 format!("ext {}, {}, {}, #{}", rd, rn, rm, imm4)
             }
             &Inst::VecTbl { rd, rn, rm } => {
-                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16, allocs);
-                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16, allocs);
-                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16, allocs);
+                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16);
+                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16);
                 format!("tbl {}, {{ {} }}, {}", rd, rn, rm)
             }
             &Inst::VecTblExt { rd, ri, rn, rm } => {
-                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16, allocs);
-                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16, allocs);
-                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16, allocs);
-                let ri = pretty_print_vreg_vector(ri, VectorSize::Size8x16, allocs);
+                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16);
+                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16);
+                let ri = pretty_print_vreg_vector(ri, VectorSize::Size8x16);
                 format!("tbx {}, {}, {{ {} }}, {}", rd, ri, rn, rm)
             }
             &Inst::VecTbl2 { rd, rn, rn2, rm } => {
-                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16, allocs);
-                let rn2 = pretty_print_vreg_vector(rn2, VectorSize::Size8x16, allocs);
-                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16, allocs);
-                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16, allocs);
+                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16);
+                let rn2 = pretty_print_vreg_vector(rn2, VectorSize::Size8x16);
+                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16);
                 format!("tbl {}, {{ {}, {} }}, {}", rd, rn, rn2, rm)
             }
             &Inst::VecTbl2Ext {
@@ -2493,35 +2484,35 @@ impl Inst {
                 rn2,
                 rm,
             } => {
-                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16, allocs);
-                let rn2 = pretty_print_vreg_vector(rn2, VectorSize::Size8x16, allocs);
-                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16, allocs);
-                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16, allocs);
-                let ri = pretty_print_vreg_vector(ri, VectorSize::Size8x16, allocs);
+                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16);
+                let rn2 = pretty_print_vreg_vector(rn2, VectorSize::Size8x16);
+                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16);
+                let ri = pretty_print_vreg_vector(ri, VectorSize::Size8x16);
                 format!("tbx {}, {}, {{ {}, {} }}, {}", rd, ri, rn, rn2, rm)
             }
             &Inst::VecLoadReplicate { rd, rn, size, .. } => {
-                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size);
+                let rn = pretty_print_reg(rn);
 
                 format!("ld1r {{ {} }}, [{}]", rd, rn)
             }
             &Inst::VecCSel { rd, rn, rm, cond } => {
-                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16, allocs);
-                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16, allocs);
-                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16, allocs);
-                let cond = cond.pretty_print(0, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), VectorSize::Size8x16);
+                let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16);
+                let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16);
+                let cond = cond.pretty_print(0);
                 format!(
                     "vcsel {}, {}, {}, {} (if-then-else diamond)",
                     rd, rn, rm, cond
                 )
             }
             &Inst::MovToNZCV { rn } => {
-                let rn = pretty_print_reg(rn, allocs);
+                let rn = pretty_print_reg(rn);
                 format!("msr nzcv, {}", rn)
             }
             &Inst::MovFromNZCV { rd } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg(rd.to_reg());
                 format!("mrs {}, nzcv", rd)
             }
             &Inst::Extend {
@@ -2531,8 +2522,8 @@ impl Inst {
                 from_bits: 1,
                 ..
             } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32, allocs);
-                let rn = pretty_print_ireg(rn, OperandSize::Size32, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32);
+                let rn = pretty_print_ireg(rn, OperandSize::Size32);
                 format!("and {}, {}, #1", rd, rn)
             }
             &Inst::Extend {
@@ -2545,8 +2536,8 @@ impl Inst {
                 // The case of a zero extension from 32 to 64 bits, is implemented
                 // with a "mov" to a 32-bit (W-reg) dest, because this zeroes
                 // the top 32 bits.
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32, allocs);
-                let rn = pretty_print_ireg(rn, OperandSize::Size32, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32);
+                let rn = pretty_print_ireg(rn, OperandSize::Size32);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::Extend {
@@ -2568,8 +2559,8 @@ impl Inst {
                 };
                 if op == "sbfx" || op == "ubfx" {
                     let dest_size = OperandSize::from_bits(to_bits);
-                    let rd = pretty_print_ireg(rd.to_reg(), dest_size, allocs);
-                    let rn = pretty_print_ireg(rn, dest_size, allocs);
+                    let rd = pretty_print_ireg(rd.to_reg(), dest_size);
+                    let rn = pretty_print_ireg(rn, dest_size);
                     format!("{} {}, {}, #0, #{}", op, rd, rn, from_bits)
                 } else {
                     let dest_size = if signed {
@@ -2577,14 +2568,14 @@ impl Inst {
                     } else {
                         OperandSize::Size32
                     };
-                    let rd = pretty_print_ireg(rd.to_reg(), dest_size, allocs);
-                    let rn = pretty_print_ireg(rn, OperandSize::from_bits(from_bits), allocs);
+                    let rd = pretty_print_ireg(rd.to_reg(), dest_size);
+                    let rn = pretty_print_ireg(rn, OperandSize::from_bits(from_bits));
                     format!("{} {}, {}", op, rd, rn)
                 }
             }
             &Inst::Call { .. } => format!("bl 0"),
             &Inst::CallInd { ref info, .. } => {
-                let rn = pretty_print_reg(info.rn, allocs);
+                let rn = pretty_print_reg(info.rn);
                 format!("blr {}", rn)
             }
             &Inst::ReturnCall {
@@ -2596,21 +2587,21 @@ impl Inst {
                     info.new_stack_arg_size
                 );
                 for ret in &info.uses {
-                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
-                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    let preg = pretty_print_reg(ret.preg);
+                    let vreg = pretty_print_reg(ret.vreg);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
             }
             &Inst::ReturnCallInd { callee, ref info } => {
-                let callee = pretty_print_reg(callee, allocs);
+                let callee = pretty_print_reg(callee);
                 let mut s = format!(
                     "return_call_ind {callee} new_stack_arg_size:{}",
                     info.new_stack_arg_size
                 );
                 for ret in &info.uses {
-                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
-                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    let preg = pretty_print_reg(ret.preg);
+                    let vreg = pretty_print_reg(ret.vreg);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
@@ -2618,8 +2609,8 @@ impl Inst {
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
-                    let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
+                    let preg = pretty_print_reg(arg.preg);
+                    let def = pretty_print_reg(arg.vreg.to_reg());
                     write!(&mut s, " {}={}", def, preg).unwrap();
                 }
                 s
@@ -2627,8 +2618,8 @@ impl Inst {
             &Inst::Rets { ref rets } => {
                 let mut s = "rets".to_string();
                 for ret in rets {
-                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
-                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    let preg = pretty_print_reg(ret.preg);
+                    let vreg = pretty_print_reg(ret.vreg);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
@@ -2647,7 +2638,7 @@ impl Inst {
                 }
             }
             &Inst::Jump { ref dest } => {
-                let dest = dest.pretty_print(0, allocs);
+                let dest = dest.pretty_print(0);
                 format!("b {}", dest)
             }
             &Inst::CondBr {
@@ -2655,19 +2646,19 @@ impl Inst {
                 ref not_taken,
                 ref kind,
             } => {
-                let taken = taken.pretty_print(0, allocs);
-                let not_taken = not_taken.pretty_print(0, allocs);
+                let taken = taken.pretty_print(0);
+                let not_taken = not_taken.pretty_print(0);
                 match kind {
                     &CondBrKind::Zero(reg) => {
-                        let reg = pretty_print_reg(reg, allocs);
+                        let reg = pretty_print_reg(reg);
                         format!("cbz {}, {} ; b {}", reg, taken, not_taken)
                     }
                     &CondBrKind::NotZero(reg) => {
-                        let reg = pretty_print_reg(reg, allocs);
+                        let reg = pretty_print_reg(reg);
                         format!("cbnz {}, {} ; b {}", reg, taken, not_taken)
                     }
                     &CondBrKind::Cond(c) => {
-                        let c = c.pretty_print(0, allocs);
+                        let c = c.pretty_print(0);
                         format!("b.{} {} ; b {}", c, taken, not_taken)
                     }
                 }
@@ -2683,13 +2674,13 @@ impl Inst {
                     TestBitAndBranchKind::Z => "z",
                     TestBitAndBranchKind::NZ => "nz",
                 };
-                let taken = taken.pretty_print(0, allocs);
-                let not_taken = not_taken.pretty_print(0, allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let taken = taken.pretty_print(0);
+                let not_taken = not_taken.pretty_print(0);
+                let rn = pretty_print_reg(rn);
                 format!("tb{cond} {rn}, #{bit}, {taken} ; b {not_taken}")
             }
             &Inst::IndirectBr { rn, .. } => {
-                let rn = pretty_print_reg(rn, allocs);
+                let rn = pretty_print_reg(rn);
                 format!("br {}", rn)
             }
             &Inst::Brk => "brk #0".to_string(),
@@ -2699,24 +2690,24 @@ impl Inst {
                 trap_code,
             } => match kind {
                 &CondBrKind::Zero(reg) => {
-                    let reg = pretty_print_reg(reg, allocs);
+                    let reg = pretty_print_reg(reg);
                     format!("cbz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::NotZero(reg) => {
-                    let reg = pretty_print_reg(reg, allocs);
+                    let reg = pretty_print_reg(reg);
                     format!("cbnz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::Cond(c) => {
-                    let c = c.pretty_print(0, allocs);
+                    let c = c.pretty_print(0);
                     format!("b.{c} #trap={trap_code}")
                 }
             },
             &Inst::Adr { rd, off } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg(rd.to_reg());
                 format!("adr {}, pc+{}", rd, off)
             }
             &Inst::Adrp { rd, off } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg(rd.to_reg());
                 // This instruction addresses 4KiB pages, so multiply it by the page size.
                 let byte_offset = off * 4096;
                 format!("adrp {}, pc+{}", rd, byte_offset)
@@ -2731,10 +2722,10 @@ impl Inst {
                 rtmp2,
                 ..
             } => {
-                let ridx = pretty_print_reg(ridx, allocs);
-                let rtmp1 = pretty_print_reg(rtmp1.to_reg(), allocs);
-                let rtmp2 = pretty_print_reg(rtmp2.to_reg(), allocs);
-                let default_target = BranchTarget::Label(default).pretty_print(0, allocs);
+                let ridx = pretty_print_reg(ridx);
+                let rtmp1 = pretty_print_reg(rtmp1.to_reg());
+                let rtmp2 = pretty_print_reg(rtmp2.to_reg());
+                let default_target = BranchTarget::Label(default).pretty_print(0);
                 format!(
                     concat!(
                         "b.hs {} ; ",
@@ -2765,7 +2756,7 @@ impl Inst {
                 ref name,
                 offset,
             } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg(rd.to_reg());
                 format!("load_ext_name {rd}, {name:?}+{offset}")
             }
             &Inst::LoadAddr { rd, ref mem } => {
@@ -2777,9 +2768,7 @@ impl Inst {
                 let (mem_insts, mem) = mem_finalize(None, &mem, I8, state);
                 let mut ret = String::new();
                 for inst in mem_insts.into_iter() {
-                    ret.push_str(
-                        &inst.print_with_state(&mut EmitState::default(), &mut empty_allocs),
-                    );
+                    ret.push_str(&inst.print_with_state(&mut EmitState::default()));
                 }
                 let (reg, index_reg, offset) = match mem {
                     AMode::RegExtended { rn, rm, extendop } => (rn, Some((rm, extendop)), 0),
@@ -2804,14 +2793,10 @@ impl Inst {
                         extendop,
                     };
 
-                    ret.push_str(
-                        &add.print_with_state(&mut EmitState::default(), &mut empty_allocs),
-                    );
+                    ret.push_str(&add.print_with_state(&mut EmitState::default()));
                 } else if offset == 0 {
                     let mov = Inst::gen_move(rd, reg, I64);
-                    ret.push_str(
-                        &mov.print_with_state(&mut EmitState::default(), &mut empty_allocs),
-                    );
+                    ret.push_str(&mov.print_with_state(&mut EmitState::default()));
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
                         alu_op,
@@ -2820,15 +2805,11 @@ impl Inst {
                         rn: reg,
                         imm12,
                     };
-                    ret.push_str(
-                        &add.print_with_state(&mut EmitState::default(), &mut empty_allocs),
-                    );
+                    ret.push_str(&add.print_with_state(&mut EmitState::default()));
                 } else {
                     let tmp = writable_spilltmp_reg();
                     for inst in Inst::load_constant(tmp, abs_offset, &mut |_| tmp).into_iter() {
-                        ret.push_str(
-                            &inst.print_with_state(&mut EmitState::default(), &mut empty_allocs),
-                        );
+                        ret.push_str(&inst.print_with_state(&mut EmitState::default()));
                     }
                     let add = Inst::AluRRR {
                         alu_op,
@@ -2837,9 +2818,7 @@ impl Inst {
                         rn: reg,
                         rm: tmp.to_reg(),
                     };
-                    ret.push_str(
-                        &add.print_with_state(&mut EmitState::default(), &mut empty_allocs),
-                    );
+                    ret.push_str(&add.print_with_state(&mut EmitState::default()));
                 }
                 ret
             }
@@ -2875,25 +2854,25 @@ impl Inst {
                 rd,
                 tmp,
             } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let tmp = pretty_print_reg(tmp.to_reg(), allocs);
+                let rd = pretty_print_reg(rd.to_reg());
+                let tmp = pretty_print_reg(tmp.to_reg());
                 format!("elf_tls_get_addr {}, {}, {}", rd, tmp, symbol.display(None))
             }
             &Inst::MachOTlsGetAddr { ref symbol, rd } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg(rd.to_reg());
                 format!("macho_tls_get_addr {}, {}", rd, symbol.display(None))
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)
             }
             &Inst::DummyUse { reg } => {
-                let reg = pretty_print_reg(reg, allocs);
+                let reg = pretty_print_reg(reg);
                 format!("dummy_use {}", reg)
             }
             &Inst::StackProbeLoop { start, end, step } => {
-                let start = pretty_print_reg(start.to_reg(), allocs);
-                let end = pretty_print_reg(end, allocs);
-                let step = step.pretty_print(0, allocs);
+                let start = pretty_print_reg(start.to_reg());
+                let end = pretty_print_reg(end);
+                let step = step.pretty_print(0);
                 format!("stack_probe_loop {start}, {end}, {step}")
             }
         }

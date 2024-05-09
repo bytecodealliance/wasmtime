@@ -265,9 +265,8 @@ impl MachInstEmit for Inst {
         );
     }
 
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
-        let mut allocs = AllocationConsumer::new(allocs);
-        self.print_with_state(state, &mut allocs)
+    fn pretty_print_inst(&self, _allocs: &[Allocation], state: &mut Self::State) -> String {
+        self.print_with_state(state)
     }
 }
 

@@ -893,30 +893,30 @@ pub fn reg_name(reg: Reg) -> String {
 }
 
 impl Inst {
-    fn print_with_state(&self, _state: &mut EmitState, allocs: &mut AllocationConsumer) -> String {
-        let format_reg = |reg: Reg, _allocs: &mut AllocationConsumer| -> String { reg_name(reg) };
+    fn print_with_state(&self, _state: &mut EmitState) -> String {
+        let format_reg = |reg: Reg| -> String { reg_name(reg) };
 
-        let format_vec_amode = |amode: &VecAMode, _allocs: &mut AllocationConsumer| -> String {
+        let format_vec_amode = |amode: &VecAMode| -> String {
             match amode {
                 VecAMode::UnitStride { base } => base.to_string(),
             }
         };
 
-        let format_mask = |mask: &VecOpMasking, allocs: &mut AllocationConsumer| -> String {
+        let format_mask = |mask: &VecOpMasking| -> String {
             match mask {
-                VecOpMasking::Enabled { reg } => format!(",{}.t", format_reg(*reg, allocs)),
+                VecOpMasking::Enabled { reg } => format!(",{}.t", format_reg(*reg)),
                 VecOpMasking::Disabled => format!(""),
             }
         };
 
-        let format_regs = |regs: &[Reg], allocs: &mut AllocationConsumer| -> String {
+        let format_regs = |regs: &[Reg]| -> String {
             let mut x = if regs.len() > 1 {
                 String::from("[")
             } else {
                 String::default()
             };
             regs.iter().for_each(|i| {
-                x.push_str(format_reg(i.clone(), allocs).as_str());
+                x.push_str(format_reg(i.clone()).as_str());
                 if *i != *regs.last().unwrap() {
                     x.push_str(",");
                 }
@@ -949,7 +949,6 @@ impl Inst {
             format!(",{}", rounding_mode.to_static_str())
         }
 
-        let mut empty_allocs = AllocationConsumer::default();
         match self {
             &Inst::Nop0 => {
                 format!("##zero length nop")
@@ -962,25 +961,25 @@ impl Inst {
                 probe_count,
                 tmp,
             } => {
-                let tmp = format_reg(tmp.to_reg(), allocs);
+                let tmp = format_reg(tmp.to_reg());
                 format!(
                     "inline_stack_probe##guard_size={} probe_count={} tmp={}",
                     guard_size, probe_count, tmp
                 )
             }
             &Inst::AtomicStore { src, ty, p } => {
-                let src = format_reg(src, allocs);
-                let p = format_reg(p, allocs);
+                let src = format_reg(src);
+                let p = format_reg(p);
                 format!("atomic_store.{} {},({})", ty, src, p)
             }
             &Inst::DummyUse { reg } => {
-                let reg = format_reg(reg, allocs);
+                let reg = format_reg(reg);
                 format!("dummy_use {}", reg)
             }
 
             &Inst::AtomicLoad { rd, ty, p } => {
-                let p = format_reg(p, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let p = format_reg(p);
+                let rd = format_reg(rd.to_reg());
                 format!("atomic_load.{} {},({})", ty, rd, p)
             }
             &Inst::AtomicRmwLoop {
@@ -992,11 +991,11 @@ impl Inst {
                 x,
                 t0,
             } => {
-                let offset = format_reg(offset, allocs);
-                let p = format_reg(p, allocs);
-                let x = format_reg(x, allocs);
-                let t0 = format_reg(t0.to_reg(), allocs);
-                let dst = format_reg(dst.to_reg(), allocs);
+                let offset = format_reg(offset);
+                let p = format_reg(p);
+                let x = format_reg(x);
+                let t0 = format_reg(t0.to_reg());
+                let dst = format_reg(dst.to_reg());
                 format!(
                     "atomic_rmw.{} {} {},{},({})##t0={} offset={}",
                     ty, op, dst, x, p, t0, offset
@@ -1033,11 +1032,11 @@ impl Inst {
                 tmp2,
                 rd,
             } => {
-                let rs = format_reg(rs, allocs);
-                let step = format_reg(step.to_reg(), allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let tmp2 = format_reg(tmp2.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rs = format_reg(rs);
+                let step = format_reg(step.to_reg());
+                let tmp = format_reg(tmp.to_reg());
+                let tmp2 = format_reg(tmp2.to_reg());
+                let rd = format_reg(rd.to_reg());
                 format!(
                     "brev8 {},{}##tmp={} tmp2={} step={} ty={}",
                     rd, rs, tmp, tmp2, step, ty
@@ -1050,10 +1049,10 @@ impl Inst {
                 tmp,
                 ty,
             } => {
-                let rs = format_reg(rs, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let step = format_reg(step.to_reg(), allocs);
-                let sum = format_reg(sum.to_reg(), allocs);
+                let rs = format_reg(rs);
+                let tmp = format_reg(tmp.to_reg());
+                let step = format_reg(step.to_reg());
+                let sum = format_reg(sum.to_reg());
                 format!("popcnt {},{}##ty={} tmp={} step={}", sum, rs, ty, tmp, step)
             }
             &Inst::Cltz {
@@ -1064,10 +1063,10 @@ impl Inst {
                 ty,
                 leading,
             } => {
-                let rs = format_reg(rs, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let step = format_reg(step.to_reg(), allocs);
-                let sum = format_reg(sum.to_reg(), allocs);
+                let rs = format_reg(rs);
+                let tmp = format_reg(tmp.to_reg());
+                let step = format_reg(step.to_reg());
+                let sum = format_reg(sum.to_reg());
                 format!(
                     "{} {},{}##ty={} tmp={} step={}",
                     if leading { "clz" } else { "ctz" },
@@ -1087,12 +1086,12 @@ impl Inst {
                 v,
                 ty,
             } => {
-                let offset = format_reg(offset, allocs);
-                let e = format_reg(e, allocs);
-                let addr = format_reg(addr, allocs);
-                let v = format_reg(v, allocs);
-                let t0 = format_reg(t0.to_reg(), allocs);
-                let dst = format_reg(dst.to_reg(), allocs);
+                let offset = format_reg(offset);
+                let e = format_reg(e);
+                let addr = format_reg(addr);
+                let v = format_reg(v);
+                let t0 = format_reg(t0.to_reg());
+                let dst = format_reg(dst.to_reg());
                 format!(
                     "atomic_cas.{} {},{},{},({})##t0={} offset={}",
                     ty, dst, e, v, addr, t0, offset,
@@ -1107,35 +1106,25 @@ impl Inst {
                 format!(
                     "{} {},{}##tmp1={},tmp2={}",
                     "br_table",
-                    format_reg(index, allocs),
+                    format_reg(index),
                     format_labels(&targets[..]),
-                    format_reg(tmp1.to_reg(), allocs),
-                    format_reg(tmp2.to_reg(), allocs),
+                    format_reg(tmp1.to_reg()),
+                    format_reg(tmp2.to_reg()),
                 )
             }
             &Inst::Auipc { rd, imm } => {
-                format!(
-                    "{} {},{}",
-                    "auipc",
-                    format_reg(rd.to_reg(), allocs),
-                    imm.as_i32(),
-                )
+                format!("{} {},{}", "auipc", format_reg(rd.to_reg()), imm.as_i32(),)
             }
             &Inst::Jalr { rd, base, offset } => {
-                let base = format_reg(base, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let base = format_reg(base);
+                let rd = format_reg(rd.to_reg());
                 format!("{} {},{}({})", "jalr", rd, offset.as_i16(), base)
             }
             &Inst::Lui { rd, ref imm } => {
-                format!(
-                    "{} {},{}",
-                    "lui",
-                    format_reg(rd.to_reg(), allocs),
-                    imm.as_i32()
-                )
+                format!("{} {},{}", "lui", format_reg(rd.to_reg()), imm.as_i32())
             }
             &Inst::Fli { rd, ty, imm } => {
-                let rd_s = format_reg(rd.to_reg(), allocs);
+                let rd_s = format_reg(rd.to_reg());
                 let imm_s = imm.format();
                 let suffix = match ty {
                     F32 => "s",
@@ -1146,7 +1135,7 @@ impl Inst {
                 format!("fli.{suffix} {rd_s},{imm_s}")
             }
             &Inst::LoadInlineConst { rd, imm, .. } => {
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg());
                 let mut buf = String::new();
                 write!(&mut buf, "auipc {},0; ", rd).unwrap();
                 write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
@@ -1160,9 +1149,9 @@ impl Inst {
                 rs1,
                 rs2,
             } => {
-                let rs1_s = format_reg(rs1, allocs);
-                let rs2_s = format_reg(rs2, allocs);
-                let rd_s = format_reg(rd.to_reg(), allocs);
+                let rs1_s = format_reg(rs1);
+                let rs2_s = format_reg(rs2);
+                let rd_s = format_reg(rd.to_reg());
                 match alu_op {
                     AluOPRRR::Adduw if rs2 == zero_reg() => {
                         format!("zext.w {},{}", rd_s, rs1_s)
@@ -1178,8 +1167,8 @@ impl Inst {
                 rd,
                 rs,
             } => {
-                let rs = format_reg(rs, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rs = format_reg(rs);
+                let rd = format_reg(rd.to_reg());
                 let frm = match alu_op {
                     FpuOPRR::FmvXW
                     | FpuOPRR::FmvWX
@@ -1200,9 +1189,9 @@ impl Inst {
                 rs2,
                 frm,
             } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rs1 = format_reg(rs1);
+                let rs2 = format_reg(rs2);
+                let rd = format_reg(rd.to_reg());
                 let rs1_is_rs2 = rs1 == rs2;
                 if rs1_is_rs2 && alu_op.is_copy_sign() {
                     // this is move instruction.
@@ -1242,10 +1231,10 @@ impl Inst {
                 rs3,
                 frm,
             } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rs3 = format_reg(rs3, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rs1 = format_reg(rs1);
+                let rs2 = format_reg(rs2);
+                let rs3 = format_reg(rs3);
+                let rd = format_reg(rd.to_reg());
                 format!(
                     "{} {},{},{},{}{}",
                     alu_op.op_name(),
@@ -1262,8 +1251,8 @@ impl Inst {
                 rs,
                 ref imm12,
             } => {
-                let rs_s = format_reg(rs, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rs_s = format_reg(rs);
+                let rd = format_reg(rd.to_reg());
 
                 // Some of these special cases are better known as
                 // their pseudo-instruction version, so prefer printing those.
@@ -1289,8 +1278,8 @@ impl Inst {
                 }
             }
             &Inst::CsrReg { op, rd, rs, csr } => {
-                let rs_s = format_reg(rs, allocs);
-                let rd_s = format_reg(rd.to_reg(), allocs);
+                let rs_s = format_reg(rs);
+                let rd_s = format_reg(rd.to_reg());
 
                 match (op, csr, rd) {
                     (CsrRegOP::CsrRW, CSR::Frm, rd) if rd.to_reg() == zero_reg() => {
@@ -1302,7 +1291,7 @@ impl Inst {
                 }
             }
             &Inst::CsrImm { op, rd, csr, imm } => {
-                let rd_s = format_reg(rd.to_reg(), allocs);
+                let rd_s = format_reg(rd.to_reg());
 
                 match (op, csr, rd) {
                     (CsrImmOP::CsrRWI, CSR::Frm, rd) if rd.to_reg() != zero_reg() => {
@@ -1320,7 +1309,7 @@ impl Inst {
                 flags: _flags,
             } => {
                 let base = from.to_string();
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg());
                 format!("{} {},{}", op.op_name(), rd, base,)
             }
             &Inst::Store {
@@ -1330,25 +1319,23 @@ impl Inst {
                 flags: _flags,
             } => {
                 let base = to.to_string();
-                let src = format_reg(src, allocs);
+                let src = format_reg(src);
                 format!("{} {},{}", op.op_name(), src, base,)
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
-                let mut empty_allocs = AllocationConsumer::default();
                 for arg in args {
-                    let preg = format_reg(arg.preg, &mut empty_allocs);
-                    let def = format_reg(arg.vreg.to_reg(), allocs);
+                    let preg = format_reg(arg.preg);
+                    let def = format_reg(arg.vreg.to_reg());
                     write!(&mut s, " {}={}", def, preg).unwrap();
                 }
                 s
             }
             &Inst::Rets { ref rets } => {
                 let mut s = "rets".to_string();
-                let mut empty_allocs = AllocationConsumer::default();
                 for ret in rets {
-                    let preg = format_reg(ret.preg, &mut empty_allocs);
-                    let vreg = format_reg(ret.vreg, allocs);
+                    let preg = format_reg(ret.preg);
+                    let vreg = format_reg(ret.vreg);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
@@ -1362,8 +1349,8 @@ impl Inst {
                 from_bits,
                 ..
             } => {
-                let rn = format_reg(rn, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rn = format_reg(rn);
+                let rd = format_reg(rd.to_reg());
                 return if signed == false && from_bits == 8 {
                     format!("andi {rd},{rn}")
                 } else {
@@ -1374,7 +1361,7 @@ impl Inst {
             }
             &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
             &MInst::CallInd { ref info } => {
-                let rd = format_reg(info.rn, allocs);
+                let rd = format_reg(info.rn);
                 format!("callind {}", rd)
             }
             &MInst::ReturnCall {
@@ -1386,21 +1373,21 @@ impl Inst {
                     info.new_stack_arg_size
                 );
                 for ret in &info.uses {
-                    let preg = format_reg(ret.preg, &mut empty_allocs);
-                    let vreg = format_reg(ret.vreg, allocs);
+                    let preg = format_reg(ret.preg);
+                    let vreg = format_reg(ret.vreg);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
             }
             &MInst::ReturnCallInd { callee, ref info } => {
-                let callee = format_reg(callee, allocs);
+                let callee = format_reg(callee);
                 let mut s = format!(
                     "return_call_ind {callee} new_stack_arg_size:{}",
                     info.new_stack_arg_size
                 );
                 for ret in &info.uses {
-                    let preg = format_reg(ret.preg, &mut empty_allocs);
-                    let vreg = format_reg(ret.vreg, allocs);
+                    let preg = format_reg(ret.preg);
+                    let vreg = format_reg(ret.vreg);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
@@ -1411,8 +1398,8 @@ impl Inst {
                 cc,
                 trap_code,
             } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
+                let rs1 = format_reg(rs1);
+                let rs2 = format_reg(rs2);
                 format!("trap_if {trap_code}##({rs1} {cc} {rs2})")
             }
             &MInst::Jal { label } => {
@@ -1424,8 +1411,8 @@ impl Inst {
                 kind,
                 ..
             } => {
-                let rs1 = format_reg(kind.rs1, allocs);
-                let rs2 = format_reg(kind.rs2, allocs);
+                let rs1 = format_reg(kind.rs1);
+                let rs2 = format_reg(kind.rs2);
                 if not_taken.is_fallthrouh() && taken.as_label().is_none() {
                     format!("{} {},{},0", kind.op_name(), rs1, rs2)
                 } else {
@@ -1448,9 +1435,9 @@ impl Inst {
                 amo,
             } => {
                 let op_name = op.op_name(amo);
-                let addr = format_reg(addr, allocs);
-                let src = format_reg(src, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let addr = format_reg(addr);
+                let src = format_reg(src);
+                let rd = format_reg(rd.to_reg());
                 if op.is_load() {
                     format!("{} {},({})", op_name, rd, addr)
                 } else {
@@ -1462,24 +1449,24 @@ impl Inst {
                 ref name,
                 offset,
             } => {
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg());
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
             &Inst::ElfTlsGetAddr { rd, ref name } => {
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg());
                 format!("elf_tls_get_addr {rd},{}", name.display(None))
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
                 let rs = mem.to_string();
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg());
                 format!("load_addr {},{}", rd, rs)
             }
             &MInst::VirtualSPOffsetAdj { amount } => {
                 format!("virtual_sp_offset_adj {:+}", amount)
             }
             &MInst::Mov { rd, rm, ty } => {
-                let rm = format_reg(rm, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rm = format_reg(rm);
+                let rd = format_reg(rd.to_reg());
 
                 let op = match ty {
                     F32 => "fmv.s",
@@ -1491,7 +1478,7 @@ impl Inst {
                 format!("{op} {rd},{rm}")
             }
             &MInst::MovFromPReg { rd, rm } => {
-                let rd = format_reg(rd.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg());
                 debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
                 let rm = reg_name(Reg::from(rm));
                 format!("mv {},{}", rd, rm)
@@ -1509,12 +1496,12 @@ impl Inst {
                 ref x,
                 ref y,
             } => {
-                let c_rs1 = format_reg(condition.rs1, allocs);
-                let c_rs2 = format_reg(condition.rs2, allocs);
-                let x = format_regs(x.regs(), allocs);
-                let y = format_regs(y.regs(), allocs);
+                let c_rs1 = format_reg(condition.rs1);
+                let c_rs2 = format_reg(condition.rs2);
+                let x = format_regs(x.regs());
+                let y = format_regs(y.regs());
                 let dst = dst.map(|r| r.to_reg());
-                let dst = format_regs(dst.regs(), allocs);
+                let dst = format_regs(dst.regs());
                 format!(
                     "select {},{},{}##condition=({} {} {})",
                     dst,
@@ -1536,11 +1523,11 @@ impl Inst {
                 ref mask,
                 ref vstate,
             } => {
-                let vs1_s = format_reg(vs1, allocs);
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_src_s = format_reg(vd_src, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
+                let vs1_s = format_reg(vs1);
+                let vs2_s = format_reg(vs2);
+                let vd_src_s = format_reg(vd_src);
+                let vd_s = format_reg(vd.to_reg());
+                let mask = format_mask(mask);
 
                 let vd_fmt = if vd_s != vd_src_s {
                     format!("{},{}", vd_s, vd_src_s)
@@ -1561,9 +1548,9 @@ impl Inst {
                 ref vstate,
                 ..
             } => {
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
+                let vs2_s = format_reg(vs2);
+                let vd_s = format_reg(vd.to_reg());
+                let mask = format_mask(mask);
 
                 // Some opcodes interpret the immediate as unsigned, lets show the
                 // correct number here.
@@ -1583,10 +1570,10 @@ impl Inst {
                 ref mask,
                 ref vstate,
             } => {
-                let vs1_s = format_reg(vs1, allocs);
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
+                let vs1_s = format_reg(vs1);
+                let vs2_s = format_reg(vs2);
+                let vd_s = format_reg(vd.to_reg());
+                let mask = format_mask(mask);
 
                 // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
                 // This is noted in Section 10.1 of the RISC-V Vector spec.
@@ -1614,9 +1601,9 @@ impl Inst {
                 ref mask,
                 ref vstate,
             } => {
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
+                let vs2_s = format_reg(vs2);
+                let vd_s = format_reg(vd.to_reg());
+                let mask = format_mask(mask);
 
                 // Some opcodes interpret the immediate as unsigned, lets show the
                 // correct number here.
@@ -1640,9 +1627,9 @@ impl Inst {
                 ref mask,
                 ref vstate,
             } => {
-                let vs_s = format_reg(vs, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
+                let vs_s = format_reg(vs);
+                let vd_s = format_reg(vd.to_reg());
+                let mask = format_mask(mask);
 
                 format!("{op} {vd_s},{vs_s}{mask} {vstate}")
             }
@@ -1653,13 +1640,13 @@ impl Inst {
                 ref mask,
                 ref vstate,
             } => {
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
+                let vd_s = format_reg(vd.to_reg());
+                let mask = format_mask(mask);
 
                 format!("{op} {vd_s},{imm}{mask} {vstate}")
             }
             &Inst::VecSetState { rd, ref vstate } => {
-                let rd_s = format_reg(rd.to_reg(), allocs);
+                let rd_s = format_reg(rd.to_reg());
                 assert!(vstate.avl.is_static());
                 format!("vsetivli {}, {}, {}", rd_s, vstate.avl, vstate.vtype)
             }
@@ -1671,9 +1658,9 @@ impl Inst {
                 ref vstate,
                 ..
             } => {
-                let base = format_vec_amode(from, allocs);
-                let vd = format_reg(to.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
+                let base = format_vec_amode(from);
+                let vd = format_reg(to.to_reg());
+                let mask = format_mask(mask);
 
                 format!("vl{eew}.v {vd},{base}{mask} {vstate}")
             }
@@ -1685,9 +1672,9 @@ impl Inst {
                 ref vstate,
                 ..
             } => {
-                let dst = format_vec_amode(to, allocs);
-                let vs3 = format_reg(*from, allocs);
-                let mask = format_mask(mask, allocs);
+                let dst = format_vec_amode(to);
+                let vs3 = format_reg(*from);
+                let mask = format_mask(mask);
 
                 format!("vs{eew}.v {vs3},{dst}{mask} {vstate}")
             }

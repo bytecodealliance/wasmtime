@@ -108,7 +108,6 @@ fn emit_reloc(sink: &mut MachBuffer<Inst>, kind: Reloc, name: &ExternalName, add
 ///   care?)
 pub(crate) fn emit(
     inst: &Inst,
-    allocs: &mut AllocationConsumer,
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
@@ -246,7 +245,6 @@ pub(crate) fn emit(
                     src1: dst.to_reg(),
                     src2: dst.to_reg().into(),
                 },
-                allocs,
                 sink,
                 info,
                 state,
@@ -1619,7 +1617,7 @@ pub(crate) fn emit(
             callee,
             info: call_info,
         } => {
-            emit_return_call_common_sequence(allocs, sink, info, state, &call_info);
+            emit_return_call_common_sequence(sink, info, state, &call_info);
 
             // Finally, jump to the callee!
             //
@@ -1640,7 +1638,7 @@ pub(crate) fn emit(
         } => {
             let callee = *callee;
 
-            emit_return_call_common_sequence(allocs, sink, info, state, &call_info);
+            emit_return_call_common_sequence(sink, info, state, &call_info);
 
             Inst::JmpUnknown {
                 target: RegMem::reg(callee),
@@ -1910,7 +1908,6 @@ pub(crate) fn emit(
                     src: XmmMem::new(src.clone().into()).unwrap(),
                     dst: *dst,
                 },
-                allocs,
                 sink,
                 info,
                 state,
@@ -2068,7 +2065,6 @@ pub(crate) fn emit(
                 src1: *src1,
                 src2: XmmMem::new(src2.clone().to_reg_mem()).unwrap(),
             },
-            allocs,
             sink,
             info,
             state,
@@ -4218,7 +4214,6 @@ pub(crate) fn emit(
 ///
 /// * Move the return address into its stack slot.
 fn emit_return_call_common_sequence(
-    _allocs: &mut AllocationConsumer,
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,

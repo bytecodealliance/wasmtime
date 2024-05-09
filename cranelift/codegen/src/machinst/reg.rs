@@ -4,9 +4,7 @@
 
 use alloc::{string::String, vec::Vec};
 use core::{fmt::Debug, hash::Hash};
-use regalloc2::{
-    Allocation, Operand, OperandConstraint, OperandKind, OperandPos, PReg, PRegSet, VReg,
-};
+use regalloc2::{Operand, OperandConstraint, OperandKind, OperandPos, PReg, PRegSet, VReg};
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
@@ -476,37 +474,9 @@ impl<T: FnMut(&mut Reg, OperandConstraint, OperandKind, OperandPos)> OperandVisi
 /// `eax` for the register by those names on x86-64, depending on a
 /// 64- or 32-bit context.
 pub trait PrettyPrint {
-    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer) -> String;
+    fn pretty_print(&self, size_bytes: u8) -> String;
 
     fn pretty_print_default(&self) -> String {
-        self.pretty_print(0, &mut AllocationConsumer::new(&[]))
-    }
-}
-
-/// A consumer of an (optional) list of Allocations along with Regs
-/// that provides RealRegs where available.
-///
-/// This is meant to be used during code emission or
-/// pretty-printing. In at least the latter case, regalloc results may
-/// or may not be available, so we may end up printing either vregs or
-/// rregs. Even pre-regalloc, though, some registers may be RealRegs
-/// that were provided when the instruction was created.
-///
-/// This struct should be used in a specific way: when matching on an
-/// instruction, provide it the Regs in the same order as they were
-/// provided to the OperandCollector.
-#[derive(Clone)]
-pub struct AllocationConsumer;
-
-impl AllocationConsumer {
-    pub fn new(allocs: &[Allocation]) -> Self {
-        debug_assert!(allocs.is_empty());
-        Self
-    }
-}
-
-impl std::default::Default for AllocationConsumer {
-    fn default() -> Self {
-        Self::new(&[])
+        self.pretty_print(0)
     }
 }

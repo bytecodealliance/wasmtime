@@ -165,11 +165,7 @@ fn enc_cbr(op_31_24: u32, off_18_0: u32, op_4: u32, cond: u32) -> u32 {
     (op_31_24 << 24) | (off_18_0 << 5) | (op_4 << 4) | cond
 }
 
-fn enc_conditional_br(
-    taken: BranchTarget,
-    kind: CondBrKind,
-    _allocs: &mut AllocationConsumer,
-) -> u32 {
+fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind) -> u32 {
     match kind {
         CondBrKind::Zero(reg) => enc_cmpbr(0b1_011010_0, taken.as_offset19_or_zero(), reg),
         CondBrKind::NotZero(reg) => enc_cmpbr(0b1_011010_1, taken.as_offset19_or_zero(), reg),
@@ -722,13 +718,11 @@ impl MachInstEmit for Inst {
 
     fn emit(
         &self,
-        allocs: &[Allocation],
+        _allocs: &[Allocation],
         sink: &mut MachBuffer<Inst>,
         emit_info: &Self::Info,
         state: &mut EmitState,
     ) {
-        let mut allocs = AllocationConsumer::new(allocs);
-
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -1626,7 +1620,6 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
                     CondBrKind::NotZero(x24),
-                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
             }
@@ -1704,7 +1697,6 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(out_label),
                     CondBrKind::Cond(Cond::Ne),
-                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
 
@@ -1721,7 +1713,6 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
                     CondBrKind::NotZero(x24),
-                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 
@@ -2833,7 +2824,6 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(else_label),
                     CondBrKind::Cond(cond),
-                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_else_offset, else_label, LabelUse::Branch19);
 
@@ -2981,7 +2971,7 @@ impl MachInstEmit for Inst {
                 ref callee,
                 ref info,
             } => {
-                emit_return_call_common_sequence(&mut allocs, sink, emit_info, state, info);
+                emit_return_call_common_sequence(sink, emit_info, state, info);
 
                 // Note: this is not `Inst::Jump { .. }.emit(..)` because we
                 // have different metadata in this case: we don't have a label
@@ -2996,7 +2986,7 @@ impl MachInstEmit for Inst {
                 start_off = sink.cur_offset();
             }
             &Inst::ReturnCallInd { callee, ref info } => {
-                emit_return_call_common_sequence(&mut allocs, sink, emit_info, state, info);
+                emit_return_call_common_sequence(sink, emit_info, state, info);
 
                 Inst::IndirectBr {
                     rn: callee,
@@ -3019,12 +3009,10 @@ impl MachInstEmit for Inst {
                 let cond_off = sink.cur_offset();
                 if let Some(l) = taken.as_label() {
                     sink.use_label_at_offset(cond_off, l, LabelUse::Branch19);
-                    let mut allocs_inv = allocs.clone();
-                    let inverted =
-                        enc_conditional_br(taken, kind.invert(), &mut allocs_inv).to_le_bytes();
+                    let inverted = enc_conditional_br(taken, kind.invert()).to_le_bytes();
                     sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
                 }
-                sink.put4(enc_conditional_br(taken, kind, &mut allocs));
+                sink.put4(enc_conditional_br(taken, kind));
 
                 // Unconditional part next.
                 let uncond_off = sink.cur_offset();
@@ -3063,11 +3051,7 @@ impl MachInstEmit for Inst {
                 let label = sink.defer_trap(trap_code, state.take_stack_map());
                 // condbr KIND, LABEL
                 let off = sink.cur_offset();
-                sink.put4(enc_conditional_br(
-                    BranchTarget::Label(label),
-                    kind,
-                    &mut allocs,
-                ));
+                sink.put4(enc_conditional_br(BranchTarget::Label(label), kind));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
             }
             &Inst::IndirectBr { rn, .. } => {
@@ -3116,11 +3100,8 @@ impl MachInstEmit for Inst {
                 // the middle; we depend on hardcoded PC-rel addressing below.
 
                 // Branch to default when condition code from prior comparison indicates.
-                let br = enc_conditional_br(
-                    BranchTarget::Label(default),
-                    CondBrKind::Cond(Cond::Hs),
-                    &mut AllocationConsumer::default(),
-                );
+                let br =
+                    enc_conditional_br(BranchTarget::Label(default), CondBrKind::Cond(Cond::Hs));
 
                 // No need to inform the sink's branch folding logic about this branch, because it
                 // will not be merged with any other branch, flipped, or elided (it is not preceded
@@ -3568,14 +3549,12 @@ impl MachInstEmit for Inst {
         state.clear_post_insn();
     }
 
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
-        let mut allocs = AllocationConsumer::new(allocs);
-        self.print_with_state(state, &mut allocs)
+    fn pretty_print_inst(&self, _allocs: &[Allocation], state: &mut Self::State) -> String {
+        self.print_with_state(state)
     }
 }
 
 fn emit_return_call_common_sequence(
-    _allocs: &mut AllocationConsumer,
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,

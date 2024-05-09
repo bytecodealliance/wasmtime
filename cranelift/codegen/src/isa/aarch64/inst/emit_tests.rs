@@ -7863,8 +7863,7 @@ fn test_aarch64_binemit() {
         );
 
         // Check the printed text is as expected.
-        let actual_printing =
-            insn.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
+        let actual_printing = insn.print_with_state(&mut EmitState::default());
         assert_eq!(expected_printing, actual_printing);
 
         let mut buffer = MachBuffer::new();
