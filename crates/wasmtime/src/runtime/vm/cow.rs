@@ -13,6 +13,8 @@ use wasmtime_environ::{
     DefinedMemoryIndex, MemoryInitialization, MemoryPlan, MemoryStyle, Module, PrimaryMap,
 };
 
+use super::sys::DecommitBehavior;
+
 /// Backing images for memories in a module.
 ///
 /// This is meant to be built once, when a module is first loaded/constructed,
@@ -481,16 +483,24 @@ impl MemoryImageSlot {
 
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     unsafe fn reset_all_memory_contents(&mut self, keep_resident: usize) -> Result<()> {
-        if !vm::supports_madvise_dontneed() {
-            // If we're not on Linux then there's no generic platform way to
-            // reset memory back to its original state, so instead reset memory
-            // back to entirely zeros with an anonymous backing.
-            //
-            // Additionally the previous image, if any, is dropped here
-            // since it's no longer applicable to this mapping.
-            return self.reset_with_anon_memory();
+        match vm::decommit_behavior() {
+            DecommitBehavior::Zero => {
+                // If we're not on Linux then there's no generic platform way to
+                // reset memory back to its original state, so instead reset memory
+                // back to entirely zeros with an anonymous backing.
+                //
+                // Additionally the previous image, if any, is dropped here
+                // since it's no longer applicable to this mapping.
+                self.reset_with_anon_memory()
+            }
+            DecommitBehavior::RestoreOriginalMapping => {
+                self.reset_with_original_mapping(keep_resident)
+            }
         }
+    }
 
+    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    unsafe fn reset_with_original_mapping(&mut self, keep_resident: usize) -> Result<()> {
         match &self.image {
             Some(image) => {
                 assert!(self.accessible >= image.linear_memory_offset + image.len);
@@ -534,13 +544,13 @@ impl MemoryImageSlot {
                     ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
 
                     // This is madvise (2)
-                    self.madvise_reset(image.linear_memory_offset, image.len)?;
+                    self.restore_original_mapping(image.linear_memory_offset, image.len)?;
 
                     // This is memset (3)
                     ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
 
                     // This is madvise (4)
-                    self.madvise_reset(
+                    self.restore_original_mapping(
                         image_end + remaining_memset,
                         mem_after_image - remaining_memset,
                     )?;
@@ -568,7 +578,7 @@ impl MemoryImageSlot {
                     ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
 
                     // This is madvise (2)
-                    self.madvise_reset(keep_resident, self.accessible - keep_resident)?;
+                    self.restore_original_mapping(keep_resident, self.accessible - keep_resident)?;
                 }
             }
 
@@ -578,7 +588,7 @@ impl MemoryImageSlot {
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
                 ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
-                self.madvise_reset(size_to_memset, self.accessible - size_to_memset)?;
+                self.restore_original_mapping(size_to_memset, self.accessible - size_to_memset)?;
             }
         }
 
@@ -586,12 +596,17 @@ impl MemoryImageSlot {
     }
 
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
-    unsafe fn madvise_reset(&self, base: usize, len: usize) -> Result<()> {
+    unsafe fn restore_original_mapping(&self, base: usize, len: usize) -> Result<()> {
         assert!(base + len <= self.accessible);
         if len == 0 {
             return Ok(());
         }
-        vm::madvise_dontneed(self.base.as_ptr().add(base), len).err2anyhow()?;
+
+        assert_eq!(
+            vm::decommit_behavior(),
+            DecommitBehavior::RestoreOriginalMapping
+        );
+        vm::decommit_pages(self.base.as_ptr().add(base), len).err2anyhow()?;
         Ok(())
     }
 

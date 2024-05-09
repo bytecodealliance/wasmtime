@@ -1,6 +1,7 @@
 use super::cvt;
 use crate::runtime::vm::sys::capi;
 use crate::runtime::vm::SendSyncPtr;
+use crate::vm::sys::DecommitBehavior;
 use anyhow::Result;
 use core::ptr::{self, NonNull};
 #[cfg(feature = "std")]
@@ -23,14 +24,13 @@ pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> Result<()> {
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn commit_table_pages(_addr: *mut u8, _len: usize) -> Result<()> {
-    // Table pages are always READ | WRITE so there's nothing that needs to be
+pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+    // Pages are always READ | WRITE so there's nothing that needs to be
     // done here.
     Ok(())
 }
 
-#[cfg(feature = "pooling-allocator")]
-pub unsafe fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> Result<()> {
     if len == 0 {
         return Ok(());
     }
@@ -46,12 +46,8 @@ pub fn get_page_size() -> usize {
     unsafe { capi::wasmtime_page_size() }
 }
 
-pub fn supports_madvise_dontneed() -> bool {
-    false
-}
-
-pub unsafe fn madvise_dontneed(_ptr: *mut u8, _len: usize) -> Result<()> {
-    unreachable!()
+pub fn decommit_behavior() -> DecommitBehavior {
+    DecommitBehavior::Zero
 }
 
 #[derive(PartialEq, Debug)]

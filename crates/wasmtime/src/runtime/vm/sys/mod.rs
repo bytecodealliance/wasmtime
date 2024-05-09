@@ -8,6 +8,17 @@
 
 #![allow(clippy::cast_sign_loss)] // platforms too fiddly to worry about this
 
+/// What happens to a mapping after it is decommitted?
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DecommitBehavior {
+    /// The mapping is zeroed.
+    Zero,
+    /// The original mapping is restored. If it was zero, then it is zero again;
+    /// if it was a CoW mapping, then the original CoW mapping is restored;
+    /// etc...
+    RestoreOriginalMapping,
+}
+
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
         mod miri;
