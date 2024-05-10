@@ -3,7 +3,6 @@
 use crate::isa::aarch64::inst::OperandSize;
 use crate::isa::aarch64::inst::ScalarSize;
 use crate::isa::aarch64::inst::VectorSize;
-use crate::machinst::AllocationConsumer;
 use crate::machinst::RealReg;
 use crate::machinst::{Reg, RegClass, Writable};
 use regalloc2::PReg;
@@ -176,7 +175,7 @@ fn show_reg(reg: Reg) -> String {
     }
 }
 
-pub fn pretty_print_reg(reg: Reg, _allocs: &mut AllocationConsumer) -> String {
+pub fn pretty_print_reg(reg: Reg) -> String {
     show_reg(reg)
 }
 
@@ -253,31 +252,18 @@ pub fn show_vreg_element(reg: Reg, idx: u8, size: ScalarSize) -> String {
     format!("{}{}[{}]", s, suffix, idx)
 }
 
-pub fn pretty_print_ireg(reg: Reg, size: OperandSize, _allocs: &mut AllocationConsumer) -> String {
+pub fn pretty_print_ireg(reg: Reg, size: OperandSize) -> String {
     show_ireg_sized(reg, size)
 }
 
-pub fn pretty_print_vreg_scalar(
-    reg: Reg,
-    size: ScalarSize,
-    _allocs: &mut AllocationConsumer,
-) -> String {
+pub fn pretty_print_vreg_scalar(reg: Reg, size: ScalarSize) -> String {
     show_vreg_scalar(reg, size)
 }
 
-pub fn pretty_print_vreg_vector(
-    reg: Reg,
-    size: VectorSize,
-    _allocs: &mut AllocationConsumer,
-) -> String {
+pub fn pretty_print_vreg_vector(reg: Reg, size: VectorSize) -> String {
     show_vreg_vector(reg, size)
 }
 
-pub fn pretty_print_vreg_element(
-    reg: Reg,
-    idx: usize,
-    size: ScalarSize,
-    _allocs: &mut AllocationConsumer,
-) -> String {
+pub fn pretty_print_vreg_element(reg: Reg, idx: usize, size: ScalarSize) -> String {
     show_vreg_element(reg, idx as u8, size)
 }

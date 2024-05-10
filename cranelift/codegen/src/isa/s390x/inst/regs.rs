@@ -99,11 +99,11 @@ pub fn maybe_show_fpr(reg: Reg) -> Option<String> {
     None
 }
 
-pub fn pretty_print_reg(reg: Reg, _allocs: &mut AllocationConsumer) -> String {
+pub fn pretty_print_reg(reg: Reg) -> String {
     show_reg(reg)
 }
 
-pub fn pretty_print_regpair(pair: RegPair, _allocs: &mut AllocationConsumer) -> String {
+pub fn pretty_print_regpair(pair: RegPair) -> String {
     let hi = pair.hi;
     let lo = pair.lo;
     if let Some(hi_reg) = hi.to_real_reg() {
@@ -121,11 +121,7 @@ pub fn pretty_print_regpair(pair: RegPair, _allocs: &mut AllocationConsumer) -> 
     format!("{}/{}", show_reg(hi), show_reg(lo))
 }
 
-pub fn pretty_print_reg_mod(
-    rd: Writable<Reg>,
-    ri: Reg,
-    _allocs: &mut AllocationConsumer,
-) -> String {
+pub fn pretty_print_reg_mod(rd: Writable<Reg>, ri: Reg) -> String {
     let output = rd.to_reg();
     let input = ri;
     if output == input {
@@ -135,11 +131,7 @@ pub fn pretty_print_reg_mod(
     }
 }
 
-pub fn pretty_print_regpair_mod(
-    rd: WritableRegPair,
-    ri: RegPair,
-    _allocs: &mut AllocationConsumer,
-) -> String {
+pub fn pretty_print_regpair_mod(rd: WritableRegPair, ri: RegPair) -> String {
     let rd_hi = rd.hi.to_reg();
     let rd_lo = rd.lo.to_reg();
     let ri_hi = ri.hi;
@@ -157,11 +149,7 @@ pub fn pretty_print_regpair_mod(
     }
 }
 
-pub fn pretty_print_regpair_mod_lo(
-    rd: WritableRegPair,
-    ri: Reg,
-    _allocs: &mut AllocationConsumer,
-) -> String {
+pub fn pretty_print_regpair_mod_lo(rd: WritableRegPair, ri: Reg) -> String {
     let rd_hi = rd.hi.to_reg();
     let rd_lo = rd.lo.to_reg();
     if rd_lo == ri {
@@ -176,6 +164,6 @@ pub fn pretty_print_regpair_mod_lo(
     }
 }
 
-pub fn pretty_print_fpr(reg: Reg, _allocs: &mut AllocationConsumer) -> (String, Option<String>) {
+pub fn pretty_print_fpr(reg: Reg) -> (String, Option<String>) {
     (show_reg(reg), maybe_show_fpr(reg))
 }

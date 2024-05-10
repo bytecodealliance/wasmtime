@@ -216,7 +216,7 @@ impl Cond {
 }
 
 impl PrettyPrint for MemArg {
-    fn pretty_print(&self, _: u8, _allocs: &mut AllocationConsumer) -> String {
+    fn pretty_print(&self, _: u8) -> String {
         match self {
             &MemArg::BXD12 {
                 base, index, disp, ..
@@ -277,7 +277,7 @@ impl PrettyPrint for MemArg {
 }
 
 impl PrettyPrint for Cond {
-    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer) -> String {
+    fn pretty_print(&self, _: u8) -> String {
         let s = match self.mask {
             1 => "o",
             2 => "h",

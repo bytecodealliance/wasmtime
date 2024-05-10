@@ -170,8 +170,8 @@ macro_rules! newtype_of_reg {
                 }
             }
             impl PrettyPrint for $newtype_reg_mem {
-                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
-                    self.0.pretty_print(size, allocs)
+                fn pretty_print(&self, size: u8) -> String {
+                    self.0.pretty_print(size)
                 }
             }
         )*
@@ -236,8 +236,8 @@ macro_rules! newtype_of_reg {
             }
 
             impl PrettyPrint for $newtype_reg_mem_imm {
-                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
-                    self.0.pretty_print(size, allocs)
+                fn pretty_print(&self, size: u8) -> String {
+                    self.0.pretty_print(size)
                 }
             }
         )*
@@ -424,12 +424,12 @@ impl Amode {
 }
 
 impl PrettyPrint for Amode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer) -> String {
+    fn pretty_print(&self, _size: u8) -> String {
         match self {
             Amode::ImmReg { simm32, base, .. } => {
                 // Note: size is always 8; the address is 64 bits,
                 // even if the addressed operand is smaller.
-                format!("{}({})", *simm32, pretty_print_reg(*base, 8, allocs))
+                format!("{}({})", *simm32, pretty_print_reg(*base, 8))
             }
             Amode::ImmRegRegShift {
                 simm32,
@@ -440,8 +440,8 @@ impl PrettyPrint for Amode {
             } => format!(
                 "{}({},{},{})",
                 *simm32,
-                pretty_print_reg(base.to_reg(), 8, allocs),
-                pretty_print_reg(index.to_reg(), 8, allocs),
+                pretty_print_reg(base.to_reg(), 8),
+                pretty_print_reg(index.to_reg(), 8),
                 1 << shift
             ),
             Amode::RipRelative { ref target } => format!("label{}(%rip)", target.get()),
@@ -558,10 +558,10 @@ impl Into<SyntheticAmode> for VCodeConstant {
 }
 
 impl PrettyPrint for SyntheticAmode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer) -> String {
+    fn pretty_print(&self, _size: u8) -> String {
         match self {
             // See note in `Amode` regarding constant size of `8`.
-            SyntheticAmode::Real(addr) => addr.pretty_print(8, allocs),
+            SyntheticAmode::Real(addr) => addr.pretty_print(8),
             &SyntheticAmode::IncomingArg { offset } => {
                 format!("rbp(stack args max - {offset})")
             }
@@ -646,10 +646,10 @@ impl From<Reg> for RegMemImm {
 }
 
 impl PrettyPrint for RegMemImm {
-    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
+    fn pretty_print(&self, size: u8) -> String {
         match self {
-            Self::Reg { reg } => pretty_print_reg(*reg, size, allocs),
-            Self::Mem { addr } => addr.pretty_print(size, allocs),
+            Self::Reg { reg } => pretty_print_reg(*reg, size),
+            Self::Mem { addr } => addr.pretty_print(size),
             Self::Imm { simm32 } => format!("${}", *simm32 as i32),
         }
     }
@@ -737,10 +737,10 @@ impl From<Writable<Reg>> for RegMem {
 }
 
 impl PrettyPrint for RegMem {
-    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer) -> String {
+    fn pretty_print(&self, size: u8) -> String {
         match self {
-            RegMem::Reg { reg } => pretty_print_reg(*reg, size, allocs),
-            RegMem::Mem { addr, .. } => addr.pretty_print(size, allocs),
+            RegMem::Reg { reg } => pretty_print_reg(*reg, size),
+            RegMem::Mem { addr, .. } => addr.pretty_print(size),
         }
     }
 }

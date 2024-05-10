@@ -1366,25 +1366,22 @@ impl MachInstEmit for Inst {
 
     fn emit(
         &self,
-        allocs: &[Allocation],
+        _allocs: &[Allocation],
         sink: &mut MachBuffer<Inst>,
         emit_info: &Self::Info,
         state: &mut EmitState,
     ) {
-        let mut allocs = AllocationConsumer::new(allocs);
-        self.emit_with_alloc_consumer(&mut allocs, sink, emit_info, state)
+        self.emit_with_alloc_consumer(sink, emit_info, state)
     }
 
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut EmitState) -> String {
-        let mut allocs = AllocationConsumer::new(allocs);
-        self.print_with_state(state, &mut allocs)
+    fn pretty_print_inst(&self, _allocs: &[Allocation], state: &mut EmitState) -> String {
+        self.print_with_state(state)
     }
 }
 
 impl Inst {
     fn emit_with_alloc_consumer(
         &self,
-        allocs: &mut AllocationConsumer,
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
         state: &mut EmitState,
@@ -2046,9 +2043,9 @@ impl Inst {
                                 target: done_label,
                                 cond: *cond,
                             };
-                            inst.emit_with_alloc_consumer(allocs, sink, emit_info, state);
+                            inst.emit_with_alloc_consumer(sink, emit_info, state);
                         }
-                        _ => inst.emit_with_alloc_consumer(allocs, sink, emit_info, state),
+                        _ => inst.emit_with_alloc_consumer(sink, emit_info, state),
                     };
                 }
 
