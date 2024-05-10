@@ -86,12 +86,12 @@ pub mod foo {
             pub trait GetHost<
                 T,
             >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host;
+                type Output: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host,
+                O: Host + Send,
             {
                 type Output = O;
             }
@@ -146,12 +146,12 @@ pub mod foo {
             pub trait GetHost<
                 T,
             >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host;
+                type Output: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host,
+                O: Host + Send,
             {
                 type Output = O;
             }
@@ -206,12 +206,12 @@ pub mod foo {
             pub trait GetHost<
                 T,
             >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host;
+                type Output: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host,
+                O: Host + Send,
             {
                 type Output = O;
             }
@@ -268,12 +268,12 @@ pub mod d {
     pub trait GetHost<
         T,
     >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-        type Output: Host;
+        type Output: Host + Send;
     }
     impl<F, T, O> GetHost<T> for F
     where
         F: Fn(T) -> O + Send + Sync + Copy + 'static,
-        O: Host,
+        O: Host + Send,
     {
         type Output = O;
     }
