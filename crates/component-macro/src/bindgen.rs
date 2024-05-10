@@ -149,6 +149,7 @@ impl Parse for Config {
                             .collect()
                     }
                     Opt::Stringify(val) => opts.stringify = val,
+                    Opt::SkipMutForwardingImpls(val) => opts.skip_mut_forwarding_impls = val,
                 }
             }
         } else {
@@ -219,6 +220,7 @@ mod kw {
     syn::custom_keyword!(trappable_imports);
     syn::custom_keyword!(additional_derives);
     syn::custom_keyword!(stringify);
+    syn::custom_keyword!(skip_mut_forwarding_impls);
 }
 
 enum Opt {
@@ -234,6 +236,7 @@ enum Opt {
     TrappableImports(TrappableImports),
     AdditionalDerives(Vec<syn::Path>),
     Stringify(bool),
+    SkipMutForwardingImpls(bool),
 }
 
 impl Parse for Opt {
@@ -378,6 +381,12 @@ impl Parse for Opt {
             input.parse::<kw::stringify>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::Stringify(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::skip_mut_forwarding_impls) {
+            input.parse::<kw::skip_mut_forwarding_impls>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::SkipMutForwardingImpls(
+                input.parse::<syn::LitBool>()?.value,
+            ))
         } else {
             Err(l.error())
         }

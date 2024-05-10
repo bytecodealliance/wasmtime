@@ -581,6 +581,15 @@ pub trait WasiView: Send {
     fn ctx(&mut self) -> &mut WasiCtx;
 }
 
+impl<T: ?Sized + WasiView> WasiView for &mut T {
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(self)
+    }
+    fn ctx(&mut self) -> &mut WasiCtx {
+        T::ctx(self)
+    }
+}
+
 /// Per-[`Store`] state which holds state necessary to implement WASI from this
 /// crate.
 ///
