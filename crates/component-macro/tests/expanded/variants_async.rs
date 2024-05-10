@@ -417,12 +417,21 @@ pub mod foo {
                 async fn return_named_option(&mut self) -> Option<u8>;
                 async fn return_named_result(&mut self) -> Result<u8, MyErrno>;
             }
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -431,7 +440,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "e1-arg",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (E1,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::e1_arg(host, arg0).await;
                         Ok(r)
                     }),
@@ -439,7 +448,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "e1-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::e1_result(host).await;
                         Ok((r,))
                     }),
@@ -447,7 +456,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "v1-arg",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (V1,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::v1_arg(host, arg0).await;
                         Ok(r)
                     }),
@@ -455,7 +464,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "v1-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::v1_result(host).await;
                         Ok((r,))
                     }),
@@ -466,7 +475,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (bool,)|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::bool_arg(host, arg0).await;
                         Ok(r)
                     }),
@@ -474,7 +483,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "bool-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::bool_result(host).await;
                         Ok((r,))
                     }),
@@ -499,7 +508,7 @@ pub mod foo {
                             Option<Option<bool>>,
                         )|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::option_arg(
                                 host,
                                 arg0,
@@ -516,7 +525,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "option-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::option_result(host).await;
                         Ok((r,))
                     }),
@@ -534,7 +543,7 @@ pub mod foo {
                             arg5,
                         ): (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6)|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::casts(host, arg0, arg1, arg2, arg3, arg4, arg5)
                             .await;
                         Ok((r,))
@@ -563,7 +572,7 @@ pub mod foo {
                             >,
                         )|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::result_arg(
                                 host,
                                 arg0,
@@ -580,7 +589,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "result-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::result_result(host).await;
                         Ok((r,))
                     }),
@@ -588,7 +597,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-result-sugar",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_result_sugar(host).await;
                         Ok((r,))
                     }),
@@ -596,7 +605,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-result-sugar2",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_result_sugar2(host).await;
                         Ok((r,))
                     }),
@@ -604,7 +613,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-result-sugar3",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_result_sugar3(host).await;
                         Ok((r,))
                     }),
@@ -612,7 +621,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-result-sugar4",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_result_sugar4(host).await;
                         Ok((r,))
                     }),
@@ -620,7 +629,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-option-sugar",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_option_sugar(host).await;
                         Ok((r,))
                     }),
@@ -628,7 +637,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-option-sugar2",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_option_sugar2(host).await;
                         Ok((r,))
                     }),
@@ -636,7 +645,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "result-simple",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::result_simple(host).await;
                         Ok((r,))
                     }),
@@ -647,7 +656,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (IsClone,)|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::is_clone_arg(host, arg0).await;
                         Ok(r)
                     }),
@@ -655,7 +664,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "is-clone-return",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::is_clone_return(host).await;
                         Ok((r,))
                     }),
@@ -663,7 +672,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-named-option",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_named_option(host).await;
                         Ok((r,))
                     }),
@@ -671,22 +680,12 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-named-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_named_result(host).await;
                         Ok((r,))
                     }),
                 )?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host + Send,
-                T: Send,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,

@@ -105,12 +105,21 @@ pub mod foo {
                 async fn r8(&mut self) -> i64;
                 async fn pair_ret(&mut self) -> (i64, u8);
             }
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -119,7 +128,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a1",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u8,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a1(host, arg0).await;
                         Ok(r)
                     }),
@@ -127,7 +136,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a2",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (i8,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a2(host, arg0).await;
                         Ok(r)
                     }),
@@ -135,7 +144,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a3",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u16,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a3(host, arg0).await;
                         Ok(r)
                     }),
@@ -143,7 +152,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a4",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (i16,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a4(host, arg0).await;
                         Ok(r)
                     }),
@@ -151,7 +160,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a5",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u32,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a5(host, arg0).await;
                         Ok(r)
                     }),
@@ -159,7 +168,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a6",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (i32,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a6(host, arg0).await;
                         Ok(r)
                     }),
@@ -167,7 +176,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a7",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u64,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a7(host, arg0).await;
                         Ok(r)
                     }),
@@ -175,7 +184,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a8",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (i64,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a8(host, arg0).await;
                         Ok(r)
                     }),
@@ -195,7 +204,7 @@ pub mod foo {
                             arg7,
                         ): (u8, i8, u16, i16, u32, i32, u64, i64)|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a9(
                                 host,
                                 arg0,
@@ -214,7 +223,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r1",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r1(host).await;
                         Ok((r,))
                     }),
@@ -222,7 +231,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r2",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r2(host).await;
                         Ok((r,))
                     }),
@@ -230,7 +239,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r3",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r3(host).await;
                         Ok((r,))
                     }),
@@ -238,7 +247,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r4",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r4(host).await;
                         Ok((r,))
                     }),
@@ -246,7 +255,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r5",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r5(host).await;
                         Ok((r,))
                     }),
@@ -254,7 +263,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r6",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r6(host).await;
                         Ok((r,))
                     }),
@@ -262,7 +271,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r7",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r7(host).await;
                         Ok((r,))
                     }),
@@ -270,7 +279,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "r8",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::r8(host).await;
                         Ok((r,))
                     }),
@@ -278,22 +287,12 @@ pub mod foo {
                 inst.func_wrap_async(
                     "pair-ret",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::pair_ret(host).await;
                         Ok((r,))
                     }),
                 )?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host + Send,
-                T: Send,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,

@@ -32,17 +32,17 @@ pub struct TheWorld {
 pub trait TheWorldImports: HostWorldResource {
     fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource>;
 }
-pub trait TheWorldImportsGetHost<T>: Send + Sync + Copy + 'static {
-    fn get_host<'a>(&self, data: &'a mut T) -> impl TheWorldImports;
+pub trait TheWorldImportsGetHost<
+    T,
+>: Fn(T) -> <Self as TheWorldImportsGetHost<T>>::Output + Send + Sync + Copy + 'static {
+    type Output: TheWorldImports;
 }
-impl<T, U, F> TheWorldImportsGetHost<T> for F
+impl<F, T, O> TheWorldImportsGetHost<T> for F
 where
-    U: TheWorldImports,
-    F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    F: Fn(T) -> O + Send + Sync + Copy + 'static,
+    O: TheWorldImports,
 {
-    fn get_host<'a>(&self, data: &'a mut T) -> impl TheWorldImports {
-        self(data)
-    }
+    type Output = O;
 }
 impl<_T: TheWorldImports + ?Sized> TheWorldImports for &mut _T {
     fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource> {
@@ -55,7 +55,7 @@ const _: () = {
     impl TheWorld {
         pub fn add_to_linker_imports_get_host<T>(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: impl TheWorldImportsGetHost<T>,
+            host_getter: impl for<'a> TheWorldImportsGetHost<&'a mut T>,
         ) -> wasmtime::Result<()> {
             let mut linker = linker.root();
             linker
@@ -64,7 +64,7 @@ const _: () = {
                     wasmtime::component::ResourceType::host::<WorldResource>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         HostWorldResource::drop(
-                            &mut host_getter.get_host(store.data_mut()),
+                            &mut host_getter(store.data_mut()),
                             wasmtime::component::Resource::new_own(rep),
                         )
                     },
@@ -73,7 +73,7 @@ const _: () = {
                 .func_wrap(
                     "[constructor]world-resource",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = HostWorldResource::new(host);
                         Ok((r,))
                     },
@@ -85,7 +85,7 @@ const _: () = {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<WorldResource>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = HostWorldResource::foo(host, arg0);
                         Ok(r)
                     },
@@ -94,7 +94,7 @@ const _: () = {
                 .func_wrap(
                     "[static]world-resource.static-foo",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = HostWorldResource::static_foo(host);
                         Ok(r)
                     },
@@ -103,7 +103,7 @@ const _: () = {
                 .func_wrap(
                     "some-world-func",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = TheWorldImports::some_world_func(host);
                         Ok((r,))
                     },
@@ -357,12 +357,21 @@ pub mod foo {
                 fn record_result(&mut self) -> NestedOwn;
                 fn func_with_handle_typedef(&mut self, x: SomeHandle) -> ();
             }
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/resources")?;
                 inst.resource(
@@ -370,7 +379,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Bar>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         HostBar::drop(
-                            &mut host_getter.get_host(store.data_mut()),
+                            &mut host_getter(store.data_mut()),
                             wasmtime::component::Resource::new_own(rep),
                         )
                     },
@@ -378,7 +387,7 @@ pub mod foo {
                 inst.func_wrap(
                     "[constructor]bar",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = HostBar::new(host);
                         Ok((r,))
                     },
@@ -386,7 +395,7 @@ pub mod foo {
                 inst.func_wrap(
                     "[static]bar.static-a",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = HostBar::static_a(host);
                         Ok((r,))
                     },
@@ -397,7 +406,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = HostBar::method_a(host, arg0);
                         Ok((r,))
                     },
@@ -408,7 +417,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::bar_own_arg(host, arg0);
                         Ok(r)
                     },
@@ -419,7 +428,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::bar_borrow_arg(host, arg0);
                         Ok(r)
                     },
@@ -427,7 +436,7 @@ pub mod foo {
                 inst.func_wrap(
                     "bar-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::bar_result(host);
                         Ok((r,))
                     },
@@ -438,7 +447,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): ((wasmtime::component::Resource<Bar>, u32),)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::tuple_own_arg(host, arg0);
                         Ok(r)
                     },
@@ -449,7 +458,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): ((wasmtime::component::Resource<Bar>, u32),)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::tuple_borrow_arg(host, arg0);
                         Ok(r)
                     },
@@ -457,7 +466,7 @@ pub mod foo {
                 inst.func_wrap(
                     "tuple-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::tuple_result(host);
                         Ok((r,))
                     },
@@ -468,7 +477,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Option<wasmtime::component::Resource<Bar>>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::option_own_arg(host, arg0);
                         Ok(r)
                     },
@@ -479,7 +488,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Option<wasmtime::component::Resource<Bar>>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::option_borrow_arg(host, arg0);
                         Ok(r)
                     },
@@ -487,7 +496,7 @@ pub mod foo {
                 inst.func_wrap(
                     "option-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::option_result(host);
                         Ok((r,))
                     },
@@ -498,7 +507,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Result<wasmtime::component::Resource<Bar>, ()>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::result_own_arg(host, arg0);
                         Ok(r)
                     },
@@ -509,7 +518,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Result<wasmtime::component::Resource<Bar>, ()>,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::result_borrow_arg(host, arg0);
                         Ok(r)
                     },
@@ -517,7 +526,7 @@ pub mod foo {
                 inst.func_wrap(
                     "result-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::result_result(host);
                         Ok((r,))
                     },
@@ -534,7 +543,7 @@ pub mod foo {
                             >,
                         )|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::list_own_arg(host, arg0);
                         Ok(r)
                     },
@@ -551,7 +560,7 @@ pub mod foo {
                             >,
                         )|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::list_borrow_arg(host, arg0);
                         Ok(r)
                     },
@@ -559,7 +568,7 @@ pub mod foo {
                 inst.func_wrap(
                     "list-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::list_result(host);
                         Ok((r,))
                     },
@@ -570,7 +579,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (NestedOwn,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::record_own_arg(host, arg0);
                         Ok(r)
                     },
@@ -581,7 +590,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (NestedBorrow,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::record_borrow_arg(host, arg0);
                         Ok(r)
                     },
@@ -589,7 +598,7 @@ pub mod foo {
                 inst.func_wrap(
                     "record-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::record_result(host);
                         Ok((r,))
                     },
@@ -600,21 +609,12 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (SomeHandle,)|
                     {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::func_with_handle_typedef(host, arg0);
                         Ok(r)
                     },
                 )?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -744,12 +744,21 @@ pub mod foo {
                 }
             }
             pub trait Host: HostA {}
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
                 inst.resource(
@@ -757,21 +766,12 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<A>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         HostA::drop(
-                            &mut host_getter.get_host(store.data_mut()),
+                            &mut host_getter(store.data_mut()),
                             wasmtime::component::Resource::new_own(rep),
                         )
                     },
                 )?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -790,24 +790,24 @@ pub mod foo {
             use wasmtime::component::__internal::anyhow;
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
             pub trait Host {}
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -826,24 +826,24 @@ pub mod foo {
             use wasmtime::component::__internal::anyhow;
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
             pub trait Host {}
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -864,32 +864,32 @@ pub mod foo {
             pub trait Host {
                 fn foo(&mut self) -> wasmtime::component::Resource<A>;
             }
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
                 inst.func_wrap(
                     "foo",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::foo(host);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -926,12 +926,21 @@ pub mod foo {
                 }
             }
             pub trait Host: HostFoo {}
-            pub trait GetHost<T>: Send + Sync + Copy + 'static {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
+                type Output: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Output = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl GetHost<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker
                     .instance("foo:foo/transitive-interface-with-resource")?;
@@ -940,21 +949,12 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Foo>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         HostFoo::drop(
-                            &mut host_getter.get_host(store.data_mut()),
+                            &mut host_getter(store.data_mut()),
                             wasmtime::component::Resource::new_own(rep),
                         )
                     },
                 )?;
                 Ok(())
-            }
-            impl<T, U, F> GetHost<T> for F
-            where
-                U: Host,
-                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            {
-                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
-                    self(data)
-                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,

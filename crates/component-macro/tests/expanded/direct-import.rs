@@ -2,17 +2,17 @@ pub struct Foo {}
 pub trait FooImports {
     fn foo(&mut self) -> ();
 }
-pub trait FooImportsGetHost<T>: Send + Sync + Copy + 'static {
-    fn get_host<'a>(&self, data: &'a mut T) -> impl FooImports;
+pub trait FooImportsGetHost<
+    T,
+>: Fn(T) -> <Self as FooImportsGetHost<T>>::Output + Send + Sync + Copy + 'static {
+    type Output: FooImports;
 }
-impl<T, U, F> FooImportsGetHost<T> for F
+impl<F, T, O> FooImportsGetHost<T> for F
 where
-    U: FooImports,
-    F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    F: Fn(T) -> O + Send + Sync + Copy + 'static,
+    O: FooImports,
 {
-    fn get_host<'a>(&self, data: &'a mut T) -> impl FooImports {
-        self(data)
-    }
+    type Output = O;
 }
 impl<_T: FooImports + ?Sized> FooImports for &mut _T {
     fn foo(&mut self) -> () {
@@ -25,14 +25,14 @@ const _: () = {
     impl Foo {
         pub fn add_to_linker_imports_get_host<T>(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: impl FooImportsGetHost<T>,
+            host_getter: impl for<'a> FooImportsGetHost<&'a mut T>,
         ) -> wasmtime::Result<()> {
             let mut linker = linker.root();
             linker
                 .func_wrap(
                     "foo",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = FooImports::foo(host);
                         Ok(r)
                     },

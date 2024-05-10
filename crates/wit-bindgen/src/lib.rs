@@ -912,18 +912,22 @@ impl Wasmtime {
         uwriteln!(
             self.src,
             "
-                pub trait {world_camel}ImportsGetHost<T>: Send + Sync + Copy + 'static {{
-                    fn get_host<'a>(&self, data: &'a mut T) -> impl {world_camel}Imports;
+                pub trait {world_camel}ImportsGetHost<T>:
+                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T>>::Output
+                        + Send
+                        + Sync
+                        + Copy
+                        + 'static
+                {{
+                    type Output: {world_camel}Imports;
                 }}
 
-                impl<T, U, F> {world_camel}ImportsGetHost<T> for F
-                    where
-                        U: {world_camel}Imports,
-                        F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                impl<F, T, O> {world_camel}ImportsGetHost<T> for F
+                where
+                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                    O: {world_camel}Imports
                 {{
-                    fn get_host<'a>(&self, data: &'a mut T) -> impl {world_camel}Imports {{
-                        self(data)
-                    }}
+                    type Output = O;
                 }}
             "
         );
@@ -1009,7 +1013,7 @@ impl Wasmtime {
                 "
                     pub fn add_to_linker_imports_get_host<T>(
                         linker: &mut wasmtime::component::Linker<T>,
-                        host_getter: impl {camel}ImportsGetHost<T>,
+                        host_getter: impl for<'a> {camel}ImportsGetHost<&'a mut T>,
                     ) -> wasmtime::Result<()>
                         where {data_bounds}
                     {{
@@ -1025,7 +1029,7 @@ impl Wasmtime {
                             \"{name}\",
                             wasmtime::component::ResourceType::host::<{camel}>(),
                             move |mut store, rep| -> wasmtime::Result<()> {{
-                                Host{camel}::drop(&mut host_getter.get_host(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                                Host{camel}::drop(&mut host_getter(store.data_mut()), wasmtime::component::Resource::new_own(rep))
                             }},
                         )?;"
                 );
@@ -1936,13 +1940,27 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(
             self.src,
             "
-                pub trait GetHost<T>: Send + Sync + Copy + 'static {{
-                    fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+                pub trait GetHost<T>:
+                    Fn(T) -> <Self as GetHost<T>>::Output
+                        + Send
+                        + Sync
+                        + Copy
+                        + 'static
+                {{
+                    type Output: Host;
+                }}
+
+                impl<F, T, O> GetHost<T> for F
+                where
+                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                    O: Host,
+                {{
+                    type Output = O;
                 }}
 
                 pub fn add_to_linker_get_host<T>(
                     linker: &mut wasmtime::component::Linker<T>,
-                    host_getter: impl GetHost<T>,
+                    host_getter: impl for<'a> GetHost<&'a mut T>,
                 ) -> wasmtime::Result<()>
                     where {data_bounds}
                 {{
@@ -1958,7 +1976,7 @@ impl<'a> InterfaceGenerator<'a> {
                     \"{name}\",
                     wasmtime::component::ResourceType::host::<{camel}>(),
                     move |mut store, rep| -> wasmtime::Result<()> {{
-                        Host{camel}::drop(&mut host_getter.get_host(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                        Host{camel}::drop(&mut host_getter(store.data_mut()), wasmtime::component::Resource::new_own(rep))
                     }},
                 )?;"
             )
@@ -1976,16 +1994,6 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(
             self.src,
             "
-                impl<T, U, F> GetHost<T> for F
-                    where
-                        {host_bounds}, {data_bounds}
-                        F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                {{
-                    fn get_host<'a>(&self, data: &'a mut T) -> impl Host {{
-                        self(data)
-                    }}
-                }}
-
                 pub fn add_to_linker<T, U>(
                     linker: &mut wasmtime::component::Linker<T>,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -2018,11 +2026,7 @@ impl<'a> InterfaceGenerator<'a> {
                 _ => continue,
             }
             self.generate_function_trait_sig(func);
-            uwrite!(
-                self.src,
-                "{{ Host::{}(*self,",
-                rust_function_name(func)
-            );
+            uwrite!(self.src, "{{ Host::{}(*self,", rust_function_name(func));
             for (name, _) in func.params.iter() {
                 uwrite!(self.src, "{},", to_rust_ident(name));
             }
@@ -2126,7 +2130,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         self.src
-            .push_str("let host = &mut host_getter.get_host(caller.data_mut());\n");
+            .push_str("let host = &mut host_getter(caller.data_mut());\n");
         let func_name = rust_function_name(func);
         let host_trait = match func.kind {
             FunctionKind::Freestanding => match owner {
