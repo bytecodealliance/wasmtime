@@ -245,6 +245,11 @@ impl Descriptors {
             wasi_filesystem_get_directories(&mut preopens);
             preopens
         });
+
+        // NB: we just got owned handles for all preopened directories. We're
+        // only intereted in one individual string allocation, however, so
+        // discard all of the descriptors and close them since we otherwise
+        // don't want to leak them.
         for i in 0..preopens.len {
             let preopen = preopens.base.add(i).read();
             drop(preopen.descriptor);
