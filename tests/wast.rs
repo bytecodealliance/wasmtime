@@ -1,5 +1,6 @@
 use anyhow::Context;
 use bstr::ByteSlice;
+use libtest_mimic::{Arguments, FormatSetting, Trial};
 use once_cell::sync::Lazy;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
@@ -10,15 +11,188 @@ use wasmtime::{
 use wasmtime_environ::WASM_PAGE_SIZE;
 use wasmtime_wast::{SpectestConfig, WastContext};
 
-include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
+fn main() {
+    env_logger::init();
+
+    let mut trials = Vec::new();
+    add_tests(&mut trials, "tests/spec_testsuite".as_ref());
+    add_tests(&mut trials, "tests/misc_testsuite".as_ref());
+
+    // There's a lot of tests so print only a `.` to keep the output a
+    // bit more terse by default.
+    let mut args = Arguments::from_args();
+    if args.format.is_none() {
+        args.format = Some(FormatSetting::Terse);
+    }
+    libtest_mimic::run(&args, trials).exit()
+}
+
+fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
+    for entry in path.read_dir().unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if entry.file_type().unwrap().is_dir() {
+            add_tests(trials, &path);
+            continue;
+        }
+
+        if path.extension().and_then(|s| s.to_str()) != Some("wast") {
+            continue;
+        }
+
+        for strategy in [Strategy::Cranelift, Strategy::Winch] {
+            for pooling in [true, false] {
+                let trial = Trial::test(
+                    format!(
+                        "{strategy:?}/{}{}",
+                        if pooling { "pooling/" } else { "" },
+                        path.to_str().unwrap()
+                    ),
+                    {
+                        let path = path.clone();
+                        move || {
+                            run_wast(&path, strategy, pooling).map_err(|e| format!("{e:?}").into())
+                        }
+                    },
+                );
+                trials.push(trial.with_ignored_flag(ignore(&path, strategy)));
+            }
+        }
+    }
+}
+
+fn ignore(test: &Path, strategy: Strategy) -> bool {
+    if cfg!(miri) {
+        return true;
+    }
+
+    // Winch only supports x86_64 at this time.
+    if strategy == Strategy::Winch && !cfg!(target_arch = "x86_64") {
+        return true;
+    }
+
+    for part in test.iter() {
+        // Not implemented in Wasmtime yet
+        if part == "exception-handling" {
+            return true;
+        }
+        // Not implemented in Wasmtime yet
+        if part == "extended-const" {
+            return true;
+        }
+
+        // TODO(#6530): These tests require tail calls, but s390x doesn't
+        // support them yet.
+        if cfg!(target_arch = "s390x") {
+            if part == "function-references" || part == "tail-call" {
+                return true;
+            }
+        }
+
+        // Disable spec tests for proposals that Winch does not implement yet.
+        if strategy == Strategy::Winch {
+            let part = part.to_str().unwrap();
+            if false
+                // wasm proposals that Winch doesn't support
+                || part == "references"
+                || part == "tail-call"
+                || part == "gc"
+                || part == "threads"
+                || part == "multi-memory"
+                // || part == "simd"
+                || part == "relaxed-simd"
+                || part == "function-references"
+                // tests in misc_testsuite that Winch doesn't support
+                || part == "no-panic.wast"
+                || part == "externref-id-function.wast"
+                || part == "int-to-float-splat.wast"
+                || part == "issue6562.wast"
+                || part == "many_table_gets_lead_to_gc.wast"
+                || part == "mutable_externref_globals.wast"
+                || part == "no-mixup-stack-maps.wast"
+                || part == "simple_ref_is_null.wast"
+                || part == "table_grow_with_funcref.wast"
+                // Tests in the spec test suite Winch doesn't support
+                || part.starts_with("simd")
+                || part.starts_with("ref_")
+                || part == "threads.wast"
+				|| part == "br_table.wast"
+				|| part == "global.wast"
+				|| part == "table_fill.wast"
+				|| part == "table_get.wast"
+				|| part == "table_set.wast"
+				|| part == "table_grow.wast"
+				|| part == "table_size.wast"
+				|| part == "elem.wast"
+				|| part == "select.wast"
+				|| part == "unreached-invalid.wast"
+				|| part == "linking.wast"
+            {
+                return true;
+            }
+        }
+
+        // Implementation of the GC proposal is a work-in-progress, this is
+        // a list of all currently known-to-fail tests.
+        if part == "gc" {
+            return [
+                "array_copy.wast",
+                "array_fill.wast",
+                "array_init_data.wast",
+                "array_init_elem.wast",
+                "array.wast",
+                "binary_gc.wast",
+                "binary.wast",
+                "br_on_cast_fail.wast",
+                "br_on_cast.wast",
+                "br_on_non_null.wast",
+                "br_on_null.wast",
+                "br_table.wast",
+                "call_ref.wast",
+                "data.wast",
+                "elem.wast",
+                "extern.wast",
+                "func.wast",
+                "global.wast",
+                "if.wast",
+                "linking.wast",
+                "local_get.wast",
+                "local_init.wast",
+                "ref_as_non_null.wast",
+                "ref_cast.wast",
+                "ref_eq.wast",
+                "ref_is_null.wast",
+                "ref_null.wast",
+                "ref_test.wast",
+                "ref.wast",
+                "return_call_indirect.wast",
+                "return_call_ref.wast",
+                "return_call.wast",
+                "select.wast",
+                "struct.wast",
+                "table_sub.wast",
+                "table.wast",
+                "type_canon.wast",
+                "type_equivalence.wast",
+                "type-rec.wast",
+                "type-subtyping.wast",
+                "unreached-invalid.wast",
+                "unreached_valid.wast",
+            ]
+            .iter()
+            .any(|i| test.ends_with(i));
+        }
+    }
+
+    false
+}
 
 // Each of the tests included from `wast_testsuite_tests` will call this
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
-fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
-    drop(env_logger::try_init());
-
-    let wast_bytes = std::fs::read(wast).with_context(|| format!("failed to read `{}`", wast))?;
+fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
+    let wast_bytes =
+        std::fs::read(wast).with_context(|| format!("failed to read `{}`", wast.display()))?;
 
     let wast = Path::new(wast);
 
@@ -35,7 +209,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         || feature_found_src(&wast_bytes, "shared)");
 
     if pooling && use_shared_memory {
-        eprintln!("skipping pooling test with shared memory");
+        log::warn!("skipping pooling test with shared memory");
         return Ok(());
     }
 
@@ -167,7 +341,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         let mut wast_context = WastContext::new(store);
         wast_context.register_spectest(&SpectestConfig {
             use_shared_memory,
-            suppress_prints: false,
+            suppress_prints: true,
         })?;
         wast_context
             .run_buffer(wast.to_str().unwrap(), &wast_bytes)
