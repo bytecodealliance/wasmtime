@@ -1509,56 +1509,55 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; fmadd: rs1 * rs2 + rs3
-(rule 0 (lower (has_type (ty_scalar_float ty) (fma x y z)))
-  (rv_fmadd ty (FRM.RNE) x y z))
+;; RISC-V has 4 FMA instructions that do a slightly different computation.
+;;
+;; fmadd:   (rs1 * rs2) + rs3
+;; fmsub:   (rs1 * rs2) - rs3
+;; fnmadd: -(rs1 * rs2) - rs3
+;; fnmsub: -(rs1 * rs2) + rs3
+;;
+;; Additionally there are vector versions of these instructions with slightly different names.
+;; The vector instructions also have two variants each. `.vv` and `.vf`, where `.vv` variants
+;; take two vector operands and the `.vf` variants take a vector operand and a scalar operand.
+;;
+;; Due to this, variation they recieve the arguments in a different order. So we need to swap
+;; the arguments below.
+;;
+;; vfmacc:  vd[i] = +(vs1[i] * vs2[i]) + vd[i]
+;; vfmsac:  vd[i] = +(vs1[i] * vs2[i]) - vd[i]
+;; vfnmacc: vd[i] = -(vs1[i] * vs2[i]) - vd[i]
+;; vfnmsac: vd[i] = -(vs1[i] * vs2[i]) + vd[i]
 
-;; fmsub: rs1 * rs2 - rs3
-(rule 1 (lower (has_type (ty_scalar_float ty) (fma x y (fneg z))))
-  (rv_fmsub ty (FRM.RNE) x y z))
+(type IsFneg (enum (Result (negate u64) (value Value))))
 
-;; fnmsub: -rs1 * rs2 + rs3
-(rule 2 (lower (has_type (ty_scalar_float ty) (fma (fneg x) y z)))
-  (rv_fnmsub ty (FRM.RNE) x y z))
+(decl pure is_fneg (Value) IsFneg)
+(rule 1 (is_fneg (fneg x)) (IsFneg.Result 1 x))
+(rule 0 (is_fneg x) (IsFneg.Result 0 x))
 
-;; fnmadd: -rs1 * rs2 - rs3
-(rule 3 (lower (has_type (ty_scalar_float ty) (fma (fneg x) y (fneg z))))
-  (rv_fnmadd ty (FRM.RNE) x y z))
+(rule 1 (lower (has_type ty (fma x_src y_src z_src)))
+  (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
+  (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
+  (if-let (IsFneg.Result neg_z z) (is_fneg z_src))
+  (rv_fma ty (u64_xor neg_x neg_y) neg_z x y z))
 
-;; (fma x y z) computes x * y + z
-;; vfmacc computes vd[i] = +(vs1[i] * vs2[i]) + vd[i]
-;; We need to reverse the order of the arguments
-
-(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (fma x y z)))
-  (rv_vfmacc_vv z y x (unmasked) ty))
-
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y z)))
-  (rv_vfmacc_vf z y x (unmasked) ty))
-
-;; vfmsac computes vd[i] = +(vs1[i] * vs2[i]) - vd[i]
-
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma x y (fneg z))))
-  (rv_vfmsac_vv z y x (unmasked) ty))
-
-(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y (fneg z))))
-  (rv_vfmsac_vf z y x (unmasked) ty))
-
-;; vfnmacc computes vd[i] = -(vs1[i] * vs2[i]) - vd[i]
-
-(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y (fneg z))))
-  (rv_vfnmacc_vv z y x (unmasked) ty))
-
-(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y (fneg z))))
-  (rv_vfnmacc_vf z y x (unmasked) ty))
-
-;; vfnmsac computes vd[i] = -(vs1[i] * vs2[i]) + vd[i]
-
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y z)))
-  (rv_vfnmsac_vv z y x (unmasked) ty))
-
-(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y z)))
-  (rv_vfnmsac_vf z y x (unmasked) ty))
-
+; parity arguments indicate whether to negate the x*y term or the z term, respectively
+(decl rv_fma (Type u64 u64 Value Value Value) InstOutput)
+(rule 0 (rv_fma (ty_scalar_float ty) 0 0 x y z) (rv_fmadd ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 0 1 x y z) (rv_fmsub ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 1 0 x y z) (rv_fnmsub ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 1 1 x y z) (rv_fnmadd ty (FRM.RNE) x y z))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 0 0 x y z) (rv_vfmacc_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 0 1 x y z) (rv_vfmsac_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 1 0 x y z) (rv_vfnmsac_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 1 1 x y z) (rv_vfnmacc_vv z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 0 0 (splat x) y z) (rv_vfmacc_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 0 1 (splat x) y z) (rv_vfmsac_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 1 0 (splat x) y z) (rv_vfnmsac_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 1 1 (splat x) y z) (rv_vfnmacc_vf z y x (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 0 0 x (splat y) z) (rv_vfmacc_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 0 1 x (splat y) z) (rv_vfmsac_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 1 0 x (splat y) z) (rv_vfnmsac_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 1 1 x (splat y) z) (rv_vfnmacc_vf z x y (unmasked) ty))
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (sqrt x)))
