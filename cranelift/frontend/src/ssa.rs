@@ -19,7 +19,7 @@ use cranelift_codegen::packed_option::PackedOption;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
-/// The parameter struct `Variable` corresponds to the way variables are represented in the
+/// The parameter struct [`Variable`] corresponds to the way variables are represented in the
 /// non-SSA language you're translating from.
 ///
 /// The SSA building relies on information about the variables used and defined.
