@@ -722,12 +722,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // present, resize the incoming argument area of the frame to accommodate those arguments.
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
         if incoming_args_diff > 0 {
-            // Decrement SP to account for the additional space required by a tail call
+            // Decrement SP to account for the additional space required by a tail call.
             insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
 
-            // Move fp and lr down
+            // Move fp and lr down.
             if setup_frame {
-                // Reload the frame pointer from the stack
+                // Reload the frame pointer from the stack.
                 insts.push(Inst::ULoad64 {
                     rd: regs::writable_fp_reg(),
                     mem: AMode::SPOffset {

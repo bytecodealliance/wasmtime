@@ -1,0 +1,63 @@
+test compile precise-output
+target pulley32
+
+function %load_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = load.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   x0 = load32_u x0+0 // flags =
+;   ret
+;
+; Disassembled:
+;        0: 20 00 00                        load32_u x0, x0
+;        3: 00                              ret
+
+function %load_i64(i32) -> i64 {
+block0(v0: i32):
+    v1 = load.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   x0 = load64_u x0+0 // flags =
+;   ret
+;
+; Disassembled:
+;        0: 22 00 00                        load64 x0, x0
+;        3: 00                              ret
+
+function %load_i32_with_offset(i32) -> i32 {
+block0(v0: i32):
+    v1 = load.i32 v0+4
+    return v1
+}
+
+; VCode:
+; block0:
+;   x0 = load32_u x0+4 // flags =
+;   ret
+;
+; Disassembled:
+;        0: 23 00 00 04                     load32_u_offset8 x0, x0, 4
+;        4: 00                              ret
+
+function %load_i64_with_offset(i32) -> i64 {
+block0(v0: i32):
+    v1 = load.i64 v0+8
+    return v1
+}
+
+; VCode:
+; block0:
+;   x0 = load64_u x0+8 // flags =
+;   ret
+;
+; Disassembled:
+;        0: 25 00 00 08                     load64_offset8 x0, x0, 8
+;        4: 00                              ret
+

@@ -7,6 +7,7 @@ use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{FpuOPWidth, VecAluOpRR, VecLmul};
+use crate::isa;
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
@@ -23,7 +24,6 @@ use crate::{
     isa::riscv64::inst::*,
     machinst::{ArgPair, InstOutput, IsTailCall},
 };
-use crate::{isa, isle_common_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
 use std::vec::Vec;

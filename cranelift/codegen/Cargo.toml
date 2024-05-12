@@ -30,6 +30,7 @@ target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
+pulley-interpreter = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
 gimli = { workspace = true, features = ["write", "std"], optional = true }
 smallvec = { workspace = true }
@@ -81,6 +82,7 @@ x86 = []
 arm64 = []
 s390x = []
 riscv64 = []
+pulley = ["dep:pulley-interpreter", "pulley-interpreter/encode", "pulley-interpreter/disas"]
 # Enable the ISA target for the host machine
 host-arch = []
 
@@ -89,7 +91,8 @@ all-arch = [
     "x86",
     "arm64",
     "s390x",
-    "riscv64"
+    "riscv64",
+    "pulley",
 ]
 
 # For dependent crates that want to serialize some parts of cranelift
