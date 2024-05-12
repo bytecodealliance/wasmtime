@@ -179,6 +179,11 @@ impl<T> Writable<T> {
         self.reg
     }
 
+    /// Get a mutable borrow of the underlying register.
+    pub fn reg_mut(&mut self) -> &mut T {
+        &mut self.reg
+    }
+
     /// Map the underlying register to another value or type.
     pub fn map<U>(self, f: impl Fn(T) -> U) -> Writable<U> {
         Writable { reg: f(self.reg) }

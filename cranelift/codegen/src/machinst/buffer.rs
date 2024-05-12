@@ -810,7 +810,12 @@ impl<I: VCodeInst> MachBuffer<I> {
         assert!(self.cur_offset() == start);
         debug_assert!(end > start);
         assert!(!self.pending_fixup_records.is_empty());
-        debug_assert!(inverted.len() == (end - start) as usize);
+        debug_assert!(
+            inverted.len() == (end - start) as usize,
+            "branch length = {}, but inverted length = {}",
+            end - start,
+            inverted.len()
+        );
         let fixup = self.pending_fixup_records.len() - 1;
         let inverted = Some(SmallVec::from(inverted));
         self.lazily_clear_labels_at_tail();
@@ -1423,7 +1428,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 self.emit_veneer(label, offset, kind);
             } else {
                 let slice = &mut self.data[start..end];
-                trace!("patching in-range!");
+                trace!("patching in-range! slice = {slice:?}; offset = {offset:#x}; label_offset = {label_offset:#x}");
                 kind.patch(slice, offset, label_offset);
             }
         } else {
@@ -1703,6 +1708,14 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
 
         self.user_stack_maps.push((return_addr, span, stack_map));
+    }
+}
+
+impl<I: VCodeInst> Extend<u8> for MachBuffer<I> {
+    fn extend<T: IntoIterator<Item = u8>>(&mut self, iter: T) {
+        for b in iter {
+            self.put1(b);
+        }
     }
 }
 

@@ -1,0 +1,562 @@
+;;;; Instruction definition ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Note: in the instructions below, we order destination registers first and
+;; then source registers afterwards.
+(type MInst
+  (enum
+    ;;;; Pseudo-Instructions ;;;;
+
+    ;; A pseudo-instruction that captures register arguments in vregs.
+    (Args (args VecArgPair))
+
+    ;; A pseudo-instruction that moves vregs to return registers.
+    (Rets (rets VecRetPair))
+
+    ;; A pseudo-instruction to update unwind info.
+    (Unwind (inst UnwindInst))
+
+    ;;;; Actual Instructions ;;;;
+
+    ;; Raise a trap.
+    (Trap (code TrapCode))
+
+    ;; Nothing.
+    (Nop)
+
+    ;; Get the stack pointer.
+    (GetSp (dst WritableXReg))
+
+    ;; Return.
+    (Ret)
+
+    ;; Load an external symbol's address into a register.
+    (LoadExtName (dst WritableXReg)
+                 (name BoxExternalName)
+                 (offset i64))
+
+    ;; A direct call to a known callee.
+    (Call (callee BoxExternalName)
+          (info BoxCallInfo))
+
+    ;; An indirect call to an unknown callee.
+    (IndirectCall (callee XReg)
+                  (info BoxCallInfo))
+
+    ;; Unconditional jumps.
+    (Jump (label MachLabel))
+
+    ;; Jump to `then` if `c` is nonzero, otherwise to `else`.
+    (BrIf (c XReg) (taken MachLabel) (not_taken MachLabel))
+
+    ;; Compare-and-branch macro ops.
+    (BrIfXeq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+    (BrIfXneq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+    (BrIfXslt32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+    (BrIfXslteq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+    (BrIfXult32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+    (BrIfXulteq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+
+    ;; Register-to-register moves.
+    (Xmov (dst WritableXReg) (src XReg))
+    (Fmov (dst WritableFReg) (src FReg))
+    (Vmov (dst WritableVReg) (src VReg))
+
+    ;; Integer constants, zero-extended to 64 bits.
+    (Xconst8 (dst WritableXReg) (imm i8))
+    (Xconst16 (dst WritableXReg) (imm i16))
+    (Xconst32 (dst WritableXReg) (imm i32))
+    (Xconst64 (dst WritableXReg) (imm i64))
+
+    ;; Integer arithmetic.
+    (Xadd32 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xadd64 (dst WritableXReg) (src1 XReg) (src2 XReg))
+
+    ;; Comparisons.
+    (Xeq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xneq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xslt64 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xslteq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xult64 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xulteq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xeq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xneq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xslt32 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xslteq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xult32 (dst WritableXReg) (src1 XReg) (src2 XReg))
+    (Xulteq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
+
+    ;; Load the memory address referenced by `mem` into `dst`.
+    (LoadAddr (dst WritableXReg) (mem Amode))
+
+    ;; Loads.
+    (Load (dst WritableReg) (mem Amode) (ty Type) (flags MemFlags) (ext ExtKind))
+
+    ;; Stores.
+    (Store (mem Amode) (src Reg) (ty Type) (flags MemFlags))
+
+    ;; Bitcasts.
+    (BitcastIntFromFloat32 (dst WritableXReg) (src FReg))
+    (BitcastIntFromFloat64 (dst WritableXReg) (src FReg))
+    (BitcastFloatFromInt32 (dst WritableFReg) (src XReg))
+    (BitcastFloatFromInt64 (dst WritableFReg) (src XReg))
+  )
+)
+
+(type BoxCallInfo (primitive BoxCallInfo))
+
+;;;; Address Modes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type StackAMode extern (enum))
+
+(type Amode
+  (enum
+    (SpOffset (offset i64))
+    (RegOffset (base XReg) (offset i64))
+    (Stack (amode StackAMode))
+  )
+)
+
+(type ExtKind (enum None Sign Zero))
+
+;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type XReg (primitive XReg))
+(type WritableXReg (primitive WritableXReg))
+
+(type FReg (primitive FReg))
+(type WritableFReg (primitive WritableFReg))
+
+(type VReg (primitive VReg))
+(type WritableVReg (primitive WritableVReg))
+
+;; Construct a new `XReg` from a `Reg`.
+;;
+;; Asserts that the register has an integer RegClass.
+(decl xreg_new (Reg) XReg)
+(extern constructor xreg_new xreg_new)
+(convert Reg XReg xreg_new)
+
+;; Construct a new `WritableXReg` from a `WritableReg`.
+;;
+;; Asserts that the register has an integer RegClass.
+(decl writable_xreg_new (WritableReg) WritableXReg)
+(extern constructor writable_xreg_new writable_xreg_new)
+(convert WritableReg WritableXReg writable_xreg_new)
+
+;; Put a value into a XReg.
+;;
+;; Asserts that the value goes into a XReg.
+(decl put_in_xreg (Value) XReg)
+(rule (put_in_xreg val) (xreg_new (put_in_reg val)))
+(convert Value XReg put_in_xreg)
+
+;; Construct an `InstOutput` out of a single XReg register.
+(decl output_xreg (XReg) InstOutput)
+(rule (output_xreg x) (output_reg x))
+(convert XReg InstOutput output_xreg)
+
+;; Convert a `WritableXReg` to an `XReg`.
+(decl pure writable_xreg_to_xreg (WritableXReg) XReg)
+(extern constructor writable_xreg_to_xreg writable_xreg_to_xreg)
+(convert WritableXReg XReg writable_xreg_to_xreg)
+
+;; Convert a `WritableXReg` to an `WritableReg`.
+(decl pure writable_xreg_to_writable_reg (WritableXReg) WritableReg)
+(extern constructor writable_xreg_to_writable_reg writable_xreg_to_writable_reg)
+(convert WritableXReg WritableReg writable_xreg_to_writable_reg)
+
+;; Convert a `WritableXReg` to an `Reg`.
+(decl pure writable_xreg_to_reg (WritableXReg) Reg)
+(rule (writable_xreg_to_reg x) (writable_xreg_to_writable_reg x))
+(convert WritableXReg Reg writable_xreg_to_reg)
+
+;; Convert an `XReg` to a `Reg`.
+(decl pure xreg_to_reg (XReg) Reg)
+(extern constructor xreg_to_reg xreg_to_reg)
+(convert XReg Reg xreg_to_reg)
+
+;; Convert a `XReg` to a `ValueRegs`.
+(decl xreg_to_value_regs (XReg) ValueRegs)
+(rule (xreg_to_value_regs x) (value_reg x))
+(convert XReg ValueRegs xreg_to_reg)
+
+;; Convert a `WritableXReg` to a `ValueRegs`.
+(decl writable_xreg_to_value_regs (WritableXReg) ValueRegs)
+(rule (writable_xreg_to_value_regs x) (value_reg x))
+(convert WritableXReg ValueRegs writable_xreg_to_value_regs)
+
+;; Allocates a new `WritableXReg`.
+(decl temp_writable_xreg () WritableXReg)
+(rule (temp_writable_xreg) (temp_writable_reg $I64))
+
+;; Construct a new `FReg` from a `Reg`.
+;;
+;; Asserts that the register has a Float RegClass.
+(decl freg_new (Reg) FReg)
+(extern constructor freg_new freg_new)
+(convert Reg FReg freg_new)
+
+;; Construct a new `WritableFReg` from a `WritableReg`.
+;;
+;; Asserts that the register has a Float RegClass.
+(decl writable_freg_new (WritableReg) WritableFReg)
+(extern constructor writable_freg_new writable_freg_new)
+(convert WritableReg WritableFReg writable_freg_new)
+
+;; Put a value into a FReg.
+;;
+;; Asserts that the value goes into a FReg.
+(decl put_in_freg (Value) FReg)
+(rule (put_in_freg val) (freg_new (put_in_reg val)))
+(convert Value FReg put_in_freg)
+
+;; Construct an `InstOutput` out of a single FReg register.
+(decl output_freg (FReg) InstOutput)
+(rule (output_freg x) (output_reg x))
+(convert FReg InstOutput output_freg)
+
+;; Convert a `WritableFReg` to an `FReg`.
+(decl pure writable_freg_to_freg (WritableFReg) FReg)
+(extern constructor writable_freg_to_freg writable_freg_to_freg)
+(convert WritableFReg FReg writable_freg_to_freg)
+
+;; Convert a `WritableFReg` to an `WritableReg`.
+(decl pure writable_freg_to_writable_reg (WritableFReg) WritableReg)
+(extern constructor writable_freg_to_writable_reg writable_freg_to_writable_reg)
+(convert WritableFReg WritableReg writable_freg_to_writable_reg)
+
+;; Convert a `WritableFReg` to an `Reg`.
+(decl pure writable_freg_to_reg (WritableFReg) Reg)
+(rule (writable_freg_to_reg x) (writable_freg_to_writable_reg x))
+(convert WritableFReg Reg writable_freg_to_reg)
+
+;; Convert an `FReg` to a `Reg`.
+(decl pure freg_to_reg (FReg) Reg)
+(extern constructor freg_to_reg freg_to_reg)
+(convert FReg Reg freg_to_reg)
+
+;; Convert a `FReg` to a `ValueRegs`.
+(decl freg_to_value_regs (FReg) ValueRegs)
+(rule (freg_to_value_regs x) (value_reg x))
+(convert FReg ValueRegs xreg_to_reg)
+
+;; Convert a `WritableFReg` to a `ValueRegs`.
+(decl writable_freg_to_value_regs (WritableFReg) ValueRegs)
+(rule (writable_freg_to_value_regs x) (value_reg x))
+(convert WritableFReg ValueRegs writable_freg_to_value_regs)
+
+;; Allocates a new `WritableFReg`.
+(decl temp_writable_freg () WritableFReg)
+(rule (temp_writable_freg) (temp_writable_reg $F64))
+
+;; Construct a new `VReg` from a `Reg`.
+;;
+;; Asserts that the register has a Vector RegClass.
+(decl vreg_new (Reg) VReg)
+(extern constructor vreg_new vreg_new)
+(convert Reg VReg vreg_new)
+
+;; Construct a new `WritableVReg` from a `WritableReg`.
+;;
+;; Asserts that the register has a Vector RegClass.
+(decl writable_vreg_new (WritableReg) WritableVReg)
+(extern constructor writable_vreg_new writable_vreg_new)
+(convert WritableReg WritableVReg writable_vreg_new)
+
+;; Put a value into a VReg.
+;;
+;; Asserts that the value goes into a VReg.
+(decl put_in_vreg (Value) VReg)
+(rule (put_in_vreg val) (vreg_new (put_in_reg val)))
+(convert Value VReg put_in_vreg)
+
+;; Construct an `InstOutput` out of a single VReg register.
+(decl output_vreg (VReg) InstOutput)
+(rule (output_vreg x) (output_reg x))
+(convert VReg InstOutput output_vreg)
+
+;; Convert a `WritableVReg` to an `VReg`.
+(decl pure writable_vreg_to_vreg (WritableVReg) VReg)
+(extern constructor writable_vreg_to_vreg writable_vreg_to_vreg)
+(convert WritableVReg VReg writable_vreg_to_vreg)
+
+;; Convert a `WritableVReg` to an `WritableReg`.
+(decl pure writable_vreg_to_writable_reg (WritableVReg) WritableReg)
+(extern constructor writable_vreg_to_writable_reg writable_vreg_to_writable_reg)
+(convert WritableVReg WritableReg writable_vreg_to_writable_reg)
+
+;; Convert a `WritableVReg` to an `Reg`.
+(decl pure writable_vreg_to_reg (WritableVReg) Reg)
+(rule (writable_vreg_to_reg x) (writable_vreg_to_writable_reg x))
+(convert WritableVReg Reg writable_vreg_to_reg)
+
+;; Convert an `VReg` to a `Reg`.
+(decl pure vreg_to_reg (VReg) Reg)
+(extern constructor vreg_to_reg vreg_to_reg)
+(convert VReg Reg vreg_to_reg)
+
+;; Convert a `VReg` to a `ValueRegs`.
+(decl vreg_to_value_regs (VReg) ValueRegs)
+(rule (vreg_to_value_regs x) (value_reg x))
+(convert VReg ValueRegs xreg_to_reg)
+
+;; Convert a `WritableVReg` to a `ValueRegs`.
+(decl writable_vreg_to_value_regs (WritableVReg) ValueRegs)
+(rule (writable_vreg_to_value_regs x) (value_reg x))
+(convert WritableVReg ValueRegs writable_vreg_to_value_regs)
+
+;; Allocates a new `WritableVReg`.
+(decl temp_writable_vreg () WritableVReg)
+(rule (temp_writable_vreg) (temp_writable_reg $I8X16))
+
+;;;; Materializing Constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Lower a constant into a register.
+(decl imm (Type u64) Reg)
+
+;; If a value can fit into 8 bits, then prioritize that.
+(rule 3 (imm (ty_int _) x)
+      (if-let y (i8_try_from_u64 x))
+      (pulley_xconst8 y))
+
+;; If a value can fit into 16 bits, then prioritize that.
+(rule 2 (imm (ty_int _) x)
+      (if-let y (i16_try_from_u64 x))
+      (pulley_xconst16 y))
+
+;; If a value can fit into 32 bits, then prioritize that.
+(rule 1 (imm (ty_int _) x)
+      (if-let y (i32_try_from_u64 x))
+      (pulley_xconst32 y))
+
+;; Base cases for integers.
+(rule 0 (imm $I8 x) (pulley_xconst8 (u8_as_i8 (u64_as_u8 x))))
+(rule 0 (imm $I16 x) (pulley_xconst16 (u16_as_i16 (u64_as_u16 x))))
+(rule 0 (imm $I32 x) (pulley_xconst32 (u64_as_i32 x)))
+(rule 0 (imm $I64 x) (pulley_xconst64 (u64_as_i64 x)))
+
+;; References are actually integers.
+(rule 0 (imm $R32 x) (imm $I32 x))
+(rule 0 (imm $R64 x) (imm $I64 x))
+
+;; Base cases for floats.
+(rule 0 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
+(rule 0 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
+
+;;;; Bitcasts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Bitcast from the first type, into the second type.
+(decl gen_bitcast (Reg Type Type) Reg)
+(rule (gen_bitcast r $F32 $I32) (pulley_bitcast_float_from_int_32 r))
+(rule (gen_bitcast r $F64 $I64) (pulley_bitcast_float_from_int_64 r))
+(rule (gen_bitcast r $I32 $F32) (pulley_bitcast_int_from_float_32 r))
+(rule (gen_bitcast r $I64 $F64) (pulley_bitcast_int_from_float_64 r))
+(rule (gen_bitcast r $I64 $R64) (copy_reg r $I64))
+(rule (gen_bitcast r $R64 $I64) (copy_reg r $I64))
+(rule -1 (gen_bitcast r ty ty) r)
+
+;; Copy a register of the given type to a new register.
+;;
+;; Generally, regalloc should take care of this kind of thing for us. This is
+;; only useful for implementing things like `bitcast` from an `r64` to an `i64`
+;; to avoid conflicting constraints on a single aliased value by splitting the
+;; value into two parts.
+(decl copy_reg (Reg Type) Reg)
+(rule (copy_reg src (ty_int_ref_scalar_64 ty))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Xmov dst src))))
+        dst))
+
+;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl pulley_trap (TrapCode) SideEffectNoResult)
+(rule (pulley_trap code)
+      (SideEffectNoResult.Inst (MInst.Trap code)))
+
+(decl pulley_get_sp () XReg)
+(rule (pulley_get_sp)
+      (let ((reg WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.GetSp reg))))
+        reg))
+
+(decl pulley_xconst8 (i8) XReg)
+(rule (pulley_xconst8 x)
+      (let ((reg WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xconst8 reg x))))
+        reg))
+
+(decl pulley_xconst16 (i16) XReg)
+(rule (pulley_xconst16 x)
+      (let ((reg WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xconst16 reg x))))
+        reg))
+
+(decl pulley_xconst32 (i32) XReg)
+(rule (pulley_xconst32 x)
+      (let ((reg WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xconst32 reg x))))
+        reg))
+
+(decl pulley_xconst64 (i64) XReg)
+(rule (pulley_xconst64 x)
+      (let ((reg WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xconst64 reg x))))
+        reg))
+
+(decl pulley_jump (MachLabel) SideEffectNoResult)
+(rule (pulley_jump label)
+      (SideEffectNoResult.Inst (MInst.Jump label)))
+
+(decl pulley_br_if (XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if c taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIf c taken not_taken)))
+
+(decl pulley_br_if_xeq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if_xeq32 a b taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIfXeq32 a b taken not_taken)))
+
+(decl pulley_br_if_xneq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if_xneq32 a b taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIfXneq32 a b taken not_taken)))
+
+(decl pulley_br_if_xslt32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if_xslt32 a b taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIfXslt32 a b taken not_taken)))
+
+(decl pulley_br_if_xslteq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if_xslteq32 a b taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIfXslteq32 a b taken not_taken)))
+
+(decl pulley_br_if_xult32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if_xult32 a b taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIfXult32 a b taken not_taken)))
+
+(decl pulley_br_if_xulteq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if_xulteq32 a b taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIfXulteq32 a b taken not_taken)))
+
+(decl pulley_xadd32 (XReg XReg) XReg)
+(rule (pulley_xadd32 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xadd32 dst a b))))
+        dst))
+
+(decl pulley_xadd64 (XReg XReg) XReg)
+(rule (pulley_xadd64 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xadd64 dst a b))))
+        dst))
+
+(decl pulley_xeq64 (XReg XReg) XReg)
+(rule (pulley_xeq64 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xeq64 dst a b))))
+        dst))
+
+(decl pulley_xneq64 (XReg XReg) XReg)
+(rule (pulley_xneq64 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xneq64 dst a b))))
+        dst))
+
+(decl pulley_xslt64 (XReg XReg) XReg)
+(rule (pulley_xslt64 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xslt64 dst a b))))
+        dst))
+
+(decl pulley_xslteq64 (XReg XReg) XReg)
+(rule (pulley_xslteq64 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xslteq64 dst a b))))
+        dst))
+
+(decl pulley_xult64 (XReg XReg) XReg)
+(rule (pulley_xult64 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xult64 dst a b))))
+        dst))
+
+(decl pulley_xulteq64 (XReg XReg) XReg)
+(rule (pulley_xulteq64 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xulteq64 dst a b))))
+        dst))
+
+(decl pulley_xeq32 (XReg XReg) XReg)
+(rule (pulley_xeq32 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xeq32 dst a b))))
+        dst))
+
+(decl pulley_xneq32 (XReg XReg) XReg)
+(rule (pulley_xneq32 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xneq32 dst a b))))
+        dst))
+
+(decl pulley_xslt32 (XReg XReg) XReg)
+(rule (pulley_xslt32 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xslt32 dst a b))))
+        dst))
+
+(decl pulley_xslteq32 (XReg XReg) XReg)
+(rule (pulley_xslteq32 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xslteq32 dst a b))))
+        dst))
+
+(decl pulley_xult32 (XReg XReg) XReg)
+(rule (pulley_xult32 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xult32 dst a b))))
+        dst))
+
+(decl pulley_xulteq32 (XReg XReg) XReg)
+(rule (pulley_xulteq32 a b)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Xulteq32 dst a b))))
+        dst))
+
+(decl pulley_load (Amode Type MemFlags ExtKind) Reg)
+(rule (pulley_load amode ty flags ext)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Load dst amode ty flags ext))))
+        dst))
+
+(decl pulley_store (Amode Reg Type MemFlags) SideEffectNoResult)
+(rule (pulley_store amode src ty flags)
+      (SideEffectNoResult.Inst (MInst.Store amode src ty flags)))
+
+(decl pulley_bitcast_float_from_int_32 (XReg) FReg)
+(rule (pulley_bitcast_float_from_int_32 src)
+      (let ((dst WritableFReg (temp_writable_freg))
+            (_ Unit (emit (MInst.BitcastFloatFromInt32 dst src))))
+        dst))
+
+(decl pulley_bitcast_float_from_int_64 (XReg) FReg)
+(rule (pulley_bitcast_float_from_int_64 src)
+      (let ((dst WritableFReg (temp_writable_freg))
+            (_ Unit (emit (MInst.BitcastFloatFromInt64 dst src))))
+        dst))
+
+(decl pulley_bitcast_int_from_float_32 (FReg) XReg)
+(rule (pulley_bitcast_int_from_float_32 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.BitcastIntFromFloat32 dst src))))
+        dst))
+
+(decl pulley_bitcast_int_from_float_64 (FReg) XReg)
+(rule (pulley_bitcast_int_from_float_64 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.BitcastIntFromFloat64 dst src))))
+        dst))
+
+;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
+(extern constructor gen_call gen_call)
+
+(decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
+(extern constructor gen_call_indirect gen_call_indirect)

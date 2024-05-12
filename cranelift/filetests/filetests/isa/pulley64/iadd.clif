@@ -1,0 +1,63 @@
+test compile precise-output
+target pulley64
+
+function %i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   x0 = xadd32 x0, x1
+;   ret
+;
+; Disassembled:
+;        0: 12 00 00 01                     xadd32 x0, x0, x1
+;        4: 00                              ret
+
+function %i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   x0 = xadd32 x0, x1
+;   ret
+;
+; Disassembled:
+;        0: 12 00 00 01                     xadd32 x0, x0, x1
+;        4: 00                              ret
+
+function %i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   x0 = xadd32 x0, x1
+;   ret
+;
+; Disassembled:
+;        0: 12 00 00 01                     xadd32 x0, x0, x1
+;        4: 00                              ret
+
+function %i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   x0 = xadd64 x0, x1
+;   ret
+;
+; Disassembled:
+;        0: 13 00 00 01                     xadd64 x0, x0, x1
+;        4: 00                              ret
+
