@@ -1534,7 +1534,7 @@
 (rule 1 (is_fneg (fneg x)) (IsFneg.Result 1 x))
 (rule 0 (is_fneg x) (IsFneg.Result 0 x))
 
-(rule 1 (lower (has_type ty (fma x_src y_src z_src)))
+(rule (lower (has_type ty (fma x_src y_src z_src)))
   (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
   (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
   (if-let (IsFneg.Result neg_z z) (is_fneg z_src))
