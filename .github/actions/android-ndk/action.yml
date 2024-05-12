@@ -1,0 +1,31 @@
+# This is a small action which uses the pre-installed Android NDK on GitHub
+# Actions builders, configured with `$ANDROID_NDK`, to compile and link Android
+# code. For Rust we mostly need to configure the linker to Cargo and the C
+# compiler to the `cc` crate, so this sets various environment variables to the
+# appropriate tool within `$ANDROID_NDK`.
+
+name: 'Setup Rust to use the Android NDK'
+description: 'Setup Rust to use the android NDK'
+
+inputs:
+  target:
+    description: 'Rust target being used'
+    required: true
+  android-platform:
+    description: 'Platform version to use for the C compiler'
+    required: false
+    default: '26'
+
+runs:
+  using: composite
+  steps:
+    - run: |
+        rust=${{ inputs.target }}
+        upcase=$(echo $rust | awk '{ print toupper($0) }' | sed 's/-/_/g')
+        ndk_bin=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
+        linker=$ndk_bin/${rust}${{ inputs.android-platform }}-clang
+        echo CARGO_TARGET_${upcase}_LINKER=$linker >> $GITHUB_ENV
+        echo CC_${rust}=$linker >> $GITHUB_ENV
+        echo RANLIB_${rust}=$ndk_bin/llvm-ranlib >> $GITHUB_ENV
+        echo AR_${rust}=$ndk_bin/llvm-ar >> $GITHUB_ENV
+      shell: bash

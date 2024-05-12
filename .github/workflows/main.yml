@@ -306,8 +306,6 @@ jobs:
     needs: determine
     name: Check
     runs-on: ubuntu-latest
-    env:
-      CARGO_NDK_VERSION: 2.12.2
     steps:
     - uses: actions/checkout@v4
       with:
@@ -388,23 +386,6 @@ jobs:
     # TODO: We aren't building with default features since the `ittapi` crate fails to compile on freebsd.
     - run: rustup target add x86_64-unknown-freebsd
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
-
-    # Check whether `wasmtime` cross-compiles to aarch64-linux-android
-    - run: rustup target add aarch64-linux-android
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-    - uses: actions/cache@v4
-      with:
-        path: ${{ runner.tool_cache }}/cargo-ndk
-        key: cargo-ndk-bin-${{ env.CARGO_NDK_VERSION }}
-    - run: echo "${{ runner.tool_cache }}/cargo-ndk/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk --locked
-    - run: cargo ndk -t arm64-v8a check -p wasmtime
 
     # Run clippy configuration
     - run: rustup component add clippy
@@ -880,6 +861,11 @@ jobs:
     - uses: ./.github/actions/binary-compatible-builds
       with:
         name: ${{ matrix.build }}
+
+    - uses: ./.github/actions/android-ndk
+      if: contains(matrix.target, 'android')
+      with:
+        target: ${{ matrix.target }}
 
     - run: $CENTOS ./ci/build-release-artifacts.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
