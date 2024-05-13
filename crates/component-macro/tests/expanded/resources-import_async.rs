@@ -37,15 +37,15 @@ pub trait TheWorldImports: Send + HostWorldResource {
 }
 pub trait TheWorldImportsGetHost<
     T,
->: Fn(T) -> <Self as TheWorldImportsGetHost<T>>::Output + Send + Sync + Copy + 'static {
-    type Output: TheWorldImports;
+>: Fn(T) -> <Self as TheWorldImportsGetHost<T>>::Host + Send + Sync + Copy + 'static {
+    type Host: TheWorldImports;
 }
 impl<F, T, O> TheWorldImportsGetHost<T> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
     O: TheWorldImports,
 {
-    type Output = O;
+    type Host = O;
 }
 #[wasmtime::component::__internal::async_trait]
 impl<_T: TheWorldImports + ?Sized + Send> TheWorldImports for &mut _T {
@@ -382,15 +382,15 @@ pub mod foo {
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host + Send;
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
-                type Output = O;
+                type Host = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -782,15 +782,15 @@ pub mod foo {
             pub trait Host: Send + HostA {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host + Send;
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
-                type Output = O;
+                type Host = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -834,15 +834,15 @@ pub mod foo {
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host + Send;
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
-                type Output = O;
+                type Host = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -876,15 +876,15 @@ pub mod foo {
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host + Send;
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
-                type Output = O;
+                type Host = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -920,15 +920,15 @@ pub mod foo {
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host + Send;
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
-                type Output = O;
+                type Host = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -990,15 +990,15 @@ pub mod foo {
             pub trait Host: Send + HostFoo {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Output + Send + Sync + Copy + 'static {
-                type Output: Host + Send;
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
             }
             impl<F, T, O> GetHost<T> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
-                type Output = O;
+                type Host = O;
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,

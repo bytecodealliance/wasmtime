@@ -4,15 +4,15 @@ pub trait FooImports {
 }
 pub trait FooImportsGetHost<
     T,
->: Fn(T) -> <Self as FooImportsGetHost<T>>::Output + Send + Sync + Copy + 'static {
-    type Output: FooImports;
+>: Fn(T) -> <Self as FooImportsGetHost<T>>::Host + Send + Sync + Copy + 'static {
+    type Host: FooImports;
 }
 impl<F, T, O> FooImportsGetHost<T> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
     O: FooImports,
 {
-    type Output = O;
+    type Host = O;
 }
 impl<_T: FooImports + ?Sized> FooImports for &mut _T {
     fn foo(&mut self) -> () {

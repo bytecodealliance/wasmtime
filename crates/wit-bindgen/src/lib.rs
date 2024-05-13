@@ -916,13 +916,13 @@ impl Wasmtime {
             self.src,
             "
                 pub trait {world_camel}ImportsGetHost<T>:
-                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T>>::Output
+                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T>>::Host
                         + Send
                         + Sync
                         + Copy
                         + 'static
                 {{
-                    type Output: {world_camel}Imports;
+                    type Host: {world_camel}Imports;
                 }}
 
                 impl<F, T, O> {world_camel}ImportsGetHost<T> for F
@@ -930,7 +930,7 @@ impl Wasmtime {
                     F: Fn(T) -> O + Send + Sync + Copy + 'static,
                     O: {world_camel}Imports
                 {{
-                    type Output = O;
+                    type Host = O;
                 }}
             "
         );
@@ -1950,13 +1950,13 @@ impl<'a> InterfaceGenerator<'a> {
             self.src,
             "
                 pub trait GetHost<T>:
-                    Fn(T) -> <Self as GetHost<T>>::Output
+                    Fn(T) -> <Self as GetHost<T>>::Host
                         + Send
                         + Sync
                         + Copy
                         + 'static
                 {{
-                    type Output: {host_bounds};
+                    type Host: {host_bounds};
                 }}
 
                 impl<F, T, O> GetHost<T> for F
@@ -1964,7 +1964,7 @@ impl<'a> InterfaceGenerator<'a> {
                     F: Fn(T) -> O + Send + Sync + Copy + 'static,
                     O: {host_bounds},
                 {{
-                    type Output = O;
+                    type Host = O;
                 }}
 
                 pub fn add_to_linker_get_host<T>(
