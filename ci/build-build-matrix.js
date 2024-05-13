@@ -49,6 +49,16 @@ const array = [
     "os": "windows-latest",
     "target": "x86_64-pc-windows-gnu",
   },
+  {
+    "build": "aarch64-android",
+    "os": "ubuntu-latest",
+    "target": "aarch64-linux-android",
+  },
+  {
+    "build": "x86_64-android",
+    "os": "ubuntu-latest",
+    "target": "x86_64-linux-android",
+  },
 ];
 
 const builds = [];
