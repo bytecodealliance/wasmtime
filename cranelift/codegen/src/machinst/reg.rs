@@ -335,11 +335,8 @@ pub trait OperandVisitorImpl: OperandVisitor {
     /// Add a use of a fixed, nonallocatable physical register.
     fn reg_fixed_nonallocatable(&mut self, preg: PReg) {
         self.debug_assert_is_allocatable_preg(preg, false);
-        // Magic VReg which does not participate in register allocation.
-        let mut reg = Reg(VReg::new(VReg::MAX, preg.class()));
-        let constraint = OperandConstraint::FixedReg(preg);
-        // This operand won't be allocated, so kind and pos don't matter.
-        self.add_operand(&mut reg, constraint, OperandKind::Use, OperandPos::Early);
+        // Since this operand does not participate in register allocation,
+        // there's nothing to do here.
     }
 
     /// Add a register use, at the start of the instruction (`Before`
