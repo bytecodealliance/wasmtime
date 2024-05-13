@@ -189,6 +189,8 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
+        self.func.dfg.resolve_all_aliases();
+
         if opt_level != OptLevel::None {
             self.egraph_pass(isa, ctrl_plane)?;
         }
