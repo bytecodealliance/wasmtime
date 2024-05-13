@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use anyhow::{bail, ensure, Result};
-use core::fmt::{self, Display};
+use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
     VMSharedTypeIndex, WasmArrayType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
@@ -15,13 +15,55 @@ pub(crate) mod matching;
 
 // Type attributes
 
-/// Indicator of whether a global is mutable or not
+/// Indicator of whether a global value, struct's field, or array type's
+/// elements are mutable or not.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum Mutability {
-    /// The global is constant and its value does not change
+    /// The global value, struct field, or array elements are constant and the
+    /// value does not change.
     Const,
-    /// The value of the global can change over time
+    /// The value of the global, struct field, or array elements can change over
+    /// time.
     Var,
+}
+
+impl Mutability {
+    /// Is this constant?
+    #[inline]
+    pub fn is_const(&self) -> bool {
+        *self == Self::Const
+    }
+
+    /// Is this variable?
+    #[inline]
+    pub fn is_var(&self) -> bool {
+        *self == Self::Var
+    }
+}
+
+/// Indicator of whether a type is final or not.
+///
+/// Final types may not be the supertype of other types.
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum Finality {
+    /// The associated type is final.
+    Final,
+    /// The associated type is not final.
+    NonFinal,
+}
+
+impl Finality {
+    /// Is this final?
+    #[inline]
+    pub fn is_final(&self) -> bool {
+        *self == Self::Final
+    }
+
+    /// Is this non-final?
+    #[inline]
+    pub fn is_non_final(&self) -> bool {
+        *self == Self::NonFinal
+    }
 }
 
 // Value Types
@@ -478,35 +520,8 @@ impl RefType {
 /// ```
 ///
 /// Additionally, some concrete function types are sub- or supertypes of other
-/// concrete function types. For simplicity, this isn't depicted in the diagram
-/// above. Specifically, this is based on their parameter and result types, and
-/// whether those types are in a subtyping relationship:
-///
-/// * Parameters are contravariant: `(func (param $a) (result $c))` is a subtype
-///   of `(func (param $b) (result $c))` when `$b` is a subtype of `$a`.
-///
-///   For example, we can substitute `(func (param $cat))` with `(func (param
-///   $animal))` because `$cat` is a subtype of `$animal` and so the new
-///   function is still prepared to accept all `$cat` arguments that any caller
-///   might pass in.
-///
-///   We can't do the opposite and replace `(func (param $animal))` with `(func
-///   (param $cat))`. What would the new function do when given a `$dog`? It is
-///   invalid.
-///
-/// * Results are covariant: `(func (result $a))` is a subtype of `(func (result
-///   $b))` when `$a` is a subtype of `$b`.
-///
-///   For example, we can substitute a `(func (result $animal))` with a
-///   `(func (result $cat))` because callers expect to be returned an
-///   `$animal` and all `$cat`s are `$animal`s.
-///
-///   We cannot do the opposite and substitute a `(func (result $cat))` with a
-///   `(func (result $animal))`, since callers expect a `$cat` but the new
-///   function could return a `$dog`.
-///
-/// As always, Wikipedia is also helpful:
-/// https:///en.wikipedia.org/wiki/Covariance_and_contravariance_(computer_science)
+/// concrete function types, if that was declared in their definition. For
+/// simplicity, this isn't depicted in the diagram above.
 ///
 /// ## External
 ///
@@ -557,16 +572,9 @@ impl RefType {
 /// ```
 ///
 /// Additionally, concrete struct and array types can be subtypes of other
-/// concrete struct and array types respectively. Once again, this is omitted
-/// from the above diagram for simplicity. Specifically:
-///
-/// * Array types are covariant with their element type: `(array $a)` is a
-///   subtype of `(array $b)` if `$a` is a subtype of `$b`. For example, `(array
-///   $cat)` is a subtype of `(array $animal)`.
-///
-/// * Struct types are covariant with their field types, and subtypes may
-///   additionally have appended fields that do not appear in the supertype. For
-///   example, `(struct $cat $dog)` is a subtype of `(struct $animal)`.
+/// concrete struct and array types respectively, if that was declared in their
+/// definitions. Once again, this is omitted from the above diagram for
+/// simplicity.
 ///
 /// # Subtyping and Equality
 ///
@@ -692,6 +700,13 @@ impl From<ArrayType> for HeapType {
     #[inline]
     fn from(a: ArrayType) -> Self {
         HeapType::ConcreteArray(a)
+    }
+}
+
+impl From<StructType> for HeapType {
+    #[inline]
+    fn from(s: StructType) -> Self {
+        HeapType::ConcreteStruct(s)
     }
 }
 
@@ -867,7 +882,12 @@ impl HeapType {
             (HeapType::NoFunc, _) => false,
 
             (HeapType::ConcreteFunc(_), HeapType::Func) => true,
-            (HeapType::ConcreteFunc(a), HeapType::ConcreteFunc(b)) => a.matches(b),
+            (HeapType::ConcreteFunc(a), HeapType::ConcreteFunc(b)) => {
+                assert!(a.comes_from_same_engine(b.engine()));
+                a.engine()
+                    .signatures()
+                    .is_subtype(a.type_index(), b.type_index())
+            }
             (HeapType::ConcreteFunc(_), _) => false,
 
             (HeapType::Func, HeapType::Func) => true,
@@ -887,14 +907,24 @@ impl HeapType {
             (HeapType::None, _) => false,
 
             (HeapType::ConcreteArray(_), HeapType::Array | HeapType::Eq | HeapType::Any) => true,
-            (HeapType::ConcreteArray(a), HeapType::ConcreteArray(b)) => a.matches(b),
+            (HeapType::ConcreteArray(a), HeapType::ConcreteArray(b)) => {
+                assert!(a.comes_from_same_engine(b.engine()));
+                a.engine()
+                    .signatures()
+                    .is_subtype(a.type_index(), b.type_index())
+            }
             (HeapType::ConcreteArray(_), _) => false,
 
             (HeapType::Array, HeapType::Array | HeapType::Eq | HeapType::Any) => true,
             (HeapType::Array, _) => false,
 
             (HeapType::ConcreteStruct(_), HeapType::Struct | HeapType::Eq | HeapType::Any) => true,
-            (HeapType::ConcreteStruct(a), HeapType::ConcreteStruct(b)) => a.matches(b),
+            (HeapType::ConcreteStruct(a), HeapType::ConcreteStruct(b)) => {
+                assert!(a.comes_from_same_engine(b.engine()));
+                a.engine()
+                    .signatures()
+                    .is_subtype(a.type_index(), b.type_index())
+            }
             (HeapType::ConcreteStruct(_), _) => false,
 
             (HeapType::Struct, HeapType::Struct | HeapType::Eq | HeapType::Any) => true,
@@ -1112,7 +1142,14 @@ impl ExternType {
                     FuncType::from_shared_type_index(engine, *e).into()
                 }
                 EngineOrModuleTypeIndex::Module(m) => {
-                    FuncType::from_wasm_func_type(engine, types[*m].unwrap_func().clone()).into()
+                    let subty = &types[*m];
+                    FuncType::from_wasm_func_type(
+                        engine,
+                        subty.is_final,
+                        subty.supertype,
+                        subty.unwrap_func().clone(),
+                    )
+                    .into()
                 }
                 EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
             },
@@ -1237,6 +1274,13 @@ impl StorageType {
         a.matches(b) && b.matches(a)
     }
 
+    pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
+        match self {
+            StorageType::I8 | StorageType::I16 => true,
+            StorageType::ValType(v) => v.comes_from_same_engine(engine),
+        }
+    }
+
     pub(crate) fn from_wasm_storage_type(engine: &Engine, ty: &WasmStorageType) -> Self {
         match ty {
             WasmStorageType::I8 => Self::I8,
@@ -1312,6 +1356,10 @@ impl FieldType {
         a.matches(b) && b.matches(a)
     }
 
+    pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
+        self.element_type.comes_from_same_engine(engine)
+    }
+
     pub(crate) fn from_wasm_field_type(engine: &Engine, ty: &WasmFieldType) -> Self {
         Self {
             mutability: if ty.mutable {
@@ -1347,16 +1395,17 @@ impl FieldType {
 /// however, you are in that 0.01% scenario where you need to check precise
 /// equality between types, you can use the [`StructType::eq`] method.
 //
-// TODO: Once we have array values, update above docs with a reference to the
-// future `Array::matches_ty` method
+// TODO: Once we have struct values, update above docs with a reference to the
+// future `Struct::matches_ty` method
 #[derive(Debug, Clone, Hash)]
 pub struct StructType {
     registered_type: RegisteredType,
 }
 
 impl StructType {
-    /// Construct a new `StructType` with the given field type's mutability and
-    /// storage type.
+    /// Construct a new `StructType` with the given field types.
+    ///
+    /// This `StructType` will be final and without a supertype.
     ///
     /// The result will be associated with the given engine, and attempts to use
     /// it with other engines will panic (for example, checking whether it is a
@@ -1365,29 +1414,104 @@ impl StructType {
     ///
     /// Returns an error if the number of fields exceeds the implementation
     /// limit.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any given field type is not associated with the given engine.
     pub fn new(engine: &Engine, fields: impl IntoIterator<Item = FieldType>) -> Result<Self> {
+        Self::with_finality_and_supertype(engine, Finality::Final, None, fields)
+    }
+
+    /// Construct a new `StructType` with the given finality, supertype, and
+    /// fields.
+    ///
+    /// The result will be associated with the given engine, and attempts to use
+    /// it with other engines will panic (for example, checking whether it is a
+    /// subtype of another struct type that is associated with a different
+    /// engine).
+    ///
+    /// Returns an error if the number of fields exceeds the implementation
+    /// limit, if the supertype is final, or if this type does not match the
+    /// supertype.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any given field type is not associated with the given engine.
+    pub fn with_finality_and_supertype(
+        engine: &Engine,
+        finality: Finality,
+        supertype: Option<&Self>,
+        fields: impl IntoIterator<Item = FieldType>,
+    ) -> Result<Self> {
+        let fields = fields.into_iter();
+
+        let mut wasmtime_fields = Vec::with_capacity({
+            let size_hint = fields.size_hint();
+            let cap = size_hint.1.unwrap_or(size_hint.0);
+            // Only reserve space if we have a supertype, as that is the only time
+            // that this vec is used.
+            supertype.is_some() as usize * cap
+        });
+
         // Same as in `FuncType::new`: we must prevent any `RegisteredType`s
         // from being reclaimed while constructing this struct type.
         let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
 
         let fields = fields
-            .into_iter()
             .map(|ty: FieldType| {
+                assert!(ty.comes_from_same_engine(engine));
+
+                if supertype.is_some() {
+                    wasmtime_fields.push(ty.clone());
+                }
+
                 if let Some(r) = ty.element_type.as_val_type().and_then(|v| v.as_ref()) {
                     if let Some(r) = r.heap_type().as_registered_type() {
                         registrations.push(r.clone());
                     }
                 }
+
                 ty.to_wasm_field_type()
             })
             .collect();
 
-        Self::from_wasm_struct_type(engine, WasmStructType { fields })
+        if let Some(supertype) = supertype {
+            ensure!(
+                supertype.finality().is_non_final(),
+                "cannot create a subtype of a final supertype"
+            );
+            ensure!(
+                Self::fields_match(wasmtime_fields.into_iter(), supertype.fields()),
+                "struct fields must match their supertype's fields"
+            );
+        }
+
+        Self::from_wasm_struct_type(
+            engine,
+            finality.is_final(),
+            supertype.map(|ty| ty.type_index().into()),
+            WasmStructType { fields },
+        )
     }
 
     /// Get the engine that this struct type is associated with.
     pub fn engine(&self) -> &Engine {
         self.registered_type.engine()
+    }
+
+    /// Get the finality of this struct type.
+    pub fn finality(&self) -> Finality {
+        match self.registered_type.is_final {
+            true => Finality::Final,
+            false => Finality::NonFinal,
+        }
+    }
+
+    /// Get the supertype of this struct type, if any.
+    pub fn supertype(&self) -> Option<Self> {
+        self.registered_type
+            .supertype
+            .map(|ty| Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()))
     }
 
     /// Get the `i`th field type.
@@ -1428,11 +1552,14 @@ impl StructType {
             return true;
         }
 
-        self.fields().len() >= other.fields().len()
-            && self
-                .fields()
-                .zip(other.fields())
-                .all(|(a, b)| a.matches(&b))
+        Self::fields_match(self.fields(), other.fields())
+    }
+
+    fn fields_match(
+        a: impl ExactSizeIterator<Item = FieldType>,
+        b: impl ExactSizeIterator<Item = FieldType>,
+    ) -> bool {
+        a.len() >= b.len() && a.zip(b).all(|(a, b)| a.matches(&b))
     }
 
     /// Is struct type `a` precisely equal to struct type `b`?
@@ -1471,7 +1598,12 @@ impl StructType {
     /// within a Wasm module's `ModuleTypes` since the Wasm module itself is
     /// holding a strong reference to all of its types, including any `(ref null
     /// <index>)` types used as the element type for this struct type.
-    pub(crate) fn from_wasm_struct_type(engine: &Engine, ty: WasmStructType) -> Result<StructType> {
+    pub(crate) fn from_wasm_struct_type(
+        engine: &Engine,
+        is_final: bool,
+        supertype: Option<EngineOrModuleTypeIndex>,
+        ty: WasmStructType,
+    ) -> Result<StructType> {
         const MAX_FIELDS: usize = 10_000;
         let fields_len = ty.fields.len();
         ensure!(
@@ -1484,10 +1616,8 @@ impl StructType {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
-                // TODO:
-                //
-                // is_final: true,
-                // supertype: None,
+                is_final,
+                supertype,
                 composite_type: WasmCompositeType::Struct(ty),
             },
         );
@@ -1533,11 +1663,53 @@ impl ArrayType {
     /// Construct a new `ArrayType` with the given field type's mutability and
     /// storage type.
     ///
+    /// The new `ArrayType` will be final and without a supertype.
+    ///
     /// The result will be associated with the given engine, and attempts to use
     /// it with other engines will panic (for example, checking whether it is a
     /// subtype of another array type that is associated with a different
     /// engine).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given field type is not associated with the given engine.
     pub fn new(engine: &Engine, field_type: FieldType) -> Self {
+        Self::with_finality_and_supertype(engine, Finality::Final, None, field_type)
+            .expect("cannot fail without a supertype")
+    }
+
+    /// Construct a new `StructType` with the given finality, supertype, and
+    /// fields.
+    ///
+    /// The result will be associated with the given engine, and attempts to use
+    /// it with other engines will panic (for example, checking whether it is a
+    /// subtype of another struct type that is associated with a different
+    /// engine).
+    ///
+    /// Returns an error if the supertype is final, or if this type does not
+    /// match the supertype.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given field type is not associated with the given engine.
+    pub fn with_finality_and_supertype(
+        engine: &Engine,
+        finality: Finality,
+        supertype: Option<&Self>,
+        field_type: FieldType,
+    ) -> Result<Self> {
+        if let Some(supertype) = supertype {
+            assert!(supertype.comes_from_same_engine(engine));
+            ensure!(
+                supertype.finality().is_non_final(),
+                "cannot create a subtype of a final supertype"
+            );
+            ensure!(
+                field_type.matches(&supertype.field_type()),
+                "array field type must match its supertype's field type"
+            );
+        }
+
         // Same as in `FuncType::new`: we must prevent any `RegisteredType` in
         // `field_type` from being reclaimed while constructing this array type.
         let _registration = field_type
@@ -1546,13 +1718,35 @@ impl ArrayType {
             .and_then(|v| v.as_ref())
             .and_then(|r| r.heap_type().as_registered_type());
 
+        assert!(field_type.comes_from_same_engine(engine));
         let wasm_ty = WasmArrayType(field_type.to_wasm_field_type());
-        Self::from_wasm_array_type(engine, wasm_ty)
+
+        Ok(Self::from_wasm_array_type(
+            engine,
+            finality.is_final(),
+            supertype.map(|ty| ty.type_index().into()),
+            wasm_ty,
+        ))
     }
 
     /// Get the engine that this array type is associated with.
     pub fn engine(&self) -> &Engine {
         self.registered_type.engine()
+    }
+
+    /// Get the finality of this array type.
+    pub fn finality(&self) -> Finality {
+        match self.registered_type.is_final {
+            true => Finality::Final,
+            false => Finality::NonFinal,
+        }
+    }
+
+    /// Get the supertype of this array type, if any.
+    pub fn supertype(&self) -> Option<Self> {
+        self.registered_type
+            .supertype
+            .map(|ty| Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()))
     }
 
     /// Get this array's underlying field type.
@@ -1643,14 +1837,17 @@ impl ArrayType {
     /// within a Wasm module's `ModuleTypes` since the Wasm module itself is
     /// holding a strong reference to all of its types, including any `(ref null
     /// <index>)` types used as the element type for this array type.
-    pub(crate) fn from_wasm_array_type(engine: &Engine, ty: WasmArrayType) -> ArrayType {
+    pub(crate) fn from_wasm_array_type(
+        engine: &Engine,
+        is_final: bool,
+        supertype: Option<EngineOrModuleTypeIndex>,
+        ty: WasmArrayType,
+    ) -> ArrayType {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
-                // TODO:
-                //
-                // is_final: true,
-                // supertype: None,
+                is_final,
+                supertype,
                 composite_type: WasmCompositeType::Array(ty),
             },
         );
@@ -1711,15 +1908,61 @@ impl Display for FuncType {
 }
 
 impl FuncType {
-    /// Creates a new function descriptor from the given parameters and results.
+    /// Creates a new function type from the given parameters and results.
     ///
-    /// The function descriptor returned will represent a function which takes
+    /// The function type returned will represent a function which takes
     /// `params` as arguments and returns `results` when it is finished.
+    ///
+    /// The resulting function type will be final and without a supertype.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any parameter or value type is not associated with the given
+    /// engine.
     pub fn new(
         engine: &Engine,
         params: impl IntoIterator<Item = ValType>,
         results: impl IntoIterator<Item = ValType>,
     ) -> FuncType {
+        Self::with_finality_and_supertype(engine, Finality::Final, None, params, results)
+            .expect("cannot fail without a supertype")
+    }
+
+    /// Create a new function type with the given finality, supertype, parameter
+    /// types, and result types.
+    ///
+    /// Returns an error if the supertype is final, or if this function type
+    /// does not match the supertype.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any parameter or value type is not associated with the given
+    /// engine.
+    pub fn with_finality_and_supertype(
+        engine: &Engine,
+        finality: Finality,
+        supertype: Option<&Self>,
+        params: impl IntoIterator<Item = ValType>,
+        results: impl IntoIterator<Item = ValType>,
+    ) -> Result<Self> {
+        let params = params.into_iter();
+        let results = results.into_iter();
+
+        let mut wasmtime_params = Vec::with_capacity({
+            let size_hint = params.size_hint();
+            let cap = size_hint.1.unwrap_or(size_hint.0);
+            // Only reserve space if we have a supertype, as that is the only time
+            // that this vec is used.
+            supertype.is_some() as usize * cap
+        });
+
+        let mut wasmtime_results = Vec::with_capacity({
+            let size_hint = results.size_hint();
+            let cap = size_hint.1.unwrap_or(size_hint.0);
+            // Same as above.
+            supertype.is_some() as usize * cap
+        });
+
         // Keep any of our parameters' and results' `RegisteredType`s alive
         // across `Self::from_wasm_func_type`. If one of our given `ValType`s is
         // the only thing keeping a type in the registry, we don't want to
@@ -1727,27 +1970,95 @@ impl FuncType {
         // before we register our new `WasmFuncType` that will reference it.
         let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
 
-        let mut to_wasm_type = |ty: ValType| {
+        let mut to_wasm_type = |ty: ValType, vec: &mut Vec<_>| {
+            assert!(ty.comes_from_same_engine(engine));
+
+            if supertype.is_some() {
+                vec.push(ty.clone());
+            }
+
             if let Some(r) = ty.as_ref() {
                 if let Some(r) = r.heap_type().as_registered_type() {
                     registrations.push(r.clone());
                 }
             }
+
             ty.to_wasm_type()
         };
 
-        Self::from_wasm_func_type(
+        let wasm_func_ty = WasmFuncType::new(
+            params
+                .map(|p| to_wasm_type(p, &mut wasmtime_params))
+                .collect(),
+            results
+                .map(|r| to_wasm_type(r, &mut wasmtime_results))
+                .collect(),
+        );
+
+        if let Some(supertype) = supertype {
+            assert!(supertype.comes_from_same_engine(engine));
+            ensure!(
+                supertype.finality().is_non_final(),
+                "cannot create a subtype of a final supertype"
+            );
+            ensure!(
+                Self::matches_impl(
+                    wasmtime_params.iter().cloned(),
+                    supertype.params(),
+                    wasmtime_results.iter().cloned(),
+                    supertype.results()
+                ),
+                "function type must match its supertype: found (func{params}{results}), expected \
+                 {supertype}",
+                params = if wasmtime_params.is_empty() {
+                    String::new()
+                } else {
+                    let mut s = format!(" (params");
+                    for p in &wasmtime_params {
+                        write!(&mut s, " {p}").unwrap();
+                    }
+                    s.push(')');
+                    s
+                },
+                results = if wasmtime_results.is_empty() {
+                    String::new()
+                } else {
+                    let mut s = format!(" (results");
+                    for r in &wasmtime_results {
+                        write!(&mut s, " {r}").unwrap();
+                    }
+                    s.push(')');
+                    s
+                },
+            );
+        }
+
+        Ok(Self::from_wasm_func_type(
             engine,
-            WasmFuncType::new(
-                params.into_iter().map(&mut to_wasm_type).collect(),
-                results.into_iter().map(&mut to_wasm_type).collect(),
-            ),
-        )
+            finality.is_final(),
+            supertype.map(|ty| ty.type_index().into()),
+            wasm_func_ty,
+        ))
     }
 
     /// Get the engine that this function type is associated with.
     pub fn engine(&self) -> &Engine {
         self.registered_type.engine()
+    }
+
+    /// Get the finality of this function type.
+    pub fn finality(&self) -> Finality {
+        match self.registered_type.is_final {
+            true => Finality::Final,
+            false => Finality::NonFinal,
+        }
+    }
+
+    /// Get the supertype of this function type, if any.
+    pub fn supertype(&self) -> Option<Self> {
+        self.registered_type
+            .supertype
+            .map(|ty| Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()))
     }
 
     /// Get the `i`th parameter type.
@@ -1813,18 +2124,30 @@ impl FuncType {
             return true;
         }
 
-        self.params().len() == other.params().len()
-            && self.results().len() == other.results().len()
+        Self::matches_impl(
+            self.params(),
+            other.params(),
+            self.results(),
+            other.results(),
+        )
+    }
+
+    fn matches_impl(
+        a_params: impl ExactSizeIterator<Item = ValType>,
+        b_params: impl ExactSizeIterator<Item = ValType>,
+        a_results: impl ExactSizeIterator<Item = ValType>,
+        b_results: impl ExactSizeIterator<Item = ValType>,
+    ) -> bool {
+        a_params.len() == b_params.len()
+            && a_results.len() == b_results.len()
             // Params are contravariant and results are covariant. For more
             // details and a refresher on variance, read
             // https://github.com/bytecodealliance/wasm-tools/blob/f1d89a4/crates/wasmparser/src/readers/core/types/matches.rs#L137-L174
-            && self
-                .params()
-                .zip(other.params())
+            && a_params
+                .zip(b_params)
                 .all(|(a, b)| b.matches(&a))
-            && self
-                .results()
-                .zip(other.results())
+            && a_results
+                .zip(b_results)
                 .all(|(a, b)| a.matches(&b))
     }
 
@@ -1868,14 +2191,17 @@ impl FuncType {
     /// within a Wasm module's `ModuleTypes` since the Wasm module itself is
     /// holding a strong reference to all of its types, including any `(ref null
     /// <index>)` types used in the function's parameters and results.
-    pub(crate) fn from_wasm_func_type(engine: &Engine, ty: WasmFuncType) -> FuncType {
+    pub(crate) fn from_wasm_func_type(
+        engine: &Engine,
+        is_final: bool,
+        supertype: Option<EngineOrModuleTypeIndex>,
+        ty: WasmFuncType,
+    ) -> FuncType {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
-                // TODO:
-                //
-                // is_final: true,
-                // supertype: None,
+                is_final,
+                supertype,
                 composite_type: WasmCompositeType::Func(ty),
             },
         );
@@ -2160,6 +2486,7 @@ impl<'module> ImportType<'module> {
         types: &'module ModuleTypes,
         engine: &'module Engine,
     ) -> ImportType<'module> {
+        assert!(ty.is_canonicalized_for_runtime_usage());
         ImportType {
             module,
             name,

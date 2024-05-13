@@ -871,10 +871,15 @@ impl ComponentItem {
             TypeDef::ComponentFunc(idx) => Self::ComponentFunc(ComponentFunc::from(*idx, ty)),
             TypeDef::Interface(iface_ty) => Self::Type(Type::from(iface_ty, ty)),
             TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
-            TypeDef::CoreFunc(idx) => Self::CoreFunc(FuncType::from_wasm_func_type(
-                engine,
-                ty.types[*idx].unwrap_func().clone(),
-            )),
+            TypeDef::CoreFunc(idx) => {
+                let subty = &ty.types[*idx];
+                Self::CoreFunc(FuncType::from_wasm_func_type(
+                    engine,
+                    subty.is_final,
+                    subty.supertype,
+                    subty.unwrap_func().clone(),
+                ))
+            }
             TypeDef::Resource(idx) => {
                 let resource_index = ty.types[*idx].ty;
                 let ty = match ty.resources.get(resource_index) {

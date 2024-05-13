@@ -2206,11 +2206,7 @@ fn wasm_to_host_trampolines_and_subtyping() -> Result<()> {
         }),
     ];
 
-    let return_func_ty = FuncType::new(
-        &engine,
-        [],
-        [RefType::new(false, HeapType::ConcreteFunc(func_ty.clone())).into()],
-    );
+    let return_func_ty = module.imports().nth(1).unwrap().ty().unwrap_func().clone();
 
     for make_func in func_ctors {
         let mut store = Store::new(&engine, ());

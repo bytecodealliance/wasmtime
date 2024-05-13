@@ -326,8 +326,23 @@ pub enum EngineOrModuleTypeIndex {
 }
 
 impl From<ModuleInternedTypeIndex> for EngineOrModuleTypeIndex {
+    #[inline]
     fn from(i: ModuleInternedTypeIndex) -> Self {
         Self::Module(i)
+    }
+}
+
+impl From<VMSharedTypeIndex> for EngineOrModuleTypeIndex {
+    #[inline]
+    fn from(i: VMSharedTypeIndex) -> Self {
+        Self::Engine(i)
+    }
+}
+
+impl From<RecGroupRelativeTypeIndex> for EngineOrModuleTypeIndex {
+    #[inline]
+    fn from(i: RecGroupRelativeTypeIndex) -> Self {
+        Self::RecGroup(i)
     }
 }
 
@@ -868,8 +883,13 @@ impl TypeTrace for WasmCompositeType {
 /// A concrete, user-defined (or host-defined) Wasm type.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmSubType {
-    // TODO: is_final, supertype
-    //
+    /// Whether this type is forbidden from being the supertype of any other
+    /// type.
+    pub is_final: bool,
+
+    /// This type's supertype, if any.
+    pub supertype: Option<EngineOrModuleTypeIndex>,
+
     /// The array, function, or struct that is defined.
     pub composite_type: WasmCompositeType,
 }
@@ -926,6 +946,9 @@ impl TypeTrace for WasmSubType {
     where
         F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
     {
+        if let Some(sup) = self.supertype {
+            func(sup)?;
+        }
         self.composite_type.trace(func)
     }
 
@@ -933,6 +956,9 @@ impl TypeTrace for WasmSubType {
     where
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
     {
+        if let Some(sup) = self.supertype.as_mut() {
+            func(sup)?;
+        }
         self.composite_type.trace_mut(func)
     }
 }
@@ -1513,27 +1539,24 @@ pub trait TypeConvert {
         })
     }
 
-    fn convert_sub_type(&self, ty: &wasmparser::SubType) -> WasmResult<WasmSubType> {
-        if ty.supertype_idx.is_some() {
-            return Err(wasm_unsupported!("wasm gc: explicit subtyping"));
+    fn convert_sub_type(&self, ty: &wasmparser::SubType) -> WasmSubType {
+        WasmSubType {
+            is_final: ty.is_final,
+            supertype: ty.supertype_idx.map(|i| self.lookup_type_index(i.unpack())),
+            composite_type: self.convert_composite_type(&ty.composite_type),
         }
-        let composite_type = self.convert_composite_type(&ty.composite_type)?;
-        Ok(WasmSubType { composite_type })
     }
 
-    fn convert_composite_type(
-        &self,
-        ty: &wasmparser::CompositeType,
-    ) -> WasmResult<WasmCompositeType> {
+    fn convert_composite_type(&self, ty: &wasmparser::CompositeType) -> WasmCompositeType {
         match ty {
             wasmparser::CompositeType::Func(f) => {
-                Ok(WasmCompositeType::Func(self.convert_func_type(f)))
+                WasmCompositeType::Func(self.convert_func_type(f))
             }
             wasmparser::CompositeType::Array(a) => {
-                Ok(WasmCompositeType::Array(self.convert_array_type(a)))
+                WasmCompositeType::Array(self.convert_array_type(a))
             }
             wasmparser::CompositeType::Struct(s) => {
-                Ok(WasmCompositeType::Struct(self.convert_struct_type(s)))
+                WasmCompositeType::Struct(self.convert_struct_type(s))
             }
         }
     }
@@ -1626,4 +1649,8 @@ pub trait TypeConvert {
     /// Converts the specified type index from a heap type into a canonicalized
     /// heap type.
     fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType;
+
+    /// Converts the specified type index from a heap type into a canonicalized
+    /// heap type.
+    fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex;
 }
