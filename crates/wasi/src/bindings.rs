@@ -50,10 +50,6 @@ pub mod sync {
     /// component through the [`Command::wasi_cli_run`] method plus
     /// [`Guest::call_run`](exports::wasi::cli::run::Guest::call_run).
     ///
-    /// > **Note**: it's recommended to use
-    /// > [`wasmtime_wasi::add_to_linker_sync`] instead of the auto-generated
-    /// > [`Command::add_to_linker`] here.
-    ///
     /// [async]: wasmtime::Config::async_support
     /// [`wasmtime_wasi::add_to_linker_sync`]: crate::add_to_linker_sync
     ///
@@ -219,9 +215,6 @@ pub use self::async_io::wasi::*;
 /// This can be used for a more "typed" view of executing a command component
 /// through the [`Command::wasi_cli_run`] method plus
 /// [`Guest::call_run`](exports::wasi::cli::run::Guest::call_run).
-///
-/// > **Note**: it's recommended to use [`wasmtime_wasi::add_to_linker_async`]
-/// > instead of the auto-generated [`Command::add_to_linker`] here.
 ///
 /// [async]: wasmtime::Config::async_support
 /// [`wasmtime_wasi::add_to_linker_async`]: crate::add_to_linker_async
