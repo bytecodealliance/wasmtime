@@ -738,7 +738,9 @@ mod test {
 
     #[test]
     fn instantiate_no_image() {
-        let plan = dummy_memory_plan(MemoryStyle::Static { bound: 4 << 30 });
+        let plan = dummy_memory_plan(MemoryStyle::Static {
+            bytes_reserved: 4 << 30,
+        });
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemoryImageSlot on top of it
@@ -771,7 +773,9 @@ mod test {
 
     #[test]
     fn instantiate_image() {
-        let plan = dummy_memory_plan(MemoryStyle::Static { bound: 4 << 30 });
+        let plan = dummy_memory_plan(MemoryStyle::Static {
+            bytes_reserved: 4 << 30,
+        });
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemoryImageSlot on top of it
@@ -819,7 +823,9 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn memset_instead_of_madvise() {
-        let plan = dummy_memory_plan(MemoryStyle::Static { bound: 100 });
+        let plan = dummy_memory_plan(MemoryStyle::Static {
+            bytes_reserved: 100 << 16,
+        });
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
