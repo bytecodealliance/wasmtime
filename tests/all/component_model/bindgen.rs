@@ -1,4 +1,4 @@
-// DO NOT COMMIT: make rust-analyzer work #![cfg(not(miri))]
+#![cfg(not(miri))]
 #![allow(dead_code)]
 
 use super::engine;
