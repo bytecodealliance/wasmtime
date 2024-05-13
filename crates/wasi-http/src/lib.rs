@@ -27,7 +27,7 @@
 //! 2. Add WASI HTTP interfaces to a [`wasmtime::component::Linker<T>`]. This is either
 //!    done through functions like [`proxy::add_to_linker`] (which bundles all interfaces
 //!    in the `wasi:http/proxy` world together) or through individual interfaces like the
-//!    [`bindings::http::outgoing_handler::add_to_linker`] function.
+//!    [`bindings::http::outgoing_handler::add_to_linker_get_host`] function.
 //! 3. Use the previous [`wasmtime::component::Linker<T>::instantiate`] to instantiate
 //!    a [`wasmtime::component::Component`] within a [`wasmtime::Store<T>`]. If you're
 //!    targeting the `wasi:http/proxy` world, you can instantiate the component with
@@ -78,6 +78,7 @@ pub mod bindings {
         trappable_error_type: {
             "wasi:http/types/error-code" => crate::HttpError,
         },
+        skip_mut_forwarding_impls: true,
     });
 
     pub use wasi::http;

@@ -80,6 +80,33 @@ pub mod foo {
             pub trait Host {
                 fn a(&mut self) -> Foo;
             }
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("foo:foo/a")?;
+                inst.func_wrap(
+                    "a",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::a(host);
+                        Ok((r,))
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -87,16 +114,12 @@ pub mod foo {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("foo:foo/a")?;
-                inst.func_wrap(
-                    "a",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
-                        let r = Host::a(host);
-                        Ok((r,))
-                    },
-                )?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self) -> Foo {
+                    Host::a(*self)
+                }
             }
         }
         #[allow(clippy::all)]
@@ -111,6 +134,33 @@ pub mod foo {
             pub trait Host {
                 fn a(&mut self) -> Foo;
             }
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("foo:foo/b")?;
+                inst.func_wrap(
+                    "a",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::a(host);
+                        Ok((r,))
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -118,16 +168,12 @@ pub mod foo {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("foo:foo/b")?;
-                inst.func_wrap(
-                    "a",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
-                        let r = Host::a(host);
-                        Ok((r,))
-                    },
-                )?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self) -> Foo {
+                    Host::a(*self)
+                }
             }
         }
         #[allow(clippy::all)]
@@ -142,6 +188,33 @@ pub mod foo {
             pub trait Host {
                 fn a(&mut self) -> Foo;
             }
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("foo:foo/c")?;
+                inst.func_wrap(
+                    "a",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::a(host);
+                        Ok((r,))
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -149,16 +222,12 @@ pub mod foo {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("foo:foo/c")?;
-                inst.func_wrap(
-                    "a",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
-                        let r = Host::a(host);
-                        Ok((r,))
-                    },
-                )?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self) -> Foo {
+                    Host::a(*self)
+                }
             }
         }
     }
@@ -175,6 +244,33 @@ pub mod d {
     pub trait Host {
         fn b(&mut self) -> Foo;
     }
+    pub trait GetHost<
+        T,
+    >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+        type Host: Host;
+    }
+    impl<F, T, O> GetHost<T> for F
+    where
+        F: Fn(T) -> O + Send + Sync + Copy + 'static,
+        O: Host,
+    {
+        type Host = O;
+    }
+    pub fn add_to_linker_get_host<T>(
+        linker: &mut wasmtime::component::Linker<T>,
+        host_getter: impl for<'a> GetHost<&'a mut T>,
+    ) -> wasmtime::Result<()> {
+        let mut inst = linker.instance("d")?;
+        inst.func_wrap(
+            "b",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                let host = &mut host_getter(caller.data_mut());
+                let r = Host::b(host);
+                Ok((r,))
+            },
+        )?;
+        Ok(())
+    }
     pub fn add_to_linker<T, U>(
         linker: &mut wasmtime::component::Linker<T>,
         get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -182,15 +278,11 @@ pub mod d {
     where
         U: Host,
     {
-        let mut inst = linker.instance("d")?;
-        inst.func_wrap(
-            "b",
-            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                let host = get(caller.data_mut());
-                let r = Host::b(host);
-                Ok((r,))
-            },
-        )?;
-        Ok(())
+        add_to_linker_get_host(linker, get)
+    }
+    impl<_T: Host + ?Sized> Host for &mut _T {
+        fn b(&mut self) -> Foo {
+            Host::b(*self)
+        }
     }
 }

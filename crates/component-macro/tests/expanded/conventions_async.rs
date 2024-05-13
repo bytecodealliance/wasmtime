@@ -10,8 +10,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::conventions::Host + Send,
             T: Send,
+            U: foo::foo::conventions::Host + Send,
         {
             foo::foo::conventions::add_to_linker(linker, get)?;
             Ok(())
@@ -107,7 +107,7 @@ pub mod foo {
                 );
             };
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host {
+            pub trait Host: Send {
                 async fn kebab_case(&mut self) -> ();
                 async fn foo(&mut self, x: LudicrousSpeed) -> ();
                 async fn function_with_dashes(&mut self) -> ();
@@ -127,19 +127,30 @@ pub mod foo {
                 /// Identifiers with the same name as keywords are quoted.
                 async fn bool(&mut self) -> ();
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host + Send,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
-                U: Host + Send,
             {
                 let mut inst = linker.instance("foo:foo/conventions")?;
                 inst.func_wrap_async(
                     "kebab-case",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::kebab_case(host).await;
                         Ok(r)
                     }),
@@ -150,7 +161,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (LudicrousSpeed,)|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::foo(host, arg0).await;
                         Ok(r)
                     }),
@@ -158,7 +169,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "function-with-dashes",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::function_with_dashes(host).await;
                         Ok(r)
                     }),
@@ -166,7 +177,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "function-with-no-weird-characters",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::function_with_no_weird_characters(host).await;
                         Ok(r)
                     }),
@@ -174,7 +185,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "apple",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::apple(host).await;
                         Ok(r)
                     }),
@@ -182,7 +193,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "apple-pear",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::apple_pear(host).await;
                         Ok(r)
                     }),
@@ -190,7 +201,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "apple-pear-grape",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::apple_pear_grape(host).await;
                         Ok(r)
                     }),
@@ -198,7 +209,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "a0",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a0(host).await;
                         Ok(r)
                     }),
@@ -206,7 +217,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "is-XML",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::is_xml(host).await;
                         Ok(r)
                     }),
@@ -214,7 +225,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "explicit",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::explicit(host).await;
                         Ok(r)
                     }),
@@ -222,7 +233,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "explicit-kebab",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::explicit_kebab(host).await;
                         Ok(r)
                     }),
@@ -230,12 +241,67 @@ pub mod foo {
                 inst.func_wrap_async(
                     "bool",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::bool(host).await;
                         Ok(r)
                     }),
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host + Send,
+                T: Send,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn kebab_case(&mut self) -> () {
+                    Host::kebab_case(*self).await
+                }
+                async fn foo(&mut self, x: LudicrousSpeed) -> () {
+                    Host::foo(*self, x).await
+                }
+                async fn function_with_dashes(&mut self) -> () {
+                    Host::function_with_dashes(*self).await
+                }
+                async fn function_with_no_weird_characters(&mut self) -> () {
+                    Host::function_with_no_weird_characters(*self).await
+                }
+                async fn apple(&mut self) -> () {
+                    Host::apple(*self).await
+                }
+                async fn apple_pear(&mut self) -> () {
+                    Host::apple_pear(*self).await
+                }
+                async fn apple_pear_grape(&mut self) -> () {
+                    Host::apple_pear_grape(*self).await
+                }
+                async fn a0(&mut self) -> () {
+                    Host::a0(*self).await
+                }
+                /// Comment out identifiers that collide when mapped to snake_case, for now; see
+                /// https://github.com/WebAssembly/component-model/issues/118
+                /// APPLE: func()
+                /// APPLE-pear-GRAPE: func()
+                /// apple-PEAR-grape: func()
+                async fn is_xml(&mut self) -> () {
+                    Host::is_xml(*self).await
+                }
+                async fn explicit(&mut self) -> () {
+                    Host::explicit(*self).await
+                }
+                async fn explicit_kebab(&mut self) -> () {
+                    Host::explicit_kebab(*self).await
+                }
+                /// Identifiers with the same name as keywords are quoted.
+                async fn bool(&mut self) -> () {
+                    Host::bool(*self).await
+                }
             }
         }
     }

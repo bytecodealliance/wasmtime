@@ -82,13 +82,22 @@ pub mod foo {
                     b: wasmtime::component::__internal::String,
                 ) -> wasmtime::component::__internal::String;
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
             where
-                U: Host,
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
             {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/strings")?;
                 inst.func_wrap(
                     "a",
@@ -96,7 +105,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::__internal::String,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a(host, arg0);
                         Ok(r)
                     },
@@ -104,7 +113,7 @@ pub mod foo {
                 inst.func_wrap(
                     "b",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::b(host);
                         Ok((r,))
                     },
@@ -121,12 +130,36 @@ pub mod foo {
                             wasmtime::component::__internal::String,
                         )|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::c(host, arg0, arg1);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self, x: wasmtime::component::__internal::String) -> () {
+                    Host::a(*self, x)
+                }
+                fn b(&mut self) -> wasmtime::component::__internal::String {
+                    Host::b(*self)
+                }
+                fn c(
+                    &mut self,
+                    a: wasmtime::component::__internal::String,
+                    b: wasmtime::component::__internal::String,
+                ) -> wasmtime::component::__internal::String {
+                    Host::c(*self, a, b)
+                }
             }
         }
     }

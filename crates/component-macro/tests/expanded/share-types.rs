@@ -111,6 +111,25 @@ pub mod foo {
                 );
             };
             pub trait Host {}
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("foo:foo/http-types")?;
+                Ok(())
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -118,9 +137,9 @@ pub mod foo {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("foo:foo/http-types")?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }
@@ -141,6 +160,33 @@ pub mod http_fetch {
     pub trait Host {
         fn fetch_request(&mut self, request: Request) -> Response;
     }
+    pub trait GetHost<
+        T,
+    >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+        type Host: Host;
+    }
+    impl<F, T, O> GetHost<T> for F
+    where
+        F: Fn(T) -> O + Send + Sync + Copy + 'static,
+        O: Host,
+    {
+        type Host = O;
+    }
+    pub fn add_to_linker_get_host<T>(
+        linker: &mut wasmtime::component::Linker<T>,
+        host_getter: impl for<'a> GetHost<&'a mut T>,
+    ) -> wasmtime::Result<()> {
+        let mut inst = linker.instance("http-fetch")?;
+        inst.func_wrap(
+            "fetch-request",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Request,)| {
+                let host = &mut host_getter(caller.data_mut());
+                let r = Host::fetch_request(host, arg0);
+                Ok((r,))
+            },
+        )?;
+        Ok(())
+    }
     pub fn add_to_linker<T, U>(
         linker: &mut wasmtime::component::Linker<T>,
         get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -148,16 +194,12 @@ pub mod http_fetch {
     where
         U: Host,
     {
-        let mut inst = linker.instance("http-fetch")?;
-        inst.func_wrap(
-            "fetch-request",
-            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Request,)| {
-                let host = get(caller.data_mut());
-                let r = Host::fetch_request(host, arg0);
-                Ok((r,))
-            },
-        )?;
-        Ok(())
+        add_to_linker_get_host(linker, get)
+    }
+    impl<_T: Host + ?Sized> Host for &mut _T {
+        fn fetch_request(&mut self, request: Request) -> Response {
+            Host::fetch_request(*self, request)
+        }
     }
 }
 pub mod exports {

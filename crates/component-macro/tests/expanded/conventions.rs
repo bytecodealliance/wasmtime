@@ -125,18 +125,27 @@ pub mod foo {
                 /// Identifiers with the same name as keywords are quoted.
                 fn bool(&mut self) -> ();
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
             where
-                U: Host,
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
             {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/conventions")?;
                 inst.func_wrap(
                     "kebab-case",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::kebab_case(host);
                         Ok(r)
                     },
@@ -147,7 +156,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (LudicrousSpeed,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::foo(host, arg0);
                         Ok(r)
                     },
@@ -155,7 +164,7 @@ pub mod foo {
                 inst.func_wrap(
                     "function-with-dashes",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::function_with_dashes(host);
                         Ok(r)
                     },
@@ -163,7 +172,7 @@ pub mod foo {
                 inst.func_wrap(
                     "function-with-no-weird-characters",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::function_with_no_weird_characters(host);
                         Ok(r)
                     },
@@ -171,7 +180,7 @@ pub mod foo {
                 inst.func_wrap(
                     "apple",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::apple(host);
                         Ok(r)
                     },
@@ -179,7 +188,7 @@ pub mod foo {
                 inst.func_wrap(
                     "apple-pear",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::apple_pear(host);
                         Ok(r)
                     },
@@ -187,7 +196,7 @@ pub mod foo {
                 inst.func_wrap(
                     "apple-pear-grape",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::apple_pear_grape(host);
                         Ok(r)
                     },
@@ -195,7 +204,7 @@ pub mod foo {
                 inst.func_wrap(
                     "a0",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::a0(host);
                         Ok(r)
                     },
@@ -203,7 +212,7 @@ pub mod foo {
                 inst.func_wrap(
                     "is-XML",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::is_xml(host);
                         Ok(r)
                     },
@@ -211,7 +220,7 @@ pub mod foo {
                 inst.func_wrap(
                     "explicit",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::explicit(host);
                         Ok(r)
                     },
@@ -219,7 +228,7 @@ pub mod foo {
                 inst.func_wrap(
                     "explicit-kebab",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::explicit_kebab(host);
                         Ok(r)
                     },
@@ -227,12 +236,65 @@ pub mod foo {
                 inst.func_wrap(
                     "bool",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::bool(host);
                         Ok(r)
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn kebab_case(&mut self) -> () {
+                    Host::kebab_case(*self)
+                }
+                fn foo(&mut self, x: LudicrousSpeed) -> () {
+                    Host::foo(*self, x)
+                }
+                fn function_with_dashes(&mut self) -> () {
+                    Host::function_with_dashes(*self)
+                }
+                fn function_with_no_weird_characters(&mut self) -> () {
+                    Host::function_with_no_weird_characters(*self)
+                }
+                fn apple(&mut self) -> () {
+                    Host::apple(*self)
+                }
+                fn apple_pear(&mut self) -> () {
+                    Host::apple_pear(*self)
+                }
+                fn apple_pear_grape(&mut self) -> () {
+                    Host::apple_pear_grape(*self)
+                }
+                fn a0(&mut self) -> () {
+                    Host::a0(*self)
+                }
+                /// Comment out identifiers that collide when mapped to snake_case, for now; see
+                /// https://github.com/WebAssembly/component-model/issues/118
+                /// APPLE: func()
+                /// APPLE-pear-GRAPE: func()
+                /// apple-PEAR-grape: func()
+                fn is_xml(&mut self) -> () {
+                    Host::is_xml(*self)
+                }
+                fn explicit(&mut self) -> () {
+                    Host::explicit(*self)
+                }
+                fn explicit_kebab(&mut self) -> () {
+                    Host::explicit_kebab(*self)
+                }
+                /// Identifiers with the same name as keywords are quoted.
+                fn bool(&mut self) -> () {
+                    Host::bool(*self)
+                }
             }
         }
     }

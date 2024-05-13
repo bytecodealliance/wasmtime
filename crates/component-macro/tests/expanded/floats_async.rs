@@ -10,8 +10,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::floats::Host + Send,
             T: Send,
+            U: foo::foo::floats::Host + Send,
         {
             foo::foo::floats::add_to_linker(linker, get)?;
             Ok(())
@@ -73,25 +73,36 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host {
+            pub trait Host: Send {
                 async fn float32_param(&mut self, x: f32) -> ();
                 async fn float64_param(&mut self, x: f64) -> ();
                 async fn float32_result(&mut self) -> f32;
                 async fn float64_result(&mut self) -> f64;
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host + Send,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
-                U: Host + Send,
             {
                 let mut inst = linker.instance("foo:foo/floats")?;
                 inst.func_wrap_async(
                     "float32-param",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (f32,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float32_param(host, arg0).await;
                         Ok(r)
                     }),
@@ -99,7 +110,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "float64-param",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (f64,)| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float64_param(host, arg0).await;
                         Ok(r)
                     }),
@@ -107,7 +118,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "float32-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float32_result(host).await;
                         Ok((r,))
                     }),
@@ -115,12 +126,37 @@ pub mod foo {
                 inst.func_wrap_async(
                     "float64-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float64_result(host).await;
                         Ok((r,))
                     }),
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host + Send,
+                T: Send,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn float32_param(&mut self, x: f32) -> () {
+                    Host::float32_param(*self, x).await
+                }
+                async fn float64_param(&mut self, x: f64) -> () {
+                    Host::float64_param(*self, x).await
+                }
+                async fn float32_result(&mut self) -> f32 {
+                    Host::float32_result(*self).await
+                }
+                async fn float64_result(&mut self) -> f64 {
+                    Host::float64_result(*self).await
+                }
             }
         }
     }

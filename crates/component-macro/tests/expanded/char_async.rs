@@ -10,8 +10,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::chars::Host + Send,
             T: Send,
+            U: foo::foo::chars::Host + Send,
         {
             foo::foo::chars::add_to_linker(linker, get)?;
             Ok(())
@@ -73,19 +73,30 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host {
+            pub trait Host: Send {
                 /// A function that accepts a character
                 async fn take_char(&mut self, x: char) -> ();
                 /// A function that returns a character
                 async fn return_char(&mut self) -> char;
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host + Send,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
-                U: Host + Send,
             {
                 let mut inst = linker.instance("foo:foo/chars")?;
                 inst.func_wrap_async(
@@ -94,7 +105,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (char,)|
                     wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::take_char(host, arg0).await;
                         Ok(r)
                     }),
@@ -102,12 +113,33 @@ pub mod foo {
                 inst.func_wrap_async(
                     "return-char",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::return_char(host).await;
                         Ok((r,))
                     }),
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host + Send,
+                T: Send,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                /// A function that accepts a character
+                async fn take_char(&mut self, x: char) -> () {
+                    Host::take_char(*self, x).await
+                }
+                /// A function that returns a character
+                async fn return_char(&mut self) -> char {
+                    Host::return_char(*self).await
+                }
             }
         }
     }

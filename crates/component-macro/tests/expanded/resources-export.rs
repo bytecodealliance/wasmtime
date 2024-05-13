@@ -130,7 +130,44 @@ pub mod foo {
                     rep: wasmtime::component::Resource<Y>,
                 ) -> wasmtime::Result<()>;
             }
+            impl<_T: HostY + ?Sized> HostY for &mut _T {
+                fn drop(
+                    &mut self,
+                    rep: wasmtime::component::Resource<Y>,
+                ) -> wasmtime::Result<()> {
+                    HostY::drop(*self, rep)
+                }
+            }
             pub trait Host: HostY {}
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("foo:foo/transitive-import")?;
+                inst.resource(
+                    "y",
+                    wasmtime::component::ResourceType::host::<Y>(),
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        HostY::drop(
+                            &mut host_getter(store.data_mut()),
+                            wasmtime::component::Resource::new_own(rep),
+                        )
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -138,19 +175,9 @@ pub mod foo {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("foo:foo/transitive-import")?;
-                inst.resource(
-                    "y",
-                    wasmtime::component::ResourceType::host::<Y>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostY::drop(
-                            get(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
-                    },
-                )?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }

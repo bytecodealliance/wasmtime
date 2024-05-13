@@ -77,18 +77,27 @@ pub mod foo {
                 fn float32_result(&mut self) -> f32;
                 fn float64_result(&mut self) -> f64;
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
             where
-                U: Host,
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
             {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/floats")?;
                 inst.func_wrap(
                     "float32-param",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (f32,)| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float32_param(host, arg0);
                         Ok(r)
                     },
@@ -96,7 +105,7 @@ pub mod foo {
                 inst.func_wrap(
                     "float64-param",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (f64,)| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float64_param(host, arg0);
                         Ok(r)
                     },
@@ -104,7 +113,7 @@ pub mod foo {
                 inst.func_wrap(
                     "float32-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float32_result(host);
                         Ok((r,))
                     },
@@ -112,12 +121,35 @@ pub mod foo {
                 inst.func_wrap(
                     "float64-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::float64_result(host);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn float32_param(&mut self, x: f32) -> () {
+                    Host::float32_param(*self, x)
+                }
+                fn float64_param(&mut self, x: f64) -> () {
+                    Host::float64_param(*self, x)
+                }
+                fn float32_result(&mut self) -> f32 {
+                    Host::float32_result(*self)
+                }
+                fn float64_result(&mut self) -> f64 {
+                    Host::float64_result(*self)
+                }
             }
         }
     }

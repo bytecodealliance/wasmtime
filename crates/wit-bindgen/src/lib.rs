@@ -56,8 +56,9 @@ struct Wasmtime {
 }
 
 struct ImportFunction {
+    func: Function,
     add_to_linker: String,
-    sig: String,
+    sig: Option<String>,
 }
 
 #[derive(Default)]
@@ -123,6 +124,11 @@ pub struct Opts {
     /// Evaluate to a string literal containing the generated code rather than the generated tokens
     /// themselves. Mostly useful for Wasmtime internal debugging and development.
     pub stringify: bool,
+
+    /// Temporary option to skip `impl<T: Trait> Trait for &mut T` for the
+    /// `wasmtime-wasi` crate while that's given a chance to update its b
+    /// indings.
+    pub skip_mut_forwarding_impls: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -329,14 +335,19 @@ impl Wasmtime {
                 // Only generate a trait signature for free functions since
                 // resource-related functions get their trait signatures
                 // during `type_resource`.
-                if let FunctionKind::Freestanding = func.kind {
+                let sig = if let FunctionKind::Freestanding = func.kind {
                     gen.generate_function_trait_sig(func);
-                }
-                let sig = mem::take(&mut gen.src).into();
+                    Some(mem::take(&mut gen.src).into())
+                } else {
+                    None
+                };
                 gen.generate_add_function_to_linker(TypeOwner::World(world), func, "linker");
                 let add_to_linker = gen.src.into();
-                self.import_functions
-                    .push(ImportFunction { sig, add_to_linker });
+                self.import_functions.push(ImportFunction {
+                    func: func.clone(),
+                    sig,
+                    add_to_linker,
+                });
             }
             WorldItem::Interface(id) => {
                 gen.gen.interface_last_seen_as_import.insert(*id, true);
@@ -546,7 +557,7 @@ impl Wasmtime {
         assert!(prev.is_none());
     }
 
-    fn build_struct(&mut self, resolve: &Resolve, world: WorldId) {
+    fn build_world_struct(&mut self, resolve: &Resolve, world: WorldId) {
         let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
         uwriteln!(self.src, "pub struct {camel} {{");
         for (name, (ty, _)) in self.exports.fields.iter() {
@@ -554,13 +565,7 @@ impl Wasmtime {
         }
         self.src.push_str("}\n");
 
-        let (async_, async__, send, await_) = if self.opts.async_.maybe_async() {
-            ("async", "_async", ":Send", ".await")
-        } else {
-            ("", "", "", "")
-        };
-
-        self.toplevel_import_trait(resolve, world);
+        self.world_imports_trait(resolve, world);
 
         uwriteln!(self.src, "const _: () = {{");
         uwriteln!(
@@ -572,7 +577,13 @@ impl Wasmtime {
         );
 
         uwriteln!(self.src, "impl {camel} {{");
-        self.toplevel_add_to_linker(resolve, world);
+        self.world_add_to_linker(resolve, world);
+
+        let (async_, async__, send, await_) = if self.opts.async_.maybe_async() {
+            ("async", "_async", ":Send", ".await")
+        } else {
+            ("", "", "", "")
+        };
         uwriteln!(
             self.src,
             "
@@ -650,7 +661,7 @@ impl Wasmtime {
         }
 
         if !self.opts.only_interfaces {
-            self.build_struct(resolve, world)
+            self.build_world_struct(resolve, world)
         }
 
         let imports = mem::take(&mut self.import_interfaces);
@@ -870,12 +881,12 @@ impl Wasmtime {
 }
 
 impl Wasmtime {
-    fn has_world_trait(&self, resolve: &Resolve, world: WorldId) -> bool {
+    fn has_world_imports_trait(&self, resolve: &Resolve, world: WorldId) -> bool {
         !self.import_functions.is_empty() || get_world_resources(resolve, world).count() > 0
     }
 
-    fn toplevel_import_trait(&mut self, resolve: &Resolve, world: WorldId) {
-        if !self.has_world_trait(resolve, world) {
+    fn world_imports_trait(&mut self, resolve: &Resolve, world: WorldId) {
+        if !self.has_world_imports_trait(resolve, world) {
             return;
         }
 
@@ -884,114 +895,184 @@ impl Wasmtime {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
         uwrite!(self.src, "pub trait {world_camel}Imports");
-        for (i, resource) in get_world_resources(resolve, world).enumerate() {
-            if i == 0 {
-                uwrite!(self.src, ": ");
-            } else {
-                uwrite!(self.src, " + ");
-            }
-            uwrite!(self.src, "Host{}", resource.to_upper_camel_case());
+        let mut supertraits = vec![];
+        if self.opts.async_.maybe_async() {
+            supertraits.push("Send".to_string());
+        }
+        for resource in get_world_resources(resolve, world) {
+            supertraits.push(format!("Host{}", resource.to_upper_camel_case()));
+        }
+        if !supertraits.is_empty() {
+            uwrite!(self.src, ": {}", supertraits.join(" + "));
         }
         uwriteln!(self.src, " {{");
         for f in self.import_functions.iter() {
-            self.src.push_str(&f.sig);
-            self.src.push_str("\n");
+            if let Some(sig) = &f.sig {
+                self.src.push_str(sig);
+                self.src.push_str(";\n");
+            }
         }
         uwriteln!(self.src, "}}");
-    }
 
-    fn toplevel_add_to_linker(&mut self, resolve: &Resolve, world: WorldId) {
-        let has_world_trait = self.has_world_trait(resolve, world);
-        if self.import_interfaces.is_empty() && !has_world_trait {
-            return;
-        }
-        let mut interfaces = Vec::new();
-        for (_, name) in self.import_interfaces.iter() {
-            let path = match name {
-                InterfaceName::Remapped { .. } => unreachable!("imported a remapped module"),
-                InterfaceName::Path(path) => path,
-            };
-            interfaces.push(path.join("::"));
-        }
-
-        uwrite!(
+        uwriteln!(
             self.src,
             "
-                pub fn add_to_linker<T, U>(
-                    linker: &mut wasmtime::component::Linker<T>,
-                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> wasmtime::Result<()>
-                    where U: \
+                pub trait {world_camel}ImportsGetHost<T>:
+                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T>>::Host
+                        + Send
+                        + Sync
+                        + Copy
+                        + 'static
+                {{
+                    type Host: {world_camel}Imports;
+                }}
+
+                impl<F, T, O> {world_camel}ImportsGetHost<T> for F
+                where
+                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                    O: {world_camel}Imports
+                {{
+                    type Host = O;
+                }}
             "
         );
-        let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
-        let world_trait = format!("{world_camel}Imports");
-        for (i, name) in interfaces
-            .iter()
-            .map(|n| format!("{n}::Host"))
-            .chain(if has_world_trait {
-                Some(world_trait.clone())
-            } else {
-                None
-            })
-            .enumerate()
-        {
-            if i > 0 {
-                self.src.push_str(" + ");
+
+        // Generate impl WorldImports for &mut WorldImports
+        let (async_trait, maybe_send) = if self.opts.async_.maybe_async() {
+            (
+                "#[wasmtime::component::__internal::async_trait]\n",
+                "+ Send",
+            )
+        } else {
+            ("", "")
+        };
+        if !self.opts.skip_mut_forwarding_impls {
+            uwriteln!(
+                self.src,
+                "{async_trait}impl<_T: {world_camel}Imports + ?Sized {maybe_send}> {world_camel}Imports for &mut _T {{"
+            );
+            // Forward each method call to &mut T
+            for f in self.import_functions.iter() {
+                if let Some(sig) = &f.sig {
+                    self.src.push_str(sig);
+                    uwrite!(
+                        self.src,
+                        "{{ {world_camel}Imports::{}(*self,",
+                        rust_function_name(&f.func)
+                    );
+                    for (name, _) in f.func.params.iter() {
+                        uwrite!(self.src, "{},", to_rust_ident(name));
+                    }
+                    uwrite!(self.src, ")");
+                    if self.opts.async_.is_import_async(&f.func.name) {
+                        uwrite!(self.src, ".await");
+                    }
+                    uwriteln!(self.src, "}}");
+                }
             }
-            self.src.push_str(&name);
+            uwriteln!(self.src, "}}");
+        }
+    }
+
+    fn import_interface_paths(&self) -> Vec<String> {
+        self.import_interfaces
+            .iter()
+            .map(|(_, name)| match name {
+                InterfaceName::Path(path) => path.join("::"),
+                InterfaceName::Remapped { .. } => unreachable!("imported a remapped module"),
+            })
+            .collect()
+    }
+
+    fn world_host_traits(&self, resolve: &Resolve, world: WorldId) -> Vec<String> {
+        let mut traits = self
+            .import_interface_paths()
+            .iter()
+            .map(|path| format!("{path}::Host"))
+            .collect::<Vec<_>>();
+        if self.has_world_imports_trait(resolve, world) {
+            let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
+            traits.push(format!("{world_camel}Imports"));
+        }
+        if self.opts.async_.maybe_async() {
+            traits.push("Send".to_string());
+        }
+        traits
+    }
+
+    fn world_add_to_linker(&mut self, resolve: &Resolve, world: WorldId) {
+        let has_world_imports_trait = self.has_world_imports_trait(resolve, world);
+        if self.import_interfaces.is_empty() && !has_world_imports_trait {
+            return;
         }
 
-        let maybe_send = if self.opts.async_.maybe_async() {
-            " + Send, T: Send"
+        let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
+        let data_bounds = if self.opts.async_.maybe_async() {
+            "T: Send,"
         } else {
             ""
         };
+        if has_world_imports_trait {
+            uwrite!(
+                self.src,
+                "
+                    pub fn add_to_linker_imports_get_host<T>(
+                        linker: &mut wasmtime::component::Linker<T>,
+                        host_getter: impl for<'a> {camel}ImportsGetHost<&'a mut T>,
+                    ) -> wasmtime::Result<()>
+                        where {data_bounds}
+                    {{
+                        let mut linker = linker.root();
+                "
+            );
+            for name in get_world_resources(resolve, world) {
+                let camel = name.to_upper_camel_case();
+                uwriteln!(
+                    self.src,
+                    "
+                        linker.resource(
+                            \"{name}\",
+                            wasmtime::component::ResourceType::host::<{camel}>(),
+                            move |mut store, rep| -> wasmtime::Result<()> {{
+                                Host{camel}::drop(&mut host_getter(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                            }},
+                        )?;"
+                );
+            }
+            for f in self.import_functions.iter() {
+                self.src.push_str(&f.add_to_linker);
+                self.src.push_str("\n");
+            }
+            uwriteln!(self.src, "Ok(())\n}}");
+        }
 
-        self.src.push_str(maybe_send);
-        self.src.push_str(",\n{\n");
-        for name in interfaces.iter() {
-            uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
-        }
-        if has_world_trait {
-            uwriteln!(self.src, "Self::add_root_to_linker(linker, get)?;");
-        }
-        uwriteln!(self.src, "Ok(())\n}}");
-        if !has_world_trait {
-            return;
-        }
+        let host_bounds = format!("U: {}", self.world_host_traits(resolve, world).join(" + "));
 
-        uwrite!(
-            self.src,
-            "
-                pub fn add_root_to_linker<T, U>(
-                    linker: &mut wasmtime::component::Linker<T>,
-                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> wasmtime::Result<()>
-                    where U: {world_trait}{maybe_send}
-                {{
-                    let mut linker = linker.root();
-            ",
-        );
-        for name in get_world_resources(resolve, world) {
-            let camel = name.to_upper_camel_case();
+        if !self.opts.skip_mut_forwarding_impls {
             uwriteln!(
                 self.src,
-                "linker.resource(
-                    \"{name}\",
-                    wasmtime::component::ResourceType::host::<{camel}>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {{
-                        Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
-                    }},
-                )?;"
-            )
+                "
+                    pub fn add_to_linker<T, U>(
+                        linker: &mut wasmtime::component::Linker<T>,
+                        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                    ) -> wasmtime::Result<()>
+                        where
+                            {data_bounds}
+                            {host_bounds}
+                    {{
+                "
+            );
+            if has_world_imports_trait {
+                uwriteln!(
+                    self.src,
+                    "Self::add_to_linker_imports_get_host(linker, get)?;"
+                );
+            }
+            for path in self.import_interface_paths() {
+                uwriteln!(self.src, "{path}::add_to_linker(linker, get)?;");
+            }
+            uwriteln!(self.src, "Ok(())\n}}");
         }
-
-        for f in self.import_functions.iter() {
-            self.src.push_str(&f.add_to_linker);
-            self.src.push_str("\n");
-        }
-        uwriteln!(self.src, "Ok(())\n}}");
     }
 }
 
@@ -1151,13 +1232,13 @@ impl<'a> InterfaceGenerator<'a> {
                 }
             }
 
+            // Generate resource trait
             if self.gen.opts.async_.maybe_async() {
                 uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
             }
-
             uwriteln!(self.src, "pub trait Host{camel} {{");
 
-            let functions = match resource.owner {
+            let mut functions = match resource.owner {
                 TypeOwner::World(id) => self.resolve.worlds[id]
                     .imports
                     .values()
@@ -1175,16 +1256,16 @@ impl<'a> InterfaceGenerator<'a> {
                 }
             };
 
-            for func in functions {
-                match func.kind {
-                    FunctionKind::Method(resource)
-                    | FunctionKind::Static(resource)
-                    | FunctionKind::Constructor(resource)
-                        if id == resource => {}
-                    _ => continue,
-                }
+            functions.retain(|func| match func.kind {
+                FunctionKind::Freestanding => false,
+                FunctionKind::Method(resource)
+                | FunctionKind::Static(resource)
+                | FunctionKind::Constructor(resource) => id == resource,
+            });
 
+            for func in &functions {
                 self.generate_function_trait_sig(func);
+                self.push_str(";\n");
             }
 
             uwrite!(
@@ -1192,6 +1273,44 @@ impl<'a> InterfaceGenerator<'a> {
                 "fn drop(&mut self, rep: wasmtime::component::Resource<{camel}>) -> wasmtime::Result<()>;");
 
             uwriteln!(self.src, "}}");
+
+            // Generate impl HostResource for &mut HostResource
+            if !self.gen.opts.skip_mut_forwarding_impls {
+                let (async_trait, maybe_send) = if self.gen.opts.async_.maybe_async() {
+                    (
+                        "#[wasmtime::component::__internal::async_trait]\n",
+                        "+ Send",
+                    )
+                } else {
+                    ("", "")
+                };
+                uwriteln!(
+                    self.src,
+                    "{async_trait}impl <_T: Host{camel} + ?Sized {maybe_send}> Host{camel} for &mut _T {{"
+                );
+                for func in &functions {
+                    self.generate_function_trait_sig(func);
+                    uwrite!(
+                        self.src,
+                        "{{ Host{camel}::{}(*self,",
+                        rust_function_name(func)
+                    );
+                    for (name, _) in func.params.iter() {
+                        uwrite!(self.src, "{},", to_rust_ident(name));
+                    }
+                    uwrite!(self.src, ")");
+                    if self.gen.opts.async_.is_import_async(&func.name) {
+                        uwrite!(self.src, ".await");
+                    }
+                    uwriteln!(self.src, "}}");
+                }
+                uwriteln!(self.src, "
+                    fn drop(&mut self, rep: wasmtime::component::Resource<{camel}>) -> wasmtime::Result<()> {{
+                        Host{camel}::drop(*self, rep)
+                    }}",
+                );
+                uwriteln!(self.src, "}}");
+            }
         } else {
             self.rustdoc(docs);
             uwriteln!(
@@ -1749,20 +1868,23 @@ impl<'a> InterfaceGenerator<'a> {
         let iface = &self.resolve.interfaces[id];
         let owner = TypeOwner::Interface(id);
 
-        if self.gen.opts.async_.maybe_async() {
+        let is_maybe_async = self.gen.opts.async_.maybe_async();
+        if is_maybe_async {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
         // Generate the `pub trait` which represents the host functionality for
         // this import which additionally inherits from all resource traits
         // for this interface defined by `type_resource`.
         uwrite!(self.src, "pub trait Host");
-        for (i, resource) in get_resources(self.resolve, id).enumerate() {
-            if i == 0 {
-                uwrite!(self.src, ": ");
-            } else {
-                uwrite!(self.src, " + ");
-            }
-            uwrite!(self.src, "Host{}", resource.to_upper_camel_case());
+        let mut host_supertraits = vec![];
+        if is_maybe_async {
+            host_supertraits.push("Send".to_string());
+        }
+        for resource in get_resources(self.resolve, id) {
+            host_supertraits.push(format!("Host{}", resource.to_upper_camel_case()));
+        }
+        if !host_supertraits.is_empty() {
+            uwrite!(self.src, ": {}", host_supertraits.join(" + "));
         }
         uwriteln!(self.src, " {{");
         for (_, func) in iface.functions.iter() {
@@ -1771,12 +1893,13 @@ impl<'a> InterfaceGenerator<'a> {
                 _ => continue,
             }
             self.generate_function_trait_sig(func);
+            self.push_str(";\n");
         }
 
         // Generate `convert_*` functions to convert custom trappable errors
         // into the representation required by Wasmtime's component API.
         let mut required_conversion_traits = IndexSet::new();
-        let mut errors_converted = IndexSet::new();
+        let mut errors_converted = IndexMap::new();
         let my_error_types = iface
             .types
             .iter()
@@ -1787,9 +1910,10 @@ impl<'a> InterfaceGenerator<'a> {
             .iter()
             .filter_map(|(_, func)| self.special_case_trappable_error(&func.results))
             .map(|(_, id, _)| id);
-        for err in my_error_types.chain(used_error_types).collect::<Vec<_>>() {
-            let custom_name = &self.gen.trappable_errors[&err];
-            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
+        let root = self.path_to_root();
+        for err_id in my_error_types.chain(used_error_types).collect::<Vec<_>>() {
+            let custom_name = &self.gen.trappable_errors[&err_id];
+            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err_id)];
             let err_name = err.name.as_ref().unwrap();
             let err_snake = err_name.to_snake_case();
             let err_camel = err_name.to_upper_camel_case();
@@ -1802,8 +1926,7 @@ impl<'a> InterfaceGenerator<'a> {
                     required_conversion_traits.insert(format!("{path}::Host"));
                 }
                 None => {
-                    if errors_converted.insert(err_name) {
-                        let root = self.path_to_root();
+                    if errors_converted.insert(err_name, err_id).is_none() {
                         uwriteln!(
                             self.src,
                             "fn convert_{err_snake}(&mut self, err: {root}{custom_name}) -> wasmtime::Result<{err_camel}>;"
@@ -1814,25 +1937,41 @@ impl<'a> InterfaceGenerator<'a> {
         }
         uwriteln!(self.src, "}}");
 
-        let mut where_clause = if self.gen.opts.async_.maybe_async() {
-            "T: Send, U: Host + Send".to_string()
+        let (data_bounds, mut host_bounds) = if self.gen.opts.async_.maybe_async() {
+            ("T: Send,", "Host + Send".to_string())
         } else {
-            "U: Host".to_string()
+            ("", "Host".to_string())
         };
-
-        for t in required_conversion_traits {
-            where_clause.push_str(" + ");
-            where_clause.push_str(&t);
+        for ty in required_conversion_traits {
+            uwrite!(host_bounds, " + {ty}");
         }
 
         uwriteln!(
             self.src,
             "
-                pub fn add_to_linker<T, U>(
+                pub trait GetHost<T>:
+                    Fn(T) -> <Self as GetHost<T>>::Host
+                        + Send
+                        + Sync
+                        + Copy
+                        + 'static
+                {{
+                    type Host: {host_bounds};
+                }}
+
+                impl<F, T, O> GetHost<T> for F
+                where
+                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                    O: {host_bounds},
+                {{
+                    type Host = O;
+                }}
+
+                pub fn add_to_linker_get_host<T>(
                     linker: &mut wasmtime::component::Linker<T>,
-                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                    host_getter: impl for<'a> GetHost<&'a mut T>,
                 ) -> wasmtime::Result<()>
-                    where {where_clause}
+                    where {data_bounds}
                 {{
             "
         );
@@ -1846,7 +1985,7 @@ impl<'a> InterfaceGenerator<'a> {
                     \"{name}\",
                     wasmtime::component::ResourceType::host::<{camel}>(),
                     move |mut store, rep| -> wasmtime::Result<()> {{
-                        Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                        Host{camel}::drop(&mut host_getter(store.data_mut()), wasmtime::component::Resource::new_own(rep))
                     }},
                 )?;"
             )
@@ -1857,6 +1996,68 @@ impl<'a> InterfaceGenerator<'a> {
         }
         uwriteln!(self.src, "Ok(())");
         uwriteln!(self.src, "}}");
+
+        if !self.gen.opts.skip_mut_forwarding_impls {
+            // Generate add_to_linker (with closure)
+            uwriteln!(
+                self.src,
+                "
+                pub fn add_to_linker<T, U>(
+                    linker: &mut wasmtime::component::Linker<T>,
+                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                ) -> wasmtime::Result<()>
+                    where
+                        U: {host_bounds}, {data_bounds}
+                {{
+                    add_to_linker_get_host(linker, get)
+                }}
+                "
+            );
+
+            // Generate impl Host for &mut Host
+            let (async_trait, maybe_send) = if is_maybe_async {
+                (
+                    "#[wasmtime::component::__internal::async_trait]\n",
+                    "+ Send",
+                )
+            } else {
+                ("", "")
+            };
+
+            uwriteln!(
+                self.src,
+                "{async_trait}impl<_T: Host + ?Sized {maybe_send}> Host for &mut _T {{"
+            );
+            // Forward each method call to &mut T
+            for (_, func) in iface.functions.iter() {
+                match func.kind {
+                    FunctionKind::Freestanding => {}
+                    _ => continue,
+                }
+                self.generate_function_trait_sig(func);
+                uwrite!(self.src, "{{ Host::{}(*self,", rust_function_name(func));
+                for (name, _) in func.params.iter() {
+                    uwrite!(self.src, "{},", to_rust_ident(name));
+                }
+                uwrite!(self.src, ")");
+                if self.gen.opts.async_.is_import_async(&func.name) {
+                    uwrite!(self.src, ".await");
+                }
+                uwriteln!(self.src, "}}");
+            }
+            for (err_name, err_id) in errors_converted {
+                uwriteln!(
+                    self.src,
+                    "fn convert_{err_snake}(&mut self, err: {root}{custom_name}) -> wasmtime::Result<{err_camel}> {{
+                        Host::convert_{err_snake}(*self, err)
+                    }}",
+                    custom_name = self.gen.trappable_errors[&err_id],
+                    err_snake = err_name.to_snake_case(),
+                    err_camel = err_name.to_upper_camel_case(),
+                );
+            }
+            uwriteln!(self.src, "}}");
+        }
     }
 
     fn generate_add_function_to_linker(&mut self, owner: TypeOwner, func: &Function, linker: &str) {
@@ -1938,7 +2139,8 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        self.src.push_str("let host = get(caller.data_mut());\n");
+        self.src
+            .push_str("let host = &mut host_getter(caller.data_mut());\n");
         let func_name = rust_function_name(func);
         let host_trait = match func.kind {
             FunctionKind::Freestanding => match owner {
@@ -2057,8 +2259,6 @@ impl<'a> InterfaceGenerator<'a> {
             self.print_result_ty(&func.results, TypeMode::Owned);
             self.push_str(">");
         }
-
-        self.push_str(";\n");
     }
 
     fn extract_typed_function(&mut self, func: &Function) -> (String, String) {

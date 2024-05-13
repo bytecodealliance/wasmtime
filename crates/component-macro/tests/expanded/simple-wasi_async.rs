@@ -8,8 +8,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host + Send,
             T: Send,
+            U: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host + Send,
         {
             foo::foo::wasi_filesystem::add_to_linker(linker, get)?;
             foo::foo::wall_clock::add_to_linker(linker, get)?;
@@ -122,23 +122,34 @@ pub mod foo {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
             };
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host {
+            pub trait Host: Send {
                 async fn create_directory_at(&mut self) -> Result<(), Errno>;
                 async fn stat(&mut self) -> Result<DescriptorStat, Errno>;
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host + Send,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
-                U: Host + Send,
             {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
                 inst.func_wrap_async(
                     "create-directory-at",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::create_directory_at(host).await;
                         Ok((r,))
                     }),
@@ -146,12 +157,31 @@ pub mod foo {
                 inst.func_wrap_async(
                     "stat",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::stat(host).await;
                         Ok((r,))
                     }),
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host + Send,
+                T: Send,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn create_directory_at(&mut self) -> Result<(), Errno> {
+                    Host::create_directory_at(*self).await
+                }
+                async fn stat(&mut self) -> Result<DescriptorStat, Errno> {
+                    Host::stat(*self).await
+                }
             }
         }
         #[allow(clippy::all)]
@@ -159,18 +189,41 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host {}
+            pub trait Host: Send {}
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host + Send,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()>
+            where
+                T: Send,
+            {
+                let mut inst = linker.instance("foo:foo/wall-clock")?;
+                Ok(())
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
-                T: Send,
                 U: Host + Send,
+                T: Send,
             {
-                let mut inst = linker.instance("foo:foo/wall-clock")?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
             }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }
 }

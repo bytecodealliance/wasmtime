@@ -124,18 +124,27 @@ pub mod foo {
                 fn create_directory_at(&mut self) -> Result<(), Errno>;
                 fn stat(&mut self) -> Result<DescriptorStat, Errno>;
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
             where
-                U: Host,
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
             {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
                 inst.func_wrap(
                     "create-directory-at",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::create_directory_at(host);
                         Ok((r,))
                     },
@@ -143,19 +152,13 @@ pub mod foo {
                 inst.func_wrap(
                     "stat",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter(caller.data_mut());
                         let r = Host::stat(host);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
             }
-        }
-        #[allow(clippy::all)]
-        pub mod wall_clock {
-            #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
-            pub trait Host {}
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -163,9 +166,51 @@ pub mod foo {
             where
                 U: Host,
             {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn create_directory_at(&mut self) -> Result<(), Errno> {
+                    Host::create_directory_at(*self)
+                }
+                fn stat(&mut self) -> Result<DescriptorStat, Errno> {
+                    Host::stat(*self)
+                }
+            }
+        }
+        #[allow(clippy::all)]
+        pub mod wall_clock {
+            #[allow(unused_imports)]
+            use wasmtime::component::__internal::anyhow;
+            pub trait Host {}
+            pub trait GetHost<
+                T,
+            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host;
+            }
+            impl<F, T, O> GetHost<T> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl for<'a> GetHost<&'a mut T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
                 Ok(())
             }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }
