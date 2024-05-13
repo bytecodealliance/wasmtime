@@ -270,11 +270,13 @@ impl MemoryPool {
             .skip(module.num_imported_memories)
         {
             match plan.style {
-                MemoryStyle::Static { bound } => {
-                    if self.layout.pages_to_next_stripe_slot() < bound {
+                MemoryStyle::Static { byte_reservation } => {
+                    if u64::try_from(self.layout.bytes_to_next_stripe_slot()).unwrap()
+                        < byte_reservation
+                    {
                         bail!(
                             "memory size allocated per-memory is too small to \
-                             satisfy static bound of {bound:#x} pages"
+                             satisfy static bound of {byte_reservation:#x} bytes"
                         );
                     }
                 }
@@ -336,8 +338,11 @@ impl MemoryPool {
             // should be returned as an error through `validate_memory_plans`
             // but double-check here to be sure.
             match memory_plan.style {
-                MemoryStyle::Static { bound } => {
-                    assert!(bound <= self.layout.pages_to_next_stripe_slot());
+                MemoryStyle::Static { byte_reservation } => {
+                    assert!(
+                        byte_reservation
+                            <= u64::try_from(self.layout.bytes_to_next_stripe_slot()).unwrap()
+                    );
                 }
                 MemoryStyle::Dynamic { .. } => {}
             }
@@ -641,13 +646,6 @@ impl SlabLayout {
     /// ```
     fn bytes_to_next_stripe_slot(&self) -> usize {
         self.slot_bytes * self.num_stripes
-    }
-
-    /// Same as `bytes_to_next_stripe_slot` but in Wasm pages.
-    fn pages_to_next_stripe_slot(&self) -> u64 {
-        let bytes = self.bytes_to_next_stripe_slot();
-        let pages = bytes / WASM_PAGE_SIZE as usize;
-        u64::try_from(pages).unwrap()
     }
 }
 
