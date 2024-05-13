@@ -285,15 +285,6 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 /// ```
 pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
     let l = linker;
-
-    // NB: workaround some rustc inference - a future refactoring may make this
-    // obsolete.
-    fn type_annotate<T, F>(val: F) -> F
-    where
-        F: Fn(&mut T) -> &mut T,
-    {
-        val
-    }
     let closure = type_annotate::<T, _>(|t| t);
 
     crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
@@ -384,15 +375,6 @@ pub fn add_to_linker_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
 ) -> anyhow::Result<()> {
     let l = linker;
-
-    // NB: workaround some rustc inference - a future refactoring may make this
-    // obsolete.
-    fn type_annotate<T, F>(val: F) -> F
-    where
-        F: Fn(&mut T) -> &mut T,
-    {
-        val
-    }
     let closure = type_annotate::<T, _>(|t| t);
 
     crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
@@ -423,4 +405,13 @@ pub fn add_to_linker_sync<T: WasiView>(
     crate::bindings::sockets::network::add_to_linker_get_host(l, closure)?;
     crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
     Ok(())
+}
+
+// NB: workaround some rustc inference - a future refactoring may make this
+// obsolete.
+fn type_annotate<T: WasiView, F>(val: F) -> F
+where
+    F: Fn(&mut T) -> &mut dyn WasiView,
+{
+    val
 }

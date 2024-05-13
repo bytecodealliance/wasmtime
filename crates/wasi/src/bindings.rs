@@ -34,7 +34,6 @@ pub mod sync {
                 "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
                 "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
             },
-            skip_mut_forwarding_impls: true,
         });
     }
     pub use self::generated::exports;
@@ -199,7 +198,6 @@ mod async_io {
             "wasi:cli/terminal-input/terminal-input": crate::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": crate::stdio::TerminalOutput,
         },
-        skip_mut_forwarding_impls: true,
     });
 }
 

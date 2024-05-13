@@ -3,7 +3,7 @@ use crate::network::Network;
 use crate::WasiView;
 use wasmtime::component::Resource;
 
-impl<T: WasiView> instance_network::Host for T {
+impl instance_network::Host for dyn WasiView + '_ {
     fn instance_network(&mut self) -> Result<Resource<Network>, anyhow::Error> {
         let network = Network {
             socket_addr_check: self.ctx().socket_addr_check.clone(),

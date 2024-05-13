@@ -13,7 +13,7 @@ use wasmtime::component::Resource;
 
 mod sync;
 
-impl<T: WasiView> preopens::Host for T {
+impl preopens::Host for dyn WasiView + '_ {
     fn get_directories(
         &mut self,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
@@ -30,7 +30,7 @@ impl<T: WasiView> preopens::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> types::Host for T {
+impl types::Host for dyn WasiView + '_ {
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
@@ -52,7 +52,7 @@ impl<T: WasiView> types::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> HostDescriptor for T {
+impl HostDescriptor for dyn WasiView + '_ {
     async fn advise(
         &mut self,
         fd: Resource<types::Descriptor>,
@@ -846,7 +846,7 @@ impl<T: WasiView> HostDescriptor for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> HostDirectoryEntryStream for T {
+impl HostDirectoryEntryStream for dyn WasiView + '_ {
     async fn read_directory_entry(
         &mut self,
         stream: Resource<types::DirectoryEntryStream>,
