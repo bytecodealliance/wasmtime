@@ -7867,7 +7867,7 @@ fn test_aarch64_binemit() {
         assert_eq!(expected_printing, actual_printing);
 
         let mut buffer = MachBuffer::new();
-        insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
+        insn.emit(&mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);

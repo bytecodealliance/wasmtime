@@ -72,7 +72,7 @@ impl Assembler {
     }
 
     fn emit(&mut self, inst: Inst) {
-        inst.emit(&[], &mut self.buffer, &self.emit_info, &mut self.emit_state);
+        inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
     /// Load a constant into a register.

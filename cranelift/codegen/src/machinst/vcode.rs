@@ -775,20 +775,19 @@ impl<I: VCodeInst> VCode<I> {
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
                 let nop = I::gen_nop((new_offset - buffer.cur_offset()) as usize);
-                nop.emit(&[], &mut buffer, &self.emit_info, &mut Default::default());
+                nop.emit(&mut buffer, &self.emit_info, &mut Default::default());
             }
             assert_eq!(buffer.cur_offset(), new_offset);
 
             let do_emit = |inst: &I,
-                           allocs: &[Allocation],
                            disasm: &mut String,
                            buffer: &mut MachBuffer<I>,
                            state: &mut I::State| {
                 if want_disasm && !inst.is_args() {
                     let mut s = state.clone();
-                    writeln!(disasm, "  {}", inst.pretty_print_inst(allocs, &mut s)).unwrap();
+                    writeln!(disasm, "  {}", inst.pretty_print_inst(&mut s)).unwrap();
                 }
-                inst.emit(allocs, buffer, &self.emit_info, state);
+                inst.emit(buffer, &self.emit_info, state);
             };
 
             // Is this the first block? Emit the prologue directly if so.
@@ -796,7 +795,7 @@ impl<I: VCodeInst> VCode<I> {
                 trace!(" -> entry block");
                 buffer.start_srcloc(Default::default());
                 for inst in &self.abi.gen_prologue() {
-                    do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
+                    do_emit(&inst, &mut disasm, &mut buffer, &mut state);
                 }
                 buffer.end_srcloc();
             }
@@ -829,7 +828,7 @@ impl<I: VCodeInst> VCode<I> {
                 self.block_order.is_indirect_branch_target(block),
                 is_forward_edge_cfi_enabled,
             ) {
-                do_emit(&block_start, &[], &mut disasm, &mut buffer, &mut state);
+                do_emit(&block_start, &mut disasm, &mut buffer, &mut state);
             }
 
             for inst_or_edit in regalloc.block_insts_and_edits(&self, block) {
@@ -903,7 +902,7 @@ impl<I: VCodeInst> VCode<I> {
                         // epilogue will contain it).
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
                             for inst in self.abi.gen_epilogue() {
-                                do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(&inst, &mut disasm, &mut buffer, &mut state);
                             }
                         } else {
                             // Update the operands for this inst using the
@@ -929,7 +928,6 @@ impl<I: VCodeInst> VCode<I> {
                             // Emit the instruction!
                             do_emit(
                                 &self.insts[iix.index()],
-                                &[],
                                 &mut disasm,
                                 &mut buffer,
                                 &mut state,
@@ -948,21 +946,21 @@ impl<I: VCodeInst> VCode<I> {
                                 debug_assert_eq!(from.class(), to.class());
                                 let ty = I::canonical_type_for_rc(from.class());
                                 let mv = I::gen_move(to_rreg, from_rreg, ty);
-                                do_emit(&mv, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(&mv, &mut disasm, &mut buffer, &mut state);
                             }
                             (Some(from), None) => {
                                 // Spill from register to spillslot.
                                 let to = to.as_stack().unwrap();
                                 let from_rreg = RealReg::from(from);
                                 let spill = self.abi.gen_spill(to, from_rreg);
-                                do_emit(&spill, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(&spill, &mut disasm, &mut buffer, &mut state);
                             }
                             (None, Some(to)) => {
                                 // Load from spillslot to register.
                                 let from = from.as_stack().unwrap();
                                 let to_rreg = Writable::from_reg(RealReg::from(to));
                                 let reload = self.abi.gen_reload(to_rreg, from);
-                                do_emit(&reload, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(&reload, &mut disasm, &mut buffer, &mut state);
                             }
                             (None, None) => {
                                 panic!("regalloc2 should have eliminated stack-to-stack moves!");
@@ -1374,7 +1372,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
                     f,
                     "  Inst {}: {}",
                     inst,
-                    self.insts[inst].pretty_print_inst(&[], &mut state)
+                    self.insts[inst].pretty_print_inst(&mut state)
                 )?;
                 if !self.operands.is_empty() {
                     for operand in self.inst_operands(InsnIndex::new(inst)) {
