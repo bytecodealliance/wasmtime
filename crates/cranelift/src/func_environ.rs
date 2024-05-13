@@ -2132,12 +2132,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     )
                 }
                 MemoryPlan {
-                    style: MemoryStyle::Static { bound: bound_pages },
+                    style:
+                        MemoryStyle::Static {
+                            byte_reservation: bound_bytes,
+                        },
                     offset_guard_size,
                     pre_guard_size: _,
                     memory: _,
                 } => {
-                    let bound_bytes = u64::from(bound_pages) * u64::from(WASM_PAGE_SIZE);
                     let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
                         // Create a memtype representing the untyped memory region.
                         let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {

@@ -1463,6 +1463,87 @@ pub struct Memory {
     pub memory64: bool,
 }
 
+/// WebAssembly page sizes are defined to be 64KiB.
+pub const WASM_PAGE_SIZE: u32 = 0x10000;
+
+/// Maximum size, in bytes, of 32-bit memories (4G)
+pub const WASM32_MAX_SIZE: u64 = 1 << 32;
+
+/// Maximum size, in bytes, of 64-bit memories.
+///
+/// Note that the true maximum size of a 64-bit linear memory, in bytes, cannot
+/// be represented in a `u64`. That would require a u65 to store `1<<64`.
+/// Despite that no system can actually allocate a full 64-bit linear memory so
+/// this is instead emulated as "what if the kernel fit in a single wasm page
+/// of linear memory". Shouldn't ever actually be possible but it provides a
+/// number to serve as an effective maximum.
+pub const WASM64_MAX_SIZE: u64 = 0u64.wrapping_sub(0x10000);
+
+impl Memory {
+    /// Returns the minimum size, in bytes, that this memory must be.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the calculation of the minimum size overflows the
+    /// `u64` return type. This means that the memory can't be allocated but
+    /// it's deferred to the caller to how to deal with that.
+    pub fn minimum_byte_size(&self) -> Result<u64, SizeOverflow> {
+        self.minimum
+            .checked_mul(u64::from(WASM_PAGE_SIZE))
+            .ok_or(SizeOverflow)
+    }
+
+    /// Returns the maximum size, in bytes, that this memory is allowed to be.
+    ///
+    /// Note that the return value here is not an `Option` despite the maximum
+    /// size of a linear memory being optional in wasm. If a maximum size
+    /// is not present in the memory's type then a maximum size is selected for
+    /// it. For example the maximum size of a 32-bit memory is `1<<32`. The
+    /// maximum size of a 64-bit linear memory is chosen to be a value that
+    /// won't ever be allowed at runtime.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the calculation of the maximum size overflows the
+    /// `u64` return type. This means that the memory can't be allocated but
+    /// it's deferred to the caller to how to deal with that.
+    pub fn maximum_byte_size(&self) -> Result<u64, SizeOverflow> {
+        match self.maximum {
+            Some(max) => max
+                .checked_mul(u64::from(WASM_PAGE_SIZE))
+                .ok_or(SizeOverflow),
+            None => {
+                let min = self.minimum_byte_size()?;
+                Ok(min.max(self.max_size_based_on_index_type()))
+            }
+        }
+    }
+
+    /// Returns the maximum size memory is allowed to be only based on the
+    /// index type used by this memory.
+    ///
+    /// For example 32-bit linear memories return `1<<32` from this method.
+    pub fn max_size_based_on_index_type(&self) -> u64 {
+        if self.memory64 {
+            WASM64_MAX_SIZE
+        } else {
+            WASM32_MAX_SIZE
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct SizeOverflow;
+
+impl fmt::Display for SizeOverflow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("size overflow calculating memory size")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for SizeOverflow {}
+
 impl From<wasmparser::MemoryType> for Memory {
     fn from(ty: wasmparser::MemoryType) -> Memory {
         Memory {

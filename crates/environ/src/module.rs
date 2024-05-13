@@ -18,39 +18,44 @@ pub enum MemoryStyle {
     },
     /// Address space is allocated up front.
     Static {
-        /// The number of mapped and unmapped pages.
-        bound: u64,
+        /// The number of bytes which are reserved for this linear memory. Only
+        /// the lower bytes which represent the actual linear memory need be
+        /// mapped, but other bytes must be guaranteed to be unmapped.
+        byte_reservation: u64,
     },
 }
 
 impl MemoryStyle {
     /// Decide on an implementation style for the given `Memory`.
     pub fn for_memory(memory: Memory, tunables: &Tunables) -> (Self, u64) {
-        // A heap with a maximum that doesn't exceed the static memory bound specified by the
-        // tunables make it static.
-        //
-        // If the module doesn't declare an explicit maximum treat it as 4GiB when not
-        // requested to use the static memory bound itself as the maximum.
-        let absolute_max_pages = if memory.memory64 {
-            crate::WASM64_MAX_PAGES
-        } else {
-            crate::WASM32_MAX_PAGES
-        };
-        let maximum = core::cmp::min(
-            memory.maximum.unwrap_or(absolute_max_pages),
-            if tunables.static_memory_bound_is_maximum {
-                core::cmp::min(tunables.static_memory_bound, absolute_max_pages)
-            } else {
-                absolute_max_pages
-            },
-        );
+        let static_memory_bound = tunables
+            .static_memory_bound
+            .checked_mul(u64::from(WASM_PAGE_SIZE))
+            .unwrap();
 
-        // Ensure the minimum is less than the maximum; the minimum might exceed the maximum
-        // when the memory is artificially bounded via `static_memory_bound_is_maximum` above
-        if memory.minimum <= maximum && maximum <= tunables.static_memory_bound {
+        let is_static = match memory.maximum_byte_size() {
+            Ok(mut maximum) => {
+                if tunables.static_memory_bound_is_maximum {
+                    maximum = maximum.min(static_memory_bound);
+                }
+
+                // Ensure the minimum is less than the maximum; the minimum might exceed the maximum
+                // when the memory is artificially bounded via `static_memory_bound_is_maximum` above
+                memory.minimum_byte_size().unwrap() <= maximum && maximum <= static_memory_bound
+            }
+
+            // If the maximum size of this memory is not representable with
+            // `u64` then use the `static_memory_bound_is_maximum` to indicate
+            // whether it's a static memory or not. It should be ok to discard
+            // the linear memory's maximum size here as growth to the maximum is
+            // always fallible and never guaranteed.
+            Err(_) => tunables.static_memory_bound_is_maximum,
+        };
+
+        if is_static {
             return (
                 Self::Static {
-                    bound: tunables.static_memory_bound,
+                    byte_reservation: static_memory_bound,
                 },
                 tunables.static_memory_offset_guard_size,
             );
