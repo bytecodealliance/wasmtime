@@ -20,12 +20,12 @@ runs:
   using: composite
   steps:
     - run: |
-        rust=${{ inputs.target }}
-        upcase=$(echo $rust | awk '{ print toupper($0) }' | sed 's/-/_/g')
+        target=${{ inputs.target }}
+        upcase=$(echo $target | tr a-z- A-Z_)
         ndk_bin=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
-        linker=$ndk_bin/${rust}${{ inputs.android-platform }}-clang
+        linker=$ndk_bin/${target}${{ inputs.android-platform }}-clang
         echo CARGO_TARGET_${upcase}_LINKER=$linker >> $GITHUB_ENV
-        echo CC_${rust}=$linker >> $GITHUB_ENV
-        echo RANLIB_${rust}=$ndk_bin/llvm-ranlib >> $GITHUB_ENV
-        echo AR_${rust}=$ndk_bin/llvm-ar >> $GITHUB_ENV
+        echo CC_${target}=$linker >> $GITHUB_ENV
+        echo RANLIB_${target}=$ndk_bin/llvm-ranlib >> $GITHUB_ENV
+        echo AR_${target}=$ndk_bin/llvm-ar >> $GITHUB_ENV
       shell: bash
