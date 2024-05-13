@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 # These dependencies are necessary for the WITX-generation macros to work:
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 wiggle = { workspace = true, features = ["wasmtime"] }
 
 # This dependency is necessary for the WIT-generation macros to work:
