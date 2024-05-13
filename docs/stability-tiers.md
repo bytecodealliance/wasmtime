@@ -89,6 +89,8 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-pc-windows-msvc`         | CI testing, unwinding, full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
 | Target               | `wasm32-wasi` [^3]                | Supported but not tested    |
+| Target               | `aarch64-linux-android`           | CI testing, full-time maintainer |
+| Target               | `x86_64-linux-android`            | CI testing, full-time maintainer |
 | Compiler Backend     | Winch on aarch64                  | finished implementation     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
