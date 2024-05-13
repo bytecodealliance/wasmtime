@@ -41,7 +41,6 @@ mod traps;
 mod types;
 mod wait_notify;
 mod wasi_testsuite;
-mod wast;
 // Currently Winch is only supported in x86_64.
 #[cfg(all(target_arch = "x86_64"))]
 mod winch;

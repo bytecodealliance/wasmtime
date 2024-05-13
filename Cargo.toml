@@ -411,6 +411,10 @@ harness = false
 name = "disas"
 harness = false
 
+[[test]]
+name = "wast"
+harness = false
+
 [[example]]
 name = "tokio"
 required-features = ["wasi-common/tokio"]
