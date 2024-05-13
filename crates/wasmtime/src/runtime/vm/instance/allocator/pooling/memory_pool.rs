@@ -276,7 +276,7 @@ impl MemoryPool {
                     {
                         bail!(
                             "memory size allocated per-memory is too small to \
-                             satisfy static bound of {byte_reservation:#x} pages"
+                             satisfy static bound of {byte_reservation:#x} bytes"
                         );
                     }
                 }
