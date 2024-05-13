@@ -68,7 +68,6 @@ mod bitset;
 mod constant_hash;
 mod context;
 mod ctxhash;
-mod dce;
 mod egraph;
 mod inst_predicates;
 mod isle_prelude;

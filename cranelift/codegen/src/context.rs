@@ -10,7 +10,6 @@
 //! single ISA instance.
 
 use crate::alias_analysis::AliasAnalysis;
-use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
@@ -182,11 +181,6 @@ impl Context {
 
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
-
-        if opt_level != OptLevel::None {
-            self.dce(isa)?;
-        }
-
         self.remove_constant_phis(isa)?;
 
         if opt_level != OptLevel::None {
@@ -261,13 +255,6 @@ impl Context {
         if fisa.flags.enable_verifier() {
             self.verify(fisa)?;
         }
-        Ok(())
-    }
-
-    /// Perform dead-code elimination on the function.
-    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
-        do_dce(&mut self.func, &mut self.domtree);
-        self.verify_if(fisa)?;
         Ok(())
     }
 
