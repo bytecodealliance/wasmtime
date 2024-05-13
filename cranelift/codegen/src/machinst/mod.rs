@@ -56,7 +56,7 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
-use regalloc2::{Allocation, VReg};
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::string::String;
 
@@ -287,15 +287,9 @@ pub trait MachInstEmit: MachInst {
     /// Constant information used in `emit` invocations.
     type Info;
     /// Emit the instruction.
-    fn emit(
-        &self,
-        allocs: &[Allocation],
-        code: &mut MachBuffer<Self>,
-        info: &Self::Info,
-        state: &mut Self::State,
-    );
+    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String;
+    fn pretty_print_inst(&self, state: &mut Self::State) -> String;
 }
 
 /// A trait describing the emission state carried between MachInsts when

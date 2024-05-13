@@ -1,7 +1,6 @@
 //! AArch64 ISA: binary code emission.
 
 use cranelift_control::ControlPlane;
-use regalloc2::Allocation;
 
 use crate::binemit::StackMap;
 use crate::ir::{self, types::*};
@@ -716,13 +715,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(
-        &self,
-        _allocs: &[Allocation],
-        sink: &mut MachBuffer<Inst>,
-        emit_info: &Self::Info,
-        state: &mut EmitState,
-    ) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -966,7 +959,7 @@ impl MachInstEmit for Inst {
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, access_ty, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state);
+                    inst.emit(sink, emit_info, state);
                 }
 
                 // ldst encoding helpers take Reg, not Writable<Reg>.
@@ -1106,7 +1099,7 @@ impl MachInstEmit for Inst {
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, access_ty, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state);
+                    inst.emit(sink, emit_info, state);
                 }
 
                 let op = match self {
@@ -1379,7 +1372,7 @@ impl MachInstEmit for Inst {
                 assert!(rm.class() == RegClass::Int);
                 assert!(rd.to_reg().class() == rm.class());
                 let size = OperandSize::Size64;
-                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
+                Inst::Mov { size, rd, rm }.emit(sink, emit_info, state);
             }
             &Inst::MovToPReg { rd, rm } => {
                 let rd: Writable<Reg> = Writable::from_reg(rd.into());
@@ -1393,7 +1386,7 @@ impl MachInstEmit for Inst {
                 assert!(rd.to_reg().class() == RegClass::Int);
                 assert!(rm.class() == rd.to_reg().class());
                 let size = OperandSize::Size64;
-                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
+                Inst::Mov { size, rd, rm }.emit(sink, emit_info, state);
             }
             &Inst::MovWide { op, rd, imm, size } => {
                 sink.put4(enc_move_wide(op, rd, imm, size));
@@ -1505,7 +1498,7 @@ impl MachInstEmit for Inst {
                         from_bits,
                         to_bits: size.bits(),
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                 }
 
                 match op {
@@ -1521,7 +1514,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
 
                         Inst::AluRRR {
                             alu_op: ALUOp::OrrNot,
@@ -1530,7 +1523,7 @@ impl MachInstEmit for Inst {
                             rn: xzr,
                             rm: x28,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                     }
                     AtomicRMWLoopOp::Umin
                     | AtomicRMWLoopOp::Umax
@@ -1557,7 +1550,7 @@ impl MachInstEmit for Inst {
                                 rm: x26,
                                 extendop,
                             }
-                            .emit(&[], sink, emit_info, state);
+                            .emit(sink, emit_info, state);
                         } else {
                             Inst::AluRRR {
                                 alu_op: ALUOp::SubS,
@@ -1566,7 +1559,7 @@ impl MachInstEmit for Inst {
                                 rn: x27,
                                 rm: x26,
                             }
-                            .emit(&[], sink, emit_info, state);
+                            .emit(sink, emit_info, state);
                         }
 
                         Inst::CSel {
@@ -1575,7 +1568,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                     }
                     _ => {
                         // add/sub/and/orr/eor x28, x27, x26
@@ -1600,7 +1593,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                     }
                 }
 
@@ -2871,7 +2864,7 @@ impl MachInstEmit for Inst {
                     rn,
                     imml,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -2885,7 +2878,7 @@ impl MachInstEmit for Inst {
                     rd,
                     rm: rn,
                 };
-                mov.emit(&[], sink, emit_info, state);
+                mov.emit(sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -2928,7 +2921,7 @@ impl MachInstEmit for Inst {
 
                 if is_hint {
                     sink.put4(key.enc_auti_hint());
-                    Inst::Ret {}.emit(&[], sink, emit_info, state);
+                    Inst::Ret {}.emit(sink, emit_info, state);
                 } else {
                     sink.put4(0xd65f0bff | (op2 << 9)); // reta{key}
                 }
@@ -2992,7 +2985,7 @@ impl MachInstEmit for Inst {
                     rn: callee,
                     targets: vec![],
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 sink.add_call_site(ir::Opcode::ReturnCallIndirect);
 
                 // `emit_return_call_common_sequence` emits an island if
@@ -3119,13 +3112,13 @@ impl MachInstEmit for Inst {
                     rn: zero_reg(),
                     rm: ridx,
                 };
-                inst.emit(&[], sink, emit_info, state);
+                inst.emit(sink, emit_info, state);
                 // Prevent any data value speculation.
-                Inst::Csdb.emit(&[], sink, emit_info, state);
+                Inst::Csdb.emit(sink, emit_info, state);
 
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
-                inst.emit(&[], sink, emit_info, state);
+                inst.emit(sink, emit_info, state);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
@@ -3136,7 +3129,7 @@ impl MachInstEmit for Inst {
                     ),
                     flags: MemFlags::trusted(),
                 };
-                inst.emit(&[], sink, emit_info, state);
+                inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
                 let inst = Inst::AluRRR {
                     alu_op: ALUOp::Add,
@@ -3145,14 +3138,14 @@ impl MachInstEmit for Inst {
                     rn: rtmp1.to_reg(),
                     rm: rtmp2.to_reg(),
                 };
-                inst.emit(&[], sink, emit_info, state);
+                inst.emit(sink, emit_info, state);
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
                     rn: rtmp1.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(&[], sink, emit_info, state);
+                inst.emit(sink, emit_info, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
                 for &target in targets.iter() {
@@ -3186,7 +3179,7 @@ impl MachInstEmit for Inst {
                     // adrp rd, symbol
                     sink.add_reloc(Reloc::Aarch64AdrGotPage21, &**name, 0);
                     let inst = Inst::Adrp { rd, off: 0 };
-                    inst.emit(&[], sink, emit_info, state);
+                    inst.emit(sink, emit_info, state);
 
                     // ldr rd, [rd, :got_lo12:X]
                     sink.add_reloc(Reloc::Aarch64Ld64GotLo12Nc, &**name, 0);
@@ -3195,7 +3188,7 @@ impl MachInstEmit for Inst {
                         mem: AMode::reg(rd.to_reg()),
                         flags: MemFlags::trusted(),
                     };
-                    inst.emit(&[], sink, emit_info, state);
+                    inst.emit(sink, emit_info, state);
                 } else {
                     // With absolute offsets we set up a load from a preallocated space, and then jump
                     // over it.
@@ -3212,11 +3205,11 @@ impl MachInstEmit for Inst {
                         },
                         flags: MemFlags::trusted(),
                     };
-                    inst.emit(&[], sink, emit_info, state);
+                    inst.emit(sink, emit_info, state);
                     let inst = Inst::Jump {
                         dest: BranchTarget::ResolvedOffset(12),
                     };
-                    inst.emit(&[], sink, emit_info, state);
+                    inst.emit(sink, emit_info, state);
                     sink.add_reloc(Reloc::Abs8, &**name, offset);
                     sink.put8(0);
                 }
@@ -3225,7 +3218,7 @@ impl MachInstEmit for Inst {
                 let mem = mem.clone();
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, I8, state);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state);
+                    inst.emit(sink, emit_info, state);
                 }
 
                 let (reg, index_reg, offset) = match mem {
@@ -3260,7 +3253,7 @@ impl MachInstEmit for Inst {
                         extendop,
                     };
 
-                    add.emit(&[], sink, emit_info, state);
+                    add.emit(sink, emit_info, state);
                 } else if offset == 0 {
                     if reg != rd.to_reg() {
                         let mov = Inst::Mov {
@@ -3269,7 +3262,7 @@ impl MachInstEmit for Inst {
                             rm: reg,
                         };
 
-                        mov.emit(&[], sink, emit_info, state);
+                        mov.emit(sink, emit_info, state);
                     }
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
@@ -3279,7 +3272,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         imm12,
                     };
-                    add.emit(&[], sink, emit_info, state);
+                    add.emit(sink, emit_info, state);
                 } else {
                     // Use `tmp2` here: `reg` may be `spilltmp` if the `AMode` on this instruction
                     // was initially an `SPOffset`. Assert that `tmp2` is truly free to use. Note
@@ -3290,7 +3283,7 @@ impl MachInstEmit for Inst {
                     debug_assert!(reg != tmp2_reg());
                     let tmp = writable_tmp2_reg();
                     for insn in Inst::load_constant(tmp, abs_offset, &mut |_| tmp).into_iter() {
-                        insn.emit(&[], sink, emit_info, state);
+                        insn.emit(sink, emit_info, state);
                     }
                     let add = Inst::AluRRR {
                         alu_op,
@@ -3299,7 +3292,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         rm: tmp.to_reg(),
                     };
-                    add.emit(&[], sink, emit_info, state);
+                    add.emit(sink, emit_info, state);
                 }
             }
             &Inst::Paci { key } => {
@@ -3337,7 +3330,7 @@ impl MachInstEmit for Inst {
                     let jmp = Inst::Jump {
                         dest: BranchTarget::Label(jump_around_label),
                     };
-                    jmp.emit(&[], sink, emit_info, state);
+                    jmp.emit(sink, emit_info, state);
                     sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
                     sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
@@ -3366,7 +3359,7 @@ impl MachInstEmit for Inst {
 
                 // adrp x0, :tlsdesc:tlsvar
                 sink.add_reloc(Reloc::Aarch64TlsDescAdrPage21, &**symbol, 0);
-                Inst::Adrp { rd, off: 0 }.emit(&[], sink, emit_info, state);
+                Inst::Adrp { rd, off: 0 }.emit(sink, emit_info, state);
 
                 // ldr  tmp, [x0, :tlsdesc_lo12:tlsvar]
                 sink.add_reloc(Reloc::Aarch64TlsDescLd64Lo12, &**symbol, 0);
@@ -3375,7 +3368,7 @@ impl MachInstEmit for Inst {
                     mem: AMode::reg(rd.to_reg()),
                     flags: MemFlags::trusted(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 // add x0, x0, :tlsdesc_lo12:tlsvar
                 sink.add_reloc(Reloc::Aarch64TlsDescAddLo12, &**symbol, 0);
@@ -3386,7 +3379,7 @@ impl MachInstEmit for Inst {
                     rn: rd.to_reg(),
                     imm12: Imm12::maybe_from_u64(0).unwrap(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 // blr tmp
                 sink.add_reloc(Reloc::Aarch64TlsDescCall, &**symbol, 0);
@@ -3402,7 +3395,7 @@ impl MachInstEmit for Inst {
                         callee_pop_size: 0,
                     }),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 // mrs tmp, tpidr_el0
                 sink.put4(0xd53bd040 | machreg_to_gpr(tmp.to_reg()));
@@ -3415,7 +3408,7 @@ impl MachInstEmit for Inst {
                     rn: rd.to_reg(),
                     rm: tmp.to_reg(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
 
             &Inst::MachOTlsGetAddr { ref symbol, rd } => {
@@ -3448,7 +3441,7 @@ impl MachInstEmit for Inst {
                     mem: AMode::reg(rd.to_reg()),
                     flags: MemFlags::trusted(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 // call function pointer in temp register
                 Inst::CallInd {
@@ -3463,7 +3456,7 @@ impl MachInstEmit for Inst {
                         callee_pop_size: 0,
                     }),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
 
             &Inst::Unwind { ref inst } => {
@@ -3507,7 +3500,7 @@ impl MachInstEmit for Inst {
                     rn: start.to_reg(),
                     imm12: step,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 Inst::Store32 {
                     rd: regs::zero_reg(),
                     mem: AMode::RegReg {
@@ -3516,7 +3509,7 @@ impl MachInstEmit for Inst {
                     },
                     flags: MemFlags::trusted(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 Inst::AluRRR {
                     alu_op: ALUOp::AddS,
                     size: OperandSize::Size64,
@@ -3524,7 +3517,7 @@ impl MachInstEmit for Inst {
                     rn: start.to_reg(),
                     rm: end,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 let loop_end = sink.get_label();
                 Inst::CondBr {
@@ -3532,7 +3525,7 @@ impl MachInstEmit for Inst {
                     not_taken: BranchTarget::Label(loop_end),
                     kind: CondBrKind::Cond(Cond::Gt),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 sink.bind_label(loop_end, &mut state.ctrl_plane);
             }
         }
@@ -3549,7 +3542,7 @@ impl MachInstEmit for Inst {
         state.clear_post_insn();
     }
 
-    fn pretty_print_inst(&self, _allocs: &[Allocation], state: &mut Self::State) -> String {
+    fn pretty_print_inst(&self, state: &mut Self::State) -> String {
         self.print_with_state(state)
     }
 }
@@ -3560,14 +3553,10 @@ fn emit_return_call_common_sequence(
     state: &mut EmitState,
     info: &ReturnCallInfo,
 ) {
-    for u in info.uses.iter() {
-        let _ = u.vreg;
-    }
-
     for inst in
         AArch64MachineDeps::gen_clobber_restore(CallConv::Tail, &emit_info.0, state.frame_layout())
     {
-        inst.emit(&[], sink, emit_info, state);
+        inst.emit(sink, emit_info, state);
     }
 
     let setup_area_size = state.frame_layout().setup_area_size;
@@ -3588,7 +3577,7 @@ fn emit_return_call_common_sequence(
             },
             flags: MemFlags::trusted(),
         }
-        .emit(&[], sink, emit_info, state);
+        .emit(sink, emit_info, state);
     }
 
     // Adjust SP to account for the possible over-allocation in the prologue.
@@ -3597,7 +3586,7 @@ fn emit_return_call_common_sequence(
         for inst in
             AArch64MachineDeps::gen_sp_reg_adjust(i32::try_from(incoming_args_diff).unwrap())
         {
-            inst.emit(&[], sink, emit_info, state);
+            inst.emit(sink, emit_info, state);
         }
     }
 

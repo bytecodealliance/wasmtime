@@ -8,7 +8,6 @@ use crate::isa::riscv64::lower::isle::generated_code::{
 };
 use crate::trace;
 use cranelift_control::ControlPlane;
-use regalloc2::Allocation;
 
 pub struct EmitInfo {
     shared_flag: settings::Flags,
@@ -222,13 +221,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(
-        &self,
-        _allocs: &[Allocation],
-        sink: &mut MachBuffer<Inst>,
-        emit_info: &Self::Info,
-        state: &mut EmitState,
-    ) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // Check if we need to update the vector state before emitting this instruction
         if let Some(expected) = self.expected_vstate() {
             if state.vstate != EmitVState::Known(expected.clone()) {
@@ -237,7 +230,7 @@ impl MachInstEmit for Inst {
                     rd: writable_zero_reg(),
                     vstate: expected.clone(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
         }
 
@@ -265,7 +258,7 @@ impl MachInstEmit for Inst {
         );
     }
 
-    fn pretty_print_inst(&self, _allocs: &[Allocation], state: &mut Self::State) -> String {
+    fn pretty_print_inst(&self, state: &mut Self::State) -> String {
         self.print_with_state(state)
     }
 }
@@ -860,7 +853,7 @@ impl Inst {
                     rs: zero_reg(),
                     imm12: Imm12::ZERO,
                 };
-                x.emit(&[], sink, emit_info, state)
+                x.emit(sink, emit_info, state)
             }
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
@@ -891,14 +884,14 @@ impl Inst {
                     flags: MemFlags::new(),
                     from: AMode::Label(label_data),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 // Jump over the inline pool
-                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+                Inst::gen_jump(label_end).emit(sink, emit_info, state);
 
                 // Emit the inline data
                 sink.bind_label(label_data, &mut state.ctrl_plane);
-                Inst::RawData { data: data.into() }.emit(&[], sink, emit_info, state);
+                Inst::RawData { data: data.into() }.emit(sink, emit_info, state);
 
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
@@ -1017,7 +1010,7 @@ impl Inst {
                     // register and load from that.
                     (Some(_), None, None) => {
                         let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
+                        Inst::LoadAddr { rd: tmp, mem: from }.emit(sink, emit_info, state);
                         (tmp.to_reg(), Imm12::ZERO)
                     }
 
@@ -1070,7 +1063,7 @@ impl Inst {
                     // Otherwise load the address it into a reg and load from it.
                     _ => {
                         let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
+                        Inst::LoadAddr { rd: tmp, mem: to }.emit(sink, emit_info, state);
                         (tmp.to_reg(), Imm12::ZERO)
                     }
                 };
@@ -1094,7 +1087,7 @@ impl Inst {
                     base: link_reg(),
                     offset: Imm12::ZERO,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
 
             &Inst::Extend {
@@ -1135,7 +1128,7 @@ impl Inst {
                 }
                 insts
                     .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit(sink, emit_info, state));
             }
 
             &Inst::Call { ref info } => {
@@ -1165,7 +1158,7 @@ impl Inst {
                     base: info.rn,
                     offset: Imm12::ZERO,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
@@ -1204,7 +1197,7 @@ impl Inst {
                     base: callee,
                     offset: Imm12::ZERO,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
             &Inst::Jal { label } => {
                 sink.use_label_at_offset(*start_off, label, LabelUse::Jal20);
@@ -1229,7 +1222,7 @@ impl Inst {
 
                 match not_taken {
                     CondBrTarget::Label(label) => {
-                        Inst::gen_jump(label).emit(&[], sink, emit_info, state)
+                        Inst::gen_jump(label).emit(sink, emit_info, state)
                     }
                     CondBrTarget::Fallthrough => {}
                 };
@@ -1270,11 +1263,11 @@ impl Inst {
                         vstate: VState::from_type(ty),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
 
             &Inst::MovFromPReg { rd, rm } => {
-                Inst::gen_move(rd, Reg::from(rm), I64).emit(&[], sink, emit_info, state);
+                Inst::gen_move(rd, Reg::from(rm), I64).emit(sink, emit_info, state);
             }
 
             &Inst::BrTable {
@@ -1301,7 +1294,7 @@ impl Inst {
                 let distance = (inst_count * Inst::UNCOMPRESSED_INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
                     let jump_around_label = sink.get_label();
-                    Inst::gen_jump(jump_around_label).emit(&[], sink, emit_info, state);
+                    Inst::gen_jump(jump_around_label).emit(sink, emit_info, state);
                     sink.emit_island(distance + 4, &mut state.ctrl_plane);
                     sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
@@ -1342,7 +1335,7 @@ impl Inst {
                     from_bits: 32,
                     to_bits: 64,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 // Bounds check.
                 //
@@ -1351,7 +1344,7 @@ impl Inst {
                 // default block.
                 Inst::load_constant_u32(tmp2, targets.len() as u64)
                     .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit(sink, emit_info, state));
                 Inst::CondBr {
                     taken: CondBrTarget::Label(label_compute_target),
                     not_taken: CondBrTarget::Fallthrough,
@@ -1361,7 +1354,7 @@ impl Inst {
                         rs2: tmp2.to_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 sink.use_label_at_offset(sink.cur_offset(), default_target, LabelUse::PCRel32);
                 Inst::construct_auipc_and_jalr(None, tmp2, 0)
@@ -1486,7 +1479,7 @@ impl Inst {
                             rs,
                             imm12,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                     }
                     (_, Some(rs), None) => {
                         let mut insts = Inst::load_constant_u64(rd, offset as u64);
@@ -1498,7 +1491,7 @@ impl Inst {
                         });
                         insts
                             .into_iter()
-                            .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                            .for_each(|inst| inst.emit(sink, emit_info, state));
                     }
                     (AMode::Const(addr), None, _) => {
                         // Get an address label for the constant and recurse.
@@ -1507,7 +1500,7 @@ impl Inst {
                             rd,
                             mem: AMode::Label(label),
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                     }
                     (AMode::Label(label), None, _) => {
                         // Get the current PC.
@@ -1549,18 +1542,18 @@ impl Inst {
                     not_taken: CondBrTarget::Label(label_false),
                     kind: condition,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 sink.bind_label(label_true, &mut state.ctrl_plane);
                 // here is the true
                 // select the first value
                 for i in gen_moves(dst.regs(), x.regs()) {
-                    i.emit(&[], sink, emit_info, state);
+                    i.emit(sink, emit_info, state);
                 }
-                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+                Inst::gen_jump(label_end).emit(sink, emit_info, state);
 
                 sink.bind_label(label_false, &mut state.ctrl_plane);
                 for i in gen_moves(dst.regs(), y.regs()) {
-                    i.emit(&[], sink, emit_info, state);
+                    i.emit(sink, emit_info, state);
                 }
 
                 sink.bind_label(label_end, &mut state.ctrl_plane);
@@ -1600,11 +1593,11 @@ impl Inst {
                     src: zero_reg(),
                     amo: AMO::SeqCst,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 if ty.bits() < 32 {
                     AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                         .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit(sink, emit_info, state));
                 } else if ty.bits() == 32 {
                     Inst::Extend {
                         rd: dst,
@@ -1613,7 +1606,7 @@ impl Inst {
                         from_bits: 32,
                         to_bits: 64,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                 }
                 Inst::CondBr {
                     taken: CondBrTarget::Label(fail_label),
@@ -1624,7 +1617,7 @@ impl Inst {
                         rs2: dst.to_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 let store_value = if ty.bits() < 32 {
                     // reload value to t0.
                     Inst::Atomic {
@@ -1634,11 +1627,11 @@ impl Inst {
                         src: zero_reg(),
                         amo: AMO::SeqCst,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     // set reset part.
                     AtomicOP::merge(t0, writable_spilltmp_reg(), offset, v, ty)
                         .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit(sink, emit_info, state));
                     t0.to_reg()
                 } else {
                     v
@@ -1650,7 +1643,7 @@ impl Inst {
                     src: store_value,
                     amo: AMO::SeqCst,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 // check is our value stored.
                 Inst::CondBr {
                     taken: CondBrTarget::Label(cas_lebel),
@@ -1661,7 +1654,7 @@ impl Inst {
                         rs2: zero_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 sink.bind_label(fail_label, &mut state.ctrl_plane);
             }
             &Inst::AtomicRmwLoop {
@@ -1683,7 +1676,7 @@ impl Inst {
                     src: zero_reg(),
                     amo: AMO::SeqCst,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 //
 
                 let store_value: Reg = match op {
@@ -1694,7 +1687,7 @@ impl Inst {
                     | crate::ir::AtomicRmwOp::Xor => {
                         AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                            .for_each(|i| i.emit(sink, emit_info, state));
                         Inst::AluRRR {
                             alu_op: match op {
                                 crate::ir::AtomicRmwOp::Add => AluOPRRR::Add,
@@ -1708,7 +1701,7 @@ impl Inst {
                             rs1: dst.to_reg(),
                             rs2: x,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
                             rd: writable_spilltmp_reg2(),
@@ -1716,7 +1709,7 @@ impl Inst {
                             src: zero_reg(),
                             amo: AMO::SeqCst,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -1725,14 +1718,14 @@ impl Inst {
                             ty,
                         )
                         .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit(sink, emit_info, state));
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Nand => {
                         if ty.bits() < 32 {
                             AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                                 .iter()
-                                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                                .for_each(|i| i.emit(sink, emit_info, state));
                         }
                         Inst::AluRRR {
                             alu_op: AluOPRRR::And,
@@ -1740,8 +1733,8 @@ impl Inst {
                             rs1: x,
                             rs2: dst.to_reg(),
                         }
-                        .emit(&[], sink, emit_info, state);
-                        Inst::construct_bit_not(t0, t0.to_reg()).emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
+                        Inst::construct_bit_not(t0, t0.to_reg()).emit(sink, emit_info, state);
                         if ty.bits() < 32 {
                             Inst::Atomic {
                                 op: AtomicOP::load_op(ty),
@@ -1750,7 +1743,7 @@ impl Inst {
                                 src: zero_reg(),
                                 amo: AMO::SeqCst,
                             }
-                            .emit(&[], sink, emit_info, state);
+                            .emit(sink, emit_info, state);
                             AtomicOP::merge(
                                 writable_spilltmp_reg2(),
                                 writable_spilltmp_reg(),
@@ -1759,7 +1752,7 @@ impl Inst {
                                 ty,
                             )
                             .iter()
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                            .for_each(|i| i.emit(sink, emit_info, state));
                             spilltmp_reg2()
                         } else {
                             t0.to_reg()
@@ -1779,7 +1772,7 @@ impl Inst {
                             AtomicOP::extract_sext(dst, offset, dst.to_reg(), ty)
                         }
                         .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit(sink, emit_info, state));
 
                         Inst::CondBr {
                             taken: CondBrTarget::Label(label_select_dst),
@@ -1796,12 +1789,12 @@ impl Inst {
                                 rs2: x,
                             },
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         // here we select x.
-                        Inst::gen_move(t0, x, I64).emit(&[], sink, emit_info, state);
-                        Inst::gen_jump(label_select_done).emit(&[], sink, emit_info, state);
+                        Inst::gen_move(t0, x, I64).emit(sink, emit_info, state);
+                        Inst::gen_jump(label_select_done).emit(sink, emit_info, state);
                         sink.bind_label(label_select_dst, &mut state.ctrl_plane);
-                        Inst::gen_move(t0, dst.to_reg(), I64).emit(&[], sink, emit_info, state);
+                        Inst::gen_move(t0, dst.to_reg(), I64).emit(sink, emit_info, state);
                         sink.bind_label(label_select_done, &mut state.ctrl_plane);
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
@@ -1810,7 +1803,7 @@ impl Inst {
                             src: zero_reg(),
                             amo: AMO::SeqCst,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -1819,13 +1812,13 @@ impl Inst {
                             ty,
                         )
                         .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit(sink, emit_info, state));
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Xchg => {
                         AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                            .for_each(|i| i.emit(sink, emit_info, state));
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
                             rd: writable_spilltmp_reg2(),
@@ -1833,7 +1826,7 @@ impl Inst {
                             src: zero_reg(),
                             amo: AMO::SeqCst,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -1842,7 +1835,7 @@ impl Inst {
                             ty,
                         )
                         .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit(sink, emit_info, state));
                         spilltmp_reg2()
                     }
                 };
@@ -1854,7 +1847,7 @@ impl Inst {
                     src: store_value,
                     amo: AMO::SeqCst,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 // if store is not ok,retry.
                 Inst::CondBr {
@@ -1866,7 +1859,7 @@ impl Inst {
                         rs2: zero_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
 
             &Inst::LoadExtName {
@@ -1928,10 +1921,10 @@ impl Inst {
                         flags: MemFlags::trusted(),
                         from: AMode::Label(label_data),
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
 
                     // Jump over the data
-                    Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+                    Inst::gen_jump(label_end).emit(sink, emit_info, state);
 
                     sink.bind_label(label_data, &mut state.ctrl_plane);
                     sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
@@ -2009,8 +2002,8 @@ impl Inst {
                     not_taken: CondBrTarget::Fallthrough,
                     kind: cond.inverse(),
                 }
-                .emit(&[], sink, emit_info, state);
-                Inst::Udf { trap_code }.emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
+                Inst::Udf { trap_code }.emit(sink, emit_info, state);
 
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
@@ -2030,7 +2023,7 @@ impl Inst {
                     pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                     succ: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 // load.
                 Inst::Load {
                     rd: rd,
@@ -2038,26 +2031,26 @@ impl Inst {
                     flags: MemFlags::new(),
                     from: AMode::RegOffset(p, 0),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 Inst::Fence {
                     pred: Inst::FENCE_REQ_R,
                     succ: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
             &Inst::AtomicStore { src, ty, p } => {
                 Inst::Fence {
                     pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                     succ: Inst::FENCE_REQ_W,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 Inst::Store {
                     to: AMode::RegOffset(p, 0),
                     op: StoreOP::from_type(ty),
                     flags: MemFlags::new(),
                     src,
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
             }
 
             &Inst::Popcnt {
@@ -2068,23 +2061,19 @@ impl Inst {
                 ty,
             } => {
                 // load 0 to sum , init.
-                Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
+                Inst::gen_move(sum, zero_reg(), I64).emit(sink, emit_info, state);
                 // load
-                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
-                    &[],
-                    sink,
-                    emit_info,
-                    state,
-                );
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16))
+                    .emit(sink, emit_info, state);
                 //
-                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp,
                     rs: tmp.to_reg(),
                     imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
                 sink.bind_label(label_loop, &mut state.ctrl_plane);
@@ -2097,7 +2086,7 @@ impl Inst {
                         rs2: zero_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 // test and add sum.
                 {
                     Inst::AluRRR {
@@ -2106,7 +2095,7 @@ impl Inst {
                         rs1: tmp.to_reg(),
                         rs2: rs,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     let label_over = sink.get_label();
                     Inst::CondBr {
                         taken: CondBrTarget::Label(label_over),
@@ -2117,14 +2106,14 @@ impl Inst {
                             rs2: spilltmp_reg2(),
                         },
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
                         rd: sum,
                         rs: sum.to_reg(),
                         imm12: Imm12::ONE,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     sink.bind_label(label_over, &mut state.ctrl_plane);
                 }
                 // set step and tmp.
@@ -2135,15 +2124,15 @@ impl Inst {
                         rs: step.to_reg(),
                         imm12: Imm12::from_i16(-1),
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
                         imm12: Imm12::ONE,
                     }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
+                    Inst::gen_jump(label_loop).emit(sink, emit_info, state);
                 }
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
@@ -2156,16 +2145,12 @@ impl Inst {
                 ty,
             } => {
                 // load 0 to sum , init.
-                Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
+                Inst::gen_move(sum, zero_reg(), I64).emit(sink, emit_info, state);
                 // load
-                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
-                    &[],
-                    sink,
-                    emit_info,
-                    state,
-                );
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16))
+                    .emit(sink, emit_info, state);
                 //
-                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(sink, emit_info, state);
                 if leading {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
@@ -2173,7 +2158,7 @@ impl Inst {
                         rs: tmp.to_reg(),
                         imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                 }
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
@@ -2187,7 +2172,7 @@ impl Inst {
                         rs2: zero_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 // test and add sum.
                 {
                     Inst::AluRRR {
@@ -2196,7 +2181,7 @@ impl Inst {
                         rs1: tmp.to_reg(),
                         rs2: rs,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     Inst::CondBr {
                         taken: CondBrTarget::Label(label_done),
                         not_taken: CondBrTarget::Fallthrough,
@@ -2206,14 +2191,14 @@ impl Inst {
                             rs2: spilltmp_reg2(),
                         },
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
                         rd: sum,
                         rs: sum.to_reg(),
                         imm12: Imm12::ONE,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                 }
                 // set step and tmp.
                 {
@@ -2223,7 +2208,7 @@ impl Inst {
                         rs: step.to_reg(),
                         imm12: Imm12::from_i16(-1),
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: if leading {
                             AluOPRRI::Srli
@@ -2234,8 +2219,8 @@ impl Inst {
                         rs: tmp.to_reg(),
                         imm12: Imm12::ONE,
                     }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
+                    Inst::gen_jump(label_loop).emit(sink, emit_info, state);
                 }
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
@@ -2247,30 +2232,26 @@ impl Inst {
                 tmp2,
                 rd,
             } => {
-                Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
-                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
-                    &[],
-                    sink,
-                    emit_info,
-                    state,
-                );
+                Inst::gen_move(rd, zero_reg(), I64).emit(sink, emit_info, state);
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16))
+                    .emit(sink, emit_info, state);
                 //
-                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp,
                     rs: tmp.to_reg(),
                     imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                 }
-                .emit(&[], sink, emit_info, state);
-                Inst::load_imm12(tmp2, Imm12::ONE).emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
+                Inst::load_imm12(tmp2, Imm12::ONE).emit(sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp2,
                     rs: tmp2.to_reg(),
                     imm12: Imm12::from_i16((ty.bits() - 8) as i16),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
 
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
@@ -2284,7 +2265,7 @@ impl Inst {
                         rs2: zero_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 // test and set bit.
                 {
                     Inst::AluRRR {
@@ -2293,7 +2274,7 @@ impl Inst {
                         rs1: tmp.to_reg(),
                         rs2: rs,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     let label_over = sink.get_label();
                     Inst::CondBr {
                         taken: CondBrTarget::Label(label_over),
@@ -2304,14 +2285,14 @@ impl Inst {
                             rs2: spilltmp_reg2(),
                         },
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     Inst::AluRRR {
                         alu_op: AluOPRRR::Or,
                         rd: rd,
                         rs1: rd.to_reg(),
                         rs2: tmp2.to_reg(),
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     sink.bind_label(label_over, &mut state.ctrl_plane);
                 }
                 // set step and tmp.
@@ -2322,33 +2303,29 @@ impl Inst {
                         rs: step.to_reg(),
                         imm12: Imm12::from_i16(-1),
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
                         imm12: Imm12::ONE,
                     }
-                    .emit(&[], sink, emit_info, state);
+                    .emit(sink, emit_info, state);
                     {
                         // reset tmp2
                         // if (step %=8 == 0) then tmp2 = tmp2 >> 15
                         // if (step %=8 != 0) then tmp2 = tmp2 << 1
                         let label_over = sink.get_label();
                         let label_sll_1 = sink.get_label();
-                        Inst::load_imm12(writable_spilltmp_reg2(), Imm12::from_i16(8)).emit(
-                            &[],
-                            sink,
-                            emit_info,
-                            state,
-                        );
+                        Inst::load_imm12(writable_spilltmp_reg2(), Imm12::from_i16(8))
+                            .emit(sink, emit_info, state);
                         Inst::AluRRR {
                             alu_op: AluOPRRR::Rem,
                             rd: writable_spilltmp_reg2(),
                             rs1: step.to_reg(),
                             rs2: spilltmp_reg2(),
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         Inst::CondBr {
                             taken: CondBrTarget::Label(label_sll_1),
                             not_taken: CondBrTarget::Fallthrough,
@@ -2358,15 +2335,15 @@ impl Inst {
                                 rs2: zero_reg(),
                             },
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Srli,
                             rd: tmp2,
                             rs: tmp2.to_reg(),
                             imm12: Imm12::from_i16(15),
                         }
-                        .emit(&[], sink, emit_info, state);
-                        Inst::gen_jump(label_over).emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
+                        Inst::gen_jump(label_over).emit(sink, emit_info, state);
                         sink.bind_label(label_sll_1, &mut state.ctrl_plane);
                         Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Slli,
@@ -2374,10 +2351,10 @@ impl Inst {
                             rs: tmp2.to_reg(),
                             imm12: Imm12::ONE,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit(sink, emit_info, state);
                         sink.bind_label(label_over, &mut state.ctrl_plane);
                     }
-                    Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
+                    Inst::gen_jump(label_loop).emit(sink, emit_info, state);
                 }
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
@@ -2389,10 +2366,10 @@ impl Inst {
                 let step = writable_spilltmp_reg();
                 Inst::load_constant_u64(step, (guard_size as u64) * (probe_count as u64))
                     .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit(sink, emit_info, state));
                 Inst::load_constant_u64(guard_size_tmp, guard_size as u64)
                     .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit(sink, emit_info, state));
 
                 let loop_start = sink.get_label();
                 let label_done = sink.get_label();
@@ -2406,7 +2383,7 @@ impl Inst {
                         rs2: guard_size_tmp.to_reg(),
                     },
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 // compute address.
                 Inst::AluRRR {
                     alu_op: AluOPRRR::Sub,
@@ -2414,14 +2391,14 @@ impl Inst {
                     rs1: stack_reg(),
                     rs2: step.to_reg(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 Inst::Store {
                     to: AMode::RegOffset(spilltmp_reg2(), 0),
                     op: StoreOP::Sb,
                     flags: MemFlags::new(),
                     src: zero_reg(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
                 // reset step.
                 Inst::AluRRR {
                     alu_op: AluOPRRR::Sub,
@@ -2429,8 +2406,8 @@ impl Inst {
                     rs1: step.to_reg(),
                     rs2: guard_size_tmp.to_reg(),
                 }
-                .emit(&[], sink, emit_info, state);
-                Inst::gen_jump(loop_start).emit(&[], sink, emit_info, state);
+                .emit(sink, emit_info, state);
+                Inst::gen_jump(loop_start).emit(sink, emit_info, state);
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::VecAluRRRImm5 {
@@ -2533,7 +2510,7 @@ impl Inst {
                                 rd: tmp,
                                 mem: base.clone(),
                             }
-                            .emit(&[], sink, emit_info, state);
+                            .emit(sink, emit_info, state);
                             tmp.to_reg()
                         }
                     }
@@ -2580,7 +2557,7 @@ impl Inst {
                                 rd: tmp,
                                 mem: base.clone(),
                             }
-                            .emit(&[], sink, emit_info, state);
+                            .emit(sink, emit_info, state);
                             tmp.to_reg()
                         }
                     }
@@ -2636,7 +2613,7 @@ fn emit_return_call_common_sequence(
             ty,
             MemFlags::trusted(),
         )
-        .emit(&[], sink, emit_info, state);
+        .emit(sink, emit_info, state);
 
         clobber_offset -= 8
     }
@@ -2650,7 +2627,7 @@ fn emit_return_call_common_sequence(
             I64,
             MemFlags::trusted(),
         )
-        .emit(&[], sink, emit_info, state);
+        .emit(sink, emit_info, state);
 
         Inst::gen_load(
             writable_fp_reg(),
@@ -2658,7 +2635,7 @@ fn emit_return_call_common_sequence(
             I64,
             MemFlags::trusted(),
         )
-        .emit(&[], sink, emit_info, state);
+        .emit(sink, emit_info, state);
     }
 
     // If we over-allocated the incoming args area in the prologue, resize down to what the callee
@@ -2670,7 +2647,7 @@ fn emit_return_call_common_sequence(
     let sp_increment = sp_to_fp_offset + setup_area_size + incoming_args_diff;
     if sp_increment > 0 {
         for inst in Riscv64MachineDeps::gen_sp_reg_adjust(i32::try_from(sp_increment).unwrap()) {
-            inst.emit(&[], sink, emit_info, state);
+            inst.emit(sink, emit_info, state);
         }
     }
 }

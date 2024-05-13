@@ -2096,9 +2096,8 @@ impl Inst {
                     format!("vlr {}, {}", rd, rn)
                 }
             }
-            &Inst::FpuCMov32 { rd, cond, ri, rm } => {
+            &Inst::FpuCMov32 { rd, cond, rm, .. } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg());
-                let _ri = ri;
                 let (rm, rm_fpr) = pretty_print_fpr(rm);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -2108,9 +2107,8 @@ impl Inst {
                     format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
                 }
             }
-            &Inst::FpuCMov64 { rd, cond, ri, rm } => {
+            &Inst::FpuCMov64 { rd, cond, rm, .. } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg());
-                let _ri = ri;
                 let (rm, rm_fpr) = pretty_print_fpr(rm);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -2822,16 +2820,16 @@ impl Inst {
             &Inst::VecLoadLane {
                 size,
                 rd,
-                ri,
                 ref mem,
                 lane_imm,
+                ..
             }
             | &Inst::VecLoadLaneRev {
                 size,
                 rd,
-                ri,
                 ref mem,
                 lane_imm,
+                ..
             } => {
                 let opcode_vrx = match (self, size) {
                     (&Inst::VecLoadLane { .. }, 8) => "vleb",
@@ -2845,7 +2843,6 @@ impl Inst {
                 };
 
                 let (rd, _) = pretty_print_fpr(rd.to_reg());
-                let _ri = ri;
                 let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,

@@ -11,7 +11,7 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
-use regalloc2::{Allocation, PRegSet};
+use regalloc2::PRegSet;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -1885,11 +1885,7 @@ impl PrettyPrint for Inst {
 
 impl fmt::Debug for Inst {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            fmt,
-            "{}",
-            self.pretty_print_inst(&[], &mut Default::default())
-        )
+        write!(fmt, "{}", self.pretty_print_inst(&mut Default::default()))
     }
 }
 
@@ -2734,17 +2730,11 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(
-        &self,
-        _allocs: &[Allocation],
-        sink: &mut MachBuffer<Inst>,
-        info: &Self::Info,
-        state: &mut Self::State,
-    ) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, info: &Self::Info, state: &mut Self::State) {
         emit::emit(self, sink, info, state);
     }
 
-    fn pretty_print_inst(&self, _allocs: &[Allocation], _: &mut Self::State) -> String {
+    fn pretty_print_inst(&self, _: &mut Self::State) -> String {
         PrettyPrint::pretty_print(self, 0)
     }
 }
