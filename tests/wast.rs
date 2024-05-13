@@ -15,8 +15,10 @@ fn main() {
     env_logger::init();
 
     let mut trials = Vec::new();
-    add_tests(&mut trials, "tests/spec_testsuite".as_ref());
-    add_tests(&mut trials, "tests/misc_testsuite".as_ref());
+    if !cfg!(miri) {
+        add_tests(&mut trials, "tests/spec_testsuite".as_ref());
+        add_tests(&mut trials, "tests/misc_testsuite".as_ref());
+    }
 
     // There's a lot of tests so print only a `.` to keep the output a
     // bit more terse by default.
@@ -62,10 +64,6 @@ fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
 }
 
 fn ignore(test: &Path, strategy: Strategy) -> bool {
-    if cfg!(miri) {
-        return true;
-    }
-
     // Winch only supports x86_64 at this time.
     if strategy == Strategy::Winch && !cfg!(target_arch = "x86_64") {
         return true;
@@ -92,42 +90,41 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
         // Disable spec tests for proposals that Winch does not implement yet.
         if strategy == Strategy::Winch {
             let part = part.to_str().unwrap();
-            if false
-                // wasm proposals that Winch doesn't support
-                || part == "references"
-                || part == "tail-call"
-                || part == "gc"
-                || part == "threads"
-                || part == "multi-memory"
-                // || part == "simd"
-                || part == "relaxed-simd"
-                || part == "function-references"
+            let unsupported = [
+                // wasm proposals that Winch doesn't support,
+                "references",
+                "tail-call",
+                "gc",
+                "threads",
+                "multi-memory",
+                "relaxed-simd",
+                "function-references",
                 // tests in misc_testsuite that Winch doesn't support
-                || part == "no-panic.wast"
-                || part == "externref-id-function.wast"
-                || part == "int-to-float-splat.wast"
-                || part == "issue6562.wast"
-                || part == "many_table_gets_lead_to_gc.wast"
-                || part == "mutable_externref_globals.wast"
-                || part == "no-mixup-stack-maps.wast"
-                || part == "simple_ref_is_null.wast"
-                || part == "table_grow_with_funcref.wast"
+                "no-panic.wast",
+                "externref-id-function.wast",
+                "int-to-float-splat.wast",
+                "issue6562.wast",
+                "many_table_gets_lead_to_gc.wast",
+                "mutable_externref_globals.wast",
+                "no-mixup-stack-maps.wast",
+                "simple_ref_is_null.wast",
+                "table_grow_with_funcref.wast",
                 // Tests in the spec test suite Winch doesn't support
-                || part.starts_with("simd")
-                || part.starts_with("ref_")
-                || part == "threads.wast"
-				|| part == "br_table.wast"
-				|| part == "global.wast"
-				|| part == "table_fill.wast"
-				|| part == "table_get.wast"
-				|| part == "table_set.wast"
-				|| part == "table_grow.wast"
-				|| part == "table_size.wast"
-				|| part == "elem.wast"
-				|| part == "select.wast"
-				|| part == "unreached-invalid.wast"
-				|| part == "linking.wast"
-            {
+                "threads.wast",
+                "br_table.wast",
+                "global.wast",
+                "table_fill.wast",
+                "table_get.wast",
+                "table_set.wast",
+                "table_grow.wast",
+                "table_size.wast",
+                "elem.wast",
+                "select.wast",
+                "unreached-invalid.wast",
+                "linking.wast",
+            ];
+
+            if unsupported.contains(&part) || part.starts_with("simd") || part.starts_with("ref_") {
                 return true;
             }
         }
