@@ -125,7 +125,9 @@ pub struct Opts {
     /// themselves. Mostly useful for Wasmtime internal debugging and development.
     pub stringify: bool,
 
-    /// TODO
+    /// Temporary option to skip `impl<T: Trait> Trait for &mut T` for the
+    /// `wasmtime-wasi` crate while that's given a chance to update its b
+    /// indings.
     pub skip_mut_forwarding_impls: bool,
 }
 
@@ -934,8 +936,6 @@ impl Wasmtime {
                 }}
             "
         );
-
-        // TODO: if !add_to_linker_with_closure { return }
 
         // Generate impl WorldImports for &mut WorldImports
         let (async_trait, maybe_send) = if self.opts.async_.maybe_async() {
