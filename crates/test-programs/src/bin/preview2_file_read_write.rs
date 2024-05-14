@@ -31,15 +31,11 @@ fn main() {
     loop {
         ready.block();
 
-        if let Err(e) = stream.read(0) {
-            if matches!(e, wasi::io::streams::StreamError::Closed) {
-                break;
-            }
-
-            panic!("Failed when checking stream state: {e:?}");
+        match stream.read(4) {
+            Ok(chunk) => buf.extend(chunk),
+            Err(wasi::io::streams::StreamError::Closed) => break,
+            Err(e) => panic!("Failed reading stream: {e:?}"),
         }
-
-        buf.extend(stream.read(4).unwrap());
     }
     assert_eq!(buf, b"\0\0\0\0\0Hello, World!");
     drop(ready);

@@ -249,30 +249,6 @@ impl FileInputStream {
         use system_interface::fs::FileIoExt;
         let p = self.position;
 
-        if size == 0 {
-            let r: Result<_, std::io::Error> = self
-                .file
-                .spawn_blocking(move |f| {
-                    let len = f.seek(std::io::SeekFrom::End(0))?;
-                    if len != p {
-                        f.seek(std::io::SeekFrom::Start(p))?;
-                    }
-                    Ok(len)
-                })
-                .await;
-
-            return match r {
-                Ok(len) => {
-                    if len == p {
-                        Err(StreamError::Closed)
-                    } else {
-                        Ok(Bytes::default())
-                    }
-                }
-                Err(e) => Err(StreamError::LastOperationFailed(e.into())),
-            };
-        }
-
         let (r, mut buf) = self
             .file
             .spawn_blocking(move |f| {
@@ -281,7 +257,7 @@ impl FileInputStream {
                 (r, buf)
             })
             .await;
-        let n = read_result(r)?;
+        let n = read_result(r, size)?;
         buf.truncate(n);
         self.position += n as u64;
         Ok(buf.freeze())
@@ -293,9 +269,9 @@ impl FileInputStream {
     }
 }
 
-fn read_result(r: io::Result<usize>) -> Result<usize, StreamError> {
+fn read_result(r: io::Result<usize>, size: usize) -> Result<usize, StreamError> {
     match r {
-        Ok(0) => Err(StreamError::Closed),
+        Ok(0) if size > 0 => Err(StreamError::Closed),
         Ok(n) => Ok(n),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
         Err(e) => Err(StreamError::LastOperationFailed(e.into())),
