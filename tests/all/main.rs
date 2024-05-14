@@ -91,7 +91,7 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
     let mut config = wasmtime::PoolingAllocationConfig::default();
 
     config.total_memories(1);
-    config.memory_pages(1);
+    config.max_memory_size(65536);
     config.total_tables(1);
     config.table_elements(10);
 

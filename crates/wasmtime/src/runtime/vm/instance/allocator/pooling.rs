@@ -137,8 +137,9 @@ pub struct InstanceLimits {
     /// Maximum number of linear memories per instance.
     pub max_memories_per_module: u32,
 
-    /// Maximum number of Wasm pages for each linear memory.
-    pub memory_pages: u64,
+    /// Maximum byte size of a linear memory, must be smaller than
+    /// `static_memory_reservation` in `Tunables`.
+    pub max_memory_size: usize,
 
     /// The total number of GC heaps in the pool, across all instances.
     #[cfg(feature = "gc")]
@@ -166,7 +167,7 @@ impl Default for InstanceLimits {
             // have 10k+ elements.
             table_elements: 20_000,
             max_memories_per_module: 1,
-            memory_pages: 160,
+            max_memory_size: 10 * (1 << 20), // 10 MiB
             #[cfg(feature = "gc")]
             total_gc_heaps: 1000,
         }
@@ -703,7 +704,7 @@ mod test {
         let config = PoolingInstanceAllocatorConfig {
             limits: InstanceLimits {
                 total_memories: 1,
-                memory_pages: 0x10001,
+                max_memory_size: (1 << 32) + 65536,
                 ..Default::default()
             },
             ..PoolingInstanceAllocatorConfig::default()
@@ -718,7 +719,8 @@ mod test {
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
-            "module memory page limit of 65537 exceeds the maximum of 65536"
+            "maximum memory size of 0x100010000 bytes exceeds the configured \
+             static memory reservation of 0x10000 bytes"
         );
     }
 

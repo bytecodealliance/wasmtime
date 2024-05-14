@@ -192,7 +192,7 @@ fn guards_present_pooling() -> Result<()> {
 
     let mut pool = crate::small_pool_config();
     pool.total_memories(2)
-        .memory_pages(10)
+        .max_memory_size(10 * 65536)
         .memory_protection_keys(MpkEnabled::Disable);
     let mut config = Config::new();
     config.static_memory_maximum_size(1 << 20);
@@ -254,7 +254,7 @@ fn guards_present_pooling_mpk() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
     let mut pool = crate::small_pool_config();
     pool.total_memories(4)
-        .memory_pages(10)
+        .max_memory_size(10 * 65536)
         .memory_protection_keys(MpkEnabled::Enable)
         .max_memory_protection_keys(2);
     let mut config = Config::new();

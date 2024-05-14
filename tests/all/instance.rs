@@ -42,7 +42,7 @@ fn linear_memory_limits() -> Result<()> {
     }
     test(&Engine::default())?;
     let mut pool = crate::small_pool_config();
-    pool.memory_pages(65536);
+    pool.max_memory_size(1 << 32);
     test(&Engine::new(Config::new().allocation_strategy(
         InstanceAllocationStrategy::Pooling(pool),
     ))?)?;

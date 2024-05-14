@@ -142,14 +142,16 @@ pub struct MemoryPool {
 impl MemoryPool {
     /// Create a new `MemoryPool`.
     pub fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
-        // The maximum module memory page count cannot exceed 65536 pages
-        if config.limits.memory_pages > 0x10000 {
+        if u64::try_from(config.limits.max_memory_size).unwrap()
+            > tunables.static_memory_reservation
+        {
             bail!(
-                "module memory page limit of {} exceeds the maximum of 65536",
-                config.limits.memory_pages
+                "maximum memory size of {:#x} bytes exceeds the configured \
+                 static memory reservation of {:#x} bytes",
+                config.limits.max_memory_size,
+                tunables.static_memory_reservation
             );
         }
-
         let pkeys = match config.memory_protection_keys {
             MpkEnabled::Auto => {
                 if mpk::is_supported() {
@@ -553,9 +555,6 @@ impl SlabConstraints {
         tunables: &Tunables,
         num_pkeys_available: usize,
     ) -> Result<Self> {
-        // The maximum size a memory can grow to in this pool.
-        let max_memory_bytes = limits.memory_pages * u64::from(WASM_PAGE_SIZE);
-
         // `static_memory_bound` is the configured number of Wasm pages for a
         // static memory slot (see `Config::static_memory_maximum_size`); even
         // if the memory never grows to this size (e.g., it has a lower memory
@@ -567,9 +566,7 @@ impl SlabConstraints {
         let expected_slot_bytes = tunables.static_memory_reservation;
 
         let constraints = SlabConstraints {
-            max_memory_bytes: max_memory_bytes
-                .try_into()
-                .context("max memory is too large")?,
+            max_memory_bytes: limits.max_memory_size,
             num_slots: limits
                 .total_memories
                 .try_into()
@@ -754,7 +751,6 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::vm::PoolingInstanceAllocator;
     use proptest::prelude::*;
 
     #[cfg(target_pointer_width = "64")]
@@ -767,7 +763,7 @@ mod tests {
                     max_tables_per_module: 0,
                     max_memories_per_module: 3,
                     table_elements: 0,
-                    memory_pages: 1,
+                    max_memory_size: 65536,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -792,28 +788,6 @@ mod tests {
         }
 
         Ok(())
-    }
-
-    #[test]
-    fn test_pooling_allocator_with_reservation_size_exceeded() {
-        let config = PoolingInstanceAllocatorConfig {
-            limits: InstanceLimits {
-                total_memories: 1,
-                memory_pages: 2,
-                ..Default::default()
-            },
-            ..PoolingInstanceAllocatorConfig::default()
-        };
-        let pool = PoolingInstanceAllocator::new(
-            &config,
-            &Tunables {
-                static_memory_reservation: 65536,
-                static_memory_offset_guard_size: 0,
-                ..Tunables::default_host()
-            },
-        )
-        .unwrap();
-        assert_eq!(pool.memories.layout.max_memory_bytes, 2 * 65536);
     }
 
     #[test]
