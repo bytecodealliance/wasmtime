@@ -63,6 +63,12 @@ wasmtime_option_group! {
         /// linear memories.
         pub guard_before_linear_memory: Option<bool>,
 
+        /// Whether to initialize tables lazily, so that instantiation is
+        /// fast but indirect calls are a little slower. If no, tables are
+        /// initialized eagerly from any active element segments that apply to
+        /// them during instantiation. (default: yes)
+        pub table_lazy_init: Option<bool>,
+
         /// Enable the pooling allocator, in place of the on-demand allocator.
         pub pooling_allocator: Option<bool>,
 
@@ -547,6 +553,9 @@ impl CommonOptions {
         }
         if let Some(enable) = self.opts.guard_before_linear_memory {
             config.guard_before_linear_memory(enable);
+        }
+        if let Some(enable) = self.opts.table_lazy_init {
+            config.table_lazy_init(enable);
         }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.

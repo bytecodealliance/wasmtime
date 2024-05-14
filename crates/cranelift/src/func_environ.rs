@@ -817,6 +817,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         table_index: TableIndex,
         index: ir::Value,
         cold_blocks: bool,
+        lazy_init: bool,
     ) -> ir::Value {
         let pointer_type = self.pointer_type();
         self.ensure_table_exists(builder.func, table_index);
@@ -833,6 +834,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             self.isa.flags().enable_table_access_spectre_mitigation(),
         );
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
+
+        if !lazy_init {
+            return value;
+        }
+
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
         // details. Note that `FUNCREF_MASK` has type `usize` which may not be
@@ -1354,11 +1360,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         cold_blocks: bool,
     ) -> WasmResult<Option<(ir::Value, ir::Value)>> {
         // Get the funcref pointer from the table.
+        let table = &self.env.module.table_plans[table_index];
+        let TableStyle::CallerChecksSignature { lazy_init } = table.style;
         let funcref_ptr = self.env.get_or_init_func_ref_table_elem(
             self.builder,
             table_index,
             callee,
             cold_blocks,
+            lazy_init,
         );
 
         // If necessary, check the signature.
@@ -1407,7 +1416,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
         // Generate a rustc compile error here if more styles are added in
         // the future as the following code is tailored to just this style.
-        let TableStyle::CallerChecksSignature = table.style;
+        let TableStyle::CallerChecksSignature { .. } = table.style;
 
         // Test if a type check is necessary for this table. If this table is a
         // table of typed functions and that type matches `ty_index`, then
@@ -1752,9 +1761,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
             // Function types.
             WasmHeapTopType::Func => match plan.style {
-                TableStyle::CallerChecksSignature => {
-                    Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index, false))
-                }
+                TableStyle::CallerChecksSignature { lazy_init } => Ok(self
+                    .get_or_init_func_ref_table_elem(
+                        builder,
+                        table_index,
+                        index,
+                        false,
+                        lazy_init,
+                    )),
             },
         }
     }
@@ -1805,7 +1819,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // Function types.
             WasmHeapTopType::Func => {
                 match plan.style {
-                    TableStyle::CallerChecksSignature => {
+                    TableStyle::CallerChecksSignature { lazy_init } => {
                         let (elem_addr, flags) = table_data.prepare_table_addr(
                             builder,
                             index,
@@ -1815,9 +1829,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         // Set the "initialized bit". See doc-comment on
                         // `FUNCREF_INIT_BIT` in
                         // crates/environ/src/ref_bits.rs for details.
-                        let value_with_init_bit = builder
-                            .ins()
-                            .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
+                        let value_with_init_bit = if lazy_init {
+                            builder
+                                .ins()
+                                .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64))
+                        } else {
+                            value
+                        };
                         builder
                             .ins()
                             .store(flags, value_with_init_bit, elem_addr, 0);

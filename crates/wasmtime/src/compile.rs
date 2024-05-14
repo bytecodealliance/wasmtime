@@ -807,7 +807,9 @@ impl FunctionIndices {
                 // Attempt to convert table initializer segments to
                 // FuncTable representation where possible, to enable
                 // table lazy init.
-                translation.try_func_table_init();
+                if engine.tunables().table_lazy_init {
+                    translation.try_func_table_init();
+                }
 
                 let funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo> =
                     wasm_functions_for_module(&mut wasm_functions, module)
