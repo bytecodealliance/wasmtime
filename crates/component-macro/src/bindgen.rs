@@ -144,6 +144,7 @@ impl Parse for Config {
                             .map(|p| p.into_token_stream().to_string())
                             .collect()
                     }
+                    Opt::SkipMutForwardingImpls(val) => opts.skip_mut_forwarding_impls = val,
                 }
             }
         } else {
@@ -213,6 +214,7 @@ mod kw {
     syn::custom_keyword!(only_imports);
     syn::custom_keyword!(trappable_imports);
     syn::custom_keyword!(additional_derives);
+    syn::custom_keyword!(skip_mut_forwarding_impls);
 }
 
 enum Opt {
@@ -227,6 +229,7 @@ enum Opt {
     With(HashMap<String, String>),
     TrappableImports(TrappableImports),
     AdditionalDerives(Vec<syn::Path>),
+    SkipMutForwardingImpls(bool),
 }
 
 impl Parse for Opt {
@@ -367,6 +370,12 @@ impl Parse for Opt {
             syn::bracketed!(contents in input);
             let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
             Ok(Opt::AdditionalDerives(list.iter().cloned().collect()))
+        } else if l.peek(kw::skip_mut_forwarding_impls) {
+            input.parse::<kw::skip_mut_forwarding_impls>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::SkipMutForwardingImpls(
+                input.parse::<syn::LitBool>()?.value,
+            ))
         } else {
             Err(l.error())
         }
