@@ -1,16 +1,15 @@
 //! Implementation of `anyref` in Wasmtime.
 
-use wasmtime_environ::VMGcKind;
-
+use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
-use crate::{prelude::*, ArrayType, StructType};
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType, Result,
-    RootSet, Rooted, ValRaw, ValType, WasmTy, I31,
+    ArrayType, AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
+    Result, RootSet, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, I31,
 };
 use core::mem;
 use core::mem::MaybeUninit;
+use wasmtime_environ::VMGcKind;
 
 /// An `anyref` GC reference.
 ///
@@ -93,7 +92,21 @@ use core::mem::MaybeUninit;
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct AnyRef {
-    inner: GcRootIndex,
+    pub(super) inner: GcRootIndex,
+}
+
+impl From<Rooted<StructRef>> for Rooted<AnyRef> {
+    #[inline]
+    fn from(s: Rooted<StructRef>) -> Self {
+        s.cast()
+    }
+}
+
+impl From<ManuallyRooted<StructRef>> for ManuallyRooted<AnyRef> {
+    #[inline]
+    fn from(s: ManuallyRooted<StructRef>) -> Self {
+        s.cast()
+    }
 }
 
 unsafe impl GcRefImpl for AnyRef {
@@ -190,8 +203,14 @@ impl AnyRef {
         store: &mut AutoAssertNoGc<'_>,
         gc_ref: VMGcRef,
     ) -> Rooted<Self> {
-        assert!(gc_ref.is_i31());
-        assert!(VMGcRef::ONLY_EXTERN_REF_AND_I31);
+        debug_assert!(
+            gc_ref.is_i31()
+                || store
+                    .unwrap_gc_store()
+                    .header(&gc_ref)
+                    .kind()
+                    .matches(VMGcKind::AnyRef)
+        );
         Rooted::new(store, gc_ref)
     }
 
@@ -349,6 +368,72 @@ impl AnyRef {
     pub fn unwrap_i31(&self, store: impl AsContext) -> Result<I31> {
         Ok(self.as_i31(store)?.expect("AnyRef::unwrap_i31 on non-i31"))
     }
+
+    /// Is this `anyref` a `structref`?
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn is_struct(&self, store: impl AsContext) -> Result<bool> {
+        self._is_struct(store.as_context().0)
+    }
+
+    pub(crate) fn _is_struct(&self, store: &StoreOpaque) -> Result<bool> {
+        // NB: Can't use `AutoAssertNoGc` here because we only have a shared
+        // context, not a mutable context.
+        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
+        Ok(!gc_ref.is_i31() && store.gc_store()?.kind(gc_ref).matches(VMGcKind::StructRef))
+    }
+
+    /// Downcast this `anyref` to a `structref`.
+    ///
+    /// If this `anyref` is a `structref`, then `Some(_)` is returned.
+    ///
+    /// If this `anyref` is not a `structref`, then `None` is returned.
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn as_struct(&self, store: impl AsContext) -> Result<Option<Rooted<StructRef>>> {
+        self._as_struct(store.as_context().0)
+    }
+
+    pub(crate) fn _as_struct(&self, store: &StoreOpaque) -> Result<Option<Rooted<StructRef>>> {
+        if self._is_struct(store)? {
+            Ok(Some(Rooted::from_gc_root_index(self.inner)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Downcast this `anyref` to an `i31`, panicking if this `anyref` is not a
+    /// `struct`.
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store, or if
+    /// this `anyref` is not a `struct`.
+    pub fn unwrap_struct(&self, store: impl AsContext) -> Result<Rooted<StructRef>> {
+        self._unwrap_struct(store.as_context().0)
+    }
+
+    pub(crate) fn _unwrap_struct(&self, store: &StoreOpaque) -> Result<Rooted<StructRef>> {
+        Ok(self
+            ._as_struct(store)?
+            .expect("AnyRef::unwrap_struct on non-structref"))
+    }
 }
 
 unsafe impl WasmTy for Rooted<AnyRef> {
@@ -457,8 +542,13 @@ unsafe impl WasmTy for ManuallyRooted<AnyRef> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
-        unreachable!()
+    fn dynamic_concrete_type_check(
+        &self,
+        store: &StoreOpaque,
+        _nullable: bool,
+        ty: &HeapType,
+    ) -> Result<()> {
+        self.ensure_matches_ty(store, ty)
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {

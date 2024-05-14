@@ -731,6 +731,24 @@ impl<T: GcRef> Rooted<T> {
         }
     }
 
+    /// Create a new `Rooted<T>` from a `GcRootIndex`.
+    ///
+    /// Note that `Rooted::from_gc_root_index(my_rooted.index)` is not
+    /// necessarily an identity funciton, as it allows changing the `T` type
+    /// parameter.
+    ///
+    /// The given index should be a LIFO index of a GC reference pointing to an
+    /// instance of the GC type that `T` represents. Failure to uphold this
+    /// invariant is memory safe but will result in general incorrectness such
+    /// as panics and wrong results.
+    pub(crate) fn from_gc_root_index(inner: GcRootIndex) -> Rooted<T> {
+        debug_assert!(inner.index.is_lifo());
+        Rooted {
+            inner,
+            _phantom: marker::PhantomData,
+        }
+    }
+
     #[inline]
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         debug_assert!(self.inner.index.is_lifo());
@@ -924,6 +942,15 @@ impl<T: GcRef> Rooted<T> {
         let gc_ref = self.try_gc_ref(store.as_context().0)?;
         gc_ref.hash(state);
         Ok(())
+    }
+
+    /// Cast `self` to a `Rooted<U>`.
+    ///
+    /// It is the caller's responsibility to ensure that `self` is actually a
+    /// `U`. Failure to uphold this invariant will be memory safe but will
+    /// result in general incorrectness such as panics and wrong results.
+    pub(crate) fn cast<U: GcRef>(self) -> Rooted<U> {
+        Rooted::from_gc_root_index(self.inner)
     }
 }
 
@@ -1559,6 +1586,20 @@ where
             },
             _phantom: marker::PhantomData,
         }
+    }
+
+    /// Cast `self` to a `ManuallyRooted<U>`.
+    ///
+    /// It is the caller's responsibility to ensure that `self` is actually a
+    /// `U`. Failure to uphold this invariant will be memory safe but will
+    /// result in general incorrectness such as panics and wrong results.
+    pub(crate) fn cast<U: GcRef>(self) -> ManuallyRooted<U> {
+        let u = ManuallyRooted {
+            inner: self.inner,
+            _phantom: core::marker::PhantomData,
+        };
+        core::mem::forget(self);
+        u
     }
 }
 

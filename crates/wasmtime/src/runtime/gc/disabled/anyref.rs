@@ -1,7 +1,7 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    AsContext, AsContextMut, GcRefImpl, HeapType, Result, Rooted, I31,
+    AsContext, AsContextMut, GcRefImpl, HeapType, Result, Rooted, StructRef, I31,
 };
 
 /// Support for `anyref` disabled at compile time because the `gc` cargo feature
@@ -32,6 +32,10 @@ impl AnyRef {
         match *self {}
     }
 
+    pub(crate) fn _ty(&self, _store: &StoreOpaque) -> Result<HeapType> {
+        match *self {}
+    }
+
     pub fn matches_ty(&self, _store: impl AsContext, _ty: &HeapType) -> Result<bool> {
         match *self {}
     }
@@ -49,6 +53,26 @@ impl AnyRef {
     }
 
     pub fn unwrap_i31(&self, _store: impl AsContext) -> Result<I31> {
+        match *self {}
+    }
+
+    pub fn is_struct(&self, _store: impl AsContext) -> Result<bool> {
+        match *self {}
+    }
+
+    pub(crate) fn _is_struct(&self, _store: &StoreOpaque) -> Result<bool> {
+        match *self {}
+    }
+
+    pub fn as_struct(&self, _store: impl AsContext) -> Result<Option<StructRef>> {
+        match *self {}
+    }
+
+    pub(crate) fn _as_struct(&self, _store: &StoreOpaque) -> Result<Option<StructRef>> {
+        match *self {}
+    }
+
+    pub fn unwrap_struct(&self, _store: impl AsContext) -> Result<StructRef> {
         match *self {}
     }
 }

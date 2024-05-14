@@ -125,6 +125,10 @@ impl<T: GcRef> Rooted<T> {
     ) -> Result<bool> {
         a.assert_unreachable()
     }
+
+    pub(crate) fn cast<U: GcRef>(self) -> Rooted<U> {
+        match self.inner {}
+    }
 }
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
@@ -213,6 +217,10 @@ where
     }
 
     pub fn into_rooted(self, _context: impl AsContextMut) -> Rooted<T> {
+        match self.inner {}
+    }
+
+    pub(crate) fn cast<U: GcRef>(self) -> ManuallyRooted<U> {
         match self.inner {}
     }
 }

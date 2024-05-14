@@ -900,6 +900,11 @@ impl Func {
     /// Does this function match the given type?
     ///
     /// That is, is this function's type a subtype of the given type?
+    ///
+    /// # Panics
+    ///
+    /// Panics if this function is not associated with the given store or if the
+    /// function type is not associated with the store's engine.
     pub fn matches_ty(&self, store: impl AsContext, func_ty: &FuncType) -> bool {
         self._matches_ty(store.as_context().0, func_ty)
     }

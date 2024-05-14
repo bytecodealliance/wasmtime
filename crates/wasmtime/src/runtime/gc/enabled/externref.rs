@@ -108,7 +108,7 @@ use core::mem::MaybeUninit;
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct ExternRef {
-    inner: GcRootIndex,
+    pub(crate) inner: GcRootIndex,
 }
 
 unsafe impl GcRefImpl for ExternRef {
@@ -280,7 +280,7 @@ impl ExternRef {
         gc_ref: VMGcRef,
     ) -> Rooted<Self> {
         assert!(
-            gc_ref.is_extern_ref(),
+            gc_ref.is_extern_ref(&*store.unwrap_gc_store().gc_heap),
             "GC reference {gc_ref:#p} is not an externref"
         );
         Rooted::new(store, gc_ref)

@@ -5,8 +5,10 @@ mod anyref;
 mod externref;
 mod i31;
 mod rooting;
+mod structref;
 
 pub use anyref::*;
 pub use externref::*;
 pub use i31::*;
 pub use rooting::*;
+pub use structref::*;

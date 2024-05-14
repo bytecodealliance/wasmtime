@@ -3,10 +3,14 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, SendSyncPtr, VMExternRef, VMGcHeader, VMGcRef,
+    VMStructRef,
 };
 use core::marker;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
+use wasmtime_environ::{VMSharedTypeIndex, WasmArrayType, WasmStructType};
+
+use super::VMStructDataMut;
 
 /// Trait for integrating a garbage collector with the runtime.
 ///
@@ -32,6 +36,12 @@ use core::{any::Any, num::NonZeroUsize};
 pub unsafe trait GcRuntime: 'static + Send + Sync {
     /// Construct a new GC heap.
     fn new_gc_heap(&self) -> Result<Box<dyn GcHeap>>;
+
+    /// Get this collector's layout for the given array type.
+    fn array_layout(&self, ty: &WasmArrayType) -> GcArrayLayout;
+
+    /// Get this collector's layout for the given struct type.
+    fn struct_layout(&self, ty: &WasmStructType) -> GcStructLayout;
 }
 
 /// A heap that manages garbage-collected objects.
@@ -200,6 +210,49 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     fn externref_host_data(&self, externref: &VMExternRef) -> ExternRefHostDataId;
 
     ////////////////////////////////////////////////////////////////////////////
+    // Struct and Array methods
+
+    /// Allocate a GC-managed struct of the given type and layout.
+    ///
+    /// The struct's fields are left uninitialized. It is the caller's
+    /// responsibility to initialize them before exposing the struct to Wasm or
+    /// triggering a GC.
+    ///
+    /// The `kind`, `ty`, and `layout` must match.
+    ///
+    /// Failure to do either of the above is memory safe, but may result in
+    /// general failures such as panics or incorrect results.
+    ///
+    /// Return values:
+    ///
+    /// * `Ok(Some(_))`: The allocation was successful.
+    ///
+    /// * `Ok(None)`: There is currently no available space for this
+    ///   allocation. The caller should call `self.gc()`, run the GC to
+    ///   completion so the collector can reclaim space, and then try allocating
+    ///   again.
+    ///
+    /// * `Err(_)`: The collector cannot satisfy this allocation request, and
+    ///   would not be able to even after the caller were to trigger a
+    ///   collection. This could be because, for example, the requested
+    ///   allocation is larger than this collector's implementation limit for
+    ///   object size.
+    fn alloc_uninit_struct(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcStructLayout,
+    ) -> Result<Option<VMStructRef>>;
+
+    /// Get a mutable borrow of the the given struct's data.
+    ///
+    /// Panics on out-of-bounds accesses.
+    ///
+    /// The given `structref` should be valid and of the given size. Failure to
+    /// do so is memory safe, but may result in general failures such as panics
+    /// or incorrect results.
+    fn struct_data(&mut self, structref: &VMStructRef, size: u32) -> VMStructDataMut<'_>;
+
+    ////////////////////////////////////////////////////////////////////////////
     // Garbage Collection Methods
 
     /// Start a new garbage collection process.
@@ -282,6 +335,91 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// This method is only used with the pooling allocator.
     #[cfg(feature = "pooling-allocator")]
     fn reset(&mut self);
+}
+
+/// The layout of a GC-managed object.
+#[derive(Clone, Debug)]
+pub enum GcLayout {
+    /// The layout of a GC-managed array object.
+    #[allow(dead_code)] // Not used yet, but added for completeness.
+    Array(GcArrayLayout),
+
+    /// The layout of a GC-managed struct object.
+    Struct(GcStructLayout),
+}
+
+impl From<GcArrayLayout> for GcLayout {
+    fn from(layout: GcArrayLayout) -> Self {
+        Self::Array(layout)
+    }
+}
+
+impl From<GcStructLayout> for GcLayout {
+    fn from(layout: GcStructLayout) -> Self {
+        Self::Struct(layout)
+    }
+}
+
+impl GcLayout {
+    /// Get the underlying `GcStructLayout`, or panic.
+    pub fn unwrap_struct(&self) -> &GcStructLayout {
+        match self {
+            Self::Struct(s) => s,
+            _ => panic!("GcLayout::unwrap_struct on non-struct GC layout"),
+        }
+    }
+}
+
+/// The layout of a GC-managed array.
+///
+/// This layout is only valid for use with the GC runtime that created it. It is
+/// not valid to use one GC runtime's layout with another GC runtime, doing so
+/// is memory safe but will lead to general incorrectness like panics and wrong
+/// results.
+///
+/// All offsets are from the start of the object; that is, the size of the GC
+/// header (for example) is included in the offset.
+///
+/// All arrays are composed of the generic `VMGcHeader`, followed by
+/// collector-specific fields, followed by the contiguous array elements
+/// themselves. The array elements must be aligned to the element type's natural
+/// alignment.
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // Not used yet, but added for completeness.
+pub struct GcArrayLayout {
+    /// The size of this array object, ignoring its elements.
+    pub size: u32,
+
+    /// The alignment of this array.
+    pub align: u32,
+
+    /// The offset of the array's length.
+    pub length_field_offset: u32,
+
+    /// The offset from where this array's contiguous elements begin.
+    pub elems_offset: u32,
+}
+
+/// The layout for a GC-managed struct type.
+///
+/// This layout is only valid for use with the GC runtime that created it. It is
+/// not valid to use one GC runtime's layout with another GC runtime, doing so
+/// is memory safe but will lead to general incorrectness like panics and wrong
+/// results.
+///
+/// All offsets are from the start of the object; that is, the size of the GC
+/// header (for example) is included in the offset.
+#[derive(Clone, Debug)]
+pub struct GcStructLayout {
+    /// The size of this struct.
+    pub size: u32,
+
+    /// The alignment of this struct.
+    pub align: u32,
+
+    /// The fields of this struct. The `i`th entry is the `i`th struct field's
+    /// offset in the struct.
+    pub fields: Vec<u32>,
 }
 
 /// A list of GC roots.
