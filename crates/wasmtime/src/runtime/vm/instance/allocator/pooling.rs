@@ -712,7 +712,7 @@ mod test {
             PoolingInstanceAllocator::new(
                 &config,
                 &Tunables {
-                    static_memory_bound: 1,
+                    static_memory_reservation: 65536,
                     ..Tunables::default_host()
                 },
             )

@@ -28,20 +28,16 @@ pub enum MemoryStyle {
 impl MemoryStyle {
     /// Decide on an implementation style for the given `Memory`.
     pub fn for_memory(memory: Memory, tunables: &Tunables) -> (Self, u64) {
-        let static_memory_bound = tunables
-            .static_memory_bound
-            .checked_mul(u64::from(WASM_PAGE_SIZE))
-            .unwrap();
-
         let is_static = match memory.maximum_byte_size() {
             Ok(mut maximum) => {
                 if tunables.static_memory_bound_is_maximum {
-                    maximum = maximum.min(static_memory_bound);
+                    maximum = maximum.min(tunables.static_memory_reservation);
                 }
 
                 // Ensure the minimum is less than the maximum; the minimum might exceed the maximum
                 // when the memory is artificially bounded via `static_memory_bound_is_maximum` above
-                memory.minimum_byte_size().unwrap() <= maximum && maximum <= static_memory_bound
+                memory.minimum_byte_size().unwrap() <= maximum
+                    && maximum <= tunables.static_memory_reservation
             }
 
             // If the maximum size of this memory is not representable with
@@ -55,7 +51,7 @@ impl MemoryStyle {
         if is_static {
             return (
                 Self::Static {
-                    byte_reservation: static_memory_bound,
+                    byte_reservation: tunables.static_memory_reservation,
                 },
                 tunables.static_memory_offset_guard_size,
             );

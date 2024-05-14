@@ -5,9 +5,9 @@ use target_lexicon::{PointerWidth, Triple};
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize, Debug)]
 pub struct Tunables {
-    /// For static heaps, the size in wasm pages of the heap protected by bounds
-    /// checking.
-    pub static_memory_bound: u64,
+    /// For static heaps, the size in bytes of virtual memory reservation for
+    /// the heap.
+    pub static_memory_reservation: u64,
 
     /// The size in bytes of the offset guard for static heaps.
     pub static_memory_offset_guard_size: u64,
@@ -106,7 +106,7 @@ impl Tunables {
         Tunables {
             // No virtual memory tricks are available on miri so make these
             // limits quite conservative.
-            static_memory_bound: (1 << 20) / crate::WASM_PAGE_SIZE as u64,
+            static_memory_reservation: 1 << 20,
             static_memory_offset_guard_size: 0,
             dynamic_memory_offset_guard_size: 0,
             dynamic_memory_growth_reserve: 0,
@@ -136,7 +136,7 @@ impl Tunables {
             // For 32-bit we scale way down to 10MB of reserved memory. This
             // impacts performance severely but allows us to have more than a
             // few instances running around.
-            static_memory_bound: (10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64,
+            static_memory_reservation: 10 * (1 << 20),
             static_memory_offset_guard_size: 0x1_0000,
             dynamic_memory_offset_guard_size: 0x1_0000,
             dynamic_memory_growth_reserve: 1 << 20, // 1MB
@@ -154,7 +154,7 @@ impl Tunables {
             //
             // Coupled with a 2 GiB address space guard it lets us translate
             // wasm offsets into x86 offsets as aggressively as we can.
-            static_memory_bound: 0x1_0000,
+            static_memory_reservation: 1 << 32,
             static_memory_offset_guard_size: 0x8000_0000,
 
             // Size in bytes of the offset guard for dynamic memories.
