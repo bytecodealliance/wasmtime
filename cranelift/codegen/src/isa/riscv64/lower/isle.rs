@@ -18,7 +18,7 @@ use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
         immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, Opcode, StackSlot, TrapCode, Value, ValueList,
+        MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
     machinst::{ArgPair, InstOutput},

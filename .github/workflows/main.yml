@@ -299,12 +299,67 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
-  # Checks of various feature combinations and whether things
-  # compile. The goal here isn't to run tests, mostly just serve as a
-  # double-check that Rust code compiles and is likely to work everywhere else.
-  checks:
+  # Checks of various feature combinations and whether things compile. The goal
+  # here isn't to run tests, mostly just serve as a double-check that Rust code
+  # compiles and is likely to work everywhere else.
+  micro_checks:
     needs: determine
-    name: Check
+    name: Check ${{matrix.name}}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: wasmtime
+            checks: |
+              -p wasmtime --no-default-features
+              -p wasmtime --no-default-features --features wat
+              -p wasmtime --no-default-features --features profiling
+              -p wasmtime --no-default-features --features cache
+              -p wasmtime --no-default-features --features async
+              -p wasmtime --no-default-features --features pooling-allocator
+              -p wasmtime --no-default-features --features cranelift
+              -p wasmtime --no-default-features --features component-model
+              -p wasmtime --no-default-features --features runtime,component-model
+              -p wasmtime --no-default-features --features cranelift,wat,async,cache
+              -p wasmtime --no-default-features --features winch
+              -p wasmtime --no-default-features --features wmemcheck
+              -p wasmtime --no-default-features --features wmemcheck,cranelift,runtime
+              -p wasmtime --no-default-features --features demangle
+              -p wasmtime --no-default-features --features addr2line
+              -p wasmtime --no-default-features --features gc
+              -p wasmtime --no-default-features --features runtime,gc
+              -p wasmtime --no-default-features --features cranelift,gc
+              -p wasmtime --no-default-features --features runtime
+              -p wasmtime --no-default-features --features threads
+              -p wasmtime --no-default-features --features runtime,threads
+              -p wasmtime --no-default-features --features cranelift,threads
+              -p wasmtime --features incremental-cache
+              -p wasmtime --all-features
+
+          - name: wasmtime-cli
+            checks: |
+              -p wasmtime-cli --no-default-features
+              -p wasmtime-cli --no-default-features --features run
+              -p wasmtime-cli --no-default-features --features run,component-model
+              -p wasmtime-cli --no-default-features --features compile
+              -p wasmtime-cli --no-default-features --features compile,cranelift
+              -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
+              -p wasmtime-cli --all-features
+              -p wasmtime-cli --features component-model
+
+          - name: cranelift-codegen benches
+            checks: |
+              --benches -p cranelift-codegen
+
+          - name: wasmtime-bench-api
+            checks: |
+              -p wasmtime-bench-api
+
+          - name: wasmtime-c-api
+            checks: |
+              -p wasmtime-c-api --no-default-features
+              -p wasmtime-c-api --no-default-features --features wat
+              -p wasmtime-c-api --no-default-features --features wasi
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -312,52 +367,34 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
 
-    # Check some feature combinations of the `wasmtime` crate
-    - run: cargo check -p wasmtime --no-default-features
-    - run: cargo check -p wasmtime --no-default-features --features wat
-    - run: cargo check -p wasmtime --no-default-features --features profiling
-    - run: cargo check -p wasmtime --no-default-features --features cache
-    - run: cargo check -p wasmtime --no-default-features --features async
-    - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
-    - run: cargo check -p wasmtime --no-default-features --features cranelift
-    - run: cargo check -p wasmtime --no-default-features --features component-model
-    - run: cargo check -p wasmtime --no-default-features --features runtime,component-model
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
-    - run: cargo check -p wasmtime --no-default-features --features winch
-    - run: cargo check -p wasmtime --no-default-features --features wmemcheck
-    - run: cargo check -p wasmtime --no-default-features --features wmemcheck,cranelift,runtime
-    - run: cargo check -p wasmtime --no-default-features --features demangle
-    - run: cargo check -p wasmtime --no-default-features --features addr2line
-    - run: cargo check -p wasmtime --no-default-features --features gc
-    - run: cargo check -p wasmtime --no-default-features --features runtime,gc
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,gc
-    - run: cargo check -p wasmtime --no-default-features --features runtime
-    - run: cargo check -p wasmtime --no-default-features --features threads
-    - run: cargo check -p wasmtime --no-default-features --features runtime,threads
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,threads
-    - run: cargo check --features component-model
-    - run: cargo check -p wasmtime --features incremental-cache
-    - run: cargo check -p wasmtime --all-features
+    # Run the check.
+    - run: |
+        checks=$(cat <<END
+        ${{ matrix.checks }}
+        END
+        )
+        echo "$checks" | xargs -I CHECK sh -c 'echo "=== cargo check CHECK ==="; cargo check CHECK'
 
-    # Feature combinations of the `wasmtime-cli`
-    - run: cargo check -p wasmtime-cli --no-default-features
-    - run: cargo check -p wasmtime-cli --no-default-features --features run
-    - run: cargo check -p wasmtime-cli --no-default-features --features run,component-model
-    - run: cargo check -p wasmtime-cli --no-default-features --features compile
-    - run: cargo check -p wasmtime-cli --no-default-features --features compile,cranelift
-    - run: cargo check -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
-    - run: cargo check -p wasmtime-cli --all-features
+    # Common logic to cancel the entire run if this job fails.
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
 
-    # Check that benchmarks of the cranelift project build
-    - run: cargo check --benches -p cranelift-codegen
-
-    # Check that the bench-api compiles
-    - run: cargo check -p wasmtime-bench-api
-
-    # Check some feature combinations of the `wasmtime-c-api` crate
-    - run: cargo check -p wasmtime-c-api --no-default-features
-    - run: cargo check -p wasmtime-c-api --no-default-features --features wat
-    - run: cargo check -p wasmtime-c-api --no-default-features --features wasi
+  # Similar to `micro_checks` but where we need to install some more state
+  # (e.g. Android NDK) and we haven't factored support for those things out into
+  # a parallel jobs yet.
+  monolith_checks:
+    needs: determine
+    name: Monolith Checks
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_VERSION: 2.12.2
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
 
     # Checks for no_std support, ensure that crates can build on a no_std
     # target
@@ -523,10 +560,6 @@ jobs:
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
       if: matrix.target != ''
 
-    # Install OpenVINO for testing wasmtime-wasi-nn.
-    - uses: abrown/install-openvino-action@v8
-      if: runner.arch == 'X64'
-
     # Fix an ICE for now in gcc when compiling zstd with debuginfo (??)
     - run: echo CFLAGS=-g0 >> $GITHUB_ENV
       if: matrix.target == 'x86_64-pc-windows-gnu'
@@ -608,7 +641,7 @@ jobs:
         fi
 
     # Build and test all features
-    - run: ./ci/run-tests.sh ${{ matrix.extra_features }} --locked
+    - run: ./ci/run-tests.sh --locked ${{ matrix.bucket }}
       env:
         RUST_BACKTRACE: 1
 
@@ -616,6 +649,67 @@ jobs:
     # something goes wrong. These take the longest anyway and otherwise if
     # Windows fails GitHub Actions will confusingly mark the failed Windows job
     # as cancelled instead of failed.
+
+  # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
+  # compatible with all targets, and each must be tested separately anyways.
+  test_wasi_nn:
+    strategy:
+      matrix:
+        feature: ["openvino", "onnx"]
+        os: ["ubuntu-latest", "windows-latest"]
+    name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: determine
+    if: needs.determine.outputs.run-full
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    # Install OpenVINO
+    - uses: abrown/install-openvino-action@v8
+      if: runner.arch == 'X64'
+
+    # Install Rust targets.
+    - run: rustup target add wasm32-wasi
+
+    # Run the tests!
+    - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
+      env:
+        RUST_BACKTRACE: 1
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
+  # `--all-features` brings in OCaml, which is a pain to get setup for all
+  # targets.
+  test_fuzzing:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: Test wasmtime-fuzzing
+    runs-on: 'ubuntu-latest'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    # Run the tests
+    - run: |
+        cargo test -p wasmtime-fuzzing -p wasm-spec-interpreter
+      env:
+        RUST_BACKTRACE: 1
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Test debug (DWARF) related functionality.
   test_debug_dwarf:
@@ -811,6 +905,9 @@ jobs:
   # Note that `cargo nextest` is used here additionally to get parallel test
   # execution by default to help cut down on the time in CI.
   miri:
+    strategy:
+      matrix:
+        crate: ["wasmtime", "wasmtime-cli", "wasmtime-environ"]
     needs: determine
     if: needs.determine.outputs.run-full && github.repository == 'bytecodealliance/wasmtime'
     name: Miri
@@ -832,10 +929,7 @@ jobs:
     - run: echo "${{ runner.tool_cache }}/cargo-nextest/bin" >> $GITHUB_PATH
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest --locked
     - run: |
-        cargo miri nextest run -j4 --no-fail-fast \
-          -p wasmtime \
-          -p wasmtime-cli \
-          -p wasmtime-environ
+        cargo miri nextest run -j4 --no-fail-fast -p ${{ matrix.crate }}
       env:
         MIRIFLAGS: -Zmiri-strict-provenance
 
@@ -924,15 +1018,18 @@ jobs:
       - test
       - test_capi
       - test_debug_dwarf
+      - test_fuzzing
+      - test_wasi_nn
+      - test_nightly
       - build
       - rustfmt
       - clangformat
       - cargo_deny
       - cargo_vet
       - doc
-      - checks
+      - micro_checks
+      - monolith_checks
       - checks_winarm64
-      - test_nightly
       - bench
       - meta_deterministic_check
       - verify-publish
