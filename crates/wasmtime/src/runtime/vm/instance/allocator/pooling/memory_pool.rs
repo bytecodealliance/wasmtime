@@ -564,7 +564,7 @@ impl SlabConstraints {
         // most bounds checks. `MemoryPool` must respect this bound, though not
         // explicitly: if we can achieve the same effect via MPK-protected
         // stripes, the slot size can be lower than the `static_memory_bound`.
-        let expected_slot_bytes = tunables.static_memory_bound * u64::from(WASM_PAGE_SIZE);
+        let expected_slot_bytes = tunables.static_memory_reservation;
 
         let constraints = SlabConstraints {
             max_memory_bytes: max_memory_bytes

@@ -346,7 +346,7 @@ impl Metadata<'_> {
 
     fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
-            static_memory_bound,
+            static_memory_reservation,
             static_memory_offset_guard_size,
             dynamic_memory_offset_guard_size,
             generate_native_debuginfo,
@@ -375,9 +375,9 @@ impl Metadata<'_> {
         } = self.tunables;
 
         Self::check_int(
-            static_memory_bound,
-            other.static_memory_bound,
-            "static memory bound",
+            static_memory_reservation,
+            other.static_memory_reservation,
+            "static memory reservation",
         )?;
         Self::check_int(
             static_memory_offset_guard_size,

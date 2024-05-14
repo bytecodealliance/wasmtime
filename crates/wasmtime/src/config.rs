@@ -139,7 +139,7 @@ pub struct Config {
 
 #[derive(Default, Clone)]
 struct ConfigTunables {
-    static_memory_bound: Option<u64>,
+    static_memory_reservation: Option<u64>,
     static_memory_offset_guard_size: Option<u64>,
     dynamic_memory_offset_guard_size: Option<u64>,
     dynamic_memory_growth_reserve: Option<u64>,
@@ -1367,8 +1367,7 @@ impl Config {
     /// for pooling allocation by using memory protection; see
     /// `PoolingAllocatorConfig::memory_protection_keys` for details.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
-        let max_pages = max_size / u64::from(wasmtime_environ::WASM_PAGE_SIZE);
-        self.tunables.static_memory_bound = Some(max_pages);
+        self.tunables.static_memory_reservation = Some(max_size);
         self
     }
 
@@ -1800,7 +1799,7 @@ impl Config {
         }
 
         set_fields! {
-            static_memory_bound
+            static_memory_reservation
             static_memory_offset_guard_size
             dynamic_memory_offset_guard_size
             dynamic_memory_growth_reserve
@@ -2159,11 +2158,8 @@ impl fmt::Debug for Config {
         if let Some(enable) = self.tunables.parse_wasm_debuginfo {
             f.field("parse_wasm_debuginfo", &enable);
         }
-        if let Some(size) = self.tunables.static_memory_bound {
-            f.field(
-                "static_memory_maximum_size",
-                &(u64::from(size) * u64::from(wasmtime_environ::WASM_PAGE_SIZE)),
-            );
+        if let Some(size) = self.tunables.static_memory_reservation {
+            f.field("static_memory_maximum_reservation", &size);
         }
         if let Some(size) = self.tunables.static_memory_offset_guard_size {
             f.field("static_memory_guard_size", &size);
