@@ -5,7 +5,8 @@ use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
 use anyhow::{anyhow, bail, Context, Result};
 use core::mem::ManuallyDrop;
 use core::ops::Range;
-use object::read::{File, Object, ObjectSection};
+use object::endian::NativeEndian;
+use object::read::{elf::ElfFile64, Object, ObjectSection};
 use object::ObjectSymbol;
 use wasmtime_environ::obj;
 use wasmtime_jit_icache_coherence as icache_coherence;
@@ -57,7 +58,7 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Result<Self> {
-        let obj = File::parse(&mmap[..])
+        let obj = ElfFile64::<NativeEndian>::parse(&mmap[..])
             .err2anyhow()
             .with_context(|| "failed to parse internal compilation artifact")?;
 
