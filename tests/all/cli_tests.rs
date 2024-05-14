@@ -1818,6 +1818,30 @@ mod test_programs {
         );
         Ok(())
     }
+
+    #[test]
+    fn cli_large_env() -> Result<()> {
+        for wasm in [CLI_LARGE_ENV, CLI_LARGE_ENV_COMPONENT] {
+            println!("run {wasm:?}");
+            let mut cmd = get_wasmtime_command()?;
+            cmd.arg("run").arg("-Sinherit-env").arg(wasm);
+
+            let debug_cmd = format!("{cmd:?}");
+            for i in 0..512 {
+                let var = format!("KEY{i}");
+                let val = (0..1024).map(|_| 'x').collect::<String>();
+                cmd.env(&var, &val);
+            }
+            let output = cmd.output()?;
+            if !output.status.success() {
+                bail!(
+                    "Failed to execute wasmtime with: {debug_cmd}\n{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 #[test]
