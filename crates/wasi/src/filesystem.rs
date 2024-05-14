@@ -248,6 +248,31 @@ impl FileInputStream {
     pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use system_interface::fs::FileIoExt;
         let p = self.position;
+
+        if size == 0 {
+            let r: Result<_, std::io::Error> = self
+                .file
+                .spawn_blocking(move |f| {
+                    let len = f.seek(std::io::SeekFrom::End(0))?;
+                    if len != p {
+                        f.seek(std::io::SeekFrom::Start(p))?;
+                    }
+                    Ok(len)
+                })
+                .await;
+
+            return match r {
+                Ok(len) => {
+                    if len == p {
+                        Err(StreamError::Closed)
+                    } else {
+                        Ok(Bytes::default())
+                    }
+                }
+                Err(e) => Err(StreamError::LastOperationFailed(e.into())),
+            };
+        }
+
         let (r, mut buf) = self
             .file
             .spawn_blocking(move |f| {
