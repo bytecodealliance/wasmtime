@@ -773,7 +773,7 @@ mod tests {
                 ..Default::default()
             },
             &Tunables {
-                static_memory_bound: 1,
+                static_memory_reservation: 65536,
                 static_memory_offset_guard_size: 0,
                 ..Tunables::default_host()
             },
@@ -807,7 +807,7 @@ mod tests {
         let pool = PoolingInstanceAllocator::new(
             &config,
             &Tunables {
-                static_memory_bound: 1,
+                static_memory_reservation: 65536,
                 static_memory_offset_guard_size: 0,
                 ..Tunables::default_host()
             },
