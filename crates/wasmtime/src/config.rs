@@ -1845,6 +1845,10 @@ impl Config {
             if tunables.winch_callable && tunables.tail_callable {
                 bail!("Winch does not support the WebAssembly tail call proposal");
             }
+
+            if tunables.winch_callable && !tunables.table_lazy_init {
+                bail!("Winch requires the table-lazy-init configuration option");
+            }
         }
 
         if tunables.static_memory_offset_guard_size < tunables.dynamic_memory_offset_guard_size {

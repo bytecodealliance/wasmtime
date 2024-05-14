@@ -227,6 +227,9 @@ impl Config {
             }
 
             cfg.cranelift_pcc(pcc);
+
+            // Eager init is currently only supported on Cranelift, not Winch.
+            cfg.table_lazy_init(self.wasmtime.table_lazy_init);
         }
 
         self.wasmtime.async_config.configure(&mut cfg);
@@ -483,6 +486,7 @@ pub struct WasmtimeConfig {
     cache_call_indirects: bool,
     /// The maximum number of call-indirect cache slots.
     max_call_indirect_cache_slots: usize,
+    table_lazy_init: bool,
 
     /// Whether or not fuzzing should enable PCC.
     pcc: bool,

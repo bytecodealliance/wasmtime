@@ -311,7 +311,8 @@ pub trait InitMemory {
 pub enum TableStyle {
     /// Signatures are stored in the table and checked in the caller.
     CallerChecksSignature {
-        /// TODO
+        /// Whether this table is initialized lazily and requires an
+        /// initialization check on every access.
         lazy_init: bool,
     },
 }
