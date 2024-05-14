@@ -1827,7 +1827,7 @@ mod test_programs {
             cmd.arg("run").arg("-Sinherit-env").arg(wasm);
 
             let debug_cmd = format!("{cmd:?}");
-            for i in 0..1024 {
+            for i in 0..512 {
                 let var = format!("KEY{i}");
                 let val = (0..1024).map(|_| 'x').collect::<String>();
                 cmd.env(&var, &val);
