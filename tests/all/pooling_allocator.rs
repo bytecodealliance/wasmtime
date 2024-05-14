@@ -430,13 +430,7 @@ fn total_core_instances_limit() -> Result<()> {
 
         match Instance::new(&mut store, &module, &[]) {
             Ok(_) => panic!("instantiation should fail"),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                format!(
-                    "maximum concurrent core instance limit of {} reached",
-                    INSTANCE_LIMIT
-                )
-            ),
+            Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
         }
     }
 
@@ -650,7 +644,7 @@ fn instance_too_large() -> Result<()> {
     let engine = Engine::new(&config)?;
     let expected = if cfg!(feature = "wmemcheck") {
         "\
-instance allocation for this module requires 336 bytes which exceeds the \
+        instance allocation for this module requires 336 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 76.19% - 256 bytes - instance state management
@@ -867,13 +861,7 @@ fn total_component_instances_limit() -> Result<()> {
 
     match linker.instantiate(&mut store, &component) {
         Ok(_) => panic!("should have hit component instance limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!(
-                "maximum concurrent component instance limit of {} reached",
-                TOTAL_COMPONENT_INSTANCES
-            ),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     drop(store);
@@ -929,10 +917,7 @@ fn total_tables_limit() -> Result<()> {
 
     match linker.instantiate(&mut store, &module) {
         Ok(_) => panic!("should have hit table limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!("maximum concurrent table limit of {} reached", TOTAL_TABLES),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     drop(store);
@@ -1006,10 +991,7 @@ async fn total_stacks_limit() -> Result<()> {
     let mut store3 = Store::new(&engine, ());
     match linker.instantiate_async(&mut store3, &module).await {
         Ok(_) => panic!("should have hit stack limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!("maximum concurrent fiber limit of {} reached", TOTAL_STACKS),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     // Finish the futures and return their Wasm stacks to the pool.
@@ -1185,19 +1167,51 @@ fn total_memories_limit() -> Result<()> {
 
     match linker.instantiate(&mut store, &module) {
         Ok(_) => panic!("should have hit memory limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!(
-                "maximum concurrent memory limit of {} reached for stripe 0",
-                TOTAL_MEMORIES
-            ),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     drop(store);
     let mut store = Store::new(&engine, ());
     for _ in 0..TOTAL_MEMORIES {
         linker.instantiate(&mut store, &module)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn decommit_batching() -> Result<()> {
+    for (capacity, batch_size) in [
+        // A reasonable batch size.
+        (10, 5),
+        // Batch sizes of zero and one should effectively disable batching.
+        (10, 1),
+        (10, 0),
+        // A bigger batch size than capacity, which forces the allocation path
+        // to flush the decommit queue.
+        (10, 99),
+    ] {
+        let mut pool = crate::small_pool_config();
+        pool.total_memories(capacity)
+            .total_core_instances(capacity)
+            .decommit_batch_size(batch_size)
+            .memory_protection_keys(MpkEnabled::Disable);
+        let mut config = Config::new();
+        config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+
+        let engine = Engine::new(&config)?;
+        let linker = Linker::new(&engine);
+        let module = Module::new(&engine, "(module (memory 1 1))")?;
+
+        // Just make sure that we can instantiate all slots a few times and the
+        // pooling allocator must be flushing the decommit queue as necessary.
+        for _ in 0..3 {
+            let mut store = Store::new(&engine, ());
+            for _ in 0..capacity {
+                linker.instantiate(&mut store, &module)?;
+            }
+        }
     }
 
     Ok(())
