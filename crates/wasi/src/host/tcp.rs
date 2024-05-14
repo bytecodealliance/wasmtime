@@ -12,9 +12,9 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
 
-impl<T: WasiView> tcp::Host for T {}
+impl tcp::Host for dyn WasiView + '_ {}
 
-impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
+impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
     fn start_bind(
         &mut self,
         this: Resource<tcp::TcpSocket>,

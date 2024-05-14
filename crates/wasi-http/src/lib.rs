@@ -78,7 +78,6 @@ pub mod bindings {
         trappable_error_type: {
             "wasi:http/types/error-code" => crate::HttpError,
         },
-        skip_mut_forwarding_impls: true,
     });
 
     pub use wasi::http;

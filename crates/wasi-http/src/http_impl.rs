@@ -15,7 +15,7 @@ use http_body_util::{BodyExt, Empty};
 use hyper::Method;
 use wasmtime::component::Resource;
 
-impl<T: WasiHttpView> outgoing_handler::Host for T {
+impl outgoing_handler::Host for dyn WasiHttpView + '_ {
     fn handle(
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
