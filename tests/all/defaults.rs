@@ -1,6 +1,7 @@
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_tail_call_default() -> Result<()> {
     for (expected, cfg) in [
         (
