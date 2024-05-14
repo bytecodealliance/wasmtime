@@ -80,6 +80,10 @@ Unreleased.
   subcommand.
   [#8525](https://github.com/bytecodealliance/wasmtime/issues/8525)
 
+* The `read` implementation for file input streams in wasmtime-wasi now
+  correctly handles zero-length reads.
+  [#8611](https://github.com/bytecodealliance/wasmtime/issues/8611)
+
 --------------------------------------------------------------------------------
 
 ## 20.0.1

@@ -22,7 +22,31 @@ fn main() {
     let stream = file.read_via_stream(0).unwrap();
     let contents = stream.blocking_read(100).unwrap();
     assert_eq!(contents, b"\0\0\0\0\0Hello, World!");
-    drop((stream, file));
+    drop(stream);
+
+    // Test that file read streams behave like other read streams.
+    let mut buf = Vec::new();
+    let stream = file.read_via_stream(0).unwrap();
+    let ready = stream.subscribe();
+    loop {
+        ready.block();
+
+        match stream.read(0) {
+            Ok(chunk) => assert!(chunk.is_empty()),
+            Err(wasi::io::streams::StreamError::Closed) => break,
+            Err(e) => panic!("Failed checking stream state: {e:?}"),
+        }
+
+        match stream.read(4) {
+            Ok(chunk) => buf.extend(chunk),
+            Err(wasi::io::streams::StreamError::Closed) => break,
+            Err(e) => panic!("Failed reading stream: {e:?}"),
+        }
+    }
+    assert_eq!(buf, b"\0\0\0\0\0Hello, World!");
+    drop(ready);
+    drop(stream);
+    drop(file);
 
     dir.unlink_file_at(filename).unwrap();
 }
