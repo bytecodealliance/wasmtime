@@ -453,6 +453,7 @@ fn dummy_funcs_and_subtypes(
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn new_global_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -492,6 +493,7 @@ fn new_global_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn global_set_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -528,6 +530,7 @@ fn global_set_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn new_table_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -558,6 +561,7 @@ fn new_table_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_set_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -600,6 +604,7 @@ fn table_set_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_grow_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -643,6 +648,7 @@ fn table_grow_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_fill_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -682,6 +688,7 @@ fn table_fill_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_copy_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
