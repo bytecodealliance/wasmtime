@@ -31,6 +31,12 @@ fn main() {
     loop {
         ready.block();
 
+        match stream.read(0) {
+            Ok(chunk) => assert!(chunk.is_empty()),
+            Err(wasi::io::streams::StreamError::Closed) => break,
+            Err(e) => panic!("Failed checking stream state: {e:?}"),
+        }
+
         match stream.read(4) {
             Ok(chunk) => buf.extend(chunk),
             Err(wasi::io::streams::StreamError::Closed) => break,
