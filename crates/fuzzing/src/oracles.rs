@@ -368,10 +368,7 @@ fn unwrap_instance(
     }
 
     // Also allow failures to instantiate as a result of hitting pooling limits.
-    if string.contains("maximum concurrent core instance limit")
-        || string.contains("maximum concurrent memory limit")
-        || string.contains("maximum concurrent table limit")
-    {
+    if e.is::<wasmtime::PoolConcurrencyLimitError>() {
         log::debug!("failed to instantiate: {}", string);
         return None;
     }
