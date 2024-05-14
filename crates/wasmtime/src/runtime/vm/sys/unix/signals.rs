@@ -255,6 +255,12 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 cx.mc_gpregs.gp_elr as *const u8,
                 cx.mc_gpregs.gp_x[29] as usize,
             )
+        } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            (
+                cx.sc_rip as *const u8,
+                cx.sc_rbp as usize,
+            )
         }
         else {
             compile_error!("unsupported platform");
