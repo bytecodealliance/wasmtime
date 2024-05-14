@@ -612,22 +612,38 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Test debug (DWARF) related functionality.
+    # NB: the test job here is explicitly lacking in cancellation of this run if
+    # something goes wrong. These take the longest anyway and otherwise if
+    # Windows fails GitHub Actions will confusingly mark the failed Windows job
+    # as cancelled instead of failed.
+
+  # Test debug (DWARF) related functionality.
+  test_debug_dwarf:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: Test DWARF debugging
+    runs-on: 'ubuntu-latest'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
         # woraround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         cargo test test_debug_dwarf -- --ignored --test-threads 1
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
         RUST_BACKTRACE: 1
         LLDB: lldb-15 # override default version, 14
 
-    # NB: the test job here is explicitly lacking in cancellation of this run if
-    # something goes wrong. These take the longest anyway and otherwise if
-    # Windows fails GitHub Actions will confusingly mark the failed Windows job
-    # as cancelled instead of failed.
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   build-preview1-component-adapter:
     name: Build wasi-preview1-component-adapter
@@ -907,6 +923,7 @@ jobs:
     needs:
       - test
       - test_capi
+      - test_debug_dwarf
       - build
       - rustfmt
       - clangformat
