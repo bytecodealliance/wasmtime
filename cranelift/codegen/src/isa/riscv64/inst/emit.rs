@@ -6,7 +6,6 @@ use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
     CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
 };
-use crate::trace;
 use cranelift_control::ControlPlane;
 
 pub struct EmitInfo {
@@ -47,7 +46,6 @@ pub enum EmitVState {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    pub(crate) virtual_sp_offset: i64,
     pub(crate) nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
@@ -76,7 +74,6 @@ impl MachInstEmitState<Inst> for EmitState {
         ctrl_plane: ControlPlane,
     ) -> Self {
         EmitState {
-            virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             ctrl_plane,
@@ -171,7 +168,6 @@ impl Inst {
             | Inst::LoadExtName { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::LoadAddr { .. }
-            | Inst::VirtualSPOffsetAdj { .. }
             | Inst::Mov { .. }
             | Inst::MovFromPReg { .. }
             | Inst::Fence { .. }
@@ -1143,12 +1139,12 @@ impl Inst {
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
-                let callee_pop_size = i64::from(info.callee_pop_size);
-                state.virtual_sp_offset -= callee_pop_size;
-                trace!(
-                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
-                    state.virtual_sp_offset
-                );
+                let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
+                if callee_pop_size > 0 {
+                    for inst in Riscv64MachineDeps::gen_sp_reg_adjust(-callee_pop_size) {
+                        inst.emit(sink, emit_info, state);
+                    }
+                }
             }
             &Inst::CallInd { ref info } => {
                 let start_offset = sink.cur_offset();
@@ -1168,12 +1164,12 @@ impl Inst {
                     sink.add_call_site(info.opcode);
                 }
 
-                let callee_pop_size = i64::from(info.callee_pop_size);
-                state.virtual_sp_offset -= callee_pop_size;
-                trace!(
-                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
-                    state.virtual_sp_offset
-                );
+                let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
+                if callee_pop_size > 0 {
+                    for inst in Riscv64MachineDeps::gen_sp_reg_adjust(-callee_pop_size) {
+                        inst.emit(sink, emit_info, state);
+                    }
+                }
             }
 
             &Inst::ReturnCall {
@@ -1423,14 +1419,6 @@ impl Inst {
                 *start_off = sink.cur_offset();
             }
 
-            &Inst::VirtualSPOffsetAdj { amount } => {
-                crate::trace!(
-                    "virtual sp offset adjusted by {} -> {}",
-                    amount,
-                    state.virtual_sp_offset + amount
-                );
-                state.virtual_sp_offset += amount;
-            }
             &Inst::Atomic {
                 op,
                 rd,

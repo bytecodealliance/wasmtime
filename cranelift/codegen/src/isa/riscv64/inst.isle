@@ -157,11 +157,6 @@
       (rd WritableReg)
       (mem AMode))
 
-    ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
-    ;; controls how AMode::NominalSPOffset args are lowered.
-    (VirtualSPOffsetAdj
-      (amount i64))
-
     ;; A MOV instruction. These are encoded as OrR's (AluRRR form) but we
     ;; keep them separate at the `Inst` level for better pretty-printing
     ;; and faster `is_move()` logic.

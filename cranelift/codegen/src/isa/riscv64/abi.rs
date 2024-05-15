@@ -337,10 +337,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> SmallInstVec<Inst> {
-        smallvec![Inst::VirtualSPOffsetAdj {
-            amount: offset as i64,
-        }]
+    fn gen_nominal_sp_adj(_offset: i32) -> SmallInstVec<Inst> {
+        smallvec![]
     }
 
     fn gen_prologue_frame_setup(
@@ -509,12 +507,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         if stack_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
 
-            // Adjust the nominal sp to account for the outgoing argument area.
-            let sp_adj = frame_layout.outgoing_args_size as i32;
-            if sp_adj > 0 {
-                insts.extend(Self::gen_nominal_sp_adj(sp_adj));
-            }
-
             let mut cur_offset = 8;
             for reg in &frame_layout.clobbered_callee_saves {
                 let r_reg = reg.to_reg();
@@ -578,6 +570,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
 
         insts
+    }
+
+    // Leave management of SP to emit
+    fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
+        smallvec![]
+    }
+
+    // Leave management of SP to emit
+    fn gen_restore_argument_area(_ret_space: u32, _arg_space: u32) -> SmallInstVec<Self::I> {
+        smallvec![]
     }
 
     fn gen_call(
@@ -696,7 +698,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     /// Get the current virtual-SP offset from an instruction-emission state.
     fn get_virtual_sp_offset_from_state(s: &EmitState) -> i64 {
-        s.virtual_sp_offset
+        i64::from(s.frame_layout().outgoing_args_size)
     }
 
     /// Get the nominal-SP-to-FP offset from an instruction-emission state.

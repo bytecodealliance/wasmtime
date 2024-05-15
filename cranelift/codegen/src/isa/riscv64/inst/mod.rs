@@ -419,7 +419,6 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(rd);
         }
 
-        Inst::VirtualSPOffsetAdj { .. } => {}
         Inst::Mov { rd, rm, .. } => {
             collector.reg_use(rm);
             collector.reg_def(rd);
@@ -1460,9 +1459,6 @@ impl Inst {
                 let rs = mem.to_string();
                 let rd = format_reg(rd.to_reg());
                 format!("load_addr {},{}", rd, rs)
-            }
-            &MInst::VirtualSPOffsetAdj { amount } => {
-                format!("virtual_sp_offset_adj {:+}", amount)
             }
             &MInst::Mov { rd, rm, ty } => {
                 let rm = format_reg(rm);
