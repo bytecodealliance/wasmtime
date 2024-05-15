@@ -292,4 +292,28 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     fn u64_bswap64(&mut self, n: u64) -> u64 {
         n.swap_bytes()
     }
+
+    fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
+        n.neg()
+    }
+
+    fn f32_abs(&mut self, n: Ieee32) -> Ieee32 {
+        n.abs()
+    }
+
+    fn f32_copysign(&mut self, a: Ieee32, b: Ieee32) -> Ieee32 {
+        a.copysign(b)
+    }
+
+    fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {
+        n.neg()
+    }
+
+    fn f64_abs(&mut self, n: Ieee64) -> Ieee64 {
+        n.abs()
+    }
+
+    fn f64_copysign(&mut self, a: Ieee64, b: Ieee64) -> Ieee64 {
+        a.copysign(b)
+    }
 }
