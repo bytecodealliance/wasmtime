@@ -132,7 +132,6 @@ block0(v0: i8):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
-;   virtual_sp_offset_adjust 16
 ; block0:
 ;   movz w7, #42
 ;   strb w0, [sp]
@@ -697,7 +696,6 @@ block0(v0: i128, v1: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
-;   virtual_sp_offset_adjust 16
 ; block0:
 ;   mov x6, x2
 ;   str x0, [sp]
@@ -774,7 +772,6 @@ block0(v0: i128, v1: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
-;   virtual_sp_offset_adjust 16
 ; block0:
 ;   mov x6, x2
 ;   str x0, [sp]

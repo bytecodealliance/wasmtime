@@ -43,13 +43,14 @@ pub fn mem_finalize(
                     ) - off
                 }
                 &AMode::NominalSPOffset { .. } => {
+                    let adj = i64::from(state.frame_layout().outgoing_args_size);
                     trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
-                        state.virtual_sp_offset,
-                        off + state.virtual_sp_offset
+                        adj,
+                        off + adj
                     );
-                    off + state.virtual_sp_offset
+                    off + adj
                 }
                 _ => off,
             };
@@ -650,9 +651,6 @@ fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Addend to convert nominal-SP offsets to real-SP offsets at the current
-    /// program point.
-    pub(crate) virtual_sp_offset: i64,
     /// Offset of FP from nominal-SP.
     pub(crate) nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
@@ -666,7 +664,6 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             ctrl_plane,
@@ -696,7 +693,7 @@ impl EmitState {
         self.stack_map = None;
     }
 
-    fn frame_layout(&self) -> &FrameLayout {
+    pub(crate) fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
     }
 }
@@ -2936,12 +2933,13 @@ impl MachInstEmit for Inst {
                     sink.add_call_site(info.opcode);
                 }
 
-                let callee_pop_size = i64::from(info.callee_pop_size);
-                state.virtual_sp_offset -= callee_pop_size;
-                trace!(
-                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
-                    state.virtual_sp_offset
-                );
+                if info.callee_pop_size > 0 {
+                    let callee_pop_size =
+                        i32::try_from(info.callee_pop_size).expect("callee popped more than 2GB");
+                    for inst in AArch64MachineDeps::gen_sp_reg_adjust(-callee_pop_size) {
+                        inst.emit(sink, emit_info, state);
+                    }
+                }
             }
             &Inst::CallInd { ref info } => {
                 if let Some(s) = state.take_stack_map() {
@@ -2953,12 +2951,13 @@ impl MachInstEmit for Inst {
                     sink.add_call_site(info.opcode);
                 }
 
-                let callee_pop_size = i64::from(info.callee_pop_size);
-                state.virtual_sp_offset -= callee_pop_size;
-                trace!(
-                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
-                    state.virtual_sp_offset
-                );
+                if info.callee_pop_size > 0 {
+                    let callee_pop_size =
+                        i32::try_from(info.callee_pop_size).expect("callee popped more than 2GB");
+                    for inst in AArch64MachineDeps::gen_sp_reg_adjust(-callee_pop_size) {
+                        inst.emit(sink, emit_info, state);
+                    }
+                }
             }
             &Inst::ReturnCall {
                 ref callee,
@@ -3315,14 +3314,6 @@ impl MachInstEmit for Inst {
                 };
 
                 sink.put4(0xd503241f | targets << 6);
-            }
-            &Inst::VirtualSPOffsetAdj { offset } => {
-                trace!(
-                    "virtual sp offset adjusted by {} -> {}",
-                    offset,
-                    state.virtual_sp_offset + offset,
-                );
-                state.virtual_sp_offset += offset;
             }
             &Inst::EmitIsland { needed_space } => {
                 if sink.island_needed(needed_space + 4) {

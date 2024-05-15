@@ -70,7 +70,6 @@ block0:
 ;   stp x21, x22, [sp, #-16]!
 ;   stp x19, x20, [sp, #-16]!
 ;   sub sp, sp, #160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   movz x2, #10
 ;   movz x3, #15
@@ -120,8 +119,6 @@ block0:
 ;   str x26, [sp, #152]
 ;   load_ext_name x15, TestCase(%tail_callee_stack_args)+0
 ;   blr x15
-;   sub sp, sp, #160
-;   virtual_sp_offset_adjust 160
 ;   add sp, sp, #160
 ;   ldp x19, x20, [sp], #16
 ;   ldp x21, x22, [sp], #16
@@ -383,7 +380,6 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   mov x0, sp
 ;   load_ext_name x12, TestCase(%tail_callee_stack_rets)+0
@@ -624,7 +620,6 @@ block0:
 ;   stp x21, x22, [sp, #-16]!
 ;   stp x19, x20, [sp, #-16]!
 ;   sub sp, sp, #320
-;   virtual_sp_offset_adjust 320
 ; block0:
 ;   movz x2, #10
 ;   movz x3, #15
@@ -675,27 +670,25 @@ block0:
 ;   add x0, sp, #160
 ;   load_ext_name x10, TestCase(%tail_callee_stack_args_and_rets)+0
 ;   blr x10
-;   sub sp, sp, #160
-;   virtual_sp_offset_adjust 160
-;   ldr x9, [sp, #160]
-;   ldr x11, [sp, #168]
-;   ldr x13, [sp, #176]
-;   ldr x15, [sp, #184]
-;   ldr x1, [sp, #192]
-;   ldr x3, [sp, #200]
-;   ldr x5, [sp, #208]
-;   ldr x7, [sp, #216]
-;   ldr x9, [sp, #224]
-;   ldr x11, [sp, #232]
-;   ldr x13, [sp, #240]
-;   ldr x15, [sp, #248]
-;   ldr x1, [sp, #256]
-;   ldr x3, [sp, #264]
-;   ldr x5, [sp, #272]
-;   ldr x7, [sp, #280]
-;   ldr x9, [sp, #288]
-;   ldr x11, [sp, #296]
-;   ldr x13, [sp, #304]
+;   ldr x7, [sp, #160]
+;   ldr x9, [sp, #168]
+;   ldr x11, [sp, #176]
+;   ldr x13, [sp, #184]
+;   ldr x15, [sp, #192]
+;   ldr x1, [sp, #200]
+;   ldr x3, [sp, #208]
+;   ldr x5, [sp, #216]
+;   ldr x7, [sp, #224]
+;   ldr x9, [sp, #232]
+;   ldr x11, [sp, #240]
+;   ldr x13, [sp, #248]
+;   ldr x15, [sp, #256]
+;   ldr x1, [sp, #264]
+;   ldr x3, [sp, #272]
+;   ldr x5, [sp, #280]
+;   ldr x7, [sp, #288]
+;   ldr x9, [sp, #296]
+;   ldr x11, [sp, #304]
 ;   ldr x2, [sp, #312]
 ;   add sp, sp, #320
 ;   ldp x19, x20, [sp], #16
@@ -770,25 +763,25 @@ block0:
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x10
 ;   sub sp, sp, #0xa0
-;   ldur x9, [sp, #0xa0]
-;   ldur x11, [sp, #0xa8]
-;   ldur x13, [sp, #0xb0]
-;   ldur x15, [sp, #0xb8]
-;   ldur x1, [sp, #0xc0]
-;   ldur x3, [sp, #0xc8]
-;   ldur x5, [sp, #0xd0]
-;   ldur x7, [sp, #0xd8]
-;   ldur x9, [sp, #0xe0]
-;   ldur x11, [sp, #0xe8]
-;   ldur x13, [sp, #0xf0]
-;   ldur x15, [sp, #0xf8]
-;   ldr x1, [sp, #0x100]
-;   ldr x3, [sp, #0x108]
-;   ldr x5, [sp, #0x110]
-;   ldr x7, [sp, #0x118]
-;   ldr x9, [sp, #0x120]
-;   ldr x11, [sp, #0x128]
-;   ldr x13, [sp, #0x130]
+;   ldur x7, [sp, #0xa0]
+;   ldur x9, [sp, #0xa8]
+;   ldur x11, [sp, #0xb0]
+;   ldur x13, [sp, #0xb8]
+;   ldur x15, [sp, #0xc0]
+;   ldur x1, [sp, #0xc8]
+;   ldur x3, [sp, #0xd0]
+;   ldur x5, [sp, #0xd8]
+;   ldur x7, [sp, #0xe0]
+;   ldur x9, [sp, #0xe8]
+;   ldur x11, [sp, #0xf0]
+;   ldur x13, [sp, #0xf8]
+;   ldr x15, [sp, #0x100]
+;   ldr x1, [sp, #0x108]
+;   ldr x3, [sp, #0x110]
+;   ldr x5, [sp, #0x118]
+;   ldr x7, [sp, #0x120]
+;   ldr x9, [sp, #0x128]
+;   ldr x11, [sp, #0x130]
 ;   ldr x2, [sp, #0x138]
 ;   add sp, sp, #0x140
 ;   ldp x19, x20, [sp], #0x10

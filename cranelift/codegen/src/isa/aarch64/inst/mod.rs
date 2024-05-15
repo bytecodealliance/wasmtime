@@ -944,7 +944,6 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // to do anything.
         }
         Inst::Bti { .. } => {}
-        Inst::VirtualSPOffsetAdj { .. } => {}
 
         Inst::ElfTlsGetAddr { rd, tmp, .. } => {
             // TLSDESC has a very neat calling convention. It is required to preserve
@@ -2842,10 +2841,6 @@ impl Inst {
                 };
 
                 "bti".to_string() + targets
-            }
-            &Inst::VirtualSPOffsetAdj { offset } => {
-                state.virtual_sp_offset += offset;
-                format!("virtual_sp_offset_adjust {}", offset)
             }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
