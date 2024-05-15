@@ -472,48 +472,6 @@ pub trait ABIMachineSpec {
     /// Adjust the stack pointer up or down.
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I>;
 
-    /// Generate a meta-instruction that adjusts the nominal SP offset.
-    fn gen_nominal_sp_adj(amount: i32) -> SmallInstVec<Self::I>;
-
-    /// When setting up for a call, ensure that `space` bytes are available in the outgoing
-    /// argument area on the stack. The specified amount of space is the minimum required for both
-    /// arguments to that function, and any values returned through the stack. There are two
-    /// reasonable implementations which each target can choose between:
-    /// 1. At least this much space is reserved during the prologue and `StackAMode::OutgoingArg`
-    ///    refers to the bottom of the reserved area, so this method does nothing.
-    /// 2. `StackAMode::OutgoingArg` refers to the top of this area, so this method needs to adjust
-    ///    the stack pointer to trim any unused portion of the bottom of the stack frame
-    ///    immediately before the call. `gen_restore_argument_area` needs to undo any stack pointer
-    ///    changes made here.
-    fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
-        smallvec![]
-    }
-
-    /// When returning from a call, perform any cleanup necessary to restore the stack pointer to
-    /// just after the argument area. This ensures that we always have
-    /// [`FrameLayout::outgoing_args_size`] bytes available in the argument area.
-    ///
-    /// * `ret_space` - The space left consumed in the outgoing argument area for values returned
-    ///   by the callee.
-    /// * `arg_space` - The argument space explicitly cleaned up by the callee when it returns. A
-    ///   value of `0` indicates that the callee did not cleanup the argument area at all, while
-    ///   any other value indicates that the callee has moved the stack pointer to account for
-    ///   those arguments when it returns (as is the case for the tail calling convention).
-    fn gen_restore_argument_area(_ret_space: u32, arg_space: u32) -> SmallInstVec<Self::I> {
-        if arg_space > 0 {
-            let amount = i32::try_from(arg_space).unwrap();
-
-            // Recover the argument space by decrementing sp
-            let mut insts = Self::gen_sp_reg_adjust(-amount);
-
-            // Emit a nominal sp adjustment to ensure offsets are computed correctly
-            insts.extend(Self::gen_nominal_sp_adj(amount));
-            insts
-        } else {
-            smallvec![]
-        }
-    }
-
     /// Compute a FrameLayout structure containing a sorted list of all clobbered
     /// registers that are callee-saved according to the ABI, as well as the sizes
     /// of all parts of the stack frame.  The result is used to emit the prologue
@@ -2453,14 +2411,15 @@ impl<M: ABIMachineSpec> CallSite<M> {
         ctx.abi_mut()
             .accumulate_outgoing_args_size(ret_space + arg_space);
 
-        // Any adjustment to SP to account for required outgoing arguments/stack return values must
-        // be done around the call, to ensure that SP is always in a consistent state for all other
-        // writes.
-        for inst in M::gen_reserve_argument_area(ret_space + arg_space) {
-            ctx.emit(inst);
-        }
-
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
+
+        // Any adjustment to SP to account for required outgoing arguments/stack return values must
+        // be done inside of the the call pseudo-op, to ensure that SP is always in a consistent
+        // state for all other instructions. For example, if a tail-call abi function is called
+        // here, the reclamation of the outgoing argument area must be done inside of the call
+        // pseudo-op's emission to ensure that SP is consisten at all other points in the lowered
+        // function. (Except the prologue and epilogue, but those are fairly special parts of the
+        // function that establish the SP invariants that are relied on elsewhere.)
         for inst in M::gen_call(
             &self.dest,
             uses,
@@ -2474,20 +2433,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
         )
         .into_iter()
         {
-            ctx.emit(inst);
-        }
-
-        // Compute the space that's reclaimed by the callee when it returns. In the case of the
-        // Tail calling convention, the callee will cleanup the arguments used in the outgoing
-        // argument area, which we will need to adjust back down to restore SP to where it was
-        // before the call.
-        let arg_space = if call_conv == isa::CallConv::Tail {
-            arg_space
-        } else {
-            0
-        };
-
-        for inst in M::gen_restore_argument_area(ret_space, arg_space) {
             ctx.emit(inst);
         }
     }

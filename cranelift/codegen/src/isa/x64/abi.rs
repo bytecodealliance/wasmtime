@@ -523,10 +523,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         )]
     }
 
-    fn gen_nominal_sp_adj(_offset: i32) -> SmallInstVec<Self::I> {
-        smallvec![]
-    }
-
     fn gen_prologue_frame_setup(
         _call_conv: isa::CallConv,
         flags: &settings::Flags,
@@ -798,16 +794,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         insts
-    }
-
-    // Leave management of SP to emit
-    fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
-        smallvec![]
-    }
-
-    // Leave management of SP to emit
-    fn gen_restore_argument_area(_ret_space: u32, _arg_space: u32) -> SmallInstVec<Self::I> {
-        smallvec![]
     }
 
     /// Generate a call instruction/sequence.

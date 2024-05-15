@@ -538,10 +538,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_nominal_sp_adj(_offset: i32) -> SmallInstVec<Inst> {
-        smallvec![]
-    }
-
     fn gen_prologue_frame_setup(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
@@ -730,16 +726,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
 
         insts
-    }
-
-    // Leave management of SP to emit
-    fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
-        unreachable!()
-    }
-
-    // Leave management of SP to emit
-    fn gen_restore_argument_area(_ret_space: u32, _arg_space: u32) -> SmallInstVec<Self::I> {
-        unreachable!()
     }
 
     fn gen_call(
