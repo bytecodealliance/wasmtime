@@ -16,7 +16,6 @@ block0(v0: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
 ;   basr %r14, %r5
@@ -49,7 +48,6 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
 ;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
@@ -99,7 +97,6 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   lgfr %r2, %r2
 ;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
@@ -149,7 +146,6 @@ block0(v0: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   brasl %r14, %g
 ;   lmg %r14, %r15, 272(%r15)
@@ -175,7 +171,6 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
 ;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
@@ -209,7 +204,6 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   basr %r14, %r3
 ;   lmg %r14, %r15, 272(%r15)
@@ -378,7 +372,6 @@ block0:
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   lghi %r2, 0
 ;   brasl %r14, %g

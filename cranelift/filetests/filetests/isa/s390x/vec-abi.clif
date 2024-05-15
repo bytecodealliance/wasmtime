@@ -12,7 +12,6 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -224
-;   virtual_sp_offset_adjust 224
 ; block0:
 ;   vl %v17, 384(%r15)
 ;   vl %v19, 400(%r15)
@@ -61,7 +60,6 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -288
-;   virtual_sp_offset_adjust 224
 ;   std %f8, 224(%r15)
 ;   std %f9, 232(%r15)
 ;   std %f10, 240(%r15)
@@ -206,7 +204,6 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -288
-;   virtual_sp_offset_adjust 224
 ;   std %f8, 224(%r15)
 ;   std %f9, 232(%r15)
 ;   std %f10, 240(%r15)
@@ -351,7 +348,6 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -224
-;   virtual_sp_offset_adjust 224
 ; block0:
 ;   vl %v17, 384(%r15)
 ;   vl %v19, 400(%r15)

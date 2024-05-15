@@ -246,7 +246,6 @@ impl Inst {
             | Inst::LoadAddr { .. }
             | Inst::Loop { .. }
             | Inst::CondBreak { .. }
-            | Inst::VirtualSPOffsetAdj { .. }
             | Inst::Unwind { .. } => InstructionSet::Base,
 
             // These depend on the opcode
@@ -959,7 +958,6 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             }
         }
         Inst::CondBreak { .. } => {}
-        Inst::VirtualSPOffsetAdj { .. } => {}
         Inst::Unwind { .. } => {}
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
@@ -3266,10 +3264,6 @@ impl Inst {
             &Inst::CondBreak { cond } => {
                 let cond = cond.pretty_print_default();
                 format!("jg{} 1f", cond)
-            }
-            &Inst::VirtualSPOffsetAdj { offset } => {
-                state.virtual_sp_offset += offset;
-                format!("virtual_sp_offset_adjust {}", offset)
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)

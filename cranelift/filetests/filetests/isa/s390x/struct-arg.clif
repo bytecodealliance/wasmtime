@@ -50,7 +50,6 @@ block0(v0: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -224
-;   virtual_sp_offset_adjust 224
 ; block0:
 ;   mvc 160(63,%r15), 0(%r2)
 ;   la %r2, 160(%r15)
@@ -80,7 +79,6 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -224
-;   virtual_sp_offset_adjust 224
 ; block0:
 ;   mvc 160(63,%r15), 0(%r3)
 ;   la %r3, 160(%r15)
@@ -134,7 +132,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -480
-;   virtual_sp_offset_adjust 480
 ; block0:
 ;   mvc 160(255,%r15), 0(%r3)
 ;   mvc 416(63,%r15), 0(%r4)
@@ -168,7 +165,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ; VCode:
 ;   stmg %r7, %r15, 56(%r15)
 ;   aghi %r15, -1248
-;   virtual_sp_offset_adjust 1248
 ; block0:
 ;   lgr %r7, %r2
 ;   lgr %r9, %r4

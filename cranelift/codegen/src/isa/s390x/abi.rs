@@ -538,10 +538,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> SmallInstVec<Inst> {
-        smallvec![Inst::VirtualSPOffsetAdj {
-            offset: offset.into(),
-        }]
+    fn gen_nominal_sp_adj(_offset: i32) -> SmallInstVec<Inst> {
+        smallvec![]
     }
 
     fn gen_prologue_frame_setup(
@@ -647,11 +645,6 @@ impl ABIMachineSpec for S390xMachineDeps {
             });
         }
 
-        let sp_adj = frame_layout.outgoing_args_size as i32;
-        if sp_adj > 0 {
-            insts.extend(Self::gen_nominal_sp_adj(sp_adj));
-        }
-
         // Write the stack backchain if requested, using the value saved above.
         if flags.preserve_frame_pointers() {
             insts.push(Inst::Store64 {
@@ -739,6 +732,16 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
+    // Leave management of SP to emit
+    fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
+        unreachable!()
+    }
+
+    // Leave management of SP to emit
+    fn gen_restore_argument_area(_ret_space: u32, _arg_space: u32) -> SmallInstVec<Self::I> {
+        unreachable!()
+    }
+
     fn gen_call(
         _dest: &CallDest,
         _uses: CallArgList,
@@ -778,7 +781,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     /// Get the current virtual-SP offset from an instruction-emission state.
     fn get_virtual_sp_offset_from_state(s: &EmitState) -> i64 {
-        s.virtual_sp_offset
+        i64::from(s.frame_layout().outgoing_args_size)
     }
 
     /// Get the nominal-SP-to-FP offset from an instruction-emission state.
