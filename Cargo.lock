@@ -3816,7 +3816,7 @@ version = "22.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.32",
+ "syn 2.0.60",
 ]
 
 [[package]]

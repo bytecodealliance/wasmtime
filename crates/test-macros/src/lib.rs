@@ -35,7 +35,7 @@ pub fn wasmtime_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 return Err(meta.error("Expected at most 2 strategies"));
             }
 
-            if strategies.len() == 0 {
+            if strategies.is_empty() {
                 return Err(meta.error("Expected at least 1 strategy"));
             }
 
@@ -51,7 +51,6 @@ pub fn wasmtime_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
         Ok(tok) => tok,
         Err(e) => e.into_compile_error().into(),
     }
-    .into()
 }
 
 fn expand(strategies: &[(String, Ident)], func: ItemFn) -> Result<TokenStream> {
