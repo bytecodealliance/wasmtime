@@ -1,0 +1,17 @@
+[package]
+description = "Macros for testing Wasmtime"
+name = "wasmtime-test-macros"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+proc-macro = true
+test = false
+doctest = false
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = { workspace = true, features = ["full"] }

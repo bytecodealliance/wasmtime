@@ -3,10 +3,11 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
-#[test]
+#[wasmtime_test(strategies(Cranelift, Winch))]
 #[cfg_attr(miri, ignore)]
-fn call_wasm_to_wasm() -> Result<()> {
+fn call_wasm_to_wasm(config: &mut Config) -> Result<()> {
     let wasm = wat::parse_str(
         r#"
           (module
@@ -21,7 +22,8 @@ fn call_wasm_to_wasm() -> Result<()> {
           )
         "#,
     )?;
-    let mut store = Store::<()>::default();
+    let engine = Engine::new(&config)?;
+    let mut store = Store::<()>::new(&engine, ());
     let module = Module::new(store.engine(), &wasm)?;
     let instance = Instance::new(&mut store, &module, &[])?;
     let func = instance
