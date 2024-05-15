@@ -27,6 +27,7 @@ use crate::Engine;
 use anyhow::{Context, Result};
 use std::{
     any::Any,
+    borrow::Cow,
     collections::{btree_map, BTreeMap, BTreeSet, HashMap, HashSet},
     mem,
 };
@@ -346,6 +347,9 @@ struct CompileInputs<'a> {
 }
 
 impl<'a> CompileInputs<'a> {
+    /// Maximum length of symbols generated in objects.
+    const MAX_SYMBOL_LEN: usize = 96;
+
     fn push_input(&mut self, f: impl FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a) {
         self.inputs.push(Box::new(f));
     }
@@ -419,6 +423,26 @@ impl<'a> CompileInputs<'a> {
         ret
     }
 
+    fn clean_symbol(name: &str) -> Cow<str> {
+        // Just to be on the safe side, avoid passing user-provided data to tools
+        // like "perf" or "objdump", and filter the name.  Let only characters usually
+        // used for function names, plus some characters that might be used in name
+        // mangling.
+        let bad_char = |c: char| !c.is_alphanumeric() && !r"<>[]_-:@$".contains(c);
+        if name.chars().any(bad_char) {
+            let mut name = name
+                .chars()
+                .map(|c| if bad_char(c) { '?' } else { c })
+                .collect::<String>()
+                .trim_matches('?')
+                .to_string();
+            name.truncate(Self::MAX_SYMBOL_LEN);
+            Cow::Owned(name)
+        } else {
+            Cow::Borrowed(&name[..])
+        }
+    }
+
     fn collect_inputs_in_translations(
         &mut self,
         types: &'a ModuleTypesBuilder,
@@ -442,13 +466,15 @@ impl<'a> CompileInputs<'a> {
                         .func_names
                         .get(&func_index)
                     {
-                        Some(name) => format!("wasm[{}]::{}", module.as_u32(), name),
-                        None => format!(
-                            "wasm[{}]::function[{}]",
+                        Some(name) => format!(
+                            "wasm[{}]::func[{}]::{}",
                             module.as_u32(),
-                            func_index.as_u32()
+                            func_index.as_u32(),
+                            Self::clean_symbol(&name)
                         ),
+                        None => format!("wasm[{}]::func[{}]", module.as_u32(), func_index.as_u32()),
                     };
+
                     Ok(CompileOutput {
                         key: CompileKey::wasm_function(module, def_func_index),
                         symbol,
