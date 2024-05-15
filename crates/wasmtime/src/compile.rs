@@ -436,13 +436,22 @@ impl<'a> CompileInputs<'a> {
                     let func_index = translation.module.func_index(def_func_index);
                     let (info, function) =
                         compiler.compile_function(translation, def_func_index, func_body, types)?;
-                    Ok(CompileOutput {
-                        key: CompileKey::wasm_function(module, def_func_index),
-                        symbol: format!(
+                    let symbol = match translation
+                        .debuginfo
+                        .name_section
+                        .func_names
+                        .get(&func_index)
+                    {
+                        Some(name) => format!("wasm[{}]::{}", module.as_u32(), name),
+                        None => format!(
                             "wasm[{}]::function[{}]",
                             module.as_u32(),
                             func_index.as_u32()
                         ),
+                    };
+                    Ok(CompileOutput {
+                        key: CompileKey::wasm_function(module, def_func_index),
+                        symbol,
                         function: CompiledFunction::Function(function),
                         info: Some(info),
                     })
