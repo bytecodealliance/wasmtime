@@ -687,11 +687,6 @@
        ;; =========================================
        ;; Meta-instructions generating no code.
 
-       ;; Marker, no-op in generated code: SP "virtual offset" is adjusted.
-       ;;
-       ;; This controls how `MemArg::NominalSPOffset` args are lowered.
-       (VirtualSPOffsetAdj (offset i64))
-
        ;; Provides a way to tell the register allocator that the upcoming
        ;; sequence of instructions will overwrite `dst` so it should be
        ;; considered as a `def`; use this with care.

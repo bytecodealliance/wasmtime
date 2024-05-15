@@ -526,7 +526,7 @@ impl SyntheticAmode {
                 )
             }
             SyntheticAmode::NominalSPOffset { simm32 } => {
-                let off = *simm32 as i64 + state.virtual_sp_offset();
+                let off = *simm32 as i64 + i64::from(state.frame_layout().outgoing_args_size);
                 Amode::imm_reg(off.try_into().expect("invalid sp offset"), regs::rsp())
             }
             SyntheticAmode::ConstantOffset(c) => {

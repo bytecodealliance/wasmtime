@@ -56,7 +56,6 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $144, %rsp
-;   virtual_sp_offset_adjust 80
 ;   movq    %rbx, 96(%rsp)
 ;   movq    %r12, 104(%rsp)
 ;   movq    %r13, 112(%rsp)
@@ -91,8 +90,6 @@ block0:
 ;   load_ext_name %tail_callee_stack_args+0, %r10
 ;   movq    rsp(0 + virtual offset), %rdi
 ;   call    *%r10
-;   subq    %rsp, $80, %rsp
-;   virtual_sp_offset_adjust 80
 ;   movq    96(%rsp), %rbx
 ;   movq    104(%rsp), %r12
 ;   movq    112(%rsp), %r13
@@ -381,7 +378,6 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $144, %rsp
-;   virtual_sp_offset_adjust 144
 ; block0:
 ;   lea     0(%rsp), %rdi
 ;   call    TestCase(%tail_callee_stack_rets)
@@ -652,7 +648,6 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $480, %rsp
-;   virtual_sp_offset_adjust 320
 ;   movq    %rbx, 432(%rsp)
 ;   movq    %r12, 440(%rsp)
 ;   movq    %r13, 448(%rsp)
@@ -735,24 +730,22 @@ block0:
 ;   movq    rsp(64 + virtual offset), %r8
 ;   movq    rsp(56 + virtual offset), %r9
 ;   call    *%r10
-;   subq    %rsp, $176, %rsp
-;   virtual_sp_offset_adjust 176
-;   movq    176(%rsp), %r10
-;   movq    184(%rsp), %rsi
-;   movq    192(%rsp), %rax
-;   movq    200(%rsp), %rdx
-;   movq    208(%rsp), %r9
-;   movq    216(%rsp), %r11
-;   movq    224(%rsp), %rdi
-;   movq    232(%rsp), %rcx
-;   movq    240(%rsp), %r8
-;   movq    248(%rsp), %r10
-;   movq    256(%rsp), %rsi
-;   movq    264(%rsp), %rax
-;   movq    272(%rsp), %rdx
-;   movq    280(%rsp), %r9
-;   movq    288(%rsp), %r11
-;   movq    296(%rsp), %rdi
+;   movq    176(%rsp), %r8
+;   movq    184(%rsp), %r10
+;   movq    192(%rsp), %rsi
+;   movq    200(%rsp), %rax
+;   movq    208(%rsp), %rdx
+;   movq    216(%rsp), %r9
+;   movq    224(%rsp), %r11
+;   movq    232(%rsp), %rdi
+;   movq    240(%rsp), %rcx
+;   movq    248(%rsp), %r8
+;   movq    256(%rsp), %r10
+;   movq    264(%rsp), %rsi
+;   movq    272(%rsp), %rax
+;   movq    280(%rsp), %rdx
+;   movq    288(%rsp), %r9
+;   movq    296(%rsp), %r11
 ;   movq    304(%rsp), %rax
 ;   movq    432(%rsp), %rbx
 ;   movq    440(%rsp), %r12
@@ -852,22 +845,22 @@ block0:
 ;   movq 0x178(%rsp), %r9
 ;   callq *%r10
 ;   subq $0xb0, %rsp
-;   movq 0xb0(%rsp), %r10
-;   movq 0xb8(%rsp), %rsi
-;   movq 0xc0(%rsp), %rax
-;   movq 0xc8(%rsp), %rdx
-;   movq 0xd0(%rsp), %r9
-;   movq 0xd8(%rsp), %r11
-;   movq 0xe0(%rsp), %rdi
-;   movq 0xe8(%rsp), %rcx
-;   movq 0xf0(%rsp), %r8
-;   movq 0xf8(%rsp), %r10
-;   movq 0x100(%rsp), %rsi
-;   movq 0x108(%rsp), %rax
-;   movq 0x110(%rsp), %rdx
-;   movq 0x118(%rsp), %r9
-;   movq 0x120(%rsp), %r11
-;   movq 0x128(%rsp), %rdi
+;   movq 0xb0(%rsp), %r8
+;   movq 0xb8(%rsp), %r10
+;   movq 0xc0(%rsp), %rsi
+;   movq 0xc8(%rsp), %rax
+;   movq 0xd0(%rsp), %rdx
+;   movq 0xd8(%rsp), %r9
+;   movq 0xe0(%rsp), %r11
+;   movq 0xe8(%rsp), %rdi
+;   movq 0xf0(%rsp), %rcx
+;   movq 0xf8(%rsp), %r8
+;   movq 0x100(%rsp), %r10
+;   movq 0x108(%rsp), %rsi
+;   movq 0x110(%rsp), %rax
+;   movq 0x118(%rsp), %rdx
+;   movq 0x120(%rsp), %r9
+;   movq 0x128(%rsp), %r11
 ;   movq 0x130(%rsp), %rax
 ;   movq 0x1b0(%rsp), %rbx
 ;   movq 0x1b8(%rsp), %r12

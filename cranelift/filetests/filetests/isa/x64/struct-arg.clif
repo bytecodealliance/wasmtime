@@ -73,7 +73,6 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $64, %rsp
-;   virtual_sp_offset_adjust 64
 ; block0:
 ;   movq    %rdi, %rsi
 ;   lea     0(%rsp), %rdi
@@ -115,7 +114,6 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $80, %rsp
-;   virtual_sp_offset_adjust 64
 ;   movq    %r13, 64(%rsp)
 ; block0:
 ;   movq    %rdi, %r13
@@ -198,7 +196,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $208, %rsp
-;   virtual_sp_offset_adjust 192
 ;   movq    %r12, 192(%rsp)
 ;   movq    %r14, 200(%rsp)
 ; block0:

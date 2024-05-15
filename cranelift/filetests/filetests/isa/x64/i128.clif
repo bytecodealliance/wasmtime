@@ -1306,7 +1306,6 @@ block0(v0: i128, v1: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $32, %rsp
-;   virtual_sp_offset_adjust 16
 ;   movq    %r13, 16(%rsp)
 ; block0:
 ;   movq    %r8, %r13

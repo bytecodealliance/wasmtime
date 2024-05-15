@@ -507,7 +507,7 @@ pub trait ABIMachineSpec {
             let mut insts = Self::gen_sp_reg_adjust(-amount);
 
             // Emit a nominal sp adjustment to ensure offsets are computed correctly
-            insts.push(Self::gen_nominal_sp_adj(amount));
+            insts.extend(Self::gen_nominal_sp_adj(amount));
             insts
         } else {
             smallvec![]

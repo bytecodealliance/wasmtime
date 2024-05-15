@@ -293,7 +293,6 @@ block0(v0:i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $64, %rsp
-;   virtual_sp_offset_adjust 16
 ;   movq    %rbx, 16(%rsp)
 ;   movq    %r12, 24(%rsp)
 ;   movq    %r13, 32(%rsp)
