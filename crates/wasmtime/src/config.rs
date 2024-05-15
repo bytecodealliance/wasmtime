@@ -1368,7 +1368,7 @@ impl Config {
     /// for pooling allocation by using memory protection; see
     /// `PoolingAllocatorConfig::memory_protection_keys` for details.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
-        self.tunables.static_memory_reservation = Some(max_size);
+        self.tunables.static_memory_reservation = Some(round_up_to_pages(max_size));
         self
     }
 

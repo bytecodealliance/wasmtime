@@ -658,3 +658,14 @@ fn init_with_negative_segment() -> Result<()> {
     Instance::new(&mut store, &module, &[])?;
     Ok(())
 }
+
+#[test]
+fn non_page_aligned_static_memory() -> Result<()> {
+    let mut config = Config::new();
+    config.static_memory_maximum_size(100_000);
+    config.static_memory_forced(true);
+    let engine = Engine::new(&config)?;
+    let ty = MemoryType::new(1, None);
+    Memory::new(&mut Store::new(&engine, ()), ty)?;
+    Ok(())
+}
