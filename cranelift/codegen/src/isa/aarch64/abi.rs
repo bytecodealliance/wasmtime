@@ -1132,11 +1132,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    /// Get the current virtual-SP offset from an instruction-emission state.
-    fn get_virtual_sp_offset_from_state(s: &EmitState) -> i64 {
-        i64::from(s.frame_layout().outgoing_args_size)
-    }
-
     /// Get the nominal-SP-to-FP offset from an instruction-emission state.
     fn get_nominal_sp_to_fp(s: &EmitState) -> i64 {
         s.nominal_sp_to_fp

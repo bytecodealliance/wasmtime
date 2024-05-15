@@ -38,6 +38,10 @@ impl MachInstEmitState<Inst> for EmitState {
     fn take_ctrl_plane(self) -> ControlPlane {
         self.ctrl_plane
     }
+
+    fn frame_layout(&self) -> &FrameLayout {
+        &self.frame_layout
+    }
 }
 
 impl EmitState {
@@ -51,9 +55,5 @@ impl EmitState {
 
     pub(crate) fn nominal_sp_to_fp(&self) -> i64 {
         self.nominal_sp_to_fp
-    }
-
-    pub(crate) fn frame_layout(&self) -> &FrameLayout {
-        &self.frame_layout
     }
 }

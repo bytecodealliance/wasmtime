@@ -62,10 +62,6 @@ impl EmitState {
     fn take_stack_map(&mut self) -> Option<StackMap> {
         self.stack_map.take()
     }
-
-    pub fn frame_layout(&self) -> &FrameLayout {
-        &self.frame_layout
-    }
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -97,6 +93,10 @@ impl MachInstEmitState<Inst> for EmitState {
     fn on_new_block(&mut self) {
         // Reset the vector state.
         self.vstate = EmitVState::Unknown;
+    }
+
+    fn frame_layout(&self) -> &FrameLayout {
+        &self.frame_layout
     }
 }
 

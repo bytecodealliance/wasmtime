@@ -577,9 +577,6 @@ pub trait ABIMachineSpec {
         isa_flags: &Self::F,
     ) -> u32;
 
-    /// Get the current virtual-SP offset from an instruction-emission state.
-    fn get_virtual_sp_offset_from_state(s: &<Self::I as MachInstEmit>::State) -> i64;
-
     /// Get the "nominal SP to FP" offset from an instruction-emission state.
     fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64;
 
@@ -1705,23 +1702,22 @@ impl<M: ABIMachineSpec> Callee<M> {
         slots: &[SpillSlot],
         state: &<M::I as MachInstEmit>::State,
     ) -> StackMap {
-        let virtual_sp_offset = M::get_virtual_sp_offset_from_state(state);
+        let frame_layout = state.frame_layout();
+        let outgoing_args_size = frame_layout.outgoing_args_size;
         let nominal_sp_to_fp = M::get_nominal_sp_to_fp(state);
-        assert!(virtual_sp_offset >= 0);
         trace!(
             "spillslots_to_stackmap: slots = {:?}, state = {:?}",
             slots,
             state
         );
-        let map_size = (virtual_sp_offset + nominal_sp_to_fp) as u32;
+        let map_size = outgoing_args_size + u32::try_from(nominal_sp_to_fp).unwrap();
         let bytes = M::word_bytes();
         let map_words = (map_size + bytes - 1) / bytes;
         let mut bits = std::iter::repeat(false)
             .take(map_words as usize)
             .collect::<Vec<bool>>();
 
-        let first_spillslot_word =
-            ((self.stackslots_size + virtual_sp_offset as u32) / bytes) as usize;
+        let first_spillslot_word = ((self.stackslots_size + outgoing_args_size) / bytes) as usize;
         for &slot in slots {
             let slot = slot.index();
             bits[first_spillslot_word + slot] = true;
@@ -1826,13 +1822,6 @@ impl<M: ABIMachineSpec> Callee<M> {
         // N.B.: "nominal SP", which we use to refer to stackslots and
         // spillslots, is defined to be equal to the stack pointer at this point
         // in the prologue.
-        //
-        // If we push any further data onto the stack in the function
-        // body, we emit a virtual-SP adjustment meta-instruction so
-        // that the nominal SP references behave as if SP were still
-        // at this point. See documentation for
-        // [crate::machinst::abi](this module) for more details
-        // on stackframe layout and nominal SP maintenance.
 
         insts
     }

@@ -682,6 +682,10 @@ impl MachInstEmitState<Inst> for EmitState {
     fn take_ctrl_plane(self) -> ControlPlane {
         self.ctrl_plane
     }
+
+    fn frame_layout(&self) -> &FrameLayout {
+        &self.frame_layout
+    }
 }
 
 impl EmitState {
@@ -691,10 +695,6 @@ impl EmitState {
 
     fn clear_post_insn(&mut self) {
         self.stack_map = None;
-    }
-
-    pub(crate) fn frame_layout(&self) -> &FrameLayout {
-        &self.frame_layout
     }
 }
 

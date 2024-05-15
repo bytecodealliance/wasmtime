@@ -916,10 +916,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
-    fn get_virtual_sp_offset_from_state(s: &<Self::I as MachInstEmit>::State) -> i64 {
-        i64::from(s.frame_layout().outgoing_args_size)
-    }
-
     fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64 {
         s.nominal_sp_to_fp()
     }
