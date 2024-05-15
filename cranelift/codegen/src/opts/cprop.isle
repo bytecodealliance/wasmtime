@@ -279,3 +279,19 @@
 (extern constructor u64_bswap32 u64_bswap32)
 (decl pure u64_bswap64 (u64) u64)
 (extern constructor u64_bswap64 u64_bswap64)
+
+;; Constant fold bitwise float operations (fneg/fabs/fcopysign)
+(rule (simplify (fneg $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_neg n))))
+(rule (simplify (fneg $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_neg n))))
+
+(rule (simplify (fabs $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_abs n))))
+(rule (simplify (fabs $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_abs n))))
+
+(rule (simplify (fcopysign $F32 (f32const $F32 n) (f32const $F32 m)))
+      (subsume (f32const $F32 (f32_copysign n m))))
+(rule (simplify (fcopysign $F64 (f64const $F64 n) (f64const $F64 m)))
+      (subsume (f64const $F64 (f64_copysign n m))))
