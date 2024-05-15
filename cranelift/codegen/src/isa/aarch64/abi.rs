@@ -558,10 +558,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         ret
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> Inst {
-        Inst::VirtualSPOffsetAdj {
+    fn gen_nominal_sp_adj(offset: i32) -> SmallInstVec<Inst> {
+        smallvec![Inst::VirtualSPOffsetAdj {
             offset: offset as i64,
-        }
+        }]
     }
 
     fn gen_prologue_frame_setup(
@@ -934,7 +934,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // Adjust the nominal sp to account for the outgoing argument area.
         let sp_adj = frame_layout.outgoing_args_size as i32;
         if sp_adj > 0 {
-            insts.push(Self::gen_nominal_sp_adj(sp_adj));
+            insts.extend(Self::gen_nominal_sp_adj(sp_adj));
         }
 
         insts

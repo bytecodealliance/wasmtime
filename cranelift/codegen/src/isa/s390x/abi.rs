@@ -538,10 +538,10 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> Inst {
-        Inst::VirtualSPOffsetAdj {
+    fn gen_nominal_sp_adj(offset: i32) -> SmallInstVec<Inst> {
+        smallvec![Inst::VirtualSPOffsetAdj {
             offset: offset.into(),
-        }
+        }]
     }
 
     fn gen_prologue_frame_setup(
@@ -649,7 +649,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         let sp_adj = frame_layout.outgoing_args_size as i32;
         if sp_adj > 0 {
-            insts.push(Self::gen_nominal_sp_adj(sp_adj));
+            insts.extend(Self::gen_nominal_sp_adj(sp_adj));
         }
 
         // Write the stack backchain if requested, using the value saved above.

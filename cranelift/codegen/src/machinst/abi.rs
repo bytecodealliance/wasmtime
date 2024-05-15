@@ -473,7 +473,7 @@ pub trait ABIMachineSpec {
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I>;
 
     /// Generate a meta-instruction that adjusts the nominal SP offset.
-    fn gen_nominal_sp_adj(amount: i32) -> Self::I;
+    fn gen_nominal_sp_adj(amount: i32) -> SmallInstVec<Self::I>;
 
     /// When setting up for a call, ensure that `space` bytes are available in the outgoing
     /// argument area on the stack. The specified amount of space is the minimum required for both

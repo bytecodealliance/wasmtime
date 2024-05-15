@@ -523,10 +523,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         )]
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> Self::I {
-        Inst::VirtualSPOffsetAdj {
+    fn gen_nominal_sp_adj(offset: i32) -> SmallInstVec<Self::I> {
+        smallvec![Inst::VirtualSPOffsetAdj {
             offset: offset as i64,
-        }
+        }]
     }
 
     fn gen_prologue_frame_setup(
@@ -718,7 +718,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // Adjust the nominal sp to account for the outgoing argument area.
         let sp_adj = frame_layout.outgoing_args_size as i32;
         if sp_adj > 0 {
-            insts.push(Self::gen_nominal_sp_adj(sp_adj));
+            insts.extend(Self::gen_nominal_sp_adj(sp_adj));
         }
 
         // Store each clobbered register in order at offsets from RSP,
