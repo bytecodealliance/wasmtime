@@ -63,7 +63,7 @@
 ;; @0031                               jump block3(v16)
 ;;
 ;;                                 block3(v13: i64):
-;; @0031                               v20 = load.i32 icall_null aligned readonly v13+24
+;; @0031                               v20 = load.i32 icall_null aligned readonly v13+16
 ;; @0031                               v18 = load.i64 notrap aligned readonly v0+80
 ;; @0031                               v19 = load.i32 notrap aligned readonly v18
 ;; @0031                               v21 = icmp eq v20, v19
@@ -73,8 +73,8 @@
 ;; @0031                               trap bad_sig
 ;;
 ;;                                 block5:
-;; @0031                               v22 = load.i64 notrap aligned readonly v13+16
-;; @0031                               v23 = load.i64 notrap aligned readonly v13+32
+;; @0031                               v22 = load.i64 notrap aligned readonly v13+8
+;; @0031                               v23 = load.i64 notrap aligned readonly v13+24
 ;; @0031                               call_indirect sig0, v22(v23, v0)
 ;; @0034                               jump block1
 ;;

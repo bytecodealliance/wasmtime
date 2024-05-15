@@ -19,7 +19,7 @@ use wasmtime_environ::{
 pub struct CompiledModule {
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-    wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
+    wasm_to_array_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
     meta: Metadata,
     code_memory: Arc<CodeMemory>,
     #[cfg(feature = "debug-builtins")]
@@ -55,7 +55,7 @@ impl CompiledModule {
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
-            wasm_to_native_trampolines: info.wasm_to_native_trampolines,
+            wasm_to_array_trampolines: info.wasm_to_array_trampolines,
             #[cfg(feature = "debug-builtins")]
             dbg_jit_registration: None,
             code_memory,
@@ -173,34 +173,21 @@ impl CompiledModule {
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
     }
 
-    /// Get the native-to-Wasm trampoline for the function `index` points to.
-    ///
-    /// If the function `index` points to does not escape, then `None` is
-    /// returned.
-    ///
-    /// These trampolines are used for native callers (e.g. `Func::wrap`)
-    /// calling Wasm callees.
-    #[inline]
-    pub fn native_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
-        let loc = self.funcs[index].native_to_wasm_trampoline?;
-        Some(&self.text()[loc.start as usize..][..loc.length as usize])
-    }
-
-    /// Get the Wasm-to-native trampoline for the given signature.
+    /// Get the Wasm-to-array trampoline for the given signature.
     ///
     /// These trampolines are used for filling in
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
-    pub fn wasm_to_native_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
+    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
         let idx = match self
-            .wasm_to_native_trampolines
+            .wasm_to_array_trampolines
             .binary_search_by_key(&signature, |entry| entry.0)
         {
             Ok(idx) => idx,
             Err(_) => panic!("missing trampoline for {signature:?}"),
         };
 
-        let (_, loc) = self.wasm_to_native_trampolines[idx];
+        let (_, loc) = self.wasm_to_array_trampolines[idx];
         &self.text()[loc.start as usize..][..loc.length as usize]
     }
 

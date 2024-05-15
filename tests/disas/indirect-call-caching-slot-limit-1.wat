@@ -33,7 +33,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0033                               v4 = global_value.i64 gv3
-;; @0033                               v5 = iadd_imm v4, 152
+;; @0033                               v5 = iadd_imm v4, 144
 ;; @0033                               v6 = load.i32 notrap aligned v5+8
 ;; @0033                               v7 = load.i64 notrap aligned v5
 ;; @0033                               v8 = icmp eq v6, v2
@@ -60,7 +60,7 @@
 ;;                                 block3(v31: i64, v32: i64):
 ;; @0033                               v33 = call_indirect sig0, v31(v32, v0)
 ;; @0036                               v34 = global_value.i64 gv3
-;; @0036                               v35 = iadd_imm v34, 168
+;; @0036                               v35 = iadd_imm v34, 160
 ;; @0036                               v36 = load.i32 notrap aligned v35+8
 ;; @0036                               v37 = load.i64 notrap aligned v35
 ;; @0036                               v38 = icmp eq v36, v33
@@ -108,11 +108,11 @@
 ;; @0033                               v23 = global_value.i64 gv3
 ;; @0033                               v24 = load.i64 notrap aligned readonly v23+80
 ;; @0033                               v25 = load.i32 notrap aligned readonly v24+4
-;; @0033                               v26 = load.i32 icall_null aligned readonly v19+24
+;; @0033                               v26 = load.i32 icall_null aligned readonly v19+16
 ;; @0033                               v27 = icmp eq v26, v25
 ;; @0033                               trapz v27, bad_sig
-;; @0033                               v28 = load.i64 notrap aligned readonly v19+16
-;; @0033                               v29 = load.i64 notrap aligned readonly v19+32
+;; @0033                               v28 = load.i64 notrap aligned readonly v19+8
+;; @0033                               v29 = load.i64 notrap aligned readonly v19+24
 ;; @0033                               v30 = icmp eq v29, v4
 ;; @0033                               brif v30, block4, block3(v28, v29)
 ;;
@@ -126,11 +126,11 @@
 ;; @0036                               v53 = global_value.i64 gv3
 ;; @0036                               v54 = load.i64 notrap aligned readonly v53+80
 ;; @0036                               v55 = load.i32 notrap aligned readonly v54+4
-;; @0036                               v56 = load.i32 icall_null aligned readonly v49+24
+;; @0036                               v56 = load.i32 icall_null aligned readonly v49+16
 ;; @0036                               v57 = icmp eq v56, v55
 ;; @0036                               trapz v57, bad_sig
-;; @0036                               v58 = load.i64 notrap aligned readonly v49+16
-;; @0036                               v59 = load.i64 notrap aligned readonly v49+32
+;; @0036                               v58 = load.i64 notrap aligned readonly v49+8
+;; @0036                               v59 = load.i64 notrap aligned readonly v49+24
 ;; @0036                               v60 = icmp eq v59, v34
 ;; @0036                               brif v60, block9, block8(v58, v59)
 ;;
@@ -144,11 +144,11 @@
 ;; @0039                               v78 = global_value.i64 gv3
 ;; @0039                               v79 = load.i64 notrap aligned readonly v78+80
 ;; @0039                               v80 = load.i32 notrap aligned readonly v79+4
-;; @0039                               v81 = load.i32 icall_null aligned readonly v74+24
+;; @0039                               v81 = load.i32 icall_null aligned readonly v74+16
 ;; @0039                               v82 = icmp eq v81, v80
 ;; @0039                               trapz v82, bad_sig
-;; @0039                               v83 = load.i64 notrap aligned readonly v74+16
-;; @0039                               v84 = load.i64 notrap aligned readonly v74+32
+;; @0039                               v83 = load.i64 notrap aligned readonly v74+8
+;; @0039                               v84 = load.i64 notrap aligned readonly v74+24
 ;; @0039                               v85 = call_indirect sig0, v83(v84, v0)
 ;; @003c                               jump block1(v85)
 ;;

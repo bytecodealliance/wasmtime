@@ -106,8 +106,8 @@ impl<'a> ObjectBuilder<'a> {
     ///   as well as where the functions are located in the text section and any
     ///   associated trampolines.
     ///
-    /// * `wasm_to_native_trampolines` - list of all trampolines necessary for
-    ///   Wasm callers calling native callees (e.g. `Func::wrap`). One for each
+    /// * `wasm_to_array_trampolines` - list of all trampolines necessary for
+    ///   Wasm callers calling array callees (e.g. `Func::wrap`). One for each
     ///   function signature in the module. Must be sorted by `SignatureIndex`.
     ///
     /// Returns the `CompiledModuleInfo` corresponding to this core Wasm module
@@ -117,7 +117,7 @@ impl<'a> ObjectBuilder<'a> {
         &mut self,
         translation: ModuleTranslation<'_>,
         funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-        wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
+        wasm_to_array_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
     ) -> Result<CompiledModuleInfo> {
         let ModuleTranslation {
             mut module,
@@ -220,7 +220,7 @@ impl<'a> ObjectBuilder<'a> {
         Ok(CompiledModuleInfo {
             module,
             funcs,
-            wasm_to_native_trampolines,
+            wasm_to_array_trampolines,
             func_names,
             meta: Metadata {
                 native_debug_info_present: self.tunables.generate_native_debuginfo,

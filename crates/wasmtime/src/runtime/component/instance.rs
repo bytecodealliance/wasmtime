@@ -324,13 +324,9 @@ impl<'a> Instantiator<'a> {
                 None => panic!("found unregistered signature: {sig:?}"),
             };
 
-            self.data.state.set_trampoline(
-                idx,
-                ptrs.wasm_call,
-                ptrs.native_call,
-                ptrs.array_call,
-                signature,
-            );
+            self.data
+                .state
+                .set_trampoline(idx, ptrs.wasm_call, ptrs.array_call, signature);
         }
 
         for initializer in env_component.initializers.iter() {

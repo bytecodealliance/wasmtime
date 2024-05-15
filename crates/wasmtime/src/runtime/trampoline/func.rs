@@ -4,14 +4,11 @@ use crate::runtime::vm::{
     StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
 };
 use crate::type_registry::RegisteredType;
-use crate::{code_memory::CodeMemory, Engine, FuncType, ValRaw};
+use crate::{FuncType, ValRaw};
 use anyhow::Result;
-use core::ptr::NonNull;
 
 struct TrampolineState<F> {
     func: F,
-    #[allow(dead_code)]
-    code_memory: CodeMemory,
 
     // Need to keep our `VMSharedTypeIndex` registered in the engine.
     #[allow(dead_code)]
@@ -74,49 +71,14 @@ unsafe extern "C" fn array_call_shim<F>(
 pub fn create_array_call_function<F>(
     ft: &FuncType,
     func: F,
-    engine: &Engine,
 ) -> Result<StoreBox<VMArrayCallHostFuncContext>>
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
-    use crate::compile::finish_object;
     use crate::prelude::*;
     use std::ptr;
 
-    let mut obj = engine
-        .compiler()
-        .object(wasmtime_environ::ObjectKind::Module)?;
-    let (wasm_call_range, native_call_range) = engine
-        .compiler()
-        .emit_trampolines_for_array_call_host_func(
-            ft.as_wasm_func_type(),
-            array_call_shim::<F> as usize,
-            &mut obj,
-        )?;
-    engine.append_bti(&mut obj);
-    let obj = finish_object(wasmtime_environ::ObjectBuilder::new(obj, engine.tunables()))?;
-
-    // Copy the results of JIT compilation into executable memory, and this will
-    // also take care of unwind table registration.
-    let mut code_memory = CodeMemory::new(obj)?;
-    code_memory.publish()?;
-
-    engine
-        .profiler()
-        .register_module(&code_memory.mmap()[..], &|_| None);
-
-    // Extract the host/wasm trampolines from the results of compilation since
-    // we know their start/length.
-
-    let text = code_memory.text();
-
     let array_call = array_call_shim::<F>;
-
-    let wasm_call = text[wasm_call_range.start as usize..].as_ptr() as *mut _;
-    let wasm_call = Some(NonNull::new(wasm_call).unwrap());
-
-    let native_call = text[native_call_range.start as usize..].as_ptr() as *mut _;
-    let native_call = NonNull::new(native_call).unwrap();
 
     let sig = ft.clone().into_registered_type();
 
@@ -124,16 +86,11 @@ where
         Ok(VMArrayCallHostFuncContext::new(
             VMFuncRef {
                 array_call,
-                wasm_call,
-                native_call,
+                wasm_call: None,
                 type_index: sig.index(),
                 vmctx: ptr::null_mut(),
             },
-            Box::new(TrampolineState {
-                func,
-                code_memory,
-                sig,
-            }),
+            Box::new(TrampolineState { func, sig }),
         ))
     }
 }

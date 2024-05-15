@@ -131,55 +131,6 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmValType) -> ir::types::Type {
     }
 }
 
-/// Get the Cranelift signature with the native calling convention for the given
-/// Wasm function type.
-///
-/// This parameters will start with the callee and caller VM contexts, followed
-/// by the translation of each of the Wasm parameter types to native types. The
-/// results are the Wasm result types translated to native types.
-///
-/// The signature uses the wasmtime variant of the target's default calling
-/// convention. The only difference from the default calling convention is how
-/// multiple results are handled.
-///
-/// When there is only a single result, or zero results, these signatures are
-/// suitable for calling from the host via
-///
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     // ...wasm parameter types...
-/// ) -> // ...wasm result type...
-/// ```
-///
-/// When there are more than one results, these signatures are suitable for
-/// calling from the host via
-///
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     // ...wasm parameter types...
-///     retptr: *mut (),
-/// ) -> // ...wasm result type 0...
-/// ```
-///
-/// where the first result is returned directly and the rest via the return
-/// pointer.
-fn native_call_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
-    let mut sig = blank_sig(isa, CallConv::triple_default(isa.triple()));
-    let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));
-    sig.params.extend(wasm.params().iter().map(&cvt));
-    if let Some(first_ret) = wasm.returns().get(0) {
-        sig.returns.push(cvt(first_ret));
-    }
-    if wasm.returns().len() > 1 {
-        sig.params.push(ir::AbiParam::new(isa.pointer_type()));
-    }
-    sig
-}
-
 /// Get the Cranelift signature for all array-call functions, that is:
 ///
 /// ```ignore

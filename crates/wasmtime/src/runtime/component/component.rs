@@ -2,9 +2,7 @@ use crate::component::matching::InstanceType;
 use crate::component::types;
 use crate::prelude::*;
 use crate::runtime::vm::component::ComponentRuntimeInfo;
-use crate::runtime::vm::{
-    VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
-};
+use crate::runtime::vm::{VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction};
 use crate::{
     code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
     ResourcesRequired,
@@ -87,7 +85,6 @@ struct ComponentInner {
 pub(crate) struct AllCallFuncPointers {
     pub wasm_call: NonNull<VMWasmCallFunction>,
     pub array_call: VMArrayCallFunction,
-    pub native_call: NonNull<VMNativeCallFunction>,
 }
 
 impl Component {
@@ -450,7 +447,6 @@ impl Component {
         let AllCallFunc {
             wasm_call,
             array_call,
-            native_call,
         } = &self.inner.info.trampolines[index];
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
@@ -459,7 +455,6 @@ impl Component {
                     self.func(array_call),
                 )
             },
-            native_call: self.func(native_call).cast(),
         }
     }
 
@@ -505,7 +500,7 @@ impl Component {
         let wasm_call = self
             .inner
             .info
-            .resource_drop_wasm_to_native_trampoline
+            .resource_drop_wasm_to_array_trampoline
             .as_ref()
             .map(|i| self.func(i).cast());
         VMFuncRef {
