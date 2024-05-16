@@ -80,7 +80,7 @@ correct execution of WebAssembly but can help mitigate issues if bugs are found:
   of the security guarantees of WebAssembly are still upheld.
 
 * Wasmtime is in the [process of implementing control-flow-integrity
-  mechanisms][cfi-rfc] to leverage hardware state for futher guaranteeing that
+  mechanisms][cfi-rfc] to leverage hardware state for further guaranteeing that
   WebAssembly stays within its sandbox. In the event of a bug in Cranelift this
   can help mitigate the impact of where control flow can go to.
 
