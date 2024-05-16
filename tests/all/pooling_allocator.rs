@@ -644,10 +644,10 @@ fn instance_too_large() -> Result<()> {
     let engine = Engine::new(&config)?;
     let expected = if cfg!(feature = "wmemcheck") {
         "\
-        instance allocation for this module requires 336 bytes which exceeds the \
+        instance allocation for this module requires 352 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 76.19% - 256 bytes - instance state management
+ * 72.73% - 256 bytes - instance state management
 "
     } else {
         "\
@@ -671,11 +671,11 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 
     let expected = if cfg!(feature = "wmemcheck") {
         "\
-instance allocation for this module requires 1936 bytes which exceeds the \
+instance allocation for this module requires 1952 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 13.22% - 256 bytes - instance state management
- * 82.64% - 1600 bytes - defined globals
+ * 13.11% - 256 bytes - instance state management
+ * 81.97% - 1600 bytes - defined globals
 "
     } else {
         "\

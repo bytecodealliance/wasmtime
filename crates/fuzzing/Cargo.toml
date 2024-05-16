@@ -49,7 +49,7 @@ rand = { version = "0.8.0", features = ["small_rng"] }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, features = ['build-libinterpret'] }
 
 [features]
-fuzz-spec-interpreter = ['wasm-spec-interpreter']
+fuzz-spec-interpreter = ['dep:wasm-spec-interpreter']
 
 # Fuzz proof-carrying code. Off by default.
 fuzz-pcc = []
