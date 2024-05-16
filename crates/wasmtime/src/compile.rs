@@ -428,7 +428,7 @@ impl<'a> CompileInputs<'a> {
         // like "perf" or "objdump", and filter the name.  Let only characters usually
         // used for function names, plus some characters that might be used in name
         // mangling.
-        let bad_char = |c: char| !c.is_alphanumeric() && !r"<>[]_-:@$".contains(c);
+        let bad_char = |c: char| !c.is_ascii_alphanumeric() && !r"<>[]_-:@$".contains(c);
         if name.chars().any(bad_char) {
             let mut last_char_seen = '\u{0000}';
             Cow::Owned(
