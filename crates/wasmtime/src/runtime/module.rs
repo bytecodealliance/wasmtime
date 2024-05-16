@@ -1035,19 +1035,17 @@ impl Module {
         &'a self,
     ) -> impl ExactSizeIterator<Item = (String, usize, usize)> + 'a {
         let module = self.compiled_module();
-        self.function_locations().map(|(offset, len)| {
-            let (idx, _) = module.func_by_text_offset(offset).unwrap();
-            let idx = module.module().func_index(idx);
-            if let Some(name) = module.func_name(idx) {
-                (
-                    format!("function[{}]::{}", idx.as_u32(), name.to_string()),
-                    offset,
-                    len,
-                )
-            } else {
-                (format!("function[{}]", idx.as_u32()), offset, len)
-            }
-        })
+        self.function_locations()
+            .enumerate()
+            .map(|(idx, (offset, len))| {
+                let idx = DefinedFuncIndex::from_u32(u32::try_from(idx).unwrap());
+                let idx = module.module().func_index(idx);
+                if let Some(name) = module.func_name(idx) {
+                    (format!("function[{}]::{}", idx.as_u32(), name), offset, len)
+                } else {
+                    (format!("function[{}]", idx.as_u32()), offset, len)
+                }
+            })
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {

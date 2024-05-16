@@ -2,6 +2,7 @@ use anyhow::Result;
 use capstone::arch::BuildsCapstone;
 use serde_derive::Serialize;
 use std::{io::Write, str::FromStr};
+use wasmtime_environ::demangle_function_name;
 
 pub fn generate(
     config: &wasmtime::Config,
@@ -83,6 +84,8 @@ struct AnnotatedAsm {
 
 #[derive(Serialize, Debug)]
 struct AnnotatedFunction {
+    name: String,
+    demangled_name: String,
     instructions: Vec<AnnotatedInstruction>,
 }
 
@@ -129,9 +132,8 @@ fn annotate_asm(
     };
 
     let functions = module
-        .function_locations()
-        .into_iter()
-        .map(|(start, len)| {
+        .function_locations_with_names()
+        .map(|(name, start, len)| {
             let body = &text[start..][..len];
 
             let mut cs = match target.architecture {
@@ -181,7 +183,21 @@ fn annotate_asm(
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            Ok(AnnotatedFunction { instructions })
+
+            let demangled_name = match name.splitn(2, "::").nth(1) {
+                Some(name) => {
+                    let mut demangled = String::new();
+                    demangle_function_name(&mut demangled, name)
+                        .map_or_else(|_| format!("demangle-error::{}", name), |_| demangled)
+                }
+                None => name.to_string(),
+            };
+
+            Ok(AnnotatedFunction {
+                name,
+                demangled_name,
+                instructions,
+            })
         })
         .collect::<Result<Vec<_>>>()?;
 

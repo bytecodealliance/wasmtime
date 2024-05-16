@@ -191,12 +191,12 @@ const renderInst = (mnemonic, operands) => {
 
 // Render the ASM.
 
-let nthFunc = 0;
 for (const func of state.asm.functions) {
   const funcElem = document.createElement("div");
 
   const funcHeader = document.createElement("h3");
-  funcHeader.textContent = `Defined Function ${nthFunc}`;
+  funcHeader.textContent = `Disassembly of function <${func.demangled_name}>:`;
+  funcHeader.title = func.name;
   funcElem.appendChild(funcHeader);
 
   const bodyElem = document.createElement("pre");
@@ -216,7 +216,6 @@ for (const func of state.asm.functions) {
   funcElem.appendChild(bodyElem);
 
   asmElem.appendChild(funcElem);
-  nthFunc++;
 }
 
 // Render the WAT.
