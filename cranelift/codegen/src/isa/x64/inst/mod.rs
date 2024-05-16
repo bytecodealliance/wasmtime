@@ -141,7 +141,6 @@ impl Inst {
             | Inst::TrapIfAnd { .. }
             | Inst::TrapIfOr { .. }
             | Inst::Ud2 { .. }
-            | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmMinMaxSeq { .. }
@@ -1840,8 +1839,6 @@ impl PrettyPrint for Inst {
                 FenceKind::SFence => "sfence".to_string(),
             },
 
-            Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {offset}"),
-
             Inst::Hlt => "hlt".into(),
 
             Inst::Ud2 { trap_code } => format!("ud2 {trap_code}"),
@@ -2472,7 +2469,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
         | Inst::TrapIfOr { .. }
-        | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
         | Inst::Ud2 { .. }
         | Inst::Fence { .. } => {

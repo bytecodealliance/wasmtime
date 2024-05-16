@@ -558,12 +558,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         ret
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> Inst {
-        Inst::VirtualSPOffsetAdj {
-            offset: offset as i64,
-        }
-    }
-
     fn gen_prologue_frame_setup(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
@@ -931,12 +925,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
         }
 
-        // Adjust the nominal sp to account for the outgoing argument area.
-        let sp_adj = frame_layout.outgoing_args_size as i32;
-        if sp_adj > 0 {
-            insts.push(Self::gen_nominal_sp_adj(sp_adj));
-        }
-
         insts
     }
 
@@ -1142,11 +1130,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
             RegClass::Float => vector_size / 8,
             RegClass::Vector => unreachable!(),
         }
-    }
-
-    /// Get the current virtual-SP offset from an instruction-emission state.
-    fn get_virtual_sp_offset_from_state(s: &EmitState) -> i64 {
-        s.virtual_sp_offset
     }
 
     /// Get the nominal-SP-to-FP offset from an instruction-emission state.

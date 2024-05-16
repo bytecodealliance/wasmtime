@@ -1594,7 +1594,11 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
         }
 
-        Inst::CallKnown { dest, opcode, info } => {
+        Inst::CallKnown {
+            dest,
+            opcode,
+            info: call_info,
+        } => {
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
             }
@@ -1607,9 +1611,18 @@ pub(crate) fn emit(
                 sink.add_call_site(*opcode);
             }
 
-            if let Some(call_info) = info {
-                let callee_pop_size = i64::from(call_info.callee_pop_size);
-                state.adjust_virtual_sp_offset(-callee_pop_size);
+            // Reclaim the outgoing argument area that was released by the callee, to ensure that
+            // StackAMode values are always computed from a consistent SP.
+            if let Some(call_info) = call_info {
+                if call_info.callee_pop_size > 0 {
+                    Inst::alu_rmi_r(
+                        OperandSize::Size64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::imm(call_info.callee_pop_size),
+                        Writable::from_reg(regs::rsp()),
+                    )
+                    .emit(sink, info, state);
+                }
             }
         }
 
@@ -1647,7 +1660,11 @@ pub(crate) fn emit(
             sink.add_call_site(ir::Opcode::ReturnCallIndirect);
         }
 
-        Inst::CallUnknown { dest, opcode, info } => {
+        Inst::CallUnknown {
+            dest,
+            opcode,
+            info: call_info,
+        } => {
             let dest = dest.clone();
 
             let start_offset = sink.cur_offset();
@@ -1686,9 +1703,18 @@ pub(crate) fn emit(
                 sink.add_call_site(*opcode);
             }
 
-            if let Some(call_info) = info {
-                let callee_pop_size = i64::from(call_info.callee_pop_size);
-                state.adjust_virtual_sp_offset(-callee_pop_size);
+            // Reclaim the outgoing argument area that was released by the callee, to ensure that
+            // StackAMode values are always computed from a consistent SP.
+            if let Some(call_info) = call_info {
+                if call_info.callee_pop_size > 0 {
+                    Inst::alu_rmi_r(
+                        OperandSize::Size64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::imm(call_info.callee_pop_size),
+                        Writable::from_reg(regs::rsp()),
+                    )
+                    .emit(sink, info, state);
+                }
             }
         }
 
@@ -3999,10 +4025,6 @@ pub(crate) fn emit(
                 sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
             }
             sink.put_data(Inst::TRAP_OPCODE);
-        }
-
-        Inst::VirtualSPOffsetAdj { offset } => {
-            state.adjust_virtual_sp_offset(*offset);
         }
 
         Inst::Nop { len } => {

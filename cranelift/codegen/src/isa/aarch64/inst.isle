@@ -930,11 +930,6 @@
        (Bti
         (targets BranchTargetType))
 
-       ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
-       ;; controls how AMode::NominalSPOffset args are lowered.
-       (VirtualSPOffsetAdj
-        (offset i64))
-
        ;; Meta-insn, no-op in generated code: emit constant/branch veneer island
        ;; at this point (with a guard jump around it) if less than the needed
        ;; space is available before the next branch deadline. See the `MachBuffer`

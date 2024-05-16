@@ -172,7 +172,6 @@ block0(v0: i8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   addi sp,sp,-32
-;   virtual_sp_offset_adj +16
 ;   sd s1,24(sp)
 ; block0:
 ;   li a7,42
@@ -626,7 +625,6 @@ block0(v0: i128, v1: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   addi sp,sp,-32
-;   virtual_sp_offset_adj +16
 ;   sd s1,24(sp)
 ; block0:
 ;   mv a6,a2
@@ -724,7 +722,6 @@ block0(v0: i128, v1: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   addi sp,sp,-32
-;   virtual_sp_offset_adj +16
 ;   sd s1,24(sp)
 ; block0:
 ;   mv a6,a2

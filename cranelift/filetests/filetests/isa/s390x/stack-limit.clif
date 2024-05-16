@@ -56,7 +56,6 @@ block0(v0: i64):
 ;   clgrtle %r15, %r1
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %foo + 0 ; lg %r2, 0(%r1)
 ;   basr %r14, %r2
@@ -98,7 +97,6 @@ block0(v0: i64):
 ;   clgrtle %r15, %r1
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %foo + 0 ; lg %r2, 0(%r1)
 ;   basr %r14, %r2

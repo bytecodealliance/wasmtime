@@ -994,11 +994,6 @@
     (CondBreak
       (cond Cond))
 
-    ;; Marker, no-op in generated code SP "virtual offset" is adjusted. This
-    ;; controls how MemArg::NominalSPOffset args are lowered.
-    (VirtualSPOffsetAdj
-      (offset i64))
-
     ;; Pseudoinstruction to keep a value alive.
     (DummyUse
      (reg Reg))

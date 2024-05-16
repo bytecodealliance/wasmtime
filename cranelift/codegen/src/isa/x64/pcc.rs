@@ -885,7 +885,7 @@ pub(crate) fn check(
             Ok(())
         }
 
-        Inst::Fence { .. } | Inst::VirtualSPOffsetAdj { .. } => Ok(()),
+        Inst::Fence { .. } => Ok(()),
 
         Inst::XmmUninitializedValue { dst } => {
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())

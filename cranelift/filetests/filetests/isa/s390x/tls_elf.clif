@@ -13,7 +13,6 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r12, %r15, 96(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   larl %r12, %ElfGlobalOffsetTable + 0
 ;   bras %r1, 12 ; data userextname0@tlsgd ; lg %r2, 0(%r1)

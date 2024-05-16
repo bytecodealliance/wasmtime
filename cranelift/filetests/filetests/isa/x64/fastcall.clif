@@ -239,7 +239,6 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;   subq    %rsp, $48, %rsp
-;   virtual_sp_offset_adjust 48
 ; block0:
 ;   uninit  %xmm3
 ;   xorpd   %xmm3, %xmm3, %xmm3

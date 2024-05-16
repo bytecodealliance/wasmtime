@@ -538,12 +538,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> Inst {
-        Inst::VirtualSPOffsetAdj {
-            offset: offset.into(),
-        }
-    }
-
     fn gen_prologue_frame_setup(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
@@ -645,11 +639,6 @@ impl ABIMachineSpec for S390xMachineDeps {
                     size: stack_size as u32,
                 },
             });
-        }
-
-        let sp_adj = frame_layout.outgoing_args_size as i32;
-        if sp_adj > 0 {
-            insts.push(Self::gen_nominal_sp_adj(sp_adj));
         }
 
         // Write the stack backchain if requested, using the value saved above.
@@ -774,11 +763,6 @@ impl ABIMachineSpec for S390xMachineDeps {
             RegClass::Float => 2,
             RegClass::Vector => unreachable!(),
         }
-    }
-
-    /// Get the current virtual-SP offset from an instruction-emission state.
-    fn get_virtual_sp_offset_from_state(s: &EmitState) -> i64 {
-        s.virtual_sp_offset
     }
 
     /// Get the nominal-SP-to-FP offset from an instruction-emission state.

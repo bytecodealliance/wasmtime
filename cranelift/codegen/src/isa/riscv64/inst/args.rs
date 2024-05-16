@@ -140,7 +140,9 @@ impl AMode {
 
     pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
         match self {
-            &AMode::NominalSPOffset(offset) => offset + state.virtual_sp_offset,
+            &AMode::NominalSPOffset(offset) => {
+                offset + i64::from(state.frame_layout().outgoing_args_size)
+            }
 
             // Compute the offset into the incoming argument area relative to SP
             &AMode::IncomingArg(offset) => {

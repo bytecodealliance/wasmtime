@@ -14,7 +14,6 @@ block0(v0: i64):
 ;   stmg %r14, %r15, 112(%r15)
 ;   lgr %r1, %r15
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   lmg %r14, %r15, 272(%r15)
