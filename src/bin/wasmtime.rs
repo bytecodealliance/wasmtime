@@ -273,7 +273,7 @@ warning: this CLI invocation of Wasmtime is going to break in the future -- for
             // error message then now's probably as good a time as any to nudge
             // them towards the new CLI. Any preexisting scripts which parsed
             // the old CLI should not hit this case which means that all old
-            // succesful parses will not go through here.
+            // successful parses will not go through here.
             //
             // In any case, display the error for the new CLI, including new
             // help text.
