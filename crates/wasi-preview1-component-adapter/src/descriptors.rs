@@ -298,7 +298,7 @@ impl Descriptors {
                     Descriptor::Closed(next) => *next,
                     _ => unreachable!("impossible: freelist points to a closed descriptor"),
                 };
-                // Write descriptor to the entry at the nead of the list
+                // Write descriptor to the entry at the head of the list
                 *freelist_desc = d;
                 // Point closed to the following item
                 self.closed = next_closed;

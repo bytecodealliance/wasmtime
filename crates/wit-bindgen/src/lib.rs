@@ -1445,7 +1445,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str("wasmtime::component::flags!(\n");
         self.src.push_str(&format!("{rust_name} {{\n"));
         for flag in flags.flags.iter() {
-            // TODO wasmtime-component-macro doesnt support docs for flags rn
+            // TODO wasmtime-component-macro doesn't support docs for flags rn
             uwrite!(
                 self.src,
                 "#[component(name=\"{}\")] const {};\n",
@@ -2242,7 +2242,7 @@ impl<'a> InterfaceGenerator<'a> {
         {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
-            // for them to trap or use `?` to propogate their errors
+            // for them to trap or use `?` to propagate their errors
             self.push_str("Result<");
             if let Some(ok) = r.ok {
                 self.print_ty(&ok, TypeMode::Owned);

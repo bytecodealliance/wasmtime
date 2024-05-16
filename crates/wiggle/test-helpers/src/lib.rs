@@ -148,7 +148,7 @@ pub struct MemArea {
 }
 
 impl MemArea {
-    // This code is a whole lot like the Region::overlaps func thats at the core of the code under
+    // This code is a whole lot like the Region::overlaps func that's at the core of the code under
     // test.
     // So, I implemented this one with std::ops::Range so it is less likely I wrote the same bug in two
     // places.

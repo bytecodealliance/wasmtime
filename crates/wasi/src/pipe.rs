@@ -459,7 +459,7 @@ mod test {
     // suitable design for all applications, and we will probably make a knob or change the
     // behavior at some point, but this test shows the behavior as it is implemented:
     async fn backpressure_read_stream() {
-        let (r, mut w) = simplex(16 * 1024); // Make sure this buffer isnt a bottleneck
+        let (r, mut w) = simplex(16 * 1024); // Make sure this buffer isn't a bottleneck
         let mut reader = AsyncReadStream::new(r);
 
         let writer_task = tokio::task::spawn(async move {
@@ -590,7 +590,7 @@ mod test {
                     "expected a LastOperationFailed before we see Closed. {write_ready_res:?}"
                 );
             }
-            // Also possible the worker hasnt processed write yet:
+            // Also possible the worker hasn't processed write yet:
             Ok(()) => {}
             Err(e) => panic!("unexpected flush error: {e:?} {write_ready_res:?}"),
         }
@@ -724,7 +724,7 @@ mod test {
         // back-pressure because now both buffers (simplex and worker) are full.
         writer.write(chunk.clone()).expect("write does not trap");
 
-        // Try shoving even more down there, and it shouldnt accept more input:
+        // Try shoving even more down there, and it shouldn't accept more input:
         writer
             .write(chunk.clone())
             .err()
@@ -789,7 +789,7 @@ mod test {
         // Writes should be refused until this flush succeeds.
         writer.flush().expect("flush succeeds");
 
-        // Try shoving even more down there, and it shouldnt accept more input:
+        // Try shoving even more down there, and it shouldn't accept more input:
         writer
             .write(chunk.clone())
             .err()

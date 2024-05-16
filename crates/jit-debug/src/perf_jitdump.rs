@@ -84,7 +84,7 @@ pub struct DebugEntry {
 }
 
 /// Describes debug information for a jitted function. An array of debug entries are
-/// appended to this record during writting. Note, this record must preceed the code
+/// appended to this record during writing. Note, this record must precede the code
 /// load record that describes the same jitted function.
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
@@ -139,7 +139,7 @@ pub struct JitDumpFile {
 }
 
 impl JitDumpFile {
-    /// Intialize a JitDumpAgent and write out the header
+    /// Initialize a JitDumpAgent and write out the header
     pub fn new(filename: impl AsRef<Path>, e_machine: u32) -> io::Result<Self> {
         let jitdump_file = OpenOptions::new()
             .read(true)

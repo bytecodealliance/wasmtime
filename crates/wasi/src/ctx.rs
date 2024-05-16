@@ -108,7 +108,7 @@ impl WasiCtxBuilder {
     /// Provides a custom implementation of stdin to use.
     ///
     /// By default stdin is closed but an example of using the host's native
-    /// stdin loos like:
+    /// stdin looks like:
     ///
     /// ```
     /// use wasmtime_wasi::{stdin, WasiCtxBuilder};

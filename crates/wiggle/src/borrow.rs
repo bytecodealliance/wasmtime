@@ -105,7 +105,7 @@ mod test {
         assert!(!b.can_read(region()));
         assert!(!b.can_write(region()));
 
-        // releasing the mutable borrows allows raeding/writing again
+        // releasing the mutable borrows allows reading/writing again
         b.mut_unborrow(h1);
         assert!(b.can_read(region()));
         assert!(b.can_write(region()));

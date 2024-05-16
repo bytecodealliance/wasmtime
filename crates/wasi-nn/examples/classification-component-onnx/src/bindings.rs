@@ -859,7 +859,7 @@ pub mod wasi {
           /// WASI. At this time, it should be interpreted as a request, and not a
           /// requirement.
           const DATA_INTEGRITY_SYNC = 1 << 3;
-          /// Requests that reads be performed at the same level of integrety
+          /// Requests that reads be performed at the same level of integrity
           /// requested for writes. This is similar to `O_RSYNC` in POSIX.
           /// 
           /// The precise semantics of this operation have not yet been defined for
@@ -4378,7 +4378,7 @@ pub mod wasi {
             #[allow(unused_unsafe, clippy::all)]
             /// Read from one stream and write to another.
             /// 
-            /// The behavior of splice is equivelant to:
+            /// The behavior of splice is equivalent to:
             /// 1. calling `check-write` on the `output-stream`
             /// 2. calling `read` on the `input-stream` with the smaller of the
             /// `check-write` permitted length and the `len` provided to `splice`

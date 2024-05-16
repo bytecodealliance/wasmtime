@@ -207,7 +207,7 @@ impl StdinPoll {
             // Wait for data to appear in stdin. If fill_buf returns any slice, it means
             // that either:
             // (a) there is some data in stdin, if non-empty,
-            // (b) EOF was recieved, if its empty
+            // (b) EOF was received, if its empty
             // Linux returns `POLLIN` in both cases, so we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
                 Ok(_) => PollState::Ready,

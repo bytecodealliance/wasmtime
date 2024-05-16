@@ -3,7 +3,7 @@
 //!
 //! Each case includes a list of arbitrary interface types to use as parameters, plus another one to use as a
 //! result, and a component which exports a function and imports a function.  The exported function forwards its
-//! parameters to the imported one and forwards the result back to the caller.  This serves to excercise Wasmtime's
+//! parameters to the imported one and forwards the result back to the caller.  This serves to exercise Wasmtime's
 //! lifting and lowering code and verify the values remain intact during both processes.
 
 use arbitrary::{Arbitrary, Unstructured};
@@ -877,7 +877,7 @@ impl Declarations {
 pub struct TestCase<'a> {
     /// The types of parameters to pass to the function
     pub params: Vec<&'a Type>,
-    /// The result types of the the function
+    /// The result types of the function
     pub results: Vec<&'a Type>,
     /// String encoding to use from host-to-component.
     pub encoding1: StringEncoding,
