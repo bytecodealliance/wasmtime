@@ -605,6 +605,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
+ "env_logger",
  "gimli",
  "hashbrown 0.14.3",
  "log",

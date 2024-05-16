@@ -49,6 +49,7 @@ pub mod loop_analysis;
 pub mod print_errors;
 pub mod settings;
 pub mod timing;
+pub mod traversals;
 pub mod verifier;
 pub mod write;
 

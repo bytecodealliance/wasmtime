@@ -43,6 +43,7 @@ rustc-hash  = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 similar = "2.1.0"
+env_logger = { workspace = true }
 
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.109.0" }
