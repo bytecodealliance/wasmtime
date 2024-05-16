@@ -471,12 +471,16 @@ impl<'a> CompileInputs<'a> {
                         .get(&func_index)
                     {
                         Some(name) => format!(
-                            "wasm[{}]::func[{}]::{}",
+                            "wasm[{}]::function[{}]::{}",
                             module.as_u32(),
                             func_index.as_u32(),
                             Self::clean_symbol(&name)
                         ),
-                        None => format!("wasm[{}]::func[{}]", module.as_u32(), func_index.as_u32()),
+                        None => format!(
+                            "wasm[{}]::function[{}]",
+                            module.as_u32(),
+                            func_index.as_u32()
+                        ),
                     };
 
                     Ok(CompileOutput {
