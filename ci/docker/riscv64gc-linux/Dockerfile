@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 
-RUN apt-get update -y && apt-get install -y gcc gcc-riscv64-linux-gnu ca-certificates
+RUN apt-get update -y && apt-get install -y gcc gcc-riscv64-linux-gnu ca-certificates cmake
 
 ENV PATH=$PATH:/rust/bin
 ENV CARGO_BUILD_TARGET=riscv64gc-unknown-linux-gnu

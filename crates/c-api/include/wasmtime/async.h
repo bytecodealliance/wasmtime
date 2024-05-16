@@ -34,11 +34,14 @@
 #define WASMTIME_ASYNC_H
 
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/config.h>
 #include <wasmtime/error.h>
 #include <wasmtime/func.h>
 #include <wasmtime/linker.h>
 #include <wasmtime/store.h>
+
+#ifdef WASMTIME_FEATURE_ASYNC
 
 #ifdef __cplusplus
 extern "C" {
@@ -365,5 +368,7 @@ wasmtime_config_host_stack_creator_set(wasm_config_t *,
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+#endif // WASMTIME_FEATURE_ASYNC
 
 #endif // WASMTIME_ASYNC_H

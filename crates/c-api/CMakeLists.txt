@@ -1,140 +1,174 @@
 cmake_minimum_required(VERSION 3.10)
 project(wasmtime C)
 
-set(WASMTIME_USER_CARGO_BUILD_OPTIONS "" CACHE STRING "Additional cargo flags (such as --features) to apply to the build command")
+option(WASMTIME_USER_CARGO_BUILD_OPTIONS "Additional cargo flags (such as --features) to apply to the build command" OFF)
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(WASMTIME_ALWAYS_BUILD "If cmake should always invoke cargo to build wasmtime" ON)
 option(WASMTIME_FASTEST_RUNTIME "Set flags designed to optimize runtime performance" OFF)
+option(WASMTIME_TARGET "Rust target to build for" OFF)
+
+if(NOT WASMTIME_TARGET)
+  execute_process(COMMAND rustc -vV OUTPUT_VARIABLE RUSTC_VERSION)
+  string(REGEX MATCH "host: ([^ \n]*)" RUSTC_HOST ${RUSTC_VERSION})
+  string(STRIP ${CMAKE_MATCH_1} WASMTIME_TARGET)
+endif()
+
+if(NOT WASMTIME_USER_CARGO_BUILD_OPTIONS)
+  set(WASMTIME_USER_CARGO_BUILD_OPTIONS "")
+endif()
+
+set(WASMTIME_FEATURES "--no-default-features")
+
+option(WASMTIME_DISABLE_ALL_FEATURES
+       "disable all features by default instead of enabling them"
+       OFF)
+
+macro(feature cmake_name rust_name default)
+  if(${default})
+    if(${WASMTIME_DISABLE_ALL_FEATURES})
+      set(feature_default OFF)
+    else()
+      set(feature_default ON)
+    endif()
+  else()
+    set(feature_default OFF)
+  endif()
+
+  option(${cmake_name} "enable the Cargo feature ${rust_name}" ${feature_default})
+
+  if(${cmake_name})
+    list(APPEND WASMTIME_FEATURES "--features=${rust_name}")
+    message(STATUS "Enabling feature ${rust_name}")
+  endif()
+endmacro()
+
+feature(WASMTIME_FEATURE_PROFILING profiling ON)
+feature(WASMTIME_FEATURE_WAT wat ON)
+feature(WASMTIME_FEATURE_CACHE cache ON)
+feature(WASMTIME_FEATURE_PARALLEL_COMPILATION parallel-compilation ON)
+feature(WASMTIME_FEATURE_WASI wasi ON)
+feature(WASMTIME_FEATURE_LOGGING logging ON)
+feature(WASMTIME_FEATURE_DISABLE_LOGGING disable-logging OFF)
+feature(WASMTIME_FEATURE_COREDUMP coredump ON)
+feature(WASMTIME_FEATURE_ADDR2LINE addr2line ON)
+feature(WASMTIME_FEATURE_DEMANGLE demangle ON)
+feature(WASMTIME_FEATURE_THREADS threads ON)
+feature(WASMTIME_FEATURE_GC gc ON)
+feature(WASMTIME_FEATURE_ASYNC async ON)
+# ... if you add a line above this be sure to also change:
+#
+#   crates/c-api/include/wasmtime/conf.h.in
+#   crates/c-api/artifact/Cargo.toml
 
 if(WASMTIME_FASTEST_RUNTIME)
-	set(WASMTIME_BUILD_TYPE_FLAG "--profile=fastest-runtime")
-	set(WASMTIME_BUILD_TYPE "fastest-runtime")
-	set(CARGO_PROFILE_PANIC CARGO_PROFILE_RELEASE_PANIC)
+    set(WASMTIME_BUILD_TYPE_FLAG "--profile=fastest-runtime")
+    set(WASMTIME_BUILD_TYPE "fastest-runtime")
+    set(CARGO_PROFILE_PANIC CARGO_PROFILE_RELEASE_PANIC)
 else()
-	if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
-	    CMAKE_BUILD_TYPE STREQUAL "MinSizeRel" OR
-	    CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-		set(WASMTIME_BUILD_TYPE_FLAG "--release")
-		set(WASMTIME_BUILD_TYPE "release")
-		set(CARGO_PROFILE_PANIC CARGO_PROFILE_RELEASE_PANIC)
-	else()
-		set(WASMTIME_BUILD_TYPE "debug")
-		set(CARGO_PROFILE_PANIC CARGO_PROFILE_DEBUG_PANIC)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
+        CMAKE_BUILD_TYPE STREQUAL "MinSizeRel" OR
+        CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        set(WASMTIME_BUILD_TYPE_FLAG "--release")
+        set(WASMTIME_BUILD_TYPE "release")
+        set(CARGO_PROFILE_PANIC CARGO_PROFILE_RELEASE_PANIC)
+    else()
+        set(WASMTIME_BUILD_TYPE "debug")
+        set(CARGO_PROFILE_PANIC CARGO_PROFILE_DEBUG_PANIC)
     endif()
 endif()
 
-if(ANDROID)
-	# TODO wasmtime only supports arm64-v8a right now
-	if(ANDROID_ABI STREQUAL "armeabi-v7a")
-		set(ANDROID_TARGET "armv7-linux-androideabi")
-		set(ANDROID_ARCH_SHORT "arm")
-	elseif(ANDROID_ABI STREQUAL "arm64-v8a")
-		set(ANDROID_TARGET "aarch64-linux-android")
-		set(ANDROID_ARCH_SHORT "aarch64")
-	elseif(ANDROID_ABI STREQUAL "x86")
-		set(ANDROID_TARGET "i686-linux-android")
-		set(ANDROID_ARCH_SHORT "i386")
-	elseif(ANDROID_ABI STREQUAL "x86_64")
-		set(ANDROID_TARGET "x86_64-linux-android")
-		set(ANDROID_ARCH_SHORT "x86_64")
-	endif()
+set(WASMTIME_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_TARGET}/${WASMTIME_BUILD_TYPE})
 
-	set(WASMTIME_BUILD_TARGET "--target=${ANDROID_TARGET}")
-endif()
-
-if (BUILD_SHARED_LIBS AND ANDROID)
-	message(FATAL_ERROR "Wasmtime cannot be built with BUILD_SHARED_LIBS on Android")
-endif()
-
-if(BUILD_SHARED_LIBS)
-	if(WIN32)
-		set(WASMTIME_BUILD_PRODUCT
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.dll.lib)
-	elseif(APPLE)
-		set(WASMTIME_BUILD_PRODUCT
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.dylib)
-	else()
-		set(WASMTIME_BUILD_PRODUCT
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.so)
-	endif()
+if(WASMTIME_TARGET MATCHES "darwin")
+  set(WASMTIME_SHARED_FILES libwasmtime.dylib)
+  set(WASMTIME_STATIC_FILES libwasmtime.a)
+elseif(WASMTIME_TARGET MATCHES "windows-gnu")
+  set(WASMTIME_SHARED_FILES libwasmtime.dll.a wasmtime.dll)
+  set(WASMTIME_STATIC_FILES libwasmtime.a)
+elseif(WASMTIME_TARGET MATCHES "windows-msvc")
+  set(WASMTIME_SHARED_FILES wasmtime.dll.lib wasmtime.dll)
+  set(WASMTIME_STATIC_FILES wasmtime.lib)
 else()
-	if(WIN32)
-		set(WASMTIME_BUILD_PRODUCT
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.lib)
-	elseif(ANDROID)
-		set(WASMTIME_BUILD_PRODUCT
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${ANDROID_TARGET}/${WASMTIME_BUILD_TYPE}/libwasmtime.a)
-	else()
-		set(WASMTIME_BUILD_PRODUCT
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.a)
-	endif()
+  set(WASMTIME_SHARED_FILES libwasmtime.so)
+  set(WASMTIME_STATIC_FILES libwasmtime.a)
 endif()
 
-if(ANDROID)
-	# Rust attempts to use libgcc.a on NDK versions r23-beta3 and up
-	# but it has been replaced with libunwind.a (rust-lang/rust#85806)
-	file(WRITE ${CMAKE_BINARY_DIR}/libgcc.a "INPUT(-lunwind)")
-	# The version of the clang compiler is part of the libunwind.a path
-	file(STRINGS ${ANDROID_TOOLCHAIN_ROOT}/AndroidVersion.txt CLANG_VERSION_FILE)
-	list(GET CLANG_VERSION_FILE 0 CLANG_VERSION)
+list(TRANSFORM WASMTIME_SHARED_FILES PREPEND ${WASMTIME_TARGET_DIR}/)
+list(TRANSFORM WASMTIME_STATIC_FILES PREPEND ${WASMTIME_TARGET_DIR}/)
 
-	# Some crates use the compiler directly, environment variables
-	# are set to make them use the Android compiler
-	set(WASMTIME_PREBUILD_COMMAND ${CMAKE_COMMAND} -E env
-	CC=${ANDROID_TOOLCHAIN_ROOT}/bin/clang
-	AR=${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar
-	"RUSTFLAGS=-L ${CMAKE_SYSROOT}/usr/lib/${ANDROID_TARGET}/${ANDROID_NATIVE_API_LEVEL} \
-		-L ${ANDROID_TOOLCHAIN_ROOT}/lib64/clang/${CLANG_VERSION}/lib/linux/${ANDROID_ARCH_SHORT} \
-		-L ${CMAKE_BINARY_DIR} -C linker=${ANDROID_TOOLCHAIN_ROOT}/bin/ld")
-endif()
 include(ExternalProject)
 find_program(WASMTIME_CARGO_BINARY cargo)
 if(NOT WASMTIME_CARGO_BINARY)
     message(FATAL_ERROR [["cargo" was not found. Ensure "cargo" is in PATH. Aborting...]])
 endif()
 ExternalProject_Add(
-	wasmtime-crate
-	DOWNLOAD_COMMAND ""
-	CONFIGURE_COMMAND ""
-	INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
+    wasmtime-crate
+    DOWNLOAD_COMMAND ""
+    CONFIGURE_COMMAND ""
+    INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
         BUILD_COMMAND
             ${CMAKE_COMMAND} -E env ${CARGO_PROFILE_PANIC}=abort
-            ${WASMTIME_PREBUILD_COMMAND} ${WASMTIME_CARGO_BINARY} build ${WASMTIME_BUILD_TYPE_FLAG} ${WASMTIME_USER_CARGO_BUILD_OPTIONS} ${WASMTIME_BUILD_TARGET}
-	USES_TERMINAL_BUILD TRUE
-	BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/artifact
-        BUILD_ALWAYS ${WASMTIME_ALWAYS_BUILD}
-	BUILD_BYPRODUCTS ${WASMTIME_BUILD_PRODUCT})
+            ${WASMTIME_PREBUILD_COMMAND}
+            ${WASMTIME_CARGO_BINARY} build
+              --target ${WASMTIME_TARGET}
+              ${WASMTIME_BUILD_TYPE_FLAG}
+              ${WASMTIME_FEATURES}
+              ${WASMTIME_USER_CARGO_BUILD_OPTIONS}
+    USES_TERMINAL_BUILD TRUE
+    BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/artifact
+    BUILD_ALWAYS ${WASMTIME_ALWAYS_BUILD}
+    BUILD_BYPRODUCTS ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES})
 add_library(wasmtime INTERFACE)
 add_dependencies(wasmtime wasmtime-crate)
 
 if(BUILD_SHARED_LIBS)
-	if(NOT WIN32)
-		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
-	endif()
-	target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT})
+    if(NOT WASMTIME_TARGET MATCHES "windows")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
+    endif()
+    list(GET WASMTIME_SHARED_FILES 0 WASMTIME_SHARED_LIB_TO_LINK)
+    target_link_libraries(wasmtime INTERFACE ${WASMTIME_SHARED_LIB_TO_LINK})
 else()
-	if(WIN32)
-		target_compile_options(wasmtime INTERFACE -DWASM_API_EXTERN= -DWASI_API_EXTERN=)
-		target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT}
-			ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
-	elseif(APPLE OR ANDROID)
-		target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT})
-	else()
-		target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT}
-			pthread dl m)
-	endif()
+    if(WASMTIME_TARGET MATCHES "windows")
+        target_compile_options(wasmtime INTERFACE -DWASM_API_EXTERN= -DWASI_API_EXTERN=)
+        target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
+            ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
+    elseif(WASMTIME_TARGET MATCHES "darwin")
+        target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES})
+    else()
+        target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
+            pthread dl m)
+    endif()
 endif()
 
 target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+set(WASMTIME_GENERATED_CONF_H ${CMAKE_BINARY_DIR}/include/wasmtime/conf.h)
+target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime/conf.h.in
+  ${WASMTIME_GENERATED_CONF_H})
+
 include(GNUInstallDirs)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime.h
-	${CMAKE_CURRENT_SOURCE_DIR}/include/wasi.h
-	${CMAKE_CURRENT_SOURCE_DIR}/include/doc-wasm.h
-	${CMAKE_CURRENT_SOURCE_DIR}/include/wasm.h
-	${CMAKE_CURRENT_SOURCE_DIR}/include/wasm.hh
-	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime
-	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${WASMTIME_BUILD_PRODUCT}
-	DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING REGEX "\\.hh?$")
+install(FILES ${WASMTIME_GENERATED_CONF_H}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wasmtime)
+install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
+        DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+if(WASMTIME_TARGET MATCHES "darwin")
+  # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
+  # directive than the default one that comes out of the linker when typically
+  # doing `cargo build`. For more info see #984
+  set(INSTALLED_LIB ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libwasmtime.dylib)
+  install(CODE "execute_process(COMMAND install_name_tool -id \"@rpath/libwasmtime.dylib\" ${INSTALLED_LIB})")
+endif()
+
+set(DOXYGEN_CONF_IN ${CMAKE_CURRENT_SOURCE_DIR}/doxygen.conf.in)
+set(DOXYGEN_CONF_OUT ${CMAKE_BINARY_DIR}/doxygen.conf)
+configure_file(${DOXYGEN_CONF_IN} ${DOXYGEN_CONF_OUT})
+add_custom_target(doc doxygen ${DOXYGEN_CONF_OUT}
+    DEPENDS ${WASMTIME_GENERATED_CONF_H} ${DOXYGEN_CONF_OUT}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
