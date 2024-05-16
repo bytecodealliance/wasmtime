@@ -1,7 +1,7 @@
 //! Wasmtime's Fused Adapter Compiler of Trampolines (FACT)
 //!
 //! This module contains a compiler which emits trampolines to implement fused
-//! adatpers for the component model. A fused adapter is when a core wasm
+//! adapters for the component model. A fused adapter is when a core wasm
 //! function is lifted from one component instance and then lowered into another
 //! component instance. This communication between components is well-defined by
 //! the spec and ends up creating what's called a "fused adapter".
@@ -14,7 +14,7 @@
 //!
 //! Note that identification of precisely what goes into an adapter module is
 //! not handled in this file, instead that's all done in `translate/adapt.rs`.
-//! Otherwise this module is only reponsible for taking a set of adapters and
+//! Otherwise this module is only responsible for taking a set of adapters and
 //! their imports and then generating a core wasm module to implement all of
 //! that.
 
@@ -605,7 +605,7 @@ cranelift_entity::entity_impl!(FunctionId);
 
 /// A generated function to be added to an adapter module.
 ///
-/// At least one function is created per-adapter and dependeing on the type
+/// At least one function is created per-adapter and depending on the type
 /// hierarchy multiple functions may be generated per-adapter.
 struct Function {
     /// Whether or not the `body` has been finished.
@@ -629,7 +629,7 @@ struct Function {
     /// The contents of the function.
     ///
     /// See `Body` for more information, and the `Vec` here represents the
-    /// concatentation of all the `Body` fragments.
+    /// concatenation of all the `Body` fragments.
     body: Vec<Body>,
 }
 
