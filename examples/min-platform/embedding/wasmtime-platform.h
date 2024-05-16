@@ -188,7 +188,7 @@ extern int32_t wasmtime_init_traps(wasmtime_trap_handler_t handler);
  * Attempts to create a new in-memory image of the `ptr`/`len` combo which
  * can be mapped to virtual addresses in the future.
  *
- * On successed the returned `wasmtime_memory_image` pointer is stored into `ret`.
+ * On success the returned `wasmtime_memory_image` pointer is stored into `ret`.
  * This value stored can be `NULL` to indicate that an image cannot be
  * created but no failure occurred. The structure otherwise will later be
  * deallocated with `wasmtime_memory_image_free` and
