@@ -1,6 +1,7 @@
 use anyhow::Result;
 use cfg_if::cfg_if;
 use cranelift_codegen::ir::function::FunctionParameters;
+use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{FinalizedMachReloc, MachStackMap, MachTrap};
 use std::fmt::Write;
@@ -69,10 +70,10 @@ pub fn print_stack_maps(traps: &[MachStackMap]) -> String {
 
 cfg_if! {
     if #[cfg(feature = "disas")] {
-        pub fn print_disassembly(isa: &dyn TargetIsa, mem: &[u8]) -> Result<()> {
+        pub fn print_disassembly(func: &Function, isa: &dyn TargetIsa, mem: &[u8]) -> Result<()> {
             let cs = isa.to_capstone().map_err(|e| anyhow::format_err!("{}", e))?;
 
-            println!("\nDisassembly of {} bytes:", mem.len());
+            println!("\nDisassembly of {} bytes <{}>:", mem.len(), func.name);
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
             for i in insns.iter() {
                 let mut line = String::new();
@@ -108,7 +109,7 @@ cfg_if! {
             Ok(())
         }
     } else {
-        pub fn print_disassembly(_: &dyn TargetIsa, _: &[u8]) -> Result<()> {
+        pub fn print_disassembly(_: &Function, _: &dyn TargetIsa, _: &[u8]) -> Result<()> {
             println!("\nNo disassembly available.");
             Ok(())
         }
@@ -117,7 +118,7 @@ cfg_if! {
 
 pub fn print_all(
     isa: &dyn TargetIsa,
-    func_params: &FunctionParameters,
+    func: &Function,
     mem: &[u8],
     code_size: u32,
     print: bool,
@@ -126,11 +127,11 @@ pub fn print_all(
     stack_maps: &[MachStackMap],
 ) -> Result<()> {
     print_bytes(&mem);
-    print_disassembly(isa, &mem[0..code_size as usize])?;
+    print_disassembly(func, isa, &mem[0..code_size as usize])?;
     if print {
         println!(
             "\n{}\n{}\n{}",
-            print_relocs(func_params, relocs),
+            print_relocs(&func.params, relocs),
             print_traps(traps),
             print_stack_maps(stack_maps)
         );
