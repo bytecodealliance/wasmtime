@@ -1178,7 +1178,11 @@ impl<M: ABIMachineSpec> Callee<M> {
             sized_stack_offset = sized_stack_offset
                 .checked_add(data.size)
                 .ok_or(CodegenError::ImplLimitExceeded)?;
-            let mask = M::word_bytes() - 1;
+            // Always at least machine-word-align slots, but also
+            // satisfy the user's requested alignment.
+            debug_assert!(data.align_shift < 32);
+            let align = std::cmp::max(M::word_bytes(), 1u32 << data.align_shift);
+            let mask = align - 1;
             sized_stack_offset = checked_round_up(sized_stack_offset, mask)
                 .ok_or(CodegenError::ImplLimitExceeded)?;
             debug_assert_eq!(stackslot.as_u32() as usize, sized_stackslots.len());

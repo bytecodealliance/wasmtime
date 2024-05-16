@@ -775,6 +775,7 @@ impl TrampolineCompiler<'_> {
                 .create_sized_stack_slot(ir::StackSlotData::new(
                     ir::StackSlotKind::ExplicitSlot,
                     pointer_type.bytes(),
+                    0,
                 ));
             args.push(self.builder.ins().stack_addr(pointer_type, slot, 0));
         }
