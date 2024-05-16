@@ -1942,13 +1942,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         frame_layout.clobber_size + frame_layout.fixed_frame_storage_size
     }
 
-    /// Returns offset from the SP to caller's SP.
-    pub fn sp_to_caller_sp_offset(&self) -> u32 {
+    /// Returns offset from the slot base in the current frame to the caller's SP.
+    pub fn slot_base_to_caller_sp_offset(&self) -> u32 {
         let frame_layout = self.frame_layout();
         frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.setup_area_size
-            + frame_layout.outgoing_args_size
     }
 
     /// Returns the size of arguments expected on the stack.
