@@ -1186,7 +1186,7 @@ impl Assembler {
         });
     }
 
-    /// Mininum for src and dst XMM registers with results put in dst.
+    /// Minimum for src and dst XMM registers with results put in dst.
     pub fn xmm_min_seq(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::XmmMinMaxSeq {
             size: size.into(),

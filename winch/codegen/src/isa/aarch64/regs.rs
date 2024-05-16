@@ -97,7 +97,7 @@ pub(crate) const fn sp() -> Reg {
 /// [MacroAssembler::move_sp_to_shadow_sp] function.
 ///
 /// This approach, requires copying the real stack pointer value into
-/// x28 everytime the real stack pointer moves, which involves
+/// x28 every time the real stack pointer moves, which involves
 /// emitting one more instruction. For example, this is generally how
 /// the real stack pointer and x28 will look like during a function:
 ///

@@ -707,7 +707,7 @@ pub(crate) trait MacroAssembler {
     /// expectations regarding the location of the instruction
     /// arguments and regarding the location of the quotient /
     /// remainder. To free the caller from having to deal with the
-    /// architecure specific contraints we give this function access
+    /// architecture specific constraints we give this function access
     /// to the code generation context, allowing each implementation
     /// to decide the lowering path.  For cases in which division is a
     /// unconstrained binary operation, the caller can decide to use

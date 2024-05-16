@@ -126,7 +126,7 @@ where
             .into();
 
         self.masm.start_source_loc(Default::default());
-        // We need to use the vmctx paramter before pinning it for stack checking.
+        // We need to use the vmctx parameter before pinning it for stack checking.
         self.masm.prologue(vmctx);
         // Pin the `VMContext` pointer.
         self.masm
@@ -213,7 +213,7 @@ where
                     let addr = self.masm.local_address(results_base_slot);
                     self.masm.store((*reg).into(), addr, (*ty).into());
                 }
-                // The result base parameter is a stack paramter, addressed
+                // The result base parameter is a stack parameter, addressed
                 // from FP.
                 _ => {}
             }
@@ -238,7 +238,7 @@ where
                     fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                         self.0.$visit($($($arg.clone()),*)?)?;
                         // Only visit operators if the compiler is in a reachable code state. If
-                        // the compiler is in an unrechable code state, most of the operators are
+                        // the compiler is in an unreachable code state, most of the operators are
                         // ignored except for If, Block, Loop, Else and End. These operators need
                         // to be observed in order to keep the control stack frames balanced and to
                         // determine if reachability should be restored.
@@ -377,9 +377,9 @@ where
                 |results, _, _| results.ret_area().copied(),
             );
         } else {
-            // If we reach the end of the function in a unreachable code state,
-            // simly truncate to the the expected values.
-            // The compiler could enter in this state through an infinite loop.
+            // If we reach the end of the function in an unreachable code state,
+            // simply truncate to the expected values.
+            // The compiler could enter this state through an infinite loop.
             self.context.truncate_stack_to(0);
             self.masm.reset_stack_pointer(base);
         }
@@ -545,7 +545,7 @@ where
     /// of doing the least amount of work possible at compile time. For static
     /// heaps, Winch does a bit more of work, given that some of the cases that
     /// are checked against, can benefit compilation times, like for example,
-    /// detecting an out of bouds access at compile time.
+    /// detecting an out of bounds access at compile time.
     pub fn emit_compute_heap_address(
         &mut self,
         memarg: &MemArg,
@@ -646,7 +646,7 @@ where
             //
             //      index <= u32::MAX
             //
-            // Therfore if any 32-bit index access occurs in the region
+            // Therefore if any 32-bit index access occurs in the region
             // represented by
             //
             //      bound + guard_size - (offset + access_size)
@@ -780,7 +780,7 @@ where
         self.masm
             .trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
 
-        // Move the index into the scratch register to calcualte the table
+        // Move the index into the scratch register to calculate the table
         // element address.
         // Moving the value of the index register to the scratch register
         // also avoids overwriting the context of the index register.

@@ -757,7 +757,7 @@ impl Masm for MacroAssembler {
 
         match &(lhs, rhs) {
             (rlhs, RegImm::Reg(rrhs)) => {
-                // If the comparision kind is zero or not zero and both operands
+                // If the comparison kind is zero or not zero and both operands
                 // are the same register, emit a test instruction. Else we emit
                 // a normal comparison.
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
@@ -1037,7 +1037,7 @@ impl MacroAssembler {
         }
     }
 
-    /// A common implemenation for zero-extend stack loads.
+    /// A common implementation for zero-extend stack loads.
     fn load_impl<M>(&mut self, src: Address, dst: Reg, size: OperandSize, flags: MemFlags)
     where
         M: Masm,
@@ -1058,7 +1058,7 @@ impl MacroAssembler {
         }
     }
 
-    /// A common implemenation for stack stores.
+    /// A common implementation for stack stores.
     fn store_impl(&mut self, src: RegImm, dst: Address, size: OperandSize, flags: MemFlags) {
         let scratch = <Self as Masm>::ABI::scratch_reg();
         let float_scratch = <Self as Masm>::ABI::float_scratch_reg();

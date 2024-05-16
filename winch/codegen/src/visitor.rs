@@ -1715,9 +1715,9 @@ where
                 &mut self.context,
                 self.masm,
                 |results, context, masm| {
-                    // In the case of `br_if` theres a possibility that we'll
-                    // exit early from the block or falltrough, for
-                    // a falltrough, we cannot rely on the pre-computed return area;
+                    // In the case of `br_if` there's a possibility that we'll
+                    // exit early from the block or fallthrough, for
+                    // a fallthrough, we cannot rely on the pre-computed return area;
                     // it must be recalculated so that any values that are
                     // generated are correctly placed near the current stack
                     // pointer.
@@ -1891,7 +1891,7 @@ where
         let val1 = self.context.pop_to_reg(self.masm, None);
         self.masm
             .cmp(cond.reg.into(), RegImm::i32(0), OperandSize::S32);
-        // Conditionally move val1 to val2 if the the comparision is
+        // Conditionally move val1 to val2 if the comparison is
         // not zero.
         self.masm
             .cmov(val1.into(), val2.into(), IntCmpKind::Ne, val1.ty.into());
@@ -2135,7 +2135,7 @@ impl From<WasmValType> for OperandSize {
             WasmValType::I64 | WasmValType::F64 => OperandSize::S64,
             WasmValType::Ref(rt) => {
                 match rt.heap_type {
-                    // TODO: Harcoded size, assuming 64-bit support only. Once
+                    // TODO: Hardcoded size, assuming 64-bit support only. Once
                     // Wasmtime supports 32-bit architectures, this will need
                     // to be updated in such a way that the calculation of the
                     // OperandSize will depend on the target's  pointer size.

@@ -176,7 +176,7 @@ pub(crate) struct StackState {
     /// The base stack pointer offset.
     /// This offset is set when entering the block, after saving any live
     /// registers and locals.
-    /// It is calcuated by substracting the size, in bytes, of any block params
+    /// It is calcuated by subtracting the size, in bytes, of any block params
     /// to the current stack pointer offset.
     pub base_offset: SPOffset,
     /// The target stack pointer offset.
@@ -192,7 +192,7 @@ pub(crate) struct StackState {
     pub target_len: usize,
 }
 
-/// Holds the all the metdata to support the emission
+/// Holds the all the metadata to support the emission
 /// of control flow instructions.
 #[derive(Debug)]
 pub(crate) enum ControlStackFrame {
@@ -227,7 +227,7 @@ pub(crate) enum ControlStackFrame {
         stack_state: StackState,
         /// Exit state of the block.
         ///
-        /// This flag is used to dertermine if a block is a branch
+        /// This flag is used to determine if a block is a branch
         /// target. By default, this is false, and it's updated when
         /// emitting a `br` or `br_if`.
         is_branch_target: bool,
@@ -378,7 +378,7 @@ impl ControlStackFrame {
     /// unreachable state. This function is intended to be called when handling
     /// an unreachable else or end.
     //
-    /// This function will truncate the value stack to the the base length of
+    /// This function will truncate the value stack to the base length of
     /// the control frame and will also set the stack pointer offset to reflect
     /// the offset expected by the target branch.
     ///
@@ -390,7 +390,7 @@ impl ControlStackFrame {
         context: &mut CodeGenContext,
     ) {
         let state = self.stack_state();
-        // This assumes that at jump sites, the machine stack poiter will be
+        // This assumes that at jump sites, the machine stack pointer will be
         // adjusted to match the expectations of the target branch (e.g.
         // `target_offset`); after performing the jump, the MacroAssembler
         // implementation will soft-reset the stack pointer offset to its

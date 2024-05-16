@@ -12,7 +12,7 @@ use crate::{
 /// If a particular register is not available upon request
 /// the register allocation will perform a "spill", essentially
 /// moving Local and Register values in the stack to memory.
-/// This processs ensures that whenever a register is requested,
+/// This process ensures that whenever a register is requested,
 /// it is going to be available.
 pub(crate) struct RegAlloc {
     /// The register set.
@@ -54,7 +54,7 @@ impl RegAlloc {
             spill(self);
             self.regset
                 .reg(named)
-                .unwrap_or_else(|| panic!("Exepected register {:?} to be available", named))
+                .unwrap_or_else(|| panic!("Expected register {:?} to be available", named))
         })
     }
 
