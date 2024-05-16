@@ -32,7 +32,7 @@ const offsetToHue = new Map();
 
 // Get the hue for the given offset, or assign it a new one if it doesn't have
 // one already.
-const hueForOffset = offset => {
+const hueForOffset = (offset) => {
   if (offsetToHue.has(offset)) {
     return offsetToHue.get(offset);
   } else {
@@ -44,7 +44,7 @@ const hueForOffset = offset => {
 
 // Get the hue for the given offset, only if the offset has already been
 // assigned a hue.
-const existingHueForOffset = offset => {
+const existingHueForOffset = (offset) => {
   return offsetToHue.get(offset);
 };
 
@@ -86,7 +86,7 @@ const addAsmElem = (offset, elem) => {
 const watElem = document.getElementById("wat");
 watElem.addEventListener(
   "click",
-  event => {
+  (event) => {
     if (event.target.dataset.wasmOffset == null) {
       return;
     }
@@ -109,7 +109,7 @@ watElem.addEventListener(
 const asmElem = document.getElementById("asm");
 asmElem.addEventListener(
   "click",
-  event => {
+  (event) => {
     if (event.target.dataset.wasmOffset == null) {
       return;
     }
@@ -129,7 +129,7 @@ asmElem.addEventListener(
   { passive: true },
 );
 
-const onMouseEnter = event => {
+const onMouseEnter = (event) => {
   if (event.target.dataset.wasmOffset == null) {
     return;
   }
@@ -141,7 +141,7 @@ const onMouseEnter = event => {
   }
 };
 
-const onMouseLeave = event => {
+const onMouseLeave = (event) => {
   if (event.target.dataset.wasmOffset == null) {
     return;
   }
@@ -159,12 +159,12 @@ const repeat = (s, n) => {
   return s.repeat(n >= 0 ? n : 0);
 };
 
-const renderAddress = addr => {
+const renderAddress = (addr) => {
   let hex = addr.toString(16);
   return repeat("0", 8 - hex.length) + hex;
 };
 
-const renderBytes = bytes => {
+const renderBytes = (bytes) => {
   let s = "";
   for (let i = 0; i < bytes.length; i++) {
     if (i != 0) {
