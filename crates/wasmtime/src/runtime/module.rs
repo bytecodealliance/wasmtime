@@ -428,7 +428,7 @@ impl Module {
     /// entire lifetime of the [`Module`] returned. Any changes to the file on
     /// disk may change future instantiations of the module to be incorrect.
     /// This is because the file is mapped into memory and lazily loaded pages
-    /// reflect the current state of the file, not necessarily the origianl
+    /// reflect the current state of the file, not necessarily the original
     /// state of the file.
     #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
@@ -437,7 +437,7 @@ impl Module {
     }
 
     /// Entrypoint for creating a `Module` for all above functions, both
-    /// of the AOT and jit-compiled cateogries.
+    /// of the AOT and jit-compiled categories.
     ///
     /// In all cases the compilation artifact, `code_memory`, is provided here.
     /// The `info_and_types` argument is `None` when a module is being

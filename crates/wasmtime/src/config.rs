@@ -672,7 +672,7 @@ impl Config {
     /// space consumed by a host function is counted towards this limit. The
     /// host functions are not prevented from consuming more than this limit.
     /// However, if the host function that used more than this limit and called
-    /// back into wasm, then the execution will trap immediatelly because of
+    /// back into wasm, then the execution will trap immediately because of
     /// stack overflow.
     ///
     /// When the `async` feature is enabled, this value cannot exceed the
@@ -1573,7 +1573,7 @@ impl Config {
         Ok(self)
     }
 
-    /// Configure wether wasmtime should compile a module using multiple
+    /// Configure whether wasmtime should compile a module using multiple
     /// threads.
     ///
     /// Disabling this will result in a single thread being used to compile

@@ -1592,7 +1592,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 ///   allocated by WebAssembly code and it's relative to the initial stack
 ///   pointer that called into wasm.
 ///
-/// This function may fail if the the stack limit can't be set because an
+/// This function may fail if the stack limit can't be set because an
 /// interrupt already happened.
 fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     // If this is a recursive call, e.g. our stack limit is already set, then
@@ -2561,7 +2561,7 @@ mod rooted {
         /// value past the lifetime of the provided `func`.
         ///
         /// Similarly, callers must ensure that the given `func_ref` is valid
-        /// for the liftime of the return value.
+        /// for the lifetime of the return value.
         pub(crate) unsafe fn new(
             func: &Arc<HostFunc>,
             func_ref: Option<NonNull<VMFuncRef>>,

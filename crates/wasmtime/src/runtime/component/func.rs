@@ -322,7 +322,7 @@ impl Func {
     ///
     /// # Panics
     ///
-    /// Panics if this is called on a function in an asyncronous store. This
+    /// Panics if this is called on a function in an asynchronous store. This
     /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
     pub fn call(
@@ -470,7 +470,7 @@ impl Func {
 
         let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
 
-        // Double-check the size/alignemnt of `space`, just in case.
+        // Double-check the size/alignment of `space`, just in case.
         //
         // Note that this alone is not enough to guarantee the validity of the
         // `unsafe` block below, but it's definitely required. In any case LLVM

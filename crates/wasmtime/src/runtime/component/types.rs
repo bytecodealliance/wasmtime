@@ -263,7 +263,7 @@ impl List {
         List(Handle::new(index, ty))
     }
 
-    /// Retreive the element type of this `list`.
+    /// Retrieve the element type of this `list`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index].element, &self.0.instance())
     }

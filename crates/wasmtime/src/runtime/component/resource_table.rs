@@ -76,7 +76,7 @@ struct TableEntry {
     entry: Box<dyn Any + Send>,
     /// The index of the parent of this entry, if it has one.
     parent: Option<u32>,
-    /// The indicies of any children of this entry.
+    /// The indices of any children of this entry.
     children: BTreeSet<u32>,
 }
 
@@ -275,7 +275,7 @@ impl ResourceTable {
         let e = self.free_entry(key as usize);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
-            // Parent must still be present because it cant be deleted while still having
+            // Parent must still be present because it can't be deleted while still having
             // children:
             self.occupied_mut(parent)
                 .expect("missing parent")

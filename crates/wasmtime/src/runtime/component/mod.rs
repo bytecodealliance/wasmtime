@@ -514,7 +514,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         "wasi:filesystem/types/descriptor": MyDescriptorType,
 ///     },
 ///
-///     // Addtional derive attributes to include on generated types (structs or enums).
+///     // Additional derive attributes to include on generated types (structs or enums).
 ///     //
 ///     // These are deduplicated and attached in a deterministic order.
 ///     additional_derives: [

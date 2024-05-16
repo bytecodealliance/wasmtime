@@ -6,7 +6,7 @@
 //!
 //! Even when batching is "disabled" we still use this queue. Batching is
 //! disabled by specifying a batch size of one, in which case, this queue will
-//! immediately get flushed everytime we push onto it.
+//! immediately get flushed every time we push onto it.
 
 use super::PoolingInstanceAllocator;
 use crate::vm::{MemoryAllocationIndex, MemoryImageSlot, Table, TableAllocationIndex};

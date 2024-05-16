@@ -229,7 +229,7 @@ impl Val {
     /// # Unsafety
     ///
     /// This method is unsafe for the reasons that [`ExternRef::from_raw`] and
-    /// [`Func::from_raw`] are unsafe. Additionaly there's no guarantee
+    /// [`Func::from_raw`] are unsafe. Additionally there's no guarantee
     /// otherwise that `raw` should have the type `ty` specified.
     pub unsafe fn from_raw(store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
         match ty {
@@ -529,7 +529,7 @@ impl From<V128> for Val {
 /// example, by claiming that the integer `0xbad1bad2` is actually a reference.
 #[derive(Debug, Clone)]
 pub enum Ref {
-    // NB: We have a variant for each of the type heirarchies defined in Wasm,
+    // NB: We have a variant for each of the type hierarchies defined in Wasm,
     // and push the `Option` that provides nullability into each variant. This
     // allows us to get the most-precise type of any reference value, whether it
     // is null or not, without any additional metadata.

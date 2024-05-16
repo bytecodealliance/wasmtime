@@ -261,7 +261,7 @@ impl VMGcRef {
         }
     }
 
-    /// Get this GC refererence as a raw u32 value, regardless whether it is
+    /// Get this GC reference as a raw u32 value, regardless whether it is
     /// actually a reference to a GC object or is an `i31ref`.
     pub fn as_raw_u32(&self) -> u32 {
         self.0.get()

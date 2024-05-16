@@ -1476,7 +1476,7 @@ where
 //
 // Even then though this didn't correctly vectorized for `Vec<u8>`. It's not
 // entirely clear why but it appeared that it's related to reloading the base
-// pointer fo memory (I guess from `MemoryMut` itself?). Overall I'm not really
+// pointer to memory (I guess from `MemoryMut` itself?). Overall I'm not really
 // clear on what's happening there, but this is surely going to be a performance
 // bottleneck in the future.
 fn lower_list<T, U>(
@@ -2069,7 +2069,7 @@ where
 ///
 /// * `payload` - the flat storage space for the entire payload of the variant
 /// * `typed_payload` - projection from the payload storage space to the
-///   individaul storage space for this variant.
+///   individual storage space for this variant.
 /// * `lower` - lowering operation used to initialize the `typed_payload` return
 ///   value.
 ///

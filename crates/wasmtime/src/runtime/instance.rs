@@ -41,7 +41,7 @@ pub(crate) struct InstanceData {
     /// `InstanceHandle`.
     id: InstanceId,
     /// A lazily-populated list of exports of this instance. The order of
-    /// exports here matches the order of the exports in the the original
+    /// exports here matches the order of the exports in the original
     /// module.
     exports: Vec<Option<Extern>>,
 }
@@ -300,7 +300,7 @@ impl Instance {
         // we immediately insert it into the store to keep it alive.
         //
         // Note that we `clone` the instance handle just to make easier
-        // working the the borrow checker here easier. Technically the `&mut
+        // working the borrow checker here easier. Technically the `&mut
         // instance` has somewhat of a borrow on `store` (which
         // conflicts with the borrow on `store.engine`) but this doesn't
         // matter in practice since initialization isn't even running any
