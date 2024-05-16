@@ -25,7 +25,7 @@ fn consumer() {
     let stdin_pollable1 = stdin.subscribe();
     let stdin_pollable2 = stdin.subscribe();
 
-    // The two pollables are subscribed to the same resource, and must report the same readyness
+    // The two pollables are subscribed to the same resource, and must report the same readiness
     stdin_pollable1.block();
     assert!(stdin_pollable1.ready() && stdin_pollable2.ready());
 

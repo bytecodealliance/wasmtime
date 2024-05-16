@@ -32,7 +32,7 @@ fn test_tcp_sample_application(family: IpAddressFamily, bind_address: IpSocketAd
 
         let data = input.blocking_read(first_message.len() as u64).unwrap();
 
-        // Check that we sent and recieved our message!
+        // Check that we sent and received our message!
         assert_eq!(data, first_message); // Not guaranteed to work but should work in practice.
     }
 
@@ -48,7 +48,7 @@ fn test_tcp_sample_application(family: IpAddressFamily, bind_address: IpSocketAd
         let (_accepted, input, _output) = listener.blocking_accept().unwrap();
         let data = input.blocking_read(second_message.len() as u64).unwrap();
 
-        // Check that we sent and recieved our message!
+        // Check that we sent and received our message!
         assert_eq!(data, second_message); // Not guaranteed to work but should work in practice.
     }
 }

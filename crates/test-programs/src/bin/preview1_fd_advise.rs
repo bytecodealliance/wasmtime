@@ -31,7 +31,7 @@ unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
     // Advise the kernel
     wasi::fd_advise(file_fd, 10, 50, wasi::ADVICE_NORMAL).expect("failed advise");
 
-    // Advise shouldnt change size
+    // Advise shouldn't change size
     let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat 3");
     assert_eq!(stat.size, 100, "file size should be 100");
 

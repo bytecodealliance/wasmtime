@@ -55,7 +55,7 @@ unsafe fn test_fd_dir_ops(dir_fd: wasi::Fd) {
     let r = wasi::fd_seek(dir_fd, 0, wasi::WHENCE_END);
     assert_eq!(r, Err(wasi::ERRNO_BADF), "fd_seek WHENCE_END error");
 
-    // Tell isnt in posix, its basically lseek with WHENCE_CUR above
+    // Tell isn't in posix, its basically lseek with WHENCE_CUR above
     let r = wasi::fd_tell(dir_fd);
     assert_eq!(r, Err(wasi::ERRNO_BADF), "fd_tell error");
 
