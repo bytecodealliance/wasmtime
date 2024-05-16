@@ -446,7 +446,7 @@ fn trapping() -> Result<(), Error> {
             }
 
             // recur so that we can trigger a next call.
-            // propogate its trap, if it traps!
+            // propagate its trap, if it traps!
             if recur > 0 {
                 let _ = caller
                     .get_export("export")
@@ -523,7 +523,7 @@ fn trapping() -> Result<(), Error> {
     assert_eq!(s.calls_into_wasm, 1);
     assert_eq!(s.returns_from_wasm, 1);
 
-    // trap in next call to wasm. No calls after the bit is set, so this trap shouldnt happen:
+    // trap in next call to wasm. No calls after the bit is set, so this trap shouldn't happen:
     let (s, e) = run(TRAP_NEXT_CALL_WASM, false);
     assert!(e.is_none());
     assert_eq!(s.calls_into_host, 1);
