@@ -192,7 +192,7 @@ fn guards_present_pooling() -> Result<()> {
 
     let mut pool = crate::small_pool_config();
     pool.total_memories(2)
-        .max_memory_size(10 * 65536)
+        .max_memory_size(10 << 16)
         .memory_protection_keys(MpkEnabled::Disable);
     let mut config = Config::new();
     config.static_memory_maximum_size(1 << 20);
@@ -254,7 +254,7 @@ fn guards_present_pooling_mpk() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
     let mut pool = crate::small_pool_config();
     pool.total_memories(4)
-        .max_memory_size(10 * 65536)
+        .max_memory_size(10 << 16)
         .memory_protection_keys(MpkEnabled::Enable)
         .max_memory_protection_keys(2);
     let mut config = Config::new();
@@ -396,7 +396,7 @@ fn tiny_static_heap() -> Result<()> {
     // specifically test that a load of all the valid addresses of the memory
     // all pass bounds-checks in cranelift to help weed out any off-by-one bugs.
     let mut config = Config::new();
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -429,7 +429,7 @@ fn tiny_static_heap() -> Result<()> {
 #[test]
 fn static_forced_max() -> Result<()> {
     let mut config = Config::new();
-    config.static_memory_maximum_size(5 * 65536);
+    config.static_memory_maximum_size(5 << 16);
     config.static_memory_forced(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());

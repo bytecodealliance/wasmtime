@@ -2757,7 +2757,7 @@ impl PoolingAllocationConfig {
         self
     }
 
-    /// The maximum size that any WebAssembly linear memory may grow to.
+    /// The maximum byte size that any WebAssembly linear memory may grow to.
     ///
     /// This option defaults to 10 MiB.
     ///

@@ -354,7 +354,7 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_memories(2)
         .max_memories_per_module(2)
-        .max_memory_size(5 * 65536)
+        .max_memory_size(5 << 16)
         .memory_protection_keys(MpkEnabled::Disable);
     let mut config = Config::new();
     config.wasm_multi_memory(true);
@@ -742,7 +742,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
         return Ok(());
     }
     let mut pool = crate::small_pool_config();
-    pool.max_memory_size(10 * 65536).table_elements(10);
+    pool.max_memory_size(10 << 16).table_elements(10);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
@@ -853,7 +853,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
         return Ok(());
     }
     let mut pool = crate::small_pool_config();
-    pool.max_memory_size(10 * 65536).table_elements(10);
+    pool.max_memory_size(10 << 16).table_elements(10);
     let mut config = Config::new();
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));

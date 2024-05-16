@@ -763,13 +763,13 @@ mod tests {
                     max_tables_per_module: 0,
                     max_memories_per_module: 3,
                     table_elements: 0,
-                    max_memory_size: 65536,
+                    max_memory_size: WASM_PAGE_SIZE as usize,
                     ..Default::default()
                 },
                 ..Default::default()
             },
             &Tunables {
-                static_memory_reservation: 65536,
+                static_memory_reservation: WASM_PAGE_SIZE as u64,
                 static_memory_offset_guard_size: 0,
                 ..Tunables::default_host()
             },

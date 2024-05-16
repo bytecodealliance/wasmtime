@@ -704,7 +704,7 @@ mod test {
         let config = PoolingInstanceAllocatorConfig {
             limits: InstanceLimits {
                 total_memories: 1,
-                max_memory_size: (1 << 32) + 65536,
+                max_memory_size: 0x100010000,
                 ..Default::default()
             },
             ..PoolingInstanceAllocatorConfig::default()
@@ -713,7 +713,7 @@ mod test {
             PoolingInstanceAllocator::new(
                 &config,
                 &Tunables {
-                    static_memory_reservation: 65536,
+                    static_memory_reservation: 0x10000,
                     ..Tunables::default_host()
                 },
             )

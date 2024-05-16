@@ -290,7 +290,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         // When multiple memories are used and are configured in the pool then
         // force the usage of static memories without guards to reduce the VM
         // impact.
-        let max_memory_size = 805 * 65536;
+        let max_memory_size = 805 << 16;
         if multi_memory {
             cfg.static_memory_maximum_size(max_memory_size as u64);
             cfg.dynamic_memory_reserved_for_growth(0);
