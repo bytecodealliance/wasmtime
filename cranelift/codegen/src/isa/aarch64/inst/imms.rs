@@ -178,7 +178,7 @@ impl FPURightShiftImm {
         // | 32                | 01xxxxx  |
         // | 64                | 1xxxxxx  |
         //
-        // The shift amount is negated such that a shift ammount
+        // The shift amount is negated such that a shift amount
         // of 1 (in 64-bit) is encoded as 0b111111 and a shift
         // amount of 64 is encoded as 0b000000,
         // in the bottom 6 bits.

@@ -415,7 +415,7 @@ pub fn encode_ci_sp_load(op: CiOp, rd: WritableReg, imm: Uimm6) -> u16 {
     // LDSP:  [5|4:3|8:6]
     // FLDSP: [5|4:3|8:6]
     //
-    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+    // We don't receive the entire offset in `imm`, just a multiple of the load-size.
 
     // Number of bits in the lowest position of imm. 3 for lwsp, 2 for {f,}ldsp.
     let low_bits = match op {
@@ -509,7 +509,7 @@ pub fn encode_css_type(op: CssOp, src: Reg, imm: Uimm6) -> u16 {
     // c.sdsp:  [5:3|8:6]
     // c.fsdsp: [5:3|8:6]
     //
-    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+    // We don't receive the entire offset in `imm`, just a multiple of the load-size.
 
     // Number of bits in the lowest position of imm. 4 for c.swsp, 3 for c.{f,}sdsp.
     let low_bits = match op {

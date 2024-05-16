@@ -205,7 +205,7 @@
                (kind ShiftKind)
                (src Gpr)
                ;; shift count: `Imm8Gpr::Imm8(0 .. #bits-in-type - 1)` or
-               ;; `Imm8Reg::Gpr(r)` where `r` get's move mitosis'd into `%cl`.
+               ;; `Imm8Reg::Gpr(r)` where `r` gets move mitosis'd into `%cl`.
                (num_bits Imm8Gpr)
                (dst WritableGpr))
 
@@ -303,7 +303,7 @@
                      (dst WritableXmm)
                      (imm u8))
 
-       ;; XMM instruction for `vpinsr{b,w,d,q}` which is separte from
+       ;; XMM instruction for `vpinsr{b,w,d,q}` which is separate from
        ;; `XmmRmRImmVex` because `src2` is a gpr, not xmm register.
        (XmmVexPinsr (op AvxOpcode)
                    (src1 Xmm)
@@ -1836,7 +1836,7 @@
 ;;
 ;; These helpers are intended to assist in emitting instructions by taking
 ;; source operands and automatically creating output operands which are then
-;; returned. These are additionally deisgned to assist with SSA-like
+;; returned. These are additionally designed to assist with SSA-like
 ;; construction where the writable version of a register is only present in
 ;; an `MInst` and every other reference to it is a readonly version.
 
@@ -2229,7 +2229,7 @@
 ;; done for integers. This is because we're comparing a fresh register to itself
 ;; and we don't know the previous contents of the register. If a floating-point
 ;; comparison is used then it runs the risk of comparing NaN against NaN and not
-;; actually producing an all-ones mask. By using integer comparision operations
+;; actually producing an all-ones mask. By using integer comparison operations
 ;; we're guaranteeed that everything is equal to itself.
 (decl vector_all_ones () Xmm)
 (rule (vector_all_ones)

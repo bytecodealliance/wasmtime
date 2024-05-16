@@ -1061,7 +1061,7 @@ impl MachInstEmit for Inst {
                             &Inst::FpuLoad128 { .. } => {
                                 sink.put4(enc_ldst_imm19(0b10011100, offset, rd));
                             }
-                            _ => panic!("Unspported size for LDR from constant pool!"),
+                            _ => panic!("Unsupported size for LDR from constant pool!"),
                         }
                     }
                     &AMode::SPPreIndexed { simm9 } => {

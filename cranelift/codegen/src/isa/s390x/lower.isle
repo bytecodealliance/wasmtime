@@ -609,7 +609,7 @@
 ;;
 ;; We never rely on the divide instruction itself to trap; while that trap
 ;; would indeed happen, we have no way of signalling two different trap
-;; conditions from the same instruction.  By explicity checking for the
+;; conditions from the same instruction.  By explicitly checking for the
 ;; integer-overflow case ahead of time, any hardware trap in the divide
 ;; instruction is guaranteed to indicate divison-by-zero.
 ;;
@@ -3841,7 +3841,7 @@
 ;; a condition mask of 2 | 1.
 ;;
 ;; As this does not match any of the encodings used with a normal integer
-;; comparsion, this cannot be represented by any IntCC value.  We need to
+;; comparison, this cannot be represented by any IntCC value.  We need to
 ;; remap the IntCC::UnsignedGreaterThan value that we have here as result
 ;; of the unsigned_add_overflow_condition call to the correct mask.
 

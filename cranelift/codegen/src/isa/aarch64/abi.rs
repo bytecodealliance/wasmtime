@@ -215,7 +215,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             //
             // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#642parameter-passing-rules), (Section 6.4.2 Stage C).
             //
-            // For arguments with alignment of 16 we round up the the register number
+            // For arguments with alignment of 16 we round up the register number
             // to the next even value. So we can never allocate for example an i128
             // to X1 and X2, we have to skip one register and do X2, X3
             // (Stage C.8)

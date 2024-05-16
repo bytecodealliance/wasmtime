@@ -855,7 +855,7 @@ impl Inst {
                 // Right now we only put a u32 or u64 in this instruction.
                 // It is not very long, no need to check if need `emit_island`.
                 // If data is very long , this is a bug because RawData is typecial
-                // use to load some data and rely on some positon in the code stream.
+                // use to load some data and rely on some position in the code stream.
                 // and we may exceed `Inst::worst_case_size`.
                 // for more information see https://github.com/bytecodealliance/wasmtime/pull/5612.
                 sink.put_data(&data[..]);
@@ -1867,7 +1867,7 @@ impl Inst {
                     //   auipc rd, 0              # R_RISCV_GOT_HI20 (symbol_name)
                     //   ld    rd, rd, 0          # R_RISCV_PCREL_LO12_I (label)
 
-                    // Create the lable that is going to be published to the final binary object.
+                    // Create the label that is going to be published to the final binary object.
                     let auipc_label = sink.get_label();
                     sink.bind_label(auipc_label, &mut state.ctrl_plane);
 
@@ -1938,7 +1938,7 @@ impl Inst {
                 //
                 // https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic
 
-                // Create the lable that is going to be published to the final binary object.
+                // Create the label that is going to be published to the final binary object.
                 let auipc_label = sink.get_label();
                 sink.bind_label(auipc_label, &mut state.ctrl_plane);
 
