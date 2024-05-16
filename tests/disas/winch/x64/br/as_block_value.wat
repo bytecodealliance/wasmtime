@@ -7,7 +7,7 @@
     (block (result i32) (nop) (call $dummy) (br 0 (i32.const 2)))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::dummy:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

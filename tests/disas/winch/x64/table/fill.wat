@@ -20,7 +20,7 @@
     (table.fill $t2 (local.get $i) (local.get $ref) (local.get $n))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::f1:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
@@ -37,7 +37,7 @@
 ;;       retq
 ;;   31: ud2
 ;;
-;; wasm[0]::function[1]:
+;; wasm[0]::function[1]::f2:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
@@ -54,7 +54,7 @@
 ;;       retq
 ;;   71: ud2
 ;;
-;; wasm[0]::function[2]:
+;; wasm[0]::function[2]::f3:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

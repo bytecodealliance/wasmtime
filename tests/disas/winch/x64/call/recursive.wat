@@ -23,7 +23,7 @@
   )
   (export "fib" (func $fibonacci8))
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::fibonacci8:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

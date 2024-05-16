@@ -6,7 +6,7 @@
     (block (call $dummy) (call $dummy) (br_if 0 (local.get 0)))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::dummy:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
