@@ -1611,7 +1611,7 @@ pub(crate) fn emit(
                 sink.add_call_site(*opcode);
             }
 
-            // Reclaim the outgoing argumetn area that was released by the callee, to ensure that
+            // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
             if let Some(call_info) = call_info {
                 if call_info.callee_pop_size > 0 {
@@ -1703,7 +1703,7 @@ pub(crate) fn emit(
                 sink.add_call_site(*opcode);
             }
 
-            // Reclaim the outgoing argumetn area that was released by the callee, to ensure that
+            // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
             if let Some(call_info) = call_info {
                 if call_info.callee_pop_size > 0 {

@@ -2408,7 +2408,9 @@ impl<M: ABIMachineSpec> CallSite<M> {
         // here, the reclamation of the outgoing argument area must be done inside of the call
         // pseudo-op's emission to ensure that SP is consisten at all other points in the lowered
         // function. (Except the prologue and epilogue, but those are fairly special parts of the
-        // function that establish the SP invariants that are relied on elsewhere.)
+        // function that establish the SP invariants that are relied on elsewhere and are generated
+        // after the register allocator has run and thus cannot have register allocator-inserted
+        // references to SP offsets.)
         for inst in M::gen_call(
             &self.dest,
             uses,
