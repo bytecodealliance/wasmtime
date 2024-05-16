@@ -2,6 +2,8 @@ test compile precise-output
 target x86_64
 
 function %f0() -> i64, i64, i64, i64 {
+  gv0 = vmctx
+  stack_limit = gv0
   ss0 = explicit_slot 8, align=16
   ss1 = explicit_slot 8, align=16
   ss2 = explicit_slot 4

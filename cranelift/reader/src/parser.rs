@@ -1514,7 +1514,7 @@ impl<'a> Parser<'a> {
             let align: i64 = self
                 .match_imm64("expected alignment-size after `align` flag")?
                 .into();
-            u32::try_from(align).map_err(|_| self.error("invalid alignment"))?
+            u32::try_from(align).map_err(|_| self.error("alignment must be a 32-bit unsigned integer"))?
         } else {
             1
         };
