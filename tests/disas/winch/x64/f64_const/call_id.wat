@@ -5,7 +5,7 @@
   (func $id-f64 (param f64) (result f64) (local.get 0))
   (func (export "type-first-f64") (result f64) (call $id-f64 (f64.const 1.32)))
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::id-f64:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

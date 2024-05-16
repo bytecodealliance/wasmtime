@@ -6,7 +6,7 @@
     (i32.ctz (loop (result i32) (call $dummy) (i32.const 13)))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::dummy:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

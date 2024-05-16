@@ -7,7 +7,7 @@
     (call $dummy3 (i32.const 1) (unreachable) (i32.const 3))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::dummy3:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

@@ -8,7 +8,7 @@
     (loop (result i32) (call $dummy) (unreachable) (i32.const 2))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::dummy:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

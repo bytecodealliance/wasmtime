@@ -6,7 +6,7 @@
     (call $f (loop (result i32) (i32.const 1)))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::f:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

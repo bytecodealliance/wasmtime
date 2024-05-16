@@ -16,7 +16,7 @@
     (i32.eq (local.get 0) (i32.const -14))
   )
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::fx:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

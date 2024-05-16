@@ -5,7 +5,7 @@
   (func $id-f32 (param f32) (result f32) (local.get 0))
   (func (export "type-first-f32") (result f32) (call $id-f32 (f32.const 1.32)))
 )
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::id-f32:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

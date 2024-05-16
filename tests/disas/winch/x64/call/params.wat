@@ -119,7 +119,7 @@
 ;;       retq
 ;;  152: ud2
 ;;
-;; wasm[0]::function[1]:
+;; wasm[0]::function[1]::add:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11

@@ -10,7 +10,7 @@
 )
 
 
-;; wasm[0]::function[0]:
+;; wasm[0]::function[0]::dummy:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
@@ -27,7 +27,7 @@
 ;;       retq
 ;;   31: ud2
 ;;
-;; wasm[0]::function[1]:
+;; wasm[0]::function[1]::f3:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
