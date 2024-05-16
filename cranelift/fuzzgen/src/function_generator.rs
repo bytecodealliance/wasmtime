@@ -1605,7 +1605,7 @@ where
     fn generate_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         for _ in 0..self.param(&self.config.static_stack_slots_per_function)? {
             let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
-            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes);
+            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes, 0);
             let slot = builder.create_sized_stack_slot(ss_data);
 
             // Generate one Alias Analysis Category for each slot

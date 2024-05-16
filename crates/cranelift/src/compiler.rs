@@ -407,7 +407,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let slot = match &ret {
             NativeRet::Bare => None,
             NativeRet::Retptr { size, .. } => Some(builder.func.create_sized_stack_slot(
-                ir::StackSlotData::new(ir::StackSlotKind::ExplicitSlot, *size),
+                ir::StackSlotData::new(ir::StackSlotKind::ExplicitSlot, *size, 0),
             )),
         };
         if let Some(slot) = slot {
@@ -942,6 +942,7 @@ impl Compiler {
         let slot = builder.func.create_sized_stack_slot(ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
             values_vec_byte_size,
+            4,
         ));
         let values_vec_ptr = builder.ins().stack_addr(pointer_type, slot, 0);
 
