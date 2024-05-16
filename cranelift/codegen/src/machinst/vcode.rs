@@ -1137,12 +1137,14 @@ impl<I: VCodeInst> VCode<I> {
                 LabelValueLoc::Reg(Reg::from(preg))
             } else {
                 let slot = alloc.as_stack().unwrap();
-                let sp_offset = self.abi.get_spillslot_offset(slot);
-                let sp_to_caller_sp_offset = self.abi.sp_to_caller_sp_offset();
+                let slot_offset = self.abi.get_spillslot_offset(slot);
+                let slot_base_to_caller_sp_offset = self.abi.slot_base_to_caller_sp_offset();
                 let caller_sp_to_cfa_offset =
                     crate::isa::unwind::systemv::caller_sp_to_cfa_offset();
-                let cfa_to_sp_offset = -((sp_to_caller_sp_offset + caller_sp_to_cfa_offset) as i64);
-                LabelValueLoc::CFAOffset(cfa_to_sp_offset + sp_offset)
+                // NOTE: this is a negative offset because it's relative to the caller's SP
+                let cfa_to_sp_offset =
+                    -((slot_base_to_caller_sp_offset + caller_sp_to_cfa_offset) as i64);
+                LabelValueLoc::CFAOffset(cfa_to_sp_offset + slot_offset)
             };
 
             // ValueLocRanges are recorded by *instruction-end
