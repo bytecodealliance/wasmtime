@@ -366,7 +366,7 @@ where
         // If `skip_at_depth` is `Some` then we previously decided to skip over
         // a node and all it's children. Let A be the last node processed, B be
         // the first node skipped, C be previous node, and D the current node.
-        // Then `cached` is the difference from A to B, `depth` is the diffence
+        // Then `cached` is the difference from A to B, `depth` is the difference
         // from B to C, and `depth_delta` is the differenc from C to D.
         let depth_delta = if let Some((depth, cached)) = skip_at_depth {
             // `new_depth` = B to D

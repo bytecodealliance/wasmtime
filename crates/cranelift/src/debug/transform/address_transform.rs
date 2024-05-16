@@ -383,7 +383,7 @@ impl<'a> Iterator for TransformRangeIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             // Merge TransformRangeStartIter and TransformRangeEndIter data using
-            // FuncLookup index's field propery to be sorted by RangeIndex.
+            // FuncLookup index's field property to be sorted by RangeIndex.
             let (start, end, range_index): (
                 Option<GeneratedAddress>,
                 Option<GeneratedAddress>,

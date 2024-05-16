@@ -414,7 +414,7 @@ impl GcCompiler for DrcCompiler {
             .ins()
             .brif(bump_region_is_full, gc_block, &[], no_gc_block, &[]);
 
-        // Block for the the bump region is not full. We should:
+        // Block for when the bump region is not full. We should:
         //
         // * increment this reference's ref count,
         // * store the reference into the bump table at `*next`,
