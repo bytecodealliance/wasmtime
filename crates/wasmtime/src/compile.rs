@@ -347,9 +347,6 @@ struct CompileInputs<'a> {
 }
 
 impl<'a> CompileInputs<'a> {
-    /// Maximum length of symbols generated in objects.
-    const MAX_SYMBOL_LEN: usize = 96;
-
     fn push_input(&mut self, f: impl FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a) {
         self.inputs.push(Box::new(f));
     }
@@ -424,22 +421,29 @@ impl<'a> CompileInputs<'a> {
     }
 
     fn clean_symbol(name: &str) -> Cow<str> {
+        /// Maximum length of symbols generated in objects.
+        const MAX_SYMBOL_LEN: usize = 96;
+
         // Just to be on the safe side, avoid passing user-provided data to tools
         // like "perf" or "objdump", and filter the name.  Let only characters usually
         // used for function names, plus some characters that might be used in name
         // mangling.
         let bad_char = |c: char| !c.is_alphanumeric() && !r"<>[]_-:@$".contains(c);
         if name.chars().any(bad_char) {
-            let mut name = name
-                .chars()
-                .map(|c| if bad_char(c) { '?' } else { c })
-                .collect::<String>()
-                .trim_matches('?')
-                .to_string();
-            name.truncate(Self::MAX_SYMBOL_LEN);
-            Cow::Owned(name)
+            let mut last_char_seen = '\u{0000}';
+            Cow::Owned(
+                name.chars()
+                    .map(|c| if bad_char(c) { '?' } else { c })
+                    .filter(|c| {
+                        let skip = last_char_seen == '?' && *c == '?';
+                        last_char_seen = *c;
+                        !skip
+                    })
+                    .take(MAX_SYMBOL_LEN)
+                    .collect::<String>(),
+            )
         } else {
-            Cow::Borrowed(&name[..])
+            Cow::Borrowed(&name[..MAX_SYMBOL_LEN])
         }
     }
 
