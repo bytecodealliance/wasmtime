@@ -50,7 +50,7 @@ pub fn hwcap_detect(isa_builder: &mut dyn Configurable) -> Result<(), &'static s
 /// Read the /proc/cpuinfo file and detect the extensions.
 ///
 /// We are looking for the isa line string, which contains the extensions.
-/// The format for this string is specifid in the linux user space ABI for RISC-V:
+/// The format for this string is specified in the linux user space ABI for RISC-V:
 /// https://github.com/torvalds/linux/blob/09a9639e56c01c7a00d6c0ca63f4c7c41abe075d/Documentation/riscv/uabi.rst
 ///
 /// The format is fairly similar to the one specified in the RISC-V ISA manual, but

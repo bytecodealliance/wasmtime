@@ -111,7 +111,7 @@ block0(v90: f32, v91: f32):
 ; nextln: }
 
 ; The bitcast instruction has two type variables: The controlling type variable
-; controls the outout type, and the input type is a free variable.
+; controls the output type, and the input type is a free variable.
 function %bitcast(i32, f32) {
 block0(v90: i32, v91: f32):
     v0 = bitcast.i8x4 v90

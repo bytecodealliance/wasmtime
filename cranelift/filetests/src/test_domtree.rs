@@ -105,7 +105,7 @@ impl SubTest for TestDomtree {
             if let Some(got_inst) = domtree.idom(block) {
                 anyhow::bail!(
                     "mismatching idoms for renumbered {}:\n\
-                     want: unrechable, got: {}",
+                     want: unreachable, got: {}",
                     block,
                     got_inst
                 );
