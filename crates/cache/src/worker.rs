@@ -259,7 +259,7 @@ impl WorkerThread {
     }
 
     /// Increases the usage counter and recompresses the file
-    /// if the usage counter reached configurable treshold.
+    /// if the usage counter reached configurable threshold.
     fn handle_on_cache_get(&self, path: PathBuf) {
         trace!("handle_on_cache_get() for path: {}", path.display());
 
@@ -847,7 +847,7 @@ fn acquire_task_fs_lock(
 
 // we have either both, or just path; dir entry is desirable since on some platforms we can get
 // metadata without extra syscalls
-// futhermore: it's better to get a path if we have it instead of allocating a new one from the dir entry
+// furthermore: it's better to get a path if we have it instead of allocating a new one from the dir entry
 fn is_fs_lock_expired(
     entry: Option<&fs::DirEntry>,
     path: &PathBuf,

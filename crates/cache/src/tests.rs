@@ -1,7 +1,7 @@
 use super::config::tests::test_prolog;
 use super::*;
 
-// Since cache system is a global thing, each test needs to be run in seperate process.
+// Since cache system is a global thing, each test needs to be run in separate process.
 // So, init() tests are run as integration tests.
 // However, caching is a private thing, an implementation detail, and needs to be tested
 // from the inside of the module.
