@@ -439,7 +439,7 @@ impl CallThreadState {
     /// * 1 as a pointer - the trap was handled by a custom trap handler on an
     ///   instance, and the trap handler should quickly return.
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
-    ///   the wasm trap was succesfully handled.
+    ///   the wasm trap was successfully handled.
     #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
     pub(crate) fn test_if_trap(
         &self,

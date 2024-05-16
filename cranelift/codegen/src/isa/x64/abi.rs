@@ -177,7 +177,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 );
             }
 
-            // Windows fastcall dictates that `__m128i` paramters to a function
+            // Windows fastcall dictates that `__m128i` parameters to a function
             // are passed indirectly as pointers, so handle that as a special
             // case before the loop below.
             if param.value_type.is_vector()
@@ -337,7 +337,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         // Fastcall's indirect 128+ bit vector arguments are all located on the
-        // stack, and stack space is reserved after all paramters are passed,
+        // stack, and stack space is reserved after all parameters are passed,
         // so allocate from the space now.
         if args_or_rets == ArgsOrRets::Args && is_fastcall {
             for arg in args.args_mut() {

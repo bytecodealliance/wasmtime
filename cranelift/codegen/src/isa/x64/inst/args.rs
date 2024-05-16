@@ -14,7 +14,7 @@ use std::string::String;
 
 pub use crate::isa::x64::lower::isle::generated_code::DivSignedness;
 
-/// An extenstion trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
+/// An extension trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
 pub trait ToWritableReg {
     /// Convert `Writable{Xmm,Gpr}` to `Writable<Reg>`.
     fn to_writable_reg(&self) -> Writable<Reg>;
@@ -2150,7 +2150,7 @@ impl From<FloatCC> for FcmpImm {
 /// (i.e. the rounding mode) which only take up the first two bits when encoded.
 /// However the rounding immediate which this field helps make up, also includes
 /// bits 3 and 4 which define the rounding select and precision mask respectively.
-/// These two bits are not defined here and are implictly set to zero when encoded.
+/// These two bits are not defined here and are implicitly set to zero when encoded.
 #[derive(Clone, Copy)]
 pub enum RoundImm {
     /// Round to nearest mode.

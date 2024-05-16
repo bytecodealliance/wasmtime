@@ -1017,8 +1017,8 @@ impl FlatTypes<'_> {
 }
 
 // Note that this is intentionally duplicated here to keep the size to 1 byte
-// irregardless to changes in the core wasm type system since this will only
-// ever use integers/floats for the forseeable future.
+// regardless to changes in the core wasm type system since this will only
+// ever use integers/floats for the foreseeable future.
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[allow(missing_docs)]
 pub enum FlatType {

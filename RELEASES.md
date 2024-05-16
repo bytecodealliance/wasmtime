@@ -2815,7 +2815,7 @@ Released 2022-03-07.
   [#3837](https://github.com/bytecodealliance/wasmtime/pull/3837)
 
 * The native stack size allowed for WebAssembly has been decreased from 1 MiB to
-  512 KiB on all platforms to better accomodate running wasm on the main thread
+  512 KiB on all platforms to better accommodate running wasm on the main thread
   on Windows.
   [#3861](https://github.com/bytecodealliance/wasmtime/pull/3861)
 
@@ -3300,7 +3300,7 @@ Released 2021-05-21.
 
 ### Added
 
-* Support for IBM z/Archiecture (`s390x`) machines in Cranelift and Wasmtime:
+* Support for IBM z/Architecture (`s390x`) machines in Cranelift and Wasmtime:
   [#2836](https://github.com/bytecodealliance/wasmtime/pull/2836),
   [#2837](https://github.com/bytecodealliance/wasmtime/pull/2837),
   [#2838](https://github.com/bytecodealliance/wasmtime/pull/2838),
@@ -3849,7 +3849,7 @@ is now enabled by default.
 
   [#1667](https://github.com/bytecodealliance/wasmtime/pull/1667)
 
-The Rust API does not require a store provided during `Module::new` operation. The `Module` can be send accross threads and instantiate for a specific store. The `Instance::new` now requires the store.
+The Rust API does not require a store provided during `Module::new` operation. The `Module` can be send across threads and instantiate for a specific store. The `Instance::new` now requires the store.
 
   [#1761](https://github.com/bytecodealliance/wasmtime/pull/1761)
 

@@ -17,7 +17,7 @@ const VALUE_REGS_PARTS: usize = 2;
 /// By convention, the register parts are kept in machine-endian order here.
 ///
 /// N.B.: we cap the capacity of this at four (when any 32-bit target is
-/// enabled) or two (otherwise), and we use special in-band sentinal `Reg`
+/// enabled) or two (otherwise), and we use special in-band sentinel `Reg`
 /// values (`Reg::invalid()`) to avoid the need to carry a separate length. This
 /// allows the struct to be `Copy` (no heap or drop overhead) and be only 16 or
 /// 8 bytes, which is important for compiler performance.

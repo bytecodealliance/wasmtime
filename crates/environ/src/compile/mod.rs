@@ -31,13 +31,13 @@ pub use self::trap_encoding::*;
 /// An error while compiling WebAssembly to machine code.
 #[derive(Debug)]
 pub enum CompileError {
-    /// A wasm translation error occured.
+    /// A wasm translation error occurred.
     Wasm(WasmError),
 
-    /// A compilation error occured.
+    /// A compilation error occurred.
     Codegen(String),
 
-    /// A compilation error occured.
+    /// A compilation error occurred.
     DebugInfoNotSupported,
 }
 

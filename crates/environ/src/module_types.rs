@@ -6,7 +6,7 @@ use wasmtime_types::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, WasmS
 
 /// All types used in a core wasm module.
 ///
-/// Note that accesing this type is primarily done through the `Index`
+/// Note that accessing this type is primarily done through the `Index`
 /// implementations for this type.
 #[derive(Default, Serialize, Deserialize)]
 pub struct ModuleTypes {

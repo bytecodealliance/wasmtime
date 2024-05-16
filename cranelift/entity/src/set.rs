@@ -70,7 +70,7 @@ where
     }
 
     /// Returns the cardinality of the set. More precisely, it returns the number of calls to
-    /// `insert` with different key values, that have happened since the the set was most recently
+    /// `insert` with different key values, that have happened since the set was most recently
     /// `clear`ed or created with `new`.
     pub fn cardinality(&self) -> usize {
         self.elems[..(self.len + (BITS - 1)) / BITS]

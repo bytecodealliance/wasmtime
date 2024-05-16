@@ -663,7 +663,7 @@ pub struct VMFuncRef {
     /// Wasm-to-native trampoline for the function. In this case, we leave
     /// `wasm_call` empty until the function is passed as an import to Wasm (or
     /// otherwise exposed to Wasm via tables/globals). At this point, we look up
-    /// a Wasm-to-native trampoline for the function in the the Wasm's compiled
+    /// a Wasm-to-native trampoline for the function in the Wasm's compiled
     /// module and use that fill in `VMFunctionImport::wasm_call`. **However**
     /// there is no guarantee that the Wasm module has a trampoline for this
     /// function's signature. The Wasm module only has trampolines for its
@@ -829,7 +829,7 @@ pub struct VMRuntimeLimits {
     /// to the host.
     ///
     /// When a host function is wrapped into a `wasmtime::Func`, and is then
-    /// called from the host, then this member has the sentinal value of `-1 as
+    /// called from the host, then this member has the sentinel value of `-1 as
     /// usize`, meaning that this contiguous sequence of Wasm frames is the
     /// empty sequence, and it is not safe to dereference the
     /// `last_wasm_exit_fp`.

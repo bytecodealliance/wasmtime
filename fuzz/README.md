@@ -123,5 +123,5 @@ Running `FUZZGEN_ALLOWED_OPS=ineg,ishl cargo fuzz run cranelift-fuzzgen` will ru
 
 ### `cranelift-icache`
 
-The icache target also uses the fuzzgen library, thus also supports the `FUZZGEN_ALLOWED_OPS` enviornment variable as described in the `cranelift-fuzzgen` section above.
+The icache target also uses the fuzzgen library, thus also supports the `FUZZGEN_ALLOWED_OPS` environment variable as described in the `cranelift-fuzzgen` section above.
 

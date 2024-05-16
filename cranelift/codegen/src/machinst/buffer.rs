@@ -379,7 +379,7 @@ pub struct MachLabel(u32);
 entity_impl!(MachLabel);
 
 impl MachLabel {
-    /// Get a label for a block. (The first N MachLabels are always reseved for
+    /// Get a label for a block. (The first N MachLabels are always reserved for
     /// the N blocks in the vcode.)
     pub fn from_block(bindex: BlockIndex) -> MachLabel {
         MachLabel(bindex.index() as u32)
@@ -742,7 +742,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Inform the buffer of an unconditional branch at the given offset,
-    /// targetting the given label. May be used to optimize branches.
+    /// targeting the given label. May be used to optimize branches.
     /// The last added label-use must correspond to this branch.
     /// This must be called when the current offset is equal to `start`; i.e.,
     /// before actually emitting the branch. This implies that for a branch that
@@ -779,7 +779,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Inform the buffer of a conditional branch at the given offset,
-    /// targetting the given label. May be used to optimize branches.
+    /// targeting the given label. May be used to optimize branches.
     /// The last added label-use must correspond to this branch.
     ///
     /// Additional requirement: no labels may be bound between `start` and `end`
@@ -968,7 +968,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
             // For any branch, conditional or unconditional:
             // - If the target is a label at the current offset, then remove
-            //   the conditional branch, and reset all labels that targetted
+            //   the conditional branch, and reset all labels that targeted
             //   the current offset (end of branch) to the truncated
             //   end-of-code.
             //

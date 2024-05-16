@@ -180,7 +180,7 @@ impl TargetIsa for Riscv64Backend {
         let mut cs = cs_builder.build()?;
 
         // Similar to AArch64, RISC-V uses inline constants rather than a separate
-        // constant pool. We want to skip dissasembly over inline constants instead
+        // constant pool. We want to skip disassembly over inline constants instead
         // of stopping on invalid bytes.
         cs.set_skipdata(true)?;
         Ok(cs)

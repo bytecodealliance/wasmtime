@@ -614,7 +614,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             buf.as_array(dirent_copy_len)
                 .copy_from_slice(&dirent_raw[..dirent_copy_len as usize])?;
 
-            // If the dirent struct wasnt compied entirely, return that we filled the buffer, which
+            // If the dirent struct wasn't compiled entirely, return that we filled the buffer, which
             // tells libc that we're not at EOF.
             if dirent_copy_len < dirent_len {
                 return Ok(buf_len);

@@ -1,7 +1,7 @@
 //! Generate a Wasm program that keeps track of its current stack frames.
 //!
 //! We can then compare the stack trace we observe in Wasmtime to what the Wasm
-//! program believes its stack should be. Any discrepencies between the two
+//! program believes its stack should be. Any discrepancies between the two
 //! points to a bug in either this test case generator or Wasmtime's stack
 //! walker.
 
@@ -89,7 +89,7 @@ impl Stacks {
     ///
     /// * `host.check_stack: [] -> []`: The host can check the Wasm's
     ///   understanding of its own stack against the host's understanding of the
-    ///   Wasm stack to find discrepency bugs.
+    ///   Wasm stack to find discrepancy bugs.
     ///
     /// * `host.call_func: [funcref] -> []`: The host should call the given
     ///   `funcref`, creating a call stack with multiple sequences of contiguous

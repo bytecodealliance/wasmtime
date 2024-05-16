@@ -14,7 +14,7 @@ pub enum ShiftOp {
     LSL = 0b00,
     /// Logical shift right.
     LSR = 0b01,
-    /// Arithmentic shift right.
+    /// Arithmetic shift right.
     ASR = 0b10,
     /// Rotate right.
     ROR = 0b11,

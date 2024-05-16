@@ -1976,7 +1976,7 @@ pub unsafe extern "C" fn poll_oneoff(
                 .trapping_unwrap()
     );
     // Store the pollable handles at the beginning, and the bool results at the
-    // end, so that we don't clobber the bool results when writting the events.
+    // end, so that we don't clobber the bool results when writing the events.
     let pollables = out as *mut c_void as *mut Pollable;
     let results = out.add(nsubscriptions).cast::<u32>().sub(nsubscriptions);
 

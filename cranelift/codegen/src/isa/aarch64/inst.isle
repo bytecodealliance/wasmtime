@@ -185,7 +185,7 @@
         (size OperandSize))
 
        ;; A MOVK with a 16-bit immediate. Modifies its register; we
-       ;; model this with a seprate input `rn` and output `rd` virtual
+       ;; model this with a separate input `rn` and output `rd` virtual
        ;; register, with a regalloc constraint to tie them together.
        (MovK
         (rd WritableReg)
@@ -1700,7 +1700,7 @@
 (decl use_lse () Inst)
 (extern extractor use_lse use_lse)
 
-;; Extractor helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Extractor helpers for various immediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)
 (extern constructor move_wide_const_from_u64 move_wide_const_from_u64)

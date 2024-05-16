@@ -199,7 +199,7 @@ impl BlockLoweringOrder {
                 let range = block_succ_range[block].clone();
 
                 // If chaos-mode is enabled in the control plane, iterate over
-                // the successors in an arbtirary order, which should have no
+                // the successors in an arbitrary order, which should have no
                 // impact on correctness. The order of the blocks is generally
                 // relevant: Uses must be seen before defs for dead-code
                 // elimination.

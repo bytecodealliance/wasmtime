@@ -189,7 +189,7 @@ macro_rules! wasi_file_impl {
                         Ok(())
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-                        // if e is EPERM, this file isnt supported by epoll because it is immediately
+                        // if e is EPERM, this file isn't supported by epoll because it is immediately
                         // available for reading:
                         Ok(())
                     }
@@ -213,7 +213,7 @@ macro_rules! wasi_file_impl {
                         Ok(())
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-                        // if e is EPERM, this file isnt supported by epoll because it is immediately
+                        // if e is EPERM, this file isn't supported by epoll because it is immediately
                         // available for writing:
                         Ok(())
                     }

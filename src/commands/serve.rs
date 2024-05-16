@@ -77,7 +77,7 @@ impl ServeCommand {
     pub fn execute(mut self) -> Result<()> {
         self.run.common.init_logging()?;
 
-        // We force cli errors before starting to listen for connections so tha we don't
+        // We force cli errors before starting to listen for connections so then we don't
         // accidentally delay them to the first request.
         if self.run.common.wasi.nn == Some(true) {
             #[cfg(not(feature = "wasi-nn"))]

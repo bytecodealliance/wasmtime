@@ -246,7 +246,7 @@ impl fmt::Display for DefVariableError {
             DefVariableError::DefinedBeforeDeclared(variable) => {
                 write!(
                     f,
-                    "the value of variabe {} was declared before it was defined",
+                    "the value of variable {} was declared before it was defined",
                     variable.index()
                 )?;
             }

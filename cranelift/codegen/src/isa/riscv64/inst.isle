@@ -726,7 +726,7 @@
   (CSexth)
 ))
 
-;; This is a mix of all Zcb memory adressing instructions
+;; This is a mix of all Zcb memory addressing instructions
 ;;
 ;; Technically they are split across 4 different formats.
 ;; But they are all very similar, so we just group them all together.
@@ -1130,7 +1130,7 @@
 (rule (rv_xor rs1 rs2)
   (alu_rrr (AluOPRRR.Xor) rs1 rs2))
 
-;; Helper for emitting the `xori` ("Exlusive Or Immediate") instruction.
+;; Helper for emitting the `xori` ("Exclusive Or Immediate") instruction.
 ;; rd ← rs1 ⊕ uext(imm)
 (decl rv_xori (XReg Imm12) XReg)
 (rule (rv_xori rs1 imm)
@@ -1172,13 +1172,13 @@
 (rule (rv_snez rs1)
   (rv_sltu (zero_reg) rs1))
 
-;; Helper for emiting the `slti` ("Set Less Than Immediate") instruction.
+;; Helper for emitting the `slti` ("Set Less Than Immediate") instruction.
 ;; rd ← rs1 < imm
 (decl rv_slti (XReg Imm12) XReg)
 (rule (rv_slti rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Slti) rs1 imm))
 
-;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
+;; Helper for emitting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
 ;; rd ← rs1 < imm
 (decl rv_sltiu (XReg Imm12) XReg)
 (rule (rv_sltiu rs1 imm)
@@ -2092,7 +2092,7 @@
         dst))
 
 ;; some instruction use imm12 as funct12.
-;; so we don't need the imm12 paramter.
+;; so we don't need the imm12 parameter.
 (decl alu_rr_funct12 (AluOPRRI Reg) Reg)
 (rule (alu_rr_funct12 op src)
       (let ((dst WritableXReg (temp_writable_xreg))
@@ -2630,7 +2630,7 @@
         dst))
 
 ;;; some float binary operation
-;;; 1. need move into x reister.
+;;; 1. need move into x register.
 ;;; 2. do the operation.
 ;;; 3. move back.
 (decl lower_float_binary (AluOPRRR FReg FReg Type) FReg)
@@ -2863,7 +2863,7 @@
   (i128_sub (value_regs_zero) val))
 
 
-;; Builds an instruction sequence that traps if the comparision succeeds.
+;; Builds an instruction sequence that traps if the comparison succeeds.
 (decl gen_trapif (IntCC XReg XReg TrapCode) InstOutput)
 (rule (gen_trapif cc a b trap_code)
   (side_effect (SideEffectNoResult.Inst (MInst.TrapIf a b cc trap_code))))

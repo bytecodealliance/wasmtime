@@ -16,7 +16,7 @@
 //! let gza = slab.alloc("Gary Grice");
 //! let bill = slab.alloc("Bill Gates");
 //!
-//! // Alloced elements can be accessed infallibly via indexing (and missing and
+//! // Allocated elements can be accessed infallibly via indexing (and missing and
 //! // deallocated entries will panic).
 //! assert_eq!(slab[rza], "Robert Fitzgerald Diggs");
 //!

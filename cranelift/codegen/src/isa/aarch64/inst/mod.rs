@@ -158,7 +158,7 @@ fn inst_size_test() {
 }
 
 impl Inst {
-    /// Create an instruction that loads a constant, using one of serveral options (MOVZ, MOVN,
+    /// Create an instruction that loads a constant, using one of several options (MOVZ, MOVN,
     /// logical immediate, or constant pool).
     pub fn load_constant<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,

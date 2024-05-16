@@ -1001,7 +1001,7 @@ impl Compiler {
     ///
     /// This can be used to load arguments out of the array if the trampoline we
     /// are building exposes the array calling convention, or it can be used to
-    /// laod results out of the array if the trampoline we are building calls a
+    /// load results out of the array if the trampoline we are building calls a
     /// function that uses the array calling convention.
     fn load_values_from_array(
         &self,

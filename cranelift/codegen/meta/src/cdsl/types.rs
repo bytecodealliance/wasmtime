@@ -185,7 +185,7 @@ impl LaneType {
             32 => shared_types::Int::I32,
             64 => shared_types::Int::I64,
             128 => shared_types::Int::I128,
-            _ => unreachable!("unxpected num bits for int"),
+            _ => unreachable!("unexpected num bits for int"),
         })
     }
 
@@ -193,7 +193,7 @@ impl LaneType {
         LaneType::Float(match num_bits {
             32 => shared_types::Float::F32,
             64 => shared_types::Float::F64,
-            _ => unreachable!("unxpected num bits for float"),
+            _ => unreachable!("unexpected num bits for float"),
         })
     }
 

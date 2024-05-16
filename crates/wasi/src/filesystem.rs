@@ -90,7 +90,7 @@ pub struct File {
     pub perms: FilePerms,
     /// The mode the file was opened under: bits for reading, and writing.
     /// Required to correctly report the DescriptorFlags, because cap-std
-    /// doesn't presently provide a cross-platform equivelant of reading the
+    /// doesn't presently provide a cross-platform equivalent of reading the
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
 
@@ -193,7 +193,7 @@ pub struct Dir {
     pub file_perms: FilePerms,
     /// The mode the directory was opened under: bits for reading, and writing.
     /// Required to correctly report the DescriptorFlags, because cap-std
-    /// doesn't presently provide a cross-platform equivelant of reading the
+    /// doesn't presently provide a cross-platform equivalent of reading the
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
 

@@ -725,7 +725,7 @@ jobs:
     - run: rustup target add wasm32-wasi wasm32-unknown-unknown
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
-        # woraround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
+        # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         cargo test test_debug_dwarf -- --ignored --test-threads 1

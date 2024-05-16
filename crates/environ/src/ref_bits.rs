@@ -25,7 +25,7 @@
 /// bit every time we load.
 ///
 /// Note that we take care to set this bit and mask it off when
-/// accessing tables direclty in fastpaths in generated code as well.
+/// accessing tables directly in fastpaths in generated code as well.
 pub const FUNCREF_INIT_BIT: usize = 1;
 
 /// The mask we apply to all refs loaded from funcref tables.

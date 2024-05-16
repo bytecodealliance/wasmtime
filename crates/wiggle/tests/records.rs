@@ -21,7 +21,7 @@ impl<'a> records::Records for WasiCtx<'a> {
         let second = an_pair
             .second
             .read()
-            .expect("dereferncing GuestPtr should succeed");
+            .expect("dereferencing GuestPtr should succeed");
         Ok(first as i64 + second as i64)
     }
 

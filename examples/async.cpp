@@ -165,7 +165,7 @@ int main() {
   // A thread that will async perform host function calls.
   std::thread printer_thread([]() {
     int32_t value_to_print = printer_state.get_value_to_print();
-    std::cout << "recieved value to print!" << std::endl;
+    std::cout << "received value to print!" << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::cout << "printing: " << value_to_print << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(500));

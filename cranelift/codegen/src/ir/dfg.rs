@@ -656,7 +656,7 @@ fn encode_narrow_field(x: u32, bits: u8) -> u32 {
         debug_assert!(
             x < max,
             "{x} does not fit into {bits} bits (must be less than {max} to \
-             allow for a 0xffffffff sentinal)"
+             allow for a 0xffffffff sentinel)"
         );
         x
     }

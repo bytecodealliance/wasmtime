@@ -200,7 +200,7 @@ fn generate_vars(
 ) -> Result<(), Error> {
     let vmctx_label = get_vmctx_value_label();
 
-    // Normalize order of ValueLabelsRanges keys to have reproducable results.
+    // Normalize order of ValueLabelsRanges keys to have reproducible results.
     let mut vars = frame_info.value_ranges.keys().collect::<Vec<_>>();
     vars.sort_by(|a, b| a.index().cmp(&b.index()));
 

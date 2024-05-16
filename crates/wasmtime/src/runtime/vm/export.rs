@@ -48,7 +48,7 @@ pub struct ExportTable {
     pub definition: *mut VMTableDefinition,
     /// Pointer to the containing `VMContext`.
     pub vmctx: *mut VMContext,
-    /// The table declaration, used for compatibilty checking.
+    /// The table declaration, used for compatibility checking.
     pub table: TablePlan,
 }
 
@@ -93,7 +93,7 @@ pub struct ExportGlobal {
     /// Pointer to the containing `VMContext`. May be null for host-created
     /// globals.
     pub vmctx: *mut VMContext,
-    /// The global declaration, used for compatibilty checking.
+    /// The global declaration, used for compatibility checking.
     pub global: Global,
 }
 

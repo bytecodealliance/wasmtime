@@ -138,7 +138,7 @@ unsafe extern "C" fn trap_handler(
         // Note that if we use `longjmp` instead of `siglongjmp` then
         // the problem is fixed. The problem with that, however, is that
         // `setjmp` is much slower than `sigsetjmp` due to the
-        // preservation of the proceses signal mask. The reason
+        // preservation of the process's signal mask. The reason
         // `longjmp` appears to work is that it seems to call a function
         // (according to published macOS sources) called
         // `_sigunaltstack` which updates the kernel to say the

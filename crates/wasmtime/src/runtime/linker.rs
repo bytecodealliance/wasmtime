@@ -67,7 +67,7 @@ use log::warn;
 /// [`Linker`] value at program start up and use that continuously for each
 /// [`Store`] created over the lifetime of the program.
 ///
-/// Note that once [`Store`]-owned items, such as [`Global`], are defined witin
+/// Note that once [`Store`]-owned items, such as [`Global`], are defined within
 /// a [`Linker`] then it is no longer compatible with any [`Store`]. At that
 /// point only the [`Store`] that owns the [`Global`] can be used to instantiate
 /// modules.

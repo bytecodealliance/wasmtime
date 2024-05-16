@@ -151,9 +151,9 @@ async function getWorkspaceMembers() {
 /// buckets across that config.
 ///
 /// This is essentially a `flat_map` where each config that logically tests all
-/// crates int he workspace is mapped to N sharded configs that each test only a
+/// crates in the workspace is mapped to N sharded configs that each test only a
 /// subset of crates in the workspace. Each sharded config's subset of crates to
-/// test are disjoint from all its siblings, and the union of all thes siblings'
+/// test are disjoint from all its siblings, and the union of all these siblings'
 /// crates to test is the full workspace members set.
 ///
 /// With some poetic license around a `crates_to_test` key that doesn't actually

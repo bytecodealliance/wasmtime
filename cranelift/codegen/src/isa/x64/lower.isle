@@ -3603,7 +3603,7 @@
 ;; Step 7 - Prep the converted second set by zeroing out negative lanes (these have already been
 ;;          converted correctly with the first set) and by setting overflow lanes to 0x7FFFFFFF
 ;;          as this will allow us to properly saturate overflow lanes when adding to 0x80000000
-;; Step 8 - Add the orginal converted src and the converted tmp1 where float values originally less
+;; Step 8 - Add the original converted src and the converted tmp1 where float values originally less
 ;;          than and equal to INT_MAX will be unchanged, float values originally between INT_MAX+1 and
 ;;          UINT_MAX will add together (INT_MAX) + (SRC - INT_MAX), and float values originally
 ;;          greater than UINT_MAX will be saturated to UINT_MAX (0xFFFFFFFF) after adding (0x8000000 + 0x7FFFFFFF).
@@ -3632,7 +3632,7 @@
 
             ;; Set tmp2 to INT_MAX+1. It is important to note here that after it looks
             ;; like we are only converting INT_MAX (0x7FFFFFFF) but in fact because
-            ;; single precision IEEE-754 floats can only accurately represent contingous
+            ;; single precision IEEE-754 floats can only accurately represent contiguous
             ;; integers up to 2^23 and outside of this range it rounds to the closest
             ;; integer that it can represent. In the case of INT_MAX, this value gets
             ;; represented as 0x4f000000 which is the integer value (INT_MAX+1).

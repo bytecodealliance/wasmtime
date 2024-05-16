@@ -210,7 +210,7 @@ impl Assembler {
         }
     }
 
-    /// Substract with three registers.
+    /// Subtract with three registers.
     pub fn sub_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size);
     }

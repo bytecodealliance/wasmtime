@@ -176,7 +176,7 @@
       (if-let $true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
       (sshr ty x (iconst_u kty shift_amt)))
 
-;; Simliarly, if the shift amount overflows the type, then we can turn
+;; Similarly, if the shift amount overflows the type, then we can turn
 ;; it into a 0
 ;;
 ;; (ishl (ishl x k1) k2) == 0 if shift_mask(k1) + shift_mask(k2) >= ty_bits

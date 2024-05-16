@@ -3806,7 +3806,7 @@ mod tests {
             "print: %default()"
         );
 
-        // Demonstrate some unparseable cases.
+        // Demonstrate some unparsable cases.
         assert!(parse("print", &sig(&[I32], &[I32])).is_err());
         assert!(parse("print:", &sig(&[], &[])).is_err());
         assert!(parse("run: ", &sig(&[], &[])).is_err());

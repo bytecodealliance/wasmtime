@@ -141,7 +141,7 @@ pub(crate) fn define() -> TargetIsa {
     );
 
     // Zvl*: Minimum Vector Length Standard Extensions
-    // These extension specifiy the minimum number of bits in a vector register.
+    // These extension specify the minimum number of bits in a vector register.
     // Since it is a minimum, Zvl64b implies Zvl32b, Zvl128b implies Zvl64b, etc.
     // The V extension supports a maximum of 64K bits in a single register.
     //

@@ -466,7 +466,7 @@ impl ABIResults {
 pub(crate) struct ABIParams {
     /// The param operands.
     operands: ABIOperands,
-    /// Whether [`ABIParams`] contains an extra paramter for the stack
+    /// Whether [`ABIParams`] contains an extra parameter for the stack
     /// result area.
     has_retptr: bool,
 }
@@ -623,7 +623,7 @@ impl ABISig {
     }
 
     /// Returns a slice over the signature params, excluding the results
-    /// base paramter, if any.
+    /// base parameter, if any.
     pub fn params_without_retptr(&self) -> &[ABIOperand] {
         if self.params.has_retptr() {
             &self.params()[0..(self.params.len() - 1)]

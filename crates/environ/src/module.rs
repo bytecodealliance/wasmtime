@@ -291,7 +291,7 @@ impl MemoryInitialization {
 /// The various callbacks provided here are used to drive the smaller bits of
 /// memory initialization.
 pub trait InitMemory {
-    /// Returns the size, in wasm pages, of the the memory specified. For
+    /// Returns the size, in wasm pages, of the memory specified. For
     /// compile-time purposes this would be the memory type's minimum size.
     fn memory_size_in_pages(&mut self, memory_index: MemoryIndex) -> u64;
 

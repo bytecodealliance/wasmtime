@@ -289,7 +289,7 @@ where
             IsaFlagGen::Host => builder_with_options(true)
                 .expect("Unable to build a TargetIsa for the current host"),
         };
-        // Cranelift has a somwhat weird API for this, but we need to build the final `TargetIsa` to be able
+        // Cranelift has a somewhat weird API for this, but we need to build the final `TargetIsa` to be able
         // to extract the values for the ISA flags. We need that to use the `string_value()` that formats
         // the values so that we can pass it into the builder again.
         let max_isa = max_builder.finish(Flags::new(settings::builder()))?;

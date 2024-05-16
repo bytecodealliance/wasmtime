@@ -57,7 +57,7 @@
 //! conversion in general. The "leaves" of a type may be resources but there are
 //! other structures in a type such as lists, records, variants, etc. This means
 //! that the `ResourcesBuilder` below is embedded within a
-//! `ComponentTypesBuilder`. This also means that it's unfortuantely not easy to
+//! `ComponentTypesBuilder`. This also means that it's unfortunately not easy to
 //! disentangle pieces and have one nice standalone file that handles everything
 //! related to type information about resources. Instead this one file was
 //! chosen as the place for this doc comment but the file itself is deceptively

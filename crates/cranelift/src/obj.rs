@@ -30,7 +30,7 @@ use wasmtime_environ::Compiler;
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
-/// A helper structure used to assemble the final text section of an exectuable,
+/// A helper structure used to assemble the final text section of an executable,
 /// plus unwinding information and other related details.
 ///
 /// This builder relies on Cranelift-specific internals but assembles into a

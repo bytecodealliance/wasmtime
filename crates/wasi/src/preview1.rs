@@ -2421,8 +2421,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                                 || now.seconds == seconds
                                     && u64::from(now.nanoseconds) < nanoseconds
                             {
-                                // `now` is less than `timeout`, which is expressable as u64,
-                                // substract the nanosecond counts directly
+                                // `now` is less than `timeout`, which is expressible as u64,
+                                // subtract the nanosecond counts directly
                                 now.seconds * 1_000_000_000 + u64::from(now.nanoseconds) - timeout
                             } else {
                                 0

@@ -101,13 +101,13 @@
 //! algorithm is a one-pass approach to partitioning everything into adapter
 //! modules.
 //!
-//! Adapters were indentified in-order as part of the inlining phase of
+//! Adapters were identified in-order as part of the inlining phase of
 //! translation where we're guaranteed that once an adapter is identified
 //! it can't depend on anything identified later. The pass implemented here is
 //! to visit all transitive dependencies of an adapter. If one of the
 //! dependencies of an adapter is an adapter in the current adapter module
 //! being built then the current module is finished and a new adapter module is
-//! started. This should quickly parition adapters into contiugous chunks of
+//! started. This should quickly partition adapters into contiugous chunks of
 //! their index space which can be in adapter modules together.
 //!
 //! There's probably more general algorithms for this but for now this should be
@@ -170,7 +170,7 @@ impl<'data> Translator<'_, 'data> {
     /// metadata for adapter modules.
     pub(super) fn partition_adapter_modules(&mut self, component: &mut dfg::ComponentDfg) {
         // Visit each adapter, in order of its original definition, during the
-        // paritioning. This allows for the guarantee that dependencies are
+        // partitioning. This allows for the guarantee that dependencies are
         // visited in a topological fashion ideally.
         let mut state = PartitionAdapterModules::default();
         for (id, adapter) in component.adapters.iter() {

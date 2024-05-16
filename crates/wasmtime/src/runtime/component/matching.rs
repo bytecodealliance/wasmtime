@@ -205,7 +205,7 @@ impl<'a> InstanceType<'a> {
 /// Small helper method to downcast an `Arc` borrow into a borrow of a concrete
 /// type within the `Arc`.
 ///
-/// Note that this is differnet than `downcast_ref` which projects out `&T`
+/// Note that this is different than `downcast_ref` which projects out `&T`
 /// where here we want `&Arc<T>`.
 fn downcast_arc_ref<T: 'static>(arc: &Arc<dyn Any + Send + Sync>) -> &Arc<T> {
     // First assert that the payload of the `Any` is indeed a `T`
