@@ -2702,9 +2702,9 @@ impl MachInst for Inst {
     fn function_alignment() -> FunctionAlignment {
         FunctionAlignment {
             minimum: 1,
-            // Prefer an alignment of 16-bytes to hypothetically get the whole
-            // function into a minimum number of lines.
-            preferred: 16,
+            // Change the alignment from 16-bytes to 32-bytes for better performance.
+            // fix-8573: https://github.com/bytecodealliance/wasmtime/issues/8573
+            preferred: 32,
         }
     }
 
