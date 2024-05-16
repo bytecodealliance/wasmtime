@@ -442,6 +442,8 @@ impl<'a> CompileInputs<'a> {
                     .take(MAX_SYMBOL_LEN)
                     .collect::<String>(),
             )
+        } else if name.len() <= MAX_SYMBOL_LEN {
+            Cow::Borrowed(&name[..])
         } else {
             Cow::Borrowed(&name[..MAX_SYMBOL_LEN])
         }
