@@ -224,7 +224,7 @@ pub struct VCodeBuilder<I: VCodeInst> {
     /// In-progress VCode.
     pub(crate) vcode: VCode<I>,
 
-    /// In what direction is the build occuring?
+    /// In what direction is the build occurring?
     direction: VCodeBuildDirection,
 
     /// Debug-value label in-progress map, keyed by label. For each

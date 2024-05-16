@@ -152,7 +152,7 @@
 ;; the shift amount to the bit width of the value being shifted, and so the high
 ;; half of the `i128` won't ever be used.
 ;;
-;; As a side efect, this marks that value as used.
+;; As a side effect, this marks that value as used.
 (decl lo_reg (Value) Reg)
 (rule (lo_reg val)
       (let ((regs ValueRegs (put_in_regs val)))

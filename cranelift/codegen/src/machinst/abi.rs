@@ -2407,10 +2407,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
 
         // Any adjustment to SP to account for required outgoing arguments/stack return values must
-        // be done inside of the the call pseudo-op, to ensure that SP is always in a consistent
+        // be done inside of the call pseudo-op, to ensure that SP is always in a consistent
         // state for all other instructions. For example, if a tail-call abi function is called
         // here, the reclamation of the outgoing argument area must be done inside of the call
-        // pseudo-op's emission to ensure that SP is consisten at all other points in the lowered
+        // pseudo-op's emission to ensure that SP is consistent at all other points in the lowered
         // function. (Except the prologue and epilogue, but those are fairly special parts of the
         // function that establish the SP invariants that are relied on elsewhere and are generated
         // after the register allocator has run and thus cannot have register allocator-inserted
