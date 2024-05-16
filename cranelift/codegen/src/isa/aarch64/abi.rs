@@ -1132,11 +1132,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    /// Get the nominal-SP-to-FP offset from an instruction-emission state.
-    fn get_nominal_sp_to_fp(s: &EmitState) -> i64 {
-        s.nominal_sp_to_fp
-    }
-
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         if flags.enable_pinned_reg() {
             static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();

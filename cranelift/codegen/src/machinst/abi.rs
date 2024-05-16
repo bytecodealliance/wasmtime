@@ -569,9 +569,6 @@ pub trait ABIMachineSpec {
         isa_flags: &Self::F,
     ) -> u32;
 
-    /// Get the "nominal SP to FP" offset from an instruction-emission state.
-    fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64;
-
     /// Get the ABI-dependent MachineEnv for managing register allocation.
     fn get_machine_env(flags: &settings::Flags, call_conv: isa::CallConv) -> &MachineEnv;
 
@@ -986,8 +983,7 @@ pub struct FrameLayout {
     pub clobber_size: u32,
 
     /// Storage allocated for the fixed part of the stack frame.
-    /// This contains stack slots and spill slots.  The "nominal SP"
-    /// during execution of the function points to the bottom of this.
+    /// This contains stack slots and spill slots.
     pub fixed_frame_storage_size: u32,
 
     /// Stack size to be reserved for outgoing arguments, if used by
@@ -1657,8 +1653,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         offset: u32,
         into_reg: Writable<Reg>,
     ) -> M::I {
-        // Offset from beginning of stackslot area, which is at nominal SP (see
-        // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
+        // Offset from beginning of stackslot area.
         let stack_off = self.sized_stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         M::gen_get_stack_addr(StackAMode::Slot(sp_off), into_reg)
@@ -1700,13 +1695,13 @@ impl<M: ABIMachineSpec> Callee<M> {
     ) -> StackMap {
         let frame_layout = state.frame_layout();
         let outgoing_args_size = frame_layout.outgoing_args_size;
-        let nominal_sp_to_fp = M::get_nominal_sp_to_fp(state);
+        let clobbers_and_slots = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
         trace!(
             "spillslots_to_stackmap: slots = {:?}, state = {:?}",
             slots,
             state
         );
-        let map_size = outgoing_args_size + u32::try_from(nominal_sp_to_fp).unwrap();
+        let map_size = outgoing_args_size + clobbers_and_slots;
         let bytes = M::word_bytes();
         let map_words = (map_size + bytes - 1) / bytes;
         let mut bits = std::iter::repeat(false)
@@ -1815,10 +1810,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             &frame_layout,
         ));
 
-        // N.B.: "nominal SP", which we use to refer to stackslots and
-        // spillslots, is defined to be equal to the stack pointer at this point
-        // in the prologue.
-
         insts
     }
 
@@ -1837,12 +1828,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             &self.flags,
             &frame_layout,
         ));
-
-        // N.B.: we do *not* emit a nominal SP adjustment here, because (i) there will be no
-        // references to nominal SP offsets before the return below, and (ii) the instruction
-        // emission tracks running SP offset linearly (in straight-line order), not according to
-        // the CFG, so early returns in the middle of function bodies would cause an incorrect
-        // offset for the rest of the body.
 
         // Tear down frame.
         insts.extend(M::gen_epilogue_frame_restore(
@@ -1909,9 +1894,9 @@ impl<M: ABIMachineSpec> Callee<M> {
         M::get_number_of_spillslots_for_value(rc, max, &self.isa_flags)
     }
 
-    /// Get the spill slot offset relative to nominal SP.
+    /// Get the spill slot offset relative to the fixed allocation area start.
     pub fn get_spillslot_offset(&self, slot: SpillSlot) -> i64 {
-        // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
+        // Offset from beginning of spillslot area.
         let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;

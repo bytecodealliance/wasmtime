@@ -765,11 +765,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    /// Get the nominal-SP-to-FP offset from an instruction-emission state.
-    fn get_nominal_sp_to_fp(s: &EmitState) -> i64 {
-        s.initial_sp_offset
-    }
-
     fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
         MACHINE_ENV.get_or_init(create_machine_env)
