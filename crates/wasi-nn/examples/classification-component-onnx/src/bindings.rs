@@ -600,7 +600,7 @@ pub mod wasi {
       }
       #[allow(unused_unsafe, clippy::all)]
       /// Create a `pollable` which will resolve once the specified instant
-      /// occured.
+      /// occurred.
       pub fn subscribe_instant(when: Instant,) -> Pollable{
         
         #[allow(unused_imports)]
@@ -623,7 +623,7 @@ pub mod wasi {
       #[allow(unused_unsafe, clippy::all)]
       /// Create a `pollable` which will resolve once the given duration has
       /// elapsed, starting at the time at which this function was called.
-      /// occured.
+      /// occurred.
       pub fn subscribe_duration(when: Duration,) -> Pollable{
         
         #[allow(unused_imports)]
@@ -4205,7 +4205,7 @@ pub mod wasi {
         impl OutputStream {
           #[allow(unused_unsafe, clippy::all)]
           /// Create a `pollable` which will resolve once the output-stream
-          /// is ready for more writing, or an error has occured. When this
+          /// is ready for more writing, or an error has occurred. When this
           /// pollable is ready, `check-write` will return `ok(n)` with n>0, or an
           /// error.
           /// 
