@@ -110,18 +110,35 @@ const linkElements = (element) => {
   element.addEventListener("mouseenter", (event) => {
     let offset = event.target.dataset.wasmOffset;
     if (offset === null) return;
-    // FIXME: there might be more than one elements here with the same offset!
-    let elems = selector(offset);
+    // Gather all elements related to the desired offset.  Put the one in the WAT
+    // view first, and then all the others subsequently; this is done so we can
+    // calculate the polygon to bridge the WAT and the ASM views.
+    //
+    // FIXME: optimize for the common case where selector() returns only two
+    // elements!
+    let elems = Array.from(selector(offset).entries()).map((elem) => {
+      let [_discard, node] = elem;
+      return node;
+    });
+    elems.sort((elem0, elem1) => {
+      let rect0 = elem0.getBoundingClientRect();
+      let rect1 = elem1.getBoundingClientRect();
+      return rect0.x - rect1.x;
+    });
     let rect0 = elems[0].getBoundingClientRect();
     let rect1 = elems[1].getBoundingClientRect();
-    if (rect0.x > rect1.x) {
-      [rect0, rect1] = [rect1, rect0];
-    }
+    let points = elems
+      .slice(1)
+      .map((elem) => {
+        let rect = elem.getBoundingClientRect();
+        return `0 ${rect0.y - 8}px, 100% ${rect.y - 8}px, 100% ${rect.bottom + 8}px, 0 ${rect0.bottom + 8}px`;
+      })
+      .join(",");
     let bridge = document.getElementById("bridge");
     bridge.style.display = "block";
     bridge.style.left = `${rect0.width}px`;
     bridge.style.width = `${rect1.left - rect0.width}px`;
-    bridge.style.clipPath = `polygon(0 ${rect0.y - 8}px, 100% ${rect1.y - 8}px, 100% ${rect1.bottom + 8}px, 0 ${rect0.bottom + 8}px)`;
+    bridge.style.clipPath = `polygon(${points})`;
     bridge.style.backgroundColor = elems[0].style.backgroundColor;
     for (const elem of elems) {
       elem.classList.add("hovered");
