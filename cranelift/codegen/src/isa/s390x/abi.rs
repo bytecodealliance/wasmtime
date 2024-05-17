@@ -81,7 +81,6 @@ use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
 
@@ -770,9 +769,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         s.initial_sp_offset
     }
 
-    fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
-        static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-        MACHINE_ENV.get_or_init(create_machine_env)
+    fn get_machine_env(_flags: &settings::Flags) -> MachineEnv {
+        create_machine_env()
     }
 
     fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
