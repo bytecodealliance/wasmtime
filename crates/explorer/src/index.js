@@ -15,10 +15,10 @@ const state = (window.STATE = new State(window.WAT, window.ASM));
 
 const rgbToLuma = (rgb) => {
   // Use the NTSC color space (https://en.wikipedia.org/wiki/YIQ) to determine
-  // the luminance of this color.  (This is scaled to a power of two so we can
-  // shift by 10 instead of dividing by 1000.)
+  // the luminance of this color.  (This is an approximation using powers of two,
+  // to avoid multiplications and divisions. It's good enough for our purposes.)
   let [r, g, b] = rgbToTriple(rgb);
-  return (r * 306 + g * 601 + b * 116) >> 10;
+  return (((r << 8) + (g << 9) + (b << 7)) >> 10) + (g & 31);
 };
 const rgbToTriple = (rgb) => [
   (rgb >> 16) & 0xff,
