@@ -440,7 +440,7 @@ impl<'a> Arbitrary<'a> for Config {
             // of memory so if we still are only allowing 0 pages of memory then
             // increase that to one here.
             if cfg.disallow_traps {
-                if pooling.max_memory_size == 0 {
+                if pooling.max_memory_size < (1 << 16) {
                     pooling.max_memory_size = 1 << 16;
                     cfg.max_memory32_pages = 1;
                     cfg.max_memory64_pages = 1;
