@@ -4,8 +4,6 @@ use cranelift_control::ControlPlane;
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Offset of FP from nominal-SP.
-    nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
@@ -20,7 +18,6 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<X64ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
@@ -51,9 +48,5 @@ impl EmitState {
 
     pub(crate) fn clear_post_insn(&mut self) {
         self.stack_map = None;
-    }
-
-    pub(crate) fn nominal_sp_to_fp(&self) -> i64 {
-        self.nominal_sp_to_fp
     }
 }
