@@ -68,19 +68,17 @@ pub fn mem_finalize(
     let mem = match mem {
         &MemArg::RegOffset { off, .. }
         | &MemArg::InitialSPOffset { off }
-        | &MemArg::NominalSPOffset { off } => {
+        | &MemArg::SlotOffset { off } => {
             let base = match mem {
                 &MemArg::RegOffset { reg, .. } => reg,
-                &MemArg::InitialSPOffset { .. } | &MemArg::NominalSPOffset { .. } => stack_reg(),
+                &MemArg::InitialSPOffset { .. } | &MemArg::SlotOffset { .. } => stack_reg(),
                 _ => unreachable!(),
             };
             let adj = match mem {
                 &MemArg::InitialSPOffset { .. } => {
                     state.initial_sp_offset + i64::from(state.frame_layout().outgoing_args_size)
                 }
-                &MemArg::NominalSPOffset { .. } => {
-                    i64::from(state.frame_layout().outgoing_args_size)
-                }
+                &MemArg::SlotOffset { .. } => i64::from(state.frame_layout().outgoing_args_size),
                 _ => 0,
             };
             let off = off + adj;

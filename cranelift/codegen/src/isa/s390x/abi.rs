@@ -50,11 +50,11 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | spill slots               |
-//!                              | (accessed via nominal SP) |
+//!                              | (accessed via SP)         |
 //!                              |          ...              |
 //!                              | stack slots               |
-//!                              | (accessed via nominal SP) |
-//! nominal SP --------------->  | (alloc'd by prologue)     |
+//!                              | (accessed via SP)         |
+//!                              | (alloc'd by prologue)     |
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | args for call             |
@@ -193,7 +193,7 @@ impl Into<MemArg> for StackAMode {
         match self {
             // Argument area always begins at the initial SP.
             StackAMode::IncomingArg(off, _) => MemArg::InitialSPOffset { off },
-            StackAMode::Slot(off) => MemArg::NominalSPOffset { off },
+            StackAMode::Slot(off) => MemArg::SlotOffset { off },
             StackAMode::OutgoingArg(off) => {
                 MemArg::reg_plus_off(stack_reg(), off, MemFlags::trusted())
             }
