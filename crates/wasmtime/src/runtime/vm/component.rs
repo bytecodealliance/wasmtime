@@ -8,7 +8,7 @@
 
 use crate::runtime::vm::{
     SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMNativeCallFunction, VMOpaqueContext, VMWasmCallFunction, ValRaw,
+    VMOpaqueContext, VMWasmCallFunction, ValRaw,
 };
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
@@ -389,7 +389,6 @@ impl ComponentInstance {
         &mut self,
         idx: TrampolineIndex,
         wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
         array_call: VMArrayCallFunction,
         type_index: VMSharedTypeIndex,
     ) {
@@ -399,7 +398,6 @@ impl ComponentInstance {
             let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
             *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
                 wasm_call: Some(wasm_call),
-                native_call,
                 array_call,
                 type_index,
                 vmctx,
@@ -731,13 +729,12 @@ impl OwnedComponentInstance {
         &mut self,
         idx: TrampolineIndex,
         wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
         array_call: VMArrayCallFunction,
         type_index: VMSharedTypeIndex,
     ) {
         unsafe {
             self.instance_mut()
-                .set_trampoline(idx, wasm_call, native_call, array_call, type_index)
+                .set_trampoline(idx, wasm_call, array_call, type_index)
         }
     }
 

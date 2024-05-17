@@ -131,12 +131,12 @@ pub(crate) use self::resources::HostResourceData;
 pub mod __internal {
     pub use super::func::{
         bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
-        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext,
-        MaybeUninitExt, Options,
+        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext, Options,
     };
     pub use super::matching::InstanceType;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
+    pub use crate::MaybeUninitExt;
     pub use alloc::boxed::Box;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;

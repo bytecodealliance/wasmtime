@@ -719,10 +719,6 @@ impl Instance {
 
         let func_ref = if let Some(def_index) = self.module().defined_func_index(index) {
             VMFuncRef {
-                native_call: self
-                    .runtime_info
-                    .native_to_wasm_trampoline(def_index)
-                    .expect("should have native-to-Wasm trampoline for escaping function"),
                 array_call: self
                     .runtime_info
                     .array_to_wasm_trampoline(def_index)
@@ -734,7 +730,6 @@ impl Instance {
         } else {
             let import = self.imported_function(index);
             VMFuncRef {
-                native_call: import.native_call,
                 array_call: import.array_call,
                 wasm_call: Some(import.wasm_call),
                 vmctx: import.vmctx,

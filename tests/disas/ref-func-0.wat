@@ -30,9 +30,9 @@
 ;; @0091                               v10 = iconst.i32 1
 ;; @0091                               v11 = call fn0(v9, v10)  ; v10 = 1
 ;; @0093                               v12 = global_value.i64 gv3
-;; @0093                               v13 = load.i64 notrap aligned table v12+160
+;; @0093                               v13 = load.i64 notrap aligned table v12+144
 ;; @0095                               v14 = global_value.i64 gv3
-;; @0095                               v15 = load.i64 notrap aligned table v14+176
+;; @0095                               v15 = load.i64 notrap aligned table v14+160
 ;; @0097                               jump block1(v8, v11, v13, v15)
 ;;
 ;;                                 block1(v2: r64, v3: r64, v4: i64, v5: i64):

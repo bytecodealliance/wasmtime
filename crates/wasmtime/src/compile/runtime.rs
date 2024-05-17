@@ -98,15 +98,6 @@ fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
     Ok(Arc::new(code))
 }
 
-/// Write an object out to an [`MmapVec`] so that it can be marked executable
-/// before running.
-///
-/// The returned `MmapVec` will contain the serialized version of `obj`
-/// and is sized appropriately to the exact size of the object serialized.
-pub fn finish_object(obj: ObjectBuilder<'_>) -> Result<MmapVec> {
-    Ok(<MmapVecWrapper as FinishedObject>::finish_object(obj)?.0)
-}
-
 pub(crate) struct MmapVecWrapper(pub MmapVec);
 
 impl FinishedObject for MmapVecWrapper {

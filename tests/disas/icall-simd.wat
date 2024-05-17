@@ -42,11 +42,11 @@
 ;; @0033                               v19 = global_value.i64 gv3
 ;; @0033                               v20 = load.i64 notrap aligned readonly v19+80
 ;; @0033                               v21 = load.i32 notrap aligned readonly v20
-;; @0033                               v22 = load.i32 icall_null aligned readonly v15+24
+;; @0033                               v22 = load.i32 icall_null aligned readonly v15+16
 ;; @0033                               v23 = icmp eq v22, v21
 ;; @0033                               trapz v23, bad_sig
-;; @0033                               v24 = load.i64 notrap aligned readonly v15+16
-;; @0033                               v25 = load.i64 notrap aligned readonly v15+32
+;; @0033                               v24 = load.i64 notrap aligned readonly v15+8
+;; @0033                               v25 = load.i64 notrap aligned readonly v15+24
 ;; @0033                               v26 = call_indirect sig0, v24(v25, v0, v3)
 ;; @0036                               jump block1(v26)
 ;;

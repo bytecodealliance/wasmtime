@@ -144,22 +144,12 @@ impl wasmtime_environ::Compiler for Compiler {
             .compile_array_to_wasm_trampoline(translation, types, index)
     }
 
-    fn compile_native_to_wasm_trampoline(
-        &self,
-        translation: &ModuleTranslation<'_>,
-        types: &ModuleTypesBuilder,
-        index: DefinedFuncIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
-        self.trampolines
-            .compile_native_to_wasm_trampoline(translation, types, index)
-    }
-
-    fn compile_wasm_to_native_trampoline(
+    fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         self.trampolines
-            .compile_wasm_to_native_trampoline(wasm_func_ty)
+            .compile_wasm_to_array_trampoline(wasm_func_ty)
     }
 
     fn append_code(
@@ -195,18 +185,6 @@ impl wasmtime_environ::Compiler for Compiler {
         }
         traps.append_to(obj);
         Ok(ret)
-    }
-
-    fn emit_trampolines_for_array_call_host_func(
-        &self,
-        ty: &wasmtime_environ::WasmFuncType,
-        // Actually `host_fn: VMArrayCallFunction` but that type is not
-        // available in `wasmtime-environ`.
-        host_fn: usize,
-        obj: &mut Object<'static>,
-    ) -> Result<(FunctionLoc, FunctionLoc)> {
-        drop((ty, host_fn, obj));
-        todo!()
     }
 
     fn triple(&self) -> &target_lexicon::Triple {

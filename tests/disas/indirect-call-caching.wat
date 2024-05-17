@@ -74,7 +74,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0050                               v4 = global_value.i64 gv3
-;; @0050                               v5 = iadd_imm v4, 272
+;; @0050                               v5 = iadd_imm v4, 240
 ;; @0050                               v6 = load.i32 notrap aligned v5+8
 ;; @0050                               v7 = load.i64 notrap aligned v5
 ;; @0050                               v8 = icmp eq v6, v2
@@ -112,11 +112,11 @@
 ;; @0050                               v23 = global_value.i64 gv3
 ;; @0050                               v24 = load.i64 notrap aligned readonly v23+80
 ;; @0050                               v25 = load.i32 notrap aligned readonly v24
-;; @0050                               v26 = load.i32 icall_null aligned readonly v19+24
+;; @0050                               v26 = load.i32 icall_null aligned readonly v19+16
 ;; @0050                               v27 = icmp eq v26, v25
 ;; @0050                               trapz v27, bad_sig
-;; @0050                               v28 = load.i64 notrap aligned readonly v19+16
-;; @0050                               v29 = load.i64 notrap aligned readonly v19+32
+;; @0050                               v28 = load.i64 notrap aligned readonly v19+8
+;; @0050                               v29 = load.i64 notrap aligned readonly v19+24
 ;; @0050                               v30 = icmp eq v29, v4
 ;; @0050                               brif v30, block4, block3(v28, v29)
 ;;

@@ -69,8 +69,7 @@ pub use crate::runtime::vm::traphandlers::*;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport,
-    VMNativeCallFunction, VMNativeCallHostFuncContext, VMOpaqueContext, VMRuntimeLimits,
-    VMTableImport, VMWasmCallFunction, ValRaw,
+    VMOpaqueContext, VMRuntimeLimits, VMTableImport, VMWasmCallFunction, ValRaw,
 };
 pub use send_sync_ptr::SendSyncPtr;
 
@@ -195,16 +194,6 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction>;
 
     /// Returns the address, in memory, of the trampoline that allows the given
-    /// defined Wasm function to be called by the native calling convention.
-    ///
-    /// Returns `None` for Wasm functions which do not escape, and therefore are
-    /// not callable from outside the Wasm module itself.
-    fn native_to_wasm_trampoline(
-        &self,
-        index: DefinedFuncIndex,
-    ) -> Option<NonNull<VMNativeCallFunction>>;
-
-    /// Returns the address, in memory, of the trampoline that allows the given
     /// defined Wasm function to be called by the array calling convention.
     ///
     /// Returns `None` for Wasm functions which do not escape, and therefore are
@@ -212,8 +201,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction>;
 
     /// Return the address, in memory, of the trampoline that allows Wasm to
-    /// call a native function of the given signature.
-    fn wasm_to_native_trampoline(
+    /// call a array function of the given signature.
+    fn wasm_to_array_trampoline(
         &self,
         signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>>;

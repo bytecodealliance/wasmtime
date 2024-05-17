@@ -1,9 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::{
-    compiler::{Compiler, NativeRet},
-    ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE,
-};
+use crate::{compiler::Compiler, ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
@@ -28,7 +25,6 @@ struct TrampolineCompiler<'a> {
 #[derive(Copy, Clone)]
 enum Abi {
     Wasm,
-    Native,
     Array,
 }
 
@@ -48,7 +44,6 @@ impl<'a> TrampolineCompiler<'a> {
             ir::UserFuncName::user(0, 0),
             match abi {
                 Abi::Wasm => crate::wasm_call_signature(isa, ty, &compiler.tunables),
-                Abi::Native => crate::native_call_signature(isa, ty),
                 Abi::Array => crate::array_call_signature(isa),
             },
         );
@@ -81,7 +76,7 @@ impl<'a> TrampolineCompiler<'a> {
                     }
                     // Transcoders can only actually be called by Wasm, so let's assert
                     // that here.
-                    Abi::Native | Abi::Array => {
+                    Abi::Array => {
                         self.builder
                             .ins()
                             .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
@@ -129,16 +124,10 @@ impl<'a> TrampolineCompiler<'a> {
         let vmctx = args[0];
         let wasm_func_ty = self.types[self.signature].unwrap_func();
 
-        // More handling is necessary here if this changes
-        assert!(matches!(
-            NativeRet::classify(self.isa, wasm_func_ty),
-            NativeRet::Bare
-        ));
-
         // Start off by spilling all the wasm arguments into a stack slot to be
         // passed to the host function.
         let (values_vec_ptr, values_vec_len) = match self.abi {
-            Abi::Wasm | Abi::Native => {
+            Abi::Wasm => {
                 let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
                     wasm_func_ty,
                     &mut self.builder,
@@ -255,7 +244,7 @@ impl<'a> TrampolineCompiler<'a> {
             .call_indirect(host_sig, host_fn, &callee_args);
 
         match self.abi {
-            Abi::Wasm | Abi::Native => {
+            Abi::Wasm => {
                 // After the host function has returned the results are loaded from
                 // `values_vec_ptr` and then returned.
                 let results = self.compiler.load_values_from_array(
@@ -536,7 +525,7 @@ impl<'a> TrampolineCompiler<'a> {
 
             // These trampolines can only actually be called by Wasm, so
             // let's assert that here.
-            Abi::Native | Abi::Array => {
+            Abi::Array => {
                 self.builder
                     .ins()
                     .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
@@ -586,7 +575,7 @@ impl<'a> TrampolineCompiler<'a> {
         match self.abi {
             // Wasm and native ABIs pass parameters as normal function
             // parameters.
-            Abi::Wasm | Abi::Native => block0_params,
+            Abi::Wasm => block0_params,
 
             // The array ABI passes a pointer/length as the 3rd/4th arguments
             // and those are used to load the actual wasm parameters.
@@ -607,7 +596,7 @@ impl<'a> TrampolineCompiler<'a> {
     fn abi_store_results(&mut self, results: &[ir::Value]) {
         match self.abi {
             // Wasm/native ABIs return values as usual.
-            Abi::Wasm | Abi::Native => {
+            Abi::Wasm => {
                 self.builder.ins().return_(results);
             }
 
@@ -684,7 +673,6 @@ impl ComponentCompiler for Compiler {
         Ok(AllCallFunc {
             wasm_call: compile(Abi::Wasm)?,
             array_call: compile(Abi::Array)?,
-            native_call: compile(Abi::Native)?,
         })
     }
 }

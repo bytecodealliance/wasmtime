@@ -177,7 +177,7 @@ impl ModuleRegistry {
         Some((info, module))
     }
 
-    pub fn wasm_to_native_trampoline(
+    pub fn wasm_to_array_trampoline(
         &self,
         sig: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>> {
@@ -190,7 +190,7 @@ impl ModuleRegistry {
         // See also the comment in `ModuleInner::wasm_to_native_trampoline`.
         for (_, code) in self.loaded_code.values() {
             for module in code.modules.values() {
-                if let Some(trampoline) = module.runtime_info().wasm_to_native_trampoline(sig) {
+                if let Some(trampoline) = module.runtime_info().wasm_to_array_trampoline(sig) {
                     return Some(trampoline);
                 }
             }

@@ -119,40 +119,34 @@ pub trait PtrSize {
         self.vmcontext_runtime_limits() + self.size()
     }
 
-    /// The offset of the `native_call` field.
-    #[inline]
-    fn vm_func_ref_native_call(&self) -> u8 {
-        0 * self.size()
-    }
-
     /// The offset of the `array_call` field.
     #[inline]
     fn vm_func_ref_array_call(&self) -> u8 {
-        1 * self.size()
+        0 * self.size()
     }
 
     /// The offset of the `wasm_call` field.
     #[inline]
     fn vm_func_ref_wasm_call(&self) -> u8 {
-        2 * self.size()
+        1 * self.size()
     }
 
     /// The offset of the `type_index` field.
     #[inline]
     fn vm_func_ref_type_index(&self) -> u8 {
-        3 * self.size()
+        2 * self.size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
     fn vm_func_ref_vmctx(&self) -> u8 {
-        4 * self.size()
+        3 * self.size()
     }
 
     /// Return the size of `VMFuncRef`.
     #[inline]
     fn size_of_vm_func_ref(&self) -> u8 {
-        5 * self.size()
+        4 * self.size()
     }
 
     /// Return the size of `VMGlobalDefinition`; this is the size of the largest value type (i.e. a
@@ -225,10 +219,8 @@ pub trait PtrSize {
 
     // Offsets within `VMArrayCallHostFuncContext`.
 
-    // Offsets within `VMNativeCallHostFuncContext`.
-
-    /// Return the offset of `VMNativeCallHostFuncContext::func_ref`.
-    fn vmnative_call_host_func_context_func_ref(&self) -> u8 {
+    /// Return the offset of `VMArrayCallHostFuncContext::func_ref`.
+    fn vmarray_call_host_func_context_func_ref(&self) -> u8 {
         u8::try_from(align(
             u32::try_from(core::mem::size_of::<u32>()).unwrap(),
             u32::from(self.size()),
@@ -526,28 +518,22 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
-    /// The offset of the `native_call` field.
-    #[inline]
-    pub fn vmfunction_import_native_call(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
     /// The offset of the `array_call` field.
     #[inline]
     pub fn vmfunction_import_array_call(&self) -> u8 {
-        2 * self.pointer_size()
+        1 * self.pointer_size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
     pub fn vmfunction_import_vmctx(&self) -> u8 {
-        3 * self.pointer_size()
+        2 * self.pointer_size()
     }
 
     /// Return the size of `VMFunctionImport`.
     #[inline]
     pub fn size_of_vmfunction_import(&self) -> u8 {
-        4 * self.pointer_size()
+        3 * self.pointer_size()
     }
 }
 
@@ -860,12 +846,6 @@ impl<P: PtrSize> VMOffsets<P> {
         self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_wasm_call())
     }
 
-    /// Return the offset to the `native_call` field in `*const VMFunctionBody` index `index`.
-    #[inline]
-    pub fn vmctx_vmfunction_import_native_call(&self, index: FuncIndex) -> u32 {
-        self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_native_call())
-    }
-
     /// Return the offset to the `array_call` field in `*const VMFunctionBody` index `index`.
     #[inline]
     pub fn vmctx_vmfunction_import_array_call(&self, index: FuncIndex) -> u32 {
@@ -991,12 +971,6 @@ pub const VMCONTEXT_MAGIC: u32 = u32::from_le_bytes(*b"core");
 /// This is stored at the start of all `VMArrayCallHostFuncContext` structures
 /// and double-checked on `VMArrayCallHostFuncContext::from_opaque`.
 pub const VM_ARRAY_CALL_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"ACHF");
-
-/// Equivalent of `VMCONTEXT_MAGIC` except for native-call host functions.
-///
-/// This is stored at the start of all `VMNativeCallHostFuncContext` structures
-/// and double-checked on `VMNativeCallHostFuncContext::from_opaque`.
-pub const VM_NATIVE_CALL_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"NCHF");
 
 #[cfg(test)]
 mod tests {

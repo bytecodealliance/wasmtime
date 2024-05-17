@@ -2,6 +2,7 @@ use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     HeapType, Ref, RefType, Result, Uninhabited, Val, ValRaw, ValType, WasmTy,
 };
+use core::mem::MaybeUninit;
 
 /// A reference to the abstract `noextern` heap value.
 ///
@@ -89,8 +90,6 @@ impl NoExtern {
 }
 
 unsafe impl WasmTy for NoExtern {
-    type Abi = NoExtern;
-
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::NoExtern))
@@ -111,30 +110,16 @@ unsafe impl WasmTy for NoExtern {
         match self._inner {}
     }
 
-    #[inline]
-    unsafe fn abi_from_raw(_raw: *mut ValRaw) -> Self::Abi {
+    fn store(self, _store: &mut AutoAssertNoGc<'_>, _ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
+        match self._inner {}
+    }
+
+    unsafe fn load(_store: &mut AutoAssertNoGc<'_>, _ptr: &ValRaw) -> Self {
         unreachable!("NoExtern is uninhabited")
-    }
-
-    #[inline]
-    unsafe fn abi_into_raw(abi: Self::Abi, _raw: *mut ValRaw) {
-        match abi._inner {}
-    }
-
-    #[inline]
-    fn into_abi(self, _store: &mut AutoAssertNoGc<'_>) -> Result<Self::Abi> {
-        unreachable!("NoExtern is uninhabited")
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &mut AutoAssertNoGc<'_>) -> Self {
-        match abi._inner {}
     }
 }
 
 unsafe impl WasmTy for Option<NoExtern> {
-    type Abi = u32;
-
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(true, HeapType::NoExtern))
@@ -156,24 +141,14 @@ unsafe impl WasmTy for Option<NoExtern> {
     }
 
     #[inline]
-    unsafe fn abi_from_raw(_raw: *mut ValRaw) -> Self::Abi {
-        0
+    fn store(self, _store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
+        ptr.write(ValRaw::externref(0));
+        Ok(())
     }
 
     #[inline]
-    unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw) {
-        debug_assert_eq!(abi, 0);
-        *raw = ValRaw::externref(0);
-    }
-
-    #[inline]
-    fn into_abi(self, _store: &mut AutoAssertNoGc<'_>) -> Result<Self::Abi> {
-        Ok(0)
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &mut AutoAssertNoGc<'_>) -> Self {
-        debug_assert_eq!(abi, 0);
+    unsafe fn load(_store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
+        debug_assert_eq!(ptr.get_externref(), 0);
         None
     }
 }
