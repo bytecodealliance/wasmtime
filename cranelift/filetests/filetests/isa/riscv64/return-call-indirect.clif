@@ -268,11 +268,11 @@ block0:
 ;   sd s11,40(sp)
 ; block0:
 ;   li a0,10
-;   sd a0,16(nominal_sp)
+;   sd a0,16(slot)
 ;   li a1,15
-;   sd a1,8(nominal_sp)
+;   sd a1,8(slot)
 ;   li a2,20
-;   sd a2,0(nominal_sp)
+;   sd a2,0(slot)
 ;   li a3,25
 ;   li a4,30
 ;   li a5,35
@@ -315,10 +315,10 @@ block0:
 ;   sd s1,-24(incoming_arg)
 ;   sd a0,-16(incoming_arg)
 ;   sd a1,-8(incoming_arg)
-;   ld a1,8(nominal_sp)
-;   ld a0,16(nominal_sp)
+;   ld a1,8(slot)
+;   ld a0,16(slot)
 ;   mv t0,a2
-;   ld a2,0(nominal_sp)
+;   ld a2,0(slot)
 ;   return_call_ind t0 new_stack_arg_size:144 a0=a0 a1=a1 a2=a2 a3=a3 a4=a4 a5=a5 a6=a6 a7=a7
 ;
 ; Disassembled:

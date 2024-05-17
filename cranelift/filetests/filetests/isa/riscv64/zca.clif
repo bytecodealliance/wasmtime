@@ -361,7 +361,7 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-16
 ; block0:
-;   load_addr a0,0(nominal_sp)
+;   load_addr a0,0(slot)
 ;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -450,12 +450,12 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-2048
 ; block0:
-;   load_addr a1,1020(nominal_sp)
+;   load_addr a1,1020(slot)
 ;   mv a5,a1
-;   load_addr a1,4(nominal_sp)
-;   load_addr a2,512(nominal_sp)
-;   load_addr a3,256(nominal_sp)
-;   load_addr a4,64(nominal_sp)
+;   load_addr a1,4(slot)
+;   load_addr a2,512(slot)
+;   load_addr a3,256(slot)
+;   load_addr a4,64(slot)
 ;   sd a2,0(a0)
 ;   sd a3,8(a0)
 ;   sd a4,16(a0)
@@ -510,8 +510,8 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-2048
 ; block0:
-;   load_addr a0,1024(nominal_sp)
-;   load_addr a1,0(nominal_sp)
+;   load_addr a0,1024(slot)
+;   load_addr a1,0(slot)
 ;   lui t6,1
 ;   addi t6,t6,-2048
 ;   add sp,sp,t6
@@ -553,7 +553,7 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-1024
 ; block0:
-;   load_addr a0,512(nominal_sp)
+;   load_addr a0,512(slot)
 ;   addi sp,sp,1024
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -702,7 +702,7 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-16
 ; block0:
-;   lw a0,12(nominal_sp)
+;   lw a0,12(slot)
 ;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -739,7 +739,7 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-128
 ; block0:
-;   ld a0,64(nominal_sp)
+;   ld a0,64(slot)
 ;   addi sp,sp,128
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -776,7 +776,7 @@ block0(v0: i32):
 ;   mv fp,sp
 ;   addi sp,sp,-16
 ; block0:
-;   sw a0,12(nominal_sp)
+;   sw a0,12(slot)
 ;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -813,7 +813,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   addi sp,sp,-128
 ; block0:
-;   sd a0,64(nominal_sp)
+;   sd a0,64(slot)
 ;   addi sp,sp,128
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
