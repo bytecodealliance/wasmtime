@@ -11,42 +11,32 @@ class State {
 
 const state = (window.STATE = new State(window.WAT, window.ASM));
 
-/*** Hues for Offsets **********************************************************/
+/*** Colors for Offsets **********************************************************/
 
-const hues = [
-  80, 160, 240, 320, 40, 120, 200, 280, 20, 100, 180, 260, 340, 60, 140, 220,
-  300,
-];
+const offsetToRgb = new Map();
 
-const nextHue = (function () {
-  let i = 0;
-  return () => {
-    return hues[++i % hues.length];
-  };
-})();
-
-// NB: don't just assign hues based on something simple like `hues[offset %
-// hues.length]` since that can suffer from bias due to certain alignments
-// happening more or less frequently.
-const offsetToHue = new Map();
-
-// Get the hue for the given offset, or assign it a new one if it doesn't have
-// one already.
-const hueForOffset = (offset) => {
-  if (offsetToHue.has(offset)) {
-    return offsetToHue.get(offset);
-  } else {
-    let hue = nextHue();
-    offsetToHue.set(offset, hue);
-    return hue;
+// Get the RGB color for the given offset.  (Memoize to avoid recalculating.)
+const rgbForOffset = (offset) => {
+  if (offsetToRgb.has(offset)) {
+    return offsetToRgb.get(offset);
   }
+  const crc24 = (crc, byte) => {
+    crc ^= byte << 16;
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc & 0x800000 ? (crc << 1) ^ 0xfa5711 : crc << 1) & 0xffffff;
+    }
+    return crc;
+  };
+  let color;
+  for (color = offset; offset; offset >>= 8)
+    color = crc24(color, offset & 0xff);
+  color = `${(color >> 16) & 0xff}, ${(color >> 8) & 0xff}, ${color & 0xff}`;
+  offsetToRgb.set(offset, color);
+  return color;
 };
 
-// Get the hue for the given offset, only if the offset has already been
-// assigned a hue.
-const existingHueForOffset = (offset) => {
-  return offsetToHue.get(offset);
-};
+const dimColorForOffset = (offset) => `rgba(${rgbForOffset(offset)}, 0.3)`;
+const brightColorForOffset = (offset) => `rgba(${rgbForOffset(offset)}, 0.7)`;
 
 // Get WAT chunk elements by Wasm offset.
 const watByOffset = new Map();
@@ -135,9 +125,9 @@ const onMouseEnter = (event) => {
   }
 
   const offset = parseInt(event.target.dataset.wasmOffset);
-  const hue = hueForOffset(offset);
+  const color = brightColorForOffset(offset);
   for (const elem of anyByOffset.get(offset)) {
-    elem.style.backgroundColor = `hsl(${hue} 75% 80%)`;
+    elem.style.backgroundColor = color;
   }
 };
 
@@ -147,9 +137,9 @@ const onMouseLeave = (event) => {
   }
 
   const offset = parseInt(event.target.dataset.wasmOffset);
-  const hue = hueForOffset(offset);
+  const color = dimColorForOffset(offset);
   for (const elem of anyByOffset.get(offset)) {
-    elem.style.backgroundColor = `hsl(${hue} 50% 95%)`;
+    elem.style.backgroundColor = color;
   }
 };
 
@@ -204,8 +194,7 @@ for (const func of state.asm.functions) {
     instElem.textContent = `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}\n`;
     if (inst.wasm_offset != null) {
       instElem.setAttribute("data-wasm-offset", inst.wasm_offset);
-      const hue = hueForOffset(inst.wasm_offset);
-      instElem.style.backgroundColor = `hsl(${hue} 50% 90%)`;
+      instElem.style.backgroundColor = dimColorForOffset(inst.wasm_offset);
       instElem.addEventListener("mouseenter", onMouseEnter);
       instElem.addEventListener("mouseleave", onMouseLeave);
       addAsmElem(inst.wasm_offset, instElem);
@@ -223,13 +212,10 @@ for (const chunk of state.wat.chunks) {
   const chunkElem = document.createElement("span");
   if (chunk.wasm_offset != null) {
     chunkElem.dataset.wasmOffset = chunk.wasm_offset;
-    const hue = existingHueForOffset(chunk.wasm_offset);
-    if (hue) {
-      chunkElem.style.backgroundColor = `hsl(${hue} 50% 95%)`;
-      chunkElem.addEventListener("mouseenter", onMouseEnter);
-      chunkElem.addEventListener("mouseleave", onMouseLeave);
-      addWatElem(chunk.wasm_offset, chunkElem);
-    }
+    chunkElem.style.backgroundColor = dimColorForOffset(chunk.wasm_offset);
+    chunkElem.addEventListener("mouseenter", onMouseEnter);
+    chunkElem.addEventListener("mouseleave", onMouseLeave);
+    addWatElem(chunk.wasm_offset, chunkElem);
   }
   chunkElem.textContent = chunk.wat;
   watElem.appendChild(chunkElem);
