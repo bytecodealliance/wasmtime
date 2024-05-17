@@ -39,6 +39,6 @@ selinux-fix = ['memmap2']
 default = []
 
 [dev-dependencies]
-cranelift = { workspace = true }
+cranelift = { path = "../umbrella" }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }

@@ -35,9 +35,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-native",
     "cranelift-object",
     "cranelift-interpreter",
-    "cranelift",
     "wasmtime-jit-icache-coherence",
     "cranelift-jit",
+    "cranelift",
     // wiggle
     "wiggle-generate",
     "wiggle-macro",

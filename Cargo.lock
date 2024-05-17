@@ -582,6 +582,11 @@ version = "0.109.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
+ "cranelift-interpreter",
+ "cranelift-jit",
+ "cranelift-module",
+ "cranelift-native",
+ "cranelift-object",
 ]
 
 [[package]]
