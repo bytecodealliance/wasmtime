@@ -193,7 +193,6 @@ where
         union Storage<T: Copy, U: Copy> {
             params: MaybeUninit<T>,
             results: U,
-            raw: [ValRaw; 0],
         }
 
         let mut storage = Storage::<Params::ValRawStorage, Results::ValRawStorage> {
@@ -218,8 +217,8 @@ where
             (func_ref.array_call)(
                 func_ref.vmctx,
                 VMOpaqueContext::from_vmcontext(caller),
-                storage.raw.as_mut_ptr(),
-                mem::size_of_val::<Storage<_, _>>(&storage) / mem::size_of::<ValRaw>(),
+                (storage as *mut Storage<_, _>) as *mut ValRaw,
+                mem::size_of_val::<Storage<_, _>>(storage) / mem::size_of::<ValRaw>(),
             );
         });
 
