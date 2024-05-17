@@ -17,7 +17,7 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-16
 ; block0:
-;   fld fa0,8(nominal_sp)
+;   fld fa0,8(slot)
 ;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -54,7 +54,7 @@ block0(v0: f64):
 ;   mv fp,sp
 ;   addi sp,sp,-128
 ; block0:
-;   fsd fa0,64(nominal_sp)
+;   fsd fa0,64(slot)
 ;   addi sp,sp,128
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)

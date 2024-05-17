@@ -22,11 +22,11 @@ pub fn mem_finalize(
         | &AMode::SPOffset { off }
         | &AMode::FPOffset { off }
         | &AMode::IncomingArg { off }
-        | &AMode::NominalSPOffset { off } => {
+        | &AMode::SlotOffset { off } => {
             let basereg = match mem {
                 &AMode::RegOffset { rn, .. } => rn,
                 &AMode::SPOffset { .. }
-                | &AMode::NominalSPOffset { .. }
+                | &AMode::SlotOffset { .. }
                 | &AMode::IncomingArg { .. } => stack_reg(),
                 &AMode::FPOffset { .. } => fp_reg(),
                 _ => unreachable!(),
@@ -42,10 +42,10 @@ pub fn mem_finalize(
                             + frame_layout.outgoing_args_size,
                     ) - off
                 }
-                &AMode::NominalSPOffset { .. } => {
+                &AMode::SlotOffset { .. } => {
                     let adj = i64::from(state.frame_layout().outgoing_args_size);
                     trace!(
-                        "mem_finalize: nominal SP offset {} + adj {} -> {}",
+                        "mem_finalize: slot offset {} + adj {} -> {}",
                         off,
                         adj,
                         off + adj
@@ -651,8 +651,6 @@ fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Offset of FP from nominal-SP.
-    pub(crate) nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
@@ -664,7 +662,6 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
@@ -1076,7 +1073,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::IncomingArg { .. }
-                    | &AMode::NominalSPOffset { .. }
+                    | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)
@@ -1170,7 +1167,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::IncomingArg { .. }
-                    | &AMode::NominalSPOffset { .. }
+                    | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)

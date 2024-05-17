@@ -46,7 +46,6 @@ pub enum EmitVState {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    pub(crate) nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
@@ -70,7 +69,6 @@ impl MachInstEmitState<Inst> for EmitState {
         ctrl_plane: ControlPlane,
     ) -> Self {
         EmitState {
-            nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             ctrl_plane,
             vstate: EmitVState::Unknown,

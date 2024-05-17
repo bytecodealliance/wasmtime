@@ -49,19 +49,17 @@ pub enum MemArg {
     /// Offset from the stack pointer at function entry.
     InitialSPOffset { off: i64 },
 
-    /// Offset from the "nominal stack pointer", which is where the real SP is
-    /// just after stack and spill slots are allocated in the function prologue.
+    /// Offset into the slot area of the stack, which lies just above the
+    /// outgoing argument area that's setup by the function prologue.
     /// At emission time, this is converted to `SPOffset` with a fixup added to
     /// the offset constant. The fixup is a running value that is tracked as
     /// emission iterates through instructions in linear order, and can be
     /// adjusted up and down with [Inst::VirtualSPOffsetAdj].
     ///
     /// The standard ABI is in charge of handling this (by emitting the
-    /// adjustment meta-instructions). It maintains the invariant that "nominal
-    /// SP" is where the actual SP is after the function prologue and before
-    /// clobber pushes. See the diagram in the documentation for
-    /// [crate::isa::s390x::abi](the ABI module) for more details.
-    NominalSPOffset { off: i64 },
+    /// adjustment meta-instructions). See the diagram in the documentation
+    /// for [crate::isa::aarch64::abi](the ABI module) for more details.
+    SlotOffset { off: i64 },
 }
 
 impl MemArg {
@@ -98,7 +96,7 @@ impl MemArg {
             MemArg::Label { .. } => MemFlags::trusted(),
             MemArg::Symbol { flags, .. } => *flags,
             MemArg::InitialSPOffset { .. } => MemFlags::trusted(),
-            MemArg::NominalSPOffset { .. } => MemFlags::trusted(),
+            MemArg::SlotOffset { .. } => MemFlags::trusted(),
         }
     }
 }
@@ -268,7 +266,7 @@ impl PrettyPrint for MemArg {
             } => format!("{} + {}", name.display(None), offset),
             // Eliminated by `mem_finalize()`.
             &MemArg::InitialSPOffset { .. }
-            | &MemArg::NominalSPOffset { .. }
+            | &MemArg::SlotOffset { .. }
             | &MemArg::RegOffset { .. } => {
                 panic!("Unexpected pseudo mem-arg mode (stack-offset or generic reg-offset)!")
             }

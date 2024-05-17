@@ -1178,19 +1178,17 @@
         (IncomingArg
           (off i64))
 
-        ;; Offset from the "nominal stack pointer", which is where the real SP is
-        ;; just after stack and spill slots are allocated in the function prologue.
+        ;; Offset into the slot area of the stack, which lies just above the
+        ;; outgoing argument area that's setup by the function prologue.
         ;; At emission time, this is converted to `SPOffset` with a fixup added to
         ;; the offset constant. The fixup is a running value that is tracked as
         ;; emission iterates through instructions in linear order, and can be
         ;; adjusted up and down with [Inst::VirtualSPOffsetAdj].
         ;;
         ;; The standard ABI is in charge of handling this (by emitting the
-        ;; adjustment meta-instructions). It maintains the invariant that "nominal
-        ;; SP" is where the actual SP is after the function prologue and before
-        ;; clobber pushes. See the diagram in the documentation for
-        ;; [crate::isa::aarch64::abi](the ABI module) for more details.
-        (NominalSPOffset
+        ;; adjustment meta-instructions). See the diagram in the documentation
+        ;; for [crate::isa::aarch64::abi](the ABI module) for more details.
+        (SlotOffset
          (off i64))))
 
 ;; A memory argument to a load/store-pair.

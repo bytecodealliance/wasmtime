@@ -50,11 +50,11 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | spill slots               |
-//!                              | (accessed via nominal SP) |
+//!                              | (accessed via SP)         |
 //!                              |          ...              |
 //!                              | stack slots               |
-//!                              | (accessed via nominal SP) |
-//! nominal SP --------------->  | (alloc'd by prologue)     |
+//!                              | (accessed via SP)         |
+//!                              | (alloc'd by prologue)     |
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | args for call             |
@@ -193,7 +193,7 @@ impl Into<MemArg> for StackAMode {
         match self {
             // Argument area always begins at the initial SP.
             StackAMode::IncomingArg(off, _) => MemArg::InitialSPOffset { off },
-            StackAMode::Slot(off) => MemArg::NominalSPOffset { off },
+            StackAMode::Slot(off) => MemArg::SlotOffset { off },
             StackAMode::OutgoingArg(off) => {
                 MemArg::reg_plus_off(stack_reg(), off, MemFlags::trusted())
             }
@@ -763,11 +763,6 @@ impl ABIMachineSpec for S390xMachineDeps {
             RegClass::Float => 2,
             RegClass::Vector => unreachable!(),
         }
-    }
-
-    /// Get the nominal-SP-to-FP offset from an instruction-emission state.
-    fn get_nominal_sp_to_fp(s: &EmitState) -> i64 {
-        s.initial_sp_offset
     }
 
     fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {

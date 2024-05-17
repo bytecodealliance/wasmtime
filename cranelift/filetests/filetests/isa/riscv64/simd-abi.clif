@@ -40,9 +40,9 @@ block0(
 ;   addi sp,sp,-256
 ; block0:
 ;   vle8.v v11,-544(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v11,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,0(slot) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v13,-528(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,128(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v13,128(slot) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v13,-512(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v15,-496(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v10,-480(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
@@ -107,9 +107,9 @@ block0(
 ;   vse8.v v10,464(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v15,480(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v13,496(a0) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v13,128(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v13,128(slot) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v13,512(a0) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,0(slot) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v11,528(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   addi sp,sp,256
 ;   ld ra,8(sp)

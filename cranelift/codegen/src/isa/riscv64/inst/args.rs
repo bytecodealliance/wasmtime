@@ -87,19 +87,17 @@ pub enum AMode {
     /// Offset from the frame pointer.
     FPOffset(i64),
 
-    /// Offset from the "nominal stack pointer", which is where the real SP is
-    /// just after stack and spill slots are allocated in the function prologue.
+    /// Offset into the slot area of the stack, which lies just above the
+    /// outgoing argument area that's setup by the function prologue.
     /// At emission time, this is converted to `SPOffset` with a fixup added to
     /// the offset constant. The fixup is a running value that is tracked as
     /// emission iterates through instructions in linear order, and can be
     /// adjusted up and down with [Inst::VirtualSPOffsetAdj].
     ///
     /// The standard ABI is in charge of handling this (by emitting the
-    /// adjustment meta-instructions). It maintains the invariant that "nominal
-    /// SP" is where the actual SP is after the function prologue and before
-    /// clobber pushes. See the diagram in the documentation for
-    /// [crate::isa::riscv64::abi](the ABI module) for more details.
-    NominalSPOffset(i64),
+    /// adjustment meta-instructions). See the diagram in the documentation
+    /// for [crate::isa::aarch64::abi](the ABI module) for more details.
+    SlotOffset(i64),
 
     /// Offset into the argument area.
     IncomingArg(i64),
@@ -120,7 +118,7 @@ impl AMode {
             // Registers used in these modes aren't allocatable.
             AMode::SPOffset(..)
             | AMode::FPOffset(..)
-            | AMode::NominalSPOffset(..)
+            | AMode::SlotOffset(..)
             | AMode::IncomingArg(..)
             | AMode::Const(..)
             | AMode::Label(..) => {}
@@ -132,7 +130,7 @@ impl AMode {
             &AMode::RegOffset(reg, ..) => Some(reg),
             &AMode::SPOffset(..) => Some(stack_reg()),
             &AMode::FPOffset(..) => Some(fp_reg()),
-            &AMode::NominalSPOffset(..) => Some(stack_reg()),
+            &AMode::SlotOffset(..) => Some(stack_reg()),
             &AMode::IncomingArg(..) => Some(stack_reg()),
             &AMode::Const(..) | AMode::Label(..) => None,
         }
@@ -140,7 +138,7 @@ impl AMode {
 
     pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
         match self {
-            &AMode::NominalSPOffset(offset) => {
+            &AMode::SlotOffset(offset) => {
                 offset + i64::from(state.frame_layout().outgoing_args_size)
             }
 
@@ -171,7 +169,7 @@ impl AMode {
             | &AMode::SPOffset(..)
             | &AMode::FPOffset(..)
             | &AMode::IncomingArg(..)
-            | &AMode::NominalSPOffset(..) => None,
+            | &AMode::SlotOffset(..) => None,
         }
     }
 }
@@ -185,8 +183,8 @@ impl Display for AMode {
             &AMode::SPOffset(offset, ..) => {
                 write!(f, "{}(sp)", offset)
             }
-            &AMode::NominalSPOffset(offset, ..) => {
-                write!(f, "{}(nominal_sp)", offset)
+            &AMode::SlotOffset(offset, ..) => {
+                write!(f, "{}(slot)", offset)
             }
             &AMode::IncomingArg(offset) => {
                 write!(f, "-{}(incoming_arg)", offset)
@@ -211,7 +209,7 @@ impl Into<AMode> for StackAMode {
                 AMode::IncomingArg(i64::from(stack_args_size) - offset)
             }
             StackAMode::OutgoingArg(offset) => AMode::SPOffset(offset),
-            StackAMode::Slot(offset) => AMode::NominalSPOffset(offset),
+            StackAMode::Slot(offset) => AMode::SlotOffset(offset),
         }
     }
 }

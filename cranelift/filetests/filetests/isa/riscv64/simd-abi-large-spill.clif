@@ -25,10 +25,10 @@ block0:
 ; block0:
 ;   mv s1,a0
 ;   vle16.v v11,[const(0)] #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v11,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,0(slot) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   call userextname0
 ;   mv a0,s1
-;   vle8.v v11,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,0(slot) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld s1,1032(sp)
 ;   addi sp,sp,1040

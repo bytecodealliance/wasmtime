@@ -88,9 +88,9 @@ block0:
 ;   sd s11,168(sp)
 ; block0:
 ;   li a0,10
-;   sd a0,8(nominal_sp)
+;   sd a0,8(slot)
 ;   li a1,15
-;   sd a1,0(nominal_sp)
+;   sd a1,0(slot)
 ;   li a2,20
 ;   li a3,25
 ;   li a4,30
@@ -134,8 +134,8 @@ block0:
 ;   sd a0,128(sp)
 ;   sd a1,136(sp)
 ;   load_sym s3,%tail_callee_stack_args+0
-;   ld a0,8(nominal_sp)
-;   ld a1,0(nominal_sp)
+;   ld a0,8(slot)
+;   ld a1,0(slot)
 ;   callind s3
 ;   ld s1,248(sp)
 ;   ld s2,240(sp)
@@ -297,11 +297,11 @@ block0:
 ;   sd s11,40(sp)
 ; block0:
 ;   li a3,10
-;   sd a3,24(nominal_sp)
+;   sd a3,24(slot)
 ;   li a1,15
-;   sd a1,16(nominal_sp)
+;   sd a1,16(slot)
 ;   li a4,20
-;   sd a4,8(nominal_sp)
+;   sd a4,8(slot)
 ;   li a4,25
 ;   li a5,30
 ;   li a2,35
@@ -325,8 +325,8 @@ block0:
 ;   li s2,125
 ;   li a1,130
 ;   li a3,135
-;   sd a3,0(nominal_sp)
-;   ld a3,8(nominal_sp)
+;   sd a3,0(slot)
+;   ld a3,8(slot)
 ;   sd a3,0(a0)
 ;   sd a4,8(a0)
 ;   sd a5,16(a0)
@@ -350,10 +350,10 @@ block0:
 ;   sd s1,160(a0)
 ;   sd s2,168(a0)
 ;   sd a1,176(a0)
-;   ld a3,0(nominal_sp)
+;   ld a3,0(slot)
 ;   sd a3,184(a0)
-;   ld a0,24(nominal_sp)
-;   ld a1,16(nominal_sp)
+;   ld a0,24(slot)
+;   ld a1,16(slot)
 ;   ld s1,120(sp)
 ;   ld s2,112(sp)
 ;   ld s3,104(sp)
@@ -584,8 +584,8 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd s10,48(sp)
 ;   sd s11,40(sp)
 ; block0:
-;   sd a0,0(nominal_sp)
-;   sd a1,8(nominal_sp)
+;   sd a0,0(slot)
+;   sd a1,8(slot)
 ;   ld s4,-160(incoming_arg)
 ;   ld s6,-152(incoming_arg)
 ;   ld s8,-144(incoming_arg)
@@ -604,7 +604,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   ld a0,-40(incoming_arg)
 ;   ld s2,-32(incoming_arg)
 ;   ld t2,-24(incoming_arg)
-;   sd t2,16(nominal_sp)
+;   sd t2,16(slot)
 ;   ld t2,-16(incoming_arg)
 ;   sd a2,0(t2)
 ;   sd a3,8(t2)
@@ -629,10 +629,10 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd a1,160(t2)
 ;   sd a0,168(t2)
 ;   sd s2,176(t2)
-;   ld a1,16(nominal_sp)
+;   ld a1,16(slot)
 ;   sd a1,184(t2)
-;   ld a0,0(nominal_sp)
-;   ld a1,8(nominal_sp)
+;   ld a0,0(slot)
+;   ld a1,8(slot)
 ;   ld s1,120(sp)
 ;   ld s2,112(sp)
 ;   ld s3,104(sp)
@@ -790,9 +790,9 @@ block0:
 ;   sd s11,376(sp)
 ; block0:
 ;   li a0,10
-;   sd a0,8(nominal_sp)
+;   sd a0,8(slot)
 ;   li a1,15
-;   sd a1,0(nominal_sp)
+;   sd a1,0(slot)
 ;   li a2,20
 ;   li a3,25
 ;   li a4,30
@@ -838,8 +838,8 @@ block0:
 ;   load_addr a0,160(sp)
 ;   sd a0,144(sp)
 ;   load_sym t1,%tail_callee_stack_args_and_rets+0
-;   ld a0,8(nominal_sp)
-;   ld a1,0(nominal_sp)
+;   ld a0,8(slot)
+;   ld a1,0(slot)
 ;   callind t1
 ;   ld a2,160(sp)
 ;   ld a4,168(sp)

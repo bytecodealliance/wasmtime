@@ -398,7 +398,7 @@ fn memarg_operands(memarg: &mut MemArg, collector: &mut impl OperandVisitor) {
         MemArg::RegOffset { reg, .. } => {
             collector.reg_use(reg);
         }
-        MemArg::InitialSPOffset { .. } | MemArg::NominalSPOffset { .. } => {}
+        MemArg::InitialSPOffset { .. } | MemArg::SlotOffset { .. } => {}
     }
     // mem_finalize might require %r1 to hold (part of) the address.
     // Conservatively assume this will always be necessary here.

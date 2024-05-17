@@ -38,28 +38,20 @@
 //! We assume that a prologue first pushes the frame pointer (and
 //! return address above that, if the machine does not do that in
 //! hardware). We set FP to point to this two-word frame record. We
-//! store all other frame slots below this two-word frame record, with
-//! the stack pointer remaining at or below this fixed frame storage
-//! for the rest of the function. We can then access frame storage
-//! slots using positive offsets from SP. In order to allow codegen
-//! for the latter before knowing how SP might be adjusted around
-//! callsites, we implement a "nominal SP" tracking feature by which a
-//! fixup (distance between actual SP and a "nominal" SP) is known at
-//! each instruction. When the prologue is finished, SP is expected
-//! to point at the bottom of the outgoing argument area, and will
-//! only move again directly around function calls. This allows the
-//! use of fixed offsets from SP for the rest of the function body.
+//! store all other frame slots below this two-word frame record, as
+//! well as enough space for arguments to the largest possible
+//! function call. The stack pointer then remains at this position
+//! for the duration of the function, allowing us to address all
+//! frame storage at positive offsets from SP.
 //!
 //! Note that if we ever support dynamic stack-space allocation (for
 //! `alloca`), we will need a way to reference spill slots and stack
-//! slots without "nominal SP", because we will no longer be able to
-//! know a static offset from SP to the slots at any particular
+//! slots relative to a dynamic SP, because we will no longer be able
+//! to know a static offset from SP to the slots at any particular
 //! program point. Probably the best solution at that point will be to
 //! revert to using the frame pointer as the reference for all slots,
-//! and creating a "nominal FP" synthetic addressing mode (analogous
-//! to "nominal SP" today) to allow generating spill/reload and
-//! stackslot accesses before we know how large the clobber-saves will
-//! be.
+//! to allow generating spill/reload and stackslot accesses before we
+//! know how large the clobber-saves will be.
 //!
 //! # Stack Layout
 //!
@@ -71,7 +63,7 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | stack args                |
-//!                              | (accessed via FP)         |
+//! Canonical Frame Address -->  | (accessed via FP)         |
 //!                              +---------------------------+
 //! SP at function entry ----->  | return address            |
 //!                              +---------------------------+
@@ -83,16 +75,16 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | spill slots               |
-//!                              | (accessed via nominal SP) |
+//!                              | (accessed via SP)         |
 //!                              |          ...              |
 //!                              | stack slots               |
-//!                              | (accessed via nominal SP) |
-//! nominal SP --------------->  | (alloc'd by prologue)     |
+//!                              | (accessed via SP)         |
+//!                              | (alloc'd by prologue)     |
 //!                              +---------------------------+
 //!                              | [alignment as needed]     |
 //!                              |          ...              |
-//!                              | args for call             |
-//! SP ----------------------->  | (pushed at callsite)      |
+//!                              | args for largest call     |
+//! SP ----------------------->  | (alloc'd by prologue)     |
 //!                              +---------------------------+
 //!
 //!   (low address)
@@ -577,9 +569,6 @@ pub trait ABIMachineSpec {
         isa_flags: &Self::F,
     ) -> u32;
 
-    /// Get the "nominal SP to FP" offset from an instruction-emission state.
-    fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64;
-
     /// Get the ABI-dependent MachineEnv for managing register allocation.
     fn get_machine_env(flags: &settings::Flags, call_conv: isa::CallConv) -> &MachineEnv;
 
@@ -994,8 +983,7 @@ pub struct FrameLayout {
     pub clobber_size: u32,
 
     /// Storage allocated for the fixed part of the stack frame.
-    /// This contains stack slots and spill slots.  The "nominal SP"
-    /// during execution of the function points to the bottom of this.
+    /// This contains stack slots and spill slots.
     pub fixed_frame_storage_size: u32,
 
     /// Stack size to be reserved for outgoing arguments, if used by
@@ -1665,8 +1653,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         offset: u32,
         into_reg: Writable<Reg>,
     ) -> M::I {
-        // Offset from beginning of stackslot area, which is at nominal SP (see
-        // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
+        // Offset from beginning of stackslot area.
         let stack_off = self.sized_stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         M::gen_get_stack_addr(StackAMode::Slot(sp_off), into_reg)
@@ -1708,13 +1695,13 @@ impl<M: ABIMachineSpec> Callee<M> {
     ) -> StackMap {
         let frame_layout = state.frame_layout();
         let outgoing_args_size = frame_layout.outgoing_args_size;
-        let nominal_sp_to_fp = M::get_nominal_sp_to_fp(state);
+        let clobbers_and_slots = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
         trace!(
             "spillslots_to_stackmap: slots = {:?}, state = {:?}",
             slots,
             state
         );
-        let map_size = outgoing_args_size + u32::try_from(nominal_sp_to_fp).unwrap();
+        let map_size = outgoing_args_size + clobbers_and_slots;
         let bytes = M::word_bytes();
         let map_words = (map_size + bytes - 1) / bytes;
         let mut bits = std::iter::repeat(false)
@@ -1823,10 +1810,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             &frame_layout,
         ));
 
-        // N.B.: "nominal SP", which we use to refer to stackslots and
-        // spillslots, is defined to be equal to the stack pointer at this point
-        // in the prologue.
-
         insts
     }
 
@@ -1845,12 +1828,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             &self.flags,
             &frame_layout,
         ));
-
-        // N.B.: we do *not* emit a nominal SP adjustment here, because (i) there will be no
-        // references to nominal SP offsets before the return below, and (ii) the instruction
-        // emission tracks running SP offset linearly (in straight-line order), not according to
-        // the CFG, so early returns in the middle of function bodies would cause an incorrect
-        // offset for the rest of the body.
 
         // Tear down frame.
         insts.extend(M::gen_epilogue_frame_restore(
@@ -1917,9 +1894,9 @@ impl<M: ABIMachineSpec> Callee<M> {
         M::get_number_of_spillslots_for_value(rc, max, &self.isa_flags)
     }
 
-    /// Get the spill slot offset relative to nominal SP.
+    /// Get the spill slot offset relative to the fixed allocation area start.
     pub fn get_spillslot_offset(&self, slot: SpillSlot) -> i64 {
-        // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
+        // Offset from beginning of spillslot area.
         let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;

@@ -411,7 +411,7 @@ fn memarg_operands(memarg: &mut AMode, collector: &mut impl OperandVisitor) {
         AMode::Label { .. } => {}
         AMode::SPPreIndexed { .. } | AMode::SPPostIndexed { .. } => {}
         AMode::FPOffset { .. } | AMode::IncomingArg { .. } => {}
-        AMode::SPOffset { .. } | AMode::NominalSPOffset { .. } => {}
+        AMode::SPOffset { .. } | AMode::SlotOffset { .. } => {}
         AMode::RegOffset { rn, .. } => {
             collector.reg_use(rn);
         }

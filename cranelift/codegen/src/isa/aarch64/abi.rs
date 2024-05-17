@@ -38,7 +38,7 @@ impl Into<AMode> for StackAMode {
             StackAMode::IncomingArg(off, stack_args_size) => AMode::IncomingArg {
                 off: i64::from(stack_args_size) - off,
             },
-            StackAMode::Slot(off) => AMode::NominalSPOffset { off },
+            StackAMode::Slot(off) => AMode::SlotOffset { off },
             StackAMode::OutgoingArg(off) => AMode::SPOffset { off },
         }
     }
@@ -1130,11 +1130,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
             RegClass::Float => vector_size / 8,
             RegClass::Vector => unreachable!(),
         }
-    }
-
-    /// Get the nominal-SP-to-FP offset from an instruction-emission state.
-    fn get_nominal_sp_to_fp(s: &EmitState) -> i64 {
-        s.nominal_sp_to_fp
     }
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {

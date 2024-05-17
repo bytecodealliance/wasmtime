@@ -463,10 +463,10 @@ pub enum SyntheticAmode {
         offset: u32,
     },
 
-    /// A (virtual) offset to the "nominal SP" value, which will be recomputed as we push and pop
-    /// within the function.
-    NominalSPOffset {
-        /// The nominal stack pointer value.
+    /// A (virtual) offset to the slot area of the function frame, which lies just above the
+    /// outgoing arguments.
+    SlotOffset {
+        /// The offset into the slot area.
         simm32: i32,
     },
 
@@ -480,8 +480,8 @@ impl SyntheticAmode {
         Self::Real(amode)
     }
 
-    pub(crate) fn nominal_sp_offset(simm32: i32) -> Self {
-        SyntheticAmode::NominalSPOffset { simm32 }
+    pub(crate) fn slot_offset(simm32: i32) -> Self {
+        SyntheticAmode::SlotOffset { simm32 }
     }
 
     /// Add the registers mentioned by `self` to `collector`.
@@ -491,7 +491,7 @@ impl SyntheticAmode {
             SyntheticAmode::IncomingArg { .. } => {
                 // Nothing to do; the base is known and isn't involved in regalloc.
             }
-            SyntheticAmode::NominalSPOffset { .. } => {
+            SyntheticAmode::SlotOffset { .. } => {
                 // Nothing to do; the base is SP and isn't involved in regalloc.
             }
             SyntheticAmode::ConstantOffset(_) => {}
@@ -505,7 +505,7 @@ impl SyntheticAmode {
             SyntheticAmode::IncomingArg { .. } => {
                 // Nothing to do; the base is known and isn't involved in regalloc.
             }
-            SyntheticAmode::NominalSPOffset { .. } => {
+            SyntheticAmode::SlotOffset { .. } => {
                 // Nothing to do; the base is SP and isn't involved in regalloc.
             }
             SyntheticAmode::ConstantOffset(_) => {}
@@ -525,7 +525,7 @@ impl SyntheticAmode {
                     regs::rbp(),
                 )
             }
-            SyntheticAmode::NominalSPOffset { simm32 } => {
+            SyntheticAmode::SlotOffset { simm32 } => {
                 let off = *simm32 as i64 + i64::from(state.frame_layout().outgoing_args_size);
                 Amode::imm_reg(off.try_into().expect("invalid sp offset"), regs::rsp())
             }
@@ -539,7 +539,7 @@ impl SyntheticAmode {
         match self {
             SyntheticAmode::Real(addr) => addr.aligned(),
             &SyntheticAmode::IncomingArg { .. }
-            | SyntheticAmode::NominalSPOffset { .. }
+            | SyntheticAmode::SlotOffset { .. }
             | SyntheticAmode::ConstantOffset { .. } => true,
         }
     }
@@ -565,7 +565,7 @@ impl PrettyPrint for SyntheticAmode {
             &SyntheticAmode::IncomingArg { offset } => {
                 format!("rbp(stack args max - {offset})")
             }
-            SyntheticAmode::NominalSPOffset { simm32 } => {
+            SyntheticAmode::SlotOffset { simm32 } => {
                 format!("rsp({} + virtual offset)", *simm32)
             }
             SyntheticAmode::ConstantOffset(c) => format!("const({})", c.as_u32()),
