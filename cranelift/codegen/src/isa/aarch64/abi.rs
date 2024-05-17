@@ -38,7 +38,7 @@ impl Into<AMode> for StackAMode {
             StackAMode::IncomingArg(off, stack_args_size) => AMode::IncomingArg {
                 off: i64::from(stack_args_size) - off,
             },
-            StackAMode::Slot(off) => AMode::NominalSPOffset { off },
+            StackAMode::Slot(off) => AMode::SlotOffset { off },
             StackAMode::OutgoingArg(off) => AMode::SPOffset { off },
         }
     }

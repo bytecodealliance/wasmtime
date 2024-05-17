@@ -22,11 +22,11 @@ pub fn mem_finalize(
         | &AMode::SPOffset { off }
         | &AMode::FPOffset { off }
         | &AMode::IncomingArg { off }
-        | &AMode::NominalSPOffset { off } => {
+        | &AMode::SlotOffset { off } => {
             let basereg = match mem {
                 &AMode::RegOffset { rn, .. } => rn,
                 &AMode::SPOffset { .. }
-                | &AMode::NominalSPOffset { .. }
+                | &AMode::SlotOffset { .. }
                 | &AMode::IncomingArg { .. } => stack_reg(),
                 &AMode::FPOffset { .. } => fp_reg(),
                 _ => unreachable!(),
@@ -42,10 +42,10 @@ pub fn mem_finalize(
                             + frame_layout.outgoing_args_size,
                     ) - off
                 }
-                &AMode::NominalSPOffset { .. } => {
+                &AMode::SlotOffset { .. } => {
                     let adj = i64::from(state.frame_layout().outgoing_args_size);
                     trace!(
-                        "mem_finalize: nominal SP offset {} + adj {} -> {}",
+                        "mem_finalize: slot offset {} + adj {} -> {}",
                         off,
                         adj,
                         off + adj
@@ -1073,7 +1073,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::IncomingArg { .. }
-                    | &AMode::NominalSPOffset { .. }
+                    | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)
@@ -1167,7 +1167,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::IncomingArg { .. }
-                    | &AMode::NominalSPOffset { .. }
+                    | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)

@@ -507,7 +507,7 @@ fn check_addr<'a>(
         &AMode::SPOffset { .. }
         | &AMode::FPOffset { .. }
         | &AMode::IncomingArg { .. }
-        | &AMode::NominalSPOffset { .. }
+        | &AMode::SlotOffset { .. }
         | &AMode::SPPostIndexed { .. }
         | &AMode::SPPreIndexed { .. } => {
             // We trust ABI code (for now!) and no lowering rules

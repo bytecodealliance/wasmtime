@@ -400,7 +400,7 @@ impl PrettyPrint for AMode {
             &AMode::SPOffset { .. }
             | &AMode::FPOffset { .. }
             | &AMode::IncomingArg { .. }
-            | &AMode::NominalSPOffset { .. }
+            | &AMode::SlotOffset { .. }
             | &AMode::RegOffset { .. } => {
                 panic!("Unexpected pseudo mem-arg mode: {:?}", self)
             }
