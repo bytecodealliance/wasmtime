@@ -1659,10 +1659,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add stack map metadata for this program point: a set of stack offsets
     /// (from SP upward) that contain live references.
-    ///
-    /// The `offset_to_fp` value is the offset from the nominal SP (at which the `stack_offsets`
-    /// are based) and the FP value. By subtracting `offset_to_fp` from each `stack_offsets`
-    /// element, one can obtain live-reference offsets from FP instead.
     pub fn add_stack_map(&mut self, extent: StackMapExtent, stack_map: StackMap) {
         let (start, end) = match extent {
             StackMapExtent::UpcomingBytes(insn_len) => {
