@@ -93,18 +93,24 @@ const linkElements = (element) => {
       for (const elem of selector(offset)) closure(elem);
     }
   };
-  element.addEventListener("click", (event) => {
-    eachElementWithSameWasmOff(event, (elem) =>
-      elem.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "nearest",
-      }),
-    );
-  });
+  element.addEventListener(
+    "click",
+    (event) => {
+      document.getElementById("bridge").style.display = "none";
+      eachElementWithSameWasmOff(event, (elem) => {
+        elem.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+      });
+    },
+    { passive: true },
+  );
   element.addEventListener("mouseenter", (event) => {
     let offset = event.target.dataset.wasmOffset;
     if (offset === null) return;
+    // FIXME: there might be more than one elements here with the same offset!
     let elems = selector(offset);
     let rect0 = elems[0].getBoundingClientRect();
     let rect1 = elems[1].getBoundingClientRect();
@@ -113,21 +119,25 @@ const linkElements = (element) => {
     }
     let bridge = document.getElementById("bridge");
     if (rect0.y < 0 || rect0.bottom < 0) {
+      // FIXME: bring the other element into view, and then update the clipPath?
       bridge.style.display = "none";
     } else {
       bridge.style.display = "block";
       bridge.style.left = `${rect0.width}px`;
-      bridge.style.clipPath = `polygon(0 ${rect0.y}px, 100% ${rect1.y}px, 100% ${rect1.bottom}px, 0 ${rect0.bottom}px)`;
+      bridge.style.clipPath = `polygon(0 ${rect0.y - 8}px, 100% ${rect1.y - 8}px, 100% ${rect1.bottom + 8}px, 0 ${rect0.bottom + 8}px)`;
       bridge.style.backgroundColor = elems[0].style.backgroundColor;
     }
-    elems[0].classList.add("hovered");
-    elems[1].classList.add("hovered");
+    for (const elem of elems) {
+      elem.classList.add("hovered");
+      elem.style.outline = `8px solid ${rgbToCss(rgbForOffset(offset))}`;
+    }
   });
   element.addEventListener("mouseleave", (event) => {
     document.getElementById("bridge").style.display = "none";
-    eachElementWithSameWasmOff(event, (elem) =>
-      elem.classList.remove("hovered"),
-    );
+    eachElementWithSameWasmOff(event, (elem) => {
+      elem.classList.remove("hovered");
+      elem.style.outline = "";
+    });
   });
 };
 
@@ -156,6 +166,7 @@ for (const func of state.asm.functions) {
 
   const addCurrentBlock = (offset) => {
     currentBlock.setAttribute("data-wasm-offset", offset);
+
     if (offset !== null) {
       adjustColorForOffset(currentBlock, offset);
       linkElements(currentBlock);
