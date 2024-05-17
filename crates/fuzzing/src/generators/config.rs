@@ -413,6 +413,12 @@ impl<'a> Arbitrary<'a> for Config {
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {
+            // Forcibly don't use the `CustomUnaligned` memory configuration
+            // with the pooling allocator active.
+            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
+                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
+            }
+
             let cfg = &mut config.module_config.config;
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
@@ -438,17 +444,17 @@ impl<'a> Arbitrary<'a> for Config {
                     pooling.max_memory_size = 1 << 16;
                     cfg.max_memory32_pages = 1;
                     cfg.max_memory64_pages = 1;
+                    if let MemoryConfig::Normal(cfg) = &mut config.wasmtime.memory_config {
+                        match &mut cfg.static_memory_maximum_size {
+                            Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                            size @ None => *size = Some(pooling.max_memory_size as u64),
+                        }
+                    }
                 }
                 // .. additionally update tables
                 if pooling.table_elements == 0 {
                     pooling.table_elements = 1;
                 }
-            }
-
-            // Forcibly don't use the `CustomUnaligned` memory configuration
-            // with the pooling allocator active.
-            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
-                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
             }
 
             // Don't allow too many linear memories per instance since massive
