@@ -161,7 +161,6 @@ const createDivForCode = () => {
 };
 
 // Render the ASM.
-let lastOffset = null;
 for (const func of state.asm.functions) {
   const funcElem = document.createElement("div");
 
@@ -176,6 +175,7 @@ for (const func of state.asm.functions) {
 
   let currentBlock = createDivForCode();
   let disasmBuffer = [];
+  let lastOffset = null;
 
   const addCurrentBlock = (offset) => {
     currentBlock.setAttribute("data-wasm-offset", offset);
@@ -196,7 +196,7 @@ for (const func of state.asm.functions) {
       `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}`,
     );
     if (lastOffset !== inst.wasm_offset) {
-      addCurrentBlock(inst.wasm_offset);
+      addCurrentBlock(lastOffset);
       currentBlock = createDivForCode();
       lastOffset = inst.wasm_offset;
     }
