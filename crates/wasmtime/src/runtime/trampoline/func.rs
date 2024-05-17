@@ -1,11 +1,13 @@
 //! Support for a calling of an imported function.
 
+use crate::prelude::*;
 use crate::runtime::vm::{
     StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
 };
 use crate::type_registry::RegisteredType;
 use crate::{FuncType, ValRaw};
 use anyhow::Result;
+use core::ptr;
 
 struct TrampolineState<F> {
     func: F,
@@ -67,7 +69,6 @@ unsafe extern "C" fn array_call_shim<F>(
     }
 }
 
-#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub fn create_array_call_function<F>(
     ft: &FuncType,
     func: F,
@@ -75,9 +76,6 @@ pub fn create_array_call_function<F>(
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
-    use crate::prelude::*;
-    use std::ptr;
-
     let array_call = array_call_shim::<F>;
 
     let sig = ft.clone().into_registered_type();

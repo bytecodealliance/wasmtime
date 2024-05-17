@@ -275,7 +275,6 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
@@ -310,7 +309,6 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn define_unknown_imports_as_default_values(
         &mut self,
         module: &Module,
@@ -428,7 +426,6 @@ impl<T> Linker<T> {
     ///
     /// Panics if the given function type is not associated with the same engine
     /// as this linker.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn func_new(
         &mut self,
         module: &str,
@@ -451,7 +448,6 @@ impl<T> Linker<T> {
     ///
     /// Panics if the given function type is not associated with the same engine
     /// as this linker.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn func_new_unchecked(
         &mut self,
         module: &str,
@@ -781,7 +777,6 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn module(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
