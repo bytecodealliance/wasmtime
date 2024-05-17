@@ -76,7 +76,7 @@ impl Config {
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.wasmtime.strategy {
             // One single-page memory
             pooling.total_memories = config.max_memories as u32;
-            pooling.memory_pages = 10;
+            pooling.max_memory_size = 10 << 16;
             pooling.max_memories_per_module = config.max_memories as u32;
 
             pooling.total_tables = config.max_tables as u32;
@@ -135,7 +135,7 @@ impl Config {
             if pooling.total_memories < 1
                 || pooling.total_tables < 5
                 || pooling.table_elements < 1_000
-                || pooling.memory_pages < 900
+                || pooling.max_memory_size < (900 << 16)
                 || pooling.total_core_instances < 500
                 || pooling.core_instance_size < 64 * 1024
             {
@@ -414,20 +414,18 @@ impl<'a> Arbitrary<'a> for Config {
 
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
-            let min = cfg
-                .max_memory32_pages
-                .min(cfg.max_memory64_pages)
-                .min(pooling.memory_pages);
-            pooling.memory_pages = min;
-            cfg.max_memory32_pages = min;
-            cfg.max_memory64_pages = min;
+            let min_pages = cfg.max_memory32_pages.min(cfg.max_memory64_pages);
+            let min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            pooling.max_memory_size = min as usize;
+            cfg.max_memory32_pages = min >> 16;
+            cfg.max_memory64_pages = min >> 16;
 
             // If traps are disallowed then memories must have at least one page
             // of memory so if we still are only allowing 0 pages of memory then
             // increase that to one here.
             if cfg.disallow_traps {
-                if pooling.memory_pages == 0 {
-                    pooling.memory_pages = 1;
+                if pooling.max_memory_size == 0 {
+                    pooling.max_memory_size = 1 << 16;
                     cfg.max_memory32_pages = 1;
                     cfg.max_memory64_pages = 1;
                 }

@@ -218,7 +218,7 @@ mod tests {
             limits: InstanceLimits {
                 total_tables: 7,
                 table_elements: 100,
-                memory_pages: 0,
+                max_memory_size: 0,
                 max_memories_per_module: 0,
                 ..Default::default()
             },

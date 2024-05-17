@@ -219,7 +219,7 @@ fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
         InstanceAllocationStrategy::OnDemand,
         InstanceAllocationStrategy::Pooling({
             let mut config = PoolingAllocationConfig::default();
-            config.memory_pages(10_000);
+            config.max_memory_size(10_000 << 16);
             config
         }),
     ]

@@ -2757,18 +2757,16 @@ impl PoolingAllocationConfig {
         self
     }
 
-    /// The maximum number of Wasm pages for any linear memory defined in a
-    /// module (default is `160`).
+    /// The maximum byte size that any WebAssembly linear memory may grow to.
     ///
-    /// The default of `160` means at most 10 MiB of host memory may be
-    /// committed for each instance.
+    /// This option defaults to 10 MiB.
     ///
-    /// If a memory's minimum page limit is greater than this value, the module
-    /// will fail to instantiate.
+    /// If a memory's minimum size is greater than this value, the module will
+    /// fail to instantiate.
     ///
-    /// If a memory's maximum page limit is unbounded or greater than this
-    /// value, the maximum will be `memory_pages` for the purpose of any
-    /// `memory.grow` instruction.
+    /// If a memory's maximum size is unbounded or greater than this value, the
+    /// maximum will be `max_memory_size` for the purpose of any `memory.grow`
+    /// instruction.
     ///
     /// This value is used to control the maximum accessible space for each
     /// linear memory of a core instance.
@@ -2776,8 +2774,8 @@ impl PoolingAllocationConfig {
     /// The reservation size of each linear memory is controlled by the
     /// `static_memory_maximum_size` setting and this value cannot exceed the
     /// configured static memory maximum size.
-    pub fn memory_pages(&mut self, pages: u64) -> &mut Self {
-        self.config.limits.memory_pages = pages;
+    pub fn max_memory_size(&mut self, bytes: usize) -> &mut Self {
+        self.config.limits.max_memory_size = bytes;
         self
     }
 

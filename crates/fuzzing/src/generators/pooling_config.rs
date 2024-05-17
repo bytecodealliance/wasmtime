@@ -13,7 +13,7 @@ pub struct PoolingAllocationConfig {
     pub total_tables: u32,
     pub total_stacks: u32,
 
-    pub memory_pages: u64,
+    pub max_memory_size: usize,
     pub table_elements: u32,
 
     pub component_instance_size: usize,
@@ -48,7 +48,7 @@ impl PoolingAllocationConfig {
         cfg.total_tables(self.total_tables);
         cfg.total_stacks(self.total_stacks);
 
-        cfg.memory_pages(self.memory_pages);
+        cfg.max_memory_size(self.max_memory_size);
         cfg.table_elements(self.table_elements);
 
         cfg.max_component_instance_size(self.component_instance_size);
@@ -80,7 +80,7 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
         const MAX_TABLES: u32 = 100;
         const MAX_MEMORIES: u32 = 100;
         const MAX_ELEMENTS: u32 = 1000;
-        const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
+        const MAX_MEMORY_SIZE: usize = 10 * (1 << 20); // 10 MiB
         const MAX_SIZE: usize = 1 << 20; // 1 MiB
         const MAX_INSTANCE_MEMORIES: u32 = 10;
         const MAX_INSTANCE_TABLES: u32 = 10;
@@ -94,7 +94,7 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
             total_tables: u.int_in_range(1..=MAX_TABLES)?,
             total_stacks: u.int_in_range(1..=MAX_COUNT)?,
 
-            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
+            max_memory_size: u.int_in_range(0..=MAX_MEMORY_SIZE)?,
             table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
 
             component_instance_size: u.int_in_range(0..=MAX_SIZE)?,

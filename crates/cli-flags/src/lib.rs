@@ -112,6 +112,10 @@ wasmtime_option_group! {
         /// the pooling allocator.
         pub pooling_total_stacks: Option<u32>,
 
+        /// The maximum runtime size of each linear memory in the pooling
+        /// allocator, in bytes.
+        pub pooling_max_memory_size: Option<usize>,
+
         /// Whether to enable call-indirect caching.
         pub cache_call_indirects: Option<bool>,
 
@@ -604,6 +608,9 @@ impl CommonOptions {
                     }
                     if let Some(limit) = self.opts.pooling_total_stacks {
                         cfg.total_stacks(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_max_memory_size {
+                        cfg.max_memory_size(limit);
                     }
                     if let Some(enable) = self.opts.memory_protection_keys {
                         if enable {

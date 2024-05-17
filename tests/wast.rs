@@ -290,8 +290,9 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         // When multiple memories are used and are configured in the pool then
         // force the usage of static memories without guards to reduce the VM
         // impact.
+        let max_memory_size = 805 << 16;
         if multi_memory {
-            cfg.static_memory_maximum_size(0);
+            cfg.static_memory_maximum_size(max_memory_size as u64);
             cfg.dynamic_memory_reserved_for_growth(0);
             cfg.static_memory_guard_size(0);
             cfg.dynamic_memory_guard_size(0);
@@ -305,7 +306,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         let mut pool = PoolingAllocationConfig::default();
         pool.total_memories(450 * 2)
             .max_memory_protection_keys(2)
-            .memory_pages(805)
+            .max_memory_size(max_memory_size)
             .max_memories_per_module(if multi_memory { 9 } else { 1 })
             .max_tables_per_module(5);
 
