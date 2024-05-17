@@ -181,6 +181,7 @@ for (const func of state.asm.functions) {
     currentBlock.setAttribute("data-wasm-offset", offset);
 
     if (offset !== null) {
+      currentBlock.setAttribute("title", `Block at WASM offset: ${offset}`);
       adjustColorForOffset(currentBlock, offset);
       linkElements(currentBlock);
     }
