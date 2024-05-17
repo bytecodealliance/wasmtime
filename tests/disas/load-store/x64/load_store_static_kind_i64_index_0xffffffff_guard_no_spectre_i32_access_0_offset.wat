@@ -35,11 +35,11 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       cmpq    0x15(%rip), %rdx
-;;       ja      0x4e
-;;   41: movq    0x60(%rdi), %r9
+;;       ja      0x5e
+;;   51: movq    0x60(%rdi), %r9
 ;;       movl    (%r9, %rdx), %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   4e: ud2
-;;   50: cld
+;;   5e: ud2
+;;   60: cld

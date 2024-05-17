@@ -47,8 +47,8 @@
 ;;       movl    %edx, %r10d
 ;;       movq    %r10, %rax
 ;;       addq    0x2f(%rip), %rax
-;;       jb      0x8a
-;;   67: movq    0x68(%rdi), %rdx
+;;       jb      0x9a
+;;   77: movq    0x68(%rdi), %rdx
 ;;       xorq    %rcx, %rcx
 ;;       addq    0x60(%rdi), %r10
 ;;       movl    $0xffff0000, %r8d
@@ -59,7 +59,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   8a: ud2
-;;   8c: addb    %al, (%rax)
-;;   8e: addb    %al, (%rax)
-;;   90: addb    $0, %al
+;;   9a: ud2
+;;   9c: addb    %al, (%rax)
+;;   9e: addb    %al, (%rax)
+;;   a0: addb    $0, %al

@@ -40,10 +40,10 @@
 ;;       movl    %edx, %r10d
 ;;       subq    $0x1004, %r8
 ;;       cmpq    %r8, %r10
-;;       ja      0x5c
-;;   4b: movq    0x60(%rdi), %rsi
+;;       ja      0x6c
+;;   5b: movq    0x60(%rdi), %rsi
 ;;       movl    0x1000(%rsi, %r10), %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   5c: ud2
+;;   6c: ud2

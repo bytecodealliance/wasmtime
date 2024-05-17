@@ -46,6 +46,6 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   56: addb    %al, (%rax)
-;;   58: cld
-;;   59: outl    %eax, %dx
+;;   66: addb    %al, (%rax)
+;;   68: cld
+;;   69: outl    %eax, %dx

@@ -47,7 +47,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   51: addb    %al, (%rax)
-;;   53: addb    %al, (%rax)
-;;   55: addb    %al, (%rax)
-;;   57: addb    %bh, %ah
+;;   61: addb    %al, (%rax)
+;;   63: addb    %al, (%rax)
+;;   65: addb    %al, (%rax)
+;;   67: addb    %bh, %ah

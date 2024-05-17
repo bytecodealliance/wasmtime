@@ -85,10 +85,10 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   8b: addb    %al, (%rax)
-;;   8d: addb    %al, (%rax)
-;;   8f: addb    %al, (%rax)
-;;   91: addb    %ah, %al
+;;   ab: addb    %al, (%rax)
+;;   ad: addb    %al, (%rax)
+;;   af: addb    %al, (%rax)
+;;   b1: addb    %ah, %al
 ;;
 ;; wasm[0]::function[4]:
 ;;       pushq   %rbp
@@ -110,12 +110,12 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   ee: addb    %al, (%rax)
-;;   f0: addl    %eax, (%rax)
-;;   f2: addl    %eax, (%rax)
-;;   f4: addl    %eax, (%rax)
-;;   f6: addl    %eax, (%rax)
-;;   f8: addl    %eax, (%rax)
-;;   fa: addl    %eax, (%rax)
-;;   fc: addl    %eax, (%rax)
-;;   fe: addl    %eax, (%rax)
+;;  11e: addb    %al, (%rax)
+;;  120: addl    %eax, (%rax)
+;;  122: addl    %eax, (%rax)
+;;  124: addl    %eax, (%rax)
+;;  126: addl    %eax, (%rax)
+;;  128: addl    %eax, (%rax)
+;;  12a: addl    %eax, (%rax)
+;;  12c: addl    %eax, (%rax)
+;;  12e: addl    %eax, (%rax)

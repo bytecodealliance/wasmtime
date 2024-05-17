@@ -91,10 +91,10 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   4f: addb    %ch, (%rax)
-;;   51: subl    %ebp, (%rcx)
-;;   53: subl    %ebp, (%rax)
-;;   55: imull   $0x616d286d, 0x20(%rsi), %ebp
+;;   5f: addb    %ch, (%rax)
+;;   61: subl    %ebp, (%rcx)
+;;   63: subl    %ebp, (%rax)
+;;   65: imull   $0x616d286d, 0x20(%rsi), %ebp
 ;;
 ;; wasm[0]::function[2]:
 ;;       pushq   %rbp
@@ -106,11 +106,11 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   80: subb    %ch, (%rcx)
-;;   82: subl    %ebp, (%rcx)
-;;   84: subb    %ch, 0x6e(%rcx)
-;;   87: andb    %ch, 0x28(%rbp)
-;;   8a: insl    %dx, (%rdi)
+;;   a0: subb    %ch, (%rcx)
+;;   a2: subl    %ebp, (%rcx)
+;;   a4: subb    %ch, 0x6e(%rcx)
+;;   a7: andb    %ch, 0x28(%rbp)
+;;   aa: insl    %dx, (%rdi)
 ;;
 ;; wasm[0]::function[3]:
 ;;       pushq   %rbp
@@ -122,11 +122,11 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   b0: subb    %ch, (%rcx)
-;;   b2: subl    %ebp, (%rcx)
-;;   b4: subb    %ch, 0x6e(%rcx)
-;;   b7: andb    %ch, 0x28(%rbp)
-;;   ba: insl    %dx, (%rdi)
+;;   e0: subb    %ch, (%rcx)
+;;   e2: subl    %ebp, (%rcx)
+;;   e4: subb    %ch, 0x6e(%rcx)
+;;   e7: andb    %ch, 0x28(%rbp)
+;;   ea: insl    %dx, (%rdi)
 ;;
 ;; wasm[0]::function[4]:
 ;;       pushq   %rbp

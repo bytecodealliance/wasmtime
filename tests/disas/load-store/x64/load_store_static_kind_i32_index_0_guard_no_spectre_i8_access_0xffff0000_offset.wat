@@ -37,11 +37,11 @@
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r8d
 ;;       cmpq    $0xffff, %r8
-;;       ja      0x58
-;;   44: addq    0x60(%rdi), %r8
+;;       ja      0x68
+;;   54: addq    0x60(%rdi), %r8
 ;;       movl    $0xffff0000, %r11d
 ;;       movzbq  (%r8, %r11), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   58: ud2
+;;   68: ud2
