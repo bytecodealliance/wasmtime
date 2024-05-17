@@ -13,27 +13,22 @@ const state = (window.STATE = new State(window.WAT, window.ASM));
 
 /*** Colors for Offsets **********************************************************/
 
-const offsetToRgb = new Map();
-
-// Get the RGB color for the given offset.  (Memoize to avoid recalculating.)
-
-const rgbToTriple = (rgb) => [
-  (rgb >> 16) & 0xff,
-  (rgb >> 8) & 0xff,
-  rgb & 0xff,
-];
-const rgbToLuminance = (rgb) => {
+const rgbToLuma = (rgb) => {
   // Use the NTSC color space (https://en.wikipedia.org/wiki/YIQ) to determine
   // the luminance of this color.
   let [r, g, b] = rgbToTriple(rgb);
   return (r * 299.0 + g * 587.0 + b * 114.0) / 1000.0;
 };
-const rgbToCss = (rgb) => `rgb(${rgbToTriple(rgb).join(",")})`;
-
+const rgbToTriple = (rgb) => [
+  (rgb >> 16) & 0xff,
+  (rgb >> 8) & 0xff,
+  rgb & 0xff,
+];
+// Get the RGB color for the given offset.  (Memoize to avoid recalculating.)
+const offsetToRgb = new Map();
 const rgbForOffset = (offset) => {
   let color = offsetToRgb[offset];
   if (color !== undefined) return color;
-
   const crc24 = (crc, byte) => {
     crc ^= byte << 16;
     for (let bit = 0; bit < 8; bit++) {
@@ -44,16 +39,17 @@ const rgbForOffset = (offset) => {
   let orig_offset = offset;
   for (color = offset; offset; offset >>= 8)
     color = crc24(color, offset & 0xff);
-  color = rgbToLuminance(color) > 127 ? color ^ 0xa5a5a5 : color;
+  color = rgbToLuma(color) > 127 ? color ^ 0xa5a5a5 : color;
   offsetToRgb[orig_offset] = color;
   return color;
 };
-
+const rgbToCss = (rgb) => `rgba(${rgbToTriple(rgb).join(",")})`;
 const adjustColorForOffset = (element, offset) => {
   let backgroundColor = rgbForOffset(offset);
   element.style.backgroundColor = rgbToCss(backgroundColor);
-  element.style.color =
-    rgbToLuminance(backgroundColor) > 128 ? "#101010" : "#dddddd";
+  element.classList.add(
+    rgbToLuma(backgroundColor) > 128 ? "dark-text" : "light-text",
+  );
 };
 
 /*** Rendering *****************************************************************/
@@ -88,11 +84,12 @@ const renderInst = (mnemonic, operands) => {
 };
 
 const linkElements = (element) => {
+  const selector = (offset) =>
+    document.querySelectorAll(`[data-wasm-offset="${offset}"]`);
   const eachElementWithSameWasmOff = (event, closure) => {
     let offset = event.target.dataset.wasmOffset;
     if (offset !== null) {
-      let elems = document.querySelectorAll(`[data-wasm-offset="${offset}"]`);
-      for (const elem of elems) closure(elem);
+      for (const elem of selector(offset)) closure(elem);
     }
   };
   element.addEventListener("click", (event) => {
@@ -104,14 +101,33 @@ const linkElements = (element) => {
       }),
     );
   });
-  element.addEventListener("mouseenter", (event) =>
-    eachElementWithSameWasmOff(event, (elem) => elem.classList.add("hovered")),
-  );
-  element.addEventListener("mouseleave", (event) =>
+  element.addEventListener("mouseenter", (event) => {
+    let offset = event.target.dataset.wasmOffset;
+    if (offset === null) return;
+    let elems = selector(offset);
+    let rect0 = elems[0].getBoundingClientRect();
+    let rect1 = elems[1].getBoundingClientRect();
+    if (rect0.x > rect1.x) {
+      [rect0, rect1] = [rect1, rect0];
+    }
+    let bridge = document.getElementById("bridge");
+    if (rect0.y < 0 || rect0.bottom < 0) {
+      bridge.style.display = "none";
+    } else {
+      bridge.style.display = "block";
+      bridge.style.left = `${rect0.width}px`;
+      bridge.style.clipPath = `polygon(0 ${rect0.y}px, 100% ${rect1.y}px, 100% ${rect1.bottom}px, 0 ${rect0.bottom}px)`;
+      bridge.style.backgroundColor = elems[0].style.backgroundColor;
+    }
+    elems[0].classList.add("hovered");
+    elems[1].classList.add("hovered");
+  });
+  element.addEventListener("mouseleave", (event) => {
+    document.getElementById("bridge").style.display = "none";
     eachElementWithSameWasmOff(event, (elem) =>
       elem.classList.remove("hovered"),
-    ),
-  );
+    );
+  });
 };
 
 const createDivForCode = () => {
@@ -139,23 +155,25 @@ for (const func of state.asm.functions) {
 
   const addCurrentBlock = (offset) => {
     currentBlock.setAttribute("data-wasm-offset", offset);
-    if (offset !== null) adjustColorForOffset(currentBlock, offset);
+    if (offset !== null) {
+      adjustColorForOffset(currentBlock, offset);
+      linkElements(currentBlock);
+    }
+
     currentBlock.innerText = disasmBuffer.join("\n");
-    linkElements(currentBlock);
     funcElem.appendChild(currentBlock);
     disasmBuffer = [];
   };
 
   for (const inst of func.instructions) {
+    disasmBuffer.push(
+      `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}`,
+    );
     if (lastOffset !== inst.wasm_offset) {
       addCurrentBlock(inst.wasm_offset);
       currentBlock = createDivForCode();
       lastOffset = inst.wasm_offset;
     }
-
-    disasmBuffer.push(
-      `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}`,
-    );
   }
   addCurrentBlock(lastOffset);
 

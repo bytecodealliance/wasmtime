@@ -17,10 +17,26 @@ body {
 .highlight {
   white-space: pre;
   font-family: monospace;
-  opacity: 0.75;
 }
 .hovered {
-  opacity: 1;
+}
+.light-text {
+  color: #dddddd;
+}
+.dark-text {
+  color: #101010;
+}
+
+#bridge {
+  position: absolute;
+  z-index: 100;
+  top: 0px;
+  bottom: 0px;
+  height: 100%;
+  width: 16px;
+  background-color: red;
+  clip-path: polygon(0px 0px, 0px 10px, 20px 100px, 100px 100px);
+  display: none;
 }
 
 #wat {
