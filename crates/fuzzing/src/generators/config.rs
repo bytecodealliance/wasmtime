@@ -84,6 +84,13 @@ impl Config {
             pooling.max_tables_per_module = config.max_tables as u32;
 
             pooling.core_instance_size = 1_000_000;
+
+            if let MemoryConfig::Normal(cfg) = &mut self.wasmtime.memory_config {
+                match &mut cfg.static_memory_maximum_size {
+                    Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                    other @ None => *other = Some(pooling.max_memory_size as u64),
+                }
+            }
         }
     }
 
@@ -415,7 +422,10 @@ impl<'a> Arbitrary<'a> for Config {
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
             let min_pages = cfg.max_memory32_pages.min(cfg.max_memory64_pages);
-            let min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            let mut min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            if let MemoryConfig::Normal(cfg) = &config.wasmtime.memory_config {
+                min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
+            }
             pooling.max_memory_size = min as usize;
             cfg.max_memory32_pages = min >> 16;
             cfg.max_memory64_pages = min >> 16;
