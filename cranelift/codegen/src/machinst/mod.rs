@@ -39,8 +39,8 @@
 //!         |                          by instruction emission code.
 //!         |                        - prologue and epilogue(s) built and emitted
 //!         |                          directly during emission.
-//!         |                        - nominal-SP-relative offsets resolved
-//!         |                          by tracking EmitState.)
+//!         |                        - SP-relative offsets resolved by tracking
+//!         |                          EmitState.)
 //!
 //! ```
 

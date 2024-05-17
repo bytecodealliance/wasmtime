@@ -63,7 +63,7 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | stack args                |
-//!                              | (accessed via FP)         |
+//! Canonical Frame Address -->  | (accessed via FP)         |
 //!                              +---------------------------+
 //! SP at function entry ----->  | return address            |
 //!                              +---------------------------+

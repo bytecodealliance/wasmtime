@@ -753,9 +753,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
 
-        // Restore regs by loading from offsets of RSP. RSP will be
-        // returned to nominal-RSP at this point, so we can use the
-        // same offsets that we used when saving clobbers above.
+        // Restore regs by loading from offsets of RSP. We compute the offset from
+        // the same base as above in clobber_save, as RSP won't change between the
+        // prologue and epilogue.
         let mut cur_offset =
             frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
         for reg in &frame_layout.clobbered_callee_saves {
@@ -1054,7 +1054,7 @@ impl From<StackAMode> for SyntheticAmode {
             StackAMode::Slot(off) => {
                 let off = i32::try_from(off)
                     .expect("Offset in Slot is greater than 2GB; should hit impl limit first");
-                SyntheticAmode::nominal_sp_offset(off)
+                SyntheticAmode::slot_offset(off)
             }
             StackAMode::OutgoingArg(off) => {
                 let off = i32::try_from(off).expect(
