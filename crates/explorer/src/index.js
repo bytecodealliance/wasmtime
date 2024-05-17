@@ -16,10 +16,24 @@ const state = (window.STATE = new State(window.WAT, window.ASM));
 const offsetToRgb = new Map();
 
 // Get the RGB color for the given offset.  (Memoize to avoid recalculating.)
+
+const rgbToTriple = (rgb) => [
+  (rgb >> 16) & 0xff,
+  (rgb >> 8) & 0xff,
+  rgb & 0xff,
+];
+const rgbToLuminance = (rgb) => {
+  // Use the NTSC color space (https://en.wikipedia.org/wiki/YIQ) to determine
+  // the luminance of this color.
+  let [r, g, b] = rgbToTriple(rgb);
+  return (r * 299.0 + g * 587.0 + b * 114.0) / 1000.0;
+};
+const rgbToCss = (rgb) => `rgb(${rgbToTriple(rgb).join(",")})`;
+
 const rgbForOffset = (offset) => {
-  if (offsetToRgb.has(offset)) {
-    return offsetToRgb.get(offset);
-  }
+  let color = offsetToRgb[offset];
+  if (color !== undefined) return color;
+
   const crc24 = (crc, byte) => {
     crc ^= byte << 16;
     for (let bit = 0; bit < 8; bit++) {
@@ -27,120 +41,19 @@ const rgbForOffset = (offset) => {
     }
     return crc;
   };
-  let color;
+  let orig_offset = offset;
   for (color = offset; offset; offset >>= 8)
     color = crc24(color, offset & 0xff);
-  color = `${(color >> 16) & 0xff}, ${(color >> 8) & 0xff}, ${color & 0xff}`;
-  offsetToRgb.set(offset, color);
+  color = rgbToLuminance(color) > 127 ? color ^ 0xa5a5a5 : color;
+  offsetToRgb[orig_offset] = color;
   return color;
 };
 
-const dimColorForOffset = (offset) => `rgba(${rgbForOffset(offset)}, 0.3)`;
-const brightColorForOffset = (offset) => `rgba(${rgbForOffset(offset)}, 0.7)`;
-
-// Get WAT chunk elements by Wasm offset.
-const watByOffset = new Map();
-
-// Get asm instruction elements by Wasm offset.
-const asmByOffset = new Map();
-
-// Get all (WAT chunk or asm instruction) elements by offset.
-const anyByOffset = new Map();
-
-const addWatElem = (offset, elem) => {
-  if (!watByOffset.has(offset)) {
-    watByOffset.set(offset, []);
-  }
-  watByOffset.get(offset).push(elem);
-
-  if (!anyByOffset.has(offset)) {
-    anyByOffset.set(offset, []);
-  }
-  anyByOffset.get(offset).push(elem);
-};
-
-const addAsmElem = (offset, elem) => {
-  if (!asmByOffset.has(offset)) {
-    asmByOffset.set(offset, []);
-  }
-  asmByOffset.get(offset).push(elem);
-
-  if (!anyByOffset.has(offset)) {
-    anyByOffset.set(offset, []);
-  }
-  anyByOffset.get(offset).push(elem);
-};
-
-/*** Event Handlers ************************************************************/
-
-const watElem = document.getElementById("wat");
-watElem.addEventListener(
-  "click",
-  (event) => {
-    if (event.target.dataset.wasmOffset == null) {
-      return;
-    }
-
-    const offset = parseInt(event.target.dataset.wasmOffset);
-    if (!asmByOffset.get(offset)) {
-      return;
-    }
-
-    const firstAsmElem = asmByOffset.get(offset)[0];
-    firstAsmElem.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
-  },
-  { passive: true },
-);
-
-const asmElem = document.getElementById("asm");
-asmElem.addEventListener(
-  "click",
-  (event) => {
-    if (event.target.dataset.wasmOffset == null) {
-      return;
-    }
-
-    const offset = parseInt(event.target.dataset.wasmOffset);
-    if (!watByOffset.get(offset)) {
-      return;
-    }
-
-    const firstWatElem = watByOffset.get(offset)[0];
-    firstWatElem.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
-  },
-  { passive: true },
-);
-
-const onMouseEnter = (event) => {
-  if (event.target.dataset.wasmOffset == null) {
-    return;
-  }
-
-  const offset = parseInt(event.target.dataset.wasmOffset);
-  const color = brightColorForOffset(offset);
-  for (const elem of anyByOffset.get(offset)) {
-    elem.style.backgroundColor = color;
-  }
-};
-
-const onMouseLeave = (event) => {
-  if (event.target.dataset.wasmOffset == null) {
-    return;
-  }
-
-  const offset = parseInt(event.target.dataset.wasmOffset);
-  const color = dimColorForOffset(offset);
-  for (const elem of anyByOffset.get(offset)) {
-    elem.style.backgroundColor = color;
-  }
+const adjustColorForOffset = (element, offset) => {
+  let backgroundColor = rgbForOffset(offset);
+  element.style.backgroundColor = rgbToCss(backgroundColor);
+  element.style.color =
+    rgbToLuminance(backgroundColor) > 128 ? "#101010" : "#dddddd";
 };
 
 /*** Rendering *****************************************************************/
@@ -174,8 +87,41 @@ const renderInst = (mnemonic, operands) => {
   }
 };
 
-// Render the ASM.
+const linkElements = (element) => {
+  const eachElementWithSameWasmOff = (event, closure) => {
+    let offset = event.target.dataset.wasmOffset;
+    if (offset !== null) {
+      let elems = document.querySelectorAll(`[data-wasm-offset="${offset}"]`);
+      for (const elem of elems) closure(elem);
+    }
+  };
+  element.addEventListener("click", (event) => {
+    eachElementWithSameWasmOff(event, (elem) =>
+      elem.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      }),
+    );
+  });
+  element.addEventListener("mouseenter", (event) =>
+    eachElementWithSameWasmOff(event, (elem) => elem.classList.add("hovered")),
+  );
+  element.addEventListener("mouseleave", (event) =>
+    eachElementWithSameWasmOff(event, (elem) =>
+      elem.classList.remove("hovered"),
+    ),
+  );
+};
 
+const createDivForCode = () => {
+  let div = document.createElement("div");
+  div.classList.add("highlight");
+  return div;
+};
+
+// Render the ASM.
+let lastOffset = null;
 for (const func of state.asm.functions) {
   const funcElem = document.createElement("div");
 
@@ -188,35 +134,45 @@ for (const func of state.asm.functions) {
   funcHeader.title = `Function ${func.func_index}: ${func_name}`;
   funcElem.appendChild(funcHeader);
 
-  const bodyElem = document.createElement("pre");
-  for (const inst of func.instructions) {
-    const instElem = document.createElement("span");
-    instElem.textContent = `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}\n`;
-    if (inst.wasm_offset != null) {
-      instElem.setAttribute("data-wasm-offset", inst.wasm_offset);
-      instElem.style.backgroundColor = dimColorForOffset(inst.wasm_offset);
-      instElem.addEventListener("mouseenter", onMouseEnter);
-      instElem.addEventListener("mouseleave", onMouseLeave);
-      addAsmElem(inst.wasm_offset, instElem);
-    }
-    bodyElem.appendChild(instElem);
-  }
-  funcElem.appendChild(bodyElem);
+  let currentBlock = createDivForCode();
+  let disasmBuffer = [];
 
-  asmElem.appendChild(funcElem);
+  const addCurrentBlock = (offset) => {
+    currentBlock.setAttribute("data-wasm-offset", offset);
+    if (offset !== null) adjustColorForOffset(currentBlock, offset);
+    currentBlock.innerText = disasmBuffer.join("\n");
+    linkElements(currentBlock);
+    funcElem.appendChild(currentBlock);
+    disasmBuffer = [];
+  };
+
+  for (const inst of func.instructions) {
+    if (lastOffset !== inst.wasm_offset) {
+      addCurrentBlock(inst.wasm_offset);
+      currentBlock = createDivForCode();
+      lastOffset = inst.wasm_offset;
+    }
+
+    disasmBuffer.push(
+      `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}`,
+    );
+  }
+  addCurrentBlock(lastOffset);
+
+  document.getElementById("asm").appendChild(funcElem);
 }
 
 // Render the WAT.
-
 for (const chunk of state.wat.chunks) {
-  const chunkElem = document.createElement("span");
-  if (chunk.wasm_offset != null) {
-    chunkElem.dataset.wasmOffset = chunk.wasm_offset;
-    chunkElem.style.backgroundColor = dimColorForOffset(chunk.wasm_offset);
-    chunkElem.addEventListener("mouseenter", onMouseEnter);
-    chunkElem.addEventListener("mouseleave", onMouseLeave);
-    addWatElem(chunk.wasm_offset, chunkElem);
+  if (chunk.wasm_offset === null) continue;
+  const block = createDivForCode();
+  block.dataset.wasmOffset = chunk.wasm_offset;
+  block.innerText = chunk.wat;
+
+  if (offsetToRgb[chunk.wasm_offset] !== undefined) {
+    adjustColorForOffset(block, chunk.wasm_offset);
+    linkElements(block);
   }
-  chunkElem.textContent = chunk.wat;
-  watElem.appendChild(chunkElem);
+
+  document.getElementById("wat").appendChild(block);
 }

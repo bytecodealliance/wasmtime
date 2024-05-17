@@ -14,6 +14,15 @@ body {
   height: 100%;
 }
 
+.highlight {
+  white-space: pre;
+  font-family: monospace;
+  opacity: 0.75;
+}
+.hovered {
+  opacity: 1;
+}
+
 #wat {
   width: 50%;
   height: 100%;
