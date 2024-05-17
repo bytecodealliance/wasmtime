@@ -84,6 +84,13 @@ impl Config {
             pooling.max_tables_per_module = config.max_tables as u32;
 
             pooling.core_instance_size = 1_000_000;
+
+            if let MemoryConfig::Normal(cfg) = &mut self.wasmtime.memory_config {
+                match &mut cfg.static_memory_maximum_size {
+                    Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                    other @ None => *other = Some(pooling.max_memory_size as u64),
+                }
+            }
         }
     }
 
@@ -406,6 +413,12 @@ impl<'a> Arbitrary<'a> for Config {
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {
+            // Forcibly don't use the `CustomUnaligned` memory configuration
+            // with the pooling allocator active.
+            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
+                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
+            }
+
             let cfg = &mut config.module_config.config;
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
@@ -415,7 +428,10 @@ impl<'a> Arbitrary<'a> for Config {
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
             let min_pages = cfg.max_memory32_pages.min(cfg.max_memory64_pages);
-            let min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            let mut min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            if let MemoryConfig::Normal(cfg) = &config.wasmtime.memory_config {
+                min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
+            }
             pooling.max_memory_size = min as usize;
             cfg.max_memory32_pages = min >> 16;
             cfg.max_memory64_pages = min >> 16;
@@ -424,21 +440,21 @@ impl<'a> Arbitrary<'a> for Config {
             // of memory so if we still are only allowing 0 pages of memory then
             // increase that to one here.
             if cfg.disallow_traps {
-                if pooling.max_memory_size == 0 {
+                if pooling.max_memory_size < (1 << 16) {
                     pooling.max_memory_size = 1 << 16;
                     cfg.max_memory32_pages = 1;
                     cfg.max_memory64_pages = 1;
+                    if let MemoryConfig::Normal(cfg) = &mut config.wasmtime.memory_config {
+                        match &mut cfg.static_memory_maximum_size {
+                            Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                            size @ None => *size = Some(pooling.max_memory_size as u64),
+                        }
+                    }
                 }
                 // .. additionally update tables
                 if pooling.table_elements == 0 {
                     pooling.table_elements = 1;
                 }
-            }
-
-            // Forcibly don't use the `CustomUnaligned` memory configuration
-            // with the pooling allocator active.
-            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
-                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
             }
 
             // Don't allow too many linear memories per instance since massive
