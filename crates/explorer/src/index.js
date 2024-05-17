@@ -118,15 +118,11 @@ const linkElements = (element) => {
       [rect0, rect1] = [rect1, rect0];
     }
     let bridge = document.getElementById("bridge");
-    if (rect0.y < 0 || rect0.bottom < 0) {
-      // FIXME: bring the other element into view, and then update the clipPath?
-      bridge.style.display = "none";
-    } else {
-      bridge.style.display = "block";
-      bridge.style.left = `${rect0.width}px`;
-      bridge.style.clipPath = `polygon(0 ${rect0.y - 8}px, 100% ${rect1.y - 8}px, 100% ${rect1.bottom + 8}px, 0 ${rect0.bottom + 8}px)`;
-      bridge.style.backgroundColor = elems[0].style.backgroundColor;
-    }
+    bridge.style.display = "block";
+    bridge.style.left = `${rect0.width}px`;
+    bridge.style.width = `${rect1.left - rect0.width}px`;
+    bridge.style.clipPath = `polygon(0 ${rect0.y - 8}px, 100% ${rect1.y - 8}px, 100% ${rect1.bottom + 8}px, 0 ${rect0.bottom + 8}px)`;
+    bridge.style.backgroundColor = elems[0].style.backgroundColor;
     for (const elem of elems) {
       elem.classList.add("hovered");
       elem.style.outline = `8px solid ${rgbToCss(rgbForOffset(offset))}`;
