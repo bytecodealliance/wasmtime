@@ -1,20 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
 project(wasmtime C)
 
-option(WASMTIME_USER_CARGO_BUILD_OPTIONS "Additional cargo flags (such as --features) to apply to the build command" OFF)
+set(WASMTIME_USER_CARGO_BUILD_OPTIONS "" CACHE STRING "Additional cargo flags (such as --features) to apply to the build command")
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(WASMTIME_ALWAYS_BUILD "If cmake should always invoke cargo to build wasmtime" ON)
 option(WASMTIME_FASTEST_RUNTIME "Set flags designed to optimize runtime performance" OFF)
-option(WASMTIME_TARGET "Rust target to build for" OFF)
+set(WASMTIME_TARGET "" CACHE STRING "Rust target to build for")
 
-if(NOT WASMTIME_TARGET)
+if(WASMTIME_TARGET STREQUAL "")
   execute_process(COMMAND rustc -vV OUTPUT_VARIABLE RUSTC_VERSION)
   string(REGEX MATCH "host: ([^ \n]*)" RUSTC_HOST ${RUSTC_VERSION})
-  string(STRIP ${CMAKE_MATCH_1} WASMTIME_TARGET)
-endif()
-
-if(NOT WASMTIME_USER_CARGO_BUILD_OPTIONS)
-  set(WASMTIME_USER_CARGO_BUILD_OPTIONS "")
+  string(STRIP ${CMAKE_MATCH_1} RUSTC_HOST_TARGET)
+  set(WASMTIME_TARGET ${RUSTC_HOST_TARGET})
 endif()
 
 set(WASMTIME_FEATURES "--no-default-features")
