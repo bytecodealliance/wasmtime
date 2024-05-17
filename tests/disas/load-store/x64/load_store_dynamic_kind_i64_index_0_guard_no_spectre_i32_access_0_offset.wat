@@ -38,10 +38,10 @@
 ;;       movq    0x68(%rdi), %r8
 ;;       subq    $4, %r8
 ;;       cmpq    %r8, %rdx
-;;       ja      0x52
-;;   45: movq    0x60(%rdi), %r11
+;;       ja      0x62
+;;   55: movq    0x60(%rdi), %r11
 ;;       movl    (%r11, %rdx), %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   52: ud2
+;;   62: ud2

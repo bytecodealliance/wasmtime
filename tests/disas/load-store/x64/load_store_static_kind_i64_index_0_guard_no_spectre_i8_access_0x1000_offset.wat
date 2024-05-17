@@ -36,13 +36,13 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       cmpq    0x1d(%rip), %rdx
-;;       ja      0x53
-;;   41: movq    0x60(%rdi), %r9
+;;       ja      0x63
+;;   51: movq    0x60(%rdi), %r9
 ;;       movzbq  0x1000(%r9, %rdx), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   53: ud2
-;;   55: addb    %al, (%rax)
-;;   57: addb    %bh, %bh
-;;   59: outl    %eax, %dx
+;;   63: ud2
+;;   65: addb    %al, (%rax)
+;;   67: addb    %bh, %bh
+;;   69: outl    %eax, %dx

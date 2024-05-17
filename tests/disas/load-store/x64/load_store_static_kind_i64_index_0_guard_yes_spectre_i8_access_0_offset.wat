@@ -47,6 +47,6 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   52: addb    %al, (%rax)
-;;   54: addb    %al, (%rax)
-;;   56: addb    %al, (%rax)
+;;   62: addb    %al, (%rax)
+;;   64: addb    %al, (%rax)
+;;   66: addb    %al, (%rax)

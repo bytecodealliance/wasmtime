@@ -39,11 +39,11 @@
 ;;       movq    0x68(%rdi), %r10
 ;;       movl    %edx, %r9d
 ;;       cmpq    %r10, %r9
-;;       ja      0x57
-;;   44: addq    0x60(%rdi), %r9
+;;       ja      0x67
+;;   54: addq    0x60(%rdi), %r9
 ;;       movl    $0xffff0000, %esi
 ;;       movzbq  (%r9, %rsi), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   57: ud2
+;;   67: ud2

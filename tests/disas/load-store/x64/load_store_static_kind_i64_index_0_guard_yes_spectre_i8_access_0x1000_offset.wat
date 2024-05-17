@@ -44,5 +44,5 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   57: addb    %bh, %bh
-;;   59: outl    %eax, %dx
+;;   67: addb    %bh, %bh
+;;   69: outl    %eax, %dx

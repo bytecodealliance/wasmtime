@@ -47,5 +47,5 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   58: cld
-;;   59: outl    %eax, %dx
+;;   68: cld
+;;   69: outl    %eax, %dx

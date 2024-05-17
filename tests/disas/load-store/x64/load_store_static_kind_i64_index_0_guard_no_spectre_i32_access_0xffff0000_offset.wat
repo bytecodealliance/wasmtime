@@ -35,11 +35,11 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       cmpq    $0xfffc, %rdx
-;;       ja      0x54
-;;   41: addq    0x60(%rdi), %rdx
+;;       ja      0x64
+;;   51: addq    0x60(%rdi), %rdx
 ;;       movl    $0xffff0000, %r10d
 ;;       movl    (%rdx, %r10), %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   54: ud2
+;;   64: ud2
