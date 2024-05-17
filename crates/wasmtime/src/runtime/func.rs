@@ -446,7 +446,6 @@ impl Func {
     ///
     /// Panics if the given function type is not associated with this store's
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -489,7 +488,6 @@ impl Func {
     ///
     /// Panics if the given function type is not associated with this store's
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -2199,7 +2197,6 @@ impl HostFunc {
     ///
     /// Panics if the given function type is not associated with the given
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,
@@ -2220,7 +2217,6 @@ impl HostFunc {
     ///
     /// Panics if the given function type is not associated with the given
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
