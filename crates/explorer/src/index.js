@@ -33,7 +33,7 @@ const rgbForOffset = (offset) => {
   const crc24 = (crc, byte) => {
     crc ^= byte << 16;
     for (let bit = 0; bit < 8; bit++) {
-      crc = (crc & 0x800000 ? (crc << 1) ^ 0xfa5711 : crc << 1) & 0xffffff;
+      crc = ((crc << 1) ^ (crc & 0x800000 ? 0xfa5711 : 0)) & 0xffffff;
     }
     return crc;
   };
