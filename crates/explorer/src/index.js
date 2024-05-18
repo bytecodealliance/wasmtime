@@ -42,7 +42,8 @@ const rgbForOffset = (offset) => {
   let orig_offset = offset;
   for (color = offset; offset; offset >>= 8)
     color = crc24(color, offset & 0xff);
-  color = rgbToLuma(color) > 127 ? color ^ 0xa5a5a5 : color;
+  // Avoid colors that are too close to white.
+  color = rgbToLuma(color) > 200 ? color ^ 0xa5a5a5 : color;
   offsetToRgb[orig_offset] = color;
   return color;
 };
