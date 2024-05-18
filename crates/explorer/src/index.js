@@ -194,14 +194,14 @@ for (const func of state.asm.functions) {
   };
 
   for (const inst of func.instructions) {
-    disasmBuffer.push(
-      `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}`,
-    );
     if (lastOffset !== inst.wasm_offset) {
       addCurrentBlock(lastOffset);
       currentBlock = createDivForCode();
       lastOffset = inst.wasm_offset;
     }
+    disasmBuffer.push(
+      `${renderAddress(inst.address)}    ${renderBytes(inst.bytes)}    ${renderInst(inst.mnemonic, inst.operands)}`,
+    );
   }
   addCurrentBlock(lastOffset);
 
