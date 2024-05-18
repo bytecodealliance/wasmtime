@@ -31,6 +31,8 @@ const rgbForOffset = (offset) => {
   let color = offsetToRgb[offset];
   if (color !== undefined) return color;
   const crc24 = (crc, byte) => {
+    // CRC computation adapted from Wikipedia[1] (shift-register based division versions.)
+    // [1] https://en.m.wikipedia.org/wiki/Computation_of_cyclic_redundancy_checks
     crc ^= byte << 16;
     for (let bit = 0; bit < 8; bit++) {
       crc = ((crc << 1) ^ (crc & 0x800000 ? 0xfa5711 : 0)) & 0xffffff;
