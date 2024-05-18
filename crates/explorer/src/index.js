@@ -123,6 +123,7 @@ const linkElements = (element) => {
       let [_discard, node] = elem;
       return node;
     });
+    if (elems.length < 2) return;
     elems.sort((elem0, elem1) => {
       let rect0 = elem0.getBoundingClientRect();
       let rect1 = elem1.getBoundingClientRect();
