@@ -48,6 +48,14 @@ const rgbForOffset = (offset) => {
   return color;
 };
 const rgbToCss = (rgb) => `rgba(${rgbToTriple(rgb).join(",")})`;
+const rgbDarken = (rgb) => {
+  let [r, g, b] = rgbToTriple(rgb);
+  return (
+    ((r - Math.min(r, 0x20)) << 16) |
+    ((g - Math.min(g, 0x20)) << 8) |
+    (b - Math.min(b, 0x20))
+  );
+};
 const adjustColorForOffset = (element, offset) => {
   let backgroundColor = rgbForOffset(offset);
   element.style.backgroundColor = rgbToCss(backgroundColor);
@@ -135,7 +143,7 @@ const linkElements = (element) => {
       .slice(1)
       .map((elem) => {
         let rect = elem.getBoundingClientRect();
-        return `0 ${rect0.y - 8}px, 100% ${rect.y - 8}px, 100% ${rect.bottom + 8}px, 0 ${rect0.bottom + 8}px`;
+        return `0 ${rect0.y - 2}px, 100% ${rect.y - 2}px, 100% ${rect.bottom + 2}px, 0 ${rect0.bottom + 2}px`;
       })
       .join(",");
     let bridge = document.getElementById("bridge");
@@ -144,11 +152,12 @@ const linkElements = (element) => {
     bridge.style.width = `${rect1.left - rect0.width}px`;
     bridge.style.clipPath = `polygon(${points})`;
     bridge.style.backgroundColor = elems[0].style.backgroundColor;
+    let outline = `2px solid ${rgbToCss(rgbDarken(rgbForOffset(offset)))}`;
     for (const elem of elems) {
       // TODO: if any of these elems is out of view, show in the pop-up there it is (up or down)
       elem.setAttribute("title", `WASM offset @ ${offset}`);
       elem.classList.add("hovered");
-      elem.style.outline = `8px solid ${rgbToCss(rgbForOffset(offset))}`;
+      elem.style.outline = outline;
     }
   });
   element.addEventListener("mouseleave", (event) => {
