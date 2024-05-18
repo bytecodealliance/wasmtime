@@ -141,6 +141,8 @@ const linkElements = (element) => {
     bridge.style.clipPath = `polygon(${points})`;
     bridge.style.backgroundColor = elems[0].style.backgroundColor;
     for (const elem of elems) {
+      // TODO: if any of these elems is out of view, show in the pop-up there it is (up or down)
+      elem.setAttribute("title", `WASM offset @ ${offset}`);
       elem.classList.add("hovered");
       elem.style.outline = `8px solid ${rgbToCss(rgbForOffset(offset))}`;
     }
@@ -148,6 +150,7 @@ const linkElements = (element) => {
   element.addEventListener("mouseleave", (event) => {
     document.getElementById("bridge").style.display = "none";
     eachElementWithSameWasmOff(event, (elem) => {
+      elem.removeAttribute("title");
       elem.classList.remove("hovered");
       elem.style.outline = "";
     });
@@ -181,7 +184,6 @@ for (const func of state.asm.functions) {
     currentBlock.setAttribute("data-wasm-offset", offset);
 
     if (offset !== null) {
-      currentBlock.setAttribute("title", `Block at WASM offset: ${offset}`);
       adjustColorForOffset(currentBlock, offset);
       linkElements(currentBlock);
     }
