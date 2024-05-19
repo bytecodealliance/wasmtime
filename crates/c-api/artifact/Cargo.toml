@@ -32,6 +32,8 @@ default = [
   'demangle',
   'threads',
   'gc',
+  'cranelift',
+  'winch',
   # ... if you add a line above this be sure to also change:
   #
   #   crates/c-api/CMakeLists.txt
@@ -50,5 +52,7 @@ demangle = ["wasmtime-c-api/demangle"]
 wat = ["wasmtime-c-api/wat"]
 threads = ["wasmtime-c-api/threads"]
 gc = ["wasmtime-c-api/gc"]
+cranelift = ["wasmtime-c-api/cranelift"]
+winch = ["wasmtime-c-api/winch"]
 # ... if you add a line above this be sure to read the comment at the end of
 # `default`

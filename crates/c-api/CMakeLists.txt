@@ -53,6 +53,8 @@ feature(demangle ON)
 feature(threads ON)
 feature(gc ON)
 feature(async ON)
+feature(cranelift ON)
+feature(winch ON)
 # ... if you add a line above this be sure to also change:
 #
 #   crates/c-api/include/wasmtime/conf.h.in

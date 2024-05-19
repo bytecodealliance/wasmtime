@@ -240,12 +240,16 @@ WASMTIME_CONFIG_PROP(void, wasm_multi_memory, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
 
+#ifdef WASMTIME_FEATURE_COMPILER
+
 /**
  * \brief Configures how JIT code will be compiled.
  *
  * This setting is #WASMTIME_STRATEGY_AUTO by default.
  */
 WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
+
+#endif // WASMTIME_FEATURE_COMPILER
 
 #ifdef WASMTIME_FEATURE_PARALLEL_COMPILATION
 
@@ -259,6 +263,8 @@ WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
 WASMTIME_CONFIG_PROP(void, parallel_compilation, bool)
 
 #endif // WASMTIME_FEATURE_PARALLEL_COMPILATION
+
+#ifdef WASMTIME_FEATURE_COMPILER
 
 /**
  * \brief Configures whether Cranelift's debug verifier is enabled.
@@ -291,6 +297,8 @@ WASMTIME_CONFIG_PROP(void, cranelift_nan_canonicalization, bool)
  * This setting in #WASMTIME_OPT_LEVEL_SPEED by default.
  */
 WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
+
+#endif // WASMTIME_FEATURE_COMPILER
 
 /**
  * \brief Configures the profiling strategy used for JIT code.
@@ -372,6 +380,8 @@ wasmtime_config_cache_config_load(wasm_config_t *, const char *);
 
 #endif // WASMTIME_FEATURE_CACHE
 
+#ifdef WASMTIME_FEATURE_COMPILER
+
 /**
  * \brief Configures the target triple that this configuration will produce
  * machine code for.
@@ -410,6 +420,8 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_enable(wasm_config_t *,
 WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t *,
                                                         const char *key,
                                                         const char *value);
+
+#endif // WASMTIME_FEATURE_COMPILER
 
 /**
  * \brief Configures whether, when on macOS, Mach ports are used for exception
