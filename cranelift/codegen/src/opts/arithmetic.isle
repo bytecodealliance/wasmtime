@@ -229,6 +229,37 @@
       (if-let $true (u64_eq k (ty_bits_u64 half_ty)))
       (uextend ty (umulhi half_ty x y)))
 
+(rule (simplify (iadd ty (imul _ a0 b0) (ishl _ (iadd _ x y) (iconst_u _ half))))
+      (wide_mul ty a0 b0 x y half))
+(rule (simplify (iadd ty (ishl _ (iadd _ x y) (iconst_u _ half)) (imul _ a0 b0)))
+      (wide_mul ty a0 b0 x y half))
+
+(decl multi wide_mul (Type Value Value Value Value u64) Value)
+(rule (wide_mul ty a0 b0 x y half)
+      (if-let $true (u64_eq (ty_bits ty) (u64_shl half 1)))
+      (if-let lo_mask (u64_sub (u64_shl 1 half) 1))
+      (if-let (band _ a (iconst_u _ lo_mask)) a0)
+      (if-let (band _ b (iconst_u _ lo_mask)) b0)
+      (if-let (IsCross.Result a1 b1) (is_cross a0 b0 x y))
+      (if-let (ushr _ a (iconst_u _ half)) a1)
+      (if-let (ushr _ b (iconst_u _ half)) b1)
+      (imul ty a b))
+
+(type IsCross (enum (Result (a1 Value) (b1 Value))))
+(decl pure multi is_cross (Value Value Value Value) IsCross)
+(rule (is_cross a0 b0 x y)
+      (if-let a1 (is_mul_by b0 x))
+      (if-let b1 (is_mul_by a0 y))
+      (IsCross.Result a1 b1))
+(rule (is_cross a0 b0 x y)
+      (if-let a1 (is_mul_by b0 y))
+      (if-let b1 (is_mul_by a0 x))
+      (IsCross.Result a1 b1))
+
+(decl pure multi is_mul_by (Value Value) Value)
+(rule (is_mul_by x (imul _ x y)) y)
+(rule (is_mul_by x (imul _ y x)) y)
+
 ;; Cranelift's `fcvt_from_{u,s}int` instructions are polymorphic over the input
 ;; type so remove any unnecessary `uextend` or `sextend` to give backends
 ;; the chance to convert from the smallest integral type to the float. This

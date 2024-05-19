@@ -1,0 +1,103 @@
+test optimize precise-output
+set opt_level=speed_and_size
+target x86_64
+
+; v3  = a_lo
+; v4  = a_hi
+; v5  = b_lo
+; v6  = b_hi
+; v11 = a0
+; v14 = a1
+; v9  = b0
+; v17 = b1
+function %multi3(i64 vmctx, i64, i32, i64, i64, i64, i64) fast {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned readonly gv0+80
+
+block0(v0: i64, v1: i64, v2: i32, v3: i64, v4: i64, v5: i64, v6: i64):
+    v7 = iconst.i64 0
+    v8 = iconst.i64 0xffff_ffff
+    v9 = band v5, v8
+    v10 = iconst.i64 0xffff_ffff
+    v11 = band v3, v10
+    v12 = imul v9, v11
+    v13 = iconst.i64 32
+    v14 = ushr v3, v13
+    v15 = imul v9, v14
+    v16 = iconst.i64 32
+    v17 = ushr v5, v16
+    v18 = imul v17, v11
+    v19 = iadd v15, v18
+    v20 = iconst.i64 32
+    v21 = ishl v19, v20
+    v22 = iadd v12, v21
+    v23 = uextend.i64 v2
+    v24 = global_value.i64 gv1
+    v25 = iadd v24, v23
+    store little heap v22, v25
+    v26 = imul v17, v14
+    v27 = icmp ult v19, v15
+    v28 = uextend.i32 v27
+    v29 = uextend.i64 v28
+    v30 = iconst.i64 32
+    v31 = ishl v29, v30
+    v32 = iconst.i64 32
+    v33 = ushr v19, v32
+    v34 = bor v31, v33
+    v35 = iadd v26, v34
+    v36 = icmp ult v22, v12
+    v37 = uextend.i32 v36
+    v38 = uextend.i64 v37
+    v39 = iadd v35, v38
+    v40 = imul v6, v3
+    v41 = imul v5, v4
+    v42 = iadd v40, v41
+    v43 = iadd v39, v42
+    v44 = uextend.i64 v2
+    v45 = global_value.i64 gv1
+    v46 = iadd v45, v44
+    v47 = iadd_imm v46, 8
+    store little heap v43, v47
+    return
+}
+
+; function %multi3(i64 vmctx, i64, i32, i64, i64, i64, i64) fast {
+;     gv0 = vmctx
+;     gv1 = load.i64 notrap aligned readonly gv0+80
+;
+; block0(v0: i64, v1: i64, v2: i32, v3: i64, v4: i64, v5: i64, v6: i64):
+;     v51 = imul v5, v3
+;     v24 = load.i64 notrap aligned readonly v0+80
+;     v23 = uextend.i64 v2
+;     v25 = iadd v24, v23
+;     store little heap v51, v25
+;     v13 = iconst.i64 32
+;     v17 = ushr v5, v13  ; v13 = 32
+;     v14 = ushr v3, v13  ; v13 = 32
+;     v26 = imul v17, v14
+;     v8 = iconst.i64 0xffff_ffff
+;     v9 = band v5, v8  ; v8 = 0xffff_ffff
+;     v15 = imul v9, v14
+;     v11 = band v3, v8  ; v8 = 0xffff_ffff
+;     v18 = imul v17, v11
+;     v19 = iadd v15, v18
+;     v27 = icmp ult v19, v15
+;     v53 = uextend.i64 v27
+;     v31 = ishl v53, v13  ; v13 = 32
+;     v33 = ushr v19, v13  ; v13 = 32
+;     v34 = bor v31, v33
+;     v35 = iadd v26, v34
+;     v12 = imul v9, v11
+;     v36 = icmp ult v51, v12
+;     v55 = uextend.i64 v36
+;     v39 = iadd v35, v55
+;     v40 = imul v6, v3
+;     v41 = imul v5, v4
+;     v42 = iadd v40, v41
+;     v63 = iadd v39, v42
+;     v50 = iconst.i64 8
+;     v47 = iadd v25, v50  ; v50 = 8
+;     store little heap v63, v47
+;     return
+; }
+
