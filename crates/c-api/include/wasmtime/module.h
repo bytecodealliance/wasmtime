@@ -117,7 +117,7 @@ wasmtime_module_serialize(wasmtime_module_t *module, wasm_byte_vec_t *ret);
  *
  * This function is not safe to receive arbitrary user input. See the Rust
  * documentation for more information on what inputs are safe to pass in here
- * (e.g. only that of #wasmtime_module_serialize)
+ * (e.g. only that of `wasmtime_module_serialize`)
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_module_deserialize(wasm_engine_t *engine, const uint8_t *bytes,
