@@ -127,29 +127,26 @@ const linkElements = (element) => {
     //
     // FIXME: optimize for the common case where selector() returns only two
     // elements!
-    let elems = Array.from(selector(offset).entries()).map((elem) => {
-      let [_discard, node] = elem;
-      return node;
-    });
+    let elems = Array.from(selector(offset).entries()).map((elem) => elem[1]);
     if (elems.length < 2) return;
-    elems.sort((elem0, elem1) => {
-      let rect0 = elem0.getBoundingClientRect();
-      let rect1 = elem1.getBoundingClientRect();
-      return rect0.x - rect1.x;
-    });
+    elems.sort(
+      (elem0, elem1) =>
+        elem0.getBoundingClientRect().x - elem1.getBoundingClientRect().x,
+    );
+    let bridgeWidth = 16;
     let rect0 = elems[0].getBoundingClientRect();
-    let rect1 = elems[1].getBoundingClientRect();
     let points = elems
       .slice(1)
       .map((elem) => {
         let rect = elem.getBoundingClientRect();
+        bridgeWidth = rect.left - rect0.width;
         return `0 ${rect0.y - 2}px, 100% ${rect.y - 2}px, 100% ${rect.bottom + 2}px, 0 ${rect0.bottom + 2}px`;
       })
       .join(",");
     let bridge = document.getElementById("bridge");
     bridge.style.display = "block";
     bridge.style.left = `${rect0.width}px`;
-    bridge.style.width = `${rect1.left - rect0.width}px`;
+    bridge.style.width = `${bridgeWidth}px`;
     bridge.style.clipPath = `polygon(${points})`;
     bridge.style.backgroundColor = elems[0].style.backgroundColor;
     let outline = `2px solid ${rgbToCss(rgbDarken(rgbForOffset(offset)))}`;
