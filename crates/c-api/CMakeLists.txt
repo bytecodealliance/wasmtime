@@ -22,6 +22,7 @@ option(WASMTIME_DISABLE_ALL_FEATURES
 
 macro(feature rust_name default)
   string(TOUPPER "wasmtime_feature_${rust_name}" cmake_name)
+  string(REPLACE "-" "_" cmake_name ${cmake_name})
   if(${default})
     if(${WASMTIME_DISABLE_ALL_FEATURES})
       set(feature_default OFF)
