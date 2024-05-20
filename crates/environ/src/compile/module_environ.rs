@@ -19,8 +19,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
     types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
-    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeRef,
-    Validator, ValidatorResources, WasmFeatures,
+    FuncToValidate, FunctionBody, KnownCustom, NameSectionReader, Naming, Operator, Parser,
+    Payload, TypeRef, Validator, ValidatorResources,
 };
 use wasmtime_types::{ConstExpr, ConstOp, ModuleInternedTypeIndex, WasmHeapTopType};
 
@@ -541,9 +541,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.result.debuginfo.wasm_file.code_section_offset = range.start as u64;
             }
 
-            Payload::CodeSectionEntry(mut body) => {
+            Payload::CodeSectionEntry(body) => {
                 let validator = self.validator.code_section_entry(&body)?;
-                body.allow_memarg64(self.validator.features().contains(WasmFeatures::MEMORY64));
                 let func_index =
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
@@ -569,7 +568,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         });
                 }
                 self.prescan_code_section(&body)?;
-                body.allow_memarg64(self.validator.features().contains(WasmFeatures::MEMORY64));
                 self.result.function_body_inputs.push(FunctionBodyData {
                     validator,
                     body,
@@ -652,13 +650,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 // the passive count, do not reserve anything here.
             }
 
-            Payload::CustomSection(s) if s.name() == "name" => {
-                let result = self.name_section(NameSectionReader::new(s.data(), s.data_offset()));
-                if let Err(e) = result {
-                    log::warn!("failed to parse name section {:?}", e);
-                }
-            }
-
             Payload::CustomSection(s)
                 if s.name() == "webidl-bindings" || s.name() == "wasm-interface-types" =>
             {
@@ -678,7 +669,7 @@ and for re-adding support for interface types you can see this issue:
             }
 
             Payload::CustomSection(s) => {
-                self.register_dwarf_section(&s);
+                self.register_custom_section(&s);
             }
 
             // It's expected that validation will probably reject other
@@ -770,11 +761,24 @@ and for re-adding support for interface types you can see this issue:
         Ok(())
     }
 
-    fn register_dwarf_section(&mut self, section: &CustomSectionReader<'data>) {
-        let name = section.name().trim_end_matches(".dwo");
-        if !name.starts_with(".debug_") {
-            return;
+    fn register_custom_section(&mut self, section: &CustomSectionReader<'data>) {
+        match section.as_known() {
+            KnownCustom::Name(name) => {
+                let result = self.name_section(name);
+                if let Err(e) = result {
+                    log::warn!("failed to parse name section {:?}", e);
+                }
+            }
+            _ => {
+                let name = section.name().trim_end_matches(".dwo");
+                if name.starts_with(".debug_") {
+                    self.dwarf_section(name, section);
+                }
+            }
         }
+    }
+
+    fn dwarf_section(&mut self, name: &str, section: &CustomSectionReader<'data>) {
         if !self.tunables.generate_native_debuginfo && !self.tunables.parse_wasm_debuginfo {
             self.result.has_unparsed_debuginfo = true;
             return;

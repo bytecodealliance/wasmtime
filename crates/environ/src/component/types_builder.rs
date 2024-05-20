@@ -517,7 +517,7 @@ impl ComponentTypesBuilder {
         self.add_tuple_type(TypeTuple { types, abi })
     }
 
-    fn flags_type(&mut self, flags: &wasmparser::map::IndexSet<KebabString>) -> TypeFlagsIndex {
+    fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
             abi: CanonicalAbiInfo::flags(flags.len()),
@@ -525,7 +525,7 @@ impl ComponentTypesBuilder {
         self.add_flags_type(flags)
     }
 
-    fn enum_type(&mut self, variants: &wasmparser::map::IndexSet<KebabString>) -> TypeEnumIndex {
+    fn enum_type(&mut self, variants: &IndexSet<KebabString>) -> TypeEnumIndex {
         let names = variants
             .iter()
             .map(|s| s.to_string())

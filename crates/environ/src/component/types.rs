@@ -855,7 +855,10 @@ pub struct TypeVariant {
 impl Hash for TypeVariant {
     fn hash<H: Hasher>(&self, h: &mut H) {
         let TypeVariant { cases, abi, info } = self;
-        cases.as_slice().hash(h);
+        cases.len().hash(h);
+        for pair in cases {
+            pair.hash(h);
+        }
         abi.hash(h);
         info.hash(h);
     }
@@ -888,7 +891,10 @@ pub struct TypeFlags {
 impl Hash for TypeFlags {
     fn hash<H: Hasher>(&self, h: &mut H) {
         let TypeFlags { names, abi } = self;
-        names.as_slice().hash(h);
+        names.len().hash(h);
+        for name in names {
+            name.hash(h);
+        }
         abi.hash(h);
     }
 }
@@ -911,7 +917,10 @@ pub struct TypeEnum {
 impl Hash for TypeEnum {
     fn hash<H: Hasher>(&self, h: &mut H) {
         let TypeEnum { names, abi, info } = self;
-        names.as_slice().hash(h);
+        names.len().hash(h);
+        for name in names {
+            name.hash(h);
+        }
         abi.hash(h);
         info.hash(h);
     }
