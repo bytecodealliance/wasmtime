@@ -2544,7 +2544,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             unimplemented!("GC operators not yet implemented")
         }
 
-        Operator::GlobalAtomicGet { .. } | Operator::GlobalAtomicSet { .. } => {
+        Operator::GlobalAtomicGet { .. }
+        | Operator::GlobalAtomicSet { .. }
+        | Operator::GlobalAtomicRmwAdd { .. }
+        | Operator::GlobalAtomicRmwSub { .. }
+        | Operator::GlobalAtomicRmwOr { .. }
+        | Operator::GlobalAtomicRmwXor { .. }
+        | Operator::GlobalAtomicRmwAnd { .. }
+        | Operator::GlobalAtomicRmwXchg { .. }
+        | Operator::GlobalAtomicRmwCmpxchg { .. } => {
             unimplemented!("shared-everything-threads not yet implemented")
         }
     };

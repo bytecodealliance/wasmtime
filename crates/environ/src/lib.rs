@@ -40,7 +40,7 @@ pub mod prelude {
     pub use alloc::string::{String, ToString};
     pub use alloc::vec;
     pub use alloc::vec::Vec;
-    pub use wasmparser::map::{IndexMap, IndexSet};
+    pub use wasmparser::collections::{IndexMap, IndexSet};
 }
 
 /// Convenience trait for converting `Result<T, E>` into `anyhow::Result<T>`
