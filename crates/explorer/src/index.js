@@ -124,31 +124,44 @@ const linkElements = (element) => {
     // Gather all elements related to the desired offset.  Put the one in the WAT
     // view first, and then all the others subsequently; this is done so we can
     // calculate the polygon to bridge the WAT and the ASM views.
-    //
-    // FIXME: optimize for the common case where selector() returns only two
-    // elements!
-    let elems = Array.from(selector(offset).entries()).map((elem) => elem[1]);
-    if (elems.length < 2) return;
-    elems.sort(
-      (elem0, elem1) =>
-        elem0.getBoundingClientRect().x - elem1.getBoundingClientRect().x,
-    );
+    let elems = selector(offset);
+    let wat_elem, asm_elems;
+    if (elems.length == 2) {
+      let rect0 = elems[0].getBoundingClientRect();
+      let rect1 = elems[1].getBoundingClientRect();
+      if (rect0.x < rect1.x) {
+        wat_elem = elems[0];
+        asm_elems = [elems[1]];
+      } else {
+        wat_elem = elems[1];
+        asm_elems = [elems[0]];
+      }
+    } else if (elems.length < 2) {
+      return;
+    } else {
+      elems = Array.from(selector(offset).entries()).map((elem) => elem[1]);
+      elems.sort(
+        (elem0, elem1) =>
+          elem0.getBoundingClientRect().x - elem1.getBoundingClientRect().x,
+      );
+      wat_elem = elems[0];
+      asm_elems = elems.slice(1);
+    }
     let bridgeWidth = 16;
-    let rect0 = elems[0].getBoundingClientRect();
-    let points = elems
-      .slice(1)
+    let wat_rect = wat_elem.getBoundingClientRect();
+    let points = asm_elems
       .map((elem) => {
         let rect = elem.getBoundingClientRect();
-        bridgeWidth = rect.left - rect0.width;
-        return `0 ${rect0.y - 2}px, 100% ${rect.y - 2}px, 100% ${rect.bottom + 2}px, 0 ${rect0.bottom + 2}px`;
+        bridgeWidth = rect.left - wat_rect.width;
+        return `0 ${wat_rect.y - 2}px, 100% ${rect.y - 2}px, 100% ${rect.bottom + 2}px, 0 ${wat_rect.bottom + 2}px`;
       })
       .join(",");
     let bridge = document.getElementById("bridge");
     bridge.style.display = "block";
-    bridge.style.left = `${rect0.width}px`;
+    bridge.style.left = `${wat_rect.width}px`;
     bridge.style.width = `${bridgeWidth}px`;
     bridge.style.clipPath = `polygon(${points})`;
-    bridge.style.backgroundColor = elems[0].style.backgroundColor;
+    bridge.style.backgroundColor = wat_elem.style.backgroundColor;
     let outline = `2px solid ${rgbToCss(rgbDarken(rgbForOffset(offset)))}`;
     for (const elem of elems) {
       // TODO: if any of these elems is out of view, show in the pop-up there it is (up or down)
