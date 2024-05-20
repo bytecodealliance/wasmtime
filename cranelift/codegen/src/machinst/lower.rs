@@ -398,7 +398,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
 
         // Find the sret register, if it's used.
-        let mut sret_reg = None;
+        let mut sret_param = None;
         for ret in vcode.abi().signature().returns.iter() {
             if ret.purpose == ArgumentPurpose::StructReturn {
                 let entry_bb = f.stencil.layout.entry_block().unwrap();
@@ -409,17 +409,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     .zip(vcode.abi().signature().params.iter())
                 {
                     if sig_param.purpose == ArgumentPurpose::StructReturn {
-                        let regs = value_regs[param];
-                        assert!(regs.len() == 1);
-
-                        assert!(sret_reg.is_none());
-                        sret_reg = Some(regs);
+                        assert!(sret_param.is_none());
+                        sret_param = Some(param);
                     }
                 }
 
-                assert!(sret_reg.is_some());
+                assert!(sret_param.is_some());
             }
         }
+
+        let sret_reg = sret_param.map(|param| {
+            let regs = value_regs[param];
+            assert!(regs.len() == 1);
+            regs
+        });
 
         // Compute instruction colors, find constant instructions, and find instructions with
         // side-effects, in one combined pass.
@@ -449,7 +452,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_end_colors[bb] = InstColor::new(cur_color);
         }
 
-        let value_ir_uses = Self::compute_use_states(f);
+        let value_ir_uses = Self::compute_use_states(f, sret_param);
 
         Ok(Lower {
             f,
@@ -482,7 +485,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Pre-analysis: compute `value_ir_uses`. See comment on
     /// `ValueUseState` for a description of what this analysis
     /// computes.
-    fn compute_use_states<'a>(f: &'a Function) -> SecondaryMap<Value, ValueUseState> {
+    fn compute_use_states<'a>(
+        f: &'a Function,
+        sret_param: Option<Value>,
+    ) -> SecondaryMap<Value, ValueUseState> {
         // We perform the analysis without recursion, so we don't
         // overflow the stack on long chains of ops in the input.
         //
@@ -501,6 +507,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // efficient than a full indirect-use-counting pass.
 
         let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
+
+        if let Some(sret_param) = sret_param {
+            value_ir_uses[sret_param] = ValueUseState::Once;
+        }
 
         // Stack of iterators over Values as we do DFS to mark
         // Multiple-state subtrees. The iterator type is whatever is
