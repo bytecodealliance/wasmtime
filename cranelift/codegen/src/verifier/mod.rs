@@ -1102,8 +1102,8 @@ impl<'a> Verifier<'a> {
                 return errors.fatal((
                     next_block,
                     format!(
-                        "invalid domtree, rpo_cmp_block does not says {} is greater than {}",
-                        prev_block, next_block
+                        "invalid domtree, rpo_cmp_block does not say {} is greater than {}; rpo = {:#?}",
+                        prev_block, next_block, domtree.cfg_postorder()
                     ),
                 ));
             }
