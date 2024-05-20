@@ -212,6 +212,11 @@ Released 2024-04-22
   mutably borrow disjoint regions of memory.
   [#8277](https://github.com/bytecodealliance/wasmtime/issues/8277)
 
+* Generated bindings with `component::bindgen!` now have a "lower level"
+  function using a generated `GetHost` trait to more flexibly add host
+  implementations into linkers.
+  [#8448](https://github.com/bytecodealliance/wasmtime/issues/8448)
+
 ### Fixed
 
 * Connection timeouts with `wasi-http` have been fixed.
