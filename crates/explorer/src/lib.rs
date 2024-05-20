@@ -84,8 +84,9 @@ struct AnnotatedAsm {
 
 #[derive(Serialize, Debug)]
 struct AnnotatedFunction {
-    name: String,
-    demangled_name: String,
+    func_index: u32,
+    name: Option<String>,
+    demangled_name: Option<String>,
     instructions: Vec<AnnotatedInstruction>,
 }
 
@@ -133,8 +134,8 @@ fn annotate_asm(
 
     let functions = module
         .function_locations_with_names()
-        .map(|(name, start, len)| {
-            let body = &text[start..][..len];
+        .map(|loc| {
+            let body = &text[loc.offset..][..loc.len];
 
             let mut cs = match target.architecture {
                 target_lexicon::Architecture::Aarch64(_) => capstone::Capstone::new()
@@ -167,13 +168,13 @@ fn annotate_asm(
             cs.set_skipdata(true).unwrap();
 
             let instructions = cs
-                .disasm_all(body, start as u64)
+                .disasm_all(body, loc.offset as u64)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             let instructions = instructions
                 .iter()
                 .map(|inst| {
                     let address = u32::try_from(inst.address()).unwrap();
-                    let wasm_offset = wasm_offset_for_address(start, address);
+                    let wasm_offset = wasm_offset_for_address(loc.offset, address);
                     Ok(AnnotatedInstruction {
                         wasm_offset,
                         address,
@@ -184,17 +185,20 @@ fn annotate_asm(
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            let demangled_name = match name.splitn(2, "::").nth(1) {
-                Some(name) => {
-                    let mut demangled = String::new();
-                    demangle_function_name(&mut demangled, name)
-                        .map_or_else(|_| format!("demangle-error::{}", name), |_| demangled)
+            let demangled_name = if let Some(name) = &loc.name {
+                let mut demangled = String::new();
+                if demangle_function_name(&mut demangled, &name).is_ok() {
+                    Some(demangled)
+                } else {
+                    None
                 }
-                None => name.to_string(),
+            } else {
+                None
             };
 
             Ok(AnnotatedFunction {
-                name,
+                func_index: loc.index.as_u32(),
+                name: loc.name,
                 demangled_name,
                 instructions,
             })
