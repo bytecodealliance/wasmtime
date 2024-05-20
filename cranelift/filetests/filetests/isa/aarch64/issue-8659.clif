@@ -1,0 +1,16 @@
+test compile precise-output
+target aarch64
+
+function u0:11(i64 sret) system_v {
+block0(v0: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
