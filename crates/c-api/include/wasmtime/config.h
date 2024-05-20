@@ -8,6 +8,7 @@
 #define WASMTIME_CONFIG_H
 
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 
 #ifdef __cplusplus
@@ -140,6 +141,8 @@ WASMTIME_CONFIG_PROP(void, epoch_interruption, bool)
  */
 WASMTIME_CONFIG_PROP(void, max_wasm_stack, size_t)
 
+#ifdef WASMTIME_FEATURE_THREADS
+
 /**
  * \brief Configures whether the WebAssembly threading proposal is enabled.
  *
@@ -148,6 +151,8 @@ WASMTIME_CONFIG_PROP(void, max_wasm_stack, size_t)
  * Note that threads are largely unimplemented in Wasmtime at this time.
  */
 WASMTIME_CONFIG_PROP(void, wasm_threads, bool)
+
+#endif // WASMTIME_FEATURE_THREADS
 
 /**
  * \brief Configures whether the WebAssembly tail call proposal is enabled.
@@ -242,6 +247,8 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
  */
 WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
 
+#ifdef WASMTIME_FEATURE_PARALLEL_COMPILATION
+
 /**
  * \brief Configure whether wasmtime should compile a module using multiple
  * threads.
@@ -250,6 +257,8 @@ WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.parallel_compilation.
  */
 WASMTIME_CONFIG_PROP(void, parallel_compilation, bool)
+
+#endif // WASMTIME_FEATURE_PARALLEL_COMPILATION
 
 /**
  * \brief Configures whether Cranelift's debug verifier is enabled.
@@ -344,6 +353,8 @@ WASMTIME_CONFIG_PROP(void, dynamic_memory_reserved_for_growth, uint64_t)
  */
 WASMTIME_CONFIG_PROP(void, native_unwind_info, bool)
 
+#ifdef WASMTIME_FEATURE_CACHE
+
 /**
  * \brief Enables Wasmtime's cache and loads configuration from the specified
  * path.
@@ -358,6 +369,8 @@ WASMTIME_CONFIG_PROP(void, native_unwind_info, bool)
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_config_cache_config_load(wasm_config_t *, const char *);
+
+#endif // WASMTIME_FEATURE_CACHE
 
 /**
  * \brief Configures the target triple that this configuration will produce

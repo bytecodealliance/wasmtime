@@ -254,7 +254,8 @@ jobs:
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
     - run: echo "`pwd`/doxygen-1.9.3/bin" >> $GITHUB_PATH
-    - run: cd crates/c-api && doxygen doxygen.conf
+    - run: cmake -S crates/c-api -B target/c-api
+    - run: cmake --build target/c-api --target doc
 
     # install mdbook, build the docs, and test the docs
     - uses: actions/cache@v4

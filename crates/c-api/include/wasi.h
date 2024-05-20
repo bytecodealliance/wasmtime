@@ -9,6 +9,9 @@
 
 #include "wasm.h"
 #include <stdint.h>
+#include <wasmtime/conf.h>
+
+#ifdef WASMTIME_FEATURE_WASI
 
 #ifndef WASI_API_EXTERN
 #ifdef _WIN32
@@ -180,5 +183,7 @@ WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t *config,
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+#endif // WASMTIME_FEATURE_WASI
 
 #endif // #ifdef WASI_H

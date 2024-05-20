@@ -180,6 +180,7 @@
 #define WASMTIME_API_H
 
 #include <wasi.h>
+#include <wasmtime/conf.h>
 // clang-format off
 // IWYU pragma: begin_exports
 #include <wasmtime/config.h>
@@ -223,6 +224,8 @@
 extern "C" {
 #endif
 
+#ifdef WASMTIME_FEATURE_WAT
+
 /**
  * \brief Converts from the text format of WebAssembly to the binary format.
  *
@@ -240,6 +243,8 @@ extern "C" {
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_wat2wasm(const char *wat, size_t wat_len, wasm_byte_vec_t *ret);
+
+#endif
 
 #ifdef __cplusplus
 } // extern "C"
