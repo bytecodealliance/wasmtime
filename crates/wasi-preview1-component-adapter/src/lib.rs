@@ -49,11 +49,12 @@ use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 
 pub mod bindings {
     #[cfg(feature = "command")]
-    wit_bindgen::generate!({
+    wit_bindgen_rust_macro::generate!({
         path: "../wasi/wit",
         world: "wasi:cli/command",
         std_feature,
         raw_strings,
+        runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         // Automatically generated bindings for these functions will allocate
         // Vecs, which in turn pulls in the panic machinery from std, which
         // creates vtables that end up in the wasm elem section, which we
@@ -64,11 +65,12 @@ pub mod bindings {
     });
 
     #[cfg(feature = "reactor")]
-    wit_bindgen::generate!({
+    wit_bindgen_rust_macro::generate!({
         path: "../wasi/wit",
         world: "wasi:cli/imports",
         std_feature,
         raw_strings,
+        runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         // Automatically generated bindings for these functions will allocate
         // Vecs, which in turn pulls in the panic machinery from std, which
         // creates vtables that end up in the wasm elem section, which we
@@ -79,7 +81,7 @@ pub mod bindings {
     });
 
     #[cfg(feature = "proxy")]
-    wit_bindgen::generate!({
+    wit_bindgen_rust_macro::generate!({
         path: "../wasi-http/wit",
         inline: r#"
             package wasmtime:adapter;
@@ -95,8 +97,15 @@ pub mod bindings {
         "#,
         std_feature,
         raw_strings,
+        runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         skip: ["poll"],
     });
+
+    pub mod wit_bindgen_rt_shim {
+        pub use bitflags;
+
+        pub fn maybe_link_cabi_realloc() {}
+    }
 }
 
 #[export_name = "wasi:cli/run@0.2.0#run"]
