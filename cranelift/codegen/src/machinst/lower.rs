@@ -509,7 +509,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
 
         if let Some(sret_param) = sret_param {
-            value_ir_uses[sret_param] = ValueUseState::Once;
+            // There's an implicit use of the struct-return parameter in each
+            // copy of the function epilogue, which we count here.
+            value_ir_uses[sret_param] = ValueUseState::Multiple;
         }
 
         // Stack of iterators over Values as we do DFS to mark
