@@ -35,4 +35,8 @@ fn build_c_helpers() {
     println!("cargo:rerun-if-changed=src/runtime/vm/helpers.c");
     build.file("src/runtime/vm/helpers.c");
     build.compile("wasmtime-helpers");
+
+    if os == "linux" {
+        println!("cargo:rustc-link-lib=m");
+    }
 }

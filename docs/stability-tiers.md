@@ -91,6 +91,7 @@ For explanations of what each tier means see below.
 | Target               | `wasm32-wasi` [^3]                | Supported but not tested    |
 | Target               | `aarch64-linux-android`           | CI testing, full-time maintainer |
 | Target               | `x86_64-linux-android`            | CI testing, full-time maintainer |
+| Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
 | Compiler Backend     | Winch on aarch64                  | finished implementation     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
@@ -118,6 +119,11 @@ as well.
 [^3]: Wasmtime's `cranelift` and `winch` features can be compiled to WebAssembly
 but not the `runtime` feature at this time. This means that
 Wasmtime-compiled-to-wasm can itself compile wasm but cannot execute wasm.
+
+[^4]: Binary artifacts for MUSL are dynamically linked, not statically
+linked, meaning that they are not suitable for "run on any linux distribution"
+style use cases. Wasmtime does not have static binary artifacts at this time and
+that will require building from source.
 
 #### Unsupported features and platforms
 
