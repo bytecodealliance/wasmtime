@@ -1,6 +1,6 @@
 test compile precise-output
 set enable_llvm_abi_extensions=true
-target x86_64 has_bmi1
+target x86_64
 
 
 function %ctz(i128) -> i128 {
@@ -13,11 +13,15 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   tzcntq  %rdi, %rax
-;   tzcntq  %rsi, %r9
-;   addq    %r9, $64, %r9
+;   movl    $64, %ecx
+;   bsfq    %rdi, %rax
+;   cmovzq  %rcx, %rax, %rax
+;   movl    $64, %edi
+;   bsfq    %rsi, %rdx
+;   cmovzq  %rdi, %rdx, %rdx
+;   addq    %rdx, $64, %rdx
 ;   cmpq    $64, %rax
-;   cmovzq  %r9, %rax, %rax
+;   cmovzq  %rdx, %rax, %rax
 ;   xorq    %rdx, %rdx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -28,11 +32,15 @@ block0(v0: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   tzcntq %rdi, %rax
-;   tzcntq %rsi, %r9
-;   addq $0x40, %r9
+;   movl $0x40, %ecx
+;   bsfq %rdi, %rax
+;   cmoveq %rcx, %rax
+;   movl $0x40, %edi
+;   bsfq %rsi, %rdx
+;   cmoveq %rdi, %rdx
+;   addq $0x40, %rdx
 ;   cmpq $0x40, %rax
-;   cmoveq %r9, %rax
+;   cmoveq %rdx, %rax
 ;   xorq %rdx, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -48,7 +56,9 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   tzcntq  %rdi, %rax
+;   movl    $64, %ecx
+;   bsfq    %rdi, %rax
+;   cmovzq  %rcx, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -58,7 +68,9 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   tzcntq %rdi, %rax
+;   movl $0x40, %ecx
+;   bsfq %rdi, %rax
+;   cmoveq %rcx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -73,7 +85,9 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   tzcntl  %edi, %eax
+;   movl    $32, %ecx
+;   bsfl    %edi, %eax
+;   cmovzl  %ecx, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -83,7 +97,9 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   tzcntl %edi, %eax
+;   movl $0x20, %ecx
+;   bsfl %edi, %eax
+;   cmovel %ecx, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -100,7 +116,9 @@ block0(v0: i16):
 ; block0:
 ;   movzwl  %di, %ecx
 ;   orl     %ecx, $65536, %ecx
-;   tzcntl  %ecx, %eax
+;   movl    $16, %r9d
+;   bsfl    %ecx, %eax
+;   cmovzl  %r9d, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -112,7 +130,9 @@ block0(v0: i16):
 ; block1: ; offset 0x4
 ;   movzwl %di, %ecx
 ;   orl $0x10000, %ecx
-;   tzcntl %ecx, %eax
+;   movl $0x10, %r9d
+;   bsfl %ecx, %eax
+;   cmovel %r9d, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -129,7 +149,9 @@ block0(v0: i8):
 ; block0:
 ;   movzbl  %dil, %ecx
 ;   orl     %ecx, $256, %ecx
-;   tzcntl  %ecx, %eax
+;   movl    $8, %r9d
+;   bsfl    %ecx, %eax
+;   cmovzl  %r9d, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -141,7 +163,9 @@ block0(v0: i8):
 ; block1: ; offset 0x4
 ;   movzbl %dil, %ecx
 ;   orl $0x100, %ecx
-;   tzcntl %ecx, %eax
+;   movl $8, %r9d
+;   bsfl %ecx, %eax
+;   cmovel %r9d, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

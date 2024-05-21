@@ -684,6 +684,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u32_shl(&mut self, x: u32, y: u32) -> u32 {
+            x << y
+        }
+
+        #[inline]
         fn s32_add_fallible(&mut self, a: i32, b: i32) -> Option<i32> {
             a.checked_add(b)
         }
