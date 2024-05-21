@@ -349,7 +349,7 @@ impl<T> Linker<T> {
             linker: &mut LinkerInstance<T>,
             item_name: &str,
             item_def: &TypeDef,
-            fully_qualified_name: String,
+            parent_instance: Option<&str>,
             types: &ComponentTypes,
         ) -> Result<()> {
             // Skip if the item isn't an instance and has already been defined in the linker.
@@ -360,6 +360,9 @@ impl<T> Linker<T> {
 
             match item_def {
                 TypeDef::ComponentFunc(_) => {
+                    let fully_qualified_name = parent_instance
+                        .map(|parent| format!("{}#{}", parent, item_name))
+                        .unwrap_or_else(|| item_name.to_owned());
                     linker.func_new(&item_name, move |_, _, _| {
                         bail!("unknown import: `{fully_qualified_name}` has not been defined")
                     })?;
@@ -368,12 +371,11 @@ impl<T> Linker<T> {
                     let instance = &types[*i];
                     let mut linker_instance = linker.instance(item_name)?;
                     for (export_name, export) in instance.exports.iter() {
-                        let fully_qualified_name = format!("{}#{}", item_name, export_name);
                         stub_item(
                             &mut linker_instance,
                             export_name,
                             export,
-                            fully_qualified_name,
+                            Some(item_name),
                             types,
                         )?;
                     }
@@ -395,7 +397,7 @@ impl<T> Linker<T> {
                 &mut self.root(),
                 import_name,
                 import_type,
-                import_name.clone(),
+                None,
                 component.types(),
             )?;
         }
