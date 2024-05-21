@@ -1,3 +1,5 @@
+/* global window, document */
+
 /*** State *********************************************************************/
 
 class State {
@@ -7,27 +9,12 @@ class State {
   }
 }
 
-const state = window.STATE = new State(window.WAT, window.ASM);
+const state = (window.STATE = new State(window.WAT, window.ASM));
 
 /*** Hues for Offsets **********************************************************/
 
 const hues = [
-  80,
-  160,
-  240,
-  320,
-  40,
-  120,
-  200,
-  280,
-  20,
-  100,
-  180,
-  260,
-  340,
-  60,
-  140,
-  220,
+  80, 160, 240, 320, 40, 120, 200, 280, 20, 100, 180, 260, 340, 60, 140, 220,
   300,
 ];
 
@@ -36,7 +23,7 @@ const nextHue = (function () {
   return () => {
     return hues[++i % hues.length];
   };
-}());
+})();
 
 // NB: don't just assign hues based on something simple like `hues[offset %
 // hues.length]` since that can suffer from bias due to certain alignments
@@ -97,42 +84,50 @@ const addAsmElem = (offset, elem) => {
 /*** Event Handlers ************************************************************/
 
 const watElem = document.getElementById("wat");
-watElem.addEventListener("click", event => {
-  if (event.target.dataset.wasmOffset == null) {
-    return;
-  }
+watElem.addEventListener(
+  "click",
+  event => {
+    if (event.target.dataset.wasmOffset == null) {
+      return;
+    }
 
-  const offset = parseInt(event.target.dataset.wasmOffset);
-  if (!asmByOffset.get(offset)) {
-    return;
-  }
+    const offset = parseInt(event.target.dataset.wasmOffset);
+    if (!asmByOffset.get(offset)) {
+      return;
+    }
 
-  const firstAsmElem = asmByOffset.get(offset)[0];
-  firstAsmElem.scrollIntoView({
-    behavior: "smooth",
-    block: "center",
-    inline: "nearest",
-  });
-}, { passive: true });
+    const firstAsmElem = asmByOffset.get(offset)[0];
+    firstAsmElem.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+  },
+  { passive: true },
+);
 
 const asmElem = document.getElementById("asm");
-asmElem.addEventListener("click", event => {
-  if (event.target.dataset.wasmOffset == null) {
-    return;
-  }
+asmElem.addEventListener(
+  "click",
+  event => {
+    if (event.target.dataset.wasmOffset == null) {
+      return;
+    }
 
-  const offset = parseInt(event.target.dataset.wasmOffset);
-  if (!watByOffset.get(offset)) {
-    return;
-  }
+    const offset = parseInt(event.target.dataset.wasmOffset);
+    if (!watByOffset.get(offset)) {
+      return;
+    }
 
-  const firstWatElem = watByOffset.get(offset)[0];
-  firstWatElem.scrollIntoView({
-    behavior: "smooth",
-    block: "center",
-    inline: "nearest",
-  });
-}, { passive: true });
+    const firstWatElem = watByOffset.get(offset)[0];
+    firstWatElem.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+  },
+  { passive: true },
+);
 
 const onMouseEnter = event => {
   if (event.target.dataset.wasmOffset == null) {

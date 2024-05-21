@@ -55,6 +55,20 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Quick JS formatting/linting checks for the little bits of JS we have for the
+  # `wasmtime explore` UI.
+  check_js:
+    name: Check JS
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: npm install
+      working-directory: ./crates/explorer
+    - run: npm run lint
+      working-directory: ./crates/explorer
+    - run: npm run fmt-check
+      working-directory: ./crates/explorer
+
   # Check Code style quickly by running `clang-format` over all the C/C++ code
   #
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
