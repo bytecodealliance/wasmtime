@@ -1,6 +1,6 @@
 test compile precise-output
 set enable_llvm_abi_extensions=true
-target x86_64 has_lzcnt
+target x86_64
 
 
 function %clz(i128) -> i128 {
@@ -66,7 +66,11 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lzcntq  %rdi, %rax
+;   movabsq $-1, %rax
+;   bsrq    %rdi, %r8
+;   cmovzq  %rax, %r8, %r8
+;   movl    $63, %eax
+;   subq    %rax, %r8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -76,7 +80,11 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   lzcntq %rdi, %rax
+;   movq $18446744073709551615, %rax
+;   bsrq %rdi, %r8
+;   cmoveq %rax, %r8
+;   movl $0x3f, %eax
+;   subq %r8, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -91,7 +99,11 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lzcntl  %edi, %eax
+;   movabsq $-1, %rax
+;   bsrl    %edi, %r8d
+;   cmovzl  %eax, %r8d, %r8d
+;   movl    $31, %eax
+;   subl    %eax, %r8d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -101,7 +113,11 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   lzcntl %edi, %eax
+;   movq $18446744073709551615, %rax
+;   bsrl %edi, %r8d
+;   cmovel %eax, %r8d
+;   movl $0x1f, %eax
+;   subl %r8d, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

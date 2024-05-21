@@ -1,6 +1,6 @@
 test compile precise-output
 set enable_llvm_abi_extensions=true
-target x86_64 has_bmi1
+target x86_64
 
 
 function %ctz(i128) -> i128 {
@@ -56,7 +56,9 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   tzcntq  %rdi, %rax
+;   movl    $64, %ecx
+;   bsfq    %rdi, %rax
+;   cmovzq  %rcx, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -66,7 +68,9 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   tzcntq %rdi, %rax
+;   movl $0x40, %ecx
+;   bsfq %rdi, %rax
+;   cmoveq %rcx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -81,7 +85,9 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   tzcntl  %edi, %eax
+;   movl    $32, %ecx
+;   bsfl    %edi, %eax
+;   cmovzl  %ecx, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -91,7 +97,9 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   tzcntl %edi, %eax
+;   movl $0x20, %ecx
+;   bsfl %edi, %eax
+;   cmovel %ecx, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
