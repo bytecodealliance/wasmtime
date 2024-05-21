@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::GuestMemory;
+use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -9,7 +9,11 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl<'a> ints::Ints for WasiCtx<'a> {
-    fn cookie_cutter(&mut self, init_cookie: types::Cookie) -> Result<types::Bool, types::Errno> {
+    fn cookie_cutter(
+        &mut self,
+        _memory: &mut GuestMemory<'_>,
+        init_cookie: types::Cookie,
+    ) -> Result<types::Bool, types::Errno> {
         let res = if init_cookie == types::COOKIE_START {
             types::Bool::True
         } else {
@@ -43,20 +47,20 @@ impl CookieCutterExercise {
 
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
         let res = ints::cookie_cutter(
             &mut ctx,
-            &host_memory,
+            &mut memory,
             self.cookie as i64,
             self.return_ptr_loc.ptr as i32,
         )
         .unwrap();
         assert_eq!(res, types::Errno::Ok as i32, "cookie cutter errno");
 
-        let is_cookie_start = host_memory
-            .ptr::<types::Bool>(self.return_ptr_loc.ptr)
-            .read()
+        let is_cookie_start = memory
+            .read(GuestPtr::<types::Bool>::new(self.return_ptr_loc.ptr))
             .expect("deref to Bool value");
 
         assert_eq!(

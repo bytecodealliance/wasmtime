@@ -4,7 +4,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use witx::{BuiltinType, Id, Type, TypeRef, WasmType};
 
-use crate::{lifetimes::LifetimeExt, UserErrorType};
+use crate::UserErrorType;
 
 pub fn type_(id: &Id) -> Ident {
     escape_id(id, NamingConvention::CamelCase)
@@ -39,25 +39,21 @@ pub fn type_ref(tref: &TypeRef, lifetime: TokenStream) -> TokenStream {
     match tref {
         TypeRef::Name(nt) => {
             let ident = type_(&nt.name);
-            if nt.tref.needs_lifetime() {
-                quote!(#ident<#lifetime>)
-            } else {
-                quote!(#ident)
-            }
+            quote!(#ident)
         }
         TypeRef::Value(ty) => match &**ty {
             Type::Builtin(builtin) => builtin_type(*builtin),
             Type::Pointer(pointee) | Type::ConstPointer(pointee) => {
                 let pointee_type = type_ref(&pointee, lifetime.clone());
-                quote!(wiggle::GuestPtr<#lifetime, #pointee_type>)
+                quote!(wiggle::GuestPtr<#pointee_type>)
             }
             Type::List(pointee) => match &**pointee.type_() {
                 Type::Builtin(BuiltinType::Char) => {
-                    quote!(wiggle::GuestPtr<#lifetime, str>)
+                    quote!(wiggle::GuestPtr<str>)
                 }
                 _ => {
                     let pointee_type = type_ref(&pointee, lifetime.clone());
-                    quote!(wiggle::GuestPtr<#lifetime, [#pointee_type]>)
+                    quote!(wiggle::GuestPtr<[#pointee_type]>)
                 }
             },
             Type::Variant(v) => match v.as_expected() {

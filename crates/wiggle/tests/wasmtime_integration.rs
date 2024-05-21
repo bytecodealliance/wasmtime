@@ -1,4 +1,5 @@
 use wasmtime::{Engine, Linker, Module, Store, Val};
+use wiggle::GuestMemory;
 
 // from_witx invocation says the func is async. This context doesn't support async!
 wiggle::from_witx!({
@@ -28,12 +29,18 @@ impl wiggle::GuestErrorType for types::Errno {
 
 #[wiggle::async_trait]
 impl atoms::Atoms for Ctx {
-    fn int_float_args(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
+    fn int_float_args(
+        &mut self,
+        _: &mut GuestMemory<'_>,
+        an_int: u32,
+        an_float: f32,
+    ) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())
     }
     async fn double_int_return_float(
         &mut self,
+        _: &mut GuestMemory<'_>,
         an_int: u32,
     ) -> Result<types::AliasToFloat, types::Errno> {
         Ok((an_int as f32) * 2.0)

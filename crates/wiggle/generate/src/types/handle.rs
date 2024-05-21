@@ -53,7 +53,7 @@ pub(super) fn define_handle(name: &witx::Id, h: &witx::HandleDatatype) -> TokenS
             }
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident {
+        impl wiggle::GuestType for #ident {
             #[inline]
             fn guest_size() -> u32 {
                 #size
@@ -65,13 +65,13 @@ pub(super) fn define_handle(name: &witx::Id, h: &witx::HandleDatatype) -> TokenS
             }
 
             #[inline]
-            fn read(location: &wiggle::GuestPtr<'a, #ident>) -> Result<#ident, wiggle::GuestError> {
-                Ok(#ident(u32::read(&location.cast())?))
+            fn read(mem: &wiggle::GuestMemory, location: wiggle::GuestPtr<#ident>) -> Result<#ident, wiggle::GuestError> {
+                Ok(#ident(u32::read(mem, location.cast())?))
             }
 
             #[inline]
-            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle::GuestError> {
-                u32::write(&location.cast(), val.0)
+            fn write(mem: &mut wiggle::GuestMemory, location: wiggle::GuestPtr<Self>, val: Self) -> Result<(), wiggle::GuestError> {
+                u32::write(mem, location.cast(), val.0)
             }
         }
     }

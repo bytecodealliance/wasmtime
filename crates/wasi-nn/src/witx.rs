@@ -14,7 +14,7 @@
 //! [`types`]: crate::wit::types
 
 use crate::ctx::{UsageError, WasiNnCtx, WasiNnError, WasiNnResult as Result};
-use wiggle::GuestPtr;
+use wiggle::{GuestMemory, GuestPtr};
 
 pub use gen::wasi_ephemeral_nn::add_to_linker;
 
@@ -54,7 +54,8 @@ mod gen {
 impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     fn load(
         &mut self,
-        builders: &gen::types::GraphBuilderArray<'_>,
+        memory: &mut GuestMemory<'_>,
+        builders: gen::types::GraphBuilderArray,
         encoding: gen::types::GraphEncoding,
         target: gen::types::ExecutionTarget,
     ) -> Result<gen::types::Graph> {
@@ -63,10 +64,11 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
             // $graph_builder_array) as slices for a backend to operate on.
             let mut slices = vec![];
             for builder in builders.iter() {
-                let slice = builder?
-                    .read()?
-                    .as_slice()?
-                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+                let builder = memory.read(builder?)?;
+                let slice = memory.as_slice(builder)?.expect(
+                    "cannot use with shared memories; \
+                     see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
+                );
                 slices.push(slice);
             }
             let slice_refs = slices.iter().map(|s| s.as_ref()).collect::<Vec<_>>();
@@ -78,8 +80,12 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         Ok(graph_id.into())
     }
 
-    fn load_by_name<'b>(&mut self, name: &wiggle::GuestPtr<'b, str>) -> Result<gen::types::Graph> {
-        let name = name.as_str()?.unwrap();
+    fn load_by_name(
+        &mut self,
+        memory: &mut GuestMemory<'_>,
+        name: wiggle::GuestPtr<str>,
+    ) -> Result<gen::types::Graph> {
+        let name = memory.as_str(name)?.unwrap();
         if let Some(graph) = self.registry.get_mut(&name) {
             let graph_id = self.graphs.insert(graph.clone().into());
             Ok(graph_id.into())
@@ -90,6 +96,7 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 
     fn init_execution_context(
         &mut self,
+        _memory: &mut GuestMemory<'_>,
         graph_id: gen::types::Graph,
     ) -> Result<gen::types::GraphExecutionContext> {
         let exec_context = if let Some(graph) = self.graphs.get_mut(graph_id.into()) {
@@ -102,17 +109,18 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         Ok(exec_context_id.into())
     }
 
-    fn set_input<'b>(
+    fn set_input(
         &mut self,
+        memory: &mut GuestMemory<'_>,
         exec_context_id: gen::types::GraphExecutionContext,
         index: u32,
-        tensor: &gen::types::Tensor<'b>,
+        tensor: &gen::types::Tensor,
     ) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
             let tensor = crate::wit::types::Tensor {
-                dimensions: tensor.dimensions.to_vec()?,
+                dimensions: memory.to_vec(tensor.dimensions)?,
                 tensor_type: tensor.type_.into(),
-                data: tensor.data.to_vec()?,
+                data: memory.to_vec(tensor.data)?,
             };
             Ok(exec_context.set_input(index, &tensor)?)
         } else {
@@ -120,7 +128,11 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         }
     }
 
-    fn compute(&mut self, exec_context_id: gen::types::GraphExecutionContext) -> Result<()> {
+    fn compute(
+        &mut self,
+        _memory: &mut GuestMemory<'_>,
+        exec_context_id: gen::types::GraphExecutionContext,
+    ) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
             Ok(exec_context.compute()?)
         } else {
@@ -130,16 +142,19 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 
     fn get_output(
         &mut self,
+        memory: &mut GuestMemory<'_>,
         exec_context_id: gen::types::GraphExecutionContext,
         index: u32,
-        out_buffer: &GuestPtr<'_, u8>,
+        out_buffer: GuestPtr<u8>,
         out_buffer_max_size: u32,
     ) -> Result<u32> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
-            let mut destination = out_buffer
-                .as_array(out_buffer_max_size)
-                .as_slice_mut()?
-                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+            let mut destination = memory
+                .as_slice_mut(out_buffer.as_array(out_buffer_max_size))?
+                .expect(
+                    "cannot use with shared memories; \
+                     see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
+                );
             Ok(exec_context.get_output(index, &mut destination)?)
         } else {
             Err(UsageError::InvalidGraphHandle.into())

@@ -1,4 +1,3 @@
-use crate::lifetimes::LifetimeExt;
 use crate::names;
 
 use proc_macro2::{Literal, TokenStream};
@@ -36,7 +35,7 @@ pub(super) fn define_variant(
             quote! {
                 #i => {
                     let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
-                    let variant_val = <#varianttype as wiggle::GuestType>::read(&variant_ptr.cast())?;
+                    let variant_val = <#varianttype as wiggle::GuestType>::read(mem, variant_ptr.cast())?;
                     Ok(#ident::#variantname(variant_val))
                 }
             }
@@ -48,7 +47,7 @@ pub(super) fn define_variant(
     let write_variant = v.cases.iter().enumerate().map(|(i, c)| {
         let variantname = names::enum_variant(&c.name);
         let write_tag = quote! {
-            location.cast().write(#i as #tag_ty)?;
+            mem.write(location.cast(), #i as #tag_ty)?;
         };
         if let Some(tref) = &c.tref {
             let varianttype = names::type_ref(tref, lifetime.clone());
@@ -56,7 +55,7 @@ pub(super) fn define_variant(
                 #ident::#variantname(contents) => {
                     #write_tag
                     let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
-                    <#varianttype as wiggle::GuestType>::write(&variant_ptr.cast(), contents)?;
+                    <#varianttype as wiggle::GuestType>::write(mem, variant_ptr.cast(), contents)?;
                 }
             }
         } else {
@@ -121,11 +120,7 @@ pub(super) fn define_variant(
         quote!()
     };
 
-    let (enum_lifetime, extra_derive) = if v.needs_lifetime() {
-        (quote!(<'a>), quote!())
-    } else {
-        (quote!(), quote!(, PartialEq #extra_derive))
-    };
+    let extra_derive = quote!(, PartialEq #extra_derive);
 
     let error_impls = if derive_std_error {
         quote! {
@@ -142,7 +137,7 @@ pub(super) fn define_variant(
 
     quote! {
         #[derive(Clone, Debug #extra_derive)]
-        pub enum #ident #enum_lifetime {
+        pub enum #ident {
             #(#variants),*
         }
         #error_impls
@@ -150,7 +145,7 @@ pub(super) fn define_variant(
         #enum_try_from
         #enum_from
 
-        impl<'a> wiggle::GuestType<'a> for #ident #enum_lifetime {
+        impl wiggle::GuestType for #ident {
             #[inline]
             fn guest_size() -> u32 {
                 #size
@@ -161,10 +156,10 @@ pub(super) fn define_variant(
                 #align
             }
 
-            fn read(location: &wiggle::GuestPtr<'a, Self>)
+            fn read(mem: &wiggle::GuestMemory, location: wiggle::GuestPtr<Self>)
                 -> Result<Self, wiggle::GuestError>
             {
-                let tag = location.cast::<#tag_ty>().read()?;
+                let tag = mem.read(location.cast::<#tag_ty>())?;
                 match tag {
                     #(#read_variant)*
                     _ => Err(wiggle::GuestError::InvalidEnumValue(stringify!(#ident))),
@@ -172,7 +167,7 @@ pub(super) fn define_variant(
 
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self)
+            fn write(mem:  &mut wiggle::GuestMemory, location: wiggle::GuestPtr<Self>, val: Self)
                 -> Result<(), wiggle::GuestError>
             {
                 match val {
