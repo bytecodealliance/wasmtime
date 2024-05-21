@@ -145,3 +145,39 @@ fn linker_substituting_types_issue_8003() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn linker_defines_unknown_imports_as_traps() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "foo" (func))
+            (import "bar" (instance (export "baz" (func))))
+            (import "qux" (type (sub resource)))
+        )"#,
+    )?;
+    linker.define_unknown_imports_as_traps(&component)?;
+    let mut store = Store::new(&engine, ());
+    let _ = linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}
+
+#[test]
+fn linker_fails_to_define_unknown_core_module_imports_as_traps() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "foo" (core module))
+        )"#,
+    )?;
+    assert!(linker.define_unknown_imports_as_traps(&component).is_err());
+
+    Ok(())
+}

@@ -342,55 +342,62 @@ impl<T> Linker<T> {
     /// By default a [`Linker`] will error when unknown imports are encountered when instantiating a [`Component`].
     /// This changes this behavior from an instant error to a trap that will happen if the import is called.
     pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
-        let types = component.types();
-        let component = component.env_component();
-
-        for (_, (import_name, import_type)) in &component.import_types {
-            // Skip any non-instance imports that are already defined in the linker.
-            if !matches!(
-                import_type,
-                wasmtime_environ::component::TypeDef::ComponentInstance(_)
-            ) && self.root().get(&import_name).is_some()
+        use wasmtime_environ::component::ComponentTypes;
+        use wasmtime_environ::component::TypeDef;
+        // Recursively stub out all imports of the component with a function that traps.
+        fn stub_item<T>(
+            linker: &mut LinkerInstance<T>,
+            item_name: &str,
+            item_def: &TypeDef,
+            fully_qualified_name: String,
+            types: &ComponentTypes,
+        ) -> Result<()> {
+            // Skip if the item isn't an instance and has already been defined in the linker.
+            if !matches!(item_def, TypeDef::ComponentInstance(_)) && linker.get(item_name).is_some()
             {
-                continue;
+                return Ok(());
             }
 
-            match import_type {
-                wasmtime_environ::component::TypeDef::ComponentFunc(_) => {
-                    let name = import_name.to_owned();
-                    self.root().func_new(&import_name, move |_, _, _| {
-                        bail!("unknown import: `{name}` has not been defined")
+            match item_def {
+                TypeDef::ComponentFunc(_) => {
+                    linker.func_new(&item_name, move |_, _, _| {
+                        bail!("unknown import: `{fully_qualified_name}` has not been defined")
                     })?;
                 }
-                wasmtime_environ::component::TypeDef::ComponentInstance(i) => {
+                TypeDef::ComponentInstance(i) => {
                     let instance = &types[*i];
-                    let mut linker_instance = self.instance(&import_name)?;
+                    let mut linker_instance = linker.instance(item_name)?;
                     for (export_name, export) in instance.exports.iter() {
-                        // Skip any exports that are already defined in the linker.
-                        if linker_instance.get(&export_name).is_some() {
-                            continue;
-                        }
-                        match export {
-                            wasmtime_environ::component::TypeDef::ComponentFunc(_) => {
-                                let name = format!("{}#{}", import_name, export_name);
-                                linker_instance.func_new(export_name, move |_, _, _| {
-                                    bail!("unknown import: `{name}` has not been defined")
-                                })?;
-                            }
-                            wasmtime_environ::component::TypeDef::Resource(_) => {
-                                let ty = crate::component::ResourceType::host::<()>();
-                                linker_instance.resource(&export_name, ty, |_, _| Ok(()))?;
-                            }
-                            _ => {}
-                        }
+                        let fully_qualified_name = format!("{}#{}", item_name, export_name);
+                        stub_item(
+                            &mut linker_instance,
+                            export_name,
+                            export,
+                            fully_qualified_name,
+                            types,
+                        )?;
                     }
                 }
-                wasmtime_environ::component::TypeDef::Resource(_) => {
+                TypeDef::Resource(_) => {
                     let ty = crate::component::ResourceType::host::<()>();
-                    self.root().resource(&import_name, ty, |_, _| Ok(()))?;
+                    linker.resource(item_name, ty, |_, _| Ok(()))?;
+                }
+                TypeDef::Component(_) | TypeDef::Module(_) => {
+                    bail!("unable to define {} imports as traps", item_def.desc())
                 }
                 _ => {}
             }
+            Ok(())
+        }
+
+        for (_, (import_name, import_type)) in &component.env_component().import_types {
+            stub_item(
+                &mut self.root(),
+                import_name,
+                import_type,
+                import_name.clone(),
+                component.types(),
+            )?;
         }
         Ok(())
     }
