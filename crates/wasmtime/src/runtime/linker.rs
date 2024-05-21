@@ -256,8 +256,7 @@ impl<T> Linker<T> {
     /// Implement any imports of the given [`Module`] with a function which traps.
     ///
     /// By default a [`Linker`] will error when unknown imports are encountered
-    /// in a command module while using [`Linker::module`]. Use this function
-    /// when
+    /// in a command module while using [`Linker::module`].
     ///
     /// This method can be used to allow unknown imports from command modules.
     ///

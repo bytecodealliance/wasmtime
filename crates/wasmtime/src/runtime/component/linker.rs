@@ -336,6 +336,64 @@ impl<T> Linker<T> {
             .instantiate_async(store)
             .await
     }
+
+    /// Implement any imports of the given [`Component`] with a function which traps.
+    ///
+    /// By default a [`Linker`] will error when unknown imports are encountered when instantiating a [`Component`].
+    /// This changes this behavior from an instant error to a trap that will happen if the import is called.
+    pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
+        let types = component.types();
+        let component = component.env_component();
+
+        for (_, (import_name, import_type)) in &component.import_types {
+            // Skip any non-instance imports that are already defined in the linker.
+            if !matches!(
+                import_type,
+                wasmtime_environ::component::TypeDef::ComponentInstance(_)
+            ) && self.root().get(&import_name).is_some()
+            {
+                continue;
+            }
+
+            match import_type {
+                wasmtime_environ::component::TypeDef::ComponentFunc(_) => {
+                    let name = import_name.to_owned();
+                    self.root().func_new(&import_name, move |_, _, _| {
+                        bail!("unknown import: `{name}` has not been defined")
+                    })?;
+                }
+                wasmtime_environ::component::TypeDef::ComponentInstance(i) => {
+                    let instance = &types[*i];
+                    let mut linker_instance = self.instance(&import_name)?;
+                    for (export_name, export) in instance.exports.iter() {
+                        // Skip any exports that are already defined in the linker.
+                        if linker_instance.get(&export_name).is_some() {
+                            continue;
+                        }
+                        match export {
+                            wasmtime_environ::component::TypeDef::ComponentFunc(_) => {
+                                let name = format!("{}#{}", import_name, export_name);
+                                linker_instance.func_new(export_name, move |_, _, _| {
+                                    bail!("unknown import: `{name}` has not been defined")
+                                })?;
+                            }
+                            wasmtime_environ::component::TypeDef::Resource(_) => {
+                                let ty = crate::component::ResourceType::host::<()>();
+                                linker_instance.resource(&export_name, ty, |_, _| Ok(()))?;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                wasmtime_environ::component::TypeDef::Resource(_) => {
+                    let ty = crate::component::ResourceType::host::<()>();
+                    self.root().resource(&import_name, ty, |_, _| Ok(()))?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<T> LinkerInstance<'_, T> {
@@ -615,6 +673,10 @@ impl<T> LinkerInstance<'_, T> {
     fn insert(&mut self, name: &str, item: Definition) -> Result<usize> {
         self.map
             .insert(name, &mut self.strings, self.allow_shadowing, item)
+    }
+
+    fn get(&self, name: &str) -> Option<&Definition> {
+        self.map.get(name, &self.strings)
     }
 }
 
