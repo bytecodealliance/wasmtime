@@ -20,3 +20,4 @@ serde_json = { workspace = true }
 target-lexicon = { workspace = true, features = ['std'] }
 wasmprinter = { workspace = true }
 wasmtime = { workspace = true, features = ["cranelift", "runtime"] }
+wasmtime-environ = { workspace = true }

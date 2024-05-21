@@ -3683,6 +3683,7 @@ dependencies = [
  "target-lexicon",
  "wasmprinter",
  "wasmtime",
+ "wasmtime-environ",
 ]
 
 [[package]]

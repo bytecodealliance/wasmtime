@@ -1017,19 +1017,35 @@ impl Module {
         self.code_object().code_memory().text()
     }
 
-    /// Get the locations of functions in this module's `.text` section.
+    /// Get information about functions in this module's `.text` section: their
+    /// index, name, and offset+length.
     ///
-    /// Each function's location is a (`.text` section offset, length) pair.
-    pub fn function_locations<'a>(&'a self) -> impl ExactSizeIterator<Item = (usize, usize)> + 'a {
-        self.compiled_module().finished_functions().map(|(f, _)| {
-            let loc = self.compiled_module().func_loc(f);
-            (loc.start as usize, loc.length as usize)
+    /// Results are yielded in a ModuleFunction struct.
+    pub fn functions<'a>(&'a self) -> impl ExactSizeIterator<Item = ModuleFunction> + 'a {
+        let module = self.compiled_module();
+        module.finished_functions().map(|(idx, _)| {
+            let loc = module.func_loc(idx);
+            let idx = module.module().func_index(idx);
+            ModuleFunction {
+                index: idx,
+                name: module.func_name(idx).map(|n| n.to_string()),
+                offset: loc.start as usize,
+                len: loc.length as usize,
+            }
         })
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
         self.inner.module.unique_id()
     }
+}
+
+/// Describes a function for a given module.
+pub struct ModuleFunction {
+    pub index: wasmtime_environ::FuncIndex,
+    pub name: Option<String>,
+    pub offset: usize,
+    pub len: usize,
 }
 
 impl ModuleInner {
