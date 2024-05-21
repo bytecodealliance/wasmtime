@@ -195,11 +195,12 @@ for (const func of state.asm.functions) {
   const funcElem = document.createElement("div");
 
   const funcHeader = document.createElement("h3");
-  let func_name = func.name === null ? `function[${func.index}]` : func.name;
+  let func_name =
+    func.name === null ? `function[${func.func_index}]` : func.name;
   let demangled_name =
-    func.demangled_name === null ? func.demangled_name : func_name;
+    func.demangled_name !== null ? func.demangled_name : func_name;
   funcHeader.textContent = `Disassembly of function <${demangled_name}>:`;
-  funcHeader.title = `Function ${func.index}: ${func_name}`;
+  funcHeader.title = `Function ${func.func_index}: ${func_name}`;
   funcElem.appendChild(funcHeader);
 
   const bodyElem = document.createElement("pre");

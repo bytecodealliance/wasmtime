@@ -23,8 +23,8 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, FuncIndex, HostPtr,
-    ModuleTypes, ObjectKind, TypeTrace, VMOffsets, VMSharedTypeIndex,
+    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
+    ObjectKind, TypeTrace, VMOffsets, VMSharedTypeIndex,
 };
 mod registry;
 
@@ -1017,36 +1017,22 @@ impl Module {
         self.code_object().code_memory().text()
     }
 
-    /// Get the locations of functions in this module's `.text` section.
+    /// Get information about functions in this module's `.text` section: their
+    /// index, name, and offset+length.
     ///
-    /// Each function's location is a (`.text` section offset, length) pair.
-    pub fn function_locations<'a>(&'a self) -> impl ExactSizeIterator<Item = (usize, usize)> + 'a {
-        self.compiled_module().finished_functions().map(|(f, _)| {
-            let loc = self.compiled_module().func_loc(f);
-            (loc.start as usize, loc.length as usize)
-        })
-    }
-
-    /// Get the locations of functions in this module's `.text` section, with the
-    /// function names.
-    ///
-    /// Each function's location is a (name, `.text` section offset, length) pair.
-    pub fn function_locations_with_names<'a>(
-        &'a self,
-    ) -> impl ExactSizeIterator<Item = FunctionLocationWithName> + 'a {
+    /// Results are yielded in a ModuleFunction struct.
+    pub fn functions<'a>(&'a self) -> impl ExactSizeIterator<Item = ModuleFunction> + 'a {
         let module = self.compiled_module();
-        self.function_locations()
-            .enumerate()
-            .map(|(idx, (offset, len))| {
-                let idx = DefinedFuncIndex::from_u32(u32::try_from(idx).unwrap());
-                let idx = module.module().func_index(idx);
-                FunctionLocationWithName {
-                    index: idx,
-                    name: module.func_name(idx).map(|n| n.to_string()),
-                    offset,
-                    len,
-                }
-            })
+        module.finished_functions().map(|(idx, _)| {
+            let loc = module.func_loc(idx);
+            let idx = module.module().func_index(idx);
+            ModuleFunction {
+                index: idx,
+                name: module.func_name(idx).map(|n| n.to_string()),
+                offset: loc.start as usize,
+                len: loc.length as usize,
+            }
+        })
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
@@ -1054,9 +1040,8 @@ impl Module {
     }
 }
 
-/// Returned by Module::function_locations_with_names() instead of 4-tuple
-/// with this information.
-pub struct FunctionLocationWithName {
+/// Describes a function for a given module.
+pub struct ModuleFunction {
     pub index: wasmtime_environ::FuncIndex,
     pub name: Option<String>,
     pub offset: usize,
