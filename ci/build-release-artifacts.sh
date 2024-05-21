@@ -25,7 +25,7 @@ if [[ "$build" = *-min ]]; then
   # Configure a whole bunch of compile-time options which help reduce the size
   # of the binary artifact produced.
   export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
-  export RUSTFLAGS=-Zlocation-detail=none
+  export RUSTFLAGS="-Zlocation-detail=none $RUSTFLAGS"
   export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
   export CARGO_PROFILE_RELEASE_LTO=true
   build_std=-Zbuild-std=std,panic_abort
