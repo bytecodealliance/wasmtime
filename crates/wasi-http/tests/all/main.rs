@@ -527,6 +527,25 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+#[test_log::test(tokio::test)]
+async fn wasi_http_without_port() -> Result<()> {
+    let req = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri("https://httpbin.org/get");
+
+    let response = run_wasi_http(
+        test_programs_artifacts::API_PROXY_FORWARD_REQUEST_COMPONENT,
+        req.body(body::empty())?,
+        None,
+        None,
+    )
+    .await??;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    Ok(())
+}
+
 mod body {
     use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
     use hyper::body::Bytes;
