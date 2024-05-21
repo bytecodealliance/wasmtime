@@ -2129,21 +2129,14 @@
 
 ;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; If available, we can use a plain lzcnt instruction here. Note no
-;; special handling is required for zero inputs, because the machine
-;; instruction does what the CLIF expects for zero, i.e. it returns
-;; zero.
-(rule 3 (lower (has_type (ty_32_or_64 ty) (clz src)))
-      (if-let $true (use_lzcnt))
-      (x64_lzcnt ty src))
-
 (rule 2 (lower (has_type (ty_32_or_64 ty) (clz src)))
       (do_clz ty ty src))
 
-(rule 1 (lower
-       (has_type (ty_8_or_16 ty)
-                 (clz src)))
-      (do_clz $I32 ty (extend_to_gpr src $I32 (ExtendKind.Zero))))
+(rule 1 (lower (has_type (ty_8_or_16 ty) (clz src)))
+      (let ((extended Gpr (extend_to_gpr src $I64 (ExtendKind.Zero)))
+            (clz Gpr (do_clz $I64 $I64 extended)))
+        (x64_sub $I64 clz (RegMemImm.Imm (u32_sub 64 (ty_bits ty))))))
+
 
 (rule 0 (lower
        (has_type $I128
@@ -2160,27 +2153,29 @@
 
 ;; Implementation helper for clz; operates on 32 or 64-bit units.
 (decl do_clz (Type Type Gpr) Gpr)
-(rule (do_clz ty orig_ty src)
+
+;; If available, we can use a plain lzcnt instruction here. Note no
+;; special handling is required for zero inputs, because the machine
+;; instruction does what the CLIF expects for zero, i.e. it returns
+;; zero.
+(rule 1 (do_clz ty orig_ty src)
+      (if-let $true (use_lzcnt))
+      (x64_lzcnt ty src))
+
+(rule 0 (do_clz ty orig_ty src)
       (let ((highest_bit_index Reg (bsr_or_else ty src (imm_i64 $I64 -1)))
             (bits_minus_1 Reg (imm ty (u64_sub (ty_bits_u64 orig_ty) 1))))
         (x64_sub ty bits_minus_1 highest_bit_index)))
 
 ;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Analogous to `clz` cases above, but using mirror instructions
-;; (tzcnt vs lzcnt, bsf vs bsr).
-
-(rule 3 (lower (has_type (ty_32_or_64 ty) (ctz src)))
-      (if-let $true (use_bmi1))
-      (x64_tzcnt ty src))
-
 (rule 2 (lower (has_type (ty_32_or_64 ty) (ctz src)))
       (do_ctz ty ty src))
 
-(rule 1 (lower
-       (has_type (ty_8_or_16 ty)
-                 (ctz src)))
-      (do_ctz $I32 ty (extend_to_gpr src $I32 (ExtendKind.Zero))))
+(rule 1 (lower (has_type (ty_8_or_16 ty) (ctz src)))
+      (let ((extended Gpr (extend_to_gpr src $I32 (ExtendKind.Zero)))
+            (stopbit Gpr (x64_or $I32 extended (RegMemImm.Imm (u32_shl 1 (ty_bits ty))))))
+        (do_ctz $I32 ty stopbit)))
 
 (rule 0 (lower
        (has_type $I128
@@ -2196,7 +2191,14 @@
         (value_regs result_lo (imm $I64 0))))
 
 (decl do_ctz (Type Type Gpr) Gpr)
-(rule (do_ctz ty orig_ty src)
+
+;; Analogous to `clz` cases above, but using mirror instructions
+;; (tzcnt vs lzcnt, bsf vs bsr).
+(rule 1 (do_ctz ty orig_ty src)
+      (if-let $true (use_bmi1))
+      (x64_tzcnt ty src))
+
+(rule 0 (do_ctz ty orig_ty src)
       (bsf_or_else ty src (imm $I64 (ty_bits_u64 orig_ty))))
 
 ;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

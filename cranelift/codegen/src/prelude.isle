@@ -133,6 +133,9 @@
 (decl pure u32_and (u32 u32) u32)
 (extern constructor u32_and u32_and)
 
+(decl pure u32_shl (u32 u32) u32)
+(extern constructor u32_shl u32_shl)
+
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
 (decl pure partial s32_add_fallible (i32 i32) i32)
