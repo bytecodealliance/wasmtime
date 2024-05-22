@@ -63,7 +63,15 @@ jobs:
           ./publish bump
           num=$(./ci/print-current-version.sh)
 
-          # Add a new section to the release notes for the new version.
+          # Remove all release notes for the currnet version now that the
+          # release branch has been created. Additionally add an entry in the
+          # list of all versions pointing to the release notes on the newly
+          # created branch.
+          sed -i '0,/-----------/d' RELEASES.md
+          sed -i "/ARCHIVE_START/a * [$cur](https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md)" RELEASES.md
+
+          # Use `RELEASES-template.md` as the new release notes and then append
+          # the archive of all historical releases to the end of it.
           cp RELEASES.md backup-releases
           sed "s/VERSION/$num/" ci/RELEASES-template.md > RELEASES.md
           cat backup-releases >> RELEASES.md
@@ -84,15 +92,13 @@ jobs:
           cat > pr-body <<-EOF
           This is an [automated pull request][process] from CI which indicates that the next [\`release-$cur\` branch][branch] has been created and the \`main\` branch is getting its version number bumped from $cur to $num.
 
-          Maintainers should take a moment to review the [release notes][RELEASES.md] for $cur, and if any changes are necessary send PRs to the \`main\` branch to update [RELEASES.md] and then backport these PRs to the [release branch][branch].
-
-          Maintainers should also review that aarch64-apple-darwin builds are passing via [embark's CI](https://buildkite.com/embark-studios/wasmtime-aarch64-apple-darwin).
+          Maintainers should take a moment to review the [release notes][RELEASES.md] for $cur and any updates should be made directly to the [release branch][branch].
 
           Another automated PR will be made in roughly 2 weeks time when for the actual release itself.
 
           If any issues arise on the \`main\` branch before the release is made then the issue should first be fixed on \`main\` and then backport to the \`release-$cur\` branch.
 
-          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
+          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md
           [branch]: https://github.com/${{ github.repository }}/tree/release-$cur
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           EOF
@@ -108,37 +114,6 @@ jobs:
           # Determine the latest release branch
           rustc ci/find-latest-release.rs -o /tmp/find-latest-release
           cur=`/tmp/find-latest-release`
-
-          # Update the release date of $cur in RELEASES.md
-          rustc ci/update-release-date.rs -o /tmp/update-release-date
-          /tmp/update-release-date $(date +'%Y-%m-%d')
-
-          git commit --allow-empty -a -F-<<EOF
-          Update release date of Wasmtime $cur
-          EOF
-          git push origin HEAD:ci/release-date-for-$cur
-
-          # In addition to the PR we'll make below to perform the actual release
-          # make a second PR to the `main` branch to note the release date in
-          # the release notes.
-          cat > pr-body <<-EOF
-          This is an [automated pull request][process] from CI which is updating the release date of Wasmtime $cur to today. This PR's base branch is \`main\` and a second PR will be coming to perform the actual release which will be targeted at \`release-$cur\`.
-
-          [process]: https://docs.wasmtime.dev/contributing-release-process.html
-          EOF
-          body=$(jq -sR < ./pr-body)
-          curl --include --request POST \
-            https://api.github.com/repos/${{ github.repository }}/pulls \
-            --header "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            --data @- << EOF
-          {
-            "head": "ci/release-date-for-$cur",
-            "base": "main",
-            "title": "Update release date of Wasmtime $cur",
-            "body": $body,
-            "maintainer_can_modify": true
-          }
-          EOF
 
           # Move to the most recent release branch, update the release date and
           # commit it, indicating that the commit is what will get tagged and
@@ -163,7 +138,7 @@ jobs:
 
           It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically created, crates will be published, and CI artifacts will be produced.
 
-          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
+          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           [branch]: https://github.com/${{ github.repository }}/tree/release-$cur
           EOF
@@ -199,7 +174,7 @@ jobs:
 
           It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically be created, crates will be published, and CI artifacts will be produced.
 
-          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
+          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-$num/RELEASES.md
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           EOF
 
