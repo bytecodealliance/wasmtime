@@ -63,7 +63,7 @@ jobs:
           ./publish bump
           num=$(./ci/print-current-version.sh)
 
-          # Remove all release notes for the currnet version now that the
+          # Remove all release notes for the current version now that the
           # release branch has been created. Additionally add an entry in the
           # list of all versions pointing to the release notes on the newly
           # created branch.
