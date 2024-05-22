@@ -162,7 +162,7 @@ struct ConfigTunables {
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 #[derive(Debug, Clone)]
 struct CompilerConfig {
-    strategy: Strategy,
+    strategy: Option<Strategy>,
     target: Option<target_lexicon::Triple>,
     settings: HashMap<String, String>,
     flags: HashSet<String>,
@@ -174,9 +174,9 @@ struct CompilerConfig {
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 impl CompilerConfig {
-    fn new(strategy: Strategy) -> Self {
+    fn new() -> Self {
         Self {
-            strategy,
+            strategy: Strategy::Auto.not_auto(),
             target: None,
             settings: HashMap::new(),
             flags: HashSet::new(),
@@ -210,7 +210,7 @@ impl CompilerConfig {
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 impl Default for CompilerConfig {
     fn default() -> Self {
-        Self::new(Strategy::Auto)
+        Self::new()
     }
 }
 
@@ -721,7 +721,8 @@ impl Config {
     /// programs to implement some recursive algorithms with *O(1)* stack space
     /// usage.
     ///
-    /// This feature is disabled by default.
+    /// This is `true` by default except on s390x or when the Winch compiler is
+    /// enabled.
     ///
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
@@ -1023,7 +1024,7 @@ impl Config {
     /// The default value for this is `Strategy::Auto`.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
-        self.compiler_config.strategy = strategy;
+        self.compiler_config.strategy = strategy.not_auto();
         self
     }
 
@@ -1745,7 +1746,7 @@ impl Config {
         // compilation strategy is the only one that supports tail calls, but not targeting s390x.
         if self.tunables.tail_callable.is_none() {
             #[cfg(feature = "cranelift")]
-            let default_tail_calls = self.compiler_config.strategy == Strategy::Cranelift
+            let default_tail_calls = self.compiler_config.strategy == Some(Strategy::Cranelift)
                 && self.compiler_config.target.as_ref().map_or_else(
                     || target_lexicon::Triple::host().architecture,
                     |triple| triple.architecture,
@@ -1835,11 +1836,7 @@ impl Config {
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
-            tunables.winch_callable = match self.compiler_config.strategy {
-                Strategy::Auto => !cfg!(feature = "cranelift") && cfg!(feature = "winch"),
-                Strategy::Cranelift => false,
-                Strategy::Winch => true,
-            };
+            tunables.winch_callable = self.compiler_config.strategy == Some(Strategy::Winch);
 
             if tunables.winch_callable && tunables.tail_callable {
                 bail!("Winch does not support the WebAssembly tail call proposal");
@@ -1918,17 +1915,15 @@ impl Config {
 
         let mut compiler = match self.compiler_config.strategy {
             #[cfg(feature = "cranelift")]
-            Strategy::Auto => wasmtime_cranelift::builder(target)?,
-            #[cfg(all(feature = "winch", not(feature = "cranelift")))]
-            Strategy::Auto => wasmtime_winch::builder(target)?,
-            #[cfg(feature = "cranelift")]
-            Strategy::Cranelift => wasmtime_cranelift::builder(target)?,
+            Some(Strategy::Cranelift) => wasmtime_cranelift::builder(target)?,
             #[cfg(not(feature = "cranelift"))]
-            Strategy::Cranelift => bail!("cranelift support not compiled in"),
+            Some(Strategy::Cranelift) => bail!("cranelift support not compiled in"),
             #[cfg(feature = "winch")]
-            Strategy::Winch => wasmtime_winch::builder(target)?,
+            Some(Strategy::Winch) => wasmtime_winch::builder(target)?,
             #[cfg(not(feature = "winch"))]
-            Strategy::Winch => bail!("winch support not compiled in"),
+            Some(Strategy::Winch) => bail!("winch support not compiled in"),
+
+            None | Some(Strategy::Auto) => unreachable!(),
         };
 
         if let Some(path) = &self.compiler_config.clif_dir {
@@ -2217,6 +2212,23 @@ pub enum Strategy {
     /// A baseline compiler for WebAssembly, currently under active development and not ready for
     /// production applications.
     Winch,
+}
+
+impl Strategy {
+    fn not_auto(&self) -> Option<Strategy> {
+        match self {
+            Strategy::Auto => {
+                if cfg!(feature = "cranelift") {
+                    Some(Strategy::Cranelift)
+                } else if cfg!(feature = "winch") {
+                    Some(Strategy::Winch)
+                } else {
+                    None
+                }
+            }
+            other => Some(*other),
+        }
+    }
 }
 
 /// Possible optimization levels for the Cranelift codegen backend.
