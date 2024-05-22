@@ -68,7 +68,8 @@ jobs:
           # list of all versions pointing to the release notes on the newly
           # created branch.
           sed -i '0,/-----------/d' RELEASES.md
-          sed -i "/ARCHIVE_START/a * [$cur](https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md)" RELEASES.md
+          version_with_trailing_x=$(echo $cur | sed 's/.$/x/')
+          sed -i "/ARCHIVE_START/a * [$version_with_trailing_x](https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md)" RELEASES.md
 
           # Use `RELEASES-template.md` as the new release notes and then append
           # the archive of all historical releases to the end of it.
