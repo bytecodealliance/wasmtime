@@ -1,5 +1,16 @@
 --------------------------------------------------------------------------------
 
+## 21.0.1
+
+Released 2024-05-22.
+
+### Fixed
+
+* Fixed outgoing HTTP requests which don't explicitly specify a port.
+  [#8671](https://github.com/bytecodealliance/wasmtime/issues/8671)
+
+--------------------------------------------------------------------------------
+
 ## 21.0.0
 
 Released 2024-05-20.
