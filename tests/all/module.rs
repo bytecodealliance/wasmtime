@@ -297,3 +297,36 @@ fn call_indirect_caching_out_of_bounds_table_index() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn tail_call_defaults() -> Result<()> {
+    let wasm_with_tail_calls = "(module (func $a return_call $a))";
+    if cfg!(target_arch = "s390x") {
+        // off by default on s390x
+        let res = Module::new(&Engine::default(), wasm_with_tail_calls);
+        assert!(res.is_err());
+    } else {
+        // on by default
+        Module::new(&Engine::default(), wasm_with_tail_calls)?;
+
+        // on by default for cranelift
+        Module::new(
+            &Engine::new(Config::new().strategy(Strategy::Cranelift))?,
+            wasm_with_tail_calls,
+        )?;
+    }
+
+    if cfg!(target_arch = "x86_64") {
+        // off by default for winch
+        let err = Module::new(
+            &Engine::new(Config::new().strategy(Strategy::Winch))?,
+            wasm_with_tail_calls,
+        );
+        assert!(err.is_err());
+
+        // can't enable with winch
+        let err = Engine::new(Config::new().strategy(Strategy::Winch).wasm_tail_call(true));
+        assert!(err.is_err());
+    }
+    Ok(())
+}

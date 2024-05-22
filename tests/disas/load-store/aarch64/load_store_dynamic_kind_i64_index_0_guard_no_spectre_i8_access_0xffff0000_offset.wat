@@ -22,15 +22,15 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     w9, #-0xffff
-;;       adds    x9, x2, x9
+;;       adds    x9, x4, x9
 ;;       b.hs    #0x3c
-;;   14: ldr     x10, [x0, #0x68]
+;;   14: ldr     x10, [x2, #0x68]
 ;;       cmp     x9, x10
 ;;       b.hi    #0x38
-;;   20: ldr     x12, [x0, #0x60]
-;;       add     x12, x12, x2
+;;   20: ldr     x12, [x2, #0x60]
+;;       add     x12, x12, x4
 ;;       mov     x13, #0xffff0000
-;;       strb    w3, [x12, x13]
+;;       strb    w5, [x12, x13]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   38: .byte   0x1f, 0xc1, 0x00, 0x00
@@ -40,15 +40,15 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     w9, #-0xffff
-;;       adds    x9, x2, x9
+;;       adds    x9, x4, x9
 ;;       b.hs    #0x7c
-;;   54: ldr     x10, [x0, #0x68]
+;;   54: ldr     x10, [x2, #0x68]
 ;;       cmp     x9, x10
 ;;       b.hi    #0x78
-;;   60: ldr     x12, [x0, #0x60]
-;;       add     x12, x12, x2
+;;   60: ldr     x12, [x2, #0x60]
+;;       add     x12, x12, x4
 ;;       mov     x13, #0xffff0000
-;;       ldrb    w0, [x12, x13]
+;;       ldrb    w2, [x12, x13]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   78: .byte   0x1f, 0xc1, 0x00, 0x00

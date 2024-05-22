@@ -1,4 +1,5 @@
 ;;! target="x86_64"
+;;! test = "winch"
 
 (module
     (type $param-i32 (func (param i32)))
@@ -16,63 +17,86 @@
     )
 )
 
-;; function u0:0(i64 vmctx, i64, i32) fast {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     stack_limit = gv2
+;; wasm[0]::function[0]::param-i32:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x18, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x36
+;;   1b: movq    %rdi, %r14
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movl    %edx, 4(%rsp)
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
+;;   36: ud2
 ;;
-;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0032                               jump block1
-;;
-;;                                 block1:
-;; @0032                               return
-;; }
-;;
-;; function u0:1(i64 vmctx, i64) fast {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly gv3+88
-;;     sig0 = (i64 vmctx, i64, i32) fast
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
-;;     fn0 = colocated u1:9 sig1
-;;     stack_limit = gv2
-;;
-;;                                 block0(v0: i64, v1: i64):
-;; @0035                               v2 = iconst.i32 0
-;; @0039                               v3 = iconst.i32 0
-;; @003b                               v4 = iconst.i32 1
-;; @003b                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 1
-;; @003b                               v6 = uextend.i64 v3  ; v3 = 0
-;; @003b                               v7 = global_value.i64 gv4
-;; @003b                               v8 = ishl_imm v6, 3
-;; @003b                               v9 = iadd v7, v8
-;; @003b                               v10 = iconst.i64 0
-;; @003b                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @003b                               v12 = load.i64 table_oob aligned table v11
-;; @003b                               v13 = band_imm v12, -2
-;; @003b                               brif v12, block3(v13), block2
-;;
-;;                                 block2 cold:
-;; @003b                               v15 = iconst.i32 0
-;; @003b                               v16 = global_value.i64 gv3
-;; @003b                               v17 = call fn0(v16, v15, v3)  ; v15 = 0, v3 = 0
-;; @003b                               jump block3(v17)
-;;
-;;                                 block3(v14: i64):
-;; @003b                               v18 = global_value.i64 gv3
-;; @003b                               v19 = load.i64 notrap aligned readonly v18+80
-;; @003b                               v20 = load.i32 notrap aligned readonly v19
-;; @003b                               v21 = load.i32 icall_null aligned readonly v14+16
-;; @003b                               v22 = icmp eq v21, v20
-;; @003b                               trapz v22, bad_sig
-;; @003b                               v23 = load.i64 notrap aligned readonly v14+8
-;; @003b                               v24 = load.i64 notrap aligned readonly v14+24
-;; @003b                               call_indirect sig0, v23(v24, v0, v2)  ; v2 = 0
-;; @003e                               jump block1
-;;
-;;                                 block1:
-;; @003e                               return
-;; }
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x20, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x126
+;;   5b: movq    %rdi, %r14
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movq    $0, (%rsp)
+;;       movl    4(%rsp), %r11d
+;;       subq    $4, %rsp
+;;       movl    %r11d, (%rsp)
+;;       movl    $0, %ecx
+;;       movq    %r14, %rdx
+;;       movl    0x60(%rdx), %ebx
+;;       cmpl    %ebx, %ecx
+;;       jae     0x128
+;;   94: movl    %ecx, %r11d
+;;       imulq   $8, %r11, %r11
+;;       movq    0x58(%rdx), %rdx
+;;       movq    %rdx, %rsi
+;;       addq    %r11, %rdx
+;;       cmpl    %ebx, %ecx
+;;       cmovaeq %rsi, %rdx
+;;       movq    (%rdx), %rax
+;;       testq   %rax, %rax
+;;       jne     0xdc
+;;   b7: subq    $4, %rsp
+;;       movl    %ecx, (%rsp)
+;;       movq    %r14, %rdi
+;;       movl    $0, %esi
+;;       movl    (%rsp), %edx
+;;       callq   0x303
+;;       addq    $4, %rsp
+;;       movq    0x14(%rsp), %r14
+;;       jmp     0xe0
+;;   dc: andq    $0xfffffffffffffffe, %rax
+;;       testq   %rax, %rax
+;;       je      0x12a
+;;   e9: movq    0x50(%r14), %r11
+;;       movl    (%r11), %ecx
+;;       movl    0x10(%rax), %edx
+;;       cmpl    %edx, %ecx
+;;       jne     0x12c
+;;   fb: movq    0x18(%rax), %rbx
+;;       movq    8(%rax), %rcx
+;;       subq    $4, %rsp
+;;       movq    %rbx, %rdi
+;;       movq    %r14, %rsi
+;;       movl    4(%rsp), %edx
+;;       callq   *%rcx
+;;       addq    $4, %rsp
+;;       addq    $4, %rsp
+;;       movq    0x10(%rsp), %r14
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
+;;  126: ud2
+;;  128: ud2
+;;  12a: ud2
+;;  12c: ud2

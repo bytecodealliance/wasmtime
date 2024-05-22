@@ -22,18 +22,18 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     w12, #-0xffff
-;;       adds    x12, x2, x12
+;;       adds    x12, x4, x12
 ;;       b.hs    #0x44
-;;   14: ldr     x13, [x0, #0x68]
-;;       ldr     x15, [x0, #0x60]
+;;   14: ldr     x13, [x2, #0x68]
+;;       ldr     x15, [x2, #0x60]
 ;;       mov     x14, #0
-;;       add     x15, x15, x2
+;;       add     x15, x15, x4
 ;;       mov     x0, #0xffff0000
 ;;       add     x15, x15, x0
 ;;       cmp     x12, x13
 ;;       csel    x14, x14, x15, hi
 ;;       csdb
-;;       strb    w3, [x14]
+;;       strb    w5, [x14]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   44: .byte   0x1f, 0xc1, 0x00, 0x00
@@ -42,18 +42,18 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     w12, #-0xffff
-;;       adds    x12, x2, x12
+;;       adds    x12, x4, x12
 ;;       b.hs    #0xa4
-;;   74: ldr     x13, [x0, #0x68]
-;;       ldr     x15, [x0, #0x60]
+;;   74: ldr     x13, [x2, #0x68]
+;;       ldr     x15, [x2, #0x60]
 ;;       mov     x14, #0
-;;       add     x15, x15, x2
+;;       add     x15, x15, x4
 ;;       mov     x0, #0xffff0000
 ;;       add     x15, x15, x0
 ;;       cmp     x12, x13
 ;;       csel    x14, x14, x15, hi
 ;;       csdb
-;;       ldrb    w0, [x14]
+;;       ldrb    w2, [x14]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   a4: .byte   0x1f, 0xc1, 0x00, 0x00
