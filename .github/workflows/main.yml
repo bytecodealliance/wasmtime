@@ -69,6 +69,12 @@ jobs:
     - run: npm run fmt-check
       working-directory: ./crates/explorer
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Check Code style quickly by running `clang-format` over all the C/C++ code
   #
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
@@ -1053,6 +1059,7 @@ jobs:
       - build-preview1-component-adapter
       - build-wasmtime-target-wasm32
       - test-min-platform-example
+      - check_js
     if: always()
     steps:
     - name: Successful test and build
