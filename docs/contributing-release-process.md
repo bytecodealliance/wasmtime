@@ -153,3 +153,20 @@ the runbook is merged.
    * Like the patch release process this will kick everything else into motion.
      Note that the actual security fixes should be merged either before or as
      part of this PR.
+
+## Releasing Notes
+
+Release notes for Wasmtime are written in the `RELEASES.md` file in the root of
+the repository. Management of this file looks like:
+
+* (theoretically) All changes on `main` which need to write an entry in
+  `RELEASES.md`.
+* When the `main` branch gets a version the `RELEASES.md` file is emptied and
+  replaced with `ci/RELEASES-template.md`. An entry for the upcoming release is
+  added to the bulleted list at the bottom.
+* (realistically) After a `release-X.Y.Z` branch is created release notes are
+  updated and edited on the release branch.
+
+This means that `RELEASES.md` only has release notes for the release branch that
+it is on. Historical release notes can be found through links at the bottom to
+previous copies of `RELEASES.md`
