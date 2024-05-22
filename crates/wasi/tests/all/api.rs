@@ -120,6 +120,11 @@ fn api_proxy() {}
 #[allow(dead_code)]
 fn api_proxy_streaming() {}
 
+// This is tested in the wasi-http crate, but need to satisfy the `foreach_api!`
+// macro above.
+#[allow(dead_code)]
+fn api_proxy_forward_request() {}
+
 wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,

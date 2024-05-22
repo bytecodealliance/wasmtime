@@ -187,7 +187,14 @@ pub async fn default_send_request_handler(
         between_bytes_timeout,
     }: OutgoingRequestConfig,
 ) -> Result<IncomingResponse, types::ErrorCode> {
-    let Some(authority) = request.uri().authority().map(ToString::to_string) else {
+    let authority = if let Some(authority) = request.uri().authority() {
+        if authority.port().is_some() {
+            authority.to_string()
+        } else {
+            let port = if use_tls { 443 } else { 80 };
+            format!("{}:{port}", authority.to_string())
+        }
+    } else {
         return Err(types::ErrorCode::HttpRequestUriInvalid);
     };
     let tcp_stream = timeout(connect_timeout, TcpStream::connect(&authority))
