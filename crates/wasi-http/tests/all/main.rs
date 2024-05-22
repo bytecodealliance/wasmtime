@@ -131,6 +131,7 @@ async fn run_wasi_http(
     req: hyper::Request<HyperIncomingBody>,
     send_request: Option<RequestSender>,
     rejected_authority: Option<String>,
+    add_wasi_linker: bool,
 ) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
@@ -160,8 +161,26 @@ async fn run_wasi_http(
     };
     let mut store = Store::new(&engine, ctx);
 
-    let mut linker = Linker::new(&engine);
+    let mut linker: Linker<Ctx> = Linker::new(&engine);
     wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
+    if add_wasi_linker {
+        fn type_annotate<T: WasiView, F>(val: F) -> F
+        where
+            F: Fn(&mut T) -> &mut dyn WasiView,
+        {
+            val
+        }
+        let closure = type_annotate::<Ctx, _>(|t| t);
+
+        wasmtime_wasi::bindings::cli::environment::add_to_linker_get_host(&mut linker, closure)?;
+        wasmtime_wasi::bindings::cli::exit::add_to_linker_get_host(&mut linker, closure)?;
+        wasmtime_wasi::bindings::filesystem::types::add_to_linker_get_host(&mut linker, closure)?;
+        wasmtime_wasi::bindings::filesystem::preopens::add_to_linker_get_host(
+            &mut linker,
+            closure,
+        )?;
+    }
+
     let (proxy, _) =
         wasmtime_wasi_http::proxy::Proxy::instantiate_async(&mut store, &component, &linker)
             .await?;
@@ -213,6 +232,7 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
         req.body(body::empty())?,
         None,
         None,
+        false,
     )
     .await?;
 
@@ -341,6 +361,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         request,
         send_request,
         None,
+        false,
     )
     .await??;
 
@@ -388,6 +409,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
         request,
         None,
         Some("forbidden.com".to_string()),
+        false,
     )
     .await??;
 
@@ -507,6 +529,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
         request,
         None,
         None,
+        false,
     )
     .await??;
 
@@ -527,6 +550,30 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+#[test_log::test(tokio::test)]
+async fn wasi_http_without_port() -> Result<()> {
+    do_http_request_without_port().await
+}
+
+async fn do_http_request_without_port() -> Result<()> {
+    let request = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri("http://example.com");
+    let request = request.body(body::empty())?;
+
+    let response = run_wasi_http(
+        test_programs_artifacts::API_FORWARD_COMPONENT,
+        request,
+        None,
+        None,
+        true,
+    )
+    .await??;
+
+    assert_eq!(StatusCode::OK, response.status());
+
+    Ok(())
+}
 mod body {
     use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
     use hyper::body::Bytes;
