@@ -7,7 +7,7 @@
     (block (param i32 i64) (result i32 i64 f64)
       (f64.const 1234.5))))
 
-;; function u0:0(i64 vmctx, i64, i64, i32) -> i32, i64, f64 fast {
+;; function u0:0(i64 vmctx, i64, i64, i32) -> i32, i64, f64 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
