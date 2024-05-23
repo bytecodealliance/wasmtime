@@ -608,7 +608,7 @@ impl ControlStackFrame {
         }
     }
 
-    /// Orchestrates how blocks results are handled.
+    /// Orchestrates how block results are handled.
     /// Results are handled in reverse order, starting from register results
     /// continuing to memory values. This guarantees that the stack ordering
     /// invariant is maintained. See [ABIResults] for more details.
