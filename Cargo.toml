@@ -366,10 +366,6 @@ default = [
   # cost, so allow disabling this through disabling of our own `default`
   # feature.
   "clap/default",
-
-  # By default include compatibility with the "old" CLI from Wasmtime 13 and
-  # prior.
-  "old-cli",
 ]
 
 # ========================================
@@ -410,9 +406,6 @@ addr2line = ["wasmtime/addr2line"]
 debug-builtins = ["wasmtime/debug-builtins"]
 threads = ["wasmtime-cli-flags/threads"]
 gc = ["wasmtime-cli-flags/gc"]
-
-# Enables compatibility shims with Wasmtime 13 and prior's CLI.
-old-cli = []
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
