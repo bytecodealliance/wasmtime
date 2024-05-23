@@ -651,7 +651,7 @@ impl<T> LinkerInstance<'_, T> {
     ) -> Result<()> {
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
+            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())

@@ -16,39 +16,43 @@ pub fn link_spectest<T>(
     config: &SpectestConfig,
 ) -> Result<()> {
     let suppress = config.suppress_prints;
-    linker.func_wrap("spectest", "print", || {})?;
-    linker.func_wrap("spectest", "print_i32", move |val: i32| {
+    linker.func_wrap("spectest", "print", |_, _: ()| {})?;
+    linker.func_wrap("spectest", "print_i32", move |_, (val,): (i32,)| {
         if !suppress {
             println!("{}: i32", val)
         }
     })?;
-    linker.func_wrap("spectest", "print_i64", move |val: i64| {
+    linker.func_wrap("spectest", "print_i64", move |_, (val,): (i64,)| {
         if !suppress {
             println!("{}: i64", val)
         }
     })?;
-    linker.func_wrap("spectest", "print_f32", move |val: f32| {
+    linker.func_wrap("spectest", "print_f32", move |_, (val,): (f32,)| {
         if !suppress {
             println!("{}: f32", val)
         }
     })?;
-    linker.func_wrap("spectest", "print_f64", move |val: f64| {
+    linker.func_wrap("spectest", "print_f64", move |_, (val,): (f64,)| {
         if !suppress {
             println!("{}: f64", val)
         }
     })?;
-    linker.func_wrap("spectest", "print_i32_f32", move |i: i32, f: f32| {
+    linker.func_wrap("spectest", "print_i32_f32", move |_, (i, f): (i32, f32)| {
         if !suppress {
             println!("{}: i32", i);
             println!("{}: f32", f);
         }
     })?;
-    linker.func_wrap("spectest", "print_f64_f64", move |f1: f64, f2: f64| {
-        if !suppress {
-            println!("{}: f64", f1);
-            println!("{}: f64", f2);
-        }
-    })?;
+    linker.func_wrap(
+        "spectest",
+        "print_f64_f64",
+        move |_, (f1, f2): (f64, f64)| {
+            if !suppress {
+                println!("{}: f64", f1);
+                println!("{}: f64", f2);
+            }
+        },
+    )?;
 
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let g = Global::new(&mut *store, ty, Val::I32(666))?;
