@@ -74,7 +74,7 @@
 ;; When constructing, the rule will fail if the value cannot be represented in
 ;; the target type.  If it fits, it'll be masked accordingly in the constant.
 (decl iconst_s (Type i64) Value)
-(extractor (iconst_s ty c) (inst_data_tupled (iconst_sextend_etor ty c)))
+(extractor (iconst_s ty c) (sextend_maybe ty (inst_data_tupled (iconst_sextend_etor _inner_ty c))))
 (rule 0 (iconst_s ty c)
 	(if-let c_masked (u64_and (i64_as_u64 c) (ty_umax ty)))
 	(if-let c_reextended (i64_sextend_u64 ty c_masked))
@@ -89,7 +89,7 @@
 ;; When constructing, the rule will fail if the value cannot be represented in
 ;; the target type.
 (decl iconst_u (Type u64) Value)
-(extractor (iconst_u ty c) (iconst ty (u64_from_imm64 c)))
+(extractor (iconst_u ty c) (uextend_maybe ty (iconst _inner_ty (u64_from_imm64 c))))
 (rule 0 (iconst_u ty c)
 	(if-let $true (u64_le c (ty_umax ty)))
     (iconst ty (imm64 c)))
