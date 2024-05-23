@@ -261,8 +261,10 @@ impl<'a> CodeGenContext<'a> {
         self.free_reg(src2);
 
         let dst = match size {
-            OperandSize::S32 => TypedReg::i32(dst),
-            OperandSize::S64 => TypedReg::i64(dst),
+            // Float comparison operators are defined as
+            // [f64 f64] -> i32
+            // https://webassembly.github.io/spec/core/appendix/index-instructions.html
+            OperandSize::S32 | OperandSize::S64 => TypedReg::i32(dst),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
         self.stack.push(dst.into());
