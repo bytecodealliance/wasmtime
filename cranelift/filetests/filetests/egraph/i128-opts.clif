@@ -135,3 +135,23 @@ block0:
     ; check: v4 = iadd v1, v3
     ; check: return v4
 }
+
+function %mul_2u_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i16 2
+    v2 = uextend.i128 v1
+    v3 = imul v0, v2
+    return v3
+    ; check: v4 = iadd v0, v0
+    ; check: return v4
+}
+
+function %mul_neg1_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i16 -1
+    v2 = sextend.i128 v1
+    v3 = imul v0, v2
+    return v3
+    ; check: v4 = ineg v0
+    ; check: return v4
+}
