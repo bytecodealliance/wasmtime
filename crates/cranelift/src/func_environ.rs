@@ -7,6 +7,7 @@ use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
@@ -118,7 +119,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// VMRuntimeLimits` for this function's vmctx argument. This pointer is stored
     /// in the vmctx itself, but never changes for the lifetime of the function,
     /// so if we load it up front we can continue to use it throughout.
-    vmruntime_limits_ptr: cranelift_frontend::Variable,
+    vmruntime_limits_ptr: ir::Value,
 
     /// A cached epoch deadline value, when performing epoch-based
     /// interruption. Loaded from `VMRuntimeLimits` and reloaded after
@@ -171,7 +172,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             fuel_var: Variable::new(0),
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
-            vmruntime_limits_ptr: Variable::new(0),
+            vmruntime_limits_ptr: ir::Value::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -284,14 +285,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // function. This is possible since we know that the pointer never
         // changes for the lifetime of the function.
         let pointer_type = self.pointer_type();
-        builder.declare_var(self.vmruntime_limits_ptr, pointer_type);
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
         let offset = i32::try_from(self.offsets.vmctx_runtime_limits()).unwrap();
         let interrupt_ptr = builder
             .ins()
             .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-        builder.def_var(self.vmruntime_limits_ptr, interrupt_ptr);
+        self.vmruntime_limits_ptr = interrupt_ptr;
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -438,7 +438,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Loads the fuel consumption value from `VMRuntimeLimits` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
+        let (addr, offset) = self.fuel_addr_offset();
         let fuel = builder
             .ins()
             .load(ir::types::I64, ir::MemFlags::trusted(), addr, offset);
@@ -448,7 +448,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Stores the fuel consumption value from `self.fuel_var` into
     /// `VMRuntimeLimits`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
+        let (addr, offset) = self.fuel_addr_offset();
         let fuel_consumed = builder.use_var(self.fuel_var);
         builder
             .ins()
@@ -457,12 +457,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Returns the `(address, offset)` of the fuel consumption within
     /// `VMRuntimeLimits`, used to perform loads/stores later.
-    fn fuel_addr_offset(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-    ) -> (ir::Value, ir::immediates::Offset32) {
+    fn fuel_addr_offset(&mut self) -> (ir::Value, ir::immediates::Offset32) {
         (
-            builder.use_var(self.vmruntime_limits_ptr),
+            self.vmruntime_limits_ptr,
             i32::from(self.offsets.ptr.vmruntime_limits_fuel_consumed()).into(),
         )
     }
@@ -599,12 +596,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let interrupts = builder.use_var(self.vmruntime_limits_ptr);
         let deadline =
             builder.ins().load(
                 ir::types::I64,
                 ir::MemFlags::trusted(),
-                interrupts,
+                self.vmruntime_limits_ptr,
                 ir::immediates::Offset32::new(
                     self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
                 ),
@@ -1688,10 +1684,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn after_locals(&mut self, num_locals: usize) {
-        self.vmruntime_limits_ptr = Variable::new(num_locals);
-        self.fuel_var = Variable::new(num_locals + 1);
-        self.epoch_deadline_var = Variable::new(num_locals + 2);
-        self.epoch_ptr_var = Variable::new(num_locals + 3);
+        self.fuel_var = Variable::new(num_locals);
+        self.epoch_deadline_var = Variable::new(num_locals + 1);
+        self.epoch_ptr_var = Variable::new(num_locals + 2);
     }
 
     fn translate_table_grow(
