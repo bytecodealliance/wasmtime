@@ -129,7 +129,6 @@ members = [
   "examples/min-platform/embedding",
   "fuzz",
   "winch/codegen",
-  "crates/test-macros",
 ]
 exclude = [
   'docs/rust_wasi_markdown_parser',

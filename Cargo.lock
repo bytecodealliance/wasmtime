@@ -3812,8 +3812,9 @@ version = "22.0.0"
 
 [[package]]
 name = "wasmtime-test-macros"
-version = "22.0.0"
+version = "0.0.0"
 dependencies = [
+ "anyhow",
  "proc-macro2",
  "quote",
  "syn 2.0.60",
