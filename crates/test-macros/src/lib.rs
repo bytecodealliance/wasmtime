@@ -11,53 +11,138 @@
 //!    Ok(())
 //! }
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
-    parenthesized, parse::Parse, parse_macro_input, Ident, ItemFn, Result, ReturnType, Token,
+    braced,
+    parse::{Parse, ParseStream},
+    parse_macro_input, token, Attribute, Ident, Result, ReturnType, Signature, Visibility,
 };
+
+/// Test configuration.
+struct TestConfig {
+    /// Supported compiler strategies.
+    strategies: Vec<(String, Ident)>,
+}
+
+impl TestConfig {
+    /// Validate the test configuration.
+    /// Only the number of strategies is validated, as this avoid expansions of
+    /// empty strategies or more strategies than supported.
+    ///
+    /// The supported strategies are validated inline when parsing.
+    fn validate(&self) -> anyhow::Result<()> {
+        if self.strategies.len() > 2 {
+            Err(anyhow::anyhow!("Expected at most 2 strategies"))
+        } else if self.strategies.len() == 0 {
+            Err(anyhow::anyhow!("Expected at least 1 strategy"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Default for TestConfig {
+    fn default() -> Self {
+        Self { strategies: vec![] }
+    }
+}
+
+/// A generic function body represented as a braced [`TokenStream`].
+struct Block {
+    brace: token::Brace,
+    rest: proc_macro2::TokenStream,
+}
+
+impl Parse for Block {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        Ok(Self {
+            brace: braced!(content in input),
+            rest: content.parse()?,
+        })
+    }
+}
+
+impl ToTokens for Block {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        self.brace.surround(tokens, |tokens| {
+            tokens.append_all(self.rest.clone());
+        });
+    }
+}
+
+/// Custom function parser.
+/// Parses the function's attributes, visibility and signature, leaving the
+/// block as an opaque [`TokenStream`].
+struct Fn {
+    attrs: Vec<Attribute>,
+    visibility: Visibility,
+    sig: Signature,
+    body: Block,
+}
+
+impl Parse for Fn {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
+        let visibility: Visibility = input.parse()?;
+        let sig: Signature = input.parse()?;
+        let body: Block = input.parse()?;
+
+        Ok(Self {
+            attrs,
+            visibility,
+            sig,
+            body,
+        })
+    }
+}
+
+impl ToTokens for Fn {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(tokens);
+        }
+        self.visibility.to_tokens(tokens);
+        self.sig.to_tokens(tokens);
+        self.body.to_tokens(tokens);
+    }
+}
 
 #[proc_macro_attribute]
 pub fn wasmtime_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
-    let mut strategies: Vec<(String, Ident)> = vec![];
+    let mut test_config = TestConfig::default();
 
-    let parser = syn::meta::parser(|meta| {
+    let config_parser = syn::meta::parser(|meta| {
         if meta.path.is_ident("strategies") {
-            let v = meta.input;
-            let content;
-            parenthesized!(content in v);
-            strategies = content
-                .parse_terminated(Ident::parse, Token![,])?
-                .into_iter()
-                .map(|v| (v.to_string(), v))
-                .collect();
+            meta.parse_nested_meta(|meta| {
+                if meta.path.is_ident("Winch") || meta.path.is_ident("Cranelift") {
+                    let id = meta.path.require_ident()?.clone();
+                    test_config.strategies.push((id.to_string(), id));
+                    Ok(())
+                } else {
+                    Err(meta.error("Unknown strategy"))
+                }
+            })?;
 
-            if strategies.len() > 2 {
-                return Err(meta.error("Expected at most 2 strategies"));
-            }
-
-            if strategies.is_empty() {
-                return Err(meta.error("Expected at least 1 strategy"));
-            }
-
-            Ok(())
+            test_config.validate().map_err(|e| meta.error(e))
         } else {
             Err(meta.error("Unsupported attributes"))
         }
     });
 
-    parse_macro_input!(attrs with parser);
+    parse_macro_input!(attrs with config_parser);
 
-    match expand(&strategies, parse_macro_input!(item as ItemFn)) {
+    match expand(&test_config, parse_macro_input!(item as Fn)) {
         Ok(tok) => tok,
         Err(e) => e.into_compile_error().into(),
     }
 }
 
-fn expand(strategies: &[(String, Ident)], func: ItemFn) -> Result<TokenStream> {
+fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     let mut tests = vec![quote! { #func }];
     let attrs = &func.attrs;
 
-    for (strategy_name, ident) in strategies {
+    for (strategy_name, ident) in &test_config.strategies {
         // Winch currently only offers support for x64.
         let target = if strategy_name == "Winch" {
             quote! { #[cfg(target_arch = "x86_64")] }
