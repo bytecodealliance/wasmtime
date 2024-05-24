@@ -288,10 +288,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
         let offset = i32::try_from(self.offsets.vmctx_runtime_limits()).unwrap();
-        let interrupt_ptr = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-        self.vmruntime_limits_ptr = interrupt_ptr;
+        debug_assert!(self.vmruntime_limits_ptr.is_reserved_value());
+        self.vmruntime_limits_ptr =
+            builder
+                .ins()
+                .load(pointer_type, ir::MemFlags::trusted(), base, offset);
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -458,6 +459,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Returns the `(address, offset)` of the fuel consumption within
     /// `VMRuntimeLimits`, used to perform loads/stores later.
     fn fuel_addr_offset(&mut self) -> (ir::Value, ir::immediates::Offset32) {
+        debug_assert!(!self.vmruntime_limits_ptr.is_reserved_value());
         (
             self.vmruntime_limits_ptr,
             i32::from(self.offsets.ptr.vmruntime_limits_fuel_consumed()).into(),
