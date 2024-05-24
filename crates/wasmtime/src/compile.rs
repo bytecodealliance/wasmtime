@@ -710,42 +710,18 @@ impl FunctionIndices {
         )?;
 
         // If requested, generate and add DWARF information.
-        if tunables.generate_native_debuginfo &&
-            // We can only add DWARF once. Supporting DWARF for components of
-            // multiple Wasm modules will require merging the DWARF sections
-            // together.
-            translations.len() == 1
-        {
-            for (module, translation) in &translations {
-                let funcs: PrimaryMap<_, _> = self
-                    .indices
-                    .get(&CompileKey::WASM_FUNCTION_KIND)
-                    .map(|xs| {
-                        xs.range(
-                            CompileKey::wasm_function(module, DefinedFuncIndex::from_u32(0))
-                                ..=CompileKey::wasm_function(
-                                    module,
-                                    DefinedFuncIndex::from_u32(u32::MAX - 1),
-                                ),
-                        )
-                    })
-                    .into_iter()
-                    .flat_map(|x| x)
-                    .map(|(_, x)| {
-                        let i = x.unwrap_function();
-                        (symbol_ids_and_locs[i].0, &*compiled_funcs[i].1)
-                    })
-                    .collect();
-                if !funcs.is_empty() {
-                    compiler.append_dwarf(
-                        &mut obj,
-                        translation,
-                        &funcs,
-                        dwarf_package_bytes,
-                        tunables,
-                    )?;
-                }
-            }
+        if tunables.generate_native_debuginfo {
+            compiler.append_dwarf(
+                &mut obj,
+                &translations,
+                &|module, func| {
+                    let bucket = &self.indices[&CompileKey::WASM_FUNCTION_KIND];
+                    let i = bucket[&CompileKey::wasm_function(module, func)].unwrap_function();
+                    (symbol_ids_and_locs[i].0, &*compiled_funcs[i].1)
+                },
+                dwarf_package_bytes,
+                tunables,
+            )?;
         }
 
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);

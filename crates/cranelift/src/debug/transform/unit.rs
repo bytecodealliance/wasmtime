@@ -4,17 +4,16 @@ use super::expression::compile_expression;
 use super::line_program::clone_line_program;
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
-use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
-use super::{DebugInputContext, Reader};
-use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctionsMetadata;
+use super::utils::{add_internal_types, append_vmctx_info};
+use super::DebugInputContext;
+use crate::debug::{Compilation, Reader};
 use anyhow::{Context, Error};
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
-use wasmtime_environ::DefinedFuncIndex;
+use wasmtime_environ::StaticModuleIndex;
 use wasmtime_versioned_export_macros::versioned_stringify_ident;
 
 struct InheritedAttr<T> {
@@ -45,14 +44,11 @@ impl<T> InheritedAttr<T> {
     }
 }
 
-fn get_base_type_name<R>(
-    type_entry: &DebuggingInformationEntry<R>,
-    unit: &Unit<R, R::Offset>,
-    context: &DebugInputContext<R>,
-) -> Result<String, Error>
-where
-    R: Reader,
-{
+fn get_base_type_name(
+    type_entry: &DebuggingInformationEntry<Reader<'_>>,
+    unit: &Unit<Reader<'_>, usize>,
+    context: &DebugInputContext<Reader<'_>>,
+) -> Result<String, Error> {
     // FIXME remove recursion.
     if let Some(AttributeValue::UnitRef(ref offset)) = type_entry.attr_value(gimli::DW_AT_type)? {
         let mut entries = unit.entries_at_offset(*offset)?;
@@ -107,20 +103,17 @@ enum WebAssemblyPtrKind {
 ///
 /// Notice that "resolve_vmctx_memory_ptr" is external/builtin
 /// subprogram that is not part of Wasm code.
-fn replace_pointer_type<R>(
+fn replace_pointer_type(
     parent_id: write::UnitEntryId,
     kind: WebAssemblyPtrKind,
     comp_unit: &mut write::Unit,
     wp_die_id: write::UnitEntryId,
-    pointer_type_entry: &DebuggingInformationEntry<R>,
-    unit: &Unit<R, R::Offset>,
-    context: &DebugInputContext<R>,
+    pointer_type_entry: &DebuggingInformationEntry<Reader<'_>>,
+    unit: &Unit<Reader<'_>, usize>,
+    context: &DebugInputContext<Reader<'_>>,
     out_strings: &mut write::StringTable,
     pending_die_refs: &mut PendingUnitRefs,
-) -> Result<write::UnitEntryId, Error>
-where
-    R: Reader,
-{
+) -> Result<write::UnitEntryId, Error> {
     const WASM_PTR_LEN: u8 = 4;
 
     macro_rules! add_tag {
@@ -245,7 +238,7 @@ where
     Ok(wrapper_die_id)
 }
 
-fn is_dead_code<R: Reader>(entry: &DebuggingInformationEntry<R>) -> bool {
+fn is_dead_code(entry: &DebuggingInformationEntry<Reader<'_>>) -> bool {
     const TOMBSTONE: u64 = u32::MAX as u64;
 
     match entry.attr_value(gimli::DW_AT_low_pc) {
@@ -254,24 +247,20 @@ fn is_dead_code<R: Reader>(entry: &DebuggingInformationEntry<R>) -> bool {
     }
 }
 
-pub(crate) fn clone_unit<'a, R>(
-    dwarf: &gimli::Dwarf<R>,
-    unit: &Unit<R, R::Offset>,
-    split_unit: Option<&Unit<R, R::Offset>>,
-    split_dwarf: Option<&gimli::Dwarf<R>>,
-    context: &DebugInputContext<R>,
-    addr_tr: &'a AddressTransform,
-    funcs: &'a CompiledFunctionsMetadata,
-    memory_offset: &ModuleMemoryOffset,
+pub(crate) fn clone_unit(
+    compilation: &mut Compilation<'_>,
+    module: StaticModuleIndex,
+    unit: &Unit<Reader<'_>, usize>,
+    split_unit: Option<&Unit<Reader<'_>, usize>>,
+    split_dwarf: Option<&gimli::Dwarf<Reader<'_>>>,
+    context: &DebugInputContext<Reader<'_>>,
+    addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
-    translated: &mut HashSet<DefinedFuncIndex>,
+    translated: &mut HashSet<usize>,
     isa: &dyn TargetIsa,
-) -> Result<Option<(write::UnitId, UnitRefsMap, PendingDebugInfoRefs)>, Error>
-where
-    R: Reader,
-{
+) -> Result<Option<(write::UnitId, UnitRefsMap, PendingDebugInfoRefs)>, Error> {
     let mut die_ref_map = UnitRefsMap::new();
     let mut pending_die_refs = PendingUnitRefs::new();
     let mut pending_di_refs = PendingDebugInfoRefs::new();
@@ -290,6 +279,9 @@ where
             skeleton_die = Some(die_tuple.1);
         }
     }
+
+    let dwarf = &compilation.translations[module].debuginfo.dwarf;
+    let memory_offset = &compilation.module_memory_offsets[module];
 
     // Iterate over all of this compilation unit's entries.
     let mut entries = program_unit.entries();
@@ -403,12 +395,11 @@ where
             let range_builder = RangeInfoBuilder::from_subprogram_die(
                 dwarf, &unit, entry, context, addr_tr, cu_low_pc,
             )?;
-            if let RangeInfoBuilder::Function(func_index) = range_builder {
-                if let Some(frame_info) = get_function_frame_info(memory_offset, funcs, func_index)
-                {
-                    current_value_range.push(new_stack_len, frame_info);
-                }
-                translated.insert(func_index);
+            if let RangeInfoBuilder::Function(func) = range_builder {
+                let frame_info = compilation.function_frame_info(module, func);
+                current_value_range.push(new_stack_len, frame_info);
+                let (symbol, _) = compilation.function(module, func);
+                translated.insert(symbol);
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {

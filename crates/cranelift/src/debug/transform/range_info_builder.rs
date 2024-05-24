@@ -2,7 +2,7 @@ use super::address_transform::AddressTransform;
 use super::{DebugInputContext, Reader};
 use anyhow::Error;
 use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit};
-use wasmtime_environ::{DefinedFuncIndex, EntityRef};
+use wasmtime_environ::DefinedFuncIndex;
 
 pub(crate) enum RangeInfoBuilder {
     Undefined,
@@ -172,8 +172,8 @@ impl RangeInfoBuilder {
                 }
             }
             RangeInfoBuilder::Function(index) => {
+                let symbol = addr_tr.map()[*index].symbol;
                 let range = addr_tr.func_range(*index);
-                let symbol = index.index();
                 let addr = write::Address::Symbol {
                     symbol,
                     addend: range.0 as i64,

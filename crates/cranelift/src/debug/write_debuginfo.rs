@@ -1,15 +1,12 @@
 pub use crate::debug::transform::transform_dwarf;
-use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctionsMetadata;
+use crate::debug::Compilation;
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::{
     unwind::{CfaUnwindInfo, UnwindInfo},
     TargetIsa,
 };
-use cranelift_entity::EntityRef;
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
-use wasmtime_environ::DebugInfoData;
 
 #[allow(missing_docs)]
 pub struct DwarfSection {
@@ -142,13 +139,13 @@ impl Writer for WriterRelocate {
 
 fn create_frame_table(
     isa: &dyn TargetIsa,
-    funcs: &CompiledFunctionsMetadata,
+    compilation: &mut Compilation<'_>,
 ) -> Option<FrameTable> {
     let mut table = FrameTable::default();
 
     let cie_id = table.add_cie(isa.create_systemv_cie()?);
 
-    for (i, metadata) in funcs {
+    for (_, symbol, metadata) in compilation.functions() {
         // The CFA-based unwind info will either be natively present, or we
         // have generated it and placed into the "cfa_unwind_info" auxiliary
         // field. We shouldn't emit both, though, it'd be wasteful.
@@ -161,13 +158,7 @@ fn create_frame_table(
         }
 
         if let Some(info) = unwind_info {
-            table.add_fde(
-                cie_id,
-                info.to_fde(Address::Symbol {
-                    symbol: i.index(),
-                    addend: 0,
-                }),
-            );
+            table.add_fde(cie_id, info.to_fde(Address::Symbol { symbol, addend: 0 }));
         }
     }
 
@@ -176,21 +167,10 @@ fn create_frame_table(
 
 pub fn emit_dwarf(
     isa: &dyn TargetIsa,
-    debuginfo_data: &DebugInfoData,
-    funcs: &CompiledFunctionsMetadata,
-    memory_offset: &ModuleMemoryOffset,
-    dwarf_package_bytes: Option<&[u8]>,
-    tunables: &wasmtime_environ::Tunables,
+    compilation: &mut Compilation<'_>,
 ) -> anyhow::Result<Vec<DwarfSection>> {
-    let dwarf = transform_dwarf(
-        isa,
-        debuginfo_data,
-        funcs,
-        memory_offset,
-        dwarf_package_bytes,
-        tunables,
-    )?;
-    let frame_table = create_frame_table(isa, funcs);
+    let dwarf = transform_dwarf(isa, compilation)?;
+    let frame_table = create_frame_table(isa, compilation);
     let sections = emit_dwarf_sections(isa, dwarf, frame_table)?;
     Ok(sections)
 }

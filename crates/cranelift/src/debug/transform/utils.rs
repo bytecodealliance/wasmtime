@@ -1,12 +1,11 @@
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctionsMetadata;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
-use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_versioned_export_macros::versioned_stringify_ident;
+
 ///Adds internal Wasm utility types DIEs such as WebAssemblyPtr and
 /// WasmtimeVMContext.
 ///
@@ -163,24 +162,4 @@ pub(crate) fn append_vmctx_info(
     var_die.set(gimli::DW_AT_location, loc);
 
     Ok(())
-}
-
-pub(crate) fn get_function_frame_info<'a, 'b, 'c>(
-    memory_offset: &ModuleMemoryOffset,
-    funcs: &'b CompiledFunctionsMetadata,
-    func_index: DefinedFuncIndex,
-) -> Option<FunctionFrameInfo<'a>>
-where
-    'b: 'a,
-    'c: 'a,
-{
-    if let Some(func) = funcs.get(func_index) {
-        let frame_info = FunctionFrameInfo {
-            value_ranges: &func.value_labels_ranges,
-            memory_offset: memory_offset.clone(),
-        };
-        Some(frame_info)
-    } else {
-        None
-    }
 }

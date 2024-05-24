@@ -356,7 +356,7 @@ check: exited with status = 0
     #[test]
     #[ignore]
     fn dwarf_simple() -> Result<()> {
-        for wasm in [DWARF_SIMPLE] {
+        for wasm in [DWARF_SIMPLE, DWARF_SIMPLE_COMPONENT] {
             test_dwarf_simple(wasm, &[])?;
         }
         Ok(())

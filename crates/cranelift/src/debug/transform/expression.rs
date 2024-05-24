@@ -13,7 +13,6 @@ use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
@@ -254,9 +253,7 @@ impl CompiledExpression {
                 Box<dyn Iterator<Item = (write::Address, u64)> + 'a>,
                 Vec<u8>,
             ),
-            Ranges(
-                Box<dyn Iterator<Item = Result<(DefinedFuncIndex, usize, usize, Vec<u8>)>> + 'a>,
-            ),
+            Ranges(Box<dyn Iterator<Item = Result<(usize, usize, usize, Vec<u8>)>> + 'a>),
         }
         impl Iterator for BuildWithLocalsResult<'_> {
             type Item = Result<(write::Address, u64, write::Expression)>;
@@ -267,10 +264,10 @@ impl CompiledExpression {
                         .next()
                         .map(|(addr, len)| Ok((addr, len, write::Expression::raw(code.to_vec())))),
                     BuildWithLocalsResult::Ranges(it) => it.next().map(|r| {
-                        r.map(|(func_index, start, end, code_buf)| {
+                        r.map(|(symbol, start, end, code_buf)| {
                             (
                                 write::Address::Symbol {
-                                    symbol: func_index.index(),
+                                    symbol,
                                     addend: start as i64,
                                 },
                                 (end - start) as u64,
@@ -650,7 +647,7 @@ where
 
 #[derive(Debug, Clone)]
 struct CachedValueLabelRange {
-    func_index: DefinedFuncIndex,
+    func_index: usize,
     start: usize,
     end: usize,
     label_location: HashMap<ValueLabel, LabelValueLoc>,
@@ -1176,7 +1173,7 @@ mod tests {
             imported_func_count: 0,
             path: None,
         };
-        AddressTransform::new(&module_map, &fi)
+        AddressTransform::mock(&module_map, fi)
     }
 
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
@@ -1225,7 +1222,6 @@ mod tests {
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
         use crate::debug::ModuleMemoryOffset;
-        use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
         let addr_tr = create_mock_address_transform();
         let (value_ranges, value_labels) = create_mock_value_ranges();
@@ -1238,7 +1234,7 @@ mod tests {
         let builder = ValueLabelRangesBuilder::new(&[(10, 20)], &addr_tr, Some(&fi));
         let ranges = builder.into_ranges().collect::<Vec<_>>();
         assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].func_index, DefinedFuncIndex::new(0));
+        assert_eq!(ranges[0].func_index, 0);
         assert_eq!(ranges[0].start, 0);
         assert_eq!(ranges[0].end, 30);
 
