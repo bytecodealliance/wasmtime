@@ -230,7 +230,6 @@
   (VfmsacVF)
   (VfnmsacVF)
   (Vslide1upVX)
-  (Vfslide1upVF)
 ))
 
 ;; Register-Imm ALU Ops
@@ -1103,13 +1102,6 @@
 (decl rv_vslide1up_vx (VReg VReg XReg VecOpMasking VState) VReg)
 (rule (rv_vslide1up_vx vd vs2 rs1 mask vstate)
   (vec_alu_rrrr (VecAluOpRRRR.Vslide1upVX) vd vs2 rs1 mask vstate))
-
-;; Helper for emitting the `vfslide1up.vf` instruction.
-;;
-;; # vd[0]=f[rs1], vd[i+1] = vs2[i]
-(decl rv_vfslide1up_vf (VReg VReg FReg VecOpMasking VState) VReg)
-(rule (rv_vfslide1up_vf vd vs2 rs1 mask vstate)
-  (vec_alu_rrrr (VecAluOpRRRR.Vfslide1upVF) vd vs2 rs1 mask vstate))
 
 ;; Helper for emitting the `vmv.x.s` instruction.
 ;; This instruction copies the first element of the source vector to the destination X register.
