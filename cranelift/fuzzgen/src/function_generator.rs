@@ -764,9 +764,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[I128],
                     &[F32 | F64]
                 ),
-                // https://github.com/bytecodealliance/wasmtime/issues/6104
-                (Opcode::Bitcast, &[I128], &[_]),
-                (Opcode::Bitcast, &[_], &[I128]),
                 // TODO
                 (
                     Opcode::SelectSpectreGuard,
