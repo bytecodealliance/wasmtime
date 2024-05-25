@@ -729,6 +729,7 @@ impl Drop for MemoryImageSlot {
 mod test {
     use super::{MemoryImage, MemoryImageSlot, MemoryImageSource, MemoryPlan, MemoryStyle};
     use crate::runtime::vm::mmap::Mmap;
+    use crate::runtime::vm::page_size;
     use crate::runtime::vm::sys::vm::decommit_pages;
     use anyhow::Result;
     use std::sync::Arc;
@@ -736,7 +737,7 @@ mod test {
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
-        let page_size = crate::runtime::vm::page_size();
+        let page_size = page_size();
         assert_eq!(offset & (page_size - 1), 0);
 
         // The image length is rounded up to the nearest page size
@@ -803,6 +804,7 @@ mod test {
 
     #[test]
     fn instantiate_image() {
+        let page_size = page_size();
         let plan = dummy_memory_plan(MemoryStyle::Static {
             byte_reservation: 4 << 30,
         });
@@ -812,13 +814,13 @@ mod test {
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
         // Create an image with some data.
-        let image = Arc::new(create_memfd_with_data(4096, &[1, 2, 3, 4]).unwrap());
+        let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         // Instantiate with this image
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         assert!(memfd.has_image());
         let slice = unsafe { mmap.slice_mut(0..65536) };
-        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
-        slice[4096] = 5;
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+        slice[page_size] = 5;
         // Clear and re-instantiate same image
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
@@ -826,7 +828,7 @@ mod test {
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         // Should not see mutation from above
-        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
         // Clear and re-instantiate no image
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
@@ -834,22 +836,22 @@ mod test {
         memfd.instantiate(64 << 10, None, &plan).unwrap();
         assert!(!memfd.has_image());
         let slice = unsafe { mmap.slice_mut(0..65536) };
-        assert_eq!(&[0, 0, 0, 0], &slice[4096..4100]);
+        assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
         // Clear and re-instantiate image again
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
-        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
         // Create another image with different data.
-        let image2 = Arc::new(create_memfd_with_data(4096, &[10, 11, 12, 13]).unwrap());
+        let image2 = Arc::new(create_memfd_with_data(page_size, &[10, 11, 12, 13]).unwrap());
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
         memfd.instantiate(128 << 10, Some(&image2), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
-        assert_eq!(&[10, 11, 12, 13], &slice[4096..4100]);
+        assert_eq!(&[10, 11, 12, 13], &slice[page_size..][..4]);
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
         memfd
@@ -857,12 +859,13 @@ mod test {
             .unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
-        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
     }
 
     #[test]
     #[cfg(target_os = "linux")]
     fn memset_instead_of_madvise() {
+        let page_size = page_size();
         let plan = dummy_memory_plan(MemoryStyle::Static {
             byte_reservation: 100 << 16,
         });
@@ -871,9 +874,9 @@ mod test {
         memfd.no_clear_on_drop();
 
         // Test basics with the image
-        for image_off in [0, 4096, 8 << 10] {
+        for image_off in [0, page_size, page_size * 2] {
             let image = Arc::new(create_memfd_with_data(image_off, &[1, 2, 3, 4]).unwrap());
-            for amt_to_memset in [0, 4096, 10 << 12, 1 << 20, 10 << 20] {
+            for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
                 memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
                 assert!(memfd.has_image());
                 let slice = unsafe { mmap.slice_mut(0..64 << 10) };
@@ -893,7 +896,7 @@ mod test {
         }
 
         // Test without an image
-        for amt_to_memset in [0, 4096, 10 << 12, 1 << 20, 10 << 20] {
+        for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
             memfd.instantiate(64 << 10, None, &plan).unwrap();
             let mem = unsafe { mmap.slice_mut(0..64 << 10) };
             for chunk in mem.chunks_mut(1024) {
@@ -911,31 +914,32 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn dynamic() {
+        let page_size = page_size();
         let plan = dummy_memory_plan(MemoryStyle::Dynamic { reserve: 200 });
 
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
-        let image = Arc::new(create_memfd_with_data(4096, &[1, 2, 3, 4]).unwrap());
+        let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         let initial = 64 << 10;
 
         // Instantiate the image and test that memory remains accessible after
         // it's cleared.
         memfd.instantiate(initial, Some(&image), &plan).unwrap();
         assert!(memfd.has_image());
-        let slice = unsafe { mmap.slice_mut(0..(64 << 10) + 4096) };
-        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
-        slice[4096] = 5;
-        assert_eq!(&[5, 2, 3, 4], &slice[4096..4100]);
+        let slice = unsafe { mmap.slice_mut(0..(64 << 10) + page_size) };
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+        slice[page_size] = 5;
+        assert_eq!(&[5, 2, 3, 4], &slice[page_size..][..4]);
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
-        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
 
         // Re-instantiate make sure it preserves memory. Grow a bit and set data
         // beyond the initial size.
         memfd.instantiate(initial, Some(&image), &plan).unwrap();
-        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
         memfd.set_heap_limit(initial * 2).unwrap();
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
         slice[initial] = 100;
@@ -962,7 +966,7 @@ mod test {
         // Reset the image to none and double-check everything is back to zero
         memfd.instantiate(64 << 10, None, &plan).unwrap();
         assert!(!memfd.has_image());
-        assert_eq!(&[0, 0, 0, 0], &slice[4096..4100]);
+        assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
     }
 }
