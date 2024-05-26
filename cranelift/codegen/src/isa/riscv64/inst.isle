@@ -2587,6 +2587,16 @@
 
 (decl gen_select_xreg (IntegerCompare XReg XReg) XReg)
 
+;; Rotate Zero Reg to the right. This allows us to write fewer rules
+;; below when matching the zero register
+
+(rule 4 (gen_select_xreg (int_compare_decompose cc a @ (zero_reg) b) x y)
+  (gen_select_xreg (int_compare (intcc_swap_args cc) b a) x y))
+
+(rule 3 (gen_select_xreg c @ (int_compare_decompose cc a b) x @ (zero_reg) y)
+  (gen_select_xreg (int_compare (intcc_complement cc) b a) y x))
+
+
 (rule 2 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedLessThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
