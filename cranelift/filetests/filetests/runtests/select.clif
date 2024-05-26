@@ -4,6 +4,7 @@ target aarch64
 target s390x
 target x86_64
 target riscv64
+target riscv64 has_zicond
 target riscv64 has_c has_zcb
 
 function %select_eq_f32(f32, f32) -> i32 {

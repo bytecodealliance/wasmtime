@@ -1,0 +1,101 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zicond
+
+
+function %select_zero(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+  v3 = select.i64 v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   czero.eqz a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xd5, 0xa5, 0x0e
+;   ret
+
+function %select_zero_icmp_neq(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+  v3 = icmp.i64 ne v0, v2
+  v4 = select.i64 v3, v1, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   czero.eqz a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xd5, 0xa5, 0x0e
+;   ret
+
+function %select_zero_icmp_neq_reverse(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+  v3 = icmp.i64 ne v0, v2
+  v4 = select.i64 v3, v2, v1
+  return v4
+}
+
+; VCode:
+; block0:
+;   select a0,zero,a1##condition=(a0 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   beqz a0, 0xc
+;   mv a0, zero
+;   j 8
+;   mv a0, a1
+;   ret
+
+function %select_zero_icmp_eqz(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+  v3 = icmp.i64 eq v0, v2
+  v4 = select.i64 v3, v1, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   czero.nez a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xf5, 0xa5, 0x0e
+;   ret
+
+
+function %select_zero_icmp_eqz_reverse(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+  v3 = icmp.i64 eq v0, v2
+  v4 = select.i64 v3, v2, v1
+  return v4
+}
+
+; VCode:
+; block0:
+;   select a0,zero,a1##condition=(a0 eq zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bnez a0, 0xc
+;   mv a0, zero
+;   j 8
+;   mv a0, a1
+;   ret
+
