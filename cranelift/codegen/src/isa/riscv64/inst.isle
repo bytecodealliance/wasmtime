@@ -553,6 +553,10 @@
   (Pack)
   (Packw)
   (Packh)
+
+  ;; ZiCond: Integer Conditional Operations
+  (CzeroEqz)
+  (CzeroNez)
 ))
 
 
@@ -1046,6 +1050,9 @@
 
 (decl pure has_zbs () bool)
 (extern constructor has_zbs has_zbs)
+
+(decl pure has_zicond () bool)
+(extern constructor has_zicond has_zicond)
 
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1782,6 +1789,26 @@
 (decl rv_packw (XReg XReg) XReg)
 (rule (rv_packw rs1 rs2)
   (alu_rrr (AluOPRRR.Packw) rs1 rs2))
+
+;; `ZiCond` Extension Instructions
+
+;; Helper for emitting the `czero.eqz` ("Conditional zero, if condition is equal to zero") instruction.
+;; RS1 is the data source
+;; RS2 is the condition
+;;
+;; rd = (rs2 == 0) ? 0 : rs1
+(decl rv_czero_eqz (XReg XReg) XReg)
+(rule (rv_czero_eqz rs1 rs2)
+  (alu_rrr (AluOPRRR.CzeroEqz) rs1 rs2))
+
+;; Helper for emitting the `czero.nez` ("Conditional zero, if condition is nonzero") instruction.
+;; RS1 is the data source
+;; RS2 is the condition
+;;
+;; rd = (rs2 != 0) ? 0 : rs1
+(decl rv_czero_nez (XReg XReg) XReg)
+(rule (rv_czero_nez rs1 rs2)
+  (alu_rrr (AluOPRRR.CzeroNez) rs1 rs2))
 
 
 ;; `Zicsr` Extension Instructions
