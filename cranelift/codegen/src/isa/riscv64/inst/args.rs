@@ -310,6 +310,10 @@ impl IntegerCompare {
             ..self
         }
     }
+
+    pub(crate) fn regs(&self) -> [Reg; 2] {
+        [self.rs1, self.rs2]
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

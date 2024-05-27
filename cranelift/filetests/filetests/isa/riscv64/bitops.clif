@@ -154,9 +154,8 @@ block0(v0: i128):
 ;   addi a2, a2, -1
 ;   srli a4, a4, 1
 ;   j -0x18
-;   bnez a1, 0xc
 ;   mv a0, a3
-;   j 8
+;   beqz a1, 8
 ;   mv a0, zero
 ;   add a0, a5, a0
 ;   mv a1, zero
@@ -183,9 +182,8 @@ block0(v0: i8):
 ;   slli a2, a0, 0x38
 ;   srai a4, a2, 0x38
 ;   not a0, a4
-;   bgez a4, 0xc
 ;   mv a2, a0
-;   j 8
+;   bltz a4, 8
 ;   mv a2, a4
 ;   mv a0, zero
 ;   addi a5, zero, 0x40
@@ -222,9 +220,8 @@ block0(v0: i16):
 ;   slli a2, a0, 0x30
 ;   srai a4, a2, 0x30
 ;   not a0, a4
-;   bgez a4, 0xc
 ;   mv a2, a0
-;   j 8
+;   bltz a4, 8
 ;   mv a2, a4
 ;   mv a0, zero
 ;   addi a5, zero, 0x40
@@ -259,9 +256,8 @@ block0(v0: i32):
 ; block0: ; offset 0x0
 ;   sext.w a2, a0
 ;   not a4, a2
-;   bgez a2, 0xc
 ;   mv a0, a4
-;   j 8
+;   bltz a2, 8
 ;   mv a0, a2
 ;   mv a4, zero
 ;   addi a3, zero, 0x40
@@ -294,9 +290,8 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   not a2, a0
-;   bgez a0, 0xc
 ;   mv a4, a2
-;   j 8
+;   bltz a0, 8
 ;   mv a4, a0
 ;   mv a2, zero
 ;   addi a1, zero, 0x40
@@ -335,14 +330,12 @@ block0(v0: i128):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   not a3, a0
-;   bgez a1, 0xc
 ;   mv a5, a3
-;   j 8
+;   bltz a1, 8
 ;   mv a5, a0
 ;   not a2, a1
-;   bgez a1, 0xc
 ;   mv a3, a2
-;   j 8
+;   bltz a1, 8
 ;   mv a3, a1
 ;   mv a1, zero
 ;   addi a0, zero, 0x40
@@ -366,9 +359,8 @@ block0(v0: i128):
 ;   addi a4, a4, -1
 ;   srli a2, a2, 1
 ;   j -0x18
-;   bnez a3, 0xc
 ;   mv a2, a0
-;   j 8
+;   beqz a3, 8
 ;   mv a2, zero
 ;   add a3, a1, a2
 ;   addi a0, a3, -1
@@ -1444,10 +1436,10 @@ block0(v0: i128, v1: i8):
 ;   srl a0,a0,a3
 ;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
-;   or a5,a3,a5
+;   or t0,a3,a5
 ;   li a3,64
-;   andi a2,a2,127
-;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a2 uge a3)
+;   andi a5,a2,127
+;   select [a0,a1],[zero,a4],[a4,t0]##condition=(a5 uge a3)
 ;   ret
 ;
 ; Disassembled:
@@ -1457,20 +1449,18 @@ block0(v0: i128, v1: i8):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   bnez a5, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a5, 8
 ;   mv a3, a0
 ;   sll a5, a1, a5
-;   or a5, a3, a5
+;   or t0, a3, a5
 ;   addi a3, zero, 0x40
-;   andi a2, a2, 0x7f
-;   bltu a2, a3, 0x10
+;   andi a5, a2, 0x7f
 ;   mv a0, zero
 ;   mv a1, a4
-;   j 0xc
+;   bgeu a5, a3, 0xc
 ;   mv a0, a4
-;   mv a1, a5
+;   mv a1, t0
 ;   ret
 
 function %ishl_i128_i128(i128, i128) -> i128 {
@@ -1511,10 +1501,9 @@ block0(v0: i128, v1: i128):
 ;   or a4, a3, a0
 ;   addi a3, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a3, 0x10
 ;   mv a0, zero
 ;   mv a1, a5
-;   j 0xc
+;   bgeu a2, a3, 0xc
 ;   mv a0, a5
 ;   mv a1, a4
 ;   ret
@@ -1546,19 +1535,17 @@ block0(v0: i128, v1: i8):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi t0, zero, 0x40
 ;   srl a3, a1, a4
 ;   andi a4, a2, 0x7f
-;   bltu a4, t0, 0x10
 ;   mv a0, a3
 ;   mv a1, zero
-;   j 0xc
+;   bgeu a4, t0, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -1615,10 +1602,9 @@ block0(v0: i128, v1: i128):
 ;   addi a3, zero, 0x40
 ;   srl a4, a1, a5
 ;   andi a5, a2, 0x7f
-;   bltu a5, a3, 0x10
 ;   mv a0, a4
 ;   mv a1, zero
-;   j 0xc
+;   bgeu a5, a3, 0xc
 ;   mv a0, s11
 ;   mv a1, a4
 ;   ld s11, 8(sp)
@@ -1658,25 +1644,22 @@ block0(v0: i128, v1: i8):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi a0, zero, 0x40
 ;   sra a3, a1, a4
 ;   addi a4, zero, -1
-;   bgez a1, 0xc
 ;   mv t4, a4
-;   j 8
+;   bltz a1, 8
 ;   mv t4, zero
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a4, 0x10
 ;   mv a0, a3
 ;   mv a1, t4
-;   j 0xc
+;   bgeu a2, a4, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -1740,10 +1723,9 @@ block0(v0: i128, v1: i128):
 ;   mv a5, zero
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a4, 0x10
 ;   mv a0, a3
 ;   mv a1, a5
-;   j 0xc
+;   bgeu a2, a4, 0xc
 ;   mv a0, s11
 ;   mv a1, a3
 ;   ld s11, 8(sp)

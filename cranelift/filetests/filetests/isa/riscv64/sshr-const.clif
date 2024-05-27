@@ -420,25 +420,22 @@ block0(v0: i128):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi a0, zero, 0x40
 ;   sra a3, a1, a4
 ;   addi a4, zero, -1
-;   bgez a1, 0xc
 ;   mv t4, a4
-;   j 8
+;   bltz a1, 8
 ;   mv t4, zero
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a4, 0x10
 ;   mv a0, a3
 ;   mv a1, t4
-;   j 0xc
+;   bgeu a2, a4, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -476,25 +473,22 @@ block0(v0: i128):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi a0, zero, 0x40
 ;   sra a3, a1, a4
 ;   addi a4, zero, -1
-;   bgez a1, 0xc
 ;   mv t4, a4
-;   j 8
+;   bltz a1, 8
 ;   mv t4, zero
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a4, 0x10
 ;   mv a0, a3
 ;   mv a1, t4
-;   j 0xc
+;   bgeu a2, a4, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -532,25 +526,22 @@ block0(v0: i128):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi a0, zero, 0x40
 ;   sra a3, a1, a4
 ;   addi a4, zero, -1
-;   bgez a1, 0xc
 ;   mv t4, a4
-;   j 8
+;   bltz a1, 8
 ;   mv t4, zero
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a4, 0x10
 ;   mv a0, a3
 ;   mv a1, t4
-;   j 0xc
+;   bgeu a2, a4, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -588,25 +579,22 @@ block0(v0: i128):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi a0, zero, 0x40
 ;   sra a3, a1, a4
 ;   addi a4, zero, -1
-;   bgez a1, 0xc
 ;   mv t4, a4
-;   j 8
+;   bltz a1, 8
 ;   mv t4, zero
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a4, 0x10
 ;   mv a0, a3
 ;   mv a1, t4
-;   j 0xc
+;   bgeu a2, a4, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -676,10 +664,9 @@ block0(v0: i128):
 ;   mv a5, zero
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a4, 0x10
 ;   mv a0, a3
 ;   mv a1, a5
-;   j 0xc
+;   bgeu a2, a4, 0xc
 ;   mv a0, s11
 ;   mv a1, a3
 ;   ld s11, 8(sp)
