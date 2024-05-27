@@ -138,3 +138,26 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   or a0, a4, a0
 ;   ret
 
+
+;; This can trigger a stack overflow with if the rules don't prevent
+;; this situation.
+function %check_rule_stack_overflow(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i64 0
+  v4 = icmp.i64 ne v3, v3
+  v5 = select.i64 v4, v3, v3
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a1,0
+;   czero.nez a0,a1,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a1, zero
+;   .byte 0x33, 0xf5, 0x05, 0x0e
+;   ret
+

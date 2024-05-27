@@ -300,6 +300,13 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn zero_reg(&mut self) -> XReg {
         XReg::new(zero_reg()).unwrap()
     }
+    fn is_non_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg != self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
+    }
     fn is_zero_reg(&mut self, reg: XReg) -> Option<()> {
         if reg == self.zero_reg() {
             Some(())
