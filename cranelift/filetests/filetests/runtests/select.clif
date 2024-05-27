@@ -140,3 +140,43 @@ block0(v0: i32):
 ; run: %select_overflow_i32(2) == 1
 ; run: %select_overflow_i32(1) == 0
 ; run: %select_overflow_i32(98) == 1
+
+function %select_zero(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+  v3 = select.i64 v0, v1, v2
+  return v3
+}
+; run: %select_zero(0, 42) == 0
+; run: %select_zero(42, 42) == 42
+
+function %select_zero_icmp_neq_zero(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+  v3 = icmp.i64 ne v0, v2
+  v4 = select.i64 v3, v1, v2
+  return v4
+}
+; run: %select_zero_icmp_neq_zero(0, 42) == 0
+; run: %select_zero_icmp_neq_zero(42, 42) == 42
+
+function %select_icmp_eq_zero(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i64 0
+  v4 = icmp.i64 eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+; run: %select_icmp_eq_zero(0, 42, 35) == 42
+; run: %select_icmp_eq_zero(42, 42, 35) == 35
+
+function %select_icmp_ne_zero(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i64 0
+  v4 = icmp.i64 ne v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+; run: %select_icmp_ne_zero(0, 42, 35) == 35
+; run: %select_icmp_ne_zero(42, 42, 35) == 42
+

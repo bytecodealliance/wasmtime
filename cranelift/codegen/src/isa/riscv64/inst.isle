@@ -2590,40 +2590,52 @@
 ;; Rotate Zero Reg to the right. This allows us to write fewer rules
 ;; below when matching the zero register
 
-(rule 4 (gen_select_xreg (int_compare_decompose cc a @ (zero_reg) b) x y)
+(rule 5 (gen_select_xreg (int_compare_decompose cc a @ (zero_reg) b) x y)
   (gen_select_xreg (int_compare (intcc_swap_args cc) b a) x y))
 
-(rule 3 (gen_select_xreg c @ (int_compare_decompose cc a b) x @ (zero_reg) y)
+(rule 4 (gen_select_xreg c @ (int_compare_decompose cc a b) x @ (zero_reg) y)
   (gen_select_xreg (int_compare (intcc_complement cc) b a) y x))
 
 
-(rule 2 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 3 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedLessThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_minu x y))
 
-(rule 2 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 3 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedLessThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_min x y))
 
-(rule 2 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 3 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedGreaterThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_maxu x y))
 
-(rule 2 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 3 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedGreaterThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_max x y))
 
-(rule 1 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x (zero_reg))
+(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x (zero_reg))
   (if-let $true (has_zicond))
   (rv_czero_nez x c))
 
-(rule 1 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x (zero_reg))
+(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x (zero_reg))
   (if-let $true (has_zicond))
   (rv_czero_eqz x c))
+
+(rule 1 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x y)
+  (if-let $true (has_zicond))
+  (rv_or
+    (rv_czero_nez x c)
+    (rv_czero_eqz y c)))
+
+(rule 1 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x y)
+  (if-let $true (has_zicond))
+  (rv_or
+    (rv_czero_eqz x c)
+    (rv_czero_nez y c)))
 
 (rule 0 (gen_select_xreg c x y)
   (let
