@@ -22,11 +22,11 @@ block0(v0: i128, v1: i128):
 ;   sub a4,a3,a5
 ;   srl a3,a0,a5
 ;   sll s7,a1,a4
-;   select s9,zero,s7##condition=(a5 eq zero)
+;   select s9,s7,zero##condition=(a5 ne zero)
 ;   or a3,a3,s9
 ;   srl a1,a1,a5
 ;   sll a4,a0,a4
-;   select a5,zero,a4##condition=(a5 eq zero)
+;   select a5,a4,zero##condition=(a5 ne zero)
 ;   or a5,a1,a5
 ;   li a4,64
 ;   andi a2,a2,127
@@ -54,17 +54,17 @@ block0(v0: i128, v1: i128):
 ;   sub a4, a3, a5
 ;   srl a3, a0, a5
 ;   sll s7, a1, a4
-;   bnez a5, 0xc
-;   mv s9, zero
-;   j 8
+;   beqz a5, 0xc
 ;   mv s9, s7
+;   j 8
+;   mv s9, zero
 ;   or a3, a3, s9
 ;   srl a1, a1, a5
 ;   sll a4, a0, a4
-;   bnez a5, 0xc
-;   mv a5, zero
-;   j 8
+;   beqz a5, 0xc
 ;   mv a5, a4
+;   j 8
+;   mv a5, zero
 ;   or a5, a1, a5
 ;   addi a4, zero, 0x40
 ;   andi a2, a2, 0x7f
@@ -95,7 +95,7 @@ block0(v0: i64, v1: i64):
 ;   sub a1,a5,a3
 ;   srl a4,a0,a3
 ;   sll a5,a0,a1
-;   select a1,zero,a5##condition=(a3 eq zero)
+;   select a1,a5,zero##condition=(a3 ne zero)
 ;   or a0,a4,a1
 ;   ret
 ;
@@ -106,10 +106,10 @@ block0(v0: i64, v1: i64):
 ;   sub a1, a5, a3
 ;   srl a4, a0, a3
 ;   sll a5, a0, a1
-;   bnez a3, 0xc
-;   mv a1, zero
-;   j 8
+;   beqz a3, 0xc
 ;   mv a1, a5
+;   j 8
+;   mv a1, zero
 ;   or a0, a4, a1
 ;   ret
 
@@ -128,7 +128,7 @@ block0(v0: i32, v1: i32):
 ;   sub a0,a3,a1
 ;   srl a2,a5,a1
 ;   sll a3,a5,a0
-;   select a5,zero,a3##condition=(a1 eq zero)
+;   select a5,a3,zero##condition=(a1 ne zero)
 ;   or a0,a2,a5
 ;   ret
 ;
@@ -141,10 +141,10 @@ block0(v0: i32, v1: i32):
 ;   sub a0, a3, a1
 ;   srl a2, a5, a1
 ;   sll a3, a5, a0
-;   bnez a1, 0xc
-;   mv a5, zero
-;   j 8
+;   beqz a1, 0xc
 ;   mv a5, a3
+;   j 8
+;   mv a5, zero
 ;   or a0, a2, a5
 ;   ret
 
@@ -163,7 +163,7 @@ block0(v0: i16, v1: i16):
 ;   sub a0,a3,a1
 ;   srl a2,a5,a1
 ;   sll a3,a5,a0
-;   select a5,zero,a3##condition=(a1 eq zero)
+;   select a5,a3,zero##condition=(a1 ne zero)
 ;   or a0,a2,a5
 ;   ret
 ;
@@ -176,10 +176,10 @@ block0(v0: i16, v1: i16):
 ;   sub a0, a3, a1
 ;   srl a2, a5, a1
 ;   sll a3, a5, a0
-;   bnez a1, 0xc
-;   mv a5, zero
-;   j 8
+;   beqz a1, 0xc
 ;   mv a5, a3
+;   j 8
+;   mv a5, zero
 ;   or a0, a2, a5
 ;   ret
 
@@ -197,7 +197,7 @@ block0(v0: i8, v1: i8):
 ;   sub a4,a1,a5
 ;   srl a0,a3,a5
 ;   sll a1,a3,a4
-;   select a3,zero,a1##condition=(a5 eq zero)
+;   select a3,a1,zero##condition=(a5 ne zero)
 ;   or a0,a0,a3
 ;   ret
 ;
@@ -209,10 +209,10 @@ block0(v0: i8, v1: i8):
 ;   sub a4, a1, a5
 ;   srl a0, a3, a5
 ;   sll a1, a3, a4
-;   bnez a5, 0xc
-;   mv a3, zero
-;   j 8
+;   beqz a5, 0xc
 ;   mv a3, a1
+;   j 8
+;   mv a3, zero
 ;   or a0, a0, a3
 ;   ret
 
@@ -231,7 +231,7 @@ block0(v0: i64):
 ;   sub a1,a5,a3
 ;   srl a4,a0,a3
 ;   sll a5,a0,a1
-;   select a1,zero,a5##condition=(a3 eq zero)
+;   select a1,a5,zero##condition=(a3 ne zero)
 ;   or a0,a4,a1
 ;   ret
 ;
@@ -243,10 +243,10 @@ block0(v0: i64):
 ;   sub a1, a5, a3
 ;   srl a4, a0, a3
 ;   sll a5, a0, a1
-;   bnez a3, 0xc
-;   mv a1, zero
-;   j 8
+;   beqz a3, 0xc
 ;   mv a1, a5
+;   j 8
+;   mv a1, zero
 ;   or a0, a4, a1
 ;   ret
 

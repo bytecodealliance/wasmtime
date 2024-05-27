@@ -104,15 +104,15 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   czero.eqz a4,a1,a0
-;   czero.nez a0,a2,a0
+;   czero.nez a4,a1,a0
+;   czero.eqz a0,a2,a0
 ;   or a0,a4,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x33, 0xd7, 0xa5, 0x0e
-;   .byte 0x33, 0x75, 0xa6, 0x0e
+;   .byte 0x33, 0xf7, 0xa5, 0x0e
+;   .byte 0x33, 0x55, 0xa6, 0x0e
 ;   or a0, a4, a0
 ;   ret
 
@@ -126,15 +126,15 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   czero.nez a4,a1,a0
-;   czero.eqz a0,a2,a0
+;   czero.eqz a4,a1,a0
+;   czero.nez a0,a2,a0
 ;   or a0,a4,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x33, 0xf7, 0xa5, 0x0e
-;   .byte 0x33, 0x55, 0xa6, 0x0e
+;   .byte 0x33, 0xd7, 0xa5, 0x0e
+;   .byte 0x33, 0x75, 0xa6, 0x0e
 ;   or a0, a4, a0
 ;   ret
 
