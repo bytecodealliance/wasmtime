@@ -1836,12 +1836,10 @@
 ;; TODO: Load floats using `fld` instead of `ld`
 (decl imm (Type u64) Reg)
 
-;; Special-case 0.0 for floats to use the `(zero_reg)` directly. This
-;; additionally goes ahead and clears out the entire destination register to
-;; avoid any false dependencies from unset bits. See #7162 for
-;; why this doesn't fall out of the rules below.
-(rule 8 (imm (ty_scalar_float ty) 0)
-  (gen_bitcast (zero_reg) $I64 $F64))
+;; Special-case 0.0 for floats to use the `(zero_reg)` directly.
+;; See #7162 for why this doesn't fall out of the rules below.
+(rule 8 (imm $F32 0) (gen_bitcast (zero_reg) $I32 $F32))
+(rule 8 (imm $F64 0) (gen_bitcast (zero_reg) $I64 $F64))
 
 ;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
 (rule 7 (imm (ty_scalar_float ty) imm)

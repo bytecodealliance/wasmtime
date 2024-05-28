@@ -22,7 +22,7 @@ block1(v4: f32):
 ; VCode:
 ; block0:
 ;   li a0,0
-;   fmv.d.x fa1,zero
+;   fmv.w.x fa1,zero
 ;   fmv.x.w a5,fa1
 ;   not a1,a5
 ;   fmv.w.x fa3,a1
@@ -42,7 +42,7 @@ block1(v4: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
-;   fmv.d.x fa1, zero
+;   fmv.w.x fa1, zero
 ;   fmv.x.w a5, fa1
 ;   not a1, a5
 ;   fmv.w.x fa3, a1

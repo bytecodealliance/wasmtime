@@ -442,12 +442,12 @@ block0:
 
 ; VCode:
 ; block0:
-;   fmv.d.x fa0,zero
+;   fmv.w.x fa0,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmv.d.x fa0, zero
+;   fmv.w.x fa0, zero
 ;   ret
 
 function %f() -> f64 {
