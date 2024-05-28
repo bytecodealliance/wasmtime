@@ -22,20 +22,19 @@ block1(v4: f32):
 ; VCode:
 ; block0:
 ;   li a0,0
-;   li a1,0
+;   fmv.d.x fa1,zero
+;   fmv.x.w a5,fa1
+;   not a1,a5
 ;   fmv.w.x fa3,a1
+;   fmv.x.w a4,fa3
 ;   fmv.x.w a1,fa3
-;   not a2,a1
-;   fmv.w.x fa4,a2
-;   fmv.x.w a5,fa4
-;   fmv.x.w a1,fa4
-;   or a3,a5,a1
-;   fmv.w.x fa4,a3
-;   br_table a0,[MachLabel(1),MachLabel(2)]##tmp1=a1,tmp2=a2
+;   or a2,a4,a1
+;   fmv.w.x fa2,a2
+;   br_table a0,[MachLabel(1),MachLabel(2)]##tmp1=a2,tmp2=a1
 ; block1:
 ;   j label3
 ; block2:
-;   fmv.d fa4,fa3
+;   fmv.d fa2,fa1
 ;   j label3
 ; block3:
 ;   ret
@@ -43,31 +42,30 @@ block1(v4: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
-;   mv a1, zero
+;   fmv.d.x fa1, zero
+;   fmv.x.w a5, fa1
+;   not a1, a5
 ;   fmv.w.x fa3, a1
+;   fmv.x.w a4, fa3
 ;   fmv.x.w a1, fa3
-;   not a2, a1
-;   fmv.w.x fa4, a2
-;   fmv.x.w a5, fa4
-;   fmv.x.w a1, fa4
-;   or a3, a5, a1
-;   fmv.w.x fa4, a3
+;   or a2, a4, a1
+;   fmv.w.x fa2, a2
 ;   slli t6, a0, 0x20
 ;   srli t6, t6, 0x20
-;   addi a2, zero, 1
-;   bltu t6, a2, 0xc
-;   auipc a2, 0
-;   jalr zero, a2, 0x28
+;   addi a1, zero, 1
+;   bltu t6, a1, 0xc
 ;   auipc a1, 0
-;   slli a2, t6, 3
-;   add a1, a1, a2
-;   jalr zero, a1, 0x10
+;   jalr zero, a1, 0x28
 ;   auipc a2, 0
-;   jalr zero, a2, 0xc
-; block1: ; offset 0x58
+;   slli a1, t6, 3
+;   add a2, a2, a1
+;   jalr zero, a2, 0x10
+;   auipc a1, 0
+;   jalr zero, a1, 0xc
+; block1: ; offset 0x54
 ;   j 8
-; block2: ; offset 0x5c
-;   fmv.d fa4, fa3
-; block3: ; offset 0x60
+; block2: ; offset 0x58
+;   fmv.d fa2, fa1
+; block3: ; offset 0x5c
 ;   ret
 

@@ -426,14 +426,12 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a0,0
-;   fmv.d.x fa0,a0
+;   fmv.d.x fa0,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a0, zero
-;   fmv.d.x fa0, a0
+;   fmv.d.x fa0, zero
 ;   ret
 
 function %f() -> f32 {
@@ -444,14 +442,12 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a0,0
-;   fmv.w.x fa0,a0
+;   fmv.d.x fa0,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a0, zero
-;   fmv.w.x fa0, a0
+;   fmv.d.x fa0, zero
 ;   ret
 
 function %f() -> f64 {
