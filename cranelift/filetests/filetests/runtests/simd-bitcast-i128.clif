@@ -1,0 +1,20 @@
+test run
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %bitcast_i64x2_to_i128(i64x2) -> i128 {
+block0(v0: i64x2):
+    v1 = bitcast.i128 little v0
+    return v1
+}
+; run: %bitcast_i64x2_to_i128([0xBEEF 0xC0FFEE]) == 0x0000000000c0ffee_000000000000beef
+; run: %bitcast_i64x2_to_i128([-1 127]) == 0x000000000000007f_ffffffffffffffff
+
+
+function %bitcast_i128_to_i64x2(i128) -> i64x2 {
+block0(v0: i128):
+    v1 = bitcast.i64x2 little v0
+    return v1
+}
+; run: %bitcast_i128_to_i64x2(0x0000000000c0ffee_000000000000beef) == [0xBEEF 0xC0FFEE]
+; run: %bitcast_i128_to_i64x2(0x000000000000007f_ffffffffffffffff) == [-1 127]
