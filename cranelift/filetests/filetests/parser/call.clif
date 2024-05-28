@@ -84,11 +84,11 @@ block0:
 ; check: return
 
 ; Special purpose function arguments
-function %special1(i32 sret, i32 stack_limit) -> i32 vmctx {
-block0(v1: i32, v2: i32):
+function %special1(i32 sret) -> i32 vmctx {
+block0(v1: i32):
     return v1
 }
-; check: function %special1(i32 sret, i32 stack_limit) -> i32 vmctx fast {
-; check: block0(v1: i32, v2: i32):
+; check: function %special1(i32 sret) -> i32 vmctx fast {
+; check: block0(v1: i32):
 ; check:     return v1
 ; check: }

@@ -166,9 +166,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
             if matches!(
                 param.purpose,
-                ir::ArgumentPurpose::StructArgument(_)
-                    | ir::ArgumentPurpose::StructReturn
-                    | ir::ArgumentPurpose::StackLimit
+                ir::ArgumentPurpose::StructArgument(_) | ir::ArgumentPurpose::StructReturn
             ) {
                 assert!(
                     call_conv != isa::CallConv::Tail,

@@ -14,19 +14,6 @@ block0:
 ; block0: ; offset 0x0
 ;   br %r14
 
-function %stack_limit_leaf_zero(i64 stack_limit) {
-block0(v0: i64):
-    return
-}
-
-; VCode:
-; block0:
-;   br %r14
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   br %r14
-
 function %stack_limit_gv_leaf_zero(i64 vmctx) {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0
@@ -42,41 +29,6 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   br %r14
-
-function %stack_limit_call_zero(i64 stack_limit) {
-    fn0 = %foo()
-block0(v0: i64):
-    call fn0()
-    return
-}
-
-; VCode:
-;   la %r1, 160(%r2)
-;   clgrtle %r15, %r1
-;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
-; block0:
-;   bras %r1, 12 ; data %foo + 0 ; lg %r2, 0(%r1)
-;   basr %r14, %r2
-;   lmg %r14, %r15, 272(%r15)
-;   br %r14
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   la %r1, 0xa0(%r2)
-;   clgrtle %r15, %r1 ; trap: stk_ovf
-;   stmg %r14, %r15, 0x70(%r15)
-;   aghi %r15, -0xa0
-; block1: ; offset 0x12
-;   bras %r1, 0x1e
-;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   lg %r2, 0(%r1)
-;   basr %r14, %r2
-;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 
 function %stack_limit_gv_call_zero(i64 vmctx) {
@@ -120,81 +72,6 @@ block0(v0: i64):
 ;   lg %r2, 0(%r1)
 ;   basr %r14, %r2
 ;   lmg %r14, %r15, 0x110(%r15)
-;   br %r14
-
-function %stack_limit(i64 stack_limit) {
-    ss0 = explicit_slot 168
-block0(v0: i64):
-    return
-}
-
-; VCode:
-;   la %r1, 168(%r2)
-;   clgrtle %r15, %r1
-;   aghi %r15, -168
-; block0:
-;   aghi %r15, 168
-;   br %r14
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   la %r1, 0xa8(%r2)
-;   clgrtle %r15, %r1 ; trap: stk_ovf
-;   aghi %r15, -0xa8
-; block1: ; offset 0xc
-;   aghi %r15, 0xa8
-;   br %r14
-
-function %large_stack_limit(i64 stack_limit) {
-    ss0 = explicit_slot 400000
-block0(v0: i64):
-    return
-}
-
-; VCode:
-;   clgrtle %r15, %r2
-;   lay %r1, 400000(%r2)
-;   clgrtle %r15, %r1
-;   agfi %r15, -400000
-; block0:
-;   agfi %r15, 400000
-;   br %r14
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   clgrtle %r15, %r2 ; trap: stk_ovf
-;   lay %r1, 0x61a80(%r2)
-;   clgrtle %r15, %r1 ; trap: stk_ovf
-;   agfi %r15, -0x61a80
-; block1: ; offset 0x14
-;   agfi %r15, 0x61a80
-;   br %r14
-
-function %huge_stack_limit(i64 stack_limit) {
-    ss0 = explicit_slot 4000000
-block0(v0: i64):
-    return
-}
-
-; VCode:
-;   clgrtle %r15, %r2
-;   lgr %r1, %r2
-;   algfi %r1, 4000000
-;   clgrtle %r15, %r1
-;   agfi %r15, -4000000
-; block0:
-;   agfi %r15, 4000000
-;   br %r14
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   clgrtle %r15, %r2 ; trap: stk_ovf
-;   lgr %r1, %r2
-;   algfi %r1, 0x3d0900
-;   clgrtle %r15, %r1 ; trap: stk_ovf
-;   agfi %r15, -0x3d0900
-; block1: ; offset 0x18
-;   agfi %r15, 0x3d0900
 ;   br %r14
 
 function %limit_preamble(i64 vmctx) {

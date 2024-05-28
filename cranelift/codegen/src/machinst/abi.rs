@@ -1164,13 +1164,9 @@ impl<M: ABIMachineSpec> Callee<M> {
         // stack limit. This can either be specified as a special-purpose
         // argument or as a global value which often calculates the stack limit
         // from the arguments.
-        let stack_limit =
-            get_special_purpose_param_register(f, sigs, sig, ir::ArgumentPurpose::StackLimit)
-                .map(|reg| (reg, smallvec![]))
-                .or_else(|| {
-                    f.stack_limit
-                        .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv))
-                });
+        let stack_limit = f
+            .stack_limit
+            .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv));
 
         let tail_args_size = sigs[sig].sized_stack_arg_space;
 
