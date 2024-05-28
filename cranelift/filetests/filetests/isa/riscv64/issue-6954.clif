@@ -128,154 +128,150 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   vle8.v v10,-64(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v13,-48(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v15,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   li a2,0
-;   li a3,0
-;   li a4,0
 ;   li a0,0
-;   sd a4,0(slot)
-;   sd a0,8(slot)
-;   sd a4,16(slot)
-;   sd a0,24(slot)
-;   sd a4,32(slot)
-;   sd a0,40(slot)
-;   sd a4,48(slot)
-;   sd a0,56(slot)
-;   sd a4,64(slot)
-;   sd a0,72(slot)
-;   sd a4,80(slot)
-;   sd a0,88(slot)
-;   sd a4,96(slot)
-;   sd a0,104(slot)
-;   sd a4,112(slot)
-;   sw a3,120(slot)
-;   sh a2,124(slot)
-;   sd a4,128(slot)
-;   sd a0,136(slot)
-;   sd a4,144(slot)
-;   sd a0,152(slot)
-;   sd a4,160(slot)
-;   sd a0,168(slot)
-;   sd a4,176(slot)
-;   sd a0,184(slot)
-;   sd a4,192(slot)
-;   sd a0,200(slot)
-;   sd a4,208(slot)
-;   sd a0,216(slot)
-;   sd a4,224(slot)
-;   sd a0,232(slot)
-;   sd a4,240(slot)
-;   sw a3,248(slot)
-;   sh a2,252(slot)
-;   sd a4,256(slot)
-;   sd a0,264(slot)
-;   sd a4,272(slot)
-;   sd a0,280(slot)
-;   sd a4,288(slot)
-;   sd a0,296(slot)
-;   sd a4,304(slot)
-;   sd a0,312(slot)
-;   sd a4,320(slot)
-;   sd a0,328(slot)
-;   sd a4,336(slot)
-;   sd a0,344(slot)
-;   sd a4,352(slot)
-;   sd a0,360(slot)
-;   sd a4,368(slot)
-;   sw a3,376(slot)
-;   sh a2,380(slot)
-;   sext.w a4,a1
-;   select v14,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v14,v14,v14##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v14,v14##condition=(a4 ne zero)
-;   vfsqrt.v v14,v10 #avl=2, #vtype=(e64, m1, ta, ma)
-;   lui a3,4095
-;   slli a0,a3,39
-;   fmv.d.x fa1,a0
-;   vfmv.v.f v8,fa1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmfne.vv v0,v14,v14 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmerge.vvm v9,v14,v8,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
-;   vfsqrt.v v8,v9 #avl=2, #vtype=(e64, m1, ta, ma)
-;   lui a3,4095
-;   slli a0,a3,39
-;   fmv.d.x fa1,a0
-;   vfmv.v.f v9,fa1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmfne.vv v0,v8,v8 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmerge.vvm v14,v8,v9,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   sext.w a4,a1
-;   select v15,v15,v15##condition=(a4 ne zero)
-;   addw a0,a1,a1
-;   select v15,v15,v15##condition=(a0 ne zero)
-;   select v15,v15,v15##condition=(a0 ne zero)
-;   select v15,v15,v15##condition=(a0 ne zero)
-;   select v15,v15,v15##condition=(a0 ne zero)
-;   select v15,v15,v15##condition=(a0 ne zero)
-;   vmax.vv v13,v13,v13 #avl=2, #vtype=(e64, m1, ta, ma)
-;   select v15,v15,v15##condition=(a0 ne zero)
-;   load_addr a1,3(slot)
-;   addi a1,a1,0
-;   andi a3,a1,3
-;   slli a2,a3,3
-;   andi a1,a1,-4
-;   atomic_rmw.i8 and a4,a5,(a1)##t0=a3 offset=a2
-;   mv a1,a4
-;   select v12,v15,v15##condition=(a0 ne zero)
-;   select v12,v12,v12##condition=(a0 ne zero)
-;   select v12,v12,v12##condition=(a0 ne zero)
-;   select v12,v12,v12##condition=(a0 ne zero)
-;   select v12,v12,v12##condition=(a0 ne zero)
-;   select v12,v12,v12##condition=(a0 ne zero)
-;   select v12,v12,v12##condition=(a0 ne zero)
-;   vse64.v v13,33(slot) #avl=2, #vtype=(e64, m1, ta, ma)
-;   select v13,v12,v12##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   select v13,v13,v13##condition=(a0 ne zero)
-;   vse8.v v14,0(a6) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,16(a6) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v14,32(a6) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,48(a6) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,64(a6) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,80(a6) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,96(a6) #avl=16, #vtype=(e8, m1, ta, ma)
-;   mv a0,a1
+;   li a2,0
+;   sd a0,0(slot)
+;   sd a2,8(slot)
+;   sd a0,16(slot)
+;   sd a2,24(slot)
+;   sd a0,32(slot)
+;   sd a2,40(slot)
+;   sd a0,48(slot)
+;   sd a2,56(slot)
+;   sd a0,64(slot)
+;   sd a2,72(slot)
+;   sd a0,80(slot)
+;   sd a2,88(slot)
+;   sd a0,96(slot)
+;   sd a2,104(slot)
+;   sd zero,112(slot)
+;   sw zero,120(slot)
+;   sh zero,124(slot)
+;   sd a0,128(slot)
+;   sd a2,136(slot)
+;   sd a0,144(slot)
+;   sd a2,152(slot)
+;   sd a0,160(slot)
+;   sd a2,168(slot)
+;   sd a0,176(slot)
+;   sd a2,184(slot)
+;   sd a0,192(slot)
+;   sd a2,200(slot)
+;   sd a0,208(slot)
+;   sd a2,216(slot)
+;   sd a0,224(slot)
+;   sd a2,232(slot)
+;   sd zero,240(slot)
+;   sw zero,248(slot)
+;   sh zero,252(slot)
+;   sd a0,256(slot)
+;   sd a2,264(slot)
+;   sd a0,272(slot)
+;   sd a2,280(slot)
+;   sd a0,288(slot)
+;   sd a2,296(slot)
+;   sd a0,304(slot)
+;   sd a2,312(slot)
+;   sd a0,320(slot)
+;   sd a2,328(slot)
+;   sd a0,336(slot)
+;   sd a2,344(slot)
+;   sd a0,352(slot)
+;   sd a2,360(slot)
+;   sd zero,368(slot)
+;   sw zero,376(slot)
+;   sh zero,380(slot)
+;   sext.w a2,a1
+;   select v12,v15,v15##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v12,v12##condition=(a2 ne zero)
+;   vfsqrt.v v11,v10 #avl=2, #vtype=(e64, m1, ta, ma)
+;   lui a2,4095
+;   slli a3,a2,39
+;   fmv.d.x fa5,a3
+;   vfmv.v.f v12,fa5 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmfne.vv v0,v11,v11 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v15,v11,v12,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vfsqrt.v v11,v15 #avl=2, #vtype=(e64, m1, ta, ma)
+;   lui a2,4095
+;   slli a3,a2,39
+;   fmv.d.x fa5,a3
+;   vfmv.v.f v15,fa5 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmfne.vv v0,v11,v11 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v12,v11,v15,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v14,v14,v14##condition=(a2 ne zero)
+;   addw a3,a1,a1
+;   select v11,v14,v14##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v14,v11,v11##condition=(a3 ne zero)
+;   vmax.vv v11,v13,v13 #avl=2, #vtype=(e64, m1, ta, ma)
+;   select v13,v14,v14##condition=(a3 ne zero)
+;   load_addr a4,3(slot)
+;   addi a4,a4,0
+;   andi a1,a4,3
+;   slli a1,a1,3
+;   andi a2,a4,-4
+;   atomic_rmw.i8 and a0,a5,(a2)##t0=a4 offset=a1
+;   select v10,v13,v13##condition=(a3 ne zero)
+;   select v10,v10,v10##condition=(a3 ne zero)
+;   select v10,v10,v10##condition=(a3 ne zero)
+;   select v10,v10,v10##condition=(a3 ne zero)
+;   select v10,v10,v10##condition=(a3 ne zero)
+;   select v10,v10,v10##condition=(a3 ne zero)
+;   select v10,v10,v10##condition=(a3 ne zero)
+;   vse64.v v11,33(slot) #avl=2, #vtype=(e64, m1, ta, ma)
+;   select v11,v10,v10##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   select v11,v11,v11##condition=(a3 ne zero)
+;   vse8.v v12,0(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,16(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,32(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,48(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,64(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,80(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,96(a6) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   addi sp,sp,384
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -297,138 +293,143 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   .byte 0x87, 0x86, 0x0f, 0x02
 ;   addi t6, sp, 0x1c0
 ;   .byte 0x87, 0x87, 0x0f, 0x02
-;   mv a2, zero
-;   mv a3, zero
-;   mv a4, zero
 ;   mv a0, zero
-;   sd a4, 0(sp)
-;   sd a0, 8(sp)
-;   sd a4, 0x10(sp)
-;   sd a0, 0x18(sp)
-;   sd a4, 0x20(sp)
-;   sd a0, 0x28(sp)
-;   sd a4, 0x30(sp)
-;   sd a0, 0x38(sp)
-;   sd a4, 0x40(sp)
-;   sd a0, 0x48(sp)
-;   sd a4, 0x50(sp)
-;   sd a0, 0x58(sp)
-;   sd a4, 0x60(sp)
-;   sd a0, 0x68(sp)
-;   sd a4, 0x70(sp)
-;   sw a3, 0x78(sp)
-;   sh a2, 0x7c(sp)
-;   sd a4, 0x80(sp)
-;   sd a0, 0x88(sp)
-;   sd a4, 0x90(sp)
-;   sd a0, 0x98(sp)
-;   sd a4, 0xa0(sp)
-;   sd a0, 0xa8(sp)
-;   sd a4, 0xb0(sp)
-;   sd a0, 0xb8(sp)
-;   sd a4, 0xc0(sp)
-;   sd a0, 0xc8(sp)
-;   sd a4, 0xd0(sp)
-;   sd a0, 0xd8(sp)
-;   sd a4, 0xe0(sp)
-;   sd a0, 0xe8(sp)
-;   sd a4, 0xf0(sp)
-;   sw a3, 0xf8(sp)
-;   sh a2, 0xfc(sp)
-;   sd a4, 0x100(sp)
-;   sd a0, 0x108(sp)
-;   sd a4, 0x110(sp)
-;   sd a0, 0x118(sp)
-;   sd a4, 0x120(sp)
-;   sd a0, 0x128(sp)
-;   sd a4, 0x130(sp)
-;   sd a0, 0x138(sp)
-;   sd a4, 0x140(sp)
-;   sd a0, 0x148(sp)
-;   sd a4, 0x150(sp)
-;   sd a0, 0x158(sp)
-;   sd a4, 0x160(sp)
-;   sd a0, 0x168(sp)
-;   sd a4, 0x170(sp)
-;   sw a3, 0x178(sp)
-;   sh a2, 0x17c(sp)
-;   sext.w a4, a1
-;   .byte 0x57, 0x37, 0xf0, 0x9e
-;   bnez a4, 8
-;   .byte 0x57, 0x37, 0xf0, 0x9e
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   .byte 0xd7, 0x37, 0xe0, 0x9e
-;   bnez a4, 8
-;   .byte 0xd7, 0x37, 0xe0, 0x9e
+;   mv a2, zero
+;   sd a0, 0(sp)
+;   sd a2, 8(sp)
+;   sd a0, 0x10(sp)
+;   sd a2, 0x18(sp)
+;   sd a0, 0x20(sp)
+;   sd a2, 0x28(sp)
+;   sd a0, 0x30(sp)
+;   sd a2, 0x38(sp)
+;   sd a0, 0x40(sp)
+;   sd a2, 0x48(sp)
+;   sd a0, 0x50(sp)
+;   sd a2, 0x58(sp)
+;   sd a0, 0x60(sp)
+;   sd a2, 0x68(sp)
+;   sd zero, 0x70(sp)
+;   sw zero, 0x78(sp)
+;   sh zero, 0x7c(sp)
+;   sd a0, 0x80(sp)
+;   sd a2, 0x88(sp)
+;   sd a0, 0x90(sp)
+;   sd a2, 0x98(sp)
+;   sd a0, 0xa0(sp)
+;   sd a2, 0xa8(sp)
+;   sd a0, 0xb0(sp)
+;   sd a2, 0xb8(sp)
+;   sd a0, 0xc0(sp)
+;   sd a2, 0xc8(sp)
+;   sd a0, 0xd0(sp)
+;   sd a2, 0xd8(sp)
+;   sd a0, 0xe0(sp)
+;   sd a2, 0xe8(sp)
+;   sd zero, 0xf0(sp)
+;   sw zero, 0xf8(sp)
+;   sh zero, 0xfc(sp)
+;   sd a0, 0x100(sp)
+;   sd a2, 0x108(sp)
+;   sd a0, 0x110(sp)
+;   sd a2, 0x118(sp)
+;   sd a0, 0x120(sp)
+;   sd a2, 0x128(sp)
+;   sd a0, 0x130(sp)
+;   sd a2, 0x138(sp)
+;   sd a0, 0x140(sp)
+;   sd a2, 0x148(sp)
+;   sd a0, 0x150(sp)
+;   sd a2, 0x158(sp)
+;   sd a0, 0x160(sp)
+;   sd a2, 0x168(sp)
+;   sd zero, 0x170(sp)
+;   sw zero, 0x178(sp)
+;   sh zero, 0x17c(sp)
+;   sext.w a2, a1
+;   .byte 0x57, 0x36, 0xf0, 0x9e
+;   bnez a2, 8
+;   .byte 0x57, 0x36, 0xf0, 0x9e
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   .byte 0x57, 0x37, 0xc0, 0x9e
+;   bnez a2, 8
+;   .byte 0x57, 0x37, 0xc0, 0x9e
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0x57, 0x17, 0xa0, 0x4e
-;   lui a3, 0xfff
-;   slli a0, a3, 0x27
-;   fmv.d.x fa1, a0
-;   .byte 0x57, 0xd4, 0x05, 0x5e
-;   .byte 0x57, 0x10, 0xe7, 0x72
-;   .byte 0xd7, 0x04, 0xe4, 0x5c
-;   .byte 0x57, 0x14, 0x90, 0x4e
-;   lui a3, 0xfff
-;   slli a0, a3, 0x27
-;   fmv.d.x fa1, a0
-;   .byte 0xd7, 0xd4, 0x05, 0x5e
-;   .byte 0x57, 0x10, 0x84, 0x72
-;   .byte 0x57, 0x87, 0x84, 0x5c
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   sext.w a4, a1
-;   addw a0, a1, a1
-;   .byte 0xd7, 0x86, 0xd6, 0x1e
-;   addi a1, sp, 3
-;   mv a1, a1
-;   andi a3, a1, 3
-;   slli a2, a3, 3
-;   andi a1, a1, -4
-;   lr.w.aqrl a4, (a1) ; trap: heap_oob
-;   srl a4, a4, a2
-;   andi a4, a4, 0xff
-;   and a3, a4, a5
-;   lr.w.aqrl t5, (a1) ; trap: heap_oob
+;   .byte 0xd7, 0x15, 0xa0, 0x4e
+;   lui a2, 0xfff
+;   slli a3, a2, 0x27
+;   fmv.d.x fa5, a3
+;   .byte 0x57, 0xd6, 0x07, 0x5e
+;   .byte 0x57, 0x90, 0xb5, 0x72
+;   .byte 0xd7, 0x07, 0xb6, 0x5c
+;   .byte 0xd7, 0x15, 0xf0, 0x4e
+;   lui a2, 0xfff
+;   slli a3, a2, 0x27
+;   fmv.d.x fa5, a3
+;   .byte 0xd7, 0xd7, 0x07, 0x5e
+;   .byte 0x57, 0x90, 0xb5, 0x72
+;   .byte 0x57, 0x86, 0xb7, 0x5c
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   addw a3, a1, a1
+;   .byte 0xd7, 0x35, 0xe0, 0x9e
+;   bnez a3, 8
+;   .byte 0xd7, 0x35, 0xe0, 0x9e
+;   .byte 0x57, 0x37, 0xb0, 0x9e
+;   bnez a3, 8
+;   .byte 0x57, 0x37, 0xb0, 0x9e
+;   .byte 0xd7, 0x85, 0xd6, 0x1e
+;   .byte 0xd7, 0x36, 0xe0, 0x9e
+;   bnez a3, 8
+;   .byte 0xd7, 0x36, 0xe0, 0x9e
+;   addi a4, sp, 3
+;   mv a4, a4
+;   andi a1, a4, 3
+;   slli a1, a1, 3
+;   andi a2, a4, -4
+;   lr.w.aqrl a0, (a2) ; trap: heap_oob
+;   srl a0, a0, a1
+;   andi a0, a0, 0xff
+;   and a4, a0, a5
+;   lr.w.aqrl t5, (a2) ; trap: heap_oob
 ;   addi t6, zero, 0xff
-;   sll t6, t6, a2
+;   sll t6, t6, a1
 ;   not t6, t6
 ;   and t5, t5, t6
-;   andi t6, a3, 0xff
-;   sll t6, t6, a2
+;   andi t6, a4, 0xff
+;   sll t6, t6, a1
 ;   or t5, t5, t6
-;   sc.w.aqrl a3, t5, (a1) ; trap: heap_oob
-;   bnez a3, -0x34
-;   mv a1, a4
-;   .byte 0x57, 0x36, 0xf0, 0x9e
-;   bnez a0, 8
-;   .byte 0x57, 0x36, 0xf0, 0x9e
+;   sc.w.aqrl a4, t5, (a2) ; trap: heap_oob
+;   bnez a4, -0x34
+;   .byte 0x57, 0x35, 0xd0, 0x9e
+;   bnez a3, 8
+;   .byte 0x57, 0x35, 0xd0, 0x9e
 ;   addi t6, sp, 0x21
-;   .byte 0xa7, 0xf6, 0x0f, 0x02
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   bnez a0, 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
+;   .byte 0xa7, 0xf5, 0x0f, 0x02
+;   .byte 0xd7, 0x35, 0xa0, 0x9e
+;   bnez a3, 8
+;   .byte 0xd7, 0x35, 0xa0, 0x9e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x07, 0x08, 0x02
+;   .byte 0x27, 0x06, 0x08, 0x02
 ;   addi t6, a6, 0x10
-;   .byte 0xa7, 0x86, 0x0f, 0x02
+;   .byte 0xa7, 0x85, 0x0f, 0x02
 ;   addi t6, a6, 0x20
-;   .byte 0x27, 0x87, 0x0f, 0x02
+;   .byte 0x27, 0x86, 0x0f, 0x02
 ;   addi t6, a6, 0x30
-;   .byte 0xa7, 0x86, 0x0f, 0x02
+;   .byte 0xa7, 0x85, 0x0f, 0x02
 ;   addi t6, a6, 0x40
-;   .byte 0xa7, 0x86, 0x0f, 0x02
+;   .byte 0xa7, 0x85, 0x0f, 0x02
 ;   addi t6, a6, 0x50
-;   .byte 0xa7, 0x86, 0x0f, 0x02
+;   .byte 0xa7, 0x85, 0x0f, 0x02
 ;   addi t6, a6, 0x60
-;   .byte 0xa7, 0x86, 0x0f, 0x02
-;   mv a0, a1
+;   .byte 0xa7, 0x85, 0x0f, 0x02
 ;   addi sp, sp, 0x180
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
