@@ -250,12 +250,6 @@ pub enum ArgumentPurpose {
     /// This is a pointer to a context struct containing details about the current sandbox. It is
     /// used as a base pointer for `vmctx` global values.
     VMContext,
-
-    /// A stack limit pointer.
-    ///
-    /// This is a pointer to a stack limit. It is used to check the current stack pointer
-    /// against. Can only appear once in a signature.
-    StackLimit,
 }
 
 impl fmt::Display for ArgumentPurpose {
@@ -265,7 +259,6 @@ impl fmt::Display for ArgumentPurpose {
             Self::StructArgument(size) => return write!(f, "sarg({})", size),
             Self::StructReturn => "sret",
             Self::VMContext => "vmctx",
-            Self::StackLimit => "stack_limit",
         })
     }
 }
@@ -277,7 +270,6 @@ impl FromStr for ArgumentPurpose {
             "normal" => Ok(Self::Normal),
             "sret" => Ok(Self::StructReturn),
             "vmctx" => Ok(Self::VMContext),
-            "stack_limit" => Ok(Self::StackLimit),
             _ if s.starts_with("sarg(") => {
                 if !s.ends_with(")") {
                     return Err(());
@@ -374,7 +366,6 @@ mod tests {
             (ArgumentPurpose::Normal, "normal"),
             (ArgumentPurpose::StructReturn, "sret"),
             (ArgumentPurpose::VMContext, "vmctx"),
-            (ArgumentPurpose::StackLimit, "stack_limit"),
             (ArgumentPurpose::StructArgument(42), "sarg(42)"),
         ];
         for &(e, n) in &all_purpose {
