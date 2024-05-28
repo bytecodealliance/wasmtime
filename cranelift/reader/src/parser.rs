@@ -2043,13 +2043,18 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // Parse parenthesized list of block parameters. Returns a vector of (u32, Type) pairs with the
-    // value numbers of the defined values and the defined types.
+    // Parse parenthesized list of block parameters.
     //
-    // block-params ::= * "(" block-param { "," block-param } ")"
+    // block-params ::= * "(" ( block-param { "," block-param } )? ")"
     fn parse_block_params(&mut self, ctx: &mut Context, block: Block) -> ParseResult<()> {
-        // block-params ::= * "(" block-param { "," block-param } ")"
+        // block-params ::= * "(" ( block-param { "," block-param } )? ")"
         self.match_token(Token::LPar, "expected '(' before block parameters")?;
+
+        // block-params ::= "(" * ")"
+        if self.token() == Some(Token::RPar) {
+            self.consume();
+            return Ok(());
+        }
 
         // block-params ::= "(" * block-param { "," block-param } ")"
         self.parse_block_param(ctx, block)?;

@@ -10,6 +10,16 @@ block0:
 ; nextln:     trap user0
 ; nextln: }
 
+; The same small function, but with empty parens on the first block.
+function %minimal_empty_parens() {
+block0():
+    trap user0
+}
+; sameln: function %minimal_empty_parens() fast {
+; nextln: block0:
+; nextln:     trap user0
+; nextln: }
+
 ; Create and use values.
 ; Polymorphic instructions with type suffix.
 function %ivalues() {
