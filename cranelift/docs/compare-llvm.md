@@ -155,9 +155,9 @@ can hold.
 - Cranelift has no aggregate types. LLVM has named and anonymous struct types as
   well as array types.
 
-Cranelift has multiple boolean types, whereas LLVM simply uses `i1`. The sized
-Cranelift boolean types are used to represent SIMD vector masks like `b32x4`
-where each lane is either all 0 or all 1 bits.
+Cranelift uses integer-typed values of `0` or `1` for booleans, whereas LLVM
+simply uses `i1`. The sized Cranelift integer types are used to represent SIMD
+vector masks like `i32x4` where each lane is either all 0 or all 1 bits.
 
 Cranelift instructions and function calls can return multiple result values. LLVM
 instead models this by returning a single value of an aggregate type.
