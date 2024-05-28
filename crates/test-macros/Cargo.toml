@@ -1,0 +1,23 @@
+[package]
+description = "Macros for testing Wasmtime"
+name = "wasmtime-test-macros"
+license = "Apache-2.0 WITH LLVM-exception"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+proc-macro = true
+test = false
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }

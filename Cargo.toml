@@ -115,6 +115,7 @@ similar = { workspace = true }
 libtest-mimic = "0.7.0"
 capstone = { workspace = true }
 object = { workspace = true, features = ['std'] }
+wasmtime-test-macros = { path = "crates/test-macros" }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }

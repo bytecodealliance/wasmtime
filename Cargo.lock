@@ -3561,6 +3561,7 @@ dependencies = [
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-explorer",
+ "wasmtime-test-macros",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wasmtime-wasi-nn",
@@ -3779,6 +3780,16 @@ dependencies = [
 [[package]]
 name = "wasmtime-slab"
 version = "22.0.0"
+
+[[package]]
+name = "wasmtime-test-macros"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.60",
+]
 
 [[package]]
 name = "wasmtime-types"
