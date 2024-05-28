@@ -32,7 +32,7 @@ pub enum Token<'a> {
     Arrow,                 // '->'
     Float(&'a str),        // Floating point immediate
     Integer(&'a str),      // Integer immediate
-    Type(types::Type),     // i32, f32, b32x4, ...
+    Type(types::Type),     // i32, f32, i32x4, ...
     DynamicType(u32),      // dt5
     Value(Value),          // v12, v7
     Block(Block),          // block3

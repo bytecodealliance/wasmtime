@@ -218,7 +218,7 @@ fn write_arg(w: &mut dyn Write, func: &Function, arg: Value) -> fmt::Result {
 ///
 ///    block1:
 ///    block1(v1: i32):
-///    block10(v4: f64, v5: b1):
+///    block10(v4: f64, v5: i8):
 ///
 pub fn write_block_header(
     w: &mut dyn Write,
