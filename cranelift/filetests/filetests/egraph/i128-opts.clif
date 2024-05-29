@@ -135,3 +135,23 @@ block0:
     ; check: v4 = iadd v1, v3
     ; check: return v4
 }
+
+function %slt() -> i8 {
+block0:
+    v0 = iconst.i64 0
+    v1 = uextend.i128 v0
+    v2 = icmp slt v1, v1
+    return v2
+    ; check: v3 = iconst.i8 0
+    ; check: return
+}
+
+function %ult() -> i8 {
+block0:
+    v0 = iconst.i64 0
+    v1 = uextend.i128 v0
+    v2 = icmp ult v1, v1
+    return v2
+    ; check: v3 = iconst.i8 0
+    ; check: return
+}
