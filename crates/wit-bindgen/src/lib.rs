@@ -315,13 +315,13 @@ impl Wasmtime {
 
         let world = &resolve.worlds[id];
         for (name, import) in world.imports.iter() {
-            if !self.opts.only_interfaces || matches!(import, WorldItem::Interface(_)) {
+            if !self.opts.only_interfaces || matches!(import, WorldItem::Interface { .. }) {
                 self.import(resolve, id, name, import);
             }
         }
 
         for (name, export) in world.exports.iter() {
-            if !self.opts.only_interfaces || matches!(export, WorldItem::Interface(_)) {
+            if !self.opts.only_interfaces || matches!(export, WorldItem::Interface { .. }) {
                 self.export(resolve, name, export);
             }
         }
@@ -349,7 +349,7 @@ impl Wasmtime {
                     add_to_linker,
                 });
             }
-            WorldItem::Interface(id) => {
+            WorldItem::Interface { id, .. } => {
                 gen.gen.interface_last_seen_as_import.insert(*id, true);
                 if gen.gen.name_interface(resolve, *id, name, false) {
                     return;
@@ -412,7 +412,7 @@ impl Wasmtime {
                 )
             }
             WorldItem::Type(_) => unreachable!(),
-            WorldItem::Interface(id) => {
+            WorldItem::Interface { id, .. } => {
                 gen.gen.interface_last_seen_as_import.insert(*id, false);
                 gen.gen.name_interface(resolve, *id, name, true);
                 gen.current_interface = Some((*id, name, true));
