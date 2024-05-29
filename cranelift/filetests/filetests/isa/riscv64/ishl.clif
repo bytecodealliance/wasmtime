@@ -356,7 +356,7 @@ block0(v0: i128, v1: i8):
 ;   sub a3,a3,a5
 ;   sll a4,a0,a5
 ;   srl a0,a0,a3
-;   select a3,a0,zero##condition=(a5 ne zero)
+;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
 ;   or a5,a3,a5
 ;   li a3,64
@@ -371,10 +371,10 @@ block0(v0: i128, v1: i8):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   beqz a5, 0xc
-;   mv a3, a0
-;   j 8
+;   bnez a5, 0xc
 ;   mv a3, zero
+;   j 8
+;   mv a3, a0
 ;   sll a5, a1, a5
 ;   or a5, a3, a5
 ;   addi a3, zero, 0x40
@@ -400,7 +400,7 @@ block0(v0: i128, v1: i16):
 ;   sub a3,a3,a5
 ;   sll a4,a0,a5
 ;   srl a0,a0,a3
-;   select a3,a0,zero##condition=(a5 ne zero)
+;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
 ;   or a5,a3,a5
 ;   li a3,64
@@ -415,10 +415,10 @@ block0(v0: i128, v1: i16):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   beqz a5, 0xc
-;   mv a3, a0
-;   j 8
+;   bnez a5, 0xc
 ;   mv a3, zero
+;   j 8
+;   mv a3, a0
 ;   sll a5, a1, a5
 ;   or a5, a3, a5
 ;   addi a3, zero, 0x40
@@ -444,7 +444,7 @@ block0(v0: i128, v1: i32):
 ;   sub a3,a3,a5
 ;   sll a4,a0,a5
 ;   srl a0,a0,a3
-;   select a3,a0,zero##condition=(a5 ne zero)
+;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
 ;   or a5,a3,a5
 ;   li a3,64
@@ -459,10 +459,10 @@ block0(v0: i128, v1: i32):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   beqz a5, 0xc
-;   mv a3, a0
-;   j 8
+;   bnez a5, 0xc
 ;   mv a3, zero
+;   j 8
+;   mv a3, a0
 ;   sll a5, a1, a5
 ;   or a5, a3, a5
 ;   addi a3, zero, 0x40
@@ -488,7 +488,7 @@ block0(v0: i128, v1: i64):
 ;   sub a3,a3,a5
 ;   sll a4,a0,a5
 ;   srl a0,a0,a3
-;   select a3,a0,zero##condition=(a5 ne zero)
+;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
 ;   or a5,a3,a5
 ;   li a3,64
@@ -503,10 +503,10 @@ block0(v0: i128, v1: i64):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   beqz a5, 0xc
-;   mv a3, a0
-;   j 8
+;   bnez a5, 0xc
 ;   mv a3, zero
+;   j 8
+;   mv a3, a0
 ;   sll a5, a1, a5
 ;   or a5, a3, a5
 ;   addi a3, zero, 0x40
@@ -534,7 +534,7 @@ block0(v0: i128, v1: i128):
 ;   mv a4,a5
 ;   sll a5,a4,a0
 ;   srl a3,a4,a3
-;   select a3,a3,zero##condition=(a0 ne zero)
+;   select a3,zero,a3##condition=(a0 eq zero)
 ;   sll a0,a1,a0
 ;   or a4,a3,a0
 ;   li a3,64
