@@ -122,7 +122,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 /// The output artifact here is the serialized object file contained within
 /// an owned mmap along with metadata about the compilation itself.
 #[cfg(feature = "component-model")]
-pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
+pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
     _dwarf_package: Option<&[u8]>,

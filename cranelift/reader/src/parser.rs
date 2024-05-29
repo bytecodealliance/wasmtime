@@ -179,7 +179,7 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
 ///    or `print`
 ///  - `Ok(Some(command))` if the comment is intended as a `RunCommand` and can be parsed to one
 ///  - `Err` otherwise.
-pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<Option<RunCommand>> {
+pub fn parse_run_command(text: &str, signature: &Signature) -> ParseResult<Option<RunCommand>> {
     let _tt = timing::parse_text();
     // We remove leading spaces and semi-colons for convenience here instead of at the call sites
     // since this function will be attempting to parse a RunCommand from a CLIF comment.

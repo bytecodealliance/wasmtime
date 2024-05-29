@@ -132,7 +132,7 @@ fn read_dwarf_package_from_bytes<'data>(
     }
 }
 
-pub fn transform_dwarf<'data>(
+pub fn transform_dwarf(
     isa: &dyn TargetIsa,
     di: &DebugInfoData,
     funcs: &CompiledFunctionsMetadata,

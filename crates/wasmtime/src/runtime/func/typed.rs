@@ -533,7 +533,7 @@ unsafe impl WasmTy for Func {
     }
 
     #[inline]
-    fn compatible_with_store<'a>(&self, store: &StoreOpaque) -> bool {
+    fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
         store.store_data().contains(self.0)
     }
 
@@ -571,7 +571,7 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
-    fn compatible_with_store<'a>(&self, store: &StoreOpaque) -> bool {
+    fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
         if let Some(f) = self {
             store.store_data().contains(f.0)
         } else {

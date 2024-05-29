@@ -1087,7 +1087,7 @@ fn checked_round_up(val: u32, mask: u32) -> Option<u32> {
 
 impl<M: ABIMachineSpec> Callee<M> {
     /// Create a new body ABI instance.
-    pub fn new<'a>(
+    pub fn new(
         f: &ir::Function,
         isa: &dyn TargetIsa,
         isa_flags: &M::F,
