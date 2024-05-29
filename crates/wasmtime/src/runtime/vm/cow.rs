@@ -164,7 +164,7 @@ impl ModuleMemoryImages {
             _ => return Ok(None),
         };
         let mut memories = PrimaryMap::with_capacity(map.len());
-        let page_size = crate::runtime::vm::page_size() as u32;
+        let page_size = crate::runtime::vm::host_page_size() as u32;
         for (memory_index, init) in map {
             // mmap-based-initialization only works for defined memories with a
             // known starting point of all zeros, so bail out if the mmeory is
@@ -189,6 +189,23 @@ impl ModuleMemoryImages {
             // creation files then we fail creating `ModuleMemoryImages` since this
             // memory couldn't be represented.
             let data = &wasm_data[init.data.start as usize..init.data.end as usize];
+            if module.memory_plans[memory_index]
+                .memory
+                .minimum_byte_size()
+                .map_or(false, |mem_initial_len| {
+                    init.offset + u64::try_from(data.len()).unwrap() > mem_initial_len
+                })
+            {
+                // The image is rounded up to multiples of the host OS page
+                // size. But if Wasm is using a custom page size, the Wasm page
+                // size might be smaller than the host OS page size, and that
+                // rounding might have made the image larger than the Wasm
+                // memory's initial length. This is *probably* okay, since the
+                // rounding would have just introduced new runs of zeroes in the
+                // image, but out of an abundance of caution we don't generate
+                // CoW images in this scenario.
+                return Ok(None);
+            }
             let image = match MemoryImage::new(page_size, init.offset, data, mmap)? {
                 Some(image) => image,
                 None => return Ok(None),
@@ -728,8 +745,8 @@ impl Drop for MemoryImageSlot {
 #[cfg(all(test, target_os = "linux", not(miri)))]
 mod test {
     use super::{MemoryImage, MemoryImageSlot, MemoryImageSource, MemoryPlan, MemoryStyle};
+    use crate::runtime::vm::host_page_size;
     use crate::runtime::vm::mmap::Mmap;
-    use crate::runtime::vm::page_size;
     use crate::runtime::vm::sys::vm::decommit_pages;
     use anyhow::Result;
     use std::sync::Arc;
@@ -737,7 +754,7 @@ mod test {
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
-        let page_size = page_size();
+        let page_size = host_page_size();
         assert_eq!(offset & (page_size - 1), 0);
 
         // The image length is rounded up to the nearest page size
@@ -759,6 +776,7 @@ mod test {
                 maximum: None,
                 shared: false,
                 memory64: false,
+                page_size_log2: Memory::DEFAULT_PAGE_SIZE_LOG2,
             },
             pre_guard_size: 0,
             offset_guard_size: 0,
@@ -804,7 +822,7 @@ mod test {
 
     #[test]
     fn instantiate_image() {
-        let page_size = page_size();
+        let page_size = host_page_size();
         let plan = dummy_memory_plan(MemoryStyle::Static {
             byte_reservation: 4 << 30,
         });
@@ -865,7 +883,7 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn memset_instead_of_madvise() {
-        let page_size = page_size();
+        let page_size = host_page_size();
         let plan = dummy_memory_plan(MemoryStyle::Static {
             byte_reservation: 100 << 16,
         });
@@ -914,7 +932,7 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn dynamic() {
-        let page_size = page_size();
+        let page_size = host_page_size();
         let plan = dummy_memory_plan(MemoryStyle::Dynamic { reserve: 200 });
 
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();

@@ -10,8 +10,8 @@ use anyhow::{bail, Result};
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, Trap,
-    VMOffsets, WasmHeapTopType, WASM_PAGE_SIZE,
+    MemoryInitializer, MemoryPlan, Module, PrimaryMap, SizeOverflow, TableInitialValue, TablePlan,
+    Trap, VMOffsets, WasmHeapTopType,
 };
 
 #[cfg(feature = "gc")]
@@ -690,8 +690,13 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
     }
 
     impl InitMemory for InitMemoryAtInstantiation<'_> {
-        fn memory_size_in_pages(&mut self, memory: wasmtime_environ::MemoryIndex) -> u64 {
-            (self.instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE)
+        fn memory_size_in_bytes(
+            &mut self,
+            memory: wasmtime_environ::MemoryIndex,
+        ) -> Result<u64, SizeOverflow> {
+            let len = self.instance.get_memory(memory).current_length();
+            let len = u64::try_from(len).unwrap();
+            Ok(len)
         }
 
         fn eval_offset(

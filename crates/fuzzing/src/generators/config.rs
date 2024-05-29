@@ -166,6 +166,7 @@ impl Config {
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
             .wasm_tail_call(self.module_config.config.tail_call_enabled)
+            .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
             .wasm_threads(self.module_config.config.threads_enabled)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)

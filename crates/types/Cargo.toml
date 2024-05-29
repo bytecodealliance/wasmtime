@@ -9,6 +9,7 @@ documentation = "https://docs.rs/wasmtime-types"
 edition.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
 serde = { workspace = true }
 serde_derive = { workspace = true }

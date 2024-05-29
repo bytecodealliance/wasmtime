@@ -731,6 +731,31 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly custom-page-sizes proposal will be
+    /// enabled for compilation or not.
+    ///
+    /// The [WebAssembly custom-page-sizes proposal] allows a memory to
+    /// customize its page sizes. By default, Wasm page sizes are 64KiB
+    /// large. This proposal allows the memory to opt into smaller page sizes
+    /// instead, allowing Wasm to run in environments with less than 64KiB RAM
+    /// available, for example.
+    ///
+    /// Note that the page size is part of the memory's type, and because
+    /// different memories may have different types, they may also have
+    /// different page sizes.
+    ///
+    /// Currently the only valid page sizes are 64KiB (the default) and 1
+    /// byte. Future extensions may relax this constraint and allow all powers
+    /// of two.
+    ///
+    /// Support for this proposal is disabled by default.
+    ///
+    /// [WebAssembly custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
+    pub fn wasm_custom_page_sizes(&mut self, enable: bool) -> &mut Self {
+        self.features.set(WasmFeatures::CUSTOM_PAGE_SIZES, enable);
+        self
+    }
+
     /// Configures whether the WebAssembly [threads] proposal will be enabled
     /// for compilation.
     ///
@@ -2120,11 +2145,7 @@ fn round_up_to_pages(val: u64) -> u64 {
 
 #[cfg(feature = "runtime")]
 fn round_up_to_pages(val: u64) -> u64 {
-    let page_size = crate::runtime::vm::page_size() as u64;
-    debug_assert!(page_size.is_power_of_two());
-    val.checked_add(page_size - 1)
-        .map(|val| val & !(page_size - 1))
-        .unwrap_or(u64::MAX / page_size + 1)
+    crate::runtime::vm::round_u64_up_to_host_pages(val)
 }
 
 impl Default for Config {

@@ -64,9 +64,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-use wasmtime_environ::{
-    DefinedMemoryIndex, MemoryPlan, MemoryStyle, Module, Tunables, WASM_PAGE_SIZE,
-};
+use wasmtime_environ::{DefinedMemoryIndex, MemoryPlan, MemoryStyle, Module, Tunables};
 
 /// A set of allocator slots.
 ///
@@ -269,7 +267,6 @@ impl MemoryPool {
             );
         }
 
-        let max_memory_pages = self.layout.max_memory_bytes / WASM_PAGE_SIZE as usize;
         for (i, plan) in module
             .memory_plans
             .iter()
@@ -288,12 +285,18 @@ impl MemoryPool {
                 }
                 MemoryStyle::Dynamic { .. } => {}
             }
-            if plan.memory.minimum > u64::try_from(max_memory_pages).unwrap() {
+            let min = plan.memory.minimum_byte_size().with_context(|| {
+                format!(
+                    "memory index {} has a minimum byte size that cannot be represented in a u64",
+                    i.as_u32()
+                )
+            })?;
+            if min > u64::try_from(self.layout.max_memory_bytes).unwrap() {
                 bail!(
-                    "memory index {} has a minimum page size of {} which exceeds the limit of {}",
+                    "memory index {} has a minimum byte size of {} which exceeds the limit of {} bytes",
                     i.as_u32(),
-                    plan.memory.minimum,
-                    max_memory_pages,
+                    min,
+                    self.layout.max_memory_bytes,
                 );
             }
         }
@@ -358,7 +361,10 @@ impl MemoryPool {
 
             let mut slot = self.take_memory_image_slot(allocation_index);
             let image = request.runtime_info.memory_image(memory_index)?;
-            let initial_size = memory_plan.memory.minimum * WASM_PAGE_SIZE as u64;
+            let initial_size = memory_plan
+                .memory
+                .minimum_byte_size()
+                .expect("min size checked in validation");
 
             // If instantiation fails, we can propagate the error
             // upward and drop the slot. This will cause the Drop
@@ -719,7 +725,7 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     };
 
     // The page-aligned slot size; equivalent to `memory_and_guard_size`.
-    let page_alignment = crate::runtime::vm::page_size() - 1;
+    let page_alignment = crate::runtime::vm::host_page_size() - 1;
     let slot_bytes = slot_bytes
         .checked_add(page_alignment)
         .and_then(|slot_bytes| Some(slot_bytes & !page_alignment))
@@ -752,6 +758,8 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    const WASM_PAGE_SIZE: u32 = wasmtime_environ::Memory::DEFAULT_PAGE_SIZE;
 
     #[cfg(target_pointer_width = "64")]
     #[test]
@@ -970,6 +978,6 @@ mod tests {
     }
 
     fn is_aligned(bytes: usize) -> bool {
-        bytes % crate::runtime::vm::page_size() == 0
+        bytes % crate::runtime::vm::host_page_size() == 0
     }
 }

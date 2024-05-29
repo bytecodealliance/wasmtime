@@ -62,6 +62,9 @@ where
     let spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
     let pcc = env.proof_carrying_code();
 
+    let host_page_size_log2 = env.target_config().page_size_align_log2;
+    let can_use_virtual_memory = heap.page_size_log2 >= host_page_size_log2;
+
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
                         lhs: ir::Value,
@@ -141,6 +144,7 @@ where
         //            index + 1 > bound
         //        ==> index >= bound
         HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
+            log::trace!("FITZGEN: bounds checking case 1");
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = make_compare(
                 builder,
@@ -188,7 +192,10 @@ where
         //    offset immediates -- which is a common code pattern when accessing
         //    multiple fields in the same struct that is in linear memory --
         //    will all emit the same `index > bound` check, which we can GVN.
-        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.offset_guard_size => {
+        HeapStyle::Dynamic { bound_gv }
+            if can_use_virtual_memory && offset_and_size <= heap.offset_guard_size =>
+        {
+            log::trace!("FITZGEN: bounds checking case 2");
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = make_compare(
                 builder,
@@ -219,6 +226,7 @@ where
         //            index + offset + access_size > bound
         //        ==> index > bound - (offset + access_size)
         HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
+            log::trace!("FITZGEN: bounds checking case 3");
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let adjustment = offset_and_size as i64;
             let adjustment_value = builder.ins().iconst(env.pointer_type(), adjustment);
@@ -261,6 +269,7 @@ where
         //
         //    And we have to handle the overflow case in the left-hand side.
         HeapStyle::Dynamic { bound_gv } => {
+            log::trace!("FITZGEN: bounds checking case 4");
             let access_size_val = builder
                 .ins()
                 // Explicit cast from u64 to i64: we just want the raw
@@ -313,6 +322,11 @@ where
         //    bound`, since we will end up being out-of-bounds regardless of the
         //    given `index`.
         HeapStyle::Static { bound } if offset_and_size > bound.into() => {
+            log::trace!("FITZGEN: bounds checking case 5");
+            assert!(
+                can_use_virtual_memory,
+                "static memories require the ability to use virtual memory"
+            );
             env.before_unconditionally_trapping_memory_access(builder)?;
             builder.ins().trap(ir::TrapCode::HeapOutOfBounds);
             Unreachable
@@ -357,10 +371,16 @@ where
         //    within the guard page region, neither of which require emitting an
         //    explicit bounds check.
         HeapStyle::Static { bound }
-            if heap.index_type == ir::types::I32
+            if can_use_virtual_memory
+                && heap.index_type == ir::types::I32
                 && u64::from(u32::MAX)
                     <= u64::from(bound) + u64::from(heap.offset_guard_size) - offset_and_size =>
         {
+            log::trace!("FITZGEN: bounds checking case 6");
+            assert!(
+                can_use_virtual_memory,
+                "static memories require the ability to use virtual memory"
+            );
             Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
@@ -386,6 +406,11 @@ where
         //    precise, not rely on the virtual memory subsystem at all, and not
         //    factor in the guard pages here.
         HeapStyle::Static { bound } => {
+            log::trace!("FITZGEN: bounds checking case 7");
+            assert!(
+                can_use_virtual_memory,
+                "static memories require the ability to use virtual memory"
+            );
             // NB: this subtraction cannot wrap because we didn't hit the first
             // special case.
             let adjusted_bound = u64::from(bound) - offset_and_size;

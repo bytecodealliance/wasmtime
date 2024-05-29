@@ -602,6 +602,11 @@ impl Instance {
         index
     }
 
+    /// Get the given memory's page size, in bytes.
+    pub(crate) fn memory_page_size(&self, index: MemoryIndex) -> usize {
+        usize::try_from(self.module().memory_plans[index].memory.page_size()).unwrap()
+    }
+
     /// Grow memory by the specified amount of pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount

@@ -63,6 +63,10 @@ impl SharedMemory {
 }
 
 impl RuntimeLinearMemory for SharedMemory {
+    fn page_size_log2(&self) -> u8 {
+        match *self {}
+    }
+
     fn byte_size(&self) -> usize {
         match *self {}
     }

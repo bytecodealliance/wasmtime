@@ -30,7 +30,7 @@ pub struct TablePool {
 impl TablePool {
     /// Create a new `TablePool`.
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
-        let page_size = crate::runtime::vm::page_size();
+        let page_size = crate::runtime::vm::host_page_size();
 
         let table_size = round_up_to_pow2(
             mem::size_of::<*mut u8>()
@@ -225,7 +225,7 @@ mod tests {
             ..Default::default()
         })?;
 
-        let host_page_size = crate::runtime::vm::page_size();
+        let host_page_size = crate::runtime::vm::host_page_size();
 
         assert_eq!(pool.table_size, host_page_size);
         assert_eq!(pool.max_total_tables, 7);

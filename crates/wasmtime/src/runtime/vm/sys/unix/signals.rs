@@ -355,7 +355,7 @@ pub fn lazy_per_thread_init() {
 
         // ... but failing that we need to allocate our own, so do all that
         // here.
-        let page_size = crate::runtime::vm::page_size();
+        let page_size = crate::runtime::vm::host_page_size();
         let guard_size = page_size;
         let alloc_size = guard_size + MIN_STACK_SIZE;
 

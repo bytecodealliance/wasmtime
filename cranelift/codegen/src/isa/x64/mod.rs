@@ -142,6 +142,11 @@ impl TargetIsa for X64Backend {
         Inst::function_alignment()
     }
 
+    fn page_size_align_log2(&self) -> u8 {
+        debug_assert_eq!(1 << 12, 0x1000);
+        12
+    }
+
     #[cfg(feature = "disas")]
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
         use capstone::prelude::*;

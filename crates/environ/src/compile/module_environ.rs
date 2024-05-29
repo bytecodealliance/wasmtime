@@ -22,7 +22,7 @@ use wasmparser::{
     FuncToValidate, FunctionBody, KnownCustom, NameSectionReader, Naming, Operator, Parser,
     Payload, TypeRef, Validator, ValidatorResources,
 };
-use wasmtime_types::{ConstExpr, ConstOp, ModuleInternedTypeIndex, WasmHeapTopType};
+use wasmtime_types::{ConstExpr, ConstOp, ModuleInternedTypeIndex, SizeOverflow, WasmHeapTopType};
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'a, 'data> {
@@ -1044,8 +1044,13 @@ impl ModuleTranslation<'_> {
             idx: usize,
         }
         impl InitMemory for InitMemoryAtCompileTime<'_> {
-            fn memory_size_in_pages(&mut self, memory_index: MemoryIndex) -> u64 {
-                self.module.memory_plans[memory_index].memory.minimum
+            fn memory_size_in_bytes(
+                &mut self,
+                memory_index: MemoryIndex,
+            ) -> Result<u64, SizeOverflow> {
+                self.module.memory_plans[memory_index]
+                    .memory
+                    .minimum_byte_size()
             }
 
             fn eval_offset(&mut self, memory_index: MemoryIndex, expr: &ConstExpr) -> Option<u64> {

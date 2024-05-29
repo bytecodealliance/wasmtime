@@ -266,16 +266,20 @@ pub struct VMMemoryDefinition {
     /// atomically. For relaxed access, see
     /// [`VMMemoryDefinition::current_length()`].
     pub current_length: AtomicUsize,
+
+    /// The log2 of this memory's page size, in bytes.
+    pub page_size_log2: u8,
 }
 
 impl VMMemoryDefinition {
-    /// Return the current length of the [`VMMemoryDefinition`] by performing a
-    /// relaxed load; do not use this function for situations in which a precise
-    /// length is needed. Owned memories (i.e., non-shared) will always return a
-    /// precise result (since no concurrent modification is possible) but shared
-    /// memories may see an imprecise value--a `current_length` potentially
-    /// smaller than what some other thread observes. Since Wasm memory only
-    /// grows, this under-estimation may be acceptable in certain cases.
+    /// Return the current length (in bytes) of the [`VMMemoryDefinition`] by
+    /// performing a relaxed load; do not use this function for situations in
+    /// which a precise length is needed. Owned memories (i.e., non-shared) will
+    /// always return a precise result (since no concurrent modification is
+    /// possible) but shared memories may see an imprecise value--a
+    /// `current_length` potentially smaller than what some other thread
+    /// observes. Since Wasm memory only grows, this under-estimation may be
+    /// acceptable in certain cases.
     pub fn current_length(&self) -> usize {
         self.current_length.load(Ordering::Relaxed)
     }
@@ -287,6 +291,7 @@ impl VMMemoryDefinition {
         VMMemoryDefinition {
             base: other.base,
             current_length: other.current_length().into(),
+            page_size_log2: other.page_size_log2,
         }
     }
 }

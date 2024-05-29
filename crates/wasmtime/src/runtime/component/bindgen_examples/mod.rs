@@ -205,11 +205,10 @@ pub mod _1_world_imports;
 ///     // ...
 /// }
 ///
+/// # mod rand { pub fn thread_rng() -> G { G } pub struct G; impl G { pub fn gen(&self) -> u32 { 0 } } }
 /// // Note that the trait here is per-interface and within a submodule now.
 /// impl my::project::host::Host for MyState {
 ///     fn gen_random_integer(&mut self) -> u32 {
-/// #       panic!();
-/// #       #[cfg(FALSE)]
 ///         rand::thread_rng().gen()
 ///     }
 ///

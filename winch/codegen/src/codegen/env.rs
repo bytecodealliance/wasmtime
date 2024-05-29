@@ -13,7 +13,7 @@ use wasmparser::BlockType;
 use wasmtime_environ::{
     BuiltinFunctionIndex, FuncIndex, GlobalIndex, MemoryIndex, MemoryPlan, MemoryStyle,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, TableIndex, TablePlan, TypeConvert,
-    TypeIndex, VMOffsets, WasmHeapType, WasmValType, WASM_PAGE_SIZE,
+    TypeIndex, VMOffsets, WasmHeapType, WasmValType,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -79,6 +79,11 @@ pub struct HeapData {
     pub min_size: u64,
     /// The maximum heap size in bytes.
     pub max_size: Option<u64>,
+    /// The log2 of this memory's page size, in bytes.
+    ///
+    /// By default the page size is 64KiB (0x10000; 2**16; 1<<16; 65536) but the
+    /// custom-page-sizes proposal allows opting into a page size of `1`.
+    pub page_size_log2: u8,
     /// Size in bytes of the offset guard pages, located after the heap bounds.
     pub offset_guard_size: u64,
 }
@@ -300,6 +305,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     },
                     min_size,
                     max_size,
+                    page_size_log2: plan.memory.page_size_log2,
                     offset_guard_size,
                 })
             }
@@ -433,16 +439,11 @@ fn heap_style_and_offset_guard_size(plan: &MemoryPlan) -> (HeapStyle, u64) {
 
 fn heap_limits(plan: &MemoryPlan) -> (u64, Option<u64>) {
     (
-        plan.memory
-            .minimum
-            .checked_mul(u64::from(WASM_PAGE_SIZE))
-            .unwrap_or_else(|| {
-                // 2^64 as a minimum doesn't fin in a 64 bit integer.
-                // So in this case, the minimum is clamped to u64::MAX.
-                u64::MAX
-            }),
-        plan.memory
-            .maximum
-            .and_then(|max| max.checked_mul(u64::from(WASM_PAGE_SIZE))),
+        plan.memory.minimum_byte_size().unwrap_or_else(|_| {
+            // 2^64 as a minimum doesn't fin in a 64 bit integer.
+            // So in this case, the minimum is clamped to u64::MAX.
+            u64::MAX
+        }),
+        plan.memory.maximum_byte_size().ok(),
     )
 }

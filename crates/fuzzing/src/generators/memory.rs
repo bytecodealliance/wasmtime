@@ -22,13 +22,26 @@ pub struct MemoryAccesses {
 
 impl<'a> Arbitrary<'a> for MemoryAccesses {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let image = HeapImage::arbitrary(u)?;
+
+        // Don't grow too much, since oss-fuzz/asan get upset if we try,
+        // even if we allow it to fail.
+        let one_mib = 1 << 20; // 1 MiB
+        let max_growth = one_mib / (1 << image.page_size_log2.unwrap_or(16));
+        let mut growth: u32 = u.int_in_range(0..=max_growth)?;
+
+        // Occasionally, round to a power of two, since these tend to be
+        // interesting numbers that overlap with the host page size and things
+        // like that.
+        if growth > 0 && u.ratio(1, 20)? {
+            growth = (growth - 1).next_power_of_two();
+        }
+
         Ok(MemoryAccesses {
             config: u.arbitrary()?,
-            image: u.arbitrary()?,
+            image,
             offset: u.arbitrary()?,
-            // Don't grow too much, since oss-fuzz/asan get upset if we try,
-            // even if we allow it to fail.
-            growth: u.int_in_range(0..=10)?,
+            growth,
         })
     }
 }
@@ -41,6 +54,8 @@ pub struct HeapImage {
     pub maximum: Option<u32>,
     /// Whether this memory should be indexed with `i64` (rather than `i32`).
     pub memory64: bool,
+    /// The log2 of the page size for this memory.
+    pub page_size_log2: Option<u32>,
     /// Data segments for this memory.
     pub segments: Vec<(u32, Vec<u8>)>,
 }
@@ -58,6 +73,7 @@ impl std::fmt::Debug for HeapImage {
             .field("minimum", &self.minimum)
             .field("maximum", &self.maximum)
             .field("memory64", &self.memory64)
+            .field("page_size_log2", &self.page_size_log2)
             .field("segments", &Segments(&self.segments))
             .finish()
     }
@@ -72,11 +88,16 @@ impl<'a> Arbitrary<'a> for HeapImage {
             None
         };
         let memory64 = u.arbitrary()?;
+        let page_size_log2 = match u.int_in_range(0..=2)? {
+            0 => None,
+            1 => Some(0),
+            2 => Some(16),
+            _ => unreachable!(),
+        };
         let mut segments = vec![];
         if minimum > 0 {
             for _ in 0..u.int_in_range(0..=4)? {
-                const WASM_PAGE_SIZE: u32 = 65536;
-                let last_addressable = WASM_PAGE_SIZE * minimum - 1;
+                let last_addressable = (1u32 << page_size_log2.unwrap_or(16)) * minimum - 1;
                 let offset = u.int_in_range(0..=last_addressable)?;
                 let max_len =
                     std::cmp::min(u.len(), usize::try_from(last_addressable - offset).unwrap());
@@ -89,6 +110,7 @@ impl<'a> Arbitrary<'a> for HeapImage {
             minimum,
             maximum,
             memory64,
+            page_size_log2,
             segments,
         })
     }

@@ -1501,6 +1501,7 @@ mod tests {
         TargetFrontendConfig {
             default_call_conv: CallConv::SystemV,
             pointer_width: PointerWidth::U64,
+            page_size_align_log2: 12,
         }
     }
 

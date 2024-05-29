@@ -191,6 +191,10 @@ unsafe impl Sync for LongTermVMMemoryDefinition {}
 
 /// Proxy all calls through the [`RwLock`].
 impl RuntimeLinearMemory for SharedMemory {
+    fn page_size_log2(&self) -> u8 {
+        self.0.memory.read().unwrap().page_size_log2()
+    }
+
     fn byte_size(&self) -> usize {
         self.0.memory.read().unwrap().byte_size()
     }

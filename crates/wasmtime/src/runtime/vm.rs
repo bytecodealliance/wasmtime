@@ -330,7 +330,7 @@ impl ModuleRuntimeInfo {
 }
 
 /// Returns the host OS page size, in bytes.
-pub fn page_size() -> usize {
+pub fn host_page_size() -> usize {
     static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
 
     return match PAGE_SIZE.load(Ordering::Relaxed) {
@@ -342,6 +342,28 @@ pub fn page_size() -> usize {
         }
         n => n,
     };
+}
+
+/// Is `bytes` a multiple of the host page size?
+pub fn usize_is_multiple_of_host_page_size(bytes: usize) -> bool {
+    bytes % host_page_size() == 0
+}
+
+/// Round the given byte size up to a multiple of the host OS page size.
+pub fn round_u64_up_to_host_pages(bytes: u64) -> u64 {
+    let page_size = u64::try_from(crate::runtime::vm::host_page_size()).unwrap();
+    debug_assert!(page_size.is_power_of_two());
+    bytes
+        .checked_add(page_size - 1)
+        .map(|val| val & !(page_size - 1))
+        .unwrap_or(u64::MAX / page_size + 1)
+}
+
+/// Same as `round_u64_up_to_host_pages` but for `usize`s.
+pub fn round_usize_up_to_host_pages(bytes: usize) -> usize {
+    let bytes = u64::try_from(bytes).unwrap();
+    let rounded = round_u64_up_to_host_pages(bytes);
+    usize::try_from(rounded).unwrap()
 }
 
 /// Result of `Memory::atomic_wait32` and `Memory::atomic_wait64`
