@@ -4,7 +4,7 @@ use anyhow::ensure;
 use wasmtime::*;
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_linker<'module, T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {
+pub fn dummy_linker<T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {
     let mut linker = Linker::new(store.engine());
     linker.allow_shadowing(true);
     for import in module.imports() {
