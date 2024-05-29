@@ -139,6 +139,29 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   ret
 
 
+function %select_icmp_sle(i64, i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  v4 = icmp.i64 slt v0, v1
+  v5 = select.i64 v4, v2, v3
+  return v5
+}
+
+; VCode:
+; block0:
+;   slt a5,a0,a1
+;   czero.eqz a1,a2,a5
+;   czero.nez a3,a3,a5
+;   or a0,a1,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slt a5, a0, a1
+;   .byte 0xb3, 0x55, 0xf6, 0x0e
+;   .byte 0xb3, 0xf6, 0xf6, 0x0e
+;   or a0, a1, a3
+;   ret
+
 ;; This can trigger a stack overflow with if the rules don't prevent
 ;; this situation.
 function %check_rule_stack_overflow(i64, i64, i64) -> i64 {
@@ -160,4 +183,3 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   mv a1, zero
 ;   .byte 0x33, 0xf5, 0x05, 0x0e
 ;   ret
-

@@ -2587,22 +2587,22 @@
 
 (decl gen_select_xreg (IntegerCompare XReg XReg) XReg)
 
-(rule 5 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedLessThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_minu x y))
 
-(rule 5 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedLessThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_min x y))
 
-(rule 5 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedGreaterThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_maxu x y))
 
-(rule 5 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedGreaterThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_max x y))
@@ -2613,34 +2613,39 @@
 ;; Additionally prevent this rule from recursing infinitely by only
 ;; matching when one of the inputs is the zero register, but not both.
 
-(rule 4 (gen_select_xreg (int_compare_decompose cc a @ (zero_reg) b @ (non_zero_reg)) x y)
+(rule 5 (gen_select_xreg (int_compare_decompose cc a @ (zero_reg) b @ (non_zero_reg)) x y)
   (if-let $true (has_zicond))
   (gen_select_xreg (int_compare (intcc_swap_args cc) b a) x y))
 
-(rule 3 (gen_select_xreg c @ (int_compare_decompose cc a b) x @ (zero_reg) y @ (non_zero_reg))
+(rule 4 (gen_select_xreg c @ (int_compare_decompose cc a b) x @ (zero_reg) y @ (non_zero_reg))
   (if-let $true (has_zicond))
   (gen_select_xreg (int_compare (intcc_complement cc) a b) y x))
 
-(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x (zero_reg))
+(rule 3 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x (zero_reg))
   (if-let $true (has_zicond))
   (rv_czero_nez x c))
 
-(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x (zero_reg))
+(rule 3 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x (zero_reg))
   (if-let $true (has_zicond))
   (rv_czero_eqz x c))
 
-(rule 1 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x y)
+(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x y)
   (if-let $true (has_zicond))
   (rv_or
     (rv_czero_nez x c)
     (rv_czero_eqz y c)))
 
-(rule 1 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x y)
+(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x y)
   (if-let $true (has_zicond))
   (rv_or
     (rv_czero_eqz x c)
     (rv_czero_nez y c)))
 
+;; It is still beneficial to emit the full compare instruction, and then the 3 instruction
+;; select using zicond, so do that here as a last resort.
+(rule 1 (gen_select_xreg compare x y)
+  (if-let $true (has_zicond))
+  (gen_select_xreg (cmp_nez (lower_int_compare compare)) x y))
 
 ;; In the base case we emit a conditional branch and a few moves.
 
