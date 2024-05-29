@@ -549,14 +549,9 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
     }
 
     // NOTE on fd_read, fd_pread, fd_write, fd_pwrite implementations:
-    // Because the arguments to these function sit behind GuestPtrs, they are not values we
-    // can convert and pass to the corresponding function in Snapshot1.
-    // Instead, we have copied the implementation of these functions from the Snapshot1 code.
-    // The implementations are identical, but the `types::` in scope locally is different.
-    // The bodies of these functions is mostly about converting the GuestPtr and types::-based
-    // representation to a std::io::IoSlice(Mut) representation.
-    //
-    // TODO: update this ^
+    // these cast their pointers from preview0 vectors to preview1 vectors and
+    // this only works because the representation didn't change between preview0
+    // and preview1.
 
     async fn fd_read(
         &mut self,

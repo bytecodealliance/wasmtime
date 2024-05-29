@@ -1125,7 +1125,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     }
 
     #[instrument(skip(self, memory))]
-    fn environ_get<'b>(
+    fn environ_get(
         &mut self,
         memory: &mut GuestMemory<'_>,
         environ: GuestPtr<GuestPtr<u8>>,
