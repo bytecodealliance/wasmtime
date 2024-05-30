@@ -14,10 +14,7 @@ rust-version.workspace = true
 workspace = true
 
 [package.metadata.docs.rs]
-# Docs.rs will use the `component-model` feature for documentation;
-# so this feature also passed in to the `cargo doc` invocation in CI.
-# See .github/workflows/main.yml
-features = ["component-model"]
+all-features = true
 
 [dependencies]
 wasmtime-asm-macros = { workspace = true, optional = true }

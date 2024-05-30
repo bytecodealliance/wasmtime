@@ -13,6 +13,9 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow = { workspace = true }
 postcard = { workspace = true }
