@@ -1,6 +1,6 @@
 /*** LRU Cache *****************************************************************/
 
-class Cache {
+class LruCache {
   constructor(size, getFunc) {
     // Maps preserve the insertion order, so we can use it to implement a naïve LRU
     // cache.
@@ -139,7 +139,7 @@ const renderInst = (mnemonic, operands) => {
 
 // Connects callbacks to mouse hovering events so elements are properly highlighted when
 // hovered, and the bridging element is drawn between the instruction lists.
-const linkedElementCache = new Cache(256, offset =>
+const linkedElementCache = new LruCache(256, offset =>
   document.querySelectorAll(`[data-wasm-offset="${offset}"]`),
 );
 const linkElements = element => {
