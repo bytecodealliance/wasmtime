@@ -126,6 +126,12 @@ pub(crate) fn define() -> TargetIsa {
         "Zbs: Single-bit instructions",
         false,
     );
+    let _has_zicond = setting.add_bool(
+        "has_zicond",
+        "has extension zicond?",
+        "ZiCond: Integer Conditional Operations",
+        false,
+    );
 
     let has_zicsr = setting.add_bool(
         "has_zicsr",

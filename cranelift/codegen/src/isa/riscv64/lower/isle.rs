@@ -300,6 +300,13 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn zero_reg(&mut self) -> XReg {
         XReg::new(zero_reg()).unwrap()
     }
+    fn is_non_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg != self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
+    }
     fn is_zero_reg(&mut self, reg: XReg) -> Option<()> {
         if reg == self.zero_reg() {
             Some(())
@@ -397,6 +404,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn has_zbs(&mut self) -> bool {
         self.backend.isa_flags.has_zbs()
+    }
+
+    fn has_zicond(&mut self) -> bool {
+        self.backend.isa_flags.has_zicond()
     }
 
     fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64) -> AMode {

@@ -1826,16 +1826,27 @@
   (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
+
+;; Manually matching (iconst 0) here is a bit of a hack. We can't do that as part
+;; of the iconst rule because that runs into regalloc issues. gen_select_xreg
+;; has some optimizations based on the use of the zero register so we have to
+;; manually match it here.
+(rule 5 (lower (has_type (ty_int_ref_scalar_64 _) (select c (i64_from_iconst 0) y)))
+  (gen_select_xreg (is_nonzero_cmp c) (zero_reg) y))
+
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 _) (select c x (i64_from_iconst 0))))
+  (gen_select_xreg (is_nonzero_cmp c) x (zero_reg)))
+
+(rule 3 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
   (gen_select_xreg (is_nonzero_cmp c) x y))
 
-(rule 1 (lower (has_type $I128 (select c x y)))
+(rule 2 (lower (has_type $I128 (select c x y)))
   (gen_select_regs (is_nonzero_cmp c) x y))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
   (gen_select_vreg (is_nonzero_cmp c) x y))
 
-(rule 3 (lower (has_type (ty_scalar_float _) (select c x y)))
+(rule 0 (lower (has_type (ty_scalar_float _) (select c x y)))
   (gen_select_freg (is_nonzero_cmp c) x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
