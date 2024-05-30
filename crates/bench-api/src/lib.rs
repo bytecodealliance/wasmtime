@@ -417,8 +417,6 @@ struct BenchState {
 
 struct HostState {
     wasi: WasiCtx,
-    #[cfg(feature = "wasi-nn")]
-    wasi_nn: wasmtime_wasi_nn::WasiNnCtx,
 }
 
 impl BenchState {
@@ -465,7 +463,7 @@ impl BenchState {
 
         #[cfg(feature = "wasi-nn")]
         if options.wasi.nn == Some(true) {
-            wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+            unimplemented!("wasi-nn is only supported for components; this crate currently only works for core modules")
         }
 
         Ok(Self {
@@ -506,11 +504,6 @@ impl BenchState {
 
         let host = HostState {
             wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
-            #[cfg(feature = "wasi-nn")]
-            wasi_nn: {
-                let (backends, registry) = wasmtime_wasi_nn::preload(&[])?;
-                wasmtime_wasi_nn::WasiNnCtx::new(backends, registry)
-            },
         };
 
         // NB: Start measuring instantiation time *after* we've created the WASI

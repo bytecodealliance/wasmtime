@@ -2,13 +2,20 @@ mod ctx;
 mod registry;
 
 pub mod backend;
-pub use ctx::{preload, WasiNnCtx};
+pub use ctx::{preload, WasiNnCtx, WasiNnView};
 pub use registry::{GraphRegistry, InMemoryRegistry};
 pub mod testing;
 pub mod wit;
-pub mod witx;
 
 use std::sync::Arc;
+
+/// Link the `wasi-nn` functionality into a component.
+pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+where
+    T: WasiNnView,
+{
+    wit::ML::add_to_linker(l, |t| t.ctx())
+}
 
 /// A machine learning backend.
 pub struct Backend(Box<dyn backend::BackendInner>);
