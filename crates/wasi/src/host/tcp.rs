@@ -14,8 +14,9 @@ use wasmtime::component::Resource;
 
 impl tcp::Host for dyn WasiView + '_ {}
 
+#[async_trait::async_trait]
 impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
-    fn start_bind(
+    async fn start_bind(
         &mut self,
         this: Resource<tcp::TcpSocket>,
         network: Resource<Network>,
@@ -27,7 +28,9 @@ impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
         let local_address: SocketAddr = local_address.into();
 
         // Ensure that we're allowed to connect to this address.
-        network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
+        network
+            .check_socket_addr(&local_address, SocketAddrUse::TcpBind)
+            .await?;
 
         // Bind to the address.
         table.get_mut(&this)?.start_bind(local_address)?;
@@ -42,7 +45,7 @@ impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
         socket.finish_bind()
     }
 
-    fn start_connect(
+    async fn start_connect(
         &mut self,
         this: Resource<tcp::TcpSocket>,
         network: Resource<Network>,
@@ -54,7 +57,9 @@ impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
         let remote_address: SocketAddr = remote_address.into();
 
         // Ensure that we're allowed to connect to this address.
-        network.check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)?;
+        network
+            .check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)
+            .await?;
 
         // Start connection
         table.get_mut(&this)?.start_connect(remote_address)?;

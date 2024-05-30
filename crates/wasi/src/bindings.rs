@@ -173,6 +173,11 @@ mod async_io {
                 "poll",
                 "[method]pollable.block",
                 "[method]pollable.ready",
+                "[method]tcp-socket.start-bind",
+                "[method]tcp-socket.start-connect",
+                "[method]udp-socket.start-bind",
+                "[method]udp-socket.stream",
+                "[method]outgoing-datagram-stream.send",
             ],
         },
         trappable_error_type: {

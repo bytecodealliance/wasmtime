@@ -24,8 +24,9 @@ const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 impl udp::Host for dyn WasiView + '_ {}
 
+#[async_trait::async_trait]
 impl udp::HostUdpSocket for dyn WasiView + '_ {
-    fn start_bind(
+    async fn start_bind(
         &mut self,
         this: Resource<udp::UdpSocket>,
         network: Resource<Network>,
@@ -53,7 +54,7 @@ impl udp::HostUdpSocket for dyn WasiView + '_ {
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            check.check(&local_address, SocketAddrUse::UdpBind)?;
+            check.check(&local_address, SocketAddrUse::UdpBind).await?;
 
             // Perform the OS bind call.
             util::udp_bind(socket.udp_socket(), &local_address).map_err(|error| match error {
@@ -88,7 +89,7 @@ impl udp::HostUdpSocket for dyn WasiView + '_ {
         }
     }
 
-    fn stream(
+    async fn stream(
         &mut self,
         this: Resource<udp::UdpSocket>,
         remote_address: Option<IpSocketAddress>,
@@ -133,7 +134,9 @@ impl udp::HostUdpSocket for dyn WasiView + '_ {
             };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
-            check.check(&connect_addr, SocketAddrUse::UdpConnect)?;
+            check
+                .check(&connect_addr, SocketAddrUse::UdpConnect)
+                .await?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -391,6 +394,7 @@ impl Subscribe for IncomingDatagramStream {
     }
 }
 
+#[async_trait::async_trait]
 impl udp::HostOutgoingDatagramStream for dyn WasiView + '_ {
     fn check_send(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> SocketResult<u64> {
         let table = self.table();
@@ -409,12 +413,12 @@ impl udp::HostOutgoingDatagramStream for dyn WasiView + '_ {
         Ok(permit.try_into().unwrap())
     }
 
-    fn send(
+    async fn send(
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
         datagrams: Vec<udp::OutgoingDatagram>,
     ) -> SocketResult<u64> {
-        fn send_one(
+        async fn send_one(
             stream: &OutgoingDatagramStream,
             datagram: &udp::OutgoingDatagram,
         ) -> SocketResult<()> {
@@ -428,7 +432,9 @@ impl udp::HostOutgoingDatagramStream for dyn WasiView + '_ {
                     let Some(check) = stream.socket_addr_check.as_ref() else {
                         return Err(ErrorCode::InvalidState.into());
                     };
-                    check.check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
+                    check
+                        .check(&addr, SocketAddrUse::UdpOutgoingDatagram)
+                        .await?;
                     addr
                 }
                 (Some(addr), None) => addr,
@@ -476,7 +482,7 @@ impl udp::HostOutgoingDatagramStream for dyn WasiView + '_ {
         let mut count = 0;
 
         for datagram in datagrams {
-            match send_one(stream, &datagram) {
+            match send_one(stream, &datagram).await {
                 Ok(_) => count += 1,
                 Err(_) if count > 0 => {
                     // WIT: "If at least one datagram has been sent successfully, this function never returns an error."
