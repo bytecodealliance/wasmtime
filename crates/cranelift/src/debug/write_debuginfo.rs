@@ -140,7 +140,7 @@ impl Writer for WriterRelocate {
     }
 }
 
-fn create_frame_table<'a>(
+fn create_frame_table(
     isa: &dyn TargetIsa,
     funcs: &CompiledFunctionsMetadata,
 ) -> Option<FrameTable> {
@@ -174,7 +174,7 @@ fn create_frame_table<'a>(
     Some(table)
 }
 
-pub fn emit_dwarf<'a>(
+pub fn emit_dwarf(
     isa: &dyn TargetIsa,
     debuginfo_data: &DebugInfoData,
     funcs: &CompiledFunctionsMetadata,

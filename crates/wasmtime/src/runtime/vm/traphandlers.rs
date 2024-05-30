@@ -227,7 +227,7 @@ pub(crate) enum TrapTest {
 /// returning them as a `Result`.
 ///
 /// Highly unsafe since `closure` won't have any dtors run.
-pub unsafe fn catch_traps<'a, F>(
+pub unsafe fn catch_traps<F>(
     signal_handler: Option<*const SignalHandler<'static>>,
     capture_backtrace: bool,
     capture_coredump: bool,

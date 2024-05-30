@@ -35,7 +35,7 @@ mod gen {
     }
 
     /// Convert the host errors to their WITX-generated type.
-    impl<'a> types::UserErrorConversion for WasiNnCtx {
+    impl types::UserErrorConversion for WasiNnCtx {
         fn nn_errno_from_wasi_nn_error(
             &mut self,
             e: WasiNnError,
@@ -51,8 +51,8 @@ mod gen {
 }
 
 /// Wire up the WITX-generated trait to the `wasi-nn` host state.
-impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
-    fn load<'b>(
+impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
+    fn load(
         &mut self,
         builders: &gen::types::GraphBuilderArray<'_>,
         encoding: gen::types::GraphEncoding,
@@ -128,7 +128,7 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         }
     }
 
-    fn get_output<'b>(
+    fn get_output(
         &mut self,
         exec_context_id: gen::types::GraphExecutionContext,
         index: u32,

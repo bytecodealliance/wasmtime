@@ -27,7 +27,7 @@ struct Sha256Hasher(Sha256);
 
 impl<'config> ModuleCacheEntry<'config> {
     /// Create the cache entry.
-    pub fn new<'data>(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
+    pub fn new(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
         if cache_config.enabled() {
             Self(Some(ModuleCacheEntryInner::new(
                 compiler_name,
@@ -108,7 +108,7 @@ impl<'config> ModuleCacheEntry<'config> {
 }
 
 impl<'config> ModuleCacheEntryInner<'config> {
-    fn new<'data>(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
+    fn new(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
         // If debug assertions are enabled then assume that we're some sort of
         // local build. We don't want local builds to stomp over caches between
         // builds, so just use a separate cache directory based on the mtime of
