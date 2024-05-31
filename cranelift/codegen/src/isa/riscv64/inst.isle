@@ -2444,7 +2444,7 @@
 ;; on why this doesn't just fall out.
 (decl gen_store (AMode MemFlags Value) InstOutput)
 (rule 1 (gen_store amode flags val @ (value_type ty))
-  (if-let (i64_from_iconst 0) val)
+  (if-let (u64_from_iconst 0) val)
   (rv_store amode (store_op ty) flags (zero_reg)))
 (rule 0 (gen_store amode flags val @ (value_type ty))
   (rv_store amode (store_op ty) flags val))
