@@ -8,7 +8,12 @@
 
 #[allow(unused_imports)]
 use anyhow::{anyhow, Context, Result};
-use std::{env, fs, path::Path, path::PathBuf, process::Command, sync::Mutex};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::Mutex,
+};
 
 #[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
 use windows::AI::MachineLearning::{LearningModelDevice, LearningModelDeviceKind};
@@ -50,13 +55,12 @@ pub fn check() -> Result<()> {
     #[cfg(feature = "openvino")]
     check_openvino_artifacts_are_available()?;
 
-    #[cfg(feature = "onnx")]
+    #[cfg(any(feature = "onnx", all(feature = "winml", target_os = "windows")))]
     check_onnx_artifacts_are_available()?;
 
-    #[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
+    #[cfg(all(feature = "winml", target_os = "windows"))]
     {
         check_winml_is_available()?;
-        check_winml_artifacts_are_available()?;
     }
     Ok(())
 }
@@ -108,7 +112,7 @@ fn check_openvino_artifacts_are_available() -> Result<()> {
     Ok(())
 }
 
-#[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
+#[cfg(all(feature = "winml", target_os = "windows"))]
 fn check_winml_is_available() -> Result<()> {
     match std::panic::catch_unwind(|| {
         println!(
@@ -121,27 +125,19 @@ fn check_winml_is_available() -> Result<()> {
     }
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any(feature = "onnx", all(feature = "winml", target_os = "windows")))]
 fn check_onnx_artifacts_are_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
 
-    const OPENVINO_BASE_URL: &str =
-        "https://github.com/intel/openvino-rs/raw/main/crates/openvino/tests/fixtures/mobilenet";
     const ONNX_BASE_URL: &str =
-        "https://github.com/onnx/models/raw/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/mobilenet/model/mobilenetv2-7.onnx?download=";
+        "https://github.com/onnx/models/raw/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/mobilenet/model/mobilenetv2-10.onnx?download=";
 
     let artifacts_dir = artifacts_dir();
     if !artifacts_dir.is_dir() {
         fs::create_dir(&artifacts_dir)?;
     }
 
-    for (from, to) in [
-        (
-            [OPENVINO_BASE_URL, "tensor-1x224x224x3-f32.bgr"].join("/"),
-            "tensor.bgr",
-        ),
-        (ONNX_BASE_URL.to_string(), "model.onnx"),
-    ] {
+    for (from, to) in [(ONNX_BASE_URL.to_string(), "model.onnx")] {
         let local_path = artifacts_dir.join(to);
         if !local_path.is_file() {
             download(&from, &local_path).with_context(|| "unable to retrieve test artifact")?;
@@ -149,31 +145,14 @@ fn check_onnx_artifacts_are_available() -> Result<()> {
             println!("> using cached artifact: {}", local_path.display())
         }
     }
-    Ok(())
-}
 
-#[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
-fn check_winml_artifacts_are_available() -> Result<()> {
-    let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
-    let artifacts_dir = artifacts_dir();
-    if !artifacts_dir.is_dir() {
-        fs::create_dir(&artifacts_dir)?;
-    }
-    const MODEL_URL: &str="https://github.com/onnx/models/raw/5faef4c33eba0395177850e1e31c4a6a9e634c82/vision/classification/mobilenet/model/mobilenetv2-12.onnx";
-    for (from, to) in [(MODEL_URL, "model.onnx")] {
-        let local_path = artifacts_dir.join(to);
-        if !local_path.is_file() {
-            download(&from, &local_path).with_context(|| "unable to retrieve test artifact")?;
-        } else {
-            println!("> using cached artifact: {}", local_path.display())
-        }
-    }
-    // kitten.rgb is converted from https://github.com/microsoft/Windows-Machine-Learning/blob/master/SharedContent/media/kitten_224.png?raw=true.
-    let tensor_path = env::current_dir()?
+    // Copy image from source tree to artifact directory.
+    let image_path = env::current_dir()?
         .join("tests")
         .join("fixtures")
-        .join("kitten.rgb");
-    fs::copy(tensor_path, artifacts_dir.join("kitten.rgb"))?;
+        .join("000000062808.rgb");
+    let dest_path = artifacts_dir.join("000000062808.rgb");
+    fs::copy(&image_path, &dest_path)?;
     Ok(())
 }
 

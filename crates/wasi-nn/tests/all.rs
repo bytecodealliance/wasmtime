@@ -97,10 +97,10 @@ fn nn_image_classification_named() {
 #[cfg_attr(not(all(feature = "winml", target_os = "windows")), ignore)]
 #[test]
 fn nn_image_classification_winml() {
-    #[cfg(feature = "winml")]
+    #[cfg(all(feature = "winml", target_os = "windows"))]
     {
         let backend = Backend::from(backend::winml::WinMLBackend::default());
-        run(NN_IMAGE_CLASSIFICATION_WINML, backend, true).unwrap()
+        run(NN_IMAGE_CLASSIFICATION_ONNX, backend, true).unwrap()
     }
 }
 

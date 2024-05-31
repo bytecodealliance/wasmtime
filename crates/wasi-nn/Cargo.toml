@@ -50,7 +50,7 @@ wasi-common = { workspace = true, features = ["sync"] }
 wasmtime = { workspace = true, features = ["cranelift"] }
 
 [features]
-default = ["openvino"]
+default = ["openvino", "winml"]
 # openvino is available on all platforms, it requires openvino installed.
 openvino = ["dep:openvino"]
 # onnx is available on all platforms.
