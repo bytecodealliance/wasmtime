@@ -13,7 +13,7 @@ pub struct Network {
 impl Network {
     pub async fn check_socket_addr(
         &self,
-        addr: &SocketAddr,
+        addr: SocketAddr,
         reason: SocketAddrUse,
     ) -> std::io::Result<()> {
         self.socket_addr_check.check(addr, reason).await
@@ -24,14 +24,14 @@ impl Network {
 #[derive(Clone)]
 pub struct SocketAddrCheck(
     pub(crate)  Arc<
-        dyn Fn(&SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+        dyn Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
             + Send
             + Sync,
     >,
 );
 
 impl SocketAddrCheck {
-    pub async fn check(&self, addr: &SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
+    pub async fn check(&self, addr: SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
         if (self.0)(addr, reason).await {
             Ok(())
         } else {

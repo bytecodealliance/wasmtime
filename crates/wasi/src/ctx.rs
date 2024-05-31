@@ -418,7 +418,7 @@ impl WasiCtxBuilder {
     /// while returning `false` will reject the connection.
     pub fn socket_addr_check<F>(&mut self, check: F) -> &mut Self
     where
-        F: Fn(&SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+        F: Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
             + Send
             + Sync
             + 'static,

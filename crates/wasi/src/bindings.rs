@@ -4,7 +4,7 @@
 // have some functions in `only_imports` below for being async.
 pub mod sync {
     mod generated {
-        use crate::{FsError, StreamError};
+        use crate::{FsError, SocketError, StreamError};
 
         wasmtime::component::bindgen!({
             path: "wit",
@@ -13,6 +13,7 @@ pub mod sync {
             trappable_error_type: {
                 "wasi:io/streams/stream-error" => StreamError,
                 "wasi:filesystem/types/error-code" => FsError,
+                "wasi:sockets/network/error-code" => SocketError,
             },
             trappable_imports: true,
             with: {
@@ -20,10 +21,10 @@ pub mod sync {
                 // sync/async agnostic.
                 "wasi:clocks": crate::bindings::clocks,
                 "wasi:random": crate::bindings::random,
-                "wasi:sockets": crate::bindings::sockets,
                 "wasi:cli": crate::bindings::cli,
                 "wasi:io/error": crate::bindings::io::error,
                 "wasi:filesystem/preopens": crate::bindings::filesystem::preopens,
+                "wasi:sockets/network": crate::bindings::sockets::network,
 
                 // Configure the resource types of the bound interfaces here
                 // to be the same as the async versions of the resources, that
@@ -33,12 +34,16 @@ pub mod sync {
                 "wasi:io/poll/pollable": super::super::io::poll::Pollable,
                 "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
                 "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
+                "wasi:sockets/tcp/tcp-socket": super::super::sockets::tcp::TcpSocket,
+                "wasi:sockets/udp/incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
+                "wasi:sockets/udp/outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
+                "wasi:sockets/udp/udp-socket": super::super::sockets::udp::UdpSocket,
             },
             require_store_data_send: true,
         });
     }
     pub use self::generated::exports;
-    pub use self::generated::wasi::{filesystem, io};
+    pub use self::generated::wasi::{filesystem, io, sockets};
 
     /// Synchronous bindings to execute and run a `wasi:cli/command`.
     ///
