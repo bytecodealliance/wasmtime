@@ -14,6 +14,7 @@ use cap_rand::{Rng, RngCore, SeedableRng};
 use cap_std::ambient_authority;
 use std::path::Path;
 use std::sync::Arc;
+use std::{future::Future, pin::Pin};
 use std::{mem, net::SocketAddr};
 use wasmtime::component::ResourceTable;
 
@@ -408,7 +409,7 @@ impl WasiCtxBuilder {
     ///
     /// See also [`WasiCtxBuilder::socket_addr_check`].
     pub fn inherit_network(&mut self) -> &mut Self {
-        self.socket_addr_check(|_, _| true)
+        self.socket_addr_check(|_, _| Box::pin(async { true }))
     }
 
     /// A check that will be called for each socket address that is used.
@@ -417,7 +418,10 @@ impl WasiCtxBuilder {
     /// while returning `false` will reject the connection.
     pub fn socket_addr_check<F>(&mut self, check: F) -> &mut Self
     where
-        F: Fn(&SocketAddr, SocketAddrUse) -> bool + Send + Sync + 'static,
+        F: Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+            + Send
+            + Sync
+            + 'static,
     {
         self.socket_addr_check = SocketAddrCheck(Arc::new(check));
         self
