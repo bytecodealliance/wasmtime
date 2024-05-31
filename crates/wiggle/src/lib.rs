@@ -163,7 +163,7 @@ impl<'a> GuestMemory<'a> {
 
     /// Copies the data in the guest region into a [`Vec`].
     ///
-    /// This is useful when one cannot use [`GuestPtr::as_slice`], e.g., when
+    /// This is useful when one cannot use [`GuestMemory::as_slice`], e.g., when
     /// pointing to a region of WebAssembly shared memory.
     pub fn to_vec<T>(&self, ptr: GuestPtr<[T]>) -> Result<Vec<T>, GuestError>
     where
@@ -310,33 +310,29 @@ impl<'a> GuestMemory<'a> {
     }
 }
 
-/// A *guest* pointer into host memory.
+/// A *guest* pointer.
 ///
 /// This type represents a pointer from the guest that points into host memory.
-/// Internally a `GuestPtr` contains a handle to its original [`GuestMemory`] as
-/// well as the offset into the memory that the pointer is pointing at.
+/// Internally a `GuestPtr` the offset into the memory that the pointer is
+/// pointing at. At this time this is always a 32-bit offset so this is not
+/// suitable for bindings where wasm has 64-bit addresses.
 ///
 /// Presence of a [`GuestPtr`] does not imply any form of validity. Pointers can
 /// be out-of-bounds, misaligned, etc. It is safe to construct a `GuestPtr` with
 /// any offset at any time. Consider a `GuestPtr<T>` roughly equivalent to `*mut
-/// T`, although there are a few more safety guarantees around this type.
+/// T`.
 ///
 /// ## Slices and Strings
 ///
 /// Note that the type parameter does not need to implement the `Sized` trait,
 /// so you can implement types such as this:
 ///
-/// * `GuestPtr<'_, str>` - a pointer to a guest string. Has the methods
-///   [`GuestPtr::as_str_mut`], which gives a dynamically borrow-checked
-///   `GuestStrMut<'_>`, which `DerefMut`s to a `&mut str`, and
-///   [`GuestPtr::as_str`], which is the shareable version of same.
-/// * `GuestPtr<'_, [T]>` - a pointer to a guest array. Has methods
-///   [`GuestPtr::as_slice_mut`], which gives a dynamically borrow-checked
-///   `GuestSliceMut<'_, T>`, which `DerefMut`s to a `&mut [T]` and
-///   [`GuestPtr::as_slice`], which is the shareable version of same.
+/// * `GuestPtr<str>` - a pointer to a guest string.
+/// * `GuestPtr<[T]>` - a pointer to a guest array.
 ///
-/// Unsized types such as this may have extra methods and won't have methods
-/// like [`GuestPtr::read`] or [`GuestPtr::write`].
+/// Note that generated bindings won't use these types so you'll have to
+/// otherwise construct the types with `.cast()` or `.as_array()`. Unsized types
+/// track both the pointer and length in guest memory.
 ///
 /// ## Type parameter and pointee
 ///
@@ -356,10 +352,10 @@ impl<'a> GuestMemory<'a> {
 /// similar) and then the bytes loaded are validated to fit within the
 /// definition of `MyEnum` before `MyEnum` is returned.
 ///
-/// For more information see the [`GuestPtr::read`] and [`GuestPtr::write`]
-/// methods. In general though be extremely careful about writing `unsafe` code
-/// when working with a `GuestPtr` if you're not using one of the
-/// already-attached helper methods.
+/// For more information see the [`GuestMemory::read`] and
+/// [`GuestMemory::write`] methods. In general though be extremely careful about
+/// writing `unsafe` code when working with a `GuestPtr` if you're not using one
+/// of the already-attached helper methods.
 #[repr(transparent)]
 pub struct GuestPtr<T: ?Sized + Pointee> {
     pointer: T::Pointer,
