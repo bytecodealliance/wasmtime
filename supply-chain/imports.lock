@@ -2557,6 +2557,12 @@ when = "2024-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen]]
+version = "0.26.0"
+when = "2024-05-30"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-core]]
 version = "0.20.0"
 when = "2024-02-29"
@@ -2572,6 +2578,12 @@ user-login = "wasmtime-publish"
 [[publisher.wit-bindgen-core]]
 version = "0.25.0"
 when = "2024-05-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-bindgen-core]]
+version = "0.26.0"
+when = "2024-05-30"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -2587,6 +2599,12 @@ when = "2024-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen-rt]]
+version = "0.26.0"
+when = "2024-05-30"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-rust]]
 version = "0.20.0"
 when = "2024-02-29"
@@ -2605,6 +2623,12 @@ when = "2024-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen-rust]]
+version = "0.26.0"
+when = "2024-05-30"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-rust-macro]]
 version = "0.20.0"
 when = "2024-02-29"
@@ -2620,6 +2644,12 @@ user-login = "wasmtime-publish"
 [[publisher.wit-bindgen-rust-macro]]
 version = "0.25.0"
 when = "2024-05-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-bindgen-rust-macro]]
+version = "0.26.0"
+when = "2024-05-30"
 user-id = 73222
 user-login = "wasmtime-publish"
 
