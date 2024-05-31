@@ -30,7 +30,7 @@ impl WasiHttpCtx {
 }
 
 /// A trait which provides internal WASI HTTP state.
-pub trait WasiHttpView {
+pub trait WasiHttpView: Send {
     /// Returns a mutable reference to the WASI HTTP context.
     fn ctx(&mut self) -> &mut WasiHttpCtx;
 
