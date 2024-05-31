@@ -136,9 +136,10 @@ pub mod sync {
             async: false,
             with: {
                 "wasi:http": crate::bindings::http, // http is in this crate
-                "wasi:io": wasmtime_wasi::bindings::sync, // io is sync
+                "wasi:io": wasmtime_wasi::bindings::sync::io, // io is sync
                 "wasi": wasmtime_wasi::bindings, // everything else
             },
+            require_store_data_send: true,
         });
     }
 

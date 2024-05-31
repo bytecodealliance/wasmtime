@@ -34,6 +34,7 @@ pub mod sync {
                 "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
                 "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
             },
+            require_store_data_send: true,
         });
     }
     pub use self::generated::exports;

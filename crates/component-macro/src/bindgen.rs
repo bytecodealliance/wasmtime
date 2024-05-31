@@ -154,6 +154,7 @@ impl Parse for Config {
                     Opt::Features(f) => {
                         features.extend(f.into_iter().map(|f| f.value()));
                     }
+                    Opt::RequireStoreDataSend(val) => opts.require_store_data_send = val,
                 }
             }
         } else {
@@ -228,6 +229,7 @@ mod kw {
     syn::custom_keyword!(stringify);
     syn::custom_keyword!(skip_mut_forwarding_impls);
     syn::custom_keyword!(features);
+    syn::custom_keyword!(require_store_data_send);
 }
 
 enum Opt {
@@ -245,6 +247,7 @@ enum Opt {
     Stringify(bool),
     SkipMutForwardingImpls(bool),
     Features(Vec<syn::LitStr>),
+    RequireStoreDataSend(bool),
 }
 
 impl Parse for Opt {
@@ -402,6 +405,12 @@ impl Parse for Opt {
             syn::bracketed!(contents in input);
             let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
             Ok(Opt::Features(list.into_iter().collect()))
+        } else if l.peek(kw::require_store_data_send) {
+            input.parse::<kw::require_store_data_send>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::RequireStoreDataSend(
+                input.parse::<syn::LitBool>()?.value,
+            ))
         } else {
             Err(l.error())
         }
