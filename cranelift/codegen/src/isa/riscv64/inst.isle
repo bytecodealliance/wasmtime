@@ -2438,8 +2438,23 @@
     dst))
 
 ;; helper function to store to memory.
-(decl gen_store (AMode StoreOP MemFlags Reg) InstOutput)
-(rule (gen_store amode op flags src)
+;;
+;; This helper contains a special-case for zero constants stored to memory to
+;; directly store the `zero` register to memory. See #7162 for some discussion
+;; on why this doesn't just fall out.
+(decl gen_store (AMode MemFlags Value) InstOutput)
+(rule 1 (gen_store amode flags val @ (value_type ty))
+  (if-let (u64_from_iconst 0) val)
+  (rv_store amode (store_op ty) flags (zero_reg)))
+(rule 0 (gen_store amode flags val @ (value_type ty))
+  (rv_store amode (store_op ty) flags val))
+
+;; Emit a raw instruction to store a register into memory.
+;;
+;; Note that the `src` operand must have the correct type for the `op`
+;; specified.
+(decl rv_store (AMode StoreOP MemFlags Reg) InstOutput)
+(rule (rv_store amode op flags src)
   (side_effect (SideEffectNoResult.Inst (MInst.Store amode op flags src))))
 
 

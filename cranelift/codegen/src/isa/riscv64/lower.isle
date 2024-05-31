@@ -2098,24 +2098,24 @@
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule (lower (istore8 flags src addr offset))
-  (gen_store (amode addr offset) (StoreOP.Sb) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sb) flags src))
 
 ;;;;;  Rules for `istore16`;;;;;;;;;
 (rule (lower (istore16 flags src addr offset))
-  (gen_store (amode addr offset) (StoreOP.Sh) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sh) flags src))
 
 ;;;;;  Rules for `istore32`;;;;;;;;;
 (rule (lower (istore32 flags src addr offset))
-  (gen_store (amode addr offset) (StoreOP.Sw) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sw) flags src))
 
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule (lower (store flags src @ (value_type ty) addr offset))
-  (gen_store (amode addr offset) (store_op ty) flags src))
+  (gen_store (amode addr offset) flags src))
 
 (rule 1 (lower (store flags src @ (value_type $I128) addr offset))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((_ InstOutput (gen_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
-    (gen_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
+  (let ((_ InstOutput (rv_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
+    (rv_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
 
 (rule 2 (lower (store flags src @ (value_type (ty_vec_fits_in_register ty)) addr offset))
   (let ((eew VecElementWidth (element_width_from_type ty))
