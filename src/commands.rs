@@ -1,5 +1,5 @@
 //! The module for the Wasmtime CLI commands.
-
+sudo apt
 #[cfg(feature = "run")]
 mod run;
 #[cfg(feature = "run")]
