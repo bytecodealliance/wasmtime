@@ -529,6 +529,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///     //
 ///     // This option defaults to an empty array.
 ///     features: ["foo", "bar", "baz"],
+///
+///     // An niche configuration option to require that the `T` in `Store<T>`
+///     // is always `Send` in the generated bindings. Typically not needed
+///     // but if synchronous bindings depend on asynchronous bindings using
+///     // the `with` key then this may be required.
+///     require_store_data_send: false,
 /// });
 /// ```
 pub use wasmtime_component_macro::bindgen;

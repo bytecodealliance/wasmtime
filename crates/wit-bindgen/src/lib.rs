@@ -31,10 +31,25 @@ use source::Source;
 enum InterfaceName {
     /// This interface was remapped using `with` to some other Rust code.
     Remapped {
+        /// This is the `::`-separated string which is the path to the mapped
+        /// item relative to the root of the `bindgen!` macro invocation.
+        ///
+        /// This path currently starts with `__with_name$N` and will then
+        /// optionally have `::` projections through to the actual item
+        /// depending on how `with` was configured.
         name_at_root: String,
+
+        /// This is currently only used for exports and is the relative path to
+        /// where this mapped name would be located if `with` were not
+        /// specified. Basically it's the same as the `Path` variant of this
+        /// enum if the mapping weren't present.
         local_path: Vec<String>,
     },
+
     /// This interface is generated in the module hierarchy specified.
+    ///
+    /// The path listed here is the path, from the root of the `bindgen!` macro,
+    /// to where this interface is generated.
     Path(Vec<String>),
 }
 
@@ -42,6 +57,11 @@ enum InterfaceName {
 struct Wasmtime {
     src: Source,
     opts: Opts,
+    /// A list of all interfaces which were imported by this world.
+    ///
+    /// The first value here is the contents of the module that this interface
+    /// generated. The second value is the name of the interface as also present
+    /// in `self.interface_names`.
     import_interfaces: Vec<(String, InterfaceName)>,
     import_functions: Vec<ImportFunction>,
     exports: Exports,
@@ -129,6 +149,13 @@ pub struct Opts {
     /// `wasmtime-wasi` crate while that's given a chance to update its b
     /// indings.
     pub skip_mut_forwarding_impls: bool,
+
+    /// Indicates that the `T` in `Store<T>` should be send even if async is not
+    /// enabled.
+    ///
+    /// This is helpful when sync bindings depend on generated functions from
+    /// async bindings as is the case with WASI in-tree.
+    pub require_store_data_send: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -203,6 +230,10 @@ impl Opts {
         r.sizes.fill(resolve);
         r.opts = self.clone();
         r.generate(resolve, world)
+    }
+
+    fn is_store_data_send(&self) -> bool {
+        self.async_.maybe_async() || self.require_store_data_send
     }
 }
 
@@ -351,17 +382,7 @@ impl Wasmtime {
             }
             WorldItem::Interface { id, .. } => {
                 gen.gen.interface_last_seen_as_import.insert(*id, true);
-                if gen.gen.name_interface(resolve, *id, name, false) {
-                    return;
-                }
                 gen.current_interface = Some((*id, name, false));
-                gen.types(*id);
-                let key_name = resolve.name_world_key(name);
-
-                gen.generate_add_to_linker(*id, &key_name);
-
-                let module = &gen.src[..];
-
                 let snake = match name {
                     WorldKey::Name(s) => s.to_snake_case(),
                     WorldKey::Interface(id) => resolve.interfaces[*id]
@@ -370,17 +391,48 @@ impl Wasmtime {
                         .unwrap()
                         .to_snake_case(),
                 };
-                let module = format!(
-                    "
-                        #[allow(clippy::all)]
-                        pub mod {snake} {{
-                            #[allow(unused_imports)]
-                            use wasmtime::component::__internal::anyhow;
+                let module = if gen.gen.name_interface(resolve, *id, name, false) {
+                    // If this interface is remapped then that means that it was
+                    // provided via the `with` key in the bindgen configuration.
+                    // That means that bindings generation is skipped here. To
+                    // accomodate future bindgens depending on this bindgen
+                    // though we still generate a module which reexports the
+                    // original module. This helps maintain the same output
+                    // structure regardless of whether `with` is used.
+                    let name_at_root = match &gen.gen.interface_names[id] {
+                        InterfaceName::Remapped { name_at_root, .. } => name_at_root,
+                        InterfaceName::Path(_) => unreachable!(),
+                    };
+                    let path_to_root = gen.path_to_root();
+                    format!(
+                        "
+                            pub mod {snake} {{
+                                #[allow(unused_imports)]
+                                pub use {path_to_root}{name_at_root}::*;
+                            }}
+                        "
+                    )
+                } else {
+                    // If this interface is not remapped then it's time to
+                    // actually generate bindings here.
+                    gen.types(*id);
+                    let key_name = resolve.name_world_key(name);
+                    gen.generate_add_to_linker(*id, &key_name);
 
-                            {module}
-                        }}
-                    "
-                );
+                    let module = &gen.src[..];
+
+                    format!(
+                        "
+                            #[allow(clippy::all)]
+                            pub mod {snake} {{
+                                #[allow(unused_imports)]
+                                use wasmtime::component::__internal::anyhow;
+
+                                {module}
+                            }}
+                        "
+                    )
+                };
                 self.import_interfaces
                     .push((module, self.interface_names[id].clone()));
             }
@@ -979,7 +1031,7 @@ impl Wasmtime {
             .iter()
             .map(|(_, name)| match name {
                 InterfaceName::Path(path) => path.join("::"),
-                InterfaceName::Remapped { .. } => unreachable!("imported a remapped module"),
+                InterfaceName::Remapped { name_at_root, .. } => name_at_root.clone(),
             })
             .collect()
     }
@@ -1007,7 +1059,7 @@ impl Wasmtime {
         }
 
         let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
-        let data_bounds = if self.opts.async_.maybe_async() {
+        let data_bounds = if self.opts.is_store_data_send() {
             "T: Send,"
         } else {
             ""
@@ -1937,7 +1989,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
         uwriteln!(self.src, "}}");
 
-        let (data_bounds, mut host_bounds) = if self.gen.opts.async_.maybe_async() {
+        let (data_bounds, mut host_bounds) = if self.gen.opts.is_store_data_send() {
             ("T: Send,", "Host + Send".to_string())
         } else {
             ("", "Host".to_string())
