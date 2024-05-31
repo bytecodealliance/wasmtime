@@ -28,7 +28,7 @@ const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 pub struct JITBuilder {
     isa: OwnedTargetIsa,
     symbols: HashMap<String, *const u8>,
-    lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8>>>,
+    lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     hotswap_enabled: bool,
 }
@@ -140,7 +140,7 @@ impl JITBuilder {
     /// symbol table. Symbol lookup fn's are called in reverse of the order in which they were added.
     pub fn symbol_lookup_fn(
         &mut self,
-        symbol_lookup_fn: Box<dyn Fn(&str) -> Option<*const u8>>,
+        symbol_lookup_fn: Box<dyn Fn(&str) -> Option<*const u8> + Send>,
     ) -> &mut Self {
         self.lookup_symbols.push(symbol_lookup_fn);
         self
@@ -173,8 +173,8 @@ pub struct JITModule {
     isa: OwnedTargetIsa,
     hotswap_enabled: bool,
     symbols: RefCell<HashMap<String, *const u8>>,
-    lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8>>>,
-    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+    lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
     function_got_entries: SecondaryMap<FuncId, Option<NonNull<AtomicPtr<u8>>>>,
@@ -190,6 +190,8 @@ pub struct JITModule {
     /// Updates to the GOT awaiting relocations to be made and region protections to be set
     pending_got_updates: Vec<GotUpdate>,
 }
+
+unsafe impl Send for JITModule {}
 
 /// A handle to allow freeing memory allocated by the `Module`.
 struct MemoryHandle {
