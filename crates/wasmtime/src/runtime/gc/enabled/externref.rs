@@ -25,7 +25,7 @@ use core::mem::MaybeUninit;
 /// operations that Wasm can perform on them via what functions you allow Wasm
 /// to import.
 ///
-/// Like all WebAssembly references, these are opaque and unforgable to Wasm:
+/// Like all WebAssembly references, these are opaque and unforgeable to Wasm:
 /// they cannot be faked and Wasm cannot, for example, cast the integer
 /// `0x12345678` into a reference, pretend it is a valid `externref`, and trick
 /// the host into dereferencing it and segfaulting or worse.
