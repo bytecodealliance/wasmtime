@@ -441,7 +441,10 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
         Call {
             func_ref, ref args, ..
-        } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),
+        } => {
+            write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool)))?;
+            write_user_stack_map_entries(w, dfg, inst)
+        }
         CallIndirect {
             sig_ref, ref args, ..
         } => {
@@ -452,7 +455,8 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 sig_ref,
                 args[0],
                 DisplayValues(&args[1..])
-            )
+            )?;
+            write_user_stack_map_entries(w, dfg, inst)
         }
         FuncAddr { func_ref, .. } => write!(w, " {}", func_ref),
         StackLoad {
@@ -501,6 +505,24 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             sep = ", ";
         }
     }
+    Ok(())
+}
+
+fn write_user_stack_map_entries(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
+    let entries = match dfg.user_stack_map_entries(inst) {
+        None => return Ok(()),
+        Some(es) => es,
+    };
+    write!(w, ", stack_map=[")?;
+    let mut need_comma = false;
+    for entry in entries {
+        if need_comma {
+            write!(w, ", ")?;
+        }
+        write!(w, "{} @ {}+{}", entry.ty, entry.slot, entry.offset)?;
+        need_comma = true;
+    }
+    write!(w, "]")?;
     Ok(())
 }
 

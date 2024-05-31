@@ -25,6 +25,7 @@ mod sourceloc;
 pub mod stackslot;
 mod trapcode;
 pub mod types;
+mod user_stack_maps;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
@@ -64,6 +65,7 @@ pub use crate::ir::stackslot::{
 };
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
+pub use crate::ir::user_stack_maps::UserStackMapEntry;
 
 use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 

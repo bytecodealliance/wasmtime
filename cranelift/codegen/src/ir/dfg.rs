@@ -6,6 +6,7 @@ use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::pcc::Fact;
+use crate::ir::user_stack_maps::{UserStackMapEntry, UserStackMapEntryVec};
 use crate::ir::{
     types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
     Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
@@ -105,6 +106,16 @@ pub struct DataFlowGraph {
     /// primary `insts` map.
     results: SecondaryMap<Inst, ValueList>,
 
+    /// User-defined stack maps.
+    ///
+    /// Not to be confused with the stack maps that `regalloc2` produces. These
+    /// are defined by the user in `cranelift-frontend`. These will eventually
+    /// replace the stack maps support in `regalloc2`, but in the name of
+    /// incrementalism and avoiding gigantic PRs that completely overhaul
+    /// Cranelift and Wasmtime at the same time, we are allowing them to live in
+    /// parallel for the time being.
+    user_stack_maps: alloc::collections::BTreeMap<Inst, UserStackMapEntryVec>,
+
     /// basic blocks in the function and their parameters.
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
@@ -155,6 +166,7 @@ impl DataFlowGraph {
         Self {
             insts: Insts(PrimaryMap::new()),
             results: SecondaryMap::new(),
+            user_stack_maps: alloc::collections::BTreeMap::new(),
             blocks: Blocks(PrimaryMap::new()),
             dynamic_types: DynamicTypes::new(),
             value_lists: ValueListPool::new(),
@@ -173,6 +185,7 @@ impl DataFlowGraph {
     pub fn clear(&mut self) {
         self.insts.0.clear();
         self.results.clear();
+        self.user_stack_maps.clear();
         self.blocks.0.clear();
         self.dynamic_types.clear();
         self.value_lists.clear();
@@ -560,6 +573,22 @@ impl DataFlowGraph {
         }
 
         self.clear_results(dest_inst);
+    }
+
+    /// Get the stack map entries associated with the given instruction.
+    pub fn user_stack_map_entries(&self, inst: Inst) -> Option<&[UserStackMapEntry]> {
+        self.user_stack_maps.get(&inst).map(|es| &**es)
+    }
+
+    /// Append a new stack map entry for the given call instruction.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given instruction is not a (non-tail) call instruction.
+    pub fn append_user_stack_map_entry(&mut self, inst: Inst, entry: UserStackMapEntry) {
+        let opcode = self.insts[inst].opcode();
+        assert!(opcode.is_call() && !opcode.is_return());
+        self.user_stack_maps.entry(inst).or_default().push(entry);
     }
 }
 
