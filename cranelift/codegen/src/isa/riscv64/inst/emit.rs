@@ -1520,25 +1520,68 @@ impl Inst {
                 ref x,
                 ref y,
             } => {
-                let label_true = sink.get_label();
-                let label_false = sink.get_label();
+                // The general form for this select is the following:
+                //
+                //     mv rd, x
+                //     b{cond} rcond, label_end
+                //     mv rd, y
+                // label_end:
+                //     ... etc
+                //
+                // This is built on the assumption that moves are cheap, but branches and jumps
+                // are not. So with this format we always avoid one jump instruction at the expense
+                // of an unconditional move.
+                //
+                // We also perform another optimization here. If the destination register is the same
+                // as one of the input registers, we can avoid emitting the first unconditional move
+                // and emit just the branch and the second move.
+                //
+                // To make sure that this happens as often as possible, we also try to invert the
+                // condition, so that if either of the input registers are the same as the destination
+                // we avoid that move.
+
                 let label_end = sink.get_label();
+
+                let xregs = x.regs();
+                let yregs = y.regs();
+                let dstregs: Vec<Reg> = dst.regs().into_iter().map(|r| r.to_reg()).collect();
+                let condregs = condition.regs();
+
+                // We are going to write to the destination register before evaluating
+                // the condition, so we need to make sure that the destination register
+                // is not one of the condition registers.
+                //
+                // This should never happen, since hopefully the regalloc constraints
+                // for this register are set up correctly.
+                debug_assert_ne!(dstregs, condregs);
+
+                // Check if we can invert the condition and avoid moving the y registers into
+                // the destination. This allows us to only emit the branch and one of the moves.
+                let (uncond_move, cond_move, condition) = if yregs == dstregs {
+                    (yregs, xregs, condition.inverse())
+                } else {
+                    (xregs, yregs, condition)
+                };
+
+                // Unconditonally move one of the values to the destination register.
+                //
+                // These moves may not end up being emitted if the source and
+                // destination registers are the same. That logic is built into
+                // the emit function for `Inst::Mov`.
+                for i in gen_moves(dst.regs(), uncond_move) {
+                    i.emit(sink, emit_info, state);
+                }
+
+                // If the condition passes we skip over the conditional move
                 Inst::CondBr {
-                    taken: CondBrTarget::Label(label_true),
-                    not_taken: CondBrTarget::Label(label_false),
+                    taken: CondBrTarget::Label(label_end),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: condition,
                 }
                 .emit(sink, emit_info, state);
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                // here is the true
-                // select the first value
-                for i in gen_moves(dst.regs(), x.regs()) {
-                    i.emit(sink, emit_info, state);
-                }
-                Inst::gen_jump(label_end).emit(sink, emit_info, state);
 
-                sink.bind_label(label_false, &mut state.ctrl_plane);
-                for i in gen_moves(dst.regs(), y.regs()) {
+                // Move the conditional value to the destination register.
+                for i in gen_moves(dst.regs(), cond_move) {
                     i.emit(sink, emit_info, state);
                 }
 

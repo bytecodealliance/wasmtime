@@ -83,9 +83,8 @@ block0(v0: i128, v1: i128):
 ;   slt a5, a1, a3
 ;   sltu a2, a0, a2
 ;   xor a3, a1, a3
-;   bnez a3, 0xc
 ;   mv a0, a2
-;   j 8
+;   beqz a3, 8
 ;   mv a0, a5
 ;   ret
 
@@ -108,9 +107,8 @@ block0(v0: i128, v1: i128):
 ;   sltu a5, a1, a3
 ;   sltu a2, a0, a2
 ;   xor a3, a1, a3
-;   bnez a3, 0xc
 ;   mv a0, a2
-;   j 8
+;   beqz a3, 8
 ;   mv a0, a5
 ;   ret
 
@@ -183,9 +181,8 @@ block0(v0: i128, v1: i128):
 ;   slt a5, a3, a1
 ;   sltu a2, a2, a0
 ;   xor a3, a3, a1
-;   bnez a3, 0xc
 ;   mv a0, a2
-;   j 8
+;   beqz a3, 8
 ;   mv a0, a5
 ;   ret
 
@@ -208,9 +205,8 @@ block0(v0: i128, v1: i128):
 ;   sltu a5, a3, a1
 ;   sltu a2, a2, a0
 ;   xor a3, a3, a1
-;   bnez a3, 0xc
 ;   mv a0, a2
-;   j 8
+;   beqz a3, 8
 ;   mv a0, a5
 ;   ret
 

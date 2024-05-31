@@ -25,9 +25,8 @@ block0(v0: f32, v1: f32):
 ;   and a1, a3, a5
 ;   fadd.s fa3, fa0, fa1, rne
 ;   fmin.s fa5, fa0, fa1
-;   beqz a1, 0xc
 ;   fmv.d fa0, fa5
-;   j 8
+;   bnez a1, 8
 ;   fmv.d fa0, fa3
 ;   ret
 
@@ -54,9 +53,8 @@ block0(v0: f64, v1: f64):
 ;   and a1, a3, a5
 ;   fadd.d fa3, fa0, fa1, rne
 ;   fmin.d fa5, fa0, fa1
-;   beqz a1, 0xc
 ;   fmv.d fa0, fa5
-;   j 8
+;   bnez a1, 8
 ;   fmv.d fa0, fa3
 ;   ret
 

@@ -22,9 +22,8 @@ block0(v0: i8):
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x16, 0x45, 0x60
 ;   not a4, a2
-;   bgez a2, 0xc
 ;   mv a0, a4
-;   j 8
+;   bltz a2, 8
 ;   mv a0, a2
 ;   .byte 0x13, 0x16, 0x05, 0x60
 ;   addi a0, a2, -0x39
@@ -49,9 +48,8 @@ block0(v0: i16):
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x16, 0x55, 0x60
 ;   not a4, a2
-;   bgez a2, 0xc
 ;   mv a0, a4
-;   j 8
+;   bltz a2, 8
 ;   mv a0, a2
 ;   .byte 0x13, 0x16, 0x05, 0x60
 ;   addi a0, a2, -0x31
@@ -76,9 +74,8 @@ block0(v0: i32):
 ; block0: ; offset 0x0
 ;   sext.w a2, a0
 ;   not a4, a2
-;   bgez a2, 0xc
 ;   mv a0, a4
-;   j 8
+;   bltz a2, 8
 ;   mv a0, a2
 ;   .byte 0x13, 0x16, 0x05, 0x60
 ;   addi a0, a2, -0x21
@@ -101,9 +98,8 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   not a2, a0
-;   bgez a0, 0xc
 ;   mv a4, a2
-;   j 8
+;   bltz a0, 8
 ;   mv a4, a0
 ;   .byte 0x13, 0x15, 0x07, 0x60
 ;   addi a0, a0, -1
@@ -123,8 +119,8 @@ block0(v0: i128):
 ;   select a3,a2,a1##condition=(a1 slt zero)
 ;   clz a0,a3
 ;   clz a1,a5
-;   select a3,a1,zero##condition=(a3 eq zero)
-;   add a5,a0,a3
+;   select a4,a1,zero##condition=(a3 eq zero)
+;   add a5,a0,a4
 ;   addi a0,a5,-1
 ;   li a1,0
 ;   ret
@@ -132,22 +128,19 @@ block0(v0: i128):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   not a3, a0
-;   bgez a1, 0xc
 ;   mv a5, a3
-;   j 8
+;   bltz a1, 8
 ;   mv a5, a0
 ;   not a2, a1
-;   bgez a1, 0xc
 ;   mv a3, a2
-;   j 8
+;   bltz a1, 8
 ;   mv a3, a1
 ;   .byte 0x13, 0x95, 0x06, 0x60
 ;   .byte 0x93, 0x95, 0x07, 0x60
-;   bnez a3, 0xc
-;   mv a3, a1
-;   j 8
-;   mv a3, zero
-;   add a5, a0, a3
+;   mv a4, a1
+;   beqz a3, 8
+;   mv a4, zero
+;   add a5, a0, a4
 ;   addi a0, a5, -1
 ;   mv a1, zero
 ;   ret
