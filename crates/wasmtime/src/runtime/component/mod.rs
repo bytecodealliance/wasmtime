@@ -166,8 +166,8 @@ pub(crate) use self::store::ComponentStoreData;
 /// wasmtime::component::bindgen!();
 /// ```
 ///
-/// This will parse your projects [WIT package] in a `wit` directory adjacent to
-/// your crate's `Cargo.toml`. All of the `*.wit` files in that directory are
+/// This will parse your project's [WIT package] in a `wit` directory adjacent
+/// to your crate's `Cargo.toml`. All of the `*.wit` files in that directory are
 /// parsed and then the single `world` found will be used for bindings.
 ///
 /// For example if your project contained:
@@ -209,8 +209,6 @@ pub(crate) use self::store::ComponentStoreData;
 /// // Imports into the world, like the `name` import for this world, are
 /// // satisfied through traits.
 /// impl HelloWorldImports for MyState {
-///     // Note the `Result` return value here where `Ok` is returned back to
-///     // the component and `Err` will raise a trap.
 ///     fn name(&mut self) -> String {
 ///         self.name.clone()
 ///     }
@@ -364,7 +362,8 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 /// Usage of this macro looks like:
 ///
-/// ```rust,ignore
+/// ```rust
+/// # macro_rules! bindgen { ($($t:tt)*) => () }
 /// // Parse the `wit/` folder adjacent to this crate's `Cargo.toml` and look
 /// // for a single `world` in it. There must be exactly one for this to
 /// // succeed.
