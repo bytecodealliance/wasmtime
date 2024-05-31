@@ -535,7 +535,7 @@ async fn wasi_http_without_port() -> Result<()> {
         .method(http::Method::GET)
         .uri("https://httpbin.org/get");
 
-    let response = run_wasi_http(
+    let _response: hyper::Response<_> = run_wasi_http(
         test_programs_artifacts::API_PROXY_FORWARD_REQUEST_COMPONENT,
         req.body(body::empty())?,
         None,
@@ -543,7 +543,10 @@ async fn wasi_http_without_port() -> Result<()> {
     )
     .await??;
 
-    assert_eq!(response.status(), StatusCode::OK);
+    // NB: don't test the actual return code of `response`. This is testing a
+    // live http request against a live server and things happen. If we got this
+    // far it's already successful that the request was made and the lack of
+    // port in the URI was handled.
 
     Ok(())
 }
