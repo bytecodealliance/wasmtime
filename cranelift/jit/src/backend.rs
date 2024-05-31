@@ -170,14 +170,9 @@ unsafe impl Send for GotUpdate {}
 /// A wrapper that impls Send for the contents.
 ///
 /// SAFETY: This must not be used for any types where it would be UB for them to be Send
+#[derive(Copy, Clone)]
 struct SendWrapper<T>(T);
 unsafe impl<T> Send for SendWrapper<T> {}
-impl<T: Copy> Copy for SendWrapper<T> {}
-impl<T: Clone> Clone for SendWrapper<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
 
 /// A `JITModule` implements `Module` and emits code and data into memory where it can be
 /// directly called and accessed.
