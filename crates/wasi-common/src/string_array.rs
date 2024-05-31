@@ -1,5 +1,5 @@
 use crate::{Error, ErrorExt};
-use wiggle::GuestPtr;
+use wiggle::{GuestMemory, GuestPtr};
 
 pub struct StringArray {
     elems: Vec<String>,
@@ -45,10 +45,11 @@ impl StringArray {
             .sum::<usize>() as u32
     }
 
-    pub fn write_to_guest<'a>(
+    pub fn write_to_guest(
         &self,
-        buffer: &GuestPtr<'a, u8>,
-        element_heads: &GuestPtr<'a, GuestPtr<'a, u8>>,
+        memory: &mut GuestMemory<'_>,
+        buffer: GuestPtr<u8>,
+        element_heads: GuestPtr<GuestPtr<u8>>,
     ) -> Result<(), Error> {
         let element_heads = element_heads.as_array(self.number_elements());
         let buffer = buffer.as_array(self.cumulative_size());
@@ -60,13 +61,13 @@ impl StringArray {
                 let elem_buffer = buffer
                     .get_range(cursor..(cursor + len))
                     .ok_or(Error::invalid_argument())?; // Elements don't fit in buffer provided
-                elem_buffer.copy_from_slice(bytes)?;
+                memory.copy_from_slice(bytes, elem_buffer)?;
             }
-            buffer
-                .get(cursor + len)
-                .ok_or(Error::invalid_argument())?
-                .write(0)?; // 0 terminate
-            head?.write(buffer.get(cursor).expect("already validated"))?;
+            memory.write(
+                buffer.get(cursor + len).ok_or(Error::invalid_argument())?,
+                0,
+            )?; // 0 terminate
+            memory.write(head?, buffer.get(cursor).expect("already validated"))?;
             cursor += len + 1;
         }
         Ok(())

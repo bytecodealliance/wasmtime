@@ -168,7 +168,30 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         quote!()
     };
 
-    TokenStream::from(quote! { #code #metadata })
+    let mut ret = quote! { #code #metadata };
+
+    if std::env::var("WIGGLE_DEBUG_BINDGEN").is_ok() {
+        use std::path::Path;
+        use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+        static INVOCATION: AtomicUsize = AtomicUsize::new(0);
+        let root = Path::new(env!("DEBUG_OUTPUT_DIR"));
+        let n = INVOCATION.fetch_add(1, Relaxed);
+        let path = root.join(format!("wiggle{n}.rs"));
+
+        std::fs::write(&path, ret.to_string()).unwrap();
+
+        // optimistically format the code but don't require success
+        drop(
+            std::process::Command::new("rustfmt")
+                .arg(&path)
+                .arg("--edition=2021")
+                .output(),
+        );
+
+        let path = path.to_str().unwrap();
+        ret = quote!(include!(#path););
+    }
+    TokenStream::from(ret)
 }
 
 #[proc_macro_attribute]

@@ -78,9 +78,9 @@ fn _define_func(
         );
     );
     let ctx_type = if settings.mutable {
-        quote!(&'a mut)
+        quote!(&mut)
     } else {
-        quote!(&'a)
+        quote!(&)
     };
     if settings.get_async(&module, &func).is_sync() {
         let traced_body = if settings.tracing.enabled_for(&mod_name, &func_name) {
@@ -96,9 +96,9 @@ fn _define_func(
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
-                pub fn #ident<'a>(
+                pub fn #ident(
                     ctx: #ctx_type (impl #(#bounds)+*),
-                    memory: &dyn wiggle::GuestMemory,
+                    memory: &mut wiggle::GuestMemory<'_>,
                     #(#abi_params),*
                 ) -> wiggle::anyhow::Result<#abi_ret> {
                     use std::convert::TryFrom as _;
@@ -114,23 +114,21 @@ fn _define_func(
                 #mk_span
                 async move {
                     #body
-                }.instrument(_span)
+                }.instrument(_span).await
             )
         } else {
             quote!(
-                async move {
-                    #body
-                }
+                #body
             )
         };
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
-                pub fn #ident<'a>(
+                pub async fn #ident(
                     ctx: #ctx_type (impl #(#bounds)+*),
-                    memory: &'a dyn wiggle::GuestMemory,
+                    memory: &mut wiggle::GuestMemory<'_>,
                     #(#abi_params),*
-                ) -> impl std::future::Future<Output = wiggle::anyhow::Result<#abi_ret>> + 'a {
+                ) -> wiggle::anyhow::Result<#abi_ret> {
                     use std::convert::TryFrom as _;
                     #traced_body
                 }
@@ -224,7 +222,7 @@ impl witx::Bindgen for Rust<'_> {
                 let val = operands.pop().unwrap();
                 let pointee_type = names::type_ref(ty, anon_lifetime());
                 results.push(quote! {
-                    wiggle::GuestPtr::<#pointee_type>::new(memory, #val as u32)
+                    wiggle::GuestPtr::<#pointee_type>::new(#val as u32)
                 });
             }
 
@@ -239,7 +237,7 @@ impl witx::Bindgen for Rust<'_> {
                     }
                 };
                 results.push(quote! {
-                    wiggle::GuestPtr::<#ty>::new(memory, (#ptr as u32, #len as u32));
+                    wiggle::GuestPtr::<#ty>::new((#ptr as u32, #len as u32));
                 })
             }
 
@@ -284,11 +282,11 @@ impl witx::Bindgen for Rust<'_> {
                 let ident = names::func(&func.name);
                 if self.settings.get_async(&self.module, &func).is_sync() {
                     self.src.extend(quote! {
-                        let ret = #trait_name::#ident(ctx, #(#args),*);
+                        let ret = #trait_name::#ident(ctx, memory, #(#args),*);
                     })
                 } else {
                     self.src.extend(quote! {
-                        let ret = #trait_name::#ident(ctx, #(#args),*).await;
+                        let ret = #trait_name::#ident(ctx, memory, #(#args),*).await;
                     })
                 };
                 if self
@@ -368,9 +366,11 @@ impl witx::Bindgen for Rust<'_> {
                 let wrap_err = wrap_err(&format!("write {}", ty.name.as_str()));
                 let pointee_type = names::type_(&ty.name);
                 self.src.extend(quote! {
-                    wiggle::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
-                        .write(#val)
-                        .map_err(#wrap_err)?;
+                    memory.write(
+                        wiggle::GuestPtr::<#pointee_type>::new(#ptr as u32),
+                        #val,
+                    )
+                    .map_err(#wrap_err)?;
                 });
             }
 
@@ -379,8 +379,7 @@ impl witx::Bindgen for Rust<'_> {
                 let wrap_err = wrap_err(&format!("read {}", ty.name.as_str()));
                 let pointee_type = names::type_(&ty.name);
                 results.push(quote! {
-                    wiggle::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
-                        .read()
+                    memory.read(wiggle::GuestPtr::<#pointee_type>::new(#ptr as u32))
                         .map_err(#wrap_err)?
                 });
             }

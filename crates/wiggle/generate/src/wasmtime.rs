@@ -113,19 +113,19 @@ fn generate_func(
 
     let body = quote! {
         let export = caller.get_export("memory");
-        let (mem, ctx) = match &export {
+        let (mut mem, ctx) = match &export {
             Some(wiggle::wasmtime_crate::Extern::Memory(m)) => {
                 let (mem, ctx) = m.data_and_store_mut(&mut caller);
                 let ctx = get_cx(ctx);
-                (wiggle::wasmtime::WasmtimeGuestMemory::new(mem), ctx)
+                (wiggle::GuestMemory::Unshared(mem), ctx)
             }
             Some(wiggle::wasmtime_crate::Extern::SharedMemory(m)) => {
                 let ctx = get_cx(caller.data_mut());
-                (wiggle::wasmtime::WasmtimeGuestMemory::shared(m.data()), ctx)
+                (wiggle::GuestMemory::Shared(m.data()), ctx)
             }
             _ => wiggle::anyhow::bail!("missing required memory export"),
         };
-        Ok(<#ret_ty>::from(#abi_func(ctx, &mem #(, #arg_names)*) #await_ ?))
+        Ok(<#ret_ty>::from(#abi_func(ctx, &mut mem #(, #arg_names)*) #await_ ?))
     };
 
     match asyncness {

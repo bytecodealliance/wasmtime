@@ -11,10 +11,11 @@ impl_errno!(types::Errno);
 impl<'a> flags::Flags for WasiCtx<'a> {
     fn configure_car(
         &mut self,
+        memory: &mut GuestMemory<'_>,
         old_config: types::CarConfig,
-        other_config_ptr: &GuestPtr<types::CarConfig>,
+        other_config_ptr: GuestPtr<types::CarConfig>,
     ) -> Result<types::CarConfig, types::Errno> {
-        let other_config = other_config_ptr.read().map_err(|e| {
+        let other_config = memory.read(other_config_ptr).map_err(|e| {
             eprintln!("old_config_ptr error: {}", e);
             types::Errno::InvalidArg
         })?;
@@ -62,17 +63,20 @@ impl ConfigureCarExercise {
 
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
         // Populate input ptr
-        host_memory
-            .ptr(self.other_config_by_ptr.ptr)
-            .write(self.other_config)
+        memory
+            .write(
+                GuestPtr::new(self.other_config_by_ptr.ptr),
+                self.other_config,
+            )
             .expect("deref ptr mut to CarConfig");
 
         let res = flags::configure_car(
             &mut ctx,
-            &host_memory,
+            &mut memory,
             self.old_config.bits() as i32,
             self.other_config_by_ptr.ptr as i32,
             self.return_ptr_loc.ptr as i32,
@@ -80,9 +84,8 @@ impl ConfigureCarExercise {
         .unwrap();
         assert_eq!(res, types::Errno::Ok as i32, "configure car errno");
 
-        let res_config = host_memory
-            .ptr::<types::CarConfig>(self.return_ptr_loc.ptr)
-            .read()
+        let res_config = memory
+            .read(GuestPtr::<types::CarConfig>::new(self.return_ptr_loc.ptr))
             .expect("deref to CarConfig value");
 
         assert_eq!(
