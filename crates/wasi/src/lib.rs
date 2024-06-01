@@ -50,8 +50,8 @@
 //! This crate uses [`wasmtime::component::bindgen!`] to generate bindings for
 //! all WASI interfaces. Raw bindings are available in the [`bindings`] module
 //! of this crate. Downstream users can either implement these traits themselves
-//! or you can use the built-in implementations in this crate for all
-//! `T: WasiVew`
+//! or you can use the built-in implementations in this crate for
+//! `WasiImpl<T: WasiView>`.
 //!
 //! # The `WasiView` trait
 //!
@@ -61,9 +61,10 @@
 //! traits look like:
 //!
 //! ```
+//! # use wasmtime_wasi::WasiImpl;
 //! # trait WasiView {}
 //! # mod bindings { pub mod wasi { pub trait Host {} } }
-//! impl<T: WasiView> bindings::wasi::Host for T {
+//! impl<T: WasiView> bindings::wasi::Host for WasiImpl<T> {
 //!     // ...
 //! }
 //! ```
@@ -177,6 +178,7 @@
 //! [`wasi:sockets/udp-create-socket`]: bindings::sockets::udp_create_socket::Host
 //! [`wasi:sockets/udp`]: bindings::sockets::udp::Host
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
+//! [`ResourceTable`]: wasmtime::component::ResourceTable
 
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 

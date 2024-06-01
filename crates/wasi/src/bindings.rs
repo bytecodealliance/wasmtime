@@ -1,7 +1,146 @@
-// Generate traits for synchronous bindings.
-//
-// Note that this is only done for interfaces which can block, or those which
-// have some functions in `only_imports` below for being async.
+//! Auto-generated bindings for WASI interfaces.
+//!
+//! This module contains the output of the [`bindgen!`] macro when run over
+//! the `wasi:cli/command` world. That means this module has all the generated
+//! types for WASI for all of its base interfaces used by the CLI world. This
+//! module itself by default contains bindings for `async`-related traits. The
+//! [`sync`] module contains bindings for a non-`async` version of types.
+//!
+//! [`bindgen!`]: https://docs.rs/wasmtime/latest/wasmtime/component/macro.bindgen.html
+//!
+//! # Examples
+//!
+//! If you have a WIT world which refers to WASI interfaces you probably want to
+//! use this crate's bindings rather than generate fresh bindings. That can be
+//! done using the `with` option to [`bindgen!`]:
+//!
+//! ```rust
+//! use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView};
+//! use wasmtime::{Result, Engine, Config};
+//! use wasmtime::component::Linker;
+//!
+//! wasmtime::component::bindgen!({
+//!     inline: "
+//!         package example:wasi;
+//!
+//!         // An example of extending the `wasi:cli/command` world with a
+//!         // custom host interface.
+//!         world my-world {
+//!             include wasi:cli/command@0.2.0;
+//!
+//!             import custom-host;
+//!         }
+//!
+//!         interface custom-host {
+//!             my-custom-function: func();
+//!         }
+//!     ",
+//!     path: "wit",
+//!     with: {
+//!         "wasi": wasmtime_wasi::bindings,
+//!     },
+//!     async: true,
+//! });
+//!
+//! struct MyState {
+//!     table: ResourceTable,
+//!     ctx: WasiCtx,
+//! }
+//!
+//! #[async_trait::async_trait]
+//! impl example::wasi::custom_host::Host for MyState {
+//!     async fn my_custom_function(&mut self) {
+//!         // ..
+//!     }
+//! }
+//!
+//! impl WasiView for MyState {
+//!     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+//!     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+//! }
+//!
+//! fn main() -> Result<()> {
+//!     let mut config = Config::default();
+//!     config.async_support(true);
+//!     let engine = Engine::new(&config)?;
+//!     let mut linker: Linker<MyState> = Linker::new(&engine);
+//!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+//!     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
+//!
+//!     // .. use `Linker` to instantiate component ...
+//!
+//!     Ok(())
+//! }
+//! ```
+
+/// Synchronous-generated bindings for WASI interfaces.
+///
+/// This is the same as the top-level [`bindings`](crate::bindings) module of
+/// this crate except that it's for synchronous calls.
+///
+/// # Examples
+///
+/// If you have a WIT world which refers to WASI interfaces you probably want to
+/// use this crate's bindings rather than generate fresh bindings. That can be
+/// done using the `with` option to `bindgen!`:
+///
+/// ```rust
+/// use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView};
+/// use wasmtime::{Result, Engine};
+/// use wasmtime::component::Linker;
+///
+/// wasmtime::component::bindgen!({
+///     inline: "
+///         package example:wasi;
+///
+///         // An example of extending the `wasi:cli/command` world with a
+///         // custom host interface.
+///         world my-world {
+///             include wasi:cli/command@0.2.0;
+///
+///             import custom-host;
+///         }
+///
+///         interface custom-host {
+///             my-custom-function: func();
+///         }
+///     ",
+///     path: "wit",
+///     with: {
+///         "wasi": wasmtime_wasi::bindings::sync,
+///     },
+///     // This is required for bindings using `wasmtime-wasi` and it otherwise
+///     // isn't the default for non-async bindings.
+///     require_store_data_send: true,
+/// });
+///
+/// struct MyState {
+///     table: ResourceTable,
+///     ctx: WasiCtx,
+/// }
+///
+/// impl example::wasi::custom_host::Host for MyState {
+///     fn my_custom_function(&mut self) {
+///         // ..
+///     }
+/// }
+///
+/// impl WasiView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+/// }
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let mut linker: Linker<MyState> = Linker::new(&engine);
+///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+///     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
+///
+///     // .. use `Linker` to instantiate component ...
+///
+///     Ok(())
+/// }
+/// ```
 pub mod sync {
     mod generated {
         use crate::{FsError, SocketError, StreamError};
@@ -43,7 +182,7 @@ pub mod sync {
         });
     }
     pub use self::generated::exports;
-    pub use self::generated::wasi::{filesystem, io, sockets};
+    pub use self::generated::wasi::*;
 
     /// Synchronous bindings to execute and run a `wasi:cli/command`.
     ///
