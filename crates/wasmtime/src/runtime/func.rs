@@ -843,7 +843,13 @@ impl Func {
         }
     }
 
-    /// todo
+    /// Same as [`Func::wrap`], except the closure asynchronously produces the
+    /// result and the arguments are passed within a tuple. For more information
+    /// see the [`Func`] documentation.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if called with a non-asynchronous store.
     #[cfg(feature = "async")]
     pub fn wrap_async<T, F, P, R>(store: impl AsContextMut<Data = T>, func: F) -> Func
     where
