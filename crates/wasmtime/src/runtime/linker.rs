@@ -1,7 +1,7 @@
 use crate::func::HostFunc;
 use crate::instance::InstancePre;
-use crate::prelude::*;
 use crate::store::StoreOpaque;
+use crate::{prelude::*, IntoFunc};
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
     Instance, Module, StoreContextMut, Val, ValRaw, ValType, WasmTyList,
@@ -530,19 +530,19 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn func_wrap<Params: WasmTyList, Args: crate::WasmRet>(
+    pub fn func_wrap<Params, Args>(
         &mut self,
         module: &str,
         name: &str,
-        func: impl Fn(Caller<'_, T>, Params) -> Args + Send + Sync + 'static,
+        func: impl IntoFunc<T, Params, Args>,
     ) -> Result<&mut Self> {
-        let func = HostFunc::wrap(&self.engine, func);
+        let func = HostFunc::wrap2(&self.engine, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)
     }
 
-    /// todo doc
+    /// Asynchronous analog of [`Linker::func_wrap`].
     #[cfg(feature = "async")]
     pub fn func_wrap_async<F, Params: WasmTyList, Args: crate::WasmRet>(
         &mut self,
@@ -560,9 +560,8 @@ impl<T> Linker<T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_async` without enabling async support on the config",
         );
-        self.func_wrap(
-            module,
-            name,
+        let func = HostFunc::wrap(
+            &self.engine,
             move |mut caller: Caller<'_, T>, args: Params| {
                 let async_cx = caller
                     .store
@@ -576,7 +575,10 @@ impl<T> Linker<T> {
                     Err(e) => Args::fallible_from_error(e),
                 }
             },
-        )
+        );
+        let key = self.import_key(module, Some(name));
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        Ok(self)
     }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.
@@ -1323,7 +1325,7 @@ impl<T> Linker<T> {
         }
 
         // Otherwise return a no-op function.
-        Ok(Func::wrap(store, |_, _: ()| {}))
+        Ok(Func::wrap(store, || {}))
     }
 }
 

@@ -815,7 +815,20 @@ impl Func {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn wrap<F, T, Params, Results>(mut store: impl AsContextMut<Data = T>, func: F) -> Func
+    pub fn wrap<T, Params, Results>(
+        mut store: impl AsContextMut<Data = T>,
+        func: impl IntoFunc<T, Params, Results>,
+    ) -> Func {
+        let store = store.as_context_mut().0;
+        // part of this unsafety is about matching the `T` to a `Store<T>`,
+        // which is done through the `AsContextMut` bound above.
+        unsafe {
+            let host = HostFunc::wrap2(store.engine(), func);
+            host.into_func(store)
+        }
+    }
+
+    fn wrap_inner<F, T, Params, Results>(mut store: impl AsContextMut<Data = T>, func: F) -> Func
     where
         F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
         Params: WasmTyList,
@@ -845,7 +858,7 @@ impl Func {
             store.as_context().async_support(),
             concat!("cannot use `wrap_async` without enabling async support on the config")
         );
-        Func::wrap(store, move |mut caller: Caller<'_, T>, args| {
+        Func::wrap_inner(store, move |mut caller: Caller<'_, T>, args| {
             let async_cx = caller
                 .store
                 .as_context_mut()
@@ -1819,6 +1832,91 @@ macro_rules! impl_wasm_host_results {
 
 for_each_function_signature!(impl_wasm_host_results);
 
+/// Internal trait implemented for all arguments that can be passed to
+/// [`Func::wrap`] and [`Linker::func_wrap`](crate::Linker::func_wrap).
+///
+/// This trait should not be implemented by external users, it's only intended
+/// as an implementation detail of this crate.
+pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
+    /// Convert this function into a `VM{Array,Native}CallHostFuncContext` and
+    /// internal `VMFuncRef`.
+    #[doc(hidden)]
+    fn into_func(self, engine: &Engine) -> HostContext;
+}
+
+macro_rules! impl_into_func {
+    ($num:tt $arg:ident) => {
+        // Implement for functions without a leading `&Caller` parameter,
+        // delegating to the implementation below which does have the leading
+        // `Caller` parameter.
+        #[allow(non_snake_case)]
+        impl<T, F, $arg, R> IntoFunc<T, $arg, R> for F
+        where
+            F: Fn($arg) -> R + Send + Sync + 'static,
+            $arg: WasmTy,
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                let f = move |_: Caller<'_, T>, $arg: $arg| {
+                    self($arg)
+                };
+
+                f.into_func(engine)
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<T, F, $arg, R> IntoFunc<T, (Caller<'_, T>, $arg), R> for F
+        where
+            F: Fn(Caller<'_, T>, $arg) -> R + Send + Sync + 'static,
+            $arg: WasmTy,
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                HostContext::from_closure(engine, move |caller: Caller<'_, T>, ($arg,)| {
+                    self(caller, $arg)
+                })
+            }
+        }
+    };
+    ($num:tt $($args:ident)*) => {
+        // Implement for functions without a leading `&Caller` parameter,
+        // delegating to the implementation below which does have the leading
+        // `Caller` parameter.
+        #[allow(non_snake_case)]
+        impl<T, F, $($args,)* R> IntoFunc<T, ($($args,)*), R> for F
+        where
+            F: Fn($($args),*) -> R + Send + Sync + 'static,
+            $($args: WasmTy,)*
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                let f = move |_: Caller<'_, T>, $($args:$args),*| {
+                    self($($args),*)
+                };
+
+                f.into_func(engine)
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<T, F, $($args,)* R> IntoFunc<T, (Caller<'_, T>, $($args,)*), R> for F
+        where
+            F: Fn(Caller<'_, T>, $($args),*) -> R + Send + Sync + 'static,
+            $($args: WasmTy,)*
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                HostContext::from_closure(engine, move |caller: Caller<'_, T>, ( $( $args ),* )| {
+                    self(caller, $( $args ),* )
+                })
+            }
+        }
+    }
+}
+
+for_each_function_signature!(impl_into_func);
+
 /// Trait implemented for various tuples made up of types which implement
 /// [`WasmTy`] that can be passed to [`Func::wrap`] and
 /// [`Linker::func_wrap`](crate::Linker::func_wrap).
@@ -1833,11 +1931,7 @@ pub unsafe trait WasmTyList {
     // This function is unsafe as it's up to the caller to ensure that `values` are
     // valid for this given type.
     #[doc(hidden)]
-    unsafe fn load(
-        store: &mut AutoAssertNoGc<'_>,
-        values: &mut [MaybeUninit<ValRaw>],
-        values_len: usize,
-    ) -> Self;
+    unsafe fn load(store: &mut AutoAssertNoGc<'_>, values: &mut [MaybeUninit<ValRaw>]) -> Self;
 }
 
 macro_rules! impl_wasm_ty_list {
@@ -1851,13 +1945,13 @@ macro_rules! impl_wasm_ty_list {
                 IntoIterator::into_iter([$($args::valtype(),)*])
             }
 
-            unsafe fn load(store: &mut AutoAssertNoGc<'_>, values: &mut [MaybeUninit<ValRaw>], values_len: usize) -> Self {
+            unsafe fn load(_store: &mut AutoAssertNoGc<'_>, _values: &mut [MaybeUninit<ValRaw>]) -> Self {
                 let mut _cur = 0;
                 ($({
-                    debug_assert!(_cur < values.len());
-                    let ptr = values.get_unchecked(_cur).assume_init_ref();
+                    debug_assert!(_cur < _values.len());
+                    let ptr = _values.get_unchecked(_cur).assume_init_ref();
                     _cur += 1;
-                    $args::load(store, ptr)
+                    $args::load(_store, ptr)
                 },)*)
             }
         }
@@ -2122,7 +2216,7 @@ impl HostContext {
                 }
 
                 let mut store = AutoAssertNoGc::new(caller.store.0);
-                let params = P::load(&mut store, args, args_len);
+                let params = P::load(&mut store, args);
                 let _ = &mut store;
                 drop(store);
 
@@ -2220,7 +2314,7 @@ impl HostFunc {
         HostFunc::_new(engine, ctx.into())
     }
 
-    /// Analog of [`Func::wrap`]
+    /// Analog of [`Func::wrap_inner`]
     pub fn wrap<F, T, Params, Results>(engine: &Engine, func: F) -> Self
     where
         F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
@@ -2228,6 +2322,15 @@ impl HostFunc {
         Results: WasmRet,
     {
         let ctx = HostContext::from_closure(engine, func);
+        HostFunc::_new(engine, ctx)
+    }
+
+    /// Analog of [`Func::wrap`]
+    pub fn wrap2<T, Params, Results>(
+        engine: &Engine,
+        func: impl IntoFunc<T, Params, Results>,
+    ) -> Self {
+        let ctx = func.into_func(engine);
         HostFunc::_new(engine, ctx)
     }
 
