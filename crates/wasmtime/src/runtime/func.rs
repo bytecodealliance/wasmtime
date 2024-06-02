@@ -823,7 +823,7 @@ impl Func {
         // part of this unsafety is about matching the `T` to a `Store<T>`,
         // which is done through the `AsContextMut` bound above.
         unsafe {
-            let host = HostFunc::wrap2(store.engine(), func);
+            let host = HostFunc::wrap(store.engine(), func);
             host.into_func(store)
         }
     }
@@ -838,7 +838,7 @@ impl Func {
         // part of this unsafety is about matching the `T` to a `Store<T>`,
         // which is done through the `AsContextMut` bound above.
         unsafe {
-            let host = HostFunc::wrap(store.engine(), func);
+            let host = HostFunc::wrap_inner(store.engine(), func);
             host.into_func(store)
         }
     }
@@ -1918,8 +1918,8 @@ macro_rules! impl_into_func {
 for_each_function_signature!(impl_into_func);
 
 /// Trait implemented for various tuples made up of types which implement
-/// [`WasmTy`] that can be passed to [`Func::wrap`] and
-/// [`Linker::func_wrap`](crate::Linker::func_wrap).
+/// [`WasmTy`] that can be passed to [`Func::wrap_inner`] and
+/// [`HostContext::from_closure`].
 pub unsafe trait WasmTyList {
     /// Get the value type that each Type in the list represents.
     fn valtypes() -> impl Iterator<Item = ValType>;
@@ -2315,7 +2315,7 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::wrap_inner`]
-    pub fn wrap<F, T, Params, Results>(engine: &Engine, func: F) -> Self
+    pub fn wrap_inner<F, T, Params, Results>(engine: &Engine, func: F) -> Self
     where
         F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
         Params: WasmTyList,
@@ -2326,7 +2326,7 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::wrap`]
-    pub fn wrap2<T, Params, Results>(
+    pub fn wrap<T, Params, Results>(
         engine: &Engine,
         func: impl IntoFunc<T, Params, Results>,
     ) -> Self {

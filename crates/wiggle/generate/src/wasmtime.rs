@@ -87,13 +87,11 @@ fn generate_func(
         .iter()
         .map(|ty| names::wasm_type(*ty))
         .collect::<Vec<_>>();
-    let arg_decls = params
+    let arg_decls = arg_names
         .iter()
-        .enumerate()
-        .map(|(i, ty)| {
-            let name = &arg_names[i];
-            let wasm = names::wasm_type(*ty);
-            quote! { #name: #wasm }
+        .zip(arg_tys.iter())
+        .map(|(name, ty)| {
+            quote! { #name: #ty }
         })
         .collect::<Vec<_>>();
 
@@ -134,16 +132,7 @@ fn generate_func(
 
     match asyncness {
         Asyncness::Async => {
-            let arg_decls = match params.len() {
-                1 => {
-                    let name = &arg_names[0];
-                    let ty = &arg_tys[0];
-                    quote! { (#name,) : (#ty,) }
-                }
-                _ => {
-                    quote! { ( #(#arg_names,)* ) : ( #(#arg_tys,)* ) }
-                }
-            };
+            let arg_decls = quote! { ( #(#arg_names,)* ) : ( #(#arg_tys,)* ) };
             quote! {
                 linker.func_wrap_async(
                     #module_str,

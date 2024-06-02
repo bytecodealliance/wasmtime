@@ -536,7 +536,7 @@ impl<T> Linker<T> {
         name: &str,
         func: impl IntoFunc<T, Params, Args>,
     ) -> Result<&mut Self> {
-        let func = HostFunc::wrap2(&self.engine, func);
+        let func = HostFunc::wrap(&self.engine, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)
@@ -560,7 +560,7 @@ impl<T> Linker<T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_async` without enabling async support on the config",
         );
-        let func = HostFunc::wrap(
+        let func = HostFunc::wrap_inner(
             &self.engine,
             move |mut caller: Caller<'_, T>, args: Params| {
                 let async_cx = caller

@@ -37,7 +37,6 @@ fn _define_func(
     let param_names = (0..wasm_params.len())
         .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
         .collect::<Vec<_>>();
-    // todo
     let abi_params = wasm_params.iter().zip(&param_names).map(|(arg, name)| {
         let wasm = names::wasm_type(*arg);
         quote!(#name : #wasm)

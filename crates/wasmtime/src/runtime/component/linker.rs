@@ -649,7 +649,7 @@ impl<T> LinkerInstance<'_, T> {
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
-        let dtor = Arc::new(crate::func::HostFunc::wrap(
+        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
         ));
