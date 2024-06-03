@@ -92,7 +92,7 @@ pub(crate) fn add_internal_types(
                 gimli::DW_AT_data_member_location = write::AttributeValue::Udata(memory_offset as u64)
             });
         }
-        ModuleMemoryOffset::Imported(_) => {
+        ModuleMemoryOffset::Imported { .. } => {
             // TODO implement convenience pointer to and additional types for VMMemoryImport.
         }
         ModuleMemoryOffset::None => (),

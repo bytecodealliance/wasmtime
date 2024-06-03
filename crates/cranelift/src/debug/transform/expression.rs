@@ -21,33 +21,25 @@ pub struct FunctionFrameInfo<'a> {
     pub memory_offset: ModuleMemoryOffset,
 }
 
-impl<'a> FunctionFrameInfo<'a> {
-    fn vmctx_memory_offset(&self) -> Option<i64> {
-        match self.memory_offset {
-            ModuleMemoryOffset::Defined(x) => Some(x as i64),
-            ModuleMemoryOffset::Imported(_) => {
-                // TODO implement memory offset for imported memory
-                None
-            }
-            ModuleMemoryOffset::None => None,
-        }
-    }
-}
-
 struct ExpressionWriter(write::EndianVec<gimli::RunTimeEndian>);
 
+enum VmctxBase {
+    Reg(u16),
+    OnStack,
+}
+
 impl ExpressionWriter {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let endian = gimli::RunTimeEndian::Little;
         let writer = write::EndianVec::new(endian);
         ExpressionWriter(writer)
     }
 
-    pub fn write_op(&mut self, op: gimli::DwOp) -> write::Result<()> {
+    fn write_op(&mut self, op: gimli::DwOp) -> write::Result<()> {
         self.write_u8(op.0 as u8)
     }
 
-    pub fn write_op_reg(&mut self, reg: u16) -> write::Result<()> {
+    fn write_op_reg(&mut self, reg: u16) -> write::Result<()> {
         if reg < 32 {
             self.write_u8(gimli::constants::DW_OP_reg0.0 as u8 + reg as u8)
         } else {
@@ -56,7 +48,7 @@ impl ExpressionWriter {
         }
     }
 
-    pub fn write_op_breg(&mut self, reg: u16) -> write::Result<()> {
+    fn write_op_breg(&mut self, reg: u16) -> write::Result<()> {
         if reg < 32 {
             self.write_u8(gimli::constants::DW_OP_breg0.0 as u8 + reg as u8)
         } else {
@@ -65,24 +57,70 @@ impl ExpressionWriter {
         }
     }
 
-    pub fn write_u8(&mut self, b: u8) -> write::Result<()> {
+    fn write_u8(&mut self, b: u8) -> write::Result<()> {
         write::Writer::write_u8(&mut self.0, b)
     }
 
-    pub fn write_u32(&mut self, b: u32) -> write::Result<()> {
+    fn write_u32(&mut self, b: u32) -> write::Result<()> {
         write::Writer::write_u32(&mut self.0, b)
     }
 
-    pub fn write_uleb128(&mut self, i: u64) -> write::Result<()> {
+    fn write_uleb128(&mut self, i: u64) -> write::Result<()> {
         write::Writer::write_uleb128(&mut self.0, i)
     }
 
-    pub fn write_sleb128(&mut self, i: i64) -> write::Result<()> {
+    fn write_sleb128(&mut self, i: i64) -> write::Result<()> {
         write::Writer::write_sleb128(&mut self.0, i)
     }
 
-    pub fn into_vec(self) -> Vec<u8> {
+    fn into_vec(self) -> Vec<u8> {
         self.0.into_vec()
+    }
+
+    fn gen_address_of_memory_base_pointer(
+        &mut self,
+        vmctx: VmctxBase,
+        memory_base: &ModuleMemoryOffset,
+    ) -> write::Result<()> {
+        match *memory_base {
+            ModuleMemoryOffset::Defined(offset) => match vmctx {
+                VmctxBase::Reg(reg) => {
+                    self.write_op_breg(reg)?;
+                    self.write_sleb128(offset.into())?;
+                }
+                VmctxBase::OnStack => {
+                    self.write_op(gimli::constants::DW_OP_consts)?;
+                    self.write_sleb128(offset.into())?;
+                    self.write_op(gimli::constants::DW_OP_plus)?;
+                }
+            },
+            ModuleMemoryOffset::Imported {
+                offset_to_vm_memory_definition,
+                offset_to_memory_base,
+            } => {
+                match vmctx {
+                    VmctxBase::Reg(reg) => {
+                        self.write_op_breg(reg)?;
+                        self.write_sleb128(offset_to_vm_memory_definition.into())?;
+                    }
+                    VmctxBase::OnStack => {
+                        if offset_to_vm_memory_definition > 0 {
+                            self.write_op(gimli::constants::DW_OP_consts)?;
+                            self.write_sleb128(offset_to_vm_memory_definition.into())?;
+                        }
+                        self.write_op(gimli::constants::DW_OP_plus)?;
+                    }
+                }
+                self.write_op(gimli::constants::DW_OP_deref)?;
+                if offset_to_memory_base > 0 {
+                    self.write_op(gimli::constants::DW_OP_consts)?;
+                    self.write_sleb128(offset_to_memory_base.into())?;
+                    self.write_op(gimli::constants::DW_OP_plus)?;
+                }
+            }
+            ModuleMemoryOffset::None => return Err(write::Error::InvalidAttributeValue),
+        }
+        Ok(())
     }
 }
 
@@ -166,34 +204,16 @@ fn append_memory_deref(
     isa: &dyn TargetIsa,
 ) -> Result<bool> {
     let mut writer = ExpressionWriter::new();
-    // FIXME for imported memory
-    match vmctx_loc {
-        LabelValueLoc::Reg(r) => {
-            let reg = isa.map_regalloc_reg_to_dwarf(r)?;
-            writer.write_op_breg(reg)?;
-            let memory_offset = match frame_info.vmctx_memory_offset() {
-                Some(offset) => offset,
-                None => {
-                    return Ok(false);
-                }
-            };
-            writer.write_sleb128(memory_offset)?;
-        }
+    let vmctx_base = match vmctx_loc {
+        LabelValueLoc::Reg(r) => VmctxBase::Reg(isa.map_regalloc_reg_to_dwarf(r)?),
         LabelValueLoc::CFAOffset(off) => {
             writer.write_op(gimli::constants::DW_OP_fbreg)?;
             writer.write_sleb128(off)?;
             writer.write_op(gimli::constants::DW_OP_deref)?;
-            writer.write_op(gimli::constants::DW_OP_consts)?;
-            let memory_offset = match frame_info.vmctx_memory_offset() {
-                Some(offset) => offset,
-                None => {
-                    return Ok(false);
-                }
-            };
-            writer.write_sleb128(memory_offset)?;
-            writer.write_op(gimli::constants::DW_OP_plus)?;
+            VmctxBase::OnStack
         }
-    }
+    };
+    writer.gen_address_of_memory_base_pointer(vmctx_base, &frame_info.memory_offset)?;
     writer.write_op(gimli::constants::DW_OP_deref)?;
     writer.write_op(gimli::constants::DW_OP_swap)?;
     writer.write_op(gimli::constants::DW_OP_const4u)?;
