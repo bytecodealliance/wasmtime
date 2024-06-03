@@ -3392,7 +3392,6 @@ dependencies = [
  "log",
  "mach2",
  "memfd",
- "memoffset",
  "object 0.36.0",
  "once_cell",
  "paste",

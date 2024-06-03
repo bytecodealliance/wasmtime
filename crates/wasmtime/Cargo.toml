@@ -56,7 +56,6 @@ gimli = { workspace = true, optional = true }
 addr2line = { workspace = true, optional = true }
 semver = { version = "1.0.17", optional = true, default-features = false }
 smallvec = { workspace = true, optional = true }
-memoffset = { workspace = true, optional = true }
 hashbrown = { workspace = true }
 libm = "0.2.7"
 
@@ -215,7 +214,6 @@ runtime = [
   "dep:smallvec",
   "dep:mach2",
   "dep:memfd",
-  "dep:memoffset",
   "dep:wasmtime-asm-macros",
   "dep:wasmtime-jit-icache-coherence",
   "dep:wasmtime-slab",

@@ -57,7 +57,7 @@ fn using_libunwind() -> bool {
         LIBUNWIND_NO => false,
         LIBUNWIND_UNKNOWN => {
             let looks_like_libunwind = unsafe {
-                !libc::dlsym(ptr::null_mut(), "__unw_add_dynamic_fde\0".as_ptr().cast()).is_null()
+                !libc::dlsym(ptr::null_mut(), c"__unw_add_dynamic_fde".as_ptr()).is_null()
             };
             USING_LIBUNWIND.store(
                 if looks_like_libunwind {
