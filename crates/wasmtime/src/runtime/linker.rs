@@ -1,10 +1,10 @@
 use crate::func::HostFunc;
 use crate::instance::InstancePre;
-use crate::prelude::*;
 use crate::store::StoreOpaque;
+use crate::{prelude::*, IntoFunc};
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, IntoFunc, Module, StoreContextMut, Val, ValRaw, ValType,
+    Instance, Module, StoreContextMut, Val, ValRaw, ValType, WasmTyList,
 };
 use alloc::sync::Arc;
 use anyhow::{bail, Context, Result};
@@ -132,44 +132,6 @@ pub(crate) enum DefinitionType {
     // no longer be the current size of the table/memory.
     Table(wasmtime_environ::Table, u32),
     Memory(wasmtime_environ::Memory, u64),
-}
-
-macro_rules! generate_wrap_async_func {
-    ($num:tt $($args:ident)*) => (paste::paste!{
-        /// Asynchronous analog of [`Linker::func_wrap`].
-        ///
-        /// For more information also see
-        /// [`Func::wrapN_async`](crate::Func::wrap1_async).
-        #[allow(non_snake_case)]
-        #[cfg(feature = "async")]
-        pub fn [<func_wrap $num _async>]<$($args,)* R>(
-            &mut self,
-            module: &str,
-            name: &str,
-            func: impl for<'a> Fn(Caller<'a, T>, $($args),*) -> Box<dyn Future<Output = R> + Send + 'a> + Send + Sync + 'static,
-        ) -> Result<&mut Self>
-        where
-            $($args: crate::WasmTy,)*
-            R: crate::WasmRet,
-        {
-            assert!(
-                self.engine.config().async_support,
-                concat!(
-                    "cannot use `func_wrap",
-                    $num,
-                    "_async` without enabling async support on the config",
-                ),
-            );
-            self.func_wrap(module, name, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                let async_cx = caller.store.as_context_mut().0.async_cx().expect("Attempt to start async function on dying fiber");
-                let mut future = Pin::from(func(caller, $($args),*));
-                match unsafe { async_cx.block_on(future.as_mut()) } {
-                    Ok(ret) => ret.into_fallible(),
-                    Err(e) => R::fallible_from_error(e),
-                }
-            })
-        }
-    })
 }
 
 impl<T> Linker<T> {
@@ -580,7 +542,44 @@ impl<T> Linker<T> {
         Ok(self)
     }
 
-    for_each_function_signature!(generate_wrap_async_func);
+    /// Asynchronous analog of [`Linker::func_wrap`].
+    #[cfg(feature = "async")]
+    pub fn func_wrap_async<F, Params: WasmTyList, Args: crate::WasmRet>(
+        &mut self,
+        module: &str,
+        name: &str,
+        func: F,
+    ) -> Result<&mut Self>
+    where
+        F: for<'a> Fn(Caller<'a, T>, Params) -> Box<dyn Future<Output = Args> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `func_wrap_async` without enabling async support on the config",
+        );
+        let func = HostFunc::wrap_inner(
+            &self.engine,
+            move |mut caller: Caller<'_, T>, args: Params| {
+                let async_cx = caller
+                    .store
+                    .as_context_mut()
+                    .0
+                    .async_cx()
+                    .expect("Attempt to start async function on dying fiber");
+                let mut future = Pin::from(func(caller, args));
+                match unsafe { async_cx.block_on(future.as_mut()) } {
+                    Ok(ret) => ret.into_fallible(),
+                    Err(e) => Args::fallible_from_error(e),
+                }
+            },
+        );
+        let key = self.import_key(module, Some(name));
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        Ok(self)
+    }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.
     ///

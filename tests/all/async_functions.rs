@@ -32,7 +32,7 @@ async fn smoke() {
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 
-    let func = Func::wrap0_async(&mut store, move |_caller| Box::new(async { Ok(()) }));
+    let func = Func::wrap_async(&mut store, move |_caller, _: ()| Box::new(async { Ok(()) }));
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 }
@@ -49,7 +49,9 @@ async fn smoke_host_func() -> Result<()> {
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     )?;
 
-    linker.func_wrap0_async("", "second", move |_caller| Box::new(async { Ok(()) }))?;
+    linker.func_wrap_async("", "second", move |_caller, _: ()| {
+        Box::new(async { Ok(()) })
+    })?;
 
     let func = linker
         .get(&mut store, "", "first")
@@ -83,7 +85,7 @@ async fn smoke_with_suspension() {
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 
-    let func = Func::wrap0_async(&mut store, move |_caller| {
+    let func = Func::wrap_async(&mut store, move |_caller, _: ()| {
         Box::new(async {
             tokio::task::yield_now().await;
             Ok(())
@@ -110,7 +112,7 @@ async fn smoke_host_func_with_suspension() -> Result<()> {
         },
     )?;
 
-    linker.func_wrap0_async("", "second", move |_caller| {
+    linker.func_wrap_async("", "second", move |_caller, _: ()| {
         Box::new(async {
             tokio::task::yield_now().await;
             Ok(())
@@ -509,7 +511,7 @@ async fn resume_separate_thread() {
             ",
         )
         .unwrap();
-        let func = Func::wrap0_async(&mut store, |_| {
+        let func = Func::wrap_async(&mut store, |_, _: ()| {
             Box::new(async {
                 tokio::task::yield_now().await;
                 Err::<(), _>(anyhow!("test"))
@@ -541,7 +543,7 @@ async fn resume_separate_thread2() {
             ",
         )
         .unwrap();
-        let func = Func::wrap0_async(&mut store, |_| {
+        let func = Func::wrap_async(&mut store, |_, _: ()| {
             Box::new(async {
                 tokio::task::yield_now().await;
             })
@@ -582,7 +584,7 @@ async fn resume_separate_thread3() {
                 ",
             )
             .unwrap();
-            let func = Func::wrap0_async(&mut store, |_| {
+            let func = Func::wrap_async(&mut store, |_, _: ()| {
                 Box::new(async {
                     tokio::task::yield_now().await;
                 })
@@ -627,7 +629,7 @@ async fn recursive_async() -> Result<()> {
     let i = Instance::new_async(&mut store, &m, &[]).await?;
     let overflow = i.get_typed_func::<(), ()>(&mut store, "overflow")?;
     let normal = i.get_typed_func::<(), ()>(&mut store, "normal")?;
-    let f2 = Func::wrap0_async(&mut store, move |mut caller| {
+    let f2 = Func::wrap_async(&mut store, move |mut caller, _: ()| {
         let normal = normal.clone();
         let overflow = overflow.clone();
         Box::new(async move {
@@ -831,17 +833,17 @@ async fn non_stacky_async_activations() -> Result<()> {
         stacks.push(wasmtime::WasmBacktrace::force_capture(store));
     }
 
-    linker1.func_wrap0_async("", "host_capture_stack", {
+    linker1.func_wrap_async("", "host_capture_stack", {
         let stacks = stacks.clone();
-        move |caller| {
+        move |caller, _: ()| {
             capture_stack(&stacks, &caller);
             Box::new(async { Ok(()) })
         }
     })?;
 
-    linker1.func_wrap0_async("", "start_async_instance", {
+    linker1.func_wrap_async("", "start_async_instance", {
         let stacks = stacks.clone();
-        move |mut caller| {
+        move |mut caller, _: ()| {
             let stacks = stacks.clone();
             capture_stack(&stacks, &caller);
 
@@ -849,9 +851,9 @@ async fn non_stacky_async_activations() -> Result<()> {
             let mut store2 = Store::new(caller.engine(), ());
             let mut linker2 = Linker::new(caller.engine());
             linker2
-                .func_wrap0_async("", "yield", {
+                .func_wrap_async("", "yield", {
                     let stacks = stacks.clone();
-                    move |caller| {
+                    move |caller, _: ()| {
                         let stacks = stacks.clone();
                         Box::new(async move {
                             capture_stack(&stacks, &caller);
@@ -972,13 +974,17 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
             Ok(())
         },
     )?;
-    linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, Option<F>>, val: i32| {
-        let func = cx.data().clone().unwrap();
-        Box::new(async move {
-            let r = Some(ExternRef::new(&mut cx, val)?);
-            Ok(func.call_async(&mut cx, (val, r)).await)
-        })
-    })?;
+    linker.func_wrap_async(
+        "",
+        "recurse",
+        |mut cx: Caller<'_, Option<F>>, (val,): (i32,)| {
+            let func = cx.data().clone().unwrap();
+            Box::new(async move {
+                let r = Some(ExternRef::new(&mut cx, val)?);
+                Ok(func.call_async(&mut cx, (val, r)).await)
+            })
+        },
+    )?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let func: F = instance.get_typed_func(&mut store, "run")?;
     *store.data_mut() = Some(func.clone());

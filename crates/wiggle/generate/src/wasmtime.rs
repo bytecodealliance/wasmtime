@@ -83,13 +83,15 @@ fn generate_func(
     let arg_names = (0..params.len())
         .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
         .collect::<Vec<_>>();
-    let arg_decls = params
+    let arg_tys = params
         .iter()
-        .enumerate()
-        .map(|(i, ty)| {
-            let name = &arg_names[i];
-            let wasm = names::wasm_type(*ty);
-            quote! { #name: #wasm }
+        .map(|ty| names::wasm_type(*ty))
+        .collect::<Vec<_>>();
+    let arg_decls = arg_names
+        .iter()
+        .zip(arg_tys.iter())
+        .map(|(name, ty)| {
+            quote! { #name: #ty }
         })
         .collect::<Vec<_>>();
 
@@ -130,12 +132,12 @@ fn generate_func(
 
     match asyncness {
         Asyncness::Async => {
-            let wrapper = format_ident!("func_wrap{}_async", params.len());
+            let arg_decls = quote! { ( #(#arg_names,)* ) : ( #(#arg_tys,)* ) };
             quote! {
-                linker.#wrapper(
+                linker.func_wrap_async(
                     #module_str,
                     #field_str,
-                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| {
+                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T>, #arg_decls| {
                         Box::new(async move { #body })
                     },
                 )?;

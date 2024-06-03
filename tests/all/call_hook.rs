@@ -121,9 +121,9 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
     store.call_hook(State::call_hook);
-    let f = Func::wrap4_async(
+    let f = Func::wrap_async(
         &mut store,
-        |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+        |caller: Caller<State>, (a, b, c, d): (i32, i64, f32, f64)| {
             Box::new(async move {
                 // Calling this func will switch context into wasm, then back to host:
                 assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
@@ -245,9 +245,9 @@ async fn call_linked_func_async() -> Result<(), Error> {
     let mut store = Store::new(&engine, State::default());
     store.call_hook(State::call_hook);
 
-    let f = Func::wrap4_async(
+    let f = Func::wrap_async(
         &mut store,
-        |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+        |caller: Caller<State>, (a, b, c, d): (i32, i64, f32, f64)| {
             Box::new(async move {
                 // Calling this func will switch context into wasm, then back to host:
                 assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
@@ -728,7 +728,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     let mut linker = Linker::new(&engine);
 
     // Simulate a host function that has lots of yields with an infinite loop.
-    linker.func_wrap0_async("host", "f", |mut cx| {
+    linker.func_wrap_async("host", "f", |mut cx, _: ()| {
         Box::new(async move {
             let state = cx.data_mut();
             assert_eq!(*state, 0);

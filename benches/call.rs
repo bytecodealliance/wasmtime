@@ -367,20 +367,24 @@ fn wasm_to_host(c: &mut Criterion) {
 
         let mut typed = Linker::new(&engine);
         typed
-            .func_wrap0_async("", "nop", |caller| {
+            .func_wrap_async("", "nop", |caller, _: ()| {
                 Box::new(async {
                     drop(caller);
                 })
             })
             .unwrap();
         typed
-            .func_wrap2_async("", "nop-params-and-results", |_caller, x: i32, y: i64| {
-                Box::new(async move {
-                    assert_eq!(x, 0);
-                    assert_eq!(y, 0);
-                    0.0f32
-                })
-            })
+            .func_wrap_async(
+                "",
+                "nop-params-and-results",
+                |_caller, (x, y): (i32, i64)| {
+                    Box::new(async move {
+                        assert_eq!(x, 0);
+                        assert_eq!(y, 0);
+                        0.0f32
+                    })
+                },
+            )
             .unwrap();
         let instance = run_await(typed.instantiate_async(&mut *store, &module)).unwrap();
         bench_instance(group, store, &instance, "async-typed", is_async);
