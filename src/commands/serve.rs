@@ -281,15 +281,19 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
 
-        // Tokio by default sets `SO_REUSEADDR` for listeners but that makes it
-        // a bit confusing if you run Wasmtime but forget to close a previous
-        // `serve` session. To avoid that we explicitly disable `SO_REUSEADDR`
-        // here.
         let socket = match &self.addr {
             SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
             SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
         };
-        socket.set_reuseaddr(false)?;
+        // Conditionally enable `SO_REUSEADDR` depending on the current
+        // platform. On Unix we want this to be able to rebind an address in
+        // the `TIME_WAIT` state which can happen then a server is killed with
+        // active TCP connections and then restarted. On Windows though if
+        // `SO_REUSEADDR` is specified then it enables multiple applications to
+        // bind the port at the same time which is not something we want. Hence
+        // this is conditionally set based on the platform (and deviates from
+        // Tokio's default from always-on).
+        socket.set_reuseaddr(!cfg!(windows))?;
         socket.bind(self.addr)?;
         let listener = socket.listen(100)?;
 
