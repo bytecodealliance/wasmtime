@@ -17,3 +17,12 @@ pub mod proxy {
         },
     });
 }
+
+pub mod rpc_hello {
+    wit_bindgen::generate!({
+        path: "../rpc/tests/wit/hello",
+        world: "client",
+        default_bindings_module: "test_programs::rpc_hello",
+        pub_export_macro: true,
+    });
+}

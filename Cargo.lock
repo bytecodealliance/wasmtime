@@ -1720,6 +1720,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
+name = "leb128-tokio"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47a57548d0fcd8bf0c9c601af2a3fdd05dac4829b82ae872e893df31f523e8ae"
+dependencies = [
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.153"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3059,6 +3070,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "utf8-tokio"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29f6ede684629efe08c9538958d0f80a4a7475dd49f41fb102b799882098e55a"
+dependencies = [
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "utf8parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3304,6 +3325,19 @@ dependencies = [
  "ocaml-interop",
  "once_cell",
  "wat",
+]
+
+[[package]]
+name = "wasm-tokio"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15db3d053fd102fa738502799dd19d0c3e7645b290004dabbdc2f86830d1344c"
+dependencies = [
+ "leb128-tokio",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "utf8-tokio",
 ]
 
 [[package]]
@@ -3775,6 +3809,25 @@ dependencies = [
  "cfg-if",
  "libc",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "wasmtime-rpc"
+version = "22.0.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures",
+ "test-log",
+ "test-programs-artifacts",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "wasm-tokio",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wrpc-transport",
 ]
 
 [[package]]
@@ -4366,6 +4419,22 @@ dependencies = [
  "log",
  "thiserror",
  "wast 35.0.2",
+]
+
+[[package]]
+name = "wrpc-transport"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "853282f4cad30d0d62b1817d8bf5f42838ce20bd0fcced6aff727306d7de7640"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures",
+ "leb128",
+ "tokio",
+ "tracing",
+ "wasm-tokio",
 ]
 
 [[package]]

@@ -1,0 +1,28 @@
+[package]
+name = "wasmtime-rpc"
+description = "RPC-based Wasmtime functionality extensions"
+
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true, features = ["alloc"] }
+tracing = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tokio-util = { workspace = true, features = ["codec"] }
+wasm-tokio = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+wrpc-transport = { workspace = true }
+
+[dev-dependencies]
+test-log = { workspace = true }
+test-programs-artifacts = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

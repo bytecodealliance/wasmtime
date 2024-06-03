@@ -1,0 +1,13 @@
+package rpc-examples:hello;
+
+interface handler {
+    hello: func(name: string) -> string;
+}
+
+world client {
+    import handler;
+}
+
+world server {
+    export handler;
+}
