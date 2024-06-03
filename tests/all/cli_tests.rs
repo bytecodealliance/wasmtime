@@ -1461,11 +1461,15 @@ mod test_programs {
             // Spawn `wasmtime serve` on port 0 which will randomly assign it a
             // port.
             let mut cmd = super::get_wasmtime_command()?;
+            cmd.arg("serve").arg("--addr=127.0.0.1:0").arg(wasm);
+            configure(&mut cmd);
+            Self::spawn(&mut cmd)
+        }
+
+        fn spawn(cmd: &mut Command) -> Result<WasmtimeServe> {
             cmd.stdin(Stdio::null());
             cmd.stdout(Stdio::piped());
             cmd.stderr(Stdio::piped());
-            cmd.arg("serve").arg("--addr=127.0.0.1:0").arg(wasm);
-            configure(&mut cmd);
             let mut child = cmd.spawn()?;
 
             // Read the first line of stderr which will say which address it's
@@ -1526,15 +1530,7 @@ mod test_programs {
 
         /// Send a request to this server and wait for the response.
         async fn send_request(&self, req: http::Request<String>) -> Result<http::Response<String>> {
-            let tcp = TcpStream::connect(&self.addr)
-                .await
-                .context("failed to connect")?;
-            let tcp = wasmtime_wasi_http::io::TokioIo::new(tcp);
-            let (mut send, conn) = hyper::client::conn::http1::handshake(tcp)
-                .await
-                .context("failed http handshake")?;
-
-            let conn_task = tokio::task::spawn(conn);
+            let (mut send, conn_task) = self.start_requests().await?;
 
             let response = send
                 .send_request(req)
@@ -1550,6 +1546,22 @@ mod test_programs {
             conn_task.await??;
 
             Ok(http::Response::from_parts(parts, body))
+        }
+
+        async fn start_requests(
+            &self,
+        ) -> Result<(
+            hyper::client::conn::http1::SendRequest<String>,
+            tokio::task::JoinHandle<hyper::Result<()>>,
+        )> {
+            let tcp = TcpStream::connect(&self.addr)
+                .await
+                .context("failed to connect")?;
+            let tcp = wasmtime_wasi_http::io::TokioIo::new(tcp);
+            let (send, conn) = hyper::client::conn::http1::handshake(tcp)
+                .await
+                .context("failed http handshake")?;
+            Ok((send, tokio::task::spawn(conn)))
         }
     }
 
@@ -1677,6 +1689,81 @@ mod test_programs {
                 );
             }
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_only_one_process_allowed() -> Result<()> {
+        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let server = WasmtimeServe::new(wasm, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        let err = WasmtimeServe::spawn(
+            super::get_wasmtime_command()?
+                .arg("serve")
+                .arg("-Scli")
+                .arg(format!("--addr={}", server.addr))
+                .arg(wasm),
+        )
+        .err()
+        .expect("server spawn should have failed but it succeeded");
+        drop(server);
+
+        let err = format!("{err:?}");
+        println!("{err}");
+        assert!(err.contains("os error"));
+        Ok(())
+    }
+
+    // Technically this test is a little racy. This binds port 0 to acquire a
+    // random port, issues a single request to this port, but then kills this
+    // server while the request is still processing. The port is then rebound
+    // in the next process while it technically could be stolen by another
+    // process.
+    #[tokio::test]
+    async fn cli_serve_quick_rebind_allowed() -> Result<()> {
+        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let server = WasmtimeServe::new(wasm, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        let addr = server.addr;
+
+        // Start up a `send` and `conn_task` which represents a connection to
+        // this server.
+        let (mut send, conn_task) = server.start_requests().await?;
+        let _ = send
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+
+        // ... once a response has been received (or at least the status
+        // code/headers) then kill the server. THis is done while `conn_task`
+        // and `send` are still alive so we're guaranteed that the other side
+        // got a request (we got a response) and our connection is still open.
+        //
+        // This forces the address/port into the `TIME_WAIT` state. The rebind
+        // below in the next process will fail if `SO_REUSEADDR` isn't set.
+        drop(server);
+        drop(send);
+        let _ = conn_task.await;
+
+        // If this is successfully bound then we'll create `WasmtimeServe`
+        // which reads off the first line of output to know which address was
+        // bound.
+        let _server2 = WasmtimeServe::spawn(
+            super::get_wasmtime_command()?
+                .arg("serve")
+                .arg("-Scli")
+                .arg(format!("--addr={addr}"))
+                .arg(wasm),
+        )?;
+
         Ok(())
     }
 }
