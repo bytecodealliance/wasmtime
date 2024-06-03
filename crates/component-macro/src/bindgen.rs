@@ -2,6 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
@@ -15,6 +16,7 @@ pub struct Config {
     resolve: Resolve,
     world: WorldId,
     files: Vec<PathBuf>,
+    include_generated_code_from_file: bool,
 }
 
 pub fn expand(input: &Config) -> Result<TokenStream> {
@@ -38,7 +40,7 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
     // place a formatted version of the expanded code into a file. This file
     // will then show up in rustc error messages for any codegen issues and can
     // be inspected manually.
-    if std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
+    if input.include_generated_code_from_file || std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
         static INVOCATION: AtomicUsize = AtomicUsize::new(0);
         let root = Path::new(env!("DEBUG_OUTPUT_DIR"));
         let world_name = &input.resolve.worlds[input.world].name;
@@ -81,6 +83,7 @@ impl Parse for Config {
         let mut path = None;
         let mut async_configured = false;
         let mut features = Vec::new();
+        let mut include_generated_code_from_file = false;
 
         if input.peek(token::Brace) {
             let content;
@@ -155,6 +158,10 @@ impl Parse for Config {
                         features.extend(f.into_iter().map(|f| f.value()));
                     }
                     Opt::RequireStoreDataSend(val) => opts.require_store_data_send = val,
+                    Opt::WasmtimeCrate(f) => {
+                        opts.wasmtime_crate = Some(f.into_token_stream().to_string())
+                    }
+                    Opt::IncludeGeneratedCodeFromFile(i) => include_generated_code_from_file = i,
                 }
             }
         } else {
@@ -174,6 +181,7 @@ impl Parse for Config {
             resolve,
             world,
             files,
+            include_generated_code_from_file,
         })
     }
 }
@@ -230,6 +238,8 @@ mod kw {
     syn::custom_keyword!(skip_mut_forwarding_impls);
     syn::custom_keyword!(features);
     syn::custom_keyword!(require_store_data_send);
+    syn::custom_keyword!(wasmtime_crate);
+    syn::custom_keyword!(include_generated_code_from_file);
 }
 
 enum Opt {
@@ -248,6 +258,8 @@ enum Opt {
     SkipMutForwardingImpls(bool),
     Features(Vec<syn::LitStr>),
     RequireStoreDataSend(bool),
+    WasmtimeCrate(syn::Path),
+    IncludeGeneratedCodeFromFile(bool),
 }
 
 impl Parse for Opt {
@@ -409,6 +421,16 @@ impl Parse for Opt {
             input.parse::<kw::require_store_data_send>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::RequireStoreDataSend(
+                input.parse::<syn::LitBool>()?.value,
+            ))
+        } else if l.peek(kw::wasmtime_crate) {
+            input.parse::<kw::wasmtime_crate>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::WasmtimeCrate(input.parse()?))
+        } else if l.peek(kw::include_generated_code_from_file) {
+            input.parse::<kw::include_generated_code_from_file>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::IncludeGeneratedCodeFromFile(
                 input.parse::<syn::LitBool>()?.value,
             ))
         } else {

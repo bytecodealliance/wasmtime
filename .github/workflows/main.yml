@@ -300,7 +300,11 @@ jobs:
           --exclude wasi-http-tests \
           --exclude cranelift-codegen-meta \
           --features component-model
+      env:
+        RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
+      env:
+        RUSTDOCFLAGS: --cfg=docsrs
 
     # Assemble the documentation, and always upload it as an artifact for
     # inspection on PRs and such.
