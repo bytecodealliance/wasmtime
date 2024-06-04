@@ -1,0 +1,54 @@
+package rpc-test:sync;
+
+interface sync {
+    flags abc {
+        a,
+        b,
+        c,
+    }
+
+    record rec-nested {
+        foo: string,
+    }
+
+    record rec {
+        nested: rec-nested,
+    }
+
+    variant var {
+        var(rec),
+        empty,
+    }
+
+    enum foobar {
+        foo,
+        bar,
+    }
+
+    fallible: func(ok: bool) -> result<bool, string>;
+    numbers: func() -> tuple<u8, u16, u32, u64, s8, s16, s32, s64, f32, f64>;
+    with-flags: func(a: bool, b: bool, c: bool) -> abc;
+    with-variant-option: func(ok: bool) -> option<var>;
+    with-record: func() -> rec;
+    with-record-list: func(n: u8) -> list<rec>;
+    with-record-tuple: func() -> tuple<rec, rec>;
+    with-enum: func() -> foobar;
+}
+
+world sync-server {
+    export sync;
+
+    export foo: interface {
+        f: func(x: string) -> u32;
+        foo: func(x: string);
+    }
+}
+
+world sync-client {
+    import sync;
+
+    import foo: interface {
+        f: func(x: string) -> u32;
+        foo: func(x: string);
+    }
+}
