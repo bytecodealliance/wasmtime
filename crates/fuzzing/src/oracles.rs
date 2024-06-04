@@ -16,6 +16,7 @@ pub mod diff_wasmi;
 pub mod diff_wasmtime;
 pub mod dummy;
 pub mod engine;
+pub mod memory;
 mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;

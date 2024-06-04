@@ -172,7 +172,6 @@ impl Config {
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
-            .memory_init_cow(self.wasmtime.memory_init_cow)
             .memory_guaranteed_dense_image_size(std::cmp::min(
                 // Clamp this at 16MiB so we don't get huge in-memory
                 // images during fuzzing.
@@ -259,7 +258,9 @@ impl Config {
                     static_memory_maximum_size: Some(4 << 30), // 4 GiB
                     static_memory_guard_size: Some(2 << 30),   // 2 GiB
                     dynamic_memory_guard_size: Some(0),
+                    dynamic_memory_reserved_for_growth: Some(0),
                     guard_before_linear_memory: false,
+                    memory_init_cow: true,
                 })
             } else {
                 self.wasmtime.memory_config.clone()
@@ -267,19 +268,16 @@ impl Config {
 
             match &memory_config {
                 MemoryConfig::Normal(memory_config) => {
-                    cfg.static_memory_maximum_size(
-                        memory_config.static_memory_maximum_size.unwrap_or(0),
-                    )
-                    .static_memory_guard_size(memory_config.static_memory_guard_size.unwrap_or(0))
-                    .dynamic_memory_guard_size(memory_config.dynamic_memory_guard_size.unwrap_or(0))
-                    .guard_before_linear_memory(memory_config.guard_before_linear_memory);
+                    memory_config.apply_to(&mut cfg);
                 }
                 MemoryConfig::CustomUnaligned => {
                     cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
                         .static_memory_maximum_size(0)
                         .dynamic_memory_guard_size(0)
+                        .dynamic_memory_reserved_for_growth(0)
                         .static_memory_guard_size(0)
-                        .guard_before_linear_memory(false);
+                        .guard_before_linear_memory(false)
+                        .memory_init_cow(false);
                 }
             }
         }
