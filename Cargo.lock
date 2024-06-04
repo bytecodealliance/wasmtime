@@ -1721,9 +1721,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "leb128-tokio"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47a57548d0fcd8bf0c9c601af2a3fdd05dac4829b82ae872e893df31f523e8ae"
+checksum = "0ed5aeb781f5bc022a2b9a0df2c113721eadcc5d2a4cd2c139faa2957b2582cf"
 dependencies = [
  "tokio",
  "tokio-util",
@@ -2071,9 +2071,9 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.9"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0a7ae3ac2f1173085d398531c705756c94a4c56843785df85a60c1a0afac116"
+checksum = "bda66fc9667c18cb2758a2ac84d1167245054bcf85d5d1aaa6923f45801bdd02"
 
 [[package]]
 name = "pin-utils"
@@ -2883,16 +2883,15 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.4"
+version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bb2e075f03b3d66d8d8785356224ba688d2906a371015e225beeb65ca92c740"
+checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
 dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
  "pin-project-lite",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3071,9 +3070,9 @@ dependencies = [
 
 [[package]]
 name = "utf8-tokio"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29f6ede684629efe08c9538958d0f80a4a7475dd49f41fb102b799882098e55a"
+checksum = "a7792e7406e4fbad1f7c298d27ece7f25aab855c8270e5a4b428ebd2b0b95313"
 dependencies = [
  "tokio",
  "tokio-util",
@@ -3329,9 +3328,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-tokio"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15db3d053fd102fa738502799dd19d0c3e7645b290004dabbdc2f86830d1344c"
+checksum = "695c68282a8ffda65b24379d40e00cdab4737363af9e61463093b3f0d58f5bfc"
 dependencies = [
  "leb128-tokio",
  "tokio",
