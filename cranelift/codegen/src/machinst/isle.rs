@@ -223,7 +223,13 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn i64_from_iconst(&mut self, val: Value) -> Option<i64> {
             let inst = self.def_inst(val)?;
-            let constant = self.lower_ctx.get_constant(inst)? as i64;
+            let constant = match self.lower_ctx.data(inst) {
+                InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    imm,
+                } => imm.bits(),
+                _ => return None,
+            };
             let ty = self.lower_ctx.output_ty(inst, 0);
             let shift_amt = std::cmp::max(0, 64 - self.ty_bits(ty));
             Some((constant << shift_amt) >> shift_amt)
