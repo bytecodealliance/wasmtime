@@ -676,6 +676,12 @@ impl Module {
             func_ref: FuncRefIndex::reserved_value(),
         })
     }
+
+    /// Returns an iterator over all of the defined function indices in this
+    /// module.
+    pub fn defined_func_indices(&self) -> impl Iterator<Item = DefinedFuncIndex> {
+        (0..self.functions.len() - self.num_imported_funcs).map(|i| DefinedFuncIndex::new(i))
+    }
 }
 
 /// Type information about functions in a wasm module.

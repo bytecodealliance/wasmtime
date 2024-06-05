@@ -1,7 +1,8 @@
-use crate::{CompiledFunctionsMetadata, FunctionAddressMap};
+use crate::debug::Compilation;
+use crate::FunctionAddressMap;
 use gimli::write;
 use std::collections::BTreeMap;
-use wasmtime_environ::{DefinedFuncIndex, EntityRef, FilePos, PrimaryMap, WasmFileInfo};
+use wasmtime_environ::{DefinedFuncIndex, FilePos, PrimaryMap, StaticModuleIndex};
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;
@@ -18,6 +19,7 @@ pub struct AddressMap {
 /// length, and instructions addresses.
 #[derive(Debug)]
 pub struct FunctionMap {
+    pub symbol: usize,
     pub offset: GeneratedAddress,
     pub len: GeneratedAddress,
     pub wasm_start: WasmAddress,
@@ -187,11 +189,19 @@ fn build_function_lookup(
 }
 
 fn build_function_addr_map(
-    funcs: &CompiledFunctionsMetadata,
-    code_section_offset: u64,
+    compilation: &Compilation<'_>,
+    module: StaticModuleIndex,
 ) -> PrimaryMap<DefinedFuncIndex, FunctionMap> {
     let mut map = PrimaryMap::new();
-    for (_, metadata) in funcs {
+    for idx in compilation.translations[module]
+        .module
+        .defined_func_indices()
+    {
+        let (symbol, metadata) = compilation.function(module, idx);
+        let code_section_offset = compilation.translations[module]
+            .debuginfo
+            .wasm_file
+            .code_section_offset;
         let ft = &metadata.address_map;
         let mut fn_map = Vec::new();
         for t in ft.instructions.iter() {
@@ -213,6 +223,7 @@ fn build_function_addr_map(
         }
 
         map.push(FunctionMap {
+            symbol,
             offset: ft.body_offset,
             len: ft.body_len as usize,
             wasm_start: get_wasm_code_offset(ft.start_srcloc, code_section_offset),
@@ -352,7 +363,7 @@ impl<'a> Iterator for TransformRangeEndIter<'a> {
 }
 
 // Utility iterator to iterate by translated function ranges.
-pub struct TransformRangeIter<'a> {
+struct TransformRangeIter<'a> {
     func: &'a FuncTransform,
     start_it: TransformRangeStartIter<'a>,
     end_it: TransformRangeEndIter<'a>,
@@ -448,11 +459,18 @@ impl<'a> Iterator for TransformRangeIter<'a> {
 }
 
 impl AddressTransform {
-    pub fn new(funcs: &CompiledFunctionsMetadata, wasm_file: &WasmFileInfo) -> Self {
-        let code_section_offset = wasm_file.code_section_offset;
-
+    pub fn new(compilation: &Compilation<'_>, module: StaticModuleIndex) -> Self {
         let mut func = BTreeMap::new();
-        for (i, metadata) in funcs {
+        let code_section_offset = compilation.translations[module]
+            .debuginfo
+            .wasm_file
+            .code_section_offset;
+
+        for idx in compilation.translations[module]
+            .module
+            .defined_func_indices()
+        {
+            let (_, metadata) = compilation.function(module, idx);
             let (fn_start, fn_end, lookup) =
                 build_function_lookup(&metadata.address_map, code_section_offset);
 
@@ -461,15 +479,54 @@ impl AddressTransform {
                 FuncTransform {
                     start: fn_start,
                     end: fn_end,
-                    index: i,
+                    index: idx,
                     lookup,
                 },
             );
         }
 
-        let map = build_function_addr_map(funcs, code_section_offset);
+        let map = build_function_addr_map(compilation, module);
         let func = Vec::from_iter(func.into_iter());
         AddressTransform { map, func }
+    }
+
+    #[cfg(test)]
+    pub fn mock(
+        module_map: &wasmtime_environ::PrimaryMap<
+            wasmtime_environ::DefinedFuncIndex,
+            &crate::CompiledFunctionMetadata,
+        >,
+        wasm_file: wasmtime_environ::WasmFileInfo,
+    ) -> Self {
+        let mut translations = wasmtime_environ::PrimaryMap::new();
+        let mut translation = wasmtime_environ::ModuleTranslation::default();
+        translation.debuginfo.wasm_file = wasm_file;
+        translation
+            .module
+            .push_function(wasmtime_environ::ModuleInternedTypeIndex::from_u32(0));
+        translations.push(translation);
+
+        let mut dummy_obj = object::write::Object::new(
+            object::BinaryFormat::Elf,
+            object::Architecture::Wasm32,
+            object::Endianness::Little,
+        );
+        let dummy_symbol = dummy_obj.add_file_symbol(Vec::new());
+        let func_lookup = move |_, f| (dummy_symbol, module_map[f]);
+        let tunables = wasmtime_environ::Tunables::default_host();
+        let compile = Compilation::new(
+            &*cranelift_codegen::isa::lookup(target_lexicon::Triple::host())
+                .unwrap()
+                .finish(cranelift_codegen::settings::Flags::new(
+                    cranelift_codegen::settings::builder(),
+                ))
+                .unwrap(),
+            &translations,
+            &func_lookup,
+            None,
+            &tunables,
+        );
+        Self::new(&compile, StaticModuleIndex::from_u32(0))
     }
 
     fn find_func(&self, addr: u64) -> Option<&FuncTransform> {
@@ -494,20 +551,20 @@ impl AddressTransform {
         self.find_func(addr).map(|f| f.index)
     }
 
-    pub fn translate_raw(&self, addr: u64) -> Option<(DefinedFuncIndex, GeneratedAddress)> {
+    fn translate_raw(&self, addr: u64) -> Option<(usize, GeneratedAddress)> {
         if addr == 0 {
             // It's normally 0 for debug info without the linked code.
             return None;
         }
         if let Some(func) = self.find_func(addr) {
+            let map = &self.map[func.index];
             if addr == func.end {
                 // Clamp last address to the end to extend translation to the end
                 // of the function.
-                let map = &self.map[func.index];
-                return Some((func.index, map.len));
+                return Some((map.symbol, map.len));
             }
             let first_result = TransformRangeStartIter::new(func, addr).next();
-            first_result.map(|(address, _)| (func.index, address))
+            first_result.map(|(address, _)| (map.symbol, address))
         } else {
             // Address was not found: function was not compiled?
             None
@@ -520,8 +577,8 @@ impl AddressTransform {
 
     pub fn translate(&self, addr: u64) -> Option<write::Address> {
         self.translate_raw(addr)
-            .map(|(func_index, address)| write::Address::Symbol {
-                symbol: func_index.index(),
+            .map(|(symbol, address)| write::Address::Symbol {
+                symbol,
                 addend: address as i64,
             })
     }
@@ -530,14 +587,15 @@ impl AddressTransform {
         &'a self,
         start: u64,
         end: u64,
-    ) -> Option<(DefinedFuncIndex, impl Iterator<Item = (usize, usize)> + 'a)> {
+    ) -> Option<(usize, impl Iterator<Item = (usize, usize)> + 'a)> {
         if start == 0 {
             // It's normally 0 for debug info without the linked code.
             return None;
         }
         if let Some(func) = self.find_func(start) {
             let result = TransformRangeIter::new(func, start, end);
-            return Some((func.index, result));
+            let symbol = self.map[func.index].symbol;
+            return Some((symbol, result));
         }
         // Address was not found: function was not compiled?
         None
@@ -578,8 +636,8 @@ impl AddressTransform {
         }
 
         match self.translate_ranges_raw(start, end) {
-            Some((func_index, ranges)) => TranslateRangesResult::Raw {
-                symbol: func_index.index(),
+            Some((symbol, ranges)) => TranslateRangesResult::Raw {
+                symbol,
                 it: Box::new(ranges),
             },
             None => TranslateRangesResult::Empty,
@@ -731,9 +789,9 @@ mod tests {
             ..Default::default()
         };
         let input = PrimaryMap::from_iter([&func]);
-        let at = AddressTransform::new(
+        let at = AddressTransform::mock(
             &input,
-            &WasmFileInfo {
+            WasmFileInfo {
                 path: None,
                 code_section_offset: 1,
                 imported_func_count: 0,

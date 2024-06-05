@@ -11,9 +11,7 @@ use cranelift_codegen::{
     settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{
-    DefinedFuncIndex, FuncIndex, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmValType,
-};
+use cranelift_wasm::{FuncIndex, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmValType};
 
 use target_lexicon::Architecture;
 use wasmtime_environ::{
@@ -33,8 +31,6 @@ mod compiler;
 mod debug;
 mod func_environ;
 mod gc;
-
-type CompiledFunctionsMetadata<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunctionMetadata>;
 
 /// Trap code used for debug assertions we emit in our JIT code.
 const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;

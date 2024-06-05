@@ -6,7 +6,7 @@ use gimli::{
     write, AttributeValue::DebugLineRef, DebugLine, DebugLineOffset, DebugStr,
     DebuggingInformationEntry, LineEncoding, Unit,
 };
-use wasmtime_environ::{DefinedFuncIndex, EntityRef};
+use wasmtime_environ::DefinedFuncIndex;
 
 #[derive(Debug)]
 enum SavedLineProgramRow {
@@ -222,7 +222,7 @@ where
                     continue; // no code generated
                 }
             };
-            let symbol = index.index();
+            let symbol = map.symbol;
             let base_addr = map.offset;
             out_program.begin_sequence(Some(write::Address::Symbol { symbol, addend: 0 }));
             // TODO track and place function declaration line here

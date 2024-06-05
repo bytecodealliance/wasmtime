@@ -2,8 +2,7 @@ use self::refs::DebugInfoRefsMap;
 use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
 use crate::debug::gc::build_dependencies;
-use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctionsMetadata;
+use crate::debug::Compilation;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
@@ -12,7 +11,9 @@ use gimli::{
 };
 use std::{collections::HashSet, fmt::Debug};
 use thiserror::Error;
-use wasmtime_environ::{DebugInfoData, ModuleTranslation, Tunables};
+use wasmtime_environ::{
+    DefinedFuncIndex, ModuleTranslation, PrimaryMap, StaticModuleIndex, Tunables,
+};
 
 pub use address_transform::AddressTransform;
 
@@ -25,6 +26,21 @@ mod refs;
 mod simulate;
 mod unit;
 mod utils;
+
+impl<'a> Compilation<'a> {
+    fn function_frame_info(
+        &mut self,
+        module: StaticModuleIndex,
+        func: DefinedFuncIndex,
+    ) -> expression::FunctionFrameInfo<'a> {
+        let (_, func) = self.function(module, func);
+
+        expression::FunctionFrameInfo {
+            value_ranges: &func.value_labels_ranges,
+            memory_offset: self.module_memory_offsets[module].clone(),
+        }
+    }
+}
 
 pub(crate) trait Reader: gimli::Reader<Offset = usize> + Send + Sync {}
 
@@ -134,34 +150,25 @@ fn read_dwarf_package_from_bytes<'data>(
 
 pub fn transform_dwarf(
     isa: &dyn TargetIsa,
-    di: &DebugInfoData,
-    funcs: &CompiledFunctionsMetadata,
-    memory_offset: &ModuleMemoryOffset,
-    dwarf_package_bytes: Option<&[u8]>,
-    tunables: &Tunables,
+    compilation: &mut Compilation<'_>,
 ) -> Result<write::Dwarf, Error> {
-    let addr_tr = AddressTransform::new(funcs, &di.wasm_file);
+    let mut transforms = PrimaryMap::new();
+    for (i, _) in compilation.translations.iter() {
+        transforms.push(AddressTransform::new(compilation, i));
+    }
 
     let buffer = Vec::new();
 
-    let dwarf_package = dwarf_package_bytes
+    let dwarf_package = compilation
+        .dwarf_package_bytes
         .map(
             |bytes| -> Option<DwarfPackage<gimli::EndianSlice<'_, gimli::LittleEndian>>> {
-                read_dwarf_package_from_bytes(bytes, &buffer, tunables)
+                read_dwarf_package_from_bytes(bytes, &buffer, compilation.tunables)
             },
         )
         .flatten();
 
-    let reachable = build_dependencies(&di.dwarf, &dwarf_package, &addr_tr)?.get_reachable();
-
-    let context = DebugInputContext {
-        debug_str: &di.dwarf.debug_str,
-        debug_line: &di.dwarf.debug_line,
-        debug_addr: &di.dwarf.debug_addr,
-        rnglists: &di.dwarf.ranges,
-        loclists: &di.dwarf.locations,
-        reachable: &reachable,
-    };
+    let reachable = build_dependencies(compilation, &dwarf_package, &transforms)?.get_reachable();
 
     let out_encoding = gimli::Encoding {
         format: gimli::Format::Dwarf32,
@@ -178,51 +185,61 @@ pub fn transform_dwarf(
     let mut di_ref_map = DebugInfoRefsMap::new();
 
     let mut translated = HashSet::new();
-    let mut iter = di.dwarf.debug_info.units();
 
-    while let Some(header) = iter.next().unwrap_or(None) {
-        let unit = di.dwarf.unit(header)?;
+    for (module, translation) in compilation.translations.iter() {
+        let addr_tr = &transforms[module];
+        let di = &translation.debuginfo;
+        let context = DebugInputContext {
+            debug_str: &di.dwarf.debug_str,
+            debug_line: &di.dwarf.debug_line,
+            debug_addr: &di.dwarf.debug_addr,
+            rnglists: &di.dwarf.ranges,
+            loclists: &di.dwarf.locations,
+            reachable: &reachable,
+        };
+        let mut iter = di.dwarf.debug_info.units();
 
-        let mut resolved_unit = None;
-        let mut split_dwarf = None;
+        while let Some(header) = iter.next().unwrap_or(None) {
+            let unit = di.dwarf.unit(header)?;
 
-        if let gimli::UnitType::Skeleton(_dwo_id) = unit.header.type_() {
-            if let Some(dwarf_package) = &dwarf_package {
-                if let Some((fused, fused_dwarf)) =
-                    replace_unit_from_split_dwarf(&unit, dwarf_package, &di.dwarf)
-                {
-                    resolved_unit = Some(fused);
-                    split_dwarf = Some(fused_dwarf);
+            let mut resolved_unit = None;
+            let mut split_dwarf = None;
+
+            if let gimli::UnitType::Skeleton(_dwo_id) = unit.header.type_() {
+                if let Some(dwarf_package) = &dwarf_package {
+                    if let Some((fused, fused_dwarf)) =
+                        replace_unit_from_split_dwarf(&unit, dwarf_package, &di.dwarf)
+                    {
+                        resolved_unit = Some(fused);
+                        split_dwarf = Some(fused_dwarf);
+                    }
                 }
             }
-        }
 
-        if let Some((id, ref_map, pending_refs)) = clone_unit(
-            &di.dwarf,
-            &unit,
-            resolved_unit.as_ref(),
-            split_dwarf.as_ref(),
-            &context,
-            &addr_tr,
-            funcs,
-            memory_offset,
-            out_encoding,
-            &mut out_units,
-            &mut out_strings,
-            &mut translated,
-            isa,
-        )? {
-            di_ref_map.insert(&header, id, ref_map);
-            pending_di_refs.push((id, pending_refs));
+            if let Some((id, ref_map, pending_refs)) = clone_unit(
+                compilation,
+                module,
+                &unit,
+                resolved_unit.as_ref(),
+                split_dwarf.as_ref(),
+                &context,
+                &addr_tr,
+                out_encoding,
+                &mut out_units,
+                &mut out_strings,
+                &mut translated,
+                isa,
+            )? {
+                di_ref_map.insert(&header, id, ref_map);
+                pending_di_refs.push((id, pending_refs));
+            }
         }
     }
     di_ref_map.patch(pending_di_refs.into_iter(), &mut out_units);
 
     generate_simulated_dwarf(
-        &addr_tr,
-        di,
-        memory_offset,
-        funcs,
+        compilation,
+        &transforms,
         &translated,
         out_encoding,
         &mut out_units,

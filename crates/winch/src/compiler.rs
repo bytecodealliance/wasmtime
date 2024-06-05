@@ -9,7 +9,7 @@ use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CompileError, DefinedFuncIndex, FunctionBodyData,
     FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget,
-    TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
+    StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
 };
 use winch_codegen::{BuiltinFunctions, TargetIsa};
 
@@ -208,13 +208,16 @@ impl wasmtime_environ::Compiler for Compiler {
         self.trampolines.component_compiler()
     }
 
-    fn append_dwarf(
+    fn append_dwarf<'a>(
         &self,
         _obj: &mut Object<'_>,
-        _translation: &ModuleTranslation<'_>,
-        _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
-        _dwarf_package: Option<&[u8]>,
-        _tunables: &wasmtime_environ::Tunables,
+        _translations: &'a PrimaryMap<StaticModuleIndex, ModuleTranslation<'a>>,
+        _get_func: &'a dyn Fn(
+            StaticModuleIndex,
+            DefinedFuncIndex,
+        ) -> (SymbolId, &'a (dyn Any + Send)),
+        _dwarf_package_bytes: Option<&'a [u8]>,
+        _tunables: &'a Tunables,
     ) -> Result<()> {
         todo!()
     }

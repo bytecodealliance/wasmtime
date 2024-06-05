@@ -5,7 +5,7 @@ use crate::prelude::*;
 use crate::{obj, Tunables};
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionLoc, ObjectKind,
-    PrimaryMap, WasmError, WasmFuncType, WasmFunctionInfo,
+    PrimaryMap, StaticModuleIndex, WasmError, WasmFuncType, WasmFunctionInfo,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
@@ -353,15 +353,20 @@ pub trait Compiler: Send + Sync {
     #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn crate::component::ComponentCompiler;
 
-    /// Appends generated DWARF sections to the `obj` specified for the compiled
-    /// functions.
-    fn append_dwarf(
+    /// Appends generated DWARF sections to the `obj` specified.
+    ///
+    /// The `translations` track all compiled functions and `get_func` can be
+    /// used to acquire the metadata for a particular function within a module.
+    fn append_dwarf<'a>(
         &self,
         obj: &mut Object<'_>,
-        translation: &ModuleTranslation<'_>,
-        funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
-        dwarf_package_bytes: Option<&[u8]>,
-        tunables: &Tunables,
+        translations: &'a PrimaryMap<StaticModuleIndex, ModuleTranslation<'a>>,
+        get_func: &'a dyn Fn(
+            StaticModuleIndex,
+            DefinedFuncIndex,
+        ) -> (SymbolId, &'a (dyn Any + Send)),
+        dwarf_package_bytes: Option<&'a [u8]>,
+        tunables: &'a Tunables,
     ) -> Result<()>;
 
     /// Creates a new System V Common Information Entry for the ISA.
