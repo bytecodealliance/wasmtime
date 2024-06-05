@@ -370,4 +370,10 @@ check: exited with status = 0
             &["--preload=env=./tests/all/debug/satisfy_memory_import.wat"],
         )
     }
+
+    #[test]
+    #[ignore]
+    fn dwarf_shared_memory() -> Result<()> {
+        test_dwarf_simple(DWARF_SHARED_MEMORY, &[])
+    }
 }

@@ -5,8 +5,8 @@ use cranelift_codegen::isa::TargetIsa;
 use object::write::SymbolId;
 use std::collections::HashMap;
 use wasmtime_environ::{
-    DefinedFuncIndex, EntityRef, MemoryIndex, ModuleTranslation, OwnedMemoryIndex, PrimaryMap,
-    PtrSize, StaticModuleIndex, Tunables, VMOffsets,
+    DefinedFuncIndex, DefinedMemoryIndex, EntityRef, MemoryIndex, ModuleTranslation,
+    OwnedMemoryIndex, PrimaryMap, PtrSize, StaticModuleIndex, Tunables, VMOffsets,
 };
 
 /// Memory definition offset in the VMContext structure.
@@ -88,25 +88,21 @@ impl<'a> Compilation<'a> {
             );
 
             let memory_offset = if ofs.num_imported_memories > 0 {
+                let index = MemoryIndex::new(0);
                 ModuleMemoryOffset::Imported {
-                    offset_to_vm_memory_definition: ofs.vmctx_vmmemory_import(MemoryIndex::new(0))
+                    offset_to_vm_memory_definition: ofs.vmctx_vmmemory_import(index)
                         + u32::from(ofs.vmmemory_import_from()),
                     offset_to_memory_base: ofs.ptr.vmmemory_definition_base().into(),
                 }
+            } else if ofs.num_owned_memories > 0 {
+                let index = OwnedMemoryIndex::new(0);
+                ModuleMemoryOffset::Defined(ofs.vmctx_vmmemory_definition_base(index))
             } else if ofs.num_defined_memories > 0 {
-                // The addition of shared memory makes the following assumption,
-                // "owned memory index = 0", possibly false. If the first memory
-                // is a shared memory, the base pointer will not be stored in
-                // the `owned_memories` array. The following code should
-                // eventually be fixed to not only handle shared memories but
-                // also multiple memories.
-                assert_eq!(
-                    ofs.num_defined_memories, ofs.num_owned_memories,
-                    "the memory base pointer may be incorrect due to sharing memory"
-                );
-                ModuleMemoryOffset::Defined(
-                    ofs.vmctx_vmmemory_definition_base(OwnedMemoryIndex::new(0)),
-                )
+                let index = DefinedMemoryIndex::new(0);
+                ModuleMemoryOffset::Imported {
+                    offset_to_vm_memory_definition: ofs.vmctx_vmmemory_pointer(index),
+                    offset_to_memory_base: ofs.ptr.vmmemory_definition_base().into(),
+                }
             } else {
                 ModuleMemoryOffset::None
             };
