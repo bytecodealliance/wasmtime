@@ -153,7 +153,7 @@ impl Mmap {
     /// Return the length of the allocated memory.
     ///
     /// This is the byte length of this entire mapping which includes both
-    /// addressible and non-addressible memory.
+    /// addressable and non-addressable memory.
     #[inline]
     pub fn len(&self) -> usize {
         self.sys.len()
