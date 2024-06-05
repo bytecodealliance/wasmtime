@@ -190,13 +190,10 @@ pub unsafe extern "C" fn cabi_import_realloc(
     align: usize,
     new_size: usize,
 ) -> *mut u8 {
-    if !old_ptr.is_null() || old_size != 0 {
-        unreachable!();
-    }
     let mut ptr = null_mut::<u8>();
     State::with(|state| {
         let mut alloc = state.import_alloc.replace(ImportAlloc::None);
-        ptr = alloc.alloc(align, new_size);
+        ptr = alloc.alloc(old_ptr, old_size, align, new_size);
         state.import_alloc.set(alloc);
         Ok(())
     });
@@ -282,11 +279,15 @@ enum ImportAlloc {
     /// An allocator specifically for getting the nth string allocation used
     /// for preopens.
     ///
-    /// This will allocate the `nth` string allocation within the `path`
-    /// allocator. Otherwise all string allocations are discarded but
-    /// temoprarily placed into `alloc`.
+    /// This will allocate everything into `alloc`. All strings other than the
+    /// `nth` string, however, will be discarded (the allocator's state is reset
+    /// after the allocation). This means that the pointer returned for the
+    /// `nth` string will be retained in `alloc` while all others will be
+    /// discarded.
+    ///
+    /// The `cur` count starts at 0 and counts up per-string.
     GetPreopenPath {
-        path: Option<BumpAlloc>,
+        cur: u32,
         nth: u32,
         alloc: BumpAlloc,
     },
@@ -298,7 +299,78 @@ enum ImportAlloc {
 
 impl ImportAlloc {
     /// To be used by cabi_import_realloc only!
-    unsafe fn alloc(&mut self, align: usize, size: usize) -> *mut u8 {
+    unsafe fn alloc(
+        &mut self,
+        old_ptr: *mut u8,
+        old_size: usize,
+        align: usize,
+        size: usize,
+    ) -> *mut u8 {
+        // This is ... a hack. This is a hack in subtle ways that is quite
+        // brittle and may break over time. There's only one case for the
+        // `realloc`-like-behavior in the canonical ABI and that's when the host
+        // is transferring a string to the guest and the host has a different
+        // string encoding. For example JS uses utf-16 (ish) and Rust/WASIp1 use
+        // utf-8. That means that when this adapter is used with a JS host
+        // realloc behavior may be triggered in which case `old_ptr` may not be
+        // null.
+        //
+        // In the case that `old_ptr` may not be null we come to the first
+        // brittle assumption: it's assumed that this is shrinking memory. In
+        // the canonical ABI overlarge allocations are made originally and then
+        // shrunk afterwards once encoding is finished. This means that the
+        // first allocation is too big and the `realloc` call is shrinking
+        // memory. This assumption may be violated in the future if the
+        // canonical ABI is updated to handle growing strings in addition to
+        // shrinking strings. (e.g. starting with an assume-ascii path and then
+        // falling back to an ok-needs-more-space path for larger unicode code
+        // points).
+        //
+        // This comes to the second brittle assumption, nothing happens here
+        // when a shrink happens. This is brittle for each of the cases below,
+        // enumerated here:
+        //
+        // * For `OneAlloc` this isn't the end of the world. That's already
+        //   asserting that only a single string is allocated. Returning the
+        //   original pointer keeps the pointer the same and the host will keep
+        //   track of the appropriate length. In this case the final length is
+        //   read out of the return value of a function, meaning that everything
+        //   actually works out here.
+        //
+        // * For `CountAndDiscardStrings` we're relying on the fact that
+        //   this is only used for `environ_sizes_get` and `args_sizes_get`. In
+        //   both situations we're actually going to return an "overlarge"
+        //   return value for the size of arguments and return values. By
+        //   assuming memory shrinks after the first allocation the return value
+        //   of `environ_sizes_get` and `args_sizes_get` will be the overlong
+        //   approximation for all strings. That means that the final exact size
+        //   won't be what's returned. This ends up being ok because technically
+        //   nothing about WASI says that those blocks have to be exact-sized.
+        //   In our case we're (ab)using that to force the caller to make an
+        //   overlarge return area which we'll allocate into. All-in-all we
+        //   don't track the shrink request and ignore the size.
+        //
+        // * For `SeparateStringsAndPointers` it's similar to the previous case
+        //   except the weird part is that the caller is providing the
+        //   argument/env space buffer to write into. It's over-large because of
+        //   the case of `CountAndDiscardStrings` above, but we'll exploit that
+        //   here and end up having space between all the arguments. Technically
+        //   WASI doesn't say all the strings have to be adjacent, so this
+        //   should work out in practice.
+        //
+        // * Finally for `GetPreopenPath` this works out only insofar that the
+        //   `State::temporary_alloc` space is used to store the path. The
+        //   WASI-provided buffer is precisely sized, not overly large, meaning
+        //   that we're forced to copy from `temporary_alloc` into the
+        //   destination buffer for this WASI call.
+        //
+        // Basically it's a case-by-case basis here that enables ignoring
+        // shrinking return calls here. Not robust.
+        if !old_ptr.is_null() {
+            assert!(old_size > size);
+            assert_eq!(align, 1);
+            return old_ptr;
+        }
         match self {
             ImportAlloc::OneAlloc(alloc) => {
                 let ret = alloc.alloc(align, size);
@@ -323,23 +395,21 @@ impl ImportAlloc {
                     alloc.alloc(align, size)
                 }
             }
-            ImportAlloc::GetPreopenPath { path, nth, alloc } => {
+            ImportAlloc::GetPreopenPath { cur, nth, alloc } => {
                 if align == 1 {
-                    if *nth == 0 {
-                        if let Some(a) = path {
-                            let ret = a.alloc(align, size);
-                            *path = None;
-                            return ret;
-                        }
+                    let real_alloc = *nth == *cur;
+                    if real_alloc {
+                        alloc.alloc(align, size)
                     } else {
-                        *nth -= 1;
+                        alloc.clone().alloc(align, size)
                     }
-                    alloc.clone().alloc(align, size)
                 } else {
                     alloc.alloc(align, size)
                 }
             }
-            ImportAlloc::None => unreachable!("no allocator configured"),
+            ImportAlloc::None => {
+                unreachable!("no allocator configured")
+            }
         }
     }
 }
@@ -2623,7 +2693,7 @@ const fn temporary_data_size() -> usize {
     }
 
     // Remove miscellaneous metadata also stored in state.
-    let misc = if cfg!(feature = "proxy") { 9 } else { 12 };
+    let misc = if cfg!(feature = "proxy") { 8 } else { 10 };
     start -= misc * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
