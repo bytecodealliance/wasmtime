@@ -459,7 +459,11 @@ impl wasmtime_environ::Compiler for Compiler {
         );
 
         let memory_offset = if ofs.num_imported_memories > 0 {
-            ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+            ModuleMemoryOffset::Imported {
+                offset_to_vm_memory_definition: ofs.vmctx_vmmemory_import(MemoryIndex::new(0))
+                    + u32::from(ofs.vmmemory_import_from()),
+                offset_to_memory_base: ofs.ptr.vmmemory_definition_base().into(),
+            }
         } else if ofs.num_defined_memories > 0 {
             // The addition of shared memory makes the following assumption,
             // "owned memory index = 0", possibly false. If the first memory
