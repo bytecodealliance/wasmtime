@@ -315,7 +315,7 @@ enum FuncKind {
     /// is dropped.
     ///
     /// Note that this is intentionally placed behind a `Box` to minimize the
-    /// size of this enum since the most common variant for high-peformance
+    /// size of this enum since the most common variant for high-performance
     /// situations is `SharedHost` and `StoreOwned`, so this ideally isn't
     /// larger than those two.
     Host(Box<HostFunc>),
