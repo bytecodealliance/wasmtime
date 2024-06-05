@@ -1829,6 +1829,16 @@ criteria = "safe-to-deploy"
 version = "0.2.5"
 notes = "I am the author of this crate."
 
+[[audits.leb128-tokio]]
+who = "Roman Volosatovs <rvolosatovs@riseup.net>"
+criteria = "safe-to-deploy"
+version = "0.1.1"
+
+[[audits.leb128-tokio]]
+who = "Roman Volosatovs <rvolosatovs@riseup.net>"
+criteria = "safe-to-deploy"
+version = "0.1.1"
+
 [[audits.libc]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -2172,6 +2182,11 @@ This crate is a single-file crate that does what it says on the tin. There are
 a few `unsafe` blocks related to utf-8 validation which are locally verifiable
 as correct and otherwise this crate is good to go.
 """
+
+[[audits.pin-project-lite]]
+who = "Roman Volosatovs <rvolosatovs@riseup.net>"
+criteria = "safe-to-deploy"
+delta = "0.2.13 -> 0.2.14"
 
 [[audits.pin-utils]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -2557,6 +2572,11 @@ criteria = "safe-to-deploy"
 version = "0.7.4"
 notes = "Alex Crichton audited the safety of src/sync/reusable_box.rs, I audited the remainder of the crate."
 
+[[audits.tokio-util]]
+who = "Roman Volosatovs <rvolosatovs@riseup.net>"
+criteria = "safe-to-deploy"
+delta = "0.7.4 -> 0.7.11"
+
 [[audits.tracing]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -2665,6 +2685,11 @@ and suss out bugs. I've historically reviewed this crate in the past and it
 is similar to what it once was back then. Skimming over the crate there is
 nothing suspicious and it's everything you'd expect a Rust URL parser to be.
 """
+
+[[audits.utf8-tokio]]
+who = "Roman Volosatovs <rvolosatovs@riseup.net>"
+criteria = "safe-to-deploy"
+version = "0.1.1"
 
 [[audits.vcpkg]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -2969,6 +2994,11 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
 version = "0.12.5"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-tokio]]
+who = "Roman Volosatovs <rvolosatovs@riseup.net>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
 
 [[audits.wasmi]]
 who = "Robin Freyler <robin.freyler@gmail.com>"
@@ -3410,6 +3440,11 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.6.4"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wrpc-transport]]
+who = "Roman Volosatovs <rvolosatovs@riseup.net>"
+criteria = "safe-to-deploy"
+version = "0.25.0"
 
 [[audits.xattr]]
 who = "Andrew Brown <andrew.brown@intel.com>"
