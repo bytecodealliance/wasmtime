@@ -767,7 +767,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
             if has_side_effect || value_needed {
-                trace!("lowering: inst {}: {:?}", inst, self.f.dfg.insts[inst]);
+                trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
                 let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
                     let ty = if self.num_outputs(inst) > 0 {
                         Some(self.output_ty(inst, 0))

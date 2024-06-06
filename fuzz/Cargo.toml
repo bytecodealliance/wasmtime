@@ -114,3 +114,10 @@ name = "call_async"
 path = "fuzz_targets/call_async.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "memory_accesses"
+path = "fuzz_targets/memory_accesses.rs"
+test = false
+doc = false
+bench = false
