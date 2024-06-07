@@ -1,16 +1,11 @@
 //! Unique IDs for modules in the runtime.
 
-use core::{
-    num::NonZeroU64,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use core::num::NonZeroU64;
 
 /// A unique identifier (within an engine or similar) for a compiled
 /// module.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CompiledModuleId(NonZeroU64);
-
-static NEXT: AtomicU64 = AtomicU64::new(1);
 
 impl CompiledModuleId {
     /// Allocates a new ID which will be unique within this process.
