@@ -478,12 +478,8 @@ impl Module {
         info: CompiledModuleInfo,
         serializable: bool,
     ) -> Result<Self> {
-        let module = CompiledModule::from_artifacts(
-            code.code_memory().clone(),
-            info,
-            engine.profiler(),
-            engine.unique_id_allocator(),
-        )?;
+        let module =
+            CompiledModule::from_artifacts(code.code_memory().clone(), info, engine.profiler())?;
 
         // Validate the module can be used with the current instance allocator.
         let offsets = VMOffsets::new(HostPtr, module.module());

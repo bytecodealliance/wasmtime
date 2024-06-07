@@ -330,3 +330,26 @@ fn tail_call_defaults() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn cross_engine_module_exports() -> Result<()> {
+    let a_engine = Engine::default();
+    let b_engine = Engine::default();
+
+    let a_module = Module::new(&a_engine, "(module)")?;
+    let b_module = Module::new(
+        &b_engine,
+        r#"
+            (module
+                (func (export "x"))
+            )
+        "#,
+    )?;
+
+    let export = b_module.get_export_index("x").unwrap();
+
+    let mut store = Store::new(&a_engine, ());
+    let instance = Instance::new(&mut store, &a_module, &[])?;
+    assert!(instance.get_module_export(&mut store, &export).is_none());
+    Ok(())
+}

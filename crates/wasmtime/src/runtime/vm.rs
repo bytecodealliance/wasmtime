@@ -74,7 +74,7 @@ pub use crate::runtime::vm::vmcontext::{
 pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;
-pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
+pub use module_id::CompiledModuleId;
 
 mod cow;
 pub use crate::runtime::vm::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
