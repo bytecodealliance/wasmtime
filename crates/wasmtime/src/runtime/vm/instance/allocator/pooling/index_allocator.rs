@@ -485,7 +485,6 @@ impl List {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::runtime::vm::CompiledModuleIdAllocator;
     use wasmtime_environ::EntityRef;
 
     #[test]
@@ -503,9 +502,8 @@ mod test {
 
     #[test]
     fn test_affinity_allocation_strategy() {
-        let id_alloc = CompiledModuleIdAllocator::new();
-        let id1 = MemoryInModule(id_alloc.alloc(), DefinedMemoryIndex::new(0));
-        let id2 = MemoryInModule(id_alloc.alloc(), DefinedMemoryIndex::new(0));
+        let id1 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
+        let id2 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
         let state = ModuleAffinityIndexAllocator::new(100, 100);
 
         let index1 = state.alloc(Some(id1)).unwrap();
@@ -560,8 +558,7 @@ mod test {
 
     #[test]
     fn clear_affine() {
-        let id_alloc = CompiledModuleIdAllocator::new();
-        let id = id_alloc.alloc();
+        let id = CompiledModuleId::new();
         let memory_index = DefinedMemoryIndex::new(0);
 
         for max_unused_warm_slots in [0, 1, 2] {
@@ -589,11 +586,11 @@ mod test {
         use rand::Rng;
         let mut rng = rand::thread_rng();
 
-        let id_alloc = CompiledModuleIdAllocator::new();
-        let ids =
-            std::iter::repeat_with(|| MemoryInModule(id_alloc.alloc(), DefinedMemoryIndex::new(0)))
-                .take(10)
-                .collect::<Vec<_>>();
+        let ids = std::iter::repeat_with(|| {
+            MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0))
+        })
+        .take(10)
+        .collect::<Vec<_>>();
         let state = ModuleAffinityIndexAllocator::new(1000, 1000);
         let mut allocated: Vec<SlotId> = vec![];
         let mut last_id = vec![None; 1000];
@@ -634,10 +631,9 @@ mod test {
 
     #[test]
     fn test_affinity_threshold() {
-        let id_alloc = CompiledModuleIdAllocator::new();
-        let id1 = MemoryInModule(id_alloc.alloc(), DefinedMemoryIndex::new(0));
-        let id2 = MemoryInModule(id_alloc.alloc(), DefinedMemoryIndex::new(0));
-        let id3 = MemoryInModule(id_alloc.alloc(), DefinedMemoryIndex::new(0));
+        let id1 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
+        let id2 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
+        let id3 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
         let state = ModuleAffinityIndexAllocator::new(10, 2);
 
         // Set some slot affinities
@@ -673,7 +669,7 @@ mod test {
         // LRU is 1, so that should be picked
         assert_eq!(
             state.alloc(Some(MemoryInModule(
-                id_alloc.alloc(),
+                CompiledModuleId::new(),
                 DefinedMemoryIndex::new(0)
             ))),
             Some(SlotId(1))
@@ -682,7 +678,7 @@ mod test {
         // Pick another LRU entry, this time 2
         assert_eq!(
             state.alloc(Some(MemoryInModule(
-                id_alloc.alloc(),
+                CompiledModuleId::new(),
                 DefinedMemoryIndex::new(0)
             ))),
             Some(SlotId(2))
@@ -691,7 +687,7 @@ mod test {
         // This should preserve slot `0` and pick up something new
         assert_eq!(
             state.alloc(Some(MemoryInModule(
-                id_alloc.alloc(),
+                CompiledModuleId::new(),
                 DefinedMemoryIndex::new(0)
             ))),
             Some(SlotId(3))
