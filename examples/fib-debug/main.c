@@ -16,6 +16,7 @@ int main(int argc, const char *argv[]) {
   // original fib-wasm.c source code and variables.
   wasm_config_t *config = wasm_config_new();
   wasmtime_config_debug_info_set(config, true);
+  wasmtime_config_cranelift_opt_level_set(config, WASMTIME_OPT_LEVEL_NONE);
 
   // Initialize.
   printf("Initializing...\n");
