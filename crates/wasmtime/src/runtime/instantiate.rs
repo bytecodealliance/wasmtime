@@ -4,7 +4,7 @@
 //! steps.
 
 use crate::prelude::*;
-use crate::runtime::vm::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
+use crate::runtime::vm::{CompiledModuleId, MmapVec};
 use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use alloc::sync::Arc;
 use anyhow::Result;
@@ -50,7 +50,6 @@ impl CompiledModule {
         code_memory: Arc<CodeMemory>,
         info: CompiledModuleInfo,
         profiler: &dyn ProfilingAgent,
-        id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
         let mut ret = Self {
             module: Arc::new(info.module),
@@ -60,7 +59,7 @@ impl CompiledModule {
             dbg_jit_registration: None,
             code_memory,
             meta: info.meta,
-            unique_id: id_allocator.alloc(),
+            unique_id: CompiledModuleId::new(),
             func_names: info.func_names,
         };
         ret.register_debug_and_profiling(profiler)?;
