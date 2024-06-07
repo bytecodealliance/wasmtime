@@ -217,6 +217,8 @@ jobs:
             run_full=true
           elif grep -q 'prtest:full' commits.log; then
             run_full=true
+          elif grep -q 'prtest:debug' commits.log; then
+            echo run-dwarf=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
