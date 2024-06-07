@@ -101,9 +101,10 @@ impl ComponentTypesBuilder {
     fn export_type_def(
         &mut self,
         static_modules: &PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
-        ty: &Export,
+        export_items: &PrimaryMap<ExportIndex, Export>,
+        idx: ExportIndex,
     ) -> TypeDef {
-        match ty {
+        match &export_items[idx] {
             Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(*ty),
             Export::ModuleStatic(idx) => {
                 let mut module_ty = TypeModule::default();
@@ -124,10 +125,11 @@ impl ComponentTypesBuilder {
             Export::Instance { ty: Some(ty), .. } => TypeDef::ComponentInstance(*ty),
             Export::Instance { exports, .. } => {
                 let mut instance_ty = TypeComponentInstance::default();
-                for (name, ty) in exports {
-                    instance_ty
-                        .exports
-                        .insert(name.to_string(), self.export_type_def(static_modules, ty));
+                for (name, idx) in exports {
+                    instance_ty.exports.insert(
+                        name.to_string(),
+                        self.export_type_def(static_modules, export_items, *idx),
+                    );
                 }
                 TypeDef::ComponentInstance(
                     self.component_types.component_instances.push(instance_ty),
@@ -140,11 +142,12 @@ impl ComponentTypesBuilder {
     /// Finishes this list of component types and returns the finished
     /// structure and the [`TypeComponentIndex`] corresponding to top-level component
     /// with `imports` and `exports` specified.
-    pub fn finish<'a>(
+    pub fn finish(
         mut self,
         static_modules: &PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+        export_items: &PrimaryMap<ExportIndex, Export>,
         imports: impl IntoIterator<Item = (String, TypeDef)>,
-        exports: impl IntoIterator<Item = (String, &'a Export)>,
+        exports: impl IntoIterator<Item = (String, ExportIndex)>,
     ) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
         for (name, ty) in imports {
@@ -153,7 +156,7 @@ impl ComponentTypesBuilder {
         for (name, ty) in exports {
             component_ty
                 .exports
-                .insert(name, self.export_type_def(static_modules, ty));
+                .insert(name, self.export_type_def(static_modules, export_items, ty));
         }
         let ty = self.component_types.components.push(component_ty);
 

@@ -169,6 +169,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     )?;
     let (types, ty) = types.finish(
         &compilation_artifacts.modules,
+        &component.component.export_items,
         component
             .component
             .import_types
@@ -178,7 +179,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
             .component
             .exports
             .iter()
-            .map(|(name, ty)| (name.clone(), ty)),
+            .map(|(name, ty)| (name.clone(), *ty)),
     );
 
     let info = CompiledComponentInfo {

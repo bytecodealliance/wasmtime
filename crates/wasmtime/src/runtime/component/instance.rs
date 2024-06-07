@@ -218,6 +218,11 @@ impl InstanceData {
     }
 
     #[inline]
+    pub fn env_component(&self) -> &wasmtime_environ::component::Component {
+        self.component.env_component()
+    }
+
+    #[inline]
     pub fn ty(&self) -> InstanceType<'_> {
         InstanceType::new(self.instance())
     }
@@ -690,16 +695,21 @@ impl Drop for Exports<'_> {
 /// of exports within an instance. The [`ExportInstance::instance`] method
 /// can be used to provide nested access to sub-instances.
 pub struct ExportInstance<'a, 'store> {
-    exports: &'a IndexMap<String, Export>,
+    exports: &'a IndexMap<String, ExportIndex>,
     instance: &'a Instance,
     data: &'a InstanceData,
     store: &'store mut StoreOpaque,
 }
 
 impl<'a, 'store> ExportInstance<'a, 'store> {
+    fn export(&self, name: &str) -> Option<&'a Export> {
+        let index = *self.exports.get(name)?;
+        Some(&self.data.env_component().export_items[index])
+    }
+
     /// Same as [`Instance::get_func`]
     pub fn func(&mut self, name: &str) -> Option<Func> {
-        match self.exports.get(name)? {
+        match self.export(name)? {
             Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
                 self.store,
                 self.instance,
@@ -731,7 +741,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
 
     /// Same as [`Instance::get_module`]
     pub fn module(&mut self, name: &str) -> Option<&'a Module> {
-        match self.exports.get(name)? {
+        match self.export(name)? {
             Export::ModuleStatic(idx) => Some(&self.data.component.static_module(*idx)),
             Export::ModuleImport { import, .. } => Some(match &self.data.imports[*import] {
                 RuntimeImport::Module(m) => m,
@@ -743,7 +753,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
 
     /// Same as [`Instance::get_resource`]
     pub fn resource(&mut self, name: &str) -> Option<ResourceType> {
-        match self.exports.get(name)? {
+        match self.export(name)? {
             Export::Type(TypeDef::Resource(id)) => Some(self.data.ty().resource_type(*id)),
             Export::Type(_)
             | Export::LiftedFunction { .. }
@@ -767,6 +777,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     // over exported modules to work.
     pub fn modules(&self) -> impl Iterator<Item = (&'a str, &'a Module)> + '_ {
         self.exports.iter().filter_map(|(name, export)| {
+            let export = &self.data.env_component().export_items[*export];
             let module = match *export {
                 Export::ModuleStatic(idx) => self.data.component.static_module(idx),
                 Export::ModuleImport { import, .. } => match &self.data.imports[import] {
@@ -797,7 +808,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     /// Same as [`ExportInstance::instance`] but consumes self to yield a
     /// return value with the same lifetimes.
     pub fn into_instance(self, name: &str) -> Option<ExportInstance<'a, 'store>> {
-        match self.exports.get(name)? {
+        match self.export(name)? {
             Export::Instance { exports, .. } => Some(ExportInstance {
                 exports,
                 instance: self.instance,

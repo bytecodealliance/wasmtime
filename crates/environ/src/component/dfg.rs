@@ -368,10 +368,11 @@ impl ComponentDfg {
 
         // Next the exports of the instance are handled which will likely end up
         // creating some lowered imports, perhaps some saved modules, etc.
+        let mut export_items = PrimaryMap::new();
         let exports = self
             .exports
             .iter()
-            .map(|(name, export)| (name.clone(), linearize.export(export)))
+            .map(|(name, export)| (name.clone(), linearize.export(export, &mut export_items)))
             .collect();
 
         // With all those pieces done the results of the dataflow-based
@@ -382,6 +383,7 @@ impl ComponentDfg {
             trampolines: linearize.trampoline_defs,
             component: Component {
                 exports,
+                export_items,
                 initializers: linearize.initializers,
                 trampolines: linearize.trampolines,
                 num_lowerings: linearize.num_lowerings,
@@ -483,8 +485,12 @@ impl LinearizeDfg<'_> {
             }));
     }
 
-    fn export(&mut self, export: &Export) -> info::Export {
-        match export {
+    fn export(
+        &mut self,
+        export: &Export,
+        items: &mut PrimaryMap<ExportIndex, info::Export>,
+    ) -> ExportIndex {
+        let item = match export {
             Export::LiftedFunction { ty, func, options } => {
                 let func = self.core_def(func);
                 let options = self.options(options);
@@ -503,11 +509,12 @@ impl LinearizeDfg<'_> {
                 ty: *ty,
                 exports: exports
                     .iter()
-                    .map(|(name, export)| (name.clone(), self.export(export)))
+                    .map(|(name, export)| (name.clone(), self.export(export, items)))
                     .collect(),
             },
             Export::Type(def) => info::Export::Type(*def),
-        }
+        };
+        items.push(item)
     }
 
     fn options(&mut self, options: &CanonicalOptions) -> info::CanonicalOptions {
