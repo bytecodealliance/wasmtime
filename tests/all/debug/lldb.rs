@@ -376,4 +376,46 @@ check: exited with status = 0
     fn dwarf_shared_memory() -> Result<()> {
         test_dwarf_simple(DWARF_SHARED_MEMORY, &[])
     }
+
+    #[test]
+    #[ignore]
+    fn dwarf_multiple_codegen_units() -> Result<()> {
+        for wasm in [
+            DWARF_MULTIPLE_CODEGEN_UNITS,
+            DWARF_MULTIPLE_CODEGEN_UNITS_COMPONENT,
+        ] {
+            println!("testing {wasm:?}");
+            let output = lldb_with_script(
+                &["-Ccache=n", "-Oopt-level=0", "-Ddebug-info", wasm],
+                r#"
+breakpoint set --file dwarf_multiple_codegen_units.rs --line 3
+breakpoint set --file dwarf_multiple_codegen_units.rs --line 10
+r
+fr v
+c
+fr v
+breakpoint delete 2
+finish
+c"#,
+            )?;
+
+            check_lldb_output(
+                &output,
+                r#"
+check: Breakpoint 1: no locations (pending)
+check: Breakpoint 2: no locations (pending)
+check: stop reason = breakpoint 1.1
+check: foo::bar(a)
+check: a = 3
+check: sum += i
+check: x = 3
+check: sum = 0
+check: 1 breakpoints deleted
+check: Return value: $(=.*) 3
+check: exited with status = 0
+"#,
+            )?;
+        }
+        Ok(())
+    }
 }
