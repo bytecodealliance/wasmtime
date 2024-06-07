@@ -29,6 +29,7 @@ pub enum Token<'a> {
     Colon,                 // ':'
     Equal,                 // '='
     Bang,                  // '!'
+    At,                    // '@'
     Arrow,                 // '->'
     Float(&'a str),        // Floating point immediate
     Integer(&'a str),      // Integer immediate
@@ -439,12 +440,17 @@ impl<'a> Lexer<'a> {
         token(Token::HexSequence(&self.source[begin..end]), loc)
     }
 
-    fn scan_srcloc(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
-        let loc = self.loc();
-        let begin = self.pos + 1;
+    /// Given that we've consumed an `@` character, are we looking at a source
+    /// location?
+    fn looking_at_srcloc(&self) -> bool {
+        match self.lookahead {
+            Some(c) => char::is_digit(c, 16),
+            _ => false,
+        }
+    }
 
-        assert_eq!(self.lookahead, Some('@'));
-
+    fn scan_srcloc(&mut self, pos: usize, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
+        let begin = pos + 1;
         while let Some(c) = self.next_ch() {
             if !char::is_digit(c, 16) {
                 break;
@@ -495,7 +501,16 @@ impl<'a> Lexer<'a> {
                 Some('%') => Some(self.scan_name()),
                 Some('"') => Some(self.scan_string()),
                 Some('#') => Some(self.scan_hex_sequence()),
-                Some('@') => Some(self.scan_srcloc()),
+                Some('@') => {
+                    let pos = self.pos;
+                    let loc = self.loc();
+                    self.next_ch();
+                    if self.looking_at_srcloc() {
+                        Some(self.scan_srcloc(pos, loc))
+                    } else {
+                        Some(token(Token::At, loc))
+                    }
+                }
                 // all ascii whitespace
                 Some(' ') | Some('\x09'..='\x0d') => {
                     self.next_ch();

@@ -2466,13 +2466,44 @@ impl<'a> Parser<'a> {
         // instruction ::=  [inst-results "="] Opcode(opc) ["." Type] * ...
         let inst_data = self.parse_inst_operands(ctx, opcode, explicit_ctrl_type)?;
 
-        // We're done parsing the instruction now.
+        // We're done parsing the instruction data itself.
         //
-        // We still need to check that the number of result values in the source matches the opcode
-        // or function call signature. We also need to create values with the right type for all
-        // the instruction results.
+        // We still need to check that the number of result values in the source
+        // matches the opcode or function call signature. We also need to create
+        // values with the right type for all the instruction results and parse
+        // and attach stack map entries, if present.
         let ctrl_typevar = self.infer_typevar(ctx, opcode, explicit_ctrl_type, &inst_data)?;
         let inst = ctx.function.dfg.make_inst(inst_data);
+        if opcode.is_call() && !opcode.is_return() && self.optional(Token::Comma) {
+            self.match_identifier("stack_map", "expected `stack_map = [...]`")?;
+            self.match_token(Token::Equal, "expected `= [...]`")?;
+            self.match_token(Token::LBracket, "expected `[...]`")?;
+            while !self.optional(Token::RBracket) {
+                let ty = self.match_type("expected `<type> @ <slot> + <offset>`")?;
+                self.match_token(Token::At, "expected `@ <slot> + <offset>`")?;
+                let slot = self.match_ss("expected `<slot> + <offset>`")?;
+                let offset: u32 = match self.token() {
+                    Some(Token::Integer(s)) if s.starts_with('+') => {
+                        self.match_uimm32("expected a u32 offset")?.into()
+                    }
+                    _ => {
+                        self.match_token(Token::Plus, "expected `+ <offset>`")
+                            .map_err(|e| {
+                                dbg!(self.lookahead);
+                                e
+                            })?;
+                        self.match_uimm32("expected a u32 offset")?.into()
+                    }
+                };
+                ctx.function
+                    .dfg
+                    .append_user_stack_map_entry(inst, ir::UserStackMapEntry { ty, slot, offset });
+                if !self.optional(Token::Comma) {
+                    self.match_token(Token::RBracket, "expected `,` or `]`")?;
+                    break;
+                }
+            }
+        }
         let num_results =
             ctx.function
                 .dfg
