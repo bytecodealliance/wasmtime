@@ -407,7 +407,12 @@ pub enum Export {
         options: CanonicalOptions,
     },
     /// A module defined within this component is exported.
-    ModuleStatic(StaticModuleIndex),
+    ModuleStatic {
+        /// The type of this module
+        ty: TypeModuleIndex,
+        /// Which module this is referring to.
+        index: StaticModuleIndex,
+    },
     /// A module imported into this component is exported.
     ModuleImport {
         /// Module type index
@@ -419,7 +424,7 @@ pub enum Export {
     /// `Export` items.
     Instance {
         /// Instance type index, if such is assigned
-        ty: Option<TypeComponentInstanceIndex>,
+        ty: TypeComponentInstanceIndex,
         /// Instance export map
         exports: IndexMap<String, ExportIndex>,
     },

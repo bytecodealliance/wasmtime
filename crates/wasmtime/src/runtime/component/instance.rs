@@ -718,7 +718,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
                 func,
                 options,
             )),
-            Export::ModuleStatic(_)
+            Export::ModuleStatic { .. }
             | Export::ModuleImport { .. }
             | Export::Instance { .. }
             | Export::Type(_) => None,
@@ -742,7 +742,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     /// Same as [`Instance::get_module`]
     pub fn module(&mut self, name: &str) -> Option<&'a Module> {
         match self.export(name)? {
-            Export::ModuleStatic(idx) => Some(&self.data.component.static_module(*idx)),
+            Export::ModuleStatic { index, .. } => Some(&self.data.component.static_module(*index)),
             Export::ModuleImport { import, .. } => Some(match &self.data.imports[*import] {
                 RuntimeImport::Module(m) => m,
                 _ => unreachable!(),
@@ -757,7 +757,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
             Export::Type(TypeDef::Resource(id)) => Some(self.data.ty().resource_type(*id)),
             Export::Type(_)
             | Export::LiftedFunction { .. }
-            | Export::ModuleStatic(_)
+            | Export::ModuleStatic { .. }
             | Export::ModuleImport { .. }
             | Export::Instance { .. } => None,
         }
@@ -779,7 +779,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
         self.exports.iter().filter_map(|(name, export)| {
             let export = &self.data.env_component().export_items[*export];
             let module = match *export {
-                Export::ModuleStatic(idx) => self.data.component.static_module(idx),
+                Export::ModuleStatic { index, .. } => self.data.component.static_module(index),
                 Export::ModuleImport { import, .. } => match &self.data.imports[import] {
                     RuntimeImport::Module(m) => m,
                     _ => unreachable!(),

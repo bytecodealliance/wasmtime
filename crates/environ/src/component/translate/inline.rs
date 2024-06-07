@@ -46,9 +46,8 @@
 //! final `Component`.
 
 use crate::component::translate::*;
-use crate::EntityType;
 use std::borrow::Cow;
-use wasmparser::types::ComponentAnyTypeId;
+use wasmparser::types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
 
 pub(super) fn run(
     types: &mut ComponentTypesBuilder,
@@ -271,7 +270,7 @@ enum ModuleDef<'a> {
     ///
     /// The `StaticModuleIndex` indexes into the `static_modules` map in the
     /// `Inliner`.
-    Static(StaticModuleIndex),
+    Static(StaticModuleIndex, ComponentCoreModuleTypeId),
 
     /// A core wasm module that was imported from the host.
     Import(ImportPath<'a>, TypeModuleIndex),
@@ -330,7 +329,7 @@ enum ComponentInstanceDef<'a> {
     // and may need `Rc`.
     Items(
         IndexMap<&'a str, ComponentItemDef<'a>>,
-        Option<TypeComponentInstanceIndex>,
+        TypeComponentInstanceIndex,
     ),
 }
 
@@ -397,11 +396,7 @@ impl<'a> Inliner<'a> {
                     *types.resources_mut() = snapshot;
                     match frames.last_mut() {
                         Some((parent, _)) => {
-                            parent.finish_instantiate(
-                                ComponentInstanceDef::Items(exports, None),
-                                instance_ty.unwrap(),
-                                types,
-                            );
+                            parent.finish_instantiate(exports, instance_ty.unwrap(), types)?;
                         }
                         None => break Ok(exports),
                     }
@@ -672,8 +667,8 @@ impl<'a> Inliner<'a> {
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
 
-            ModuleStatic(idx) => {
-                frame.modules.push(ModuleDef::Static(*idx));
+            ModuleStatic(idx, ty) => {
+                frame.modules.push(ModuleDef::Static(*idx, *ty));
             }
 
             // Instantiation of a module is one of the meatier initializers that
@@ -690,7 +685,7 @@ impl<'a> Inliner<'a> {
             ModuleInstantiate(module, args) => {
                 let instance_module;
                 let init = match &frame.modules[*module] {
-                    ModuleDef::Static(idx) => {
+                    ModuleDef::Static(idx, _ty) => {
                         let mut defs = Vec::new();
                         for (module, name, _ty) in self.nested_modules[*idx].module.imports() {
                             let instance = args[module];
@@ -793,7 +788,7 @@ impl<'a> Inliner<'a> {
                 let ty = types.convert_instance(types_ref, *ty)?;
                 frame
                     .component_instances
-                    .push(ComponentInstanceDef::Items(items, Some(ty)));
+                    .push(ComponentInstanceDef::Items(items, ty));
             }
 
             // Core wasm aliases, this and the cases below, are creating
@@ -928,7 +923,7 @@ impl<'a> Inliner<'a> {
             // time here.
             ModuleInstanceDef::Instantiated(instance, module) => {
                 let item = match frame.modules[*module] {
-                    ModuleDef::Static(idx) => {
+                    ModuleDef::Static(idx, _ty) => {
                         let entity = self.nested_modules[idx].module.exports[name];
                         ExportItem::Index(entity)
                     }
@@ -977,7 +972,7 @@ impl<'a> Inliner<'a> {
                 },
                 InstanceModule::Import(ty) => match &memory.item {
                     ExportItem::Name(name) => match types[*ty].exports[name] {
-                        EntityType::Memory(m) => m.memory64,
+                        wasmtime_types::EntityType::Memory(m) => m.memory64,
                         _ => unreachable!(),
                     },
                     ExportItem::Index(_) => unreachable!(),
@@ -1031,7 +1026,7 @@ impl<'a> Inliner<'a> {
             // then an initializer is recorded about where the module comes
             // from.
             ComponentItemDef::Module(module) => match module {
-                ModuleDef::Static(idx) => dfg::Export::ModuleStatic(idx),
+                ModuleDef::Static(index, ty) => dfg::Export::ModuleStatic { ty, index },
                 ModuleDef::Import(path, ty) => dfg::Export::ModuleImport {
                     ty,
                     import: self.runtime_import(&path),
@@ -1072,10 +1067,7 @@ impl<'a> Inliner<'a> {
                             let def = ComponentItemDef::from_import(path, *ty)?;
                             self.record_export(name, def, types, &mut exports)?;
                         }
-                        dfg::Export::Instance {
-                            ty: Some(ty),
-                            exports,
-                        }
+                        dfg::Export::Instance { ty, exports }
                     }
 
                     // An exported instance which is itself a bag of items is
@@ -1233,20 +1225,29 @@ impl<'a> InlinerFrame<'a> {
     /// and which component instantiated it.
     fn finish_instantiate(
         &mut self,
-        def: ComponentInstanceDef<'a>,
+        exports: IndexMap<&'a str, ComponentItemDef<'a>>,
         ty: ComponentInstanceTypeId,
         types: &mut ComponentTypesBuilder,
-    ) {
-        let (resources, types) = types.resources_mut_and_types();
-        let mut path = Vec::new();
+    ) -> Result<()> {
+        let types_ref = self.translation.types_ref();
+        {
+            let (resources, types) = types.resources_mut_and_types();
+            let mut path = Vec::new();
+            resources.register_component_entity_type(
+                &types_ref,
+                ComponentEntityType::Instance(ty),
+                &mut path,
+                &mut |path| match path {
+                    [] => unreachable!(),
+                    [name, rest @ ..] => exports[name].lookup_resource(rest, types),
+                },
+            );
+        }
+        let ty = types.convert_instance(types_ref, ty)?;
+        let def = ComponentInstanceDef::Items(exports, ty);
         let arg = ComponentItemDef::Instance(def);
-        resources.register_component_entity_type(
-            &self.translation.types_ref(),
-            ComponentEntityType::Instance(ty),
-            &mut path,
-            &mut |path| arg.lookup_resource(path, types),
-        );
         self.push_item(arg);
+        Ok(())
     }
 }
 
@@ -1277,7 +1278,7 @@ impl<'a> ComponentItemDef<'a> {
             // should be treated.
             TypeDef::Component(_ty) => bail!("root-level component imports are not supported"),
             TypeDef::Interface(_) | TypeDef::Resource(_) => ComponentItemDef::Type(ty),
-            TypeDef::CoreFunc(_ty) => unreachable!(),
+            TypeDef::CoreFunc(_) => unreachable!(),
         };
         Ok(item)
     }

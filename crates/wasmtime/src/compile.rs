@@ -168,7 +168,6 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         None, // TODO: Support dwarf packages for components.
     )?;
     let (types, ty) = types.finish(
-        &compilation_artifacts.modules,
         &component.component.export_items,
         component
             .component
