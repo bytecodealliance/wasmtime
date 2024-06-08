@@ -339,6 +339,17 @@ impl Term {
         matches!(self.kind, TermKind::EnumVariant { .. })
     }
 
+    /// Is this term partial?
+    pub fn is_partial(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::Decl {
+                flags: TermFlags { partial: true, .. },
+                ..
+            }
+        )
+    }
+
     /// Does this term have a constructor?
     pub fn has_constructor(&self) -> bool {
         matches!(
