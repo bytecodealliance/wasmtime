@@ -450,6 +450,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             _ => None,
         }
     }
+
+    fn sinkable_inst(&mut self, val: Value) -> Option<Inst> {
+        self.is_sinkable_inst(val)
+    }
+
     fn load_op(&mut self, ty: Type) -> LoadOP {
         LoadOP::from_type(ty)
     }
