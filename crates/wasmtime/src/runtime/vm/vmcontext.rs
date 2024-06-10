@@ -266,9 +266,6 @@ pub struct VMMemoryDefinition {
     /// atomically. For relaxed access, see
     /// [`VMMemoryDefinition::current_length()`].
     pub current_length: AtomicUsize,
-
-    /// The log2 of this memory's page size, in bytes.
-    pub page_size_log2: u8,
 }
 
 impl VMMemoryDefinition {
@@ -291,7 +288,6 @@ impl VMMemoryDefinition {
         VMMemoryDefinition {
             base: other.base,
             current_length: other.current_length().into(),
-            page_size_log2: other.page_size_log2,
         }
     }
 }

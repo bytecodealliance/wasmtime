@@ -104,7 +104,6 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         VMMemoryDefinition {
             base: self.mem.as_ptr(),
             current_length: self.mem.byte_size().into(),
-            page_size_log2: self.page_size_log2,
         }
     }
 

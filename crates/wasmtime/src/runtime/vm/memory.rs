@@ -408,7 +408,6 @@ impl RuntimeLinearMemory for MmapMemory {
         VMMemoryDefinition {
             base: unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) },
             current_length: self.len.into(),
-            page_size_log2: self.page_size_log2,
         }
     }
 
@@ -519,7 +518,6 @@ impl RuntimeLinearMemory for StaticMemory {
         VMMemoryDefinition {
             base: self.base.as_ptr(),
             current_length: self.size.into(),
-            page_size_log2: self.page_size_log2,
         }
     }
 
