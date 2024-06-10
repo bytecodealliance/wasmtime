@@ -3,7 +3,7 @@ use crate::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::host::network::util;
 use crate::poll::{subscribe, Pollable, Subscribe};
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
-use crate::{SocketError, WasiView};
+use crate::{SocketError, WasiImpl, WasiView};
 use anyhow::Result;
 use std::mem;
 use std::net::{Ipv6Addr, ToSocketAddrs};
@@ -20,7 +20,10 @@ pub enum ResolveAddressStream {
 }
 
 #[async_trait::async_trait]
-impl Host for dyn WasiView + '_ {
+impl<T> Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
@@ -41,7 +44,10 @@ impl Host for dyn WasiView + '_ {
 }
 
 #[async_trait::async_trait]
-impl HostResolveAddressStream for dyn WasiView + '_ {
+impl<T> HostResolveAddressStream for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn resolve_next_address(
         &mut self,
         resource: Resource<ResolveAddressStream>,

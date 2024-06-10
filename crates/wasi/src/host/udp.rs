@@ -8,7 +8,7 @@ use crate::{
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
     Subscribe,
 };
-use crate::{Pollable, SocketError, SocketResult, WasiView};
+use crate::{Pollable, SocketError, SocketResult, WasiImpl, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -22,10 +22,13 @@ use wasmtime::component::Resource;
 /// In practice, datagrams are typically less than 1500 bytes.
 const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
-impl udp::Host for dyn WasiView + '_ {}
+impl<T> udp::Host for WasiImpl<T> where T: WasiView {}
 
 #[async_trait::async_trait]
-impl udp::HostUdpSocket for dyn WasiView + '_ {
+impl<T> udp::HostUdpSocket for WasiImpl<T>
+where
+    T: WasiView,
+{
     async fn start_bind(
         &mut self,
         this: Resource<udp::UdpSocket>,
@@ -301,7 +304,10 @@ impl udp::HostUdpSocket for dyn WasiView + '_ {
     }
 }
 
-impl udp::HostIncomingDatagramStream for dyn WasiView + '_ {
+impl<T> udp::HostIncomingDatagramStream for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn receive(
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
@@ -393,7 +399,10 @@ impl Subscribe for IncomingDatagramStream {
 }
 
 #[async_trait::async_trait]
-impl udp::HostOutgoingDatagramStream for dyn WasiView + '_ {
+impl<T> udp::HostOutgoingDatagramStream for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn check_send(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> SocketResult<u64> {
         let table = self.table();
         let stream = table.get_mut(&this)?;
@@ -557,12 +566,15 @@ pub mod sync {
             },
         },
         runtime::in_tokio,
-        SocketError, WasiView,
+        SocketError, WasiImpl, WasiView,
     };
 
-    impl udp::Host for dyn WasiView + '_ {}
+    impl<T> udp::Host for WasiImpl<T> where T: WasiView {}
 
-    impl HostUdpSocket for dyn WasiView + '_ {
+    impl<T> HostUdpSocket for WasiImpl<T>
+    where
+        T: WasiView,
+    {
         fn start_bind(
             &mut self,
             self_: Resource<UdpSocket>,
@@ -661,7 +673,10 @@ pub mod sync {
         }
     }
 
-    impl HostIncomingDatagramStream for dyn WasiView + '_ {
+    impl<T> HostIncomingDatagramStream for WasiImpl<T>
+    where
+        T: WasiView,
+    {
         fn receive(
             &mut self,
             self_: Resource<IncomingDatagramStream>,
@@ -700,7 +715,10 @@ pub mod sync {
         }
     }
 
-    impl HostOutgoingDatagramStream for dyn WasiView + '_ {
+    impl<T> HostOutgoingDatagramStream for WasiImpl<T>
+    where
+        T: WasiView,
+    {
         fn check_send(
             &mut self,
             self_: Resource<OutgoingDatagramStream>,

@@ -1,6 +1,9 @@
-use crate::{bindings::cli::exit, I32Exit, WasiView};
+use crate::{bindings::cli::exit, I32Exit, WasiImpl, WasiView};
 
-impl exit::Host for dyn WasiView + '_ {
+impl<T> exit::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn exit(&mut self, status: Result<(), ()>) -> anyhow::Result<()> {
         let status = match status {
             Ok(()) => 0,
