@@ -35,7 +35,8 @@
 ;; @0058                               v7 = uextend.i64 v2
 ;; @0058                               v8 = global_value.i64 gv4
 ;; @0058                               v9 = iadd v8, v7
-;; @0058                               v10 = sload16.i64 little heap v9
+;; @0058                               v10 = load.i16 little heap v9
+;; @0058                               v11 = sextend.i64 v10
 ;; @005c                               jump block3
 ;;
 ;;                                 block4(v6: i32):

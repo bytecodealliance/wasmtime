@@ -48,14 +48,15 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       llgfr   %r4, %r4
-;;       lghi    %r3, 0
-;;       lgr     %r5, %r4
-;;       ag      %r5, 0x60(%r2)
+;;       llgfr   %r5, %r4
+;;       lghi    %r4, 0
+;;       lgr     %r3, %r5
+;;       ag      %r3, 0x60(%r2)
 ;;       llilh   %r2, 0xffff
-;;       agrk    %r2, %r5, %r2
-;;       clgfi   %r4, 0xffff
-;;       locgrh  %r2, %r3
-;;       llc     %r2, 0(%r2)
+;;       agr     %r3, %r2
+;;       clgfi   %r5, 0xffff
+;;       locgrh  %r3, %r4
+;;       llc     %r5, 0(%r3)
+;;       llcr    %r2, %r5
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

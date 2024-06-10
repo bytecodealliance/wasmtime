@@ -36,14 +36,15 @@
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       mov     w8, w4
-;;       mov     x9, #0xffff
-;;       cmp     x8, x9
-;;       b.hi    #0x70
-;;   58: ldr     x10, [x2, #0x60]
-;;       add     x10, x10, w4, uxtw
-;;       mov     x11, #0xffff0000
-;;       ldrb    w2, [x10, x11]
+;;       mov     w9, w4
+;;       mov     x10, #0xffff
+;;       cmp     x9, x10
+;;       b.hi    #0x74
+;;   58: ldr     x11, [x2, #0x60]
+;;       add     x11, x11, w4, uxtw
+;;       mov     x12, #0xffff0000
+;;       ldrb    w11, [x11, x12]
+;;       uxtb    w2, w11
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   70: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   74: .byte   0x1f, 0xc1, 0x00, 0x00

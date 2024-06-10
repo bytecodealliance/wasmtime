@@ -41,18 +41,24 @@
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    %rdx, %r10
-;;       addq    0x2a(%rip), %r10
-;;       jb      0x76
-;;   54: movq    0x68(%rdi), %r11
-;;       cmpq    %r11, %r10
-;;       ja      0x74
+;;       movq    %rdx, %r11
+;;       addq    0x32(%rip), %r11
+;;       jb      0x79
+;;   54: movq    0x68(%rdi), %rsi
+;;       cmpq    %rsi, %r11
+;;       ja      0x77
 ;;   61: addq    0x60(%rdi), %rdx
-;;       movl    $0xffff0000, %edi
-;;       movzbq  (%rdx, %rdi), %rax
+;;       movl    $0xffff0000, %eax
+;;       movzbq  (%rdx, %rax), %rax
+;;       movzbl  %al, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   74: ud2
-;;   76: ud2
-;;   78: addl    %eax, (%rax)
+;;   77: ud2
+;;   79: ud2
+;;   7b: addb    %al, (%rax)
+;;   7d: addb    %al, (%rax)
+;;   7f: addb    %al, (%rcx)
+;;   81: addb    %bh, %bh
+;;   83: incl    (%rax)
+;;   85: addb    %al, (%rax)

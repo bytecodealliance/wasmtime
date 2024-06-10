@@ -49,13 +49,14 @@
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
 ;;       lg      %r3, 0x68(%r2)
-;;       llgfr   %r4, %r4
+;;       llgfr   %r5, %r4
 ;;       aghi    %r3, -0x1001
-;;       clgr    %r4, %r3
-;;       jgh     0xb0
-;;       ag      %r4, 0x60(%r2)
-;;       lghi    %r5, 0x1000
-;;       llc     %r2, 0(%r5, %r4)
+;;       clgr    %r5, %r3
+;;       jgh     0xb4
+;;       ag      %r5, 0x60(%r2)
+;;       lghi    %r2, 0x1000
+;;       llc     %r5, 0(%r2, %r5)
+;;       llcr    %r2, %r5
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00

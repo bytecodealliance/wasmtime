@@ -66,8 +66,9 @@
 ;; @004c                               v10 = iadd v9, v4
 ;; @004c                               v11 = iconst.i64 0xffff_0000
 ;; @004c                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
-;; @004c                               v13 = uload8.i32 little heap v12
-;; @0053                               jump block1(v13)
+;; @004c                               v13 = load.i8 little heap v12
+;; @004c                               v14 = uextend.i32 v13
+;; @0053                               jump block1(v14)
 ;;
 ;;                                 block1(v3: i32):
 ;; @0053                               return v3

@@ -40,10 +40,11 @@
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
 ;;       ld      a1, 0x68(a0)
-;;       bgeu    a2, a1, 0x20
-;;       ld      a1, 0x60(a0)
-;;       add     a1, a1, a2
-;;       lbu     a0, 0(a1)
+;;       bgeu    a2, a1, 0x24
+;;       ld      a3, 0x60(a0)
+;;       add     a2, a3, a2
+;;       lb      a2, 0(a2)
+;;       andi    a0, a2, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

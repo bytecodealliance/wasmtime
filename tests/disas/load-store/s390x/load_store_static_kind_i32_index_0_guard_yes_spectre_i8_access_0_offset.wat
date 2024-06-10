@@ -42,8 +42,11 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lg      %r3, 0x60(%r2)
-;;       llgfr   %r4, %r4
-;;       llc     %r2, 0(%r4, %r3)
+;;       lgr     %r5, %r4
+;;       lg      %r4, 0x60(%r2)
+;;       lgr     %r2, %r5
+;;       llgfr   %r5, %r2
+;;       llc     %r4, 0(%r5, %r4)
+;;       llcr    %r2, %r4
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

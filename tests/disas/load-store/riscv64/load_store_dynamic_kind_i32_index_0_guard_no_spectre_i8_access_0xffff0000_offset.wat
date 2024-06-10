@@ -52,24 +52,26 @@
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
 ;;       slli    a1, a2, 0x20
-;;       srli    a2, a1, 0x20
-;;       auipc   a1, 0
-;;       ld      a1, 0x48(a1)
-;;       add     a1, a2, a1
-;;       bgeu    a1, a2, 8
+;;       srli    a3, a1, 0x20
+;;       auipc   a2, 0
+;;       ld      a2, 0x50(a2)
+;;       add     a2, a3, a2
+;;       bgeu    a2, a3, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a3, 0x68(a0)
-;;       bltu    a3, a1, 0x2c
-;;       ld      a3, 0x60(a0)
-;;       add     a3, a3, a2
-;;       lui     a2, 0xffff
-;;       slli    a4, a2, 4
-;;       add     a3, a3, a4
-;;       lbu     a0, 0(a3)
+;;       ld      a4, 0x68(a0)
+;;       bltu    a4, a2, 0x30
+;;       ld      a4, 0x60(a0)
+;;       add     a4, a4, a3
+;;       lui     a3, 0xffff
+;;       slli    a5, a3, 4
+;;       add     a4, a4, a5
+;;       lb      a4, 0(a4)
+;;       andi    a0, a4, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
 ;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       .byte   0x01, 0x00, 0xff, 0xff
 ;;       .byte   0x00, 0x00, 0x00, 0x00

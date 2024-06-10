@@ -48,10 +48,11 @@
 ;;       stg     %r1, 0(%r15)
 ;;       lg      %r5, 0x68(%r2)
 ;;       clgr    %r4, %r5
-;;       jgh     0xa0
+;;       jgh     0xa4
 ;;       ag      %r4, 0x60(%r2)
-;;       llilh   %r2, 0xffff
-;;       llc     %r2, 0(%r2, %r4)
+;;       llilh   %r3, 0xffff
+;;       llc     %r3, 0(%r3, %r4)
+;;       llcr    %r2, %r3
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00

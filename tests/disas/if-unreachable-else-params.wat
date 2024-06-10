@@ -61,10 +61,11 @@
 ;; @004b                               v7 = uextend.i64 v4
 ;; @004b                               v8 = global_value.i64 gv4
 ;; @004b                               v9 = iadd v8, v7
-;; @004b                               v10 = sload16.i64 little heap v9
+;; @004b                               v10 = load.i16 little heap v9
+;; @004b                               v11 = sextend.i64 v10
 ;; @004e                               trap unreachable
 ;;
 ;;                                 block6(v6: i32):
-;; @005d                               v11 = popcnt.i32 v4
+;; @005d                               v12 = popcnt.i32 v4
 ;; @0060                               return
 ;; }

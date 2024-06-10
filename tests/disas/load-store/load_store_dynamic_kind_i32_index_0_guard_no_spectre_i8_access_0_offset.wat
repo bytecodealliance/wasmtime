@@ -58,8 +58,9 @@
 ;; @0048                               trapnz v6, heap_oob
 ;; @0048                               v7 = global_value.i64 gv5
 ;; @0048                               v8 = iadd v7, v4
-;; @0048                               v9 = uload8.i32 little heap v8
-;; @004b                               jump block1(v9)
+;; @0048                               v9 = load.i8 little heap v8
+;; @0048                               v10 = uextend.i32 v9
+;; @004b                               jump block1(v10)
 ;;
 ;;                                 block1(v3: i32):
 ;; @004b                               return v3

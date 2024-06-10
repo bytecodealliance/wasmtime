@@ -31,9 +31,10 @@
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       ldr     x6, [x2, #0x60]
-;;       add     x6, x6, w4, uxtw
-;;       mov     x7, #0xffff0000
-;;       ldrb    w2, [x6, x7]
+;;       ldr     x7, [x2, #0x60]
+;;       add     x7, x7, w4, uxtw
+;;       mov     x8, #0xffff0000
+;;       ldrb    w7, [x7, x8]
+;;       uxtb    w2, w7
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

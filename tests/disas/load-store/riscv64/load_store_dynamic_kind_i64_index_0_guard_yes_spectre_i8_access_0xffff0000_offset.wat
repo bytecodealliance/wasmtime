@@ -51,25 +51,27 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       auipc   a3, 0
-;;       ld      a3, 0x50(a3)
-;;       add     a3, a2, a3
-;;       bgeu    a3, a2, 8
+;;       auipc   a4, 0
+;;       ld      a4, 0x58(a4)
+;;       add     a4, a2, a4
+;;       bgeu    a4, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a4, 0x68(a0)
-;;       ld      a5, 0x60(a0)
-;;       sltu    a4, a4, a3
-;;       add     a5, a5, a2
-;;       lui     a3, 0xffff
-;;       slli    a0, a3, 4
-;;       add     a5, a5, a0
-;;       neg     a2, a4
-;;       not     a4, a2
-;;       and     a0, a5, a4
-;;       lbu     a0, 0(a0)
+;;       ld      a5, 0x68(a0)
+;;       ld      a0, 0x60(a0)
+;;       sltu    a5, a5, a4
+;;       add     a0, a0, a2
+;;       lui     a4, 0xffff
+;;       slli    a1, a4, 4
+;;       add     a0, a0, a1
+;;       neg     a3, a5
+;;       not     a5, a3
+;;       and     a1, a0, a5
+;;       lb      a5, 0(a1)
+;;       andi    a0, a5, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
 ;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       .byte   0x01, 0x00, 0xff, 0xff
 ;;       .byte   0x00, 0x00, 0x00, 0x00

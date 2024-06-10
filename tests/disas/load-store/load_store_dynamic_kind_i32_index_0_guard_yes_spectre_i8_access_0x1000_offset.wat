@@ -68,8 +68,9 @@
 ;; @0049                               v12 = iadd v10, v11  ; v11 = 4096
 ;; @0049                               v13 = iconst.i64 0
 ;; @0049                               v14 = select_spectre_guard v8, v13, v12  ; v13 = 0
-;; @0049                               v15 = uload8.i32 little heap v14
-;; @004d                               jump block1(v15)
+;; @0049                               v15 = load.i8 little heap v14
+;; @0049                               v16 = uextend.i32 v15
+;; @004d                               jump block1(v16)
 ;;
 ;;                                 block1(v3: i32):
 ;; @004d                               return v3

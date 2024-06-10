@@ -51,9 +51,10 @@
 ;;       lgr     %r5, %r4
 ;;       ag      %r5, 0x60(%r2)
 ;;       llilh   %r2, 0xffff
-;;       agr     %r5, %r2
+;;       agrk    %r2, %r5, %r2
 ;;       clgfi   %r4, 0xffff
-;;       locgrh  %r5, %r3
-;;       llc     %r2, 0(%r5)
+;;       locgrh  %r2, %r3
+;;       llc     %r4, 0(%r2)
+;;       llcr    %r2, %r4
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

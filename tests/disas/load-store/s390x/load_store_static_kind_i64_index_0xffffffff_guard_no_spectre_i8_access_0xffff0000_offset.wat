@@ -46,10 +46,11 @@
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
 ;;       clgfi   %r4, 0xffff
-;;       jgh     0x98
+;;       jgh     0x9c
 ;;       ag      %r4, 0x60(%r2)
-;;       llilh   %r5, 0xffff
-;;       llc     %r2, 0(%r5, %r4)
+;;       llilh   %r2, 0xffff
+;;       llc     %r2, 0(%r2, %r4)
+;;       llcr    %r2, %r2
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00

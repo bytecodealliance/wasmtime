@@ -30,6 +30,7 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       ldr     x5, [x2, #0x60]
-;;       ldrb    w2, [x5, w4, uxtw]
+;;       ldrb    w5, [x5, w4, uxtw]
+;;       uxtb    w2, w5
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
