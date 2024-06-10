@@ -144,7 +144,6 @@ where
         //            index + 1 > bound
         //        ==> index >= bound
         HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
-            log::trace!("FITZGEN: bounds checking case 1");
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = make_compare(
                 builder,
@@ -195,7 +194,6 @@ where
         HeapStyle::Dynamic { bound_gv }
             if can_use_virtual_memory && offset_and_size <= heap.offset_guard_size =>
         {
-            log::trace!("FITZGEN: bounds checking case 2");
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = make_compare(
                 builder,
@@ -226,7 +224,6 @@ where
         //            index + offset + access_size > bound
         //        ==> index > bound - (offset + access_size)
         HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
-            log::trace!("FITZGEN: bounds checking case 3");
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let adjustment = offset_and_size as i64;
             let adjustment_value = builder.ins().iconst(env.pointer_type(), adjustment);
@@ -269,7 +266,6 @@ where
         //
         //    And we have to handle the overflow case in the left-hand side.
         HeapStyle::Dynamic { bound_gv } => {
-            log::trace!("FITZGEN: bounds checking case 4");
             let access_size_val = builder
                 .ins()
                 // Explicit cast from u64 to i64: we just want the raw
@@ -322,7 +318,6 @@ where
         //    bound`, since we will end up being out-of-bounds regardless of the
         //    given `index`.
         HeapStyle::Static { bound } if offset_and_size > bound.into() => {
-            log::trace!("FITZGEN: bounds checking case 5");
             assert!(
                 can_use_virtual_memory,
                 "static memories require the ability to use virtual memory"
@@ -376,7 +371,6 @@ where
                 && u64::from(u32::MAX)
                     <= u64::from(bound) + u64::from(heap.offset_guard_size) - offset_and_size =>
         {
-            log::trace!("FITZGEN: bounds checking case 6");
             assert!(
                 can_use_virtual_memory,
                 "static memories require the ability to use virtual memory"
@@ -406,7 +400,6 @@ where
         //    precise, not rely on the virtual memory subsystem at all, and not
         //    factor in the guard pages here.
         HeapStyle::Static { bound } => {
-            log::trace!("FITZGEN: bounds checking case 7");
             assert!(
                 can_use_virtual_memory,
                 "static memories require the ability to use virtual memory"
