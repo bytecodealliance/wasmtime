@@ -111,11 +111,11 @@ mod storage;
 mod store;
 pub mod types;
 mod values;
-pub use self::component::Component;
+pub use self::component::{Component, ComponentExportIndex};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
-pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
+pub use self::instance::{Instance, InstanceExportLookup, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny};

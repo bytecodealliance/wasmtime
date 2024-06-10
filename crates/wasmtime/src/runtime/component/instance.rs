@@ -1,11 +1,13 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
-use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc};
+use crate::component::{
+    Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc,
+};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
-use crate::runtime::vm::VMFuncRef;
+use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
 use alloc::sync::Arc;
@@ -66,33 +68,117 @@ pub(crate) struct InstanceData {
 }
 
 impl Instance {
-    /// Returns information about the exports of this instance.
+    /// Looks up an exported function by name within this [`Instance`].
     ///
-    /// This method can be used to extract exported values from this component
-    /// instance. The argument to this method be a handle to the store that
-    /// this instance was instantiated into.
+    /// The `store` argument provided must be the store that this instance
+    /// lives within and the `name` argument is the lookup key by which to find
+    /// the exported function. If the function is found then `Some` is returned
+    /// and otherwise `None` is returned.
     ///
-    /// The returned [`Exports`] value can be used to lookup exported items by
-    /// name.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `store` does not own this instance.
-    pub fn exports<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>) -> Exports<'a> {
-        let store = store.into();
-        Exports::new(store.0, self)
-    }
-
-    /// Looks up a function by name within this [`Instance`].
-    ///
-    /// This is a convenience method for calling [`Instance::exports`] followed
-    /// by [`ExportInstance::func`].
+    /// The `name` here can be a string such as `&str` or it can be a
+    /// [`ComponentExportIndex`] which is loaded prior from a [`Component`].
     ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_func(&self, mut store: impl AsContextMut, name: &str) -> Option<Func> {
-        self.exports(store.as_context_mut()).root().func(name)
+    ///
+    /// # Examples
+    ///
+    /// Looking up a function which is exported from the root of a component:
+    ///
+    /// ```
+    /// use wasmtime::{Engine, Store};
+    /// use wasmtime::component::{Component, Linker};
+    ///
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let engine = Engine::default();
+    /// let component = Component::new(
+    ///     &engine,
+    ///     r#"
+    ///         (component
+    ///             (core module $m
+    ///                 (func (export "f"))
+    ///             )
+    ///             (core instance $i (instantiate $m))
+    ///             (func (export "f")
+    ///                 (canon lift (core func $i "f")))
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// // Look up the function by name
+    /// let mut store = Store::new(&engine, ());
+    /// let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    /// let func = instance.get_func(&mut store, "f").unwrap();
+    ///
+    /// // The function can also be looked up by an index via a precomputed index.
+    /// let (_, export) = component.export_index(&engine, None, "f").unwrap();
+    /// let func = instance.get_func(&mut store, &export).unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Looking up a function which is exported from a nested instance:
+    ///
+    /// ```
+    /// use wasmtime::{Engine, Store};
+    /// use wasmtime::component::{Component, Linker};
+    ///
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let engine = Engine::default();
+    /// let component = Component::new(
+    ///     &engine,
+    ///     r#"
+    ///         (component
+    ///             (core module $m
+    ///                 (func (export "f"))
+    ///             )
+    ///             (core instance $i (instantiate $m))
+    ///             (func $f
+    ///                 (canon lift (core func $i "f")))
+    ///
+    ///             (instance $i
+    ///                 (export "f" (func $f)))
+    ///             (export "i" (instance $i))
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// // First look up the exported instance, then use that to lookup the
+    /// // exported function.
+    /// let (_, instance_index) = component.export_index(&engine, None, "i").unwrap();
+    /// let (_, func_index) = component.export_index(&engine, Some(&instance_index), "f").unwrap();
+    ///
+    /// // Then use `func_index` at runtime.
+    /// let mut store = Store::new(&engine, ());
+    /// let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    /// let func = instance.get_func(&mut store, &func_index).unwrap();
+    ///
+    /// // Alternatively the `instance` can be used directly in conjunction with
+    /// // the `get_export` method.
+    /// let instance_index = instance.get_export(&mut store, None, "i").unwrap();
+    /// let func_index = instance.get_export(&mut store, Some(&instance_index), "f").unwrap();
+    /// let func = instance.get_func(&mut store, &func_index).unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_func(
+        &self,
+        mut store: impl AsContextMut,
+        name: impl InstanceExportLookup,
+    ) -> Option<Func> {
+        let store = store.as_context_mut().0;
+        let data = store[self.0].take().unwrap();
+        let ret = name.lookup(&data.component).and_then(|index| {
+            match &data.component.env_component().export_items[index] {
+                Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
+                    store, self, &data, *ty, func, options,
+                )),
+                _ => None,
+            }
+        });
+        store[self.0] = Some(data);
+        ret
     }
 
     /// Looks up an exported [`Func`] value by name and with its type.
@@ -109,7 +195,7 @@ impl Instance {
     pub fn get_typed_func<Params, Results>(
         &self,
         mut store: impl AsContextMut,
-        name: &str,
+        name: impl InstanceExportLookup,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: ComponentNamedList + Lower,
@@ -117,38 +203,161 @@ impl Instance {
     {
         let f = self
             .get_func(store.as_context_mut(), name)
-            .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
+            .ok_or_else(|| anyhow!("failed to find function export"))?;
         Ok(f.typed::<Params, Results>(store)
-            .with_context(|| format!("failed to convert function `{}` to given type", name))?)
+            .with_context(|| format!("failed to convert function to given type"))?)
     }
 
-    /// Looks up a module by name within this [`Instance`].
+    /// Looks up an exported module by name within this [`Instance`].
     ///
-    /// The `store` specified must be the store that this instance lives within
-    /// and `name` is the name of the function to lookup. If the module is
-    /// found `Some` is returned otherwise `None` is returned.
+    /// The `store` argument provided must be the store that this instance
+    /// lives within and the `name` argument is the lookup key by which to find
+    /// the exported module. If the module is found then `Some` is returned
+    /// and otherwise `None` is returned.
+    ///
+    /// The `name` here can be a string such as `&str` or it can be a
+    /// [`ComponentExportIndex`] which is loaded prior from a [`Component`].
+    ///
+    /// For some examples see [`Instance::get_func`] for loading values from a
+    /// component.
     ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_module(&self, mut store: impl AsContextMut, name: &str) -> Option<Module> {
-        self.exports(store.as_context_mut())
-            .root()
-            .module(name)
-            .cloned()
+    pub fn get_module(
+        &self,
+        mut store: impl AsContextMut,
+        name: impl InstanceExportLookup,
+    ) -> Option<Module> {
+        let store = store.as_context_mut().0;
+        let (data, export, _) = self.lookup_export(store, name)?;
+        match export {
+            Export::ModuleStatic { index, .. } => {
+                Some(data.component.static_module(*index).clone())
+            }
+            Export::ModuleImport { import, .. } => match &data.imports[*import] {
+                RuntimeImport::Module(m) => Some(m.clone()),
+                _ => unreachable!(),
+            },
+            _ => None,
+        }
     }
 
     /// Looks up an exported resource type by name within this [`Instance`].
     ///
-    /// The `store` specified must be the store that this instance lives within
-    /// and `name` is the name of the function to lookup. If the resource type
-    /// is found `Some` is returned otherwise `None` is returned.
+    /// The `store` argument provided must be the store that this instance
+    /// lives within and the `name` argument is the lookup key by which to find
+    /// the exported resource. If the resource is found then `Some` is returned
+    /// and otherwise `None` is returned.
+    ///
+    /// The `name` here can be a string such as `&str` or it can be a
+    /// [`ComponentExportIndex`] which is loaded prior from a [`Component`].
+    ///
+    /// For some examples see [`Instance::get_func`] for loading values from a
+    /// component.
     ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_resource(&self, mut store: impl AsContextMut, name: &str) -> Option<ResourceType> {
-        self.exports(store.as_context_mut()).root().resource(name)
+    pub fn get_resource(
+        &self,
+        mut store: impl AsContextMut,
+        name: impl InstanceExportLookup,
+    ) -> Option<ResourceType> {
+        let store = store.as_context_mut().0;
+        let (data, export, _) = self.lookup_export(store, name)?;
+        match export {
+            Export::Type(TypeDef::Resource(id)) => Some(data.ty().resource_type(*id)),
+            Export::Type(_)
+            | Export::LiftedFunction { .. }
+            | Export::ModuleStatic { .. }
+            | Export::ModuleImport { .. }
+            | Export::Instance { .. } => None,
+        }
+    }
+
+    /// A methods similar to [`Component::export_index`] except for this
+    /// instance.
+    ///
+    /// This method will lookup the `name` provided within the `instance`
+    /// provided and return a [`ComponentExportIndex`] which can be used to
+    /// pass to other `get_*` functions like [`Instance::get_func`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_export(
+        &self,
+        mut store: impl AsContextMut,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<ComponentExportIndex> {
+        self._get_export(store.as_context_mut().0, instance, name)
+    }
+
+    fn _get_export(
+        &self,
+        store: &StoreOpaque,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<ComponentExportIndex> {
+        let data = store[self.0].as_ref().unwrap();
+        let index = data.component.lookup_export_index(instance, name)?;
+        Some(ComponentExportIndex {
+            id: data.component_id(),
+            index,
+        })
+    }
+
+    fn lookup_export<'a>(
+        &self,
+        store: &'a StoreOpaque,
+        name: impl InstanceExportLookup,
+    ) -> Option<(&'a InstanceData, &'a Export, ExportIndex)> {
+        let data = store[self.0].as_ref().unwrap();
+        let index = name.lookup(&data.component)?;
+        Some((
+            data,
+            &data.component.env_component().export_items[index],
+            index,
+        ))
+    }
+}
+
+/// Trait used to lookup the export of a component instance.
+///
+/// This trait is used as an implementation detail of [`Instance::get_func`]
+/// and related `get_*` methods. Notable implementors of this trait are:
+///
+/// * `str`
+/// * `String`
+/// * [`ComponentExportIndex`]
+///
+/// Note that this is intended to be a `wasmtime`-sealed trait so it shouldn't
+/// need to be implemented externally.
+pub trait InstanceExportLookup {
+    #[doc(hidden)]
+    fn lookup(&self, component: &Component) -> Option<ExportIndex>;
+}
+
+impl<T> InstanceExportLookup for &T
+where
+    T: InstanceExportLookup + ?Sized,
+{
+    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+        T::lookup(self, component)
+    }
+}
+
+impl InstanceExportLookup for str {
+    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+        component.env_component().exports.get(self).copied()
+    }
+}
+
+impl InstanceExportLookup for String {
+    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+        str::lookup(self, component)
     }
 }
 
@@ -218,8 +427,8 @@ impl InstanceData {
     }
 
     #[inline]
-    pub fn env_component(&self) -> &wasmtime_environ::component::Component {
-        self.component.env_component()
+    pub fn component_id(&self) -> CompiledModuleId {
+        self.component.id()
     }
 
     #[inline]
@@ -625,197 +834,5 @@ impl<T> InstancePre<T> {
         let instance = Instance(store.0.store_data_mut().insert(Some(data)));
         store.0.push_component_instance(instance);
         Ok(instance)
-    }
-}
-
-/// Description of the exports of an [`Instance`].
-///
-/// This structure is created through the [`Instance::exports`] method and is
-/// used lookup exports by name from within an instance.
-pub struct Exports<'store> {
-    store: &'store mut StoreOpaque,
-    data: Option<Box<InstanceData>>,
-    instance: Instance,
-}
-
-impl<'store> Exports<'store> {
-    fn new(store: &'store mut StoreOpaque, instance: &Instance) -> Exports<'store> {
-        // Note that the `InstanceData` is `take`n from the store here. That's
-        // to ease with the various liftimes in play here where we often need
-        // simultaneous borrows into the `store` and the `data`.
-        //
-        // To put the data back into the store the `Drop for Exports<'_>` will
-        // restore the state of the world.
-        Exports {
-            data: store[instance.0].take(),
-            store,
-            instance: *instance,
-        }
-    }
-
-    /// Returns the "root" instance of this set of exports, or the items that
-    /// are directly exported from the instance that this was created from.
-    pub fn root(&mut self) -> ExportInstance<'_, '_> {
-        let data = self.data.as_ref().unwrap();
-        ExportInstance {
-            exports: &data.component.env_component().exports,
-            instance: &self.instance,
-            data,
-            store: self.store,
-        }
-    }
-
-    /// Returns the items that the named instance exports.
-    ///
-    /// This method will lookup the exported instance with the name `name` from
-    /// this list of exports and return a descriptin of that instance's
-    /// exports.
-    pub fn instance(&mut self, name: &str) -> Option<ExportInstance<'_, '_>> {
-        self.root().into_instance(name)
-    }
-
-    // FIXME: should all the func/module/typed_func methods below be mirrored
-    // here as well? They're already mirrored on `Instance` and otherwise
-    // this is attempting to look like the `Linker` API "but in reverse"
-    // somewhat.
-}
-
-impl Drop for Exports<'_> {
-    fn drop(&mut self) {
-        // See `Exports::new` for where this data was originally extracted, and
-        // this is just restoring the state of the world.
-        self.store[self.instance.0] = self.data.take();
-    }
-}
-
-/// Description of the exports of a single instance.
-///
-/// This structure is created from [`Exports`] via the [`Exports::root`] or
-/// [`Exports::instance`] methods. This type provides access to the first layer
-/// of exports within an instance. The [`ExportInstance::instance`] method
-/// can be used to provide nested access to sub-instances.
-pub struct ExportInstance<'a, 'store> {
-    exports: &'a IndexMap<String, ExportIndex>,
-    instance: &'a Instance,
-    data: &'a InstanceData,
-    store: &'store mut StoreOpaque,
-}
-
-impl<'a, 'store> ExportInstance<'a, 'store> {
-    fn export(&self, name: &str) -> Option<&'a Export> {
-        let index = *self.exports.get(name)?;
-        Some(&self.data.env_component().export_items[index])
-    }
-
-    /// Same as [`Instance::get_func`]
-    pub fn func(&mut self, name: &str) -> Option<Func> {
-        match self.export(name)? {
-            Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
-                self.store,
-                self.instance,
-                self.data,
-                *ty,
-                func,
-                options,
-            )),
-            Export::ModuleStatic { .. }
-            | Export::ModuleImport { .. }
-            | Export::Instance { .. }
-            | Export::Type(_) => None,
-        }
-    }
-
-    /// Same as [`Instance::get_typed_func`]
-    pub fn typed_func<Params, Results>(&mut self, name: &str) -> Result<TypedFunc<Params, Results>>
-    where
-        Params: ComponentNamedList + Lower,
-        Results: ComponentNamedList + Lift,
-    {
-        let func = self
-            .func(name)
-            .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(func
-            ._typed::<Params, Results>(self.store, Some(self.data))
-            .with_context(|| format!("failed to convert function `{}` to given type", name))?)
-    }
-
-    /// Same as [`Instance::get_module`]
-    pub fn module(&mut self, name: &str) -> Option<&'a Module> {
-        match self.export(name)? {
-            Export::ModuleStatic { index, .. } => Some(&self.data.component.static_module(*index)),
-            Export::ModuleImport { import, .. } => Some(match &self.data.imports[*import] {
-                RuntimeImport::Module(m) => m,
-                _ => unreachable!(),
-            }),
-            _ => None,
-        }
-    }
-
-    /// Same as [`Instance::get_resource`]
-    pub fn resource(&mut self, name: &str) -> Option<ResourceType> {
-        match self.export(name)? {
-            Export::Type(TypeDef::Resource(id)) => Some(self.data.ty().resource_type(*id)),
-            Export::Type(_)
-            | Export::LiftedFunction { .. }
-            | Export::ModuleStatic { .. }
-            | Export::ModuleImport { .. }
-            | Export::Instance { .. } => None,
-        }
-    }
-
-    /// Returns an iterator of all of the exported modules that this instance
-    /// contains.
-    //
-    // FIXME: this should probably be generalized in some form to something else
-    // that either looks like:
-    //
-    // * an iterator over all exports
-    // * an iterator for a `Component` with type information followed by a
-    //   `get_module` function here
-    //
-    // For now this is just quick-and-dirty to get wast support for iterating
-    // over exported modules to work.
-    pub fn modules(&self) -> impl Iterator<Item = (&'a str, &'a Module)> + '_ {
-        self.exports.iter().filter_map(|(name, export)| {
-            let export = &self.data.env_component().export_items[*export];
-            let module = match *export {
-                Export::ModuleStatic { index, .. } => self.data.component.static_module(index),
-                Export::ModuleImport { import, .. } => match &self.data.imports[import] {
-                    RuntimeImport::Module(m) => m,
-                    _ => unreachable!(),
-                },
-                _ => return None,
-            };
-            Some((name.as_str(), module))
-        })
-    }
-
-    fn as_mut(&mut self) -> ExportInstance<'a, '_> {
-        ExportInstance {
-            exports: self.exports,
-            instance: self.instance,
-            data: self.data,
-            store: self.store,
-        }
-    }
-
-    /// Looks up the exported instance with the `name` specified and returns
-    /// a description of its exports.
-    pub fn instance(&mut self, name: &str) -> Option<ExportInstance<'a, '_>> {
-        self.as_mut().into_instance(name)
-    }
-
-    /// Same as [`ExportInstance::instance`] but consumes self to yield a
-    /// return value with the same lifetimes.
-    pub fn into_instance(self, name: &str) -> Option<ExportInstance<'a, 'store>> {
-        match self.export(name)? {
-            Export::Instance { exports, .. } => Some(ExportInstance {
-                exports,
-                instance: self.instance,
-                data: self.data,
-                store: self.store,
-            }),
-            _ => None,
-        }
     }
 }
