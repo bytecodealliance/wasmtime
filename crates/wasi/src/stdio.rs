@@ -4,7 +4,9 @@ use crate::bindings::cli::{
 };
 use crate::bindings::io::streams;
 use crate::pipe;
-use crate::{HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, WasiView};
+use crate::{
+    HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, WasiImpl, WasiView,
+};
 use bytes::Bytes;
 use std::future::Future;
 use std::io::IsTerminal;
@@ -367,21 +369,30 @@ pub enum IsATTY {
     No,
 }
 
-impl stdin::Host for dyn WasiView + '_ {
+impl<T> stdin::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
         let stream = self.ctx().stdin.stream();
         Ok(self.table().push(streams::InputStream::Host(stream))?)
     }
 }
 
-impl stdout::Host for dyn WasiView + '_ {
+impl<T> stdout::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx().stdout.stream();
         Ok(self.table().push(stream)?)
     }
 }
 
-impl stderr::Host for dyn WasiView + '_ {
+impl<T> stderr::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx().stderr.stream();
         Ok(self.table().push(stream)?)
@@ -391,21 +402,30 @@ impl stderr::Host for dyn WasiView + '_ {
 pub struct TerminalInput;
 pub struct TerminalOutput;
 
-impl terminal_input::Host for dyn WasiView + '_ {}
-impl terminal_input::HostTerminalInput for dyn WasiView + '_ {
+impl<T> terminal_input::Host for WasiImpl<T> where T: WasiView {}
+impl<T> terminal_input::HostTerminalInput for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn drop(&mut self, r: Resource<TerminalInput>) -> anyhow::Result<()> {
         self.table().delete(r)?;
         Ok(())
     }
 }
-impl terminal_output::Host for dyn WasiView + '_ {}
-impl terminal_output::HostTerminalOutput for dyn WasiView + '_ {
+impl<T> terminal_output::Host for WasiImpl<T> where T: WasiView {}
+impl<T> terminal_output::HostTerminalOutput for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn drop(&mut self, r: Resource<TerminalOutput>) -> anyhow::Result<()> {
         self.table().delete(r)?;
         Ok(())
     }
 }
-impl terminal_stdin::Host for dyn WasiView + '_ {
+impl<T> terminal_stdin::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
         if self.ctx().stdin.isatty() {
             let fd = self.table().push(TerminalInput)?;
@@ -415,7 +435,10 @@ impl terminal_stdin::Host for dyn WasiView + '_ {
         }
     }
 }
-impl terminal_stdout::Host for dyn WasiView + '_ {
+impl<T> terminal_stdout::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stdout.isatty() {
             let fd = self.table().push(TerminalOutput)?;
@@ -425,7 +448,10 @@ impl terminal_stdout::Host for dyn WasiView + '_ {
         }
     }
 }
-impl terminal_stderr::Host for dyn WasiView + '_ {
+impl<T> terminal_stderr::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stderr.isatty() {
             let fd = self.table().push(TerminalOutput)?;

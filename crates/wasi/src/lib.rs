@@ -205,7 +205,7 @@ mod udp;
 mod write_stream;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
-pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
+pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiImpl, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FileInputStream, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
@@ -285,7 +285,7 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 /// ```
 pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
     let l = linker;
-    let closure = type_annotate::<T, _>(|t| t);
+    let closure = type_annotate::<T, _>(|t| WasiImpl(t));
 
     crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
@@ -375,7 +375,7 @@ pub fn add_to_linker_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
 ) -> anyhow::Result<()> {
     let l = linker;
-    let closure = type_annotate::<T, _>(|t| t);
+    let closure = type_annotate::<T, _>(|t| WasiImpl(t));
 
     crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
@@ -411,7 +411,7 @@ pub fn add_to_linker_sync<T: WasiView>(
 // obsolete.
 fn type_annotate<T: WasiView, F>(val: F) -> F
 where
-    F: Fn(&mut T) -> &mut dyn WasiView,
+    F: Fn(&mut T) -> WasiImpl<&mut T>,
 {
     val
 }

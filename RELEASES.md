@@ -86,8 +86,9 @@ Unreleased.
   [#8610](https://github.com/bytecodealliance/wasmtime/pull/8610)
 
 * Implementations of `Host` traits in the `wasmtime-wasi` crate are now for
-  `dyn WasiView` instead of blanket impls for `T: WasiView`.
+  `WasiImpl<T>` instead of blanket impls for `T`.
   [#8609](https://github.com/bytecodealliance/wasmtime/pull/8609)
+  [#8766](https://github.com/bytecodealliance/wasmtime/pull/8766)
 
 * The concepts of "virtual sp offset" and "nominal sp" have been removed from all
   Cranelift backends.

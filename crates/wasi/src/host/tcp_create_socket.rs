@@ -1,9 +1,12 @@
 use crate::bindings::{sockets::network::IpAddressFamily, sockets::tcp_create_socket};
 use crate::tcp::TcpSocket;
-use crate::{SocketResult, WasiView};
+use crate::{SocketResult, WasiImpl, WasiView};
 use wasmtime::component::Resource;
 
-impl tcp_create_socket::Host for dyn WasiView + '_ {
+impl<T> tcp_create_socket::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn create_tcp_socket(
         &mut self,
         address_family: IpAddressFamily,

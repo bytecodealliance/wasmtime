@@ -2,10 +2,13 @@ use crate::bindings::filesystem::types as async_filesystem;
 use crate::bindings::sync::filesystem::types as sync_filesystem;
 use crate::bindings::sync::io::streams;
 use crate::runtime::in_tokio;
-use crate::{FsError, FsResult, WasiView};
+use crate::{FsError, FsResult, WasiImpl, WasiView};
 use wasmtime::component::Resource;
 
-impl sync_filesystem::Host for dyn WasiView + '_ {
+impl<T> sync_filesystem::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<sync_filesystem::ErrorCode> {
         Ok(async_filesystem::Host::convert_error_code(self, err)?.into())
     }
@@ -18,7 +21,10 @@ impl sync_filesystem::Host for dyn WasiView + '_ {
     }
 }
 
-impl sync_filesystem::HostDescriptor for dyn WasiView + '_ {
+impl<T> sync_filesystem::HostDescriptor for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn advise(
         &mut self,
         fd: Resource<sync_filesystem::Descriptor>,
@@ -302,7 +308,10 @@ impl sync_filesystem::HostDescriptor for dyn WasiView + '_ {
     }
 }
 
-impl sync_filesystem::HostDirectoryEntryStream for dyn WasiView + '_ {
+impl<T> sync_filesystem::HostDirectoryEntryStream for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn read_directory_entry(
         &mut self,
         stream: Resource<sync_filesystem::DirectoryEntryStream>,
