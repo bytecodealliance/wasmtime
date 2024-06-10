@@ -208,7 +208,7 @@ pub trait PtrSize {
     /// Return the size of `VMMemoryDefinition`.
     #[inline]
     fn size_of_vmmemory_definition(&self) -> u8 {
-        3 * self.size()
+        2 * self.size()
     }
 
     /// Return the size of `*mut VMMemoryDefinition`.
