@@ -2479,9 +2479,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
         };
 
-        let page_size: u64 = self.module.memory_plans[index].memory.page_size();
-        let page_size = i64::try_from(page_size).unwrap();
-        let current_length_in_pages = pos.ins().udiv_imm(current_length_in_bytes, page_size);
+        let page_size_log2 = i64::from(self.module.memory_plans[index].memory.page_size_log2);
+        let current_length_in_pages = pos.ins().ushr_imm(current_length_in_bytes, page_size_log2);
 
         Ok(self.cast_pointer_to_memory_index(pos, current_length_in_pages, index))
     }
