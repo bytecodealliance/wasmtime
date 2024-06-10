@@ -13,9 +13,6 @@ mod utils;
 #[cfg(feature = "souper-harvest")]
 mod souper_harvest;
 
-#[cfg(feature = "wasm")]
-mod wasm;
-
 /// Cranelift code generator utility.
 #[derive(Parser)]
 enum Commands {
@@ -27,11 +24,6 @@ enum Commands {
     Compile(compile::Options),
     Pass(PassOptions),
     Bugpoint(bugpoint::Options),
-
-    #[cfg(feature = "wasm")]
-    Wasm(wasm::Options),
-    #[cfg(not(feature = "wasm"))]
-    Wasm(CompiledWithoutSupportOptions),
 
     #[cfg(feature = "souper-harvest")]
     SouperHarvest(souper_harvest::Options),
@@ -91,11 +83,6 @@ fn main() -> anyhow::Result<()> {
         Commands::PrintCfg(p) => print_cfg::run(&p)?,
         Commands::Compile(c) => compile::run(&c)?,
         Commands::Bugpoint(b) => bugpoint::run(&b)?,
-
-        #[cfg(feature = "wasm")]
-        Commands::Wasm(w) => wasm::run(&w)?,
-        #[cfg(not(feature = "wasm"))]
-        Commands::Wasm(_) => anyhow::bail!("Error: clif-util was compiled without wasm support."),
 
         #[cfg(feature = "souper-harvest")]
         Commands::SouperHarvest(s) => souper_harvest::run(&s)?,

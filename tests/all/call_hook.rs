@@ -121,9 +121,9 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
     store.call_hook(State::call_hook);
-    let f = Func::wrap4_async(
+    let f = Func::wrap_async(
         &mut store,
-        |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+        |caller: Caller<State>, (a, b, c, d): (i32, i64, f32, f64)| {
             Box::new(async move {
                 // Calling this func will switch context into wasm, then back to host:
                 assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
@@ -245,9 +245,9 @@ async fn call_linked_func_async() -> Result<(), Error> {
     let mut store = Store::new(&engine, State::default());
     store.call_hook(State::call_hook);
 
-    let f = Func::wrap4_async(
+    let f = Func::wrap_async(
         &mut store,
-        |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+        |caller: Caller<State>, (a, b, c, d): (i32, i64, f32, f64)| {
             Box::new(async move {
                 // Calling this func will switch context into wasm, then back to host:
                 assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
@@ -446,7 +446,7 @@ fn trapping() -> Result<(), Error> {
             }
 
             // recur so that we can trigger a next call.
-            // propogate its trap, if it traps!
+            // propagate its trap, if it traps!
             if recur > 0 {
                 let _ = caller
                     .get_export("export")
@@ -523,7 +523,7 @@ fn trapping() -> Result<(), Error> {
     assert_eq!(s.calls_into_wasm, 1);
     assert_eq!(s.returns_from_wasm, 1);
 
-    // trap in next call to wasm. No calls after the bit is set, so this trap shouldnt happen:
+    // trap in next call to wasm. No calls after the bit is set, so this trap shouldn't happen:
     let (s, e) = run(TRAP_NEXT_CALL_WASM, false);
     assert!(e.is_none());
     assert_eq!(s.calls_into_host, 1);
@@ -728,7 +728,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     let mut linker = Linker::new(&engine);
 
     // Simulate a host function that has lots of yields with an infinite loop.
-    linker.func_wrap0_async("host", "f", |mut cx| {
+    linker.func_wrap_async("host", "f", |mut cx, _: ()| {
         Box::new(async move {
             let state = cx.data_mut();
             assert_eq!(*state, 0);

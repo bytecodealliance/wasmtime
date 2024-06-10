@@ -38,8 +38,67 @@
 //! It's recommended to read over the [documentation for the Component
 //! Model][Component Model] to get an overview about how to build components
 //! from various languages.
+//!
+//! ## Example Usage
+//!
+//! Imagine you have the following WIT package definition in a file called world.wit
+//! along with a component (my_component.wasm) that targets `my-world`:
+//!
+//! ```text,ignore
+//! package component:my-package;
+//!
+//! world my-world {
+//!     import name: func() -> string;
+//!     export greet: func() -> string;
+//! }
+//! ```
+//!
+//! You can instantiate and call the component like so:
+//!
+//! ```
+//! fn main() -> wasmtime::Result<()> {
+//!     #   if true { return Ok(()) }
+//!     // Instantiate the engine and store
+//!     let engine = wasmtime::Engine::default();
+//!     let mut store = wasmtime::Store::new(&engine, ());
+//!
+//!     // Load the component from disk
+//!     let bytes = std::fs::read("my_component.wasm")?;
+//!     let component = wasmtime::component::Component::new(&engine, bytes)?;
+//!
+//!     // Configure the linker
+//!     let mut linker = wasmtime::component::Linker::new(&engine);
+//!     // The component expects one import `name` that
+//!     // takes no params and returns a string
+//!     linker
+//!         .root()
+//!         .func_wrap("name", |_store, _params: ()| {
+//!             Ok((String::from("Alice"),))
+//!         })?;
+//!
+//!     // Instantiate the component
+//!     let instance = linker.instantiate(&mut store, &component)?;
+//!
+//!     // Call the `greet` function
+//!     let func = instance.get_func(&mut store, "greet").expect("greet export not found");
+//!     let mut result = [wasmtime::component::Val::String("".into())];
+//!     func.call(&mut store, &[], &mut result)?;
+//!
+//!     // This should print out `Greeting: [String("Hello, Alice!")]`
+//!     println!("Greeting: {:?}", result);
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Manually configuring the linker and calling untyped component exports is
+//! a bit tedious and error prone. The [`bindgen!`] macro can be used to
+//! generate bindings eliminating much of this boilerplate.
+//!
+//! See the docs for [`bindgen!`] for more information on how to use it.
 
-#![cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
+// rustdoc appears to lie about a warning above, so squelch it for now.
+#![allow(rustdoc::redundant_explicit_links)]
 
 mod component;
 mod func;
@@ -72,12 +131,15 @@ pub(crate) use self::resources::HostResourceData;
 pub mod __internal {
     pub use super::func::{
         bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
-        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext,
-        MaybeUninitExt, Options,
+        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext, Options,
     };
     pub use super::matching::InstanceType;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
+    pub use crate::MaybeUninitExt;
+    pub use alloc::boxed::Box;
+    pub use alloc::string::String;
+    pub use alloc::vec::Vec;
     pub use anyhow;
     #[cfg(feature = "async")]
     pub use async_trait::async_trait;
@@ -98,200 +160,25 @@ pub(crate) use self::store::ComponentStoreData;
 /// raw [`Instance`] type which must be manually-type-checked and manually have
 /// its imports provided via the [`Linker`] type.
 ///
-/// The most basic usage of this macro is:
+/// # Examples
 ///
-/// ```rust,ignore
-/// wasmtime::component::bindgen!();
-/// ```
+/// Examples for this macro can be found in the [`bindgen_examples`] module
+/// documentation. That module has a submodule-per-example which includes the
+/// source code, with WIT, used to generate the structures along with the
+/// generated code itself in documentation.
 ///
-/// This will parse your projects [WIT package] in a `wit` directory adjacent to
-/// your crate's `Cargo.toml`. All of the `*.wit` files in that directory are
-/// parsed and then the single `world` found will be used for bindings.
+/// # Debugging and Exploring
 ///
-/// For example if your project contained:
+/// If you need to debug the output of `bindgen!` you can try using the
+/// `WASMTIME_DEBUG_BINDGEN=1` environment variable. This will write the
+/// generated code to a file on disk so rustc can produce better error messages
+/// against the actual generated source instead of the macro invocation itself.
+/// This additionally can enable opening up the generated code in an editor and
+/// exploring it (through an error message).
 ///
-/// ```text,ignore
-/// // wit/my-component.wit
-///
-/// package my:project;
-///
-/// world hello-world {
-///     import name: func() -> string;
-///     export greet: func();
-/// }
-/// ```
-///
-/// Then you can interact with the generated bindings like so:
-///
-/// ```rust
-/// use wasmtime::component::*;
-/// use wasmtime::{Config, Engine, Store};
-///
-/// # const _: () = { macro_rules! bindgen { () => () }
-/// bindgen!();
-/// # };
-/// # bindgen!({
-/// #   inline: r#"
-/// #       package my:project;
-/// #       world hello-world {
-/// #           import name: func() -> string;
-/// #           export greet: func();
-/// #       }
-/// #   "#,
-/// # });
-///
-/// struct MyState {
-///     name: String,
-/// }
-///
-/// // Imports into the world, like the `name` import for this world, are
-/// // satisfied through traits.
-/// impl HelloWorldImports for MyState {
-///     // Note the `Result` return value here where `Ok` is returned back to
-///     // the component and `Err` will raise a trap.
-///     fn name(&mut self) -> wasmtime::Result<String> {
-///         Ok(self.name.clone())
-///     }
-/// }
-///
-/// fn main() -> wasmtime::Result<()> {
-/// #   if true { return Ok(()) }
-///     // Configure an `Engine` and compile the `Component` that is being run for
-///     // the application.
-///     let mut config = Config::new();
-///     config.wasm_component_model(true);
-///     let engine = Engine::new(&config)?;
-///     let component = Component::from_file(&engine, "./your-component.wasm")?;
-///
-///     // Instantiation of bindings always happens through a `Linker`.
-///     // Configuration of the linker is done through a generated `add_to_linker`
-///     // method on the bindings structure.
-///     //
-///     // Note that the closure provided here is a projection from `T` in
-///     // `Store<T>` to `&mut U` where `U` implements the `HelloWorldImports`
-///     // trait. In this case the `T`, `MyState`, is stored directly in the
-///     // structure so no projection is necessary here.
-///     let mut linker = Linker::new(&engine);
-///     HelloWorld::add_to_linker(&mut linker, |state: &mut MyState| state)?;
-///
-///     // As with the core wasm API of Wasmtime instantiation occurs within a
-///     // `Store`. The bindings structure contains an `instantiate` method which
-///     // takes the store, component, and linker. This returns the `bindings`
-///     // structure which is an instance of `HelloWorld` and supports typed access
-///     // to the exports of the component.
-///     let mut store = Store::new(
-///         &engine,
-///         MyState {
-///             name: "me".to_string(),
-///         },
-///     );
-///     let (bindings, _) = HelloWorld::instantiate(&mut store, &component, &linker)?;
-///
-///     // Here our `greet` function doesn't take any parameters for the component,
-///     // but in the Wasmtime embedding API the first argument is always a `Store`.
-///     bindings.call_greet(&mut store)?;
-///     Ok(())
-/// }
-/// ```
-///
-/// The function signatures within generated traits and on generated exports
-/// match the component-model signatures as specified in the WIT `world` item.
-/// Note that WIT also has support for importing and exports interfaces within
-/// worlds, which can be bound here as well:
-///
-/// For example this WIT input
-///
-/// ```text,ignore
-/// // wit/my-component.wit
-///
-/// package my:project;
-///
-/// interface host {
-///     gen-random-integer: func() -> u32;
-///     sha256: func(bytes: list<u8>) -> string;
-/// }
-///
-/// world hello-world {
-///     import host;
-///
-///     export demo: interface {
-///         run: func();
-///     }
-/// }
-/// ```
-///
-/// Then you can interact with the generated bindings like so:
-///
-/// ```rust
-/// use wasmtime::component::*;
-/// use wasmtime::{Config, Engine, Store};
-/// use my::project::host::Host;
-///
-/// # const _: () = { macro_rules! bindgen { () => () }
-/// bindgen!();
-/// # };
-/// # bindgen!({
-/// #   inline: r#"
-/// # package my:project;
-/// #
-/// # interface host {
-/// #     gen-random-integer: func() -> u32;
-/// #     sha256: func(bytes: list<u8>) -> string;
-/// # }
-/// #
-/// # world hello-world {
-/// #     import host;
-/// #
-/// #     export demo: interface {
-/// #         run: func();
-/// #     }
-/// # }
-/// #   "#,
-/// # });
-///
-/// struct MyState {
-///     // ...
-/// }
-///
-/// // Note that the trait here is per-interface and within a submodule now.
-/// impl Host for MyState {
-///     fn gen_random_integer(&mut self) -> wasmtime::Result<u32> {
-/// #       panic!();
-/// #       #[cfg(FALSE)]
-///         Ok(rand::thread_rng().gen())
-///     }
-///
-///     fn sha256(&mut self, bytes: Vec<u8>) -> wasmtime::Result<String> {
-///         // ...
-/// #       panic!()
-///     }
-/// }
-///
-/// fn main() -> wasmtime::Result<()> {
-/// #   if true { return Ok(()) }
-///     let mut config = Config::new();
-///     config.wasm_component_model(true);
-///     let engine = Engine::new(&config)?;
-///     let component = Component::from_file(&engine, "./your-component.wasm")?;
-///
-///     let mut linker = Linker::new(&engine);
-///     HelloWorld::add_to_linker(&mut linker, |state: &mut MyState| state)?;
-///
-///     let mut store = Store::new(
-///         &engine,
-///         MyState { /* ... */ },
-///     );
-///     let (bindings, _) = HelloWorld::instantiate(&mut store, &component, &linker)?;
-///
-///     // Note that the `demo` method returns a `&Demo` through which we can
-///     // run the methods on that interface.
-///     bindings.demo().call_run(&mut store)?;
-///     Ok(())
-/// }
-/// ```
-///
-/// The generated bindings can additionally be explored more fully with `cargo
-/// doc` to see what types and traits and such are generated.
+/// The generated bindings can additionally be explored with `cargo doc` to see
+/// what's generated. It's also recommended to browse the [`bindgen_examples`]
+/// for example generated structures and example generated code.
 ///
 /// # Syntax
 ///
@@ -302,7 +189,8 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 /// Usage of this macro looks like:
 ///
-/// ```rust,ignore
+/// ```rust
+/// # macro_rules! bindgen { ($($t:tt)*) => () }
 /// // Parse the `wit/` folder adjacent to this crate's `Cargo.toml` and look
 /// // for a single `world` in it. There must be exactly one for this to
 /// // succeed.
@@ -319,11 +207,22 @@ pub(crate) use self::store::ComponentStoreData;
 /// // Parse the file `foo.wit` as a single-file WIT package with no
 /// // dependencies.
 /// bindgen!("foo" in "foo.wit");
+///
+/// // Specify a suite of options to the bindings generation, documented below
+/// bindgen!({
+///     world: "foo",
+///     path: "other/path/to/wit",
+///     // ...
+/// });
 /// ```
 ///
-/// A more configured version of invoking this macro looks like:
+/// # Options Reference
 ///
-/// ```rust,ignore
+/// This is an example listing of all options that this macro supports along
+/// with documentation for each option and example syntax for each option.
+///
+/// ```rust
+/// # macro_rules! bindgen { ($($t:tt)*) => () }
 /// bindgen!({
 ///     world: "foo", // not needed if `path` has one `world`
 ///
@@ -372,6 +271,21 @@ pub(crate) use self::store::ComponentStoreData;
 ///         only_imports: ["foo", "bar"],
 ///     },
 ///
+///     // This option is used to indicate whether imports can trap.
+///     //
+///     // Imports that may trap have their return types wrapped in
+///     // `wasmtime::Result<T>` where the `Err` variant indicates that a
+///     // trap will be raised in the guest.
+///     //
+///     // By default imports cannot trap and the return value is the return
+///     // value from the WIT bindings itself. This value can be set to `true`
+///     // to indicate that any import can trap. This value can also be set to
+///     // an array-of-strings to indicate that only a set list of imports
+///     // can trap.
+///     trappable_imports: false,             // no imports can trap (default)
+///     // trappable_imports: true,           // all imports can trap
+///     // trappable_imports: ["foo", "bar"], // only these can trap
+///
 ///     // This can be used to translate WIT return values of the form
 ///     // `result<T, error-type>` into `Result<T, RustErrorType>` in Rust.
 ///     // Users must define `RustErrorType` and the `Host` trait for the
@@ -380,7 +294,8 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // into `wasmtime::Result<ErrorType>`. This conversion can either
 ///     // return the raw WIT error (`ErrorType` here) or a trap.
 ///     //
-///     // By default this option is not specified.
+///     // By default this option is not specified. This option only takes
+///     // effect when `trappable_imports` is set for some imports.
 ///     trappable_error_type: {
 ///         "wasi:io/streams/stream-error" => RustErrorType,
 ///     },
@@ -435,6 +350,49 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // useful when working with the typed methods of `ResourceTable`.
 ///         "wasi:filesystem/types/descriptor": MyDescriptorType,
 ///     },
+///
+///     // Additional derive attributes to include on generated types (structs or enums).
+///     //
+///     // These are deduplicated and attached in a deterministic order.
+///     additional_derives: [
+///         Hash,
+///         serde::Deserialize,
+///         serde::Serialize,
+///     ],
+///
+///     // A list of WIT "features" to enable when parsing the WIT document that
+///     // this bindgen macro matches. WIT features are all disabled by default
+///     // and must be opted-in-to if source level features are used.
+///     //
+///     // This option defaults to an empty array.
+///     features: ["foo", "bar", "baz"],
+///
+///     // An niche configuration option to require that the `T` in `Store<T>`
+///     // is always `Send` in the generated bindings. Typically not needed
+///     // but if synchronous bindings depend on asynchronous bindings using
+///     // the `with` key then this may be required.
+///     require_store_data_send: false,
+///
+///     // If the `wasmtime` crate is depended on at a nonstandard location
+///     // or is renamed then this is the path to the root of the `wasmtime`
+///     // crate. Much of the generated code needs to refer to `wasmtime` so
+///     // this should be used if the `wasmtime` name is not wasmtime itself.
+///     //
+///     // By default this is `wasmtime`.
+///     wasmtime_crate: path::to::wasmtime,
+///
+///     // This is an in-source alternative to using `WASMTIME_DEBUG_BINDGEN`.
+///     //
+///     // Note that if this option is specified then the compiler will always
+///     // recompile your bindings. Cargo records the start time of when rustc
+///     // is spawned by this will write a file during compilation. To Cargo
+///     // that looks like a file was modified after `rustc` was spawned,
+///     // so Cargo will always think your project is "dirty" and thus always
+///     // recompile it. Recompiling will then overwrite the file again,
+///     // starting the cycle anew. This is only recommended for debugging.
+///     //
+///     // This option defaults to false.
+///     include_generated_code_from_file: false,
 /// });
 /// ```
 pub use wasmtime_component_macro::bindgen;
@@ -694,3 +652,6 @@ pub use wasmtime_component_macro::Lower;
 /// [`BitXorAssign`]: std::ops::BitXorAssign
 /// [`Not`]: std::ops::Not
 pub use wasmtime_component_macro::flags;
+
+#[cfg(any(docsrs, test, doctest))]
+pub mod bindgen_examples;

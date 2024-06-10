@@ -24,7 +24,7 @@ impl TryFrom<SystemTime> for Datetime {
     }
 }
 
-impl<T: WasiView> wall_clock::Host for T {
+impl wall_clock::Host for dyn WasiView + '_ {
     fn now(&mut self) -> anyhow::Result<Datetime> {
         let now = self.ctx().wall_clock.now();
         Ok(Datetime {
@@ -61,7 +61,7 @@ fn subscribe_to_duration(
     subscribe(table, sleep)
 }
 
-impl<T: WasiView> monotonic_clock::Host for T {
+impl monotonic_clock::Host for dyn WasiView + '_ {
     fn now(&mut self) -> anyhow::Result<Instant> {
         Ok(self.ctx().monotonic_clock.now())
     }

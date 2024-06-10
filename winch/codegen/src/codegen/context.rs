@@ -253,16 +253,18 @@ impl<'a> CodeGenContext<'a> {
         F: FnMut(&mut M, Reg, Reg, Reg, OperandSize),
         M: MacroAssembler,
     {
-        let src1 = self.pop_to_reg(masm, None);
         let src2 = self.pop_to_reg(masm, None);
+        let src1 = self.pop_to_reg(masm, None);
         let dst = self.any_gpr(masm);
         emit(masm, dst, src1.reg, src2.reg, size);
         self.free_reg(src1);
         self.free_reg(src2);
 
         let dst = match size {
-            OperandSize::S32 => TypedReg::i32(dst),
-            OperandSize::S64 => TypedReg::i64(dst),
+            // Float comparison operators are defined as
+            // [f64 f64] -> i32
+            // https://webassembly.github.io/spec/core/appendix/index-instructions.html
+            OperandSize::S32 | OperandSize::S64 => TypedReg::i32(dst),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
         self.stack.push(dst.into());

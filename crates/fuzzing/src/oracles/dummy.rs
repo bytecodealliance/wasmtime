@@ -1,10 +1,10 @@
 //! Dummy implementations of things that a Wasm module can import.
 
-use anyhow::bail;
+use anyhow::ensure;
 use wasmtime::*;
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_linker<'module, T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {
+pub fn dummy_linker<T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {
     let mut linker = Linker::new(store.engine());
     linker.allow_shadowing(true);
     for import in module.imports() {
@@ -45,11 +45,13 @@ pub fn dummy_value(val_ty: ValType) -> Result<Val> {
         ValType::F32 => Val::F32(0),
         ValType::F64 => Val::F64(0),
         ValType::V128 => Val::V128(0.into()),
-        ValType::Ref(r) => match r.heap_type() {
-            _ if !r.is_nullable() => bail!("cannot construct a dummy value of type `{r}`"),
-            HeapType::Extern => Val::null_extern_ref(),
-            HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_) => Val::null_func_ref(),
-        },
+        ValType::Ref(r) => {
+            ensure!(
+                r.is_nullable(),
+                "cannot construct a dummy value of type `{r}`"
+            );
+            Val::null_ref(r.heap_type())
+        }
     })
 }
 

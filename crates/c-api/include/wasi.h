@@ -9,6 +9,9 @@
 
 #include "wasm.h"
 #include <stdint.h>
+#include <wasmtime/conf.h>
+
+#ifdef WASMTIME_FEATURE_WASI
 
 #ifndef WASI_API_EXTERN
 #ifdef _WIN32
@@ -55,8 +58,11 @@ WASI_API_EXTERN own wasi_config_t *wasi_config_new();
  *
  * The arguments are copied into the `config` object as part of this function
  * call, so the `argv` pointer only needs to stay alive for this function call.
+ *
+ * This function returns `true` if all arguments were registered successfully,
+ * or `false` if an argument was not valid UTF-8.
  */
-WASI_API_EXTERN void wasi_config_set_argv(wasi_config_t *config, int argc,
+WASI_API_EXTERN bool wasi_config_set_argv(wasi_config_t *config, size_t argc,
                                           const char *argv[]);
 
 /**
@@ -76,8 +82,12 @@ WASI_API_EXTERN void wasi_config_inherit_argv(wasi_config_t *config);
  * The env vars are copied into the `config` object as part of this function
  * call, so the `names` and `values` pointers only need to stay alive for this
  * function call.
+ *
+ * This function returns `true` if all environment variables were successfully
+ * registered. This returns `false` if environment variables are not valid
+ * UTF-8.
  */
-WASI_API_EXTERN void wasi_config_set_env(wasi_config_t *config, int envc,
+WASI_API_EXTERN bool wasi_config_set_env(wasi_config_t *config, size_t envc,
                                          const char *names[],
                                          const char *values[]);
 
@@ -168,25 +178,12 @@ WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t *config,
                                              const char *path,
                                              const char *guest_path);
 
-/**
- * \brief Configures a "preopened" listen socket to be available to WASI APIs.
- *
- * By default WASI programs do not have access to open up network sockets on
- * the host. This API can be used to grant WASI programs access to a network
- * socket file descriptor on the host.
- *
- * The fd_num argument is the number of the file descriptor by which it will be
- * known in WASM and the host_port is the IP address and port (e.g.
- * "127.0.0.1:8080") requested to listen on.
- */
-WASI_API_EXTERN bool wasi_config_preopen_socket(wasi_config_t *config,
-                                                uint32_t fd_num,
-                                                const char *host_port);
-
 #undef own
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+#endif // WASMTIME_FEATURE_WASI
 
 #endif // #ifdef WASI_H

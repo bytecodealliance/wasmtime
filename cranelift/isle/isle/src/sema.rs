@@ -9,7 +9,7 @@
 //! unification or anything like that.
 //!
 //! The term environment is constructed from both the AST and type
-//! envionment. It is sort of a typed and reorganized AST that more directly
+//! environment. It is sort of a typed and reorganized AST that more directly
 //! reflects ISLE semantics than the input ISLE source code (where as the AST is
 //! the opposite).
 
@@ -17,7 +17,7 @@ use crate::ast;
 use crate::error::*;
 use crate::lexer::Pos;
 use crate::log;
-use crate::{StableMap, StableSet};
+use crate::stablemapset::{StableMap, StableSet};
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

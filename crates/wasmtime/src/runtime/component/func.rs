@@ -2,75 +2,19 @@ use crate::component::instance::{Instance, InstanceData};
 use crate::component::storage::storage_as_slice;
 use crate::component::types::Type;
 use crate::component::values::Val;
+use crate::prelude::*;
+use crate::runtime::vm::component::ResourceTables;
+use crate::runtime::vm::{Export, ExportFunction};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
+use alloc::sync::Arc;
 use anyhow::{bail, Context, Result};
-use std::mem::{self, MaybeUninit};
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::mem::{self, MaybeUninit};
+use core::ptr::NonNull;
 use wasmtime_environ::component::{
     CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
     TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
-use wasmtime_runtime::component::ResourceTables;
-use wasmtime_runtime::{Export, ExportFunction};
-
-/// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
-/// is a field projection within `T`.
-///
-/// This is intended to be invoked as:
-///
-/// ```ignore
-/// struct MyType {
-///     field: u32,
-/// }
-///
-/// let initial: &mut MaybeUninit<MyType> = ...;
-/// let field: &mut MaybeUninit<u32> = map_maybe_uninit!(initial.field);
-/// ```
-///
-/// Note that array accesses are also supported:
-///
-/// ```ignore
-///
-/// let initial: &mut MaybeUninit<[u32; 2]> = ...;
-/// let element: &mut MaybeUninit<u32> = map_maybe_uninit!(initial[1]);
-/// ```
-#[doc(hidden)]
-#[macro_export]
-macro_rules! map_maybe_uninit {
-    ($maybe_uninit:ident $($field:tt)*) => ({
-        #[allow(unused_unsafe)]
-        {
-            unsafe {
-                use $crate::component::__internal::MaybeUninitExt;
-
-                let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
-                // Note the usage of `addr_of_mut!` here which is an attempt to "stay
-                // safe" here where we never accidentally create `&mut T` where `T` is
-                // actually uninitialized, hopefully appeasing the Rust unsafe
-                // guidelines gods.
-                m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
-            }
-        }
-    })
-}
-
-#[doc(hidden)]
-pub trait MaybeUninitExt<T> {
-    /// Maps `MaybeUninit<T>` to `MaybeUninit<U>` using the closure provided.
-    ///
-    /// Note that this is `unsafe` as there is no guarantee that `U` comes from
-    /// `T`.
-    unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U) -> &mut MaybeUninit<U>;
-}
-
-impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
-    unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U) -> &mut MaybeUninit<U> {
-        let new_ptr = f(self.as_mut_ptr());
-        std::mem::transmute::<*mut U, &mut MaybeUninit<U>>(new_ptr)
-    }
-}
 
 mod host;
 mod options;
@@ -321,7 +265,7 @@ impl Func {
     ///
     /// # Panics
     ///
-    /// Panics if this is called on a function in an asyncronous store. This
+    /// Panics if this is called on a function in an asynchronous store. This
     /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
     pub fn call(
@@ -349,7 +293,6 @@ impl Func {
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -470,7 +413,7 @@ impl Func {
 
         let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
 
-        // Double-check the size/alignemnt of `space`, just in case.
+        // Double-check the size/alignment of `space`, just in case.
         //
         // Note that this alone is not enough to guarantee the validity of the
         // `unsafe` block below, but it's definitely required. In any case LLVM
@@ -609,7 +552,6 @@ impl Func {
     /// Panics if this is called on a function in a synchronous store. This
     /// only works with functions defined within an asynchronous store.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn post_return_async<T: Send>(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -722,11 +664,11 @@ impl Func {
         cx: &mut LiftContext<'_>,
         results_ty: &TypeTuple,
         results: &mut [Val],
-        src: &mut std::slice::Iter<'_, ValRaw>,
+        src: &mut core::slice::Iter<'_, ValRaw>,
     ) -> Result<()> {
         // FIXME: needs to read an i64 for memory64
-        let ptr = usize::try_from(src.next().unwrap().get_u32())?;
-        if ptr % usize::try_from(results_ty.abi.align32)? != 0 {
+        let ptr = usize::try_from(src.next().unwrap().get_u32()).err2anyhow()?;
+        if ptr % usize::try_from(results_ty.abi.align32).err2anyhow()? != 0 {
             bail!("return pointer not aligned");
         }
 

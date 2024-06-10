@@ -58,15 +58,16 @@
 
 use crate::{
     abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
-    codegen::{BuiltinFunction, BuiltinType, Callee, CalleeInfo, CodeGenContext},
+    codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext},
     masm::{
         CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
         VMContextLoc,
     },
     reg::Reg,
     stack::Val,
+    FuncEnv,
 };
-use wasmtime_environ::{PtrSize, VMOffsets};
+use wasmtime_environ::{FuncIndex, PtrSize, VMOffsets};
 
 /// All the information needed to emit a function call.
 #[derive(Copy, Clone)]
@@ -80,14 +81,15 @@ impl FnCall {
     /// 4. Creates the stack space needed for the return area.
     /// 5. Emits the call.
     /// 6. Cleans up the stack space.
-    pub fn emit<'a, M: MacroAssembler, P: PtrSize>(
+    pub fn emit<M: MacroAssembler>(
+        env: &mut FuncEnv<M::Ptr>,
         masm: &mut M,
         context: &mut CodeGenContext,
-        callee: Callee<'a>,
+        callee: Callee,
     ) {
-        let sig = callee.sig();
-        let (kind, callee_context) = Self::lower(&context.vmoffsets, &callee, sig, context, masm);
+        let (kind, callee_context) = Self::lower(env, context.vmoffsets, &callee, context, masm);
 
+        let sig = env.callee_sig::<M::ABI>(&callee);
         context.spill(masm);
         let ret_area = Self::make_ret_area(&sig, masm);
         let arg_stack_space = sig.params_stack_size();
@@ -122,51 +124,49 @@ impl FnCall {
     /// Lowers the high-level [`Callee`] to a [`CalleeKind`] and
     /// [ContextArgs] pair which contains all the metadata needed for
     /// emission.
-    fn lower<P: PtrSize, M: MacroAssembler>(
-        vmoffsets: &VMOffsets<P>,
+    fn lower<M: MacroAssembler>(
+        env: &mut FuncEnv<M::Ptr>,
+        vmoffsets: &VMOffsets<u8>,
         callee: &Callee,
-        sig: &ABISig,
         context: &mut CodeGenContext,
         masm: &mut M,
     ) -> (CalleeKind, ContextArgs) {
         let ptr = vmoffsets.ptr.size();
         match callee {
-            Callee::Builtin(b) => Self::lower_builtin(b, context, masm),
-            Callee::FuncRef(_) => Self::lower_funcref(sig, ptr, context, masm),
-            Callee::Local(i) => Self::lower_local::<M>(i),
-            Callee::Import(i) => Self::lower_import(i, sig, context, masm, vmoffsets),
+            Callee::Builtin(b) => Self::lower_builtin(env, b),
+            Callee::FuncRef(_) => {
+                Self::lower_funcref(env.callee_sig::<M::ABI>(callee), ptr, context, masm)
+            }
+            Callee::Local(i) => Self::lower_local(env, *i),
+            Callee::Import(i) => {
+                let sig = env.callee_sig::<M::ABI>(callee);
+                Self::lower_import(*i, sig, context, masm, vmoffsets)
+            }
         }
     }
 
     /// Lowers a builtin function by loading its address to the next available
     /// register.
-    fn lower_builtin<M: MacroAssembler>(
+    fn lower_builtin<P: PtrSize>(
+        env: &mut FuncEnv<P>,
         builtin: &BuiltinFunction,
-        context: &mut CodeGenContext,
-        masm: &mut M,
     ) -> (CalleeKind, ContextArgs) {
         match builtin.ty() {
-            BuiltinType::Dynamic { index, base } => {
-                let sig = builtin.sig();
-                let callee = context.without::<Reg, _, _>(&sig.regs, masm, |cx, masm| {
-                    let scratch = <M::ABI as ABI>::scratch_reg();
-                    let builtins_base = masm.address_at_vmctx(base);
-                    masm.load_ptr(builtins_base, scratch);
-                    let addr = masm.address_at_reg(scratch, index);
-                    let callee = cx.any_gpr(masm);
-                    masm.load_ptr(addr, callee);
-                    callee
-                });
-                (CalleeKind::indirect(callee), ContextArgs::pinned_vmctx())
-            }
-            BuiltinType::Known(c) => (CalleeKind::known(c), ContextArgs::none()),
+            BuiltinType::Builtin(idx) => (
+                CalleeKind::direct(env.name_builtin(idx)),
+                ContextArgs::pinned_vmctx(),
+            ),
+            BuiltinType::LibCall(c) => (CalleeKind::libcall(c), ContextArgs::none()),
         }
     }
 
     /// Lower  a local function to a [`CalleeKind`] and [ContextArgs] pair.
-    fn lower_local<M: MacroAssembler>(info: &CalleeInfo) -> (CalleeKind, ContextArgs) {
+    fn lower_local<P: PtrSize>(
+        env: &mut FuncEnv<P>,
+        index: FuncIndex,
+    ) -> (CalleeKind, ContextArgs) {
         (
-            CalleeKind::direct(info.index.as_u32()),
+            CalleeKind::direct(env.name_wasm(index)),
             ContextArgs::pinned_callee_and_caller_vmctx(),
         )
     }
@@ -174,7 +174,7 @@ impl FnCall {
     /// Lowers a function import by loading its address to the next available
     /// register.
     fn lower_import<M: MacroAssembler, P: PtrSize>(
-        info: &CalleeInfo,
+        index: FuncIndex,
         sig: &ABISig,
         context: &mut CodeGenContext,
         masm: &mut M,
@@ -184,11 +184,11 @@ impl FnCall {
             context.without::<(Reg, Reg), M, _>(&sig.regs, masm, |context, masm| {
                 (context.any_gpr(masm), context.any_gpr(masm))
             });
-        let callee_vmctx_offset = vmoffsets.vmctx_vmfunction_import_vmctx(info.index);
+        let callee_vmctx_offset = vmoffsets.vmctx_vmfunction_import_vmctx(index);
         let callee_vmctx_addr = masm.address_at_vmctx(callee_vmctx_offset);
         masm.load_ptr(callee_vmctx_addr, callee_vmctx);
 
-        let callee_body_offset = vmoffsets.vmctx_vmfunction_import_wasm_call(info.index);
+        let callee_body_offset = vmoffsets.vmctx_vmfunction_import_wasm_call(index);
         let callee_addr = masm.address_at_vmctx(callee_body_offset);
         masm.load_ptr(callee_addr, callee);
 

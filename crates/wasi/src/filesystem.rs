@@ -74,6 +74,7 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub struct File {
     /// The operating system File this struct is mediating access to.
     ///
@@ -89,17 +90,25 @@ pub struct File {
     pub perms: FilePerms,
     /// The mode the file was opened under: bits for reading, and writing.
     /// Required to correctly report the DescriptorFlags, because cap-std
-    /// doesn't presently provide a cross-platform equivelant of reading the
+    /// doesn't presently provide a cross-platform equivalent of reading the
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
+
+    allow_blocking_current_thread: bool,
 }
 
 impl File {
-    pub fn new(file: cap_std::fs::File, perms: FilePerms, open_mode: OpenMode) -> Self {
+    pub fn new(
+        file: cap_std::fs::File,
+        perms: FilePerms,
+        open_mode: OpenMode,
+        allow_blocking_current_thread: bool,
+    ) -> Self {
         Self {
             file: Arc::new(file),
             perms,
             open_mode,
+            allow_blocking_current_thread,
         }
     }
 
@@ -110,15 +119,56 @@ impl File {
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        let f = self.file.clone();
-        spawn_blocking(move || body(&f)).await
+        match self._spawn_blocking(body) {
+            SpawnBlocking::Done(result) => result,
+            SpawnBlocking::Spawned(task) => task.await,
+        }
+    }
+
+    /// Returns `Some` when the current thread is allowed to block in filesystem
+    /// operations, and otherwise returns `None` to indicate that
+    /// `spawn_blocking` must be used.
+    pub(crate) fn as_blocking_file(&self) -> Option<&cap_std::fs::File> {
+        if self.allow_blocking_current_thread {
+            Some(&self.file)
+        } else {
+            None
+        }
+    }
+
+    fn _spawn_blocking<F, R>(&self, body: F) -> SpawnBlocking<R>
+    where
+        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        match self.as_blocking_file() {
+            Some(file) => SpawnBlocking::Done(body(file)),
+            None => {
+                let f = self.file.clone();
+                SpawnBlocking::Spawned(spawn_blocking(move || body(&f)))
+            }
+        }
     }
 }
 
+enum SpawnBlocking<T> {
+    Done(T),
+    Spawned(AbortOnDropJoinHandle<T>),
+}
+
 bitflags::bitflags! {
+    /// Permission bits for operating on a directory.
+    ///
+    /// Directories can be limited to being readonly. This will restrict what
+    /// can be done with them, for example preventing creation of new files.
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct DirPerms: usize {
+        /// This directory can be read, for example its entries can be iterated
+        /// over and files can be opened.
         const READ = 0b1;
+
+        /// This directory can be mutated, for example by creating new files
+        /// within it.
         const MUTATE = 0b10;
     }
 }
@@ -143,9 +193,11 @@ pub struct Dir {
     pub file_perms: FilePerms,
     /// The mode the directory was opened under: bits for reading, and writing.
     /// Required to correctly report the DescriptorFlags, because cap-std
-    /// doesn't presently provide a cross-platform equivelant of reading the
+    /// doesn't presently provide a cross-platform equivalent of reading the
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
+
+    allow_blocking_current_thread: bool,
 }
 
 impl Dir {
@@ -154,12 +206,14 @@ impl Dir {
         perms: DirPerms,
         file_perms: FilePerms,
         open_mode: OpenMode,
+        allow_blocking_current_thread: bool,
     ) -> Self {
         Dir {
             dir: Arc::new(dir),
             perms,
             file_perms,
             open_mode,
+            allow_blocking_current_thread,
         }
     }
 
@@ -170,31 +224,40 @@ impl Dir {
         F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
         R: Send + 'static,
     {
-        let d = self.dir.clone();
-        spawn_blocking(move || body(&d)).await
+        if self.allow_blocking_current_thread {
+            body(&self.dir)
+        } else {
+            let d = self.dir.clone();
+            spawn_blocking(move || body(&d)).await
+        }
     }
 }
 
 pub struct FileInputStream {
-    file: Arc<cap_std::fs::File>,
+    file: File,
     position: u64,
 }
 impl FileInputStream {
-    pub fn new(file: Arc<cap_std::fs::File>, position: u64) -> Self {
-        Self { file, position }
+    pub fn new(file: &File, position: u64) -> Self {
+        Self {
+            file: file.clone(),
+            position,
+        }
     }
 
     pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use system_interface::fs::FileIoExt;
-        let f = Arc::clone(&self.file);
         let p = self.position;
-        let (r, mut buf) = spawn_blocking(move || {
-            let mut buf = BytesMut::zeroed(size);
-            let r = f.read_at(&mut buf, p);
-            (r, buf)
-        })
-        .await;
-        let n = read_result(r)?;
+
+        let (r, mut buf) = self
+            .file
+            .spawn_blocking(move |f| {
+                let mut buf = BytesMut::zeroed(size);
+                let r = f.read_at(&mut buf, p);
+                (r, buf)
+            })
+            .await;
+        let n = read_result(r, size)?;
         buf.truncate(n);
         self.position += n as u64;
         Ok(buf.freeze())
@@ -206,9 +269,9 @@ impl FileInputStream {
     }
 }
 
-fn read_result(r: io::Result<usize>) -> Result<usize, StreamError> {
+fn read_result(r: io::Result<usize>, size: usize) -> Result<usize, StreamError> {
     match r {
-        Ok(0) => Err(StreamError::Closed),
+        Ok(0) if size > 0 => Err(StreamError::Closed),
         Ok(n) => Ok(n),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
         Err(e) => Err(StreamError::LastOperationFailed(e.into())),
@@ -222,7 +285,7 @@ pub(crate) enum FileOutputMode {
 }
 
 pub(crate) struct FileOutputStream {
-    file: Arc<cap_std::fs::File>,
+    file: File,
     mode: FileOutputMode,
     state: OutputState,
 }
@@ -238,16 +301,17 @@ enum OutputState {
 }
 
 impl FileOutputStream {
-    pub fn write_at(file: Arc<cap_std::fs::File>, position: u64) -> Self {
+    pub fn write_at(file: &File, position: u64) -> Self {
         Self {
-            file,
+            file: file.clone(),
             mode: FileOutputMode::Position(position),
             state: OutputState::Ready,
         }
     }
-    pub fn append(file: Arc<cap_std::fs::File>) -> Self {
+
+    pub fn append(file: &File) -> Self {
         Self {
-            file,
+            file: file.clone(),
             mode: FileOutputMode::Append,
             state: OutputState::Ready,
         }
@@ -275,33 +339,43 @@ impl HostOutputStream for FileOutputStream {
             return Ok(());
         }
 
-        let f = Arc::clone(&self.file);
         let m = self.mode;
-        let task = spawn_blocking(move || match m {
-            FileOutputMode::Position(mut p) => {
-                let mut total = 0;
-                let mut buf = buf;
-                while !buf.is_empty() {
-                    let nwritten = f.write_at(buf.as_ref(), p)?;
-                    // afterwards buf contains [nwritten, len):
-                    let _ = buf.split_to(nwritten);
-                    p += nwritten as u64;
-                    total += nwritten;
+        let result = self.file._spawn_blocking(move |f| {
+            match m {
+                FileOutputMode::Position(mut p) => {
+                    let mut total = 0;
+                    let mut buf = buf;
+                    while !buf.is_empty() {
+                        let nwritten = f.write_at(buf.as_ref(), p)?;
+                        // afterwards buf contains [nwritten, len):
+                        let _ = buf.split_to(nwritten);
+                        p += nwritten as u64;
+                        total += nwritten;
+                    }
+                    Ok(total)
                 }
-                Ok(total)
-            }
-            FileOutputMode::Append => {
-                let mut total = 0;
-                let mut buf = buf;
-                while !buf.is_empty() {
-                    let nwritten = f.append(buf.as_ref())?;
-                    let _ = buf.split_to(nwritten);
-                    total += nwritten;
+                FileOutputMode::Append => {
+                    let mut total = 0;
+                    let mut buf = buf;
+                    while !buf.is_empty() {
+                        let nwritten = f.append(buf.as_ref())?;
+                        let _ = buf.split_to(nwritten);
+                        total += nwritten;
+                    }
+                    Ok(total)
                 }
-                Ok(total)
             }
         });
-        self.state = OutputState::Waiting(task);
+        self.state = match result {
+            SpawnBlocking::Done(Ok(nwritten)) => {
+                if let FileOutputMode::Position(ref mut p) = &mut self.mode {
+                    *p += nwritten as u64;
+                }
+                OutputState::Ready
+            }
+            SpawnBlocking::Done(Err(e)) => OutputState::Error(e),
+            SpawnBlocking::Spawned(task) => OutputState::Waiting(task),
+        };
         Ok(())
     }
     fn flush(&mut self) -> Result<(), StreamError> {

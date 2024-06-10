@@ -1,127 +1,82 @@
-use cfg_if::cfg_if;
+use crate::{gc, BuiltinFunctionSignatures};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{
-    AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature, UserFuncName, Value,
-};
-use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
+use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
-    HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
-    TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    CallIndirectSiteIndex, EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex,
+    GlobalVariable, Heap, HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize,
+    TargetEnvironment, TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
 };
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleType,
-    ModuleTypesBuilder, PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypesBuilder,
+    PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
-macro_rules! declare_function_signatures {
-    (
-        $(
-            $( #[$attr:meta] )*
-            $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
-        )*
-    ) => {
-        /// A struct with an `Option<ir::SigRef>` member for every builtin
-        /// function, to de-duplicate constructing/getting its signature.
-        #[allow(unused_doc_comments)]
-        struct BuiltinFunctionSignatures {
-            pointer_type: ir::Type,
+/// A struct with an `Option<ir::FuncRef>` member for every builtin
+/// function, to de-duplicate constructing/getting its function.
+pub(crate) struct BuiltinFunctions {
+    types: BuiltinFunctionSignatures,
 
-            #[cfg(feature = "gc")]
-            reference_type: ir::Type,
-
-            call_conv: isa::CallConv,
-
-            $(
-                $( #[$attr] )*
-                $name: Option<ir::SigRef>,
-            )*
-        }
-
-        #[allow(unused_doc_comments)]
-        impl BuiltinFunctionSignatures {
-            fn new(
-                pointer_type: ir::Type,
-                reference_type: ir::Type,
-                call_conv: isa::CallConv,
-            ) -> Self {
-                #[cfg(not(feature = "gc"))]
-                let _ = reference_type;
-
-                Self {
-                    pointer_type,
-
-                    #[cfg(feature = "gc")]
-                    reference_type,
-
-                    call_conv,
-
-                    $(
-                        $( #[$attr] )*
-                        $name: None,
-                    )*
-                }
-            }
-
-            fn vmctx(&self) -> AbiParam {
-                AbiParam::special(self.pointer_type, ArgumentPurpose::VMContext)
-            }
-
-            #[cfg(feature = "gc")]
-            fn reference(&self) -> AbiParam {
-                AbiParam::new(self.reference_type)
-            }
-
-            fn pointer(&self) -> AbiParam {
-                AbiParam::new(self.pointer_type)
-            }
-
-            fn i32(&self) -> AbiParam {
-                // Some platform ABIs require i32 values to be zero- or sign-
-                // extended to the full register width.  We need to indicate
-                // this here by using the appropriate .uext or .sext attribute.
-                // The attribute can be added unconditionally; platforms whose
-                // ABI does not require such extensions will simply ignore it.
-                // Note that currently all i32 arguments or return values used
-                // by builtin functions are unsigned, so we always use .uext.
-                // If that ever changes, we will have to add a second type
-                // marker here.
-                AbiParam::new(I32).uext()
-            }
-
-            fn i64(&self) -> AbiParam {
-                AbiParam::new(I64)
-            }
-
-            $(
-                $( #[$attr] )*
-                fn $name(&mut self, func: &mut Function) -> ir::SigRef {
-                    let sig = self.$name.unwrap_or_else(|| {
-                        func.import_signature(Signature {
-                            params: vec![ $( self.$param() ),* ],
-                            returns: vec![ $( self.$result() )? ],
-                            call_conv: self.call_conv,
-                        })
-                    });
-                    self.$name = Some(sig);
-                    sig
-                }
-            )*
-        }
-    };
+    builtins:
+        [Option<ir::FuncRef>; BuiltinFunctionIndex::builtin_functions_total_number() as usize],
 }
 
+impl BuiltinFunctions {
+    fn new(isa: &dyn TargetIsa) -> Self {
+        Self {
+            types: BuiltinFunctionSignatures::new(isa),
+            builtins: [None; BuiltinFunctionIndex::builtin_functions_total_number() as usize],
+        }
+    }
+
+    fn load_builtin(&mut self, func: &mut Function, index: BuiltinFunctionIndex) -> ir::FuncRef {
+        let cache = &mut self.builtins[index.index() as usize];
+        if let Some(f) = cache {
+            return *f;
+        }
+        let signature = func.import_signature(self.types.signature(index));
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: crate::NS_WASMTIME_BUILTIN,
+                index: index.index(),
+            }));
+        let f = func.import_function(ir::ExtFuncData {
+            name,
+            signature,
+            colocated: true,
+        });
+        *cache = Some(f);
+        f
+    }
+}
+
+// Generate helper methods on `BuiltinFunctions` above for each named builtin
+// as well.
+macro_rules! declare_function_signatures {
+    ($(
+        $( #[$attr:meta] )*
+        $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
+    )*) => {
+        $(impl BuiltinFunctions {
+            $( #[$attr] )*
+            pub(crate) fn $name(&mut self, func: &mut Function) -> ir::FuncRef {
+                self.load_builtin(func, BuiltinFunctionIndex::$name())
+            }
+        })*
+    };
+}
 wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 
 /// The `FuncEnvironment` implementation for use by the `ModuleEnvironment`.
@@ -130,6 +85,7 @@ pub struct FuncEnvironment<'module_environment> {
     module: &'module_environment Module,
     types: &'module_environment ModuleTypesBuilder,
 
+    #[cfg(feature = "wmemcheck")]
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -146,7 +102,7 @@ pub struct FuncEnvironment<'module_environment> {
     pcc_vmctx_memtype: Option<ir::MemoryType>,
 
     /// Caches of signatures for builtin functions.
-    builtin_function_signatures: BuiltinFunctionSignatures,
+    pub(crate) builtin_functions: BuiltinFunctions,
 
     /// Offsets to struct fields accessed by JIT code.
     pub(crate) offsets: VMOffsets<u8>,
@@ -163,7 +119,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// VMRuntimeLimits` for this function's vmctx argument. This pointer is stored
     /// in the vmctx itself, but never changes for the lifetime of the function,
     /// so if we load it up front we can continue to use it throughout.
-    vmruntime_limits_ptr: cranelift_frontend::Variable,
+    vmruntime_limits_ptr: ir::Value,
 
     /// A cached epoch deadline value, when performing epoch-based
     /// interruption. Loaded from `VMRuntimeLimits` and reloaded after
@@ -182,6 +138,9 @@ pub struct FuncEnvironment<'module_environment> {
 
     #[cfg(feature = "wmemcheck")]
     wmemcheck: bool,
+
+    /// The current call-indirect-cache index.
+    pub call_indirect_index: usize,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -191,16 +150,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         types: &'module_environment ModuleTypesBuilder,
         tunables: &'module_environment Tunables,
         wmemcheck: bool,
+        call_indirect_start: usize,
     ) -> Self {
-        let builtin_function_signatures = BuiltinFunctionSignatures::new(
-            isa.pointer_type(),
-            match isa.pointer_type() {
-                ir::types::I32 => ir::types::R32,
-                ir::types::I64 => ir::types::R64,
-                _ => panic!(),
-            },
-            CallConv::triple_default(isa.triple()),
-        );
+        let builtin_functions = BuiltinFunctions::new(isa);
 
         // Avoid unused warning in default build.
         #[cfg(not(feature = "wmemcheck"))]
@@ -214,28 +166,32 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             tables: SecondaryMap::default(),
             vmctx: None,
             pcc_vmctx_memtype: None,
-            builtin_function_signatures,
+            builtin_functions,
             offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
             tunables,
             fuel_var: Variable::new(0),
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
-            vmruntime_limits_ptr: Variable::new(0),
-            translation: translation,
+            vmruntime_limits_ptr: ir::Value::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
+
+            call_indirect_index: call_indirect_start,
+
             #[cfg(feature = "wmemcheck")]
             wmemcheck,
+            #[cfg(feature = "wmemcheck")]
+            translation,
         }
     }
 
-    fn pointer_type(&self) -> ir::Type {
+    pub(crate) fn pointer_type(&self) -> ir::Type {
         self.isa.pointer_type()
     }
 
-    fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
+    pub(crate) fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
             if self.isa.flags().enable_pcc() {
@@ -261,120 +217,44 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
+    pub(crate) fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
+        let pointer_type = self.pointer_type();
+        let vmctx = self.vmctx(&mut pos.func);
+        pos.ins().global_value(pointer_type, vmctx)
+    }
+
     fn get_table_copy_func(
         &mut self,
         func: &mut Function,
         dst_table_index: TableIndex,
         src_table_index: TableIndex,
-    ) -> (ir::SigRef, usize, usize, BuiltinFunctionIndex) {
-        let sig = self.builtin_function_signatures.table_copy(func);
+    ) -> (ir::FuncRef, usize, usize) {
+        let sig = self.builtin_functions.table_copy(func);
         (
             sig,
             dst_table_index.as_u32() as usize,
             src_table_index.as_u32() as usize,
-            BuiltinFunctionIndex::table_copy(),
         )
     }
 
-    fn get_table_init_func(
-        &mut self,
-        func: &mut Function,
-        table_index: TableIndex,
-    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        let sig = self.builtin_function_signatures.table_init(func);
-        let table_index = table_index.as_u32() as usize;
-        (sig, table_index, BuiltinFunctionIndex::table_init())
-    }
-
-    fn get_elem_drop_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
-        let sig = self.builtin_function_signatures.elem_drop(func);
-        (sig, BuiltinFunctionIndex::elem_drop())
-    }
-
+    #[cfg(feature = "threads")]
     fn get_memory_atomic_wait(
         &mut self,
         func: &mut Function,
         memory_index: MemoryIndex,
         ty: ir::Type,
-    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+    ) -> (ir::FuncRef, usize) {
         match ty {
             I32 => (
-                self.builtin_function_signatures.memory_atomic_wait32(func),
+                self.builtin_functions.memory_atomic_wait32(func),
                 memory_index.index(),
-                BuiltinFunctionIndex::memory_atomic_wait32(),
             ),
             I64 => (
-                self.builtin_function_signatures.memory_atomic_wait64(func),
+                self.builtin_functions.memory_atomic_wait64(func),
                 memory_index.index(),
-                BuiltinFunctionIndex::memory_atomic_wait64(),
             ),
             x => panic!("get_memory_atomic_wait unsupported type: {:?}", x),
         }
-    }
-
-    fn get_memory_init_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
-        (
-            self.builtin_function_signatures.memory_init(func),
-            BuiltinFunctionIndex::memory_init(),
-        )
-    }
-
-    fn get_data_drop_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
-        (
-            self.builtin_function_signatures.data_drop(func),
-            BuiltinFunctionIndex::data_drop(),
-        )
-    }
-
-    /// Translates load of builtin function and returns a pair of values `vmctx`
-    /// and address of the loaded function.
-    fn translate_load_builtin_function_address(
-        &mut self,
-        pos: &mut FuncCursor<'_>,
-        callee_func_idx: BuiltinFunctionIndex,
-    ) -> (ir::Value, ir::Value) {
-        // We use an indirect call so that we don't have to patch the code at runtime.
-        let pointer_type = self.pointer_type();
-        let vmctx = self.vmctx(&mut pos.func);
-        let base = pos.ins().global_value(pointer_type, vmctx);
-
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
-
-        // Load the base of the array of builtin functions
-        let array_offset = i32::try_from(self.offsets.vmctx_builtin_functions()).unwrap();
-        let array_addr = pos.ins().load(pointer_type, mem_flags, base, array_offset);
-
-        // Load the callee address.
-        let body_offset = i32::try_from(callee_func_idx.index() * pointer_type.bytes()).unwrap();
-        let func_addr = pos
-            .ins()
-            .load(pointer_type, mem_flags, array_addr, body_offset);
-
-        (base, func_addr)
-    }
-
-    /// Generate code to increment or decrement the given `externref`'s
-    /// reference count.
-    ///
-    /// The new reference count is returned.
-    #[cfg(feature = "gc")]
-    fn mutate_externref_ref_count(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        externref: ir::Value,
-        delta: i64,
-    ) -> ir::Value {
-        debug_assert!(delta == -1 || delta == 1);
-        let pointer_type = self.pointer_type();
-        let offset = i32::try_from(self.offsets.vm_extern_data_ref_count()).unwrap();
-        let count = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), externref, offset);
-        let new_count = builder.ins().iadd_imm(count, delta);
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), new_count, externref, offset);
-        new_count
     }
 
     fn get_global_location(
@@ -405,14 +285,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // function. This is possible since we know that the pointer never
         // changes for the lifetime of the function.
         let pointer_type = self.pointer_type();
-        builder.declare_var(self.vmruntime_limits_ptr, pointer_type);
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
         let offset = i32::try_from(self.offsets.vmctx_runtime_limits()).unwrap();
-        let interrupt_ptr = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-        builder.def_var(self.vmruntime_limits_ptr, interrupt_ptr);
+        debug_assert!(self.vmruntime_limits_ptr.is_reserved_value());
+        self.vmruntime_limits_ptr =
+            builder
+                .ins()
+                .load(pointer_type, ir::MemFlags::trusted(), base, offset);
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -559,7 +439,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Loads the fuel consumption value from `VMRuntimeLimits` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
+        let (addr, offset) = self.fuel_addr_offset();
         let fuel = builder
             .ins()
             .load(ir::types::I64, ir::MemFlags::trusted(), addr, offset);
@@ -569,7 +449,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Stores the fuel consumption value from `self.fuel_var` into
     /// `VMRuntimeLimits`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
+        let (addr, offset) = self.fuel_addr_offset();
         let fuel_consumed = builder.use_var(self.fuel_var);
         builder
             .ins()
@@ -578,12 +458,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Returns the `(address, offset)` of the fuel consumption within
     /// `VMRuntimeLimits`, used to perform loads/stores later.
-    fn fuel_addr_offset(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-    ) -> (ir::Value, ir::immediates::Offset32) {
+    fn fuel_addr_offset(&mut self) -> (ir::Value, ir::immediates::Offset32) {
+        debug_assert!(!self.vmruntime_limits_ptr.is_reserved_value());
         (
-            builder.use_var(self.vmruntime_limits_ptr),
+            self.vmruntime_limits_ptr,
             i32::from(self.offsets.ptr.vmruntime_limits_fuel_consumed()).into(),
         )
     }
@@ -620,14 +498,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // intrinsic may alter how much fuel is in the system.
         builder.switch_to_block(out_of_gas_block);
         self.fuel_save_from_var(builder);
-        let out_of_gas_sig = self.builtin_function_signatures.out_of_gas(builder.func);
-        let (vmctx, out_of_gas) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::out_of_gas(),
-        );
-        builder
-            .ins()
-            .call_indirect(out_of_gas_sig, out_of_gas, &[vmctx]);
+        let out_of_gas = self.builtin_functions.out_of_gas(builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        builder.ins().call(out_of_gas, &[vmctx]);
         self.fuel_load_into_var(builder);
         builder.ins().jump(continuation_block, &[]);
         builder.seal_block(continuation_block);
@@ -663,12 +536,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     #[cfg(feature = "wmemcheck")]
-    fn hook_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[Value]) {
-        let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
-        let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::check_malloc(),
-        );
+    fn hook_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[ir::Value]) {
+        let check_malloc = self.builtin_functions.check_malloc(builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
         let func_args = builder
             .func
             .dfg
@@ -685,18 +555,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         } else {
             retvals[0]
         };
-        builder
-            .ins()
-            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, retval, len]);
+        builder.ins().call(check_malloc, &[vmctx, retval, len]);
     }
 
     #[cfg(feature = "wmemcheck")]
     fn hook_free_exit(&mut self, builder: &mut FunctionBuilder) {
-        let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
-        let (vmctx, check_free) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::check_free(),
-        );
+        let check_free = self.builtin_functions.check_free(builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
         let func_args = builder
             .func
             .dfg
@@ -708,9 +573,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // first argument is a pointer to memory.
             func_args[2]
         };
-        builder
-            .ins()
-            .call_indirect(check_free_sig, check_free, &[vmctx, ptr]);
+        builder.ins().call(check_free, &[vmctx, ptr]);
     }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
@@ -735,12 +598,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let interrupts = builder.use_var(self.vmruntime_limits_ptr);
         let deadline =
             builder.ins().load(
                 ir::types::I64,
                 ir::MemFlags::trusted(),
-                interrupts,
+                self.vmruntime_limits_ptr,
                 ir::immediates::Offset32::new(
                     self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
                 ),
@@ -797,16 +659,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.seal_block(new_epoch_doublecheck_block);
 
         builder.switch_to_block(new_epoch_doublecheck_block);
-        let new_epoch_sig = self.builtin_function_signatures.new_epoch(builder.func);
-        let (vmctx, new_epoch) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::new_epoch(),
-        );
+        let new_epoch = self.builtin_functions.new_epoch(builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
         // new_epoch() returns the new deadline, so we don't have to
         // reload it.
-        let call = builder
-            .ins()
-            .call_indirect(new_epoch_sig, new_epoch, &[vmctx]);
+        let call = builder.ins().call(new_epoch, &[vmctx]);
         let new_deadline = *builder.func.dfg.inst_results(call).first().unwrap();
         builder.def_var(self.epoch_deadline_var, new_deadline);
         builder.ins().jump(continuation_block, &[]);
@@ -906,15 +763,26 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             }
         };
 
+        let table = &self.module.table_plans[index].table;
+        let element_size = if table.wasm_ty.is_vmgcref_type() {
+            // For GC-managed references, tables store `Option<VMGcRef>`s.
+            ir::types::I32.bytes()
+        } else {
+            self.reference_type(table.wasm_ty.heap_type).bytes()
+        };
+
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            flags: MemFlags::trusted(),
+            flags: if Some(table.minimum) == table.maximum {
+                // A fixed-size table can't be resized so its base address won't
+                // change.
+                MemFlags::trusted().with_readonly()
+            } else {
+                MemFlags::trusted()
+            },
         });
-
-        let table = &self.module.table_plans[index].table;
-        let element_size = self.reference_type(table.wasm_ty.heap_type).bytes();
 
         let bound = if Some(table.minimum) == table.maximum {
             TableSize::Static {
@@ -946,6 +814,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
         index: ir::Value,
+        cold_blocks: bool,
+        lazy_init: bool,
     ) -> ir::Value {
         let pointer_type = self.pointer_type();
         self.ensure_table_exists(builder.func, table_index);
@@ -962,6 +832,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             self.isa.flags().enable_table_access_spectre_mitigation(),
         );
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
+
+        if !lazy_init {
+            return value;
+        }
+
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
         // details. Note that `FUNCREF_MASK` has type `usize` which may not be
@@ -973,6 +848,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let null_block = builder.create_block();
         let continuation_block = builder.create_block();
+        if cold_blocks {
+            builder.set_cold_block(null_block);
+            builder.set_cold_block(continuation_block);
+        }
         let result_param = builder.append_block_param(continuation_block, pointer_type);
         builder.set_cold_block(null_block);
 
@@ -983,16 +862,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         builder.switch_to_block(null_block);
         let table_index = builder.ins().iconst(I32, table_index.index() as i64);
-        let builtin_idx = BuiltinFunctionIndex::table_get_lazy_init_func_ref();
-        let builtin_sig = self
-            .builtin_function_signatures
+        let lazy_init = self
+            .builtin_functions
             .table_get_lazy_init_func_ref(builder.func);
-        let (vmctx, builtin_addr) =
-            self.translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
-        let call_inst =
-            builder
-                .ins()
-                .call_indirect(builtin_sig, builtin_addr, &[vmctx, table_index, index]);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let call_inst = builder.ins().call(lazy_init, &[vmctx, table_index, index]);
         let returned_entry = builder.func.dfg.inst_results(call_inst)[0];
         builder.ins().jump(continuation_block, &[returned_entry]);
         builder.seal_block(continuation_block);
@@ -1001,31 +875,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         result_param
     }
 
+    #[cfg(feature = "wmemcheck")]
     fn check_malloc_start(&mut self, builder: &mut FunctionBuilder) {
-        let malloc_start_sig = self.builtin_function_signatures.malloc_start(builder.func);
-        let (vmctx, malloc_start) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::malloc_start(),
-        );
-        builder
-            .ins()
-            .call_indirect(malloc_start_sig, malloc_start, &[vmctx]);
+        let malloc_start = self.builtin_functions.malloc_start(builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        builder.ins().call(malloc_start, &[vmctx]);
     }
 
+    #[cfg(feature = "wmemcheck")]
     fn check_free_start(&mut self, builder: &mut FunctionBuilder) {
-        let free_start_sig = self.builtin_function_signatures.free_start(builder.func);
-        let (vmctx, free_start) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::free_start(),
-        );
-        builder
-            .ins()
-            .call_indirect(free_start_sig, free_start, &[vmctx]);
+        let free_start = self.builtin_functions.free_start(builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        builder.ins().call(free_start, &[vmctx]);
     }
 
+    #[cfg(feature = "wmemcheck")]
     fn current_func_name(&self, builder: &mut FunctionBuilder) -> Option<&str> {
         let func_index = match &builder.func.name {
-            UserFuncName::User(user) => FuncIndex::from_u32(user.index),
+            ir::UserFuncName::User(user) => FuncIndex::from_u32(user.index),
             _ => {
                 panic!("function name not a UserFuncName::User as expected")
             }
@@ -1117,6 +984,63 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pointee_mt
         });
         (pointee, mt)
+    }
+
+    fn i31_ref_to_unshifted_value(&self, pos: &mut FuncCursor, i31ref: ir::Value) -> ir::Value {
+        let ref_ty = self.reference_type(WasmHeapType::I31);
+        debug_assert_eq!(pos.func.dfg.value_type(i31ref), ref_ty);
+
+        let is_null = pos.ins().is_null(i31ref);
+        pos.ins().trapnz(is_null, ir::TrapCode::NullI31Ref);
+
+        let val = pos.ins().bitcast(ref_ty.as_int(), MemFlags::new(), i31ref);
+
+        if cfg!(debug_assertions) {
+            let is_i31_ref = pos
+                .ins()
+                .band_imm(val, i64::from(crate::I31_REF_DISCRIMINANT));
+            pos.ins().trapz(
+                is_i31_ref,
+                ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
+            );
+        }
+
+        match ref_ty.bytes() {
+            8 => pos.ins().ireduce(ir::types::I32, val),
+            4 => val,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Allocate the next CallIndirectSiteIndex for indirect-target
+    /// caching purposes, if slots remain below the slot-count limit.
+    fn alloc_call_indirect_index(&mut self) -> Option<CallIndirectSiteIndex> {
+        // We need to check to see if we have reached the cache-slot
+        // limit.
+        //
+        // There are two kinds of limit behavior:
+        //
+        // 1. Our function's start-index is below the limit, but we
+        //    hit the limit in the middle of the function. We will
+        //    allocate slots up to the limit, then stop exactly when we
+        //    hit it.
+        //
+        // 2. Our function is beyond the limit-count of
+        //    `call_indirect`s. The counting prescan in
+        //    `ModuleEnvironment` that assigns start indices will
+        //    saturate at the limit, and this function's start index
+        //    will be exactly the limit, so we get zero slots and exit
+        //    immediately at every call to this function.
+        if self.call_indirect_index >= self.tunables.max_call_indirect_cache_slots {
+            return None;
+        }
+
+        let idx = CallIndirectSiteIndex::from_u32(
+            u32::try_from(self.call_indirect_index)
+                .expect("More than 2^32 callsites; should be limited by impl limits"),
+        );
+        self.call_indirect_index += 1;
+        Some(idx)
     }
 }
 
@@ -1229,6 +1153,68 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
     }
 
+    /// Get the address of the call-indirect cache slot for a given callsite.
+    pub fn call_indirect_cache_slot_addr(
+        &mut self,
+        call_site: CallIndirectSiteIndex,
+        vmctx: ir::Value,
+    ) -> ir::Value {
+        let offset = self.env.offsets.vmctx_call_indirect_cache(call_site);
+        self.builder.ins().iadd_imm(vmctx, i64::from(offset))
+    }
+
+    /// Load the cached index and code pointer for an indirect call.
+    ///
+    /// Generates IR like:
+    ///
+    /// ```ignore
+    /// v1 = load.i64 cache_ptr+0 ;; cached index (cache key)
+    /// v2 = load.i64 cache_ptr+8 ;; cached raw code pointer (cache value)
+    /// ```
+    ///
+    /// and returns `(index, code_ptr)` (e.g. from above, `(v1, v2)`).
+    fn load_cached_indirect_index_and_code_ptr(
+        &mut self,
+        cache_ptr: ir::Value,
+    ) -> (ir::Value, ir::Value) {
+        let cached_index = self.builder.ins().load(
+            I32,
+            MemFlags::trusted(),
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
+        );
+        let cached_code_ptr = self.builder.ins().load(
+            self.env.pointer_type(),
+            MemFlags::trusted(),
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
+        );
+
+        (cached_index, cached_code_ptr)
+    }
+
+    /// Update the indirect-call cache: store a new index and raw code
+    /// pointer in the slot for a given callsite.
+    fn store_cached_indirect_index_and_code_ptr(
+        &mut self,
+        cache_ptr: ir::Value,
+        index: ir::Value,
+        code_ptr: ir::Value,
+    ) {
+        self.builder.ins().store(
+            MemFlags::trusted(),
+            index,
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
+        );
+        self.builder.ins().store(
+            MemFlags::trusted(),
+            code_ptr,
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
+        );
+    }
+
     /// Do an indirect call through the given funcref table.
     pub fn indirect_call(
         mut self,
@@ -1238,10 +1224,149 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<Option<ir::Inst>> {
+        // If we are performing call-indirect caching with this table, check the cache.
+        let caching = if self.env.tunables.cache_call_indirects {
+            let plan = &self.env.module.table_plans[table_index];
+            // We can do the indirect call caching optimization only
+            // if table elements will not change (no opcodes exist
+            // that could write the table, and table not exported),
+            // and if we can use the zero-index as a sentinenl for "no
+            // cache entry" (initial zeroed vmctx state).
+            !plan.written && !plan.non_null_zero
+        } else {
+            false
+        };
+
+        // Allocate a call-indirect cache slot if caching is
+        // enabled. Note that this still may be `None` if we run out
+        // of slots.
+        let call_site = if caching {
+            self.env.alloc_call_indirect_index()
+        } else {
+            None
+        };
+
+        let (code_ptr, callee_vmctx) = if let Some(call_site) = call_site {
+            // Get a local copy of `vmctx`.
+            let vmctx = self.env.vmctx(self.builder.func);
+            let vmctx = self
+                .builder
+                .ins()
+                .global_value(self.env.pointer_type(), vmctx);
+
+            // Get the address of the cache slot in the VMContext
+            // struct.
+            let slot = self.call_indirect_cache_slot_addr(call_site, vmctx);
+
+            // Create the following CFG and generate code with the following outline:
+            //
+            //   (load cached index and code pointer)
+            //   hit = icmp eq (cached index), (callee)
+            //   brif hit, call_block((cached code ptr), vmctx), miss_block
+            //
+            // miss_block:
+            //   (compute actual code pointer, with checks)
+            //   same_instance = icmp eq (callee vmctx), (vmctx)
+            //   brif same_instance update_block, call_block((actual code ptr), (callee vmctx))
+            //
+            // update_block:
+            //   (store actual index and actual code pointer)
+            //   jump call_block((actual code ptr), (callee vmctx))
+            //
+            // call_block(code_ptr, callee_vmctx):
+            //   (unchecked call-indirect sequence)
+
+            // Create two-level conditionals with CFG.
+            let current_block = self.builder.current_block().unwrap();
+            let miss_block = self.builder.create_block();
+            let call_block = self.builder.create_block();
+            let update_block = self.builder.create_block();
+
+            self.builder.insert_block_after(miss_block, current_block);
+            self.builder.insert_block_after(update_block, miss_block);
+            self.builder.insert_block_after(call_block, update_block);
+            self.builder.set_cold_block(miss_block);
+            self.builder.set_cold_block(update_block);
+
+            // Load cached values, check for hit, branch to
+            // call block or miss block.
+
+            let (cached_index, cached_code_ptr) =
+                self.load_cached_indirect_index_and_code_ptr(slot);
+            let hit = self.builder.ins().icmp(IntCC::Equal, cached_index, callee);
+            self.builder
+                .ins()
+                .brif(hit, call_block, &[cached_code_ptr, vmctx], miss_block, &[]);
+
+            // Miss block: compute actual callee code pointer and
+            // vmctx, and update cache if same-instance.
+
+            self.builder.seal_block(miss_block);
+            self.builder.switch_to_block(miss_block);
+
+            if let Some((code_ptr, callee_vmctx)) =
+                self.check_and_load_code_and_callee_vmctx(table_index, ty_index, callee, true)?
+            {
+                // If callee vmctx is equal to ours, update the cache.
+                let same_instance = self.builder.ins().icmp(IntCC::Equal, callee_vmctx, vmctx);
+
+                self.builder.ins().brif(
+                    same_instance,
+                    update_block,
+                    &[],
+                    call_block,
+                    &[code_ptr, callee_vmctx],
+                );
+
+                self.builder.seal_block(update_block);
+                self.builder.switch_to_block(update_block);
+
+                self.store_cached_indirect_index_and_code_ptr(slot, callee, code_ptr);
+                self.builder
+                    .ins()
+                    .jump(call_block, &[code_ptr, callee_vmctx]);
+            }
+
+            // Call block: do the call.
+
+            self.builder.seal_block(call_block);
+            self.builder.switch_to_block(call_block);
+
+            let code_ptr = self
+                .builder
+                .append_block_param(call_block, self.env.pointer_type());
+            let callee_vmctx = self
+                .builder
+                .append_block_param(call_block, self.env.pointer_type());
+            (code_ptr, callee_vmctx)
+        } else {
+            match self.check_and_load_code_and_callee_vmctx(table_index, ty_index, callee, false)? {
+                Some(pair) => pair,
+                None => return Ok(None),
+            }
+        };
+
+        self.unchecked_call_impl(sig_ref, code_ptr, callee_vmctx, call_args)
+            .map(Some)
+    }
+
+    fn check_and_load_code_and_callee_vmctx(
+        &mut self,
+        table_index: TableIndex,
+        ty_index: TypeIndex,
+        callee: ir::Value,
+        cold_blocks: bool,
+    ) -> WasmResult<Option<(ir::Value, ir::Value)>> {
         // Get the funcref pointer from the table.
-        let funcref_ptr =
-            self.env
-                .get_or_init_func_ref_table_elem(self.builder, table_index, callee);
+        let table = &self.env.module.table_plans[table_index];
+        let TableStyle::CallerChecksSignature { lazy_init } = table.style;
+        let funcref_ptr = self.env.get_or_init_func_ref_table_elem(
+            self.builder,
+            table_index,
+            callee,
+            cold_blocks,
+            lazy_init,
+        );
 
         // If necessary, check the signature.
         let check = self.check_indirect_call_type_signature(table_index, ty_index, funcref_ptr);
@@ -1272,8 +1397,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // is now unreachable code.
             CheckIndirectCallTypeSignature::StaticTrap => return Ok(None),
         };
-        self.unchecked_call(sig_ref, funcref_ptr, trap_code, call_args)
-            .map(Some)
+
+        Ok(Some(self.load_code_and_vmctx(funcref_ptr, trap_code)))
     }
 
     fn check_indirect_call_type_signature(
@@ -1289,7 +1414,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
         // Generate a rustc compile error here if more styles are added in
         // the future as the following code is tailored to just this style.
-        let TableStyle::CallerChecksSignature = table.style;
+        let TableStyle::CallerChecksSignature { .. } = table.style;
 
         // Test if a type check is necessary for this table. If this table is a
         // table of typed functions and that type matches `ty_index`, then
@@ -1303,11 +1428,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // Functions that have a statically known type are either going to
             // always succeed or always fail. Figure out by inspecting the types
             // further.
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(table_ty)) => {
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(table_ty)) => {
                 // If `ty_index` matches `table_ty`, then this call is
                 // statically known to have the right type, so no checks are
                 // necessary.
-                let ModuleType::Function(specified_ty) = self.env.module.types[ty_index];
+                let specified_ty = self.env.module.types[ty_index];
                 if specified_ty == table_ty {
                     return CheckIndirectCallTypeSignature::StaticMatch {
                         may_be_null: table.table.wasm_ty.nullable,
@@ -1343,10 +1468,21 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
-            // Engine-indexed types don't show up until runtime and it's a wasm
-            // validation error to perform a call through an `externref` table,
+            // Engine-indexed types don't show up until runtime and it's a Wasm
+            // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(_)) | WasmHeapType::Extern => {
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(_))
+            | WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::RecGroup(_))
+            | WasmHeapType::Extern
+            | WasmHeapType::NoExtern
+            | WasmHeapType::Any
+            | WasmHeapType::Eq
+            | WasmHeapType::I31
+            | WasmHeapType::Array
+            | WasmHeapType::ConcreteArray(_)
+            | WasmHeapType::Struct
+            | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::None => {
                 unreachable!()
             }
         }
@@ -1364,7 +1500,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             base,
             i32::try_from(self.env.offsets.vmctx_type_ids_array()).unwrap(),
         );
-        let sig_index = self.env.module.types[ty_index].unwrap_function();
+        let sig_index = self.env.module.types[ty_index];
         let offset =
             i32::try_from(sig_index.as_u32().checked_mul(sig_id_type.bytes()).unwrap()).unwrap();
         let caller_sig_id = self
@@ -1423,6 +1559,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee_load_trap_code: Option<ir::TrapCode>,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
+        let (func_addr, callee_vmctx) = self.load_code_and_vmctx(callee, callee_load_trap_code);
+        self.unchecked_call_impl(sig_ref, func_addr, callee_vmctx, call_args)
+    }
+
+    fn load_code_and_vmctx(
+        &mut self,
+        callee: ir::Value,
+        callee_load_trap_code: Option<ir::TrapCode>,
+    ) -> (ir::Value, ir::Value) {
         let pointer_type = self.env.pointer_type();
 
         // Dereference callee pointer to get the function address.
@@ -1439,7 +1584,26 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             callee,
             i32::from(self.env.offsets.ptr.vm_func_ref_wasm_call()),
         );
+        let callee_vmctx = self.builder.ins().load(
+            pointer_type,
+            mem_flags,
+            callee,
+            i32::from(self.env.offsets.ptr.vm_func_ref_vmctx()),
+        );
 
+        (func_addr, callee_vmctx)
+    }
+
+    /// This calls a function by reference without checking the
+    /// signature, given the raw code pointer to the
+    /// Wasm-calling-convention entry point and the callee vmctx.
+    fn unchecked_call_impl(
+        &mut self,
+        sig_ref: ir::SigRef,
+        func_addr: ir::Value,
+        callee_vmctx: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
         let caller_vmctx = self
             .builder
@@ -1447,14 +1611,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .special_param(ArgumentPurpose::VMContext)
             .unwrap();
 
-        // First append the callee vmctx address.
-        let vmctx = self.builder.ins().load(
-            pointer_type,
-            mem_flags,
-            callee,
-            i32::from(self.env.offsets.ptr.vm_func_ref_vmctx()),
-        );
-        real_call_args.push(vmctx);
+        // First append the callee and caller vmctx addresses.
+        real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
         // Then append the regular call arguments.
@@ -1489,11 +1647,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
 impl TypeConvert for FuncEnvironment<'_> {
     fn lookup_heap_type(&self, ty: wasmparser::UnpackedIndex) -> WasmHeapType {
-        wasmtime_environ::WasmparserTypeConverter {
-            module: self.module,
-            types: self.types,
-        }
-        .lookup_heap_type(ty)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, self.module).lookup_heap_type(ty)
+    }
+
+    fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, self.module)
+            .lookup_type_index(index)
     }
 }
 
@@ -1527,10 +1686,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn after_locals(&mut self, num_locals: usize) {
-        self.vmruntime_limits_ptr = Variable::new(num_locals);
-        self.fuel_var = Variable::new(num_locals + 1);
-        self.epoch_deadline_var = Variable::new(num_locals + 2);
-        self.epoch_ptr_var = Variable::new(num_locals + 3);
+        self.fuel_var = Variable::new(num_locals);
+        self.epoch_deadline_var = Variable::new(num_locals + 1);
+        self.epoch_ptr_var = Variable::new(num_locals + 2);
     }
 
     fn translate_table_grow(
@@ -1540,36 +1698,20 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let (func_idx, func_sig) =
-            match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => (
-                    BuiltinFunctionIndex::table_grow_func_ref(),
-                    self.builtin_function_signatures
-                        .table_grow_func_ref(&mut pos.func),
-                ),
-                #[cfg(feature = "gc")]
-                WasmHeapType::Extern => (
-                    BuiltinFunctionIndex::table_grow_externref(),
-                    self.builtin_function_signatures
-                        .table_grow_externref(&mut pos.func),
-                ),
-                #[cfg(not(feature = "gc"))]
-                WasmHeapType::Extern => {
-                    return Err(cranelift_wasm::wasm_unsupported!(
-                        "support for `externref` disabled at compile time because \
-                     the `gc` cargo feature was not enabled",
-                    ))
-                }
-            };
+        let ty = self.module.table_plans[table_index].table.wasm_ty.heap_type;
+        let grow = if ty.is_vmgcref_type() {
+            gc::gc_ref_table_grow_builtin(ty, self, &mut pos.func)?
+        } else {
+            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
+            self.builtin_functions.table_grow_func_ref(&mut pos.func)
+        };
 
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+        let vmctx = self.vmctx_val(&mut pos);
 
         let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
-        let call_inst = pos.ins().call_indirect(
-            func_sig,
-            func_addr,
-            &[vmctx, table_index_arg, delta, init_value],
-        );
+        let call_inst = pos
+            .ins()
+            .call(grow, &[vmctx, table_index_arg, delta, init_value]);
 
         Ok(pos.func.dfg.first_result(call_inst))
     }
@@ -1581,145 +1723,50 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: ir::Value,
     ) -> WasmResult<ir::Value> {
         let plan = &self.module.table_plans[table_index];
-        match plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
-                match plan.style {
-                    TableStyle::CallerChecksSignature => {
-                        Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index))
-                    }
-                }
-            }
-            #[cfg(feature = "gc")]
-            WasmHeapType::Extern => {
-                // Our read barrier for `externref` tables is roughly equivalent
-                // to the following pseudocode:
-                //
-                // ```
-                // let elem = table[index]
-                // if elem is not null:
-                //     let (next, end) = VMExternRefActivationsTable bump region
-                //     if next != end:
-                //         elem.ref_count += 1
-                //         *next = elem
-                //         next += 1
-                //     else:
-                //         call activations_table_insert_with_gc(elem)
-                // return elem
-                // ```
-                //
-                // This ensures that all `externref`s coming out of tables and
-                // onto the stack are safely held alive by the
-                // `VMExternRefActivationsTable`.
-
-                let pointer_type = self.pointer_type();
-                let reference_type = self.reference_type(WasmHeapType::Extern);
-
-                builder.ensure_inserted_block();
-                let continue_block = builder.create_block();
-                let non_null_elem_block = builder.create_block();
-                let gc_block = builder.create_block();
-                let no_gc_block = builder.create_block();
-                let current_block = builder.current_block().unwrap();
-                builder.insert_block_after(non_null_elem_block, current_block);
-                builder.insert_block_after(no_gc_block, non_null_elem_block);
-                builder.insert_block_after(gc_block, no_gc_block);
-                builder.insert_block_after(continue_block, gc_block);
-
-                // Load the table element.
-                self.ensure_table_exists(builder.func, table_index);
-                let table_data = self.tables[table_index].as_ref().unwrap();
-                let (elem_addr, flags) = table_data.prepare_table_addr(
+        self.ensure_table_exists(builder.func, table_index);
+        let table_data = self.tables[table_index].as_ref().unwrap();
+        let heap_ty = plan.table.wasm_ty.heap_type;
+        match heap_ty.top() {
+            // `i31ref`s never need barriers, and therefore don't need to go
+            // through the GC compiler.
+            WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
+                let (src, flags) = table_data.prepare_table_addr(
                     builder,
                     index,
-                    pointer_type,
+                    self.pointer_type(),
                     self.isa.flags().enable_table_access_spectre_mitigation(),
                 );
-                let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
-
-                let elem_is_null = builder.ins().is_null(elem);
-                builder
-                    .ins()
-                    .brif(elem_is_null, continue_block, &[], non_null_elem_block, &[]);
-
-                // Load the `VMExternRefActivationsTable::next` bump finger and
-                // the `VMExternRefActivationsTable::end` bump boundary.
-                builder.switch_to_block(non_null_elem_block);
-                let vmctx = self.vmctx(&mut builder.func);
-                let vmctx = builder.ins().global_value(pointer_type, vmctx);
-                let activations_table = builder.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    vmctx,
-                    i32::try_from(self.offsets.vmctx_externref_activations_table()).unwrap(),
-                );
-                let next = builder.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    activations_table,
-                    i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
-                );
-                let end = builder.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    activations_table,
-                    i32::try_from(self.offsets.vm_extern_ref_activation_table_end()).unwrap(),
-                );
-
-                // If `next == end`, then we are at full capacity. Call a
-                // builtin to do a GC and insert this reference into the
-                // just-swept table for us.
-                let at_capacity = builder.ins().icmp(ir::condcodes::IntCC::Equal, next, end);
-                builder
-                    .ins()
-                    .brif(at_capacity, gc_block, &[], no_gc_block, &[]);
-                builder.switch_to_block(gc_block);
-                let builtin_idx = BuiltinFunctionIndex::activations_table_insert_with_gc();
-                let builtin_sig = self
-                    .builtin_function_signatures
-                    .activations_table_insert_with_gc(builder.func);
-                let (vmctx, builtin_addr) = self
-                    .translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
-                builder
-                    .ins()
-                    .call_indirect(builtin_sig, builtin_addr, &[vmctx, elem]);
-                builder.ins().jump(continue_block, &[]);
-
-                // If `next != end`, then:
-                //
-                // * increment this reference's ref count,
-                // * store the reference into the bump table at `*next`,
-                // * and finally increment the `next` bump finger.
-                builder.switch_to_block(no_gc_block);
-                self.mutate_externref_ref_count(builder, elem, 1);
-                builder.ins().store(ir::MemFlags::trusted(), elem, next, 0);
-
-                let new_next = builder
-                    .ins()
-                    .iadd_imm(next, i64::from(reference_type.bytes()));
-                builder.ins().store(
-                    ir::MemFlags::trusted(),
-                    new_next,
-                    activations_table,
-                    i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
-                );
-
-                builder.ins().jump(continue_block, &[]);
-                builder.switch_to_block(continue_block);
-
-                builder.seal_block(non_null_elem_block);
-                builder.seal_block(gc_block);
-                builder.seal_block(no_gc_block);
-                builder.seal_block(continue_block);
-
-                Ok(elem)
+                gc::unbarriered_load_gc_ref(self, builder, WasmHeapType::I31, src, flags)
             }
-            #[cfg(not(feature = "gc"))]
-            WasmHeapType::Extern => {
-                return Err(cranelift_wasm::wasm_unsupported!(
-                    "support for `externref` disabled at compile time because the \
-                 `gc` cargo feature was not enabled",
-                ))
+
+            // GC-managed types.
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+                let (src, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::gc_compiler(self).translate_read_gc_reference(
+                    self,
+                    builder,
+                    plan.table.wasm_ty,
+                    src,
+                    flags,
+                )
             }
+
+            // Function types.
+            WasmHeapTopType::Func => match plan.style {
+                TableStyle::CallerChecksSignature { lazy_init } => Ok(self
+                    .get_or_init_func_ref_table_elem(
+                        builder,
+                        table_index,
+                        index,
+                        false,
+                        lazy_init,
+                    )),
+            },
         }
     }
 
@@ -1734,11 +1781,43 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let plan = &self.module.table_plans[table_index];
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].as_ref().unwrap();
-        match plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+        let heap_ty = plan.table.wasm_ty.heap_type;
+        match heap_ty.top() {
+            // `i31ref`s never need GC barriers, and therefore don't need to go
+            // through the GC compiler.
+            WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
+                let (addr, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::unbarriered_store_gc_ref(self, builder, WasmHeapType::I31, addr, value, flags)
+            }
+
+            // GC-managed types.
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+                let (dst, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::gc_compiler(self).translate_write_gc_reference(
+                    self,
+                    builder,
+                    plan.table.wasm_ty,
+                    dst,
+                    value,
+                    flags,
+                )
+            }
+
+            // Function types.
+            WasmHeapTopType::Func => {
                 match plan.style {
-                    TableStyle::CallerChecksSignature => {
-                        let (table_entry_addr, flags) = table_data.prepare_table_addr(
+                    TableStyle::CallerChecksSignature { lazy_init } => {
+                        let (elem_addr, flags) = table_data.prepare_table_addr(
                             builder,
                             index,
                             pointer_type,
@@ -1747,159 +1826,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         // Set the "initialized bit". See doc-comment on
                         // `FUNCREF_INIT_BIT` in
                         // crates/environ/src/ref_bits.rs for details.
-                        let value_with_init_bit = builder
-                            .ins()
-                            .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
+                        let value_with_init_bit = if lazy_init {
+                            builder
+                                .ins()
+                                .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64))
+                        } else {
+                            value
+                        };
                         builder
                             .ins()
-                            .store(flags, value_with_init_bit, table_entry_addr, 0);
+                            .store(flags, value_with_init_bit, elem_addr, 0);
                         Ok(())
                     }
                 }
-            }
-
-            #[cfg(feature = "gc")]
-            WasmHeapType::Extern => {
-                // Our write barrier for `externref`s being copied out of the
-                // stack and into a table is roughly equivalent to the following
-                // pseudocode:
-                //
-                // ```
-                // let current_elem = table[index]
-                // table[index] = value
-                // if value != null:
-                //     value.ref_count += 1
-                // if current_elem != null:
-                //     current_elem.ref_count -= 1
-                //     if current_elem.ref_count == 0:
-                //         call drop_externref(current_elem)
-                // ```
-                //
-                // This write barrier is responsible for ensuring that:
-                //
-                // 1. The value's ref count is incremented now that the
-                //    table is holding onto it. This is required for memory safety.
-                //
-                // 2. The old table element, if any, has its ref count
-                //    decremented, and that the wrapped data is dropped if the
-                //    ref count reaches zero. This is not required for memory
-                //    safety, but is required to avoid leaks. Furthermore, the
-                //    destructor might GC or touch this table, so we must only
-                //    drop the old table element *after* we've replaced it with
-                //    the new `value`!
-
-                builder.ensure_inserted_block();
-                let current_block = builder.current_block().unwrap();
-                let inc_ref_count_block = builder.create_block();
-                builder.insert_block_after(inc_ref_count_block, current_block);
-                let check_current_elem_block = builder.create_block();
-                builder.insert_block_after(check_current_elem_block, inc_ref_count_block);
-                let dec_ref_count_block = builder.create_block();
-                builder.insert_block_after(dec_ref_count_block, check_current_elem_block);
-                let drop_block = builder.create_block();
-                builder.insert_block_after(drop_block, dec_ref_count_block);
-                let continue_block = builder.create_block();
-                builder.insert_block_after(continue_block, drop_block);
-
-                // Grab the current element from the table if it's in-bounds,
-                // and store the new `value` into the table. This is the first
-                // thing we do, because we don't want to modify the ref count
-                // on `value` if this `table.set` is going to trap due to an
-                // out-of-bounds index.
-                //
-                // Note that we load the current element as a pointer, not a
-                // reference. This is so that if we call out-of-line to run its
-                // destructor, and its destructor triggers GC, this reference is
-                // not recorded in the stack map (which would lead to the GC
-                // saving a reference to a deallocated object, and then using it
-                // after its been freed).
-                let (table_entry_addr, flags) = table_data.prepare_table_addr(
-                    builder,
-                    index,
-                    pointer_type,
-                    self.isa.flags().enable_table_access_spectre_mitigation(),
-                );
-                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
-
-                // After the load, a store to the same address can't trap.
-                let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
-                builder.ins().store(flags, value, table_entry_addr, 0);
-
-                // If value is not null, increment `value`'s ref count.
-                //
-                // This has to come *before* decrementing the current table
-                // element's ref count, because it might reach ref count == zero,
-                // causing us to deallocate the current table element. However,
-                // if `value` *is* the current table element (and therefore this
-                // whole `table.set` is a no-op), then we would incorrectly
-                // deallocate `value` and leave it in the table, leading to use
-                // after free.
-                let value_is_null = builder.ins().is_null(value);
-                builder.ins().brif(
-                    value_is_null,
-                    check_current_elem_block,
-                    &[],
-                    inc_ref_count_block,
-                    &[],
-                );
-                builder.switch_to_block(inc_ref_count_block);
-                self.mutate_externref_ref_count(builder, value, 1);
-                builder.ins().jump(check_current_elem_block, &[]);
-
-                // If the current element is non-null, decrement its reference
-                // count. And if its reference count has reached zero, then make
-                // an out-of-line call to deallocate it.
-                builder.switch_to_block(check_current_elem_block);
-                let current_elem_is_null =
-                    builder
-                        .ins()
-                        .icmp_imm(ir::condcodes::IntCC::Equal, current_elem, 0);
-                builder.ins().brif(
-                    current_elem_is_null,
-                    continue_block,
-                    &[],
-                    dec_ref_count_block,
-                    &[],
-                );
-
-                builder.switch_to_block(dec_ref_count_block);
-                let new_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
-                let cond = builder.ins().icmp_imm(IntCC::Equal, new_ref_count, 0);
-                builder
-                    .ins()
-                    .brif(cond, drop_block, &[], continue_block, &[]);
-
-                // Call the `drop_externref` builtin to (you guessed it) drop
-                // the `externref`.
-                builder.switch_to_block(drop_block);
-                let builtin_idx = BuiltinFunctionIndex::drop_externref();
-                let builtin_sig = self
-                    .builtin_function_signatures
-                    .drop_externref(builder.func);
-                let (vmctx, builtin_addr) = self
-                    .translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
-                builder
-                    .ins()
-                    .call_indirect(builtin_sig, builtin_addr, &[vmctx, current_elem]);
-                builder.ins().jump(continue_block, &[]);
-
-                builder.switch_to_block(continue_block);
-
-                builder.seal_block(inc_ref_count_block);
-                builder.seal_block(check_current_elem_block);
-                builder.seal_block(dec_ref_count_block);
-                builder.seal_block(drop_block);
-                builder.seal_block(continue_block);
-
-                Ok(())
-            }
-
-            #[cfg(not(feature = "gc"))]
-            WasmHeapType::Extern => {
-                return Err(cranelift_wasm::wasm_unsupported!(
-                    "support for `externref` disabled at compile time because the \
-                     `gc` cargo feature was not enabled",
-                ))
             }
         }
     }
@@ -1912,39 +1851,56 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let (builtin_idx, builtin_sig) =
-            match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => (
-                    BuiltinFunctionIndex::table_fill_func_ref(),
-                    self.builtin_function_signatures
-                        .table_fill_func_ref(&mut pos.func),
-                ),
-                #[cfg(feature = "gc")]
-                WasmHeapType::Extern => (
-                    BuiltinFunctionIndex::table_fill_externref(),
-                    self.builtin_function_signatures
-                        .table_fill_externref(&mut pos.func),
-                ),
-                #[cfg(not(feature = "gc"))]
-                WasmHeapType::Extern => {
-                    return Err(cranelift_wasm::wasm_unsupported!(
-                        "support for `externref` disabled at compile time because the \
-                         `gc` cargo feature was not enabled",
-                    ));
-                }
-            };
+        let ty = self.module.table_plans[table_index].table.wasm_ty.heap_type;
+        let libcall = if ty.is_vmgcref_type() {
+            gc::gc_ref_table_fill_builtin(ty, self, &mut pos.func)?
+        } else {
+            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
+            self.builtin_functions.table_fill_func_ref(&mut pos.func)
+        };
 
-        let (vmctx, builtin_addr) =
-            self.translate_load_builtin_function_address(&mut pos, builtin_idx);
+        let vmctx = self.vmctx_val(&mut pos);
 
         let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
-        pos.ins().call_indirect(
-            builtin_sig,
-            builtin_addr,
-            &[vmctx, table_index_arg, dst, val, len],
-        );
+        pos.ins()
+            .call(libcall, &[vmctx, table_index_arg, dst, val, len]);
 
         Ok(())
+    }
+
+    fn translate_ref_i31(&mut self, mut pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value> {
+        let shifted = pos.ins().ishl_imm(val, 1);
+        let tagged = pos
+            .ins()
+            .bor_imm(shifted, i64::from(crate::I31_REF_DISCRIMINANT));
+        let ref_ty = self.reference_type(WasmHeapType::I31);
+        let extended = if ref_ty.bytes() > 4 {
+            pos.ins().uextend(ref_ty.as_int(), tagged)
+        } else {
+            tagged
+        };
+        let i31ref = pos.ins().bitcast(ref_ty, MemFlags::new(), extended);
+        Ok(i31ref)
+    }
+
+    fn translate_i31_get_s(
+        &mut self,
+        mut pos: FuncCursor,
+        i31ref: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let val = self.i31_ref_to_unshifted_value(&mut pos, i31ref);
+        let shifted = pos.ins().sshr_imm(val, 1);
+        Ok(shifted)
+    }
+
+    fn translate_i31_get_u(
+        &mut self,
+        mut pos: FuncCursor,
+        i31ref: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let val = self.i31_ref_to_unshifted_value(&mut pos, i31ref);
+        let shifted = pos.ins().ushr_imm(val, 1);
+        Ok(shifted)
     }
 
     fn translate_ref_null(
@@ -1952,11 +1908,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: cranelift_codegen::cursor::FuncCursor,
         ht: WasmHeapType,
     ) -> WasmResult<ir::Value> {
-        Ok(match ht {
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
-                pos.ins().iconst(self.pointer_type(), 0)
+        Ok(match ht.top() {
+            WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+                pos.ins().null(self.reference_type(ht))
             }
-            WasmHeapType::Extern => pos.ins().null(self.reference_type(ht)),
         })
     }
 
@@ -1985,106 +1941,58 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
         let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
-        let builtin_index = BuiltinFunctionIndex::ref_func();
-        let builtin_sig = self.builtin_function_signatures.ref_func(&mut pos.func);
-        let (vmctx, builtin_addr) =
-            self.translate_load_builtin_function_address(&mut pos, builtin_index);
+        let ref_func = self.builtin_functions.ref_func(&mut pos.func);
+        let vmctx = self.vmctx_val(&mut pos);
 
-        let call_inst = pos
-            .ins()
-            .call_indirect(builtin_sig, builtin_addr, &[vmctx, func_index]);
+        let call_inst = pos.ins().call(ref_func, &[vmctx, func_index]);
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
-    #[cfg(feature = "gc")]
     fn translate_custom_global_get(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         index: cranelift_wasm::GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
+        let ty = self.module.globals[index].wasm_ty;
+        debug_assert!(
+            ty.is_vmgcref_type(),
+            "We only use GlobalVariable::Custom for VMGcRef types"
         );
 
-        let builtin_index = BuiltinFunctionIndex::externref_global_get();
-        let builtin_sig = self
-            .builtin_function_signatures
-            .externref_global_get(&mut pos.func);
+        // TODO: use `GcCompiler::translate_read_gc_reference` for GC-reference
+        // globals instead of a libcall.
+        let libcall = gc::gc_ref_global_get_builtin(ty, self, &mut pos.func)?;
 
-        let (vmctx, builtin_addr) =
-            self.translate_load_builtin_function_address(&mut pos, builtin_index);
+        let vmctx = self.vmctx_val(&mut pos);
 
         let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
-        let call_inst =
-            pos.ins()
-                .call_indirect(builtin_sig, builtin_addr, &[vmctx, global_index_arg]);
+        let call_inst = pos.ins().call(libcall, &[vmctx, global_index_arg]);
 
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
-    #[cfg(not(feature = "gc"))]
-    fn translate_custom_global_get(
-        &mut self,
-        _pos: FuncCursor,
-        index: GlobalIndex,
-    ) -> WasmResult<ir::Value> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
-        );
-        Err(cranelift_wasm::wasm_unsupported!(
-            "support for `externref` disabled at compile time because the \
-             `gc` cargo feature was not enabled",
-        ))
-    }
-
-    #[cfg(feature = "gc")]
     fn translate_custom_global_set(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         index: cranelift_wasm::GlobalIndex,
         value: ir::Value,
     ) -> WasmResult<()> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
+        let ty = self.module.globals[index].wasm_ty;
+        debug_assert!(
+            ty.is_vmgcref_type(),
+            "We only use GlobalVariable::Custom for VMGcRef types"
         );
 
-        let builtin_index = BuiltinFunctionIndex::externref_global_set();
-        let builtin_sig = self
-            .builtin_function_signatures
-            .externref_global_set(&mut pos.func);
+        // TODO: use `GcCompiler::translate_write_gc_reference` for GC-reference
+        // globals instead of a libcall.
+        let libcall = gc::gc_ref_global_set_builtin(ty, self, &mut pos.func)?;
 
-        let (vmctx, builtin_addr) =
-            self.translate_load_builtin_function_address(&mut pos, builtin_index);
+        let vmctx = self.vmctx_val(&mut pos);
 
         let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
-        pos.ins()
-            .call_indirect(builtin_sig, builtin_addr, &[vmctx, global_index_arg, value]);
+        pos.ins().call(libcall, &[vmctx, global_index_arg, value]);
 
         Ok(())
-    }
-
-    #[cfg(not(feature = "gc"))]
-    fn translate_custom_global_set(
-        &mut self,
-        _pos: FuncCursor,
-        index: GlobalIndex,
-        _value: ir::Value,
-    ) -> WasmResult<()> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
-        );
-        Err(cranelift_wasm::wasm_unsupported!(
-            "support for `externref` disabled at compile time because the \
-             `gc` cargo feature was not enabled",
-        ))
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
@@ -2244,12 +2152,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     )
                 }
                 MemoryPlan {
-                    style: MemoryStyle::Static { bound: bound_pages },
+                    style:
+                        MemoryStyle::Static {
+                            byte_reservation: bound_bytes,
+                        },
                     offset_guard_size,
                     pre_guard_size: _,
                     memory: _,
                 } => {
-                    let bound_bytes = u64::from(bound_pages) * u64::from(WASM_PAGE_SIZE);
                     let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
                         // Create a memtype representing the untyped memory region.
                         let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
@@ -2332,33 +2242,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
         let ty = self.module.globals[index].wasm_ty;
-        match ty {
-            // Although `ExternRef`s live at the same memory location as any
-            // other type of global at the same index would, getting or setting
-            // them requires ref counting barriers. Therefore, we need to use
-            // `GlobalVariable::Custom`, as that is the only kind of
+
+        if ty.is_vmgcref_type() {
+            // Although reference-typed globals live at the same memory location as
+            // any other type of global at the same index would, getting or
+            // setting them requires ref counting barriers. Therefore, we need
+            // to use `GlobalVariable::Custom`, as that is the only kind of
             // `GlobalVariable` for which `cranelift-wasm` supports custom
             // access translation.
-            WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Extern,
-                ..
-            }) => return Ok(GlobalVariable::Custom),
-
-            // Funcrefs are represented as pointers which survive for the
-            // entire lifetime of the `Store` so there's no need for barriers.
-            // This means that they can fall through to memory as well.
-            WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc,
-                ..
-            }) => {}
-
-            // Value types all live in memory so let them fall through to a
-            // memory-based global.
-            WasmValType::I32
-            | WasmValType::I64
-            | WasmValType::F32
-            | WasmValType::F64
-            | WasmValType::V128 => {}
+            return Ok(GlobalVariable::Custom);
         }
 
         let (gv, offset) = self.get_global_location(func, index);
@@ -2374,8 +2266,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
-        let index = self.module.types[index].unwrap_function();
-        let sig = crate::wasm_call_signature(self.isa, &self.types[index], &self.tunables);
+        let index = self.module.types[index];
+        let sig =
+            crate::wasm_call_signature(self.isa, self.types[index].unwrap_func(), &self.tunables);
         Ok(func.import_signature(sig))
     }
 
@@ -2385,11 +2278,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
         let sig = self.module.functions[index].signature;
-        let sig = crate::wasm_call_signature(self.isa, &self.types[sig], &self.tunables);
+        let sig =
+            crate::wasm_call_signature(self.isa, self.types[sig].unwrap_func(), &self.tunables);
         let signature = func.import_signature(sig);
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
+                namespace: crate::NS_WASM_FUNC,
                 index: index.as_u32(),
             }));
         Ok(func.import_function(ir::ExtFuncData {
@@ -2494,21 +2388,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _heap: Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let func_sig = self
-            .builtin_function_signatures
-            .memory32_grow(&mut pos.func);
+        let memory_grow = self.builtin_functions.memory32_grow(&mut pos.func);
         let index_arg = index.index();
 
         let memory_index = pos.ins().iconst(I32, index_arg as i64);
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(
-            &mut pos,
-            BuiltinFunctionIndex::memory32_grow(),
-        );
+        let vmctx = self.vmctx_val(&mut pos);
 
         let val = self.cast_memory_index_to_i64(&mut pos, val, index);
-        let call_inst = pos
-            .ins()
-            .call_indirect(func_sig, func_addr, &[vmctx, val, memory_index]);
+        let call_inst = pos.ins().call(memory_grow, &[vmctx, val, memory_index]);
         let result = *pos.func.dfg.inst_results(call_inst).first().unwrap();
         Ok(self.cast_pointer_to_memory_index(pos, result, index))
     }
@@ -2600,10 +2487,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let (vmctx, func_addr) = self
-            .translate_load_builtin_function_address(&mut pos, BuiltinFunctionIndex::memory_copy());
+        let vmctx = self.vmctx_val(&mut pos);
 
-        let func_sig = self.builtin_function_signatures.memory_copy(&mut pos.func);
+        let memory_copy = self.builtin_functions.memory_copy(&mut pos.func);
         let dst = self.cast_memory_index_to_i64(&mut pos, dst, dst_index);
         let src = self.cast_memory_index_to_i64(&mut pos, src, src_index);
         // The length is 32-bit if either memory is 32-bit, but if they're both
@@ -2620,11 +2506,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         };
         let src_index = pos.ins().iconst(I32, i64::from(src_index.as_u32()));
         let dst_index = pos.ins().iconst(I32, i64::from(dst_index.as_u32()));
-        pos.ins().call_indirect(
-            func_sig,
-            func_addr,
-            &[vmctx, dst_index, dst, src_index, src, len],
-        );
+        pos.ins()
+            .call(memory_copy, &[vmctx, dst_index, dst, src_index, src, len]);
 
         Ok(())
     }
@@ -2638,19 +2521,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let func_sig = self.builtin_function_signatures.memory_fill(&mut pos.func);
+        let memory_fill = self.builtin_functions.memory_fill(&mut pos.func);
         let dst = self.cast_memory_index_to_i64(&mut pos, dst, memory_index);
         let len = self.cast_memory_index_to_i64(&mut pos, len, memory_index);
         let memory_index_arg = pos.ins().iconst(I32, i64::from(memory_index.as_u32()));
 
-        let (vmctx, func_addr) = self
-            .translate_load_builtin_function_address(&mut pos, BuiltinFunctionIndex::memory_fill());
+        let vmctx = self.vmctx_val(&mut pos);
 
-        pos.ins().call_indirect(
-            func_sig,
-            func_addr,
-            &[vmctx, memory_index_arg, dst, val, len],
-        );
+        pos.ins()
+            .call(memory_fill, &[vmctx, memory_index_arg, dst, val, len]);
 
         Ok(())
     }
@@ -2665,18 +2544,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let (func_sig, func_idx) = self.get_memory_init_func(&mut pos.func);
+        let memory_init = self.builtin_functions.memory_init(&mut pos.func);
 
         let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
 
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+        let vmctx = self.vmctx_val(&mut pos);
 
         let dst = self.cast_memory_index_to_i64(&mut pos, dst, memory_index);
 
-        pos.ins().call_indirect(
-            func_sig,
-            func_addr,
+        pos.ins().call(
+            memory_init,
             &[vmctx, memory_index_arg, seg_index_arg, dst, src, len],
         );
 
@@ -2684,11 +2562,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
-        let (func_sig, func_idx) = self.get_data_drop_func(&mut pos.func);
+        let data_drop = self.builtin_functions.data_drop(&mut pos.func);
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
-        pos.ins()
-            .call_indirect(func_sig, func_addr, &[vmctx, seg_index_arg]);
+        let vmctx = self.vmctx_val(&mut pos);
+        pos.ins().call(data_drop, &[vmctx, seg_index_arg]);
         Ok(())
     }
 
@@ -2711,17 +2588,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let (func_sig, dst_table_index_arg, src_table_index_arg, func_idx) =
+        let (table_copy, dst_table_index_arg, src_table_index_arg) =
             self.get_table_copy_func(&mut pos.func, dst_table_index, src_table_index);
 
         let dst_table_index_arg = pos.ins().iconst(I32, dst_table_index_arg as i64);
         let src_table_index_arg = pos.ins().iconst(I32, src_table_index_arg as i64);
-
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
-
-        pos.ins().call_indirect(
-            func_sig,
-            func_addr,
+        let vmctx = self.vmctx_val(&mut pos);
+        pos.ins().call(
+            table_copy,
             &[
                 vmctx,
                 dst_table_index_arg,
@@ -2744,17 +2618,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let (func_sig, table_index_arg, func_idx) =
-            self.get_table_init_func(&mut pos.func, table_index);
-
-        let table_index_arg = pos.ins().iconst(I32, table_index_arg as i64);
-        let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
-
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
-
-        pos.ins().call_indirect(
-            func_sig,
-            func_addr,
+        let table_init = self.builtin_functions.table_init(&mut pos.func);
+        let table_index_arg = pos.ins().iconst(I32, i64::from(table_index.as_u32()));
+        let seg_index_arg = pos.ins().iconst(I32, i64::from(seg_index));
+        let vmctx = self.vmctx_val(&mut pos);
+        pos.ins().call(
+            table_init,
             &[vmctx, table_index_arg, seg_index_arg, dst, src, len],
         );
 
@@ -2762,15 +2631,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn translate_elem_drop(&mut self, mut pos: FuncCursor, elem_index: u32) -> WasmResult<()> {
-        let (func_sig, func_idx) = self.get_elem_drop_func(&mut pos.func);
-
+        let elem_drop = self.builtin_functions.elem_drop(&mut pos.func);
         let elem_index_arg = pos.ins().iconst(I32, elem_index as i64);
-
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
-
-        pos.ins()
-            .call_indirect(func_sig, func_addr, &[vmctx, elem_index_arg]);
-
+        let vmctx = self.vmctx_val(&mut pos);
+        pos.ins().call(elem_drop, &[vmctx, elem_index_arg]);
         Ok(())
     }
 
@@ -2783,22 +2647,31 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         expected: ir::Value,
         timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
-        let implied_ty = pos.func.dfg.value_type(expected);
-        let (func_sig, memory_index, func_idx) =
-            self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
+        #[cfg(feature = "threads")]
+        {
+            let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
+            let implied_ty = pos.func.dfg.value_type(expected);
+            let (wait_func, memory_index) =
+                self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
 
-        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+            let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
 
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+            let vmctx = self.vmctx_val(&mut pos);
 
-        let call_inst = pos.ins().call_indirect(
-            func_sig,
-            func_addr,
-            &[vmctx, memory_index_arg, addr, expected, timeout],
-        );
+            let call_inst = pos.ins().call(
+                wait_func,
+                &[vmctx, memory_index_arg, addr, expected, timeout],
+            );
 
-        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+            Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+        }
+        #[cfg(not(feature = "threads"))]
+        {
+            let _ = (&mut pos, memory_index, addr, expected, timeout);
+            Err(wasmtime_environ::WasmError::Unsupported(
+                "threads support disabled at compile time".to_string(),
+            ))
+        }
     }
 
     fn translate_atomic_notify(
@@ -2809,23 +2682,26 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         addr: ir::Value,
         count: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
-        let func_sig = self
-            .builtin_function_signatures
-            .memory_atomic_notify(&mut pos.func);
+        #[cfg(feature = "threads")]
+        {
+            let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
+            let atomic_notify = self.builtin_functions.memory_atomic_notify(&mut pos.func);
 
-        let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
+            let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
+            let vmctx = self.vmctx_val(&mut pos);
+            let call_inst = pos
+                .ins()
+                .call(atomic_notify, &[vmctx, memory_index_arg, addr, count]);
 
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(
-            &mut pos,
-            BuiltinFunctionIndex::memory_atomic_notify(),
-        );
-
-        let call_inst =
-            pos.ins()
-                .call_indirect(func_sig, func_addr, &[vmctx, memory_index_arg, addr, count]);
-
-        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+            Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+        }
+        #[cfg(not(feature = "threads"))]
+        {
+            let _ = (&mut pos, memory_index, addr, count);
+            Err(wasmtime_environ::WasmError::Unsupported(
+                "threads support disabled at compile time".to_string(),
+            ))
+        }
     }
 
     fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
@@ -2898,11 +2774,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.epoch_function_entry(builder);
         }
 
-        let func_name = self.current_func_name(builder);
-        if func_name == Some("malloc") {
-            self.check_malloc_start(builder);
-        } else if func_name == Some("free") {
-            self.check_free_start(builder);
+        #[cfg(feature = "wmemcheck")]
+        {
+            let func_name = self.current_func_name(builder);
+            if func_name == Some("malloc") {
+                self.check_malloc_start(builder);
+            } else if func_name == Some("free") {
+                self.check_free_start(builder);
+            }
         }
 
         Ok(())
@@ -2947,102 +2826,85 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.isa.has_x86_pmaddubsw_lowering()
     }
 
-    cfg_if! {
-        if #[cfg(feature = "wmemcheck")] {
-            fn handle_before_return(
-                &mut self,
-                retvals: &[Value],
-                builder: &mut FunctionBuilder,
-            ) {
-                if self.wmemcheck {
-                    let func_name = self.current_func_name(builder);
-                    if func_name == Some("malloc") {
-                        self.hook_malloc_exit(builder, retvals);
-                    } else if func_name == Some("free") {
-                        self.hook_free_exit(builder);
-                    }
-                }
+    #[cfg(feature = "wmemcheck")]
+    fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
+        if self.wmemcheck {
+            let func_name = self.current_func_name(builder);
+            if func_name == Some("malloc") {
+                self.hook_malloc_exit(builder, retvals);
+            } else if func_name == Some("free") {
+                self.hook_free_exit(builder);
             }
+        }
+    }
 
-            fn before_load(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
-                if self.wmemcheck {
-                    let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
-                    let (vmctx, check_load) = self.translate_load_builtin_function_address(
-                        &mut builder.cursor(),
-                        BuiltinFunctionIndex::check_load(),
-                    );
-                    let num_bytes = builder.ins().iconst(I32, val_size as i64);
-                    let offset_val = builder.ins().iconst(I64, offset as i64);
-                    builder
-                        .ins()
-                        .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
-                }
-            }
+    #[cfg(feature = "wmemcheck")]
+    fn before_load(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        val_size: u8,
+        addr: ir::Value,
+        offset: u64,
+    ) {
+        if self.wmemcheck {
+            let check_load = self.builtin_functions.check_load(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let num_bytes = builder.ins().iconst(I32, val_size as i64);
+            let offset_val = builder.ins().iconst(I64, offset as i64);
+            builder
+                .ins()
+                .call(check_load, &[vmctx, num_bytes, addr, offset_val]);
+        }
+    }
 
-            fn before_store(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
-                if self.wmemcheck {
-                    let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
-                    let (vmctx, check_store) = self.translate_load_builtin_function_address(
-                        &mut builder.cursor(),
-                        BuiltinFunctionIndex::check_store(),
-                    );
-                    let num_bytes = builder.ins().iconst(I32, val_size as i64);
-                    let offset_val = builder.ins().iconst(I64, offset as i64);
-                    builder
-                        .ins()
-                        .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
-                }
-            }
+    #[cfg(feature = "wmemcheck")]
+    fn before_store(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        val_size: u8,
+        addr: ir::Value,
+        offset: u64,
+    ) {
+        if self.wmemcheck {
+            let check_store = self.builtin_functions.check_store(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let num_bytes = builder.ins().iconst(I32, val_size as i64);
+            let offset_val = builder.ins().iconst(I64, offset as i64);
+            builder
+                .ins()
+                .call(check_store, &[vmctx, num_bytes, addr, offset_val]);
+        }
+    }
 
-            fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {
-                if self.wmemcheck {
-                    if global_index == 0 {
-                        // We are making the assumption that global 0 is the auxiliary stack pointer.
-                        let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
-                        let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
-                            &mut builder.cursor(),
-                            BuiltinFunctionIndex::update_stack_pointer(),
-                        );
-                        builder
-                            .ins()
-                            .call_indirect(update_stack_pointer_sig, update_stack_pointer, &[vmctx, value]);
-                    }
-                }
+    #[cfg(feature = "wmemcheck")]
+    fn update_global(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        global_index: u32,
+        value: ir::Value,
+    ) {
+        if self.wmemcheck {
+            if global_index == 0 {
+                // We are making the assumption that global 0 is the auxiliary stack pointer.
+                let update_stack_pointer =
+                    self.builtin_functions.update_stack_pointer(builder.func);
+                let vmctx = self.vmctx_val(&mut builder.cursor());
+                builder.ins().call(update_stack_pointer, &[vmctx, value]);
             }
+        }
+    }
 
-            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_pages: ir::Value, mem_index: MemoryIndex) {
-                if self.wmemcheck && mem_index.as_u32() == 0 {
-                    let update_mem_size_sig = self.builtin_function_signatures.update_mem_size(builder.func);
-                    let (vmctx, update_mem_size) = self.translate_load_builtin_function_address(
-                        &mut builder.cursor(),
-                        BuiltinFunctionIndex::update_mem_size(),
-                    );
-                    builder
-                        .ins()
-                        .call_indirect(update_mem_size_sig, update_mem_size, &[vmctx, num_pages]);
-                }
-            }
-        } else {
-            fn handle_before_return(&mut self, _retvals: &[Value], builder: &mut FunctionBuilder) {
-                let _ = self.builtin_function_signatures.check_malloc(builder.func);
-                let _ = self.builtin_function_signatures.check_free(builder.func);
-            }
-
-            fn before_load(&mut self, builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {
-                let _ = self.builtin_function_signatures.check_load(builder.func);
-            }
-
-            fn before_store(&mut self, builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {
-                let _ = self.builtin_function_signatures.check_store(builder.func);
-            }
-
-            fn update_global(&mut self, builder: &mut FunctionBuilder, _global_index: u32, _value: ir::Value) {
-                let _ = self.builtin_function_signatures.update_stack_pointer(builder.func);
-            }
-
-            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, _num_pages: Value, _mem_index: MemoryIndex) {
-                let _ = self.builtin_function_signatures.update_mem_size(builder.func);
-            }
+    #[cfg(feature = "wmemcheck")]
+    fn before_memory_grow(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        num_pages: ir::Value,
+        mem_index: MemoryIndex,
+    ) {
+        if self.wmemcheck && mem_index.as_u32() == 0 {
+            let update_mem_size = self.builtin_functions.update_mem_size(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            builder.ins().call(update_mem_size, &[vmctx, num_pages]);
         }
     }
 }

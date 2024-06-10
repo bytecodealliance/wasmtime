@@ -15,18 +15,21 @@
 //! 1. A version byte, currently `VERSION`.
 //! 2. A byte indicating how long the next field is.
 //! 3. A version string of the length of the previous byte value.
-//! 4. A `bincode`-encoded `Metadata` structure.
+//! 4. A `postcard`-encoded `Metadata` structure.
 //!
 //! This is hoped to help distinguish easily Wasmtime-based ELF files from
 //! other random ELF files, as well as provide better error messages for
 //! using wasmtime artifacts across versions.
 
+use crate::prelude::*;
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, ensure, Context, Result};
+use core::str::FromStr;
+use object::endian::NativeEndian;
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
-use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
+use object::{read::elf::ElfFile64, FileFlags, Object as _, ObjectSection, SectionKind};
 use serde_derive::{Deserialize, Serialize};
-use std::str::FromStr;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
 
@@ -54,7 +57,9 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     // structured well enough to make this easy and additionally it's not really
     // a perf issue right now so doing that is left for another day's
     // refactoring.
-    let obj = File::parse(mmap).context("failed to parse precompiled artifact as an ELF")?;
+    let obj = ElfFile64::<NativeEndian>::parse(mmap)
+        .err2anyhow()
+        .context("failed to parse precompiled artifact as an ELF")?;
     let expected_e_flags = match expected {
         ObjectKind::Module => obj::EF_WASMTIME_MODULE,
         ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
@@ -71,7 +76,8 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     let data = obj
         .section_by_name(obj::ELF_WASM_ENGINE)
         .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
-        .data()?;
+        .data()
+        .err2anyhow()?;
     let (first, data) = data
         .split_first()
         .ok_or_else(|| anyhow!("invalid engine section"))?;
@@ -90,7 +96,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
 
     match &engine.config().module_version {
         ModuleVersionStrategy::WasmtimeVersion => {
-            let version = std::str::from_utf8(version)?;
+            let version = core::str::from_utf8(version).err2anyhow()?;
             if version != env!("CARGO_PKG_VERSION") {
                 bail!(
                     "Module was compiled with incompatible Wasmtime version '{}'",
@@ -99,7 +105,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
             }
         }
         ModuleVersionStrategy::Custom(v) => {
-            let version = std::str::from_utf8(&version)?;
+            let version = core::str::from_utf8(&version).err2anyhow()?;
             if version != v {
                 bail!(
                     "Module was compiled with incompatible version '{}'",
@@ -109,9 +115,12 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         }
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
-    bincode::deserialize::<Metadata<'_>>(data)?.check_compatible(engine)
+    postcard::from_bytes::<Metadata<'_>>(data)
+        .err2anyhow()?
+        .check_compatible(engine)
 }
 
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Metadata<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
@@ -132,12 +141,12 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     );
     data.push(version.len() as u8);
     data.extend_from_slice(version.as_bytes());
-    bincode::serialize_into(&mut data, metadata).unwrap();
+    data.extend(postcard::to_allocvec(metadata).unwrap());
     obj.set_section_data(section, data, 1);
 }
 
 fn detect_precompiled<'data, R: object::ReadRef<'data>>(
-    obj: File<'data, R>,
+    obj: ElfFile64<'data, NativeEndian, R>,
 ) -> Option<Precompiled> {
     match obj.flags() {
         FileFlags::Elf {
@@ -155,12 +164,13 @@ fn detect_precompiled<'data, R: object::ReadRef<'data>>(
 }
 
 pub fn detect_precompiled_bytes(bytes: &[u8]) -> Option<Precompiled> {
-    detect_precompiled(File::parse(bytes).ok()?)
+    detect_precompiled(ElfFile64::parse(bytes).ok()?)
 }
 
+#[cfg(feature = "std")]
 pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Option<Precompiled>> {
     let read_cache = object::ReadCache::new(std::fs::File::open(path)?);
-    let obj = File::parse(&read_cache)?;
+    let obj = ElfFile64::parse(&read_cache)?;
     Ok(detect_precompiled(obj))
 }
 
@@ -197,7 +207,7 @@ struct WasmFeatures {
 impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new(engine: &Engine) -> Metadata<'static> {
-        let wasmparser::WasmFeatures {
+        let wasmparser::WasmFeaturesInflated {
             reference_types,
             multi_value,
             bulk_memory,
@@ -213,6 +223,8 @@ impl Metadata<'_> {
             memory_control,
             function_references,
             gc,
+            custom_page_sizes,
+            shared_everything_threads,
             component_model_values,
             component_model_nested_names,
 
@@ -221,11 +233,16 @@ impl Metadata<'_> {
             saturating_float_to_int: _,
             sign_extension: _,
             floats: _,
-        } = engine.config().features;
+        } = engine.config().features.inflate();
 
+        // These features are not implemented in Wasmtime yet. We match on them
+        // above so that once we do implement support for them, we won't
+        // silently ignore them during serialization.
         assert!(!memory_control);
         assert!(!component_model_values);
         assert!(!component_model_nested_names);
+        assert!(!custom_page_sizes);
+        assert!(!shared_everything_threads);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -302,7 +319,7 @@ impl Metadata<'_> {
         Ok(())
     }
 
-    fn check_int<T: Eq + std::fmt::Display>(found: T, expected: T, feature: &str) -> Result<()> {
+    fn check_int<T: Eq + core::fmt::Display>(found: T, expected: T, feature: &str) -> Result<()> {
         if found == expected {
             return Ok(());
         }
@@ -330,7 +347,7 @@ impl Metadata<'_> {
 
     fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
-            static_memory_bound,
+            static_memory_reservation,
             static_memory_offset_guard_size,
             dynamic_memory_offset_guard_size,
             generate_native_debuginfo,
@@ -339,9 +356,12 @@ impl Metadata<'_> {
             epoch_interruption,
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
+            table_lazy_init,
             relaxed_simd_deterministic,
             tail_callable,
             winch_callable,
+            cache_call_indirects,
+            max_call_indirect_cache_slots,
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
@@ -357,9 +377,9 @@ impl Metadata<'_> {
         } = self.tunables;
 
         Self::check_int(
-            static_memory_bound,
-            other.static_memory_bound,
-            "static memory bound",
+            static_memory_reservation,
+            other.static_memory_reservation,
+            "static memory reservation",
         )?;
         Self::check_int(
             static_memory_offset_guard_size,
@@ -397,6 +417,7 @@ impl Metadata<'_> {
             other.guard_before_linear_memory,
             "guard before linear memory",
         )?;
+        Self::check_bool(table_lazy_init, other.table_lazy_init, "table lazy init")?;
         Self::check_bool(
             relaxed_simd_deterministic,
             other.relaxed_simd_deterministic,
@@ -407,6 +428,16 @@ impl Metadata<'_> {
             winch_callable,
             other.winch_callable,
             "Winch calling convention",
+        )?;
+        Self::check_bool(
+            cache_call_indirects,
+            other.cache_call_indirects,
+            "caching of call-indirect targets",
+        )?;
+        Self::check_int(
+            max_call_indirect_cache_slots,
+            other.max_call_indirect_cache_slots,
+            "maximum slot count for caching of call-indirect targets",
         )?;
 
         Ok(())
@@ -451,69 +482,78 @@ impl Metadata<'_> {
             gc,
         } = self.features;
 
+        use wasmparser::WasmFeatures as F;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
             "gc",
             reference_types,
-            other.reference_types,
+            other.contains(F::REFERENCE_TYPES),
             "WebAssembly reference types support",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
             "gc",
             function_references,
-            other.function_references,
+            other.contains(F::FUNCTION_REFERENCES),
             "WebAssembly function-references support",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
             "gc",
             gc,
-            other.gc,
+            other.contains(F::GC),
             "WebAssembly garbage collection support",
         )?;
 
         Self::check_bool(
             multi_value,
-            other.multi_value,
+            other.contains(F::MULTI_VALUE),
             "WebAssembly multi-value support",
         )?;
         Self::check_bool(
             bulk_memory,
-            other.bulk_memory,
+            other.contains(F::BULK_MEMORY),
             "WebAssembly bulk memory support",
         )?;
         Self::check_bool(
             component_model,
-            other.component_model,
+            other.contains(F::COMPONENT_MODEL),
             "WebAssembly component model support",
         )?;
-        Self::check_bool(simd, other.simd, "WebAssembly SIMD support")?;
-        Self::check_bool(tail_call, other.tail_call, "WebAssembly tail calls support")?;
-        Self::check_bool(threads, other.threads, "WebAssembly threads support")?;
+        Self::check_bool(simd, other.contains(F::SIMD), "WebAssembly SIMD support")?;
+        Self::check_bool(
+            tail_call,
+            other.contains(F::TAIL_CALL),
+            "WebAssembly tail calls support",
+        )?;
+        Self::check_bool(
+            threads,
+            other.contains(F::THREADS),
+            "WebAssembly threads support",
+        )?;
         Self::check_bool(
             multi_memory,
-            other.multi_memory,
+            other.contains(F::MULTI_MEMORY),
             "WebAssembly multi-memory support",
         )?;
         Self::check_bool(
             exceptions,
-            other.exceptions,
+            other.contains(F::EXCEPTIONS),
             "WebAssembly exceptions support",
         )?;
         Self::check_bool(
             memory64,
-            other.memory64,
+            other.contains(F::MEMORY64),
             "WebAssembly 64-bit memory support",
         )?;
         Self::check_bool(
             extended_const,
-            other.extended_const,
+            other.contains(F::EXTENDED_CONST),
             "WebAssembly extended-const support",
         )?;
         Self::check_bool(
             relaxed_simd,
-            other.relaxed_simd,
+            other.contains(F::RELAXED_SIMD),
             "WebAssembly relaxed-simd support",
         )?;
 
@@ -603,13 +643,16 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(format!("{:?}", e).starts_with(
-                "\
+            Err(e) => assert!(
+                format!("{e:?}").starts_with(
+                    "\
 compilation settings of module incompatible with native host
 
 Caused by:
-    cannot test if target-specific flag \"not_a_flag\" is available at runtime",
-            )),
+    don't know how to test for target-specific flag \"not_a_flag\" at runtime",
+                ),
+                "bad error {e:?}",
+            ),
         }
 
         Ok(())
@@ -809,6 +852,38 @@ Caused by:
         assert_ne!(custom_version_hash, default_version_hash);
         assert_ne!(custom_version_hash, none_version_hash);
         assert_ne!(default_version_hash, none_version_hash);
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    #[cfg(feature = "component-model")]
+    fn components_are_cached() -> Result<()> {
+        use crate::component::Component;
+
+        let td = TempDir::new()?;
+        let config_path = td.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            &format!(
+                "
+                    [cache]
+                    enabled = true
+                    directory = '{}'
+                ",
+                td.path().join("cache").display()
+            ),
+        )?;
+        let mut cfg = Config::new();
+        cfg.cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Component::new(&engine, "(component (core module (func)))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Component::new(&engine, "(component (core module (func)))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         Ok(())
     }

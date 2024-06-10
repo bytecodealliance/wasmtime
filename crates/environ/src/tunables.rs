@@ -5,9 +5,9 @@ use target_lexicon::{PointerWidth, Triple};
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize, Debug)]
 pub struct Tunables {
-    /// For static heaps, the size in wasm pages of the heap protected by bounds
-    /// checking.
-    pub static_memory_bound: u64,
+    /// For static heaps, the size in bytes of virtual memory reservation for
+    /// the heap.
+    pub static_memory_reservation: u64,
 
     /// The size in bytes of the offset guard for static heaps.
     pub static_memory_offset_guard_size: u64,
@@ -42,6 +42,12 @@ pub struct Tunables {
     /// beginning of the allocation in addition to the end.
     pub guard_before_linear_memory: bool,
 
+    /// Whether to initialize tables lazily, so that instantiation is fast but
+    /// indirect calls are a little slower. If false, tables are initialized
+    /// eagerly from any active element segments that apply to them during
+    /// instantiation.
+    pub table_lazy_init: bool,
+
     /// Indicates whether an address map from compiled native code back to wasm
     /// offsets in the original file is generated.
     pub generate_address_map: bool,
@@ -59,6 +65,14 @@ pub struct Tunables {
 
     /// Whether or not Wasm functions target the winch abi.
     pub winch_callable: bool,
+
+    /// Whether we implement a one-entry cache at each call_indirect
+    /// site.
+    pub cache_call_indirects: bool,
+
+    /// The maximum number of call-indirect cache slots that we will
+    /// allocate for one instance.
+    pub max_call_indirect_cache_slots: usize,
 }
 
 impl Tunables {
@@ -92,7 +106,7 @@ impl Tunables {
         Tunables {
             // No virtual memory tricks are available on miri so make these
             // limits quite conservative.
-            static_memory_bound: (1 << 20) / crate::WASM_PAGE_SIZE as u64,
+            static_memory_reservation: 1 << 20,
             static_memory_offset_guard_size: 0,
             dynamic_memory_offset_guard_size: 0,
             dynamic_memory_growth_reserve: 0,
@@ -105,11 +119,14 @@ impl Tunables {
             epoch_interruption: false,
             static_memory_bound_is_maximum: false,
             guard_before_linear_memory: true,
+            table_lazy_init: true,
             generate_address_map: true,
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
             tail_callable: false,
             winch_callable: false,
+            cache_call_indirects: false,
+            max_call_indirect_cache_slots: 50_000,
         }
     }
 
@@ -119,7 +136,7 @@ impl Tunables {
             // For 32-bit we scale way down to 10MB of reserved memory. This
             // impacts performance severely but allows us to have more than a
             // few instances running around.
-            static_memory_bound: (10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64,
+            static_memory_reservation: 10 * (1 << 20),
             static_memory_offset_guard_size: 0x1_0000,
             dynamic_memory_offset_guard_size: 0x1_0000,
             dynamic_memory_growth_reserve: 1 << 20, // 1MB
@@ -137,7 +154,7 @@ impl Tunables {
             //
             // Coupled with a 2 GiB address space guard it lets us translate
             // wasm offsets into x86 offsets as aggressively as we can.
-            static_memory_bound: 0x1_0000,
+            static_memory_reservation: 1 << 32,
             static_memory_offset_guard_size: 0x8000_0000,
 
             // Size in bytes of the offset guard for dynamic memories.

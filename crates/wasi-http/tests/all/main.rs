@@ -8,22 +8,22 @@ use sha2::{Digest, Sha256};
 use std::{collections::HashMap, iter, net::Ipv4Addr, str, sync::Arc};
 use tokio::task;
 use wasmtime::{
-    component::{Component, Linker, Resource, ResourceTable},
+    component::{Component, Linker, ResourceTable},
     Config, Engine, Store,
 };
 use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
-    body::HyperIncomingBody,
+    body::{HyperIncomingBody, HyperOutgoingBody},
     io::TokioIo,
-    types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequest},
-    WasiHttpCtx, WasiHttpView,
+    types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+    HttpResult, WasiHttpCtx, WasiHttpView,
 };
 
 mod http_server;
 
 type RequestSender = Arc<
-    dyn Fn(&mut Ctx, OutgoingRequest) -> wasmtime::Result<Resource<HostFutureIncomingResponse>>
+    dyn Fn(hyper::Request<HyperOutgoingBody>, OutgoingRequestConfig) -> HostFutureIncomingResponse
         + Send
         + Sync,
 >;
@@ -58,18 +58,19 @@ impl WasiHttpView for Ctx {
 
     fn send_request(
         &mut self,
-        request: OutgoingRequest,
-    ) -> wasmtime::Result<Resource<HostFutureIncomingResponse>> {
+        request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> HttpResult<HostFutureIncomingResponse> {
         if let Some(rejected_authority) = &self.rejected_authority {
-            let (auth, _port) = request.authority.split_once(':').unwrap();
-            if auth == rejected_authority {
+            let authority = request.uri().authority().map(ToString::to_string).unwrap();
+            if &authority == rejected_authority {
                 return Err(ErrorCode::HttpRequestDenied.into());
             }
         }
         if let Some(send_request) = self.send_request.clone() {
-            send_request(self, request)
+            Ok(send_request(request, config))
         } else {
-            types::default_send_request(self, request)
+            Ok(types::default_send_request(request, config))
         }
     }
 
@@ -90,7 +91,7 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     let ctx = Ctx {
         table: ResourceTable::new(),
         wasi: builder.build(),
-        http: WasiHttpCtx {},
+        http: WasiHttpCtx::new(),
         stderr,
         stdout,
         send_request: None,
@@ -147,7 +148,7 @@ async fn run_wasi_http(
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     let wasi = builder.build();
-    let http = WasiHttpCtx;
+    let http = WasiHttpCtx::new();
     let ctx = Ctx {
         table,
         wasi,
@@ -269,20 +270,19 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
 
     let send_request = if override_send_request {
         Some(Arc::new(
-            move |view: &mut Ctx,
-                  OutgoingRequest {
-                      request,
+            move |request: hyper::Request<HyperOutgoingBody>,
+                  OutgoingRequestConfig {
                       between_bytes_timeout,
                       ..
                   }| {
                 let response = handle(request.into_parts().0).map(|resp| {
-                    Ok(IncomingResponseInternal {
+                    Ok(IncomingResponse {
                         resp,
-                        worker: Arc::new(wasmtime_wasi::runtime::spawn(future::ready(()))),
+                        worker: None,
                         between_bytes_timeout,
                     })
                 });
-                Ok(WasiHttpView::table(view).push(HostFutureIncomingResponse::Ready(response))?)
+                HostFutureIncomingResponse::ready(response)
             },
         ) as RequestSender)
     } else {
@@ -523,6 +523,30 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
             received.len()
         );
     }
+
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+// test uses TLS but riscv/s390x don't support that yet
+#[cfg_attr(any(target_arch = "riscv64", target_arch = "s390x"), ignore)]
+async fn wasi_http_without_port() -> Result<()> {
+    let req = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri("https://httpbin.org/get");
+
+    let _response: hyper::Response<_> = run_wasi_http(
+        test_programs_artifacts::API_PROXY_FORWARD_REQUEST_COMPONENT,
+        req.body(body::empty())?,
+        None,
+        None,
+    )
+    .await??;
+
+    // NB: don't test the actual return code of `response`. This is testing a
+    // live http request against a live server and things happen. If we got this
+    // far it's already successful that the request was made and the lack of
+    // port in the URI was handled.
 
     Ok(())
 }

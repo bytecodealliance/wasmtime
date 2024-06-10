@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
 use anyhow::Result;
 use std::io::{self, BufWriter, Write};
@@ -10,7 +11,7 @@ static PERFMAP_FILE: Mutex<Option<BufWriter<File>>> = Mutex::new(None);
 /// Interface for driving the creation of jitdump files
 struct PerfMapAgent;
 
-/// Intialize a JitDumpAgent and write out the header.
+/// Initialize a JitDumpAgent and write out the header.
 pub fn new() -> Result<Box<dyn ProfilingAgent>> {
     let mut file = PERFMAP_FILE.lock().unwrap();
     if file.is_none() {

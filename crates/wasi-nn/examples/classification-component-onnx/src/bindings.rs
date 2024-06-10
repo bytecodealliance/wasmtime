@@ -600,7 +600,7 @@ pub mod wasi {
       }
       #[allow(unused_unsafe, clippy::all)]
       /// Create a `pollable` which will resolve once the specified instant
-      /// occured.
+      /// occurred.
       pub fn subscribe_instant(when: Instant,) -> Pollable{
         
         #[allow(unused_imports)]
@@ -623,7 +623,7 @@ pub mod wasi {
       #[allow(unused_unsafe, clippy::all)]
       /// Create a `pollable` which will resolve once the given duration has
       /// elapsed, starting at the time at which this function was called.
-      /// occured.
+      /// occurred.
       pub fn subscribe_duration(when: Duration,) -> Pollable{
         
         #[allow(unused_imports)]
@@ -859,7 +859,7 @@ pub mod wasi {
           /// WASI. At this time, it should be interpreted as a request, and not a
           /// requirement.
           const DATA_INTEGRITY_SYNC = 1 << 3;
-          /// Requests that reads be performed at the same level of integrety
+          /// Requests that reads be performed at the same level of integrity
           /// requested for writes. This is similar to `O_RSYNC` in POSIX.
           /// 
           /// The precise semantics of this operation have not yet been defined for
@@ -3357,7 +3357,7 @@ pub mod wasi {
       /// This function does not return a `result`; polling in itself does not
       /// do any I/O so it doesn't fail. If any of the I/O sources identified by
       /// the pollables has an error, it is indicated by marking the source as
-      /// being reaedy for I/O.
+      /// being ready for I/O.
       pub fn poll(in_: &[&Pollable],) -> wit_bindgen::rt::vec::Vec::<u32>{
         
         #[allow(unused_imports)]
@@ -4205,7 +4205,7 @@ pub mod wasi {
         impl OutputStream {
           #[allow(unused_unsafe, clippy::all)]
           /// Create a `pollable` which will resolve once the output-stream
-          /// is ready for more writing, or an error has occured. When this
+          /// is ready for more writing, or an error has occurred. When this
           /// pollable is ready, `check-write` will return `ok(n)` with n>0, or an
           /// error.
           /// 
@@ -4378,7 +4378,7 @@ pub mod wasi {
             #[allow(unused_unsafe, clippy::all)]
             /// Read from one stream and write to another.
             /// 
-            /// The behavior of splice is equivelant to:
+            /// The behavior of splice is equivalent to:
             /// 1. calling `check-write` on the `output-stream`
             /// 2. calling `read` on the `input-stream` with the smaller of the
             /// `check-write` permitted length and the `len` provided to `splice`

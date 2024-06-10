@@ -3,15 +3,17 @@ use crate::{
     codegen::{control, BlockSig, BuiltinFunction, BuiltinFunctions, OperandSize},
     isa::TargetIsa,
 };
+use cranelift_codegen::ir::{UserExternalName, UserExternalNameRef};
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
 };
+use std::mem;
 use wasmparser::BlockType;
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, MemoryIndex, MemoryPlan, MemoryStyle, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, TableIndex, TablePlan, TypeConvert, TypeIndex, VMOffsets,
-    WasmHeapType, WasmValType, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, FuncIndex, GlobalIndex, MemoryIndex, MemoryPlan, MemoryStyle,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, TableIndex, TablePlan, TypeConvert,
+    TypeIndex, VMOffsets, WasmHeapType, WasmValType, WASM_PAGE_SIZE,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -85,36 +87,15 @@ pub struct HeapData {
 /// It categorizes how the callee should be treated
 /// when performing the call.
 #[derive(Clone)]
-pub(crate) enum Callee<'a> {
+pub(crate) enum Callee {
     /// Locally defined function.
-    Local(&'a CalleeInfo),
+    Local(FuncIndex),
     /// Imported function.
-    Import(&'a CalleeInfo),
+    Import(FuncIndex),
     /// Function reference.
-    FuncRef(&'a ABISig),
+    FuncRef(TypeIndex),
     /// A built-in function.
     Builtin(BuiltinFunction),
-}
-
-impl Callee<'_> {
-    /// Returns the [ABISig] of the [Callee].
-    pub(crate) fn sig(&self) -> &ABISig {
-        match self {
-            Self::Local(info) | Self::Import(info) => &info.sig,
-            Self::FuncRef(sig) => sig,
-            Self::Builtin(b) => b.sig(),
-        }
-    }
-}
-
-/// Metadata about a function callee. Used by the code generation to
-/// emit function calls to local or imported functions.
-#[derive(Clone)]
-pub struct CalleeInfo {
-    /// The function's ABI signature.
-    pub(crate) sig: ABISig,
-    /// The callee index in the WebAssembly function index space.
-    pub index: FuncIndex,
 }
 
 /// The function environment.
@@ -134,9 +115,9 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     resolved_tables: HashMap<TableIndex, TableData>,
     /// Track resolved heap information.
     resolved_heaps: HashMap<MemoryIndex, HeapData>,
-    /// A map from [FunctionIndex] to [CalleeInfo], to keep track of the resolved
+    /// A map from [FunctionIndex] to [ABISig], to keep track of the resolved
     /// function callees.
-    resolved_callees: HashMap<FuncIndex, CalleeInfo>,
+    resolved_callees: HashMap<FuncIndex, ABISig>,
     /// A map from [TypeIndex] to [ABISig], to keep track of the resolved
     /// indirect function signatures.
     resolved_sigs: HashMap<TypeIndex, ABISig>,
@@ -146,6 +127,10 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     ptr_type: WasmValType,
     /// Whether or not to enable Spectre mitigation on heap bounds checks.
     heap_access_spectre_mitigation: bool,
+    /// Whether or not to enable Spectre mitigation on table element accesses.
+    table_access_spectre_mitigation: bool,
+    name_map: PrimaryMap<UserExternalNameRef, UserExternalName>,
+    name_intern: HashMap<UserExternalName, UserExternalNameRef>,
 }
 
 pub fn ptr_type_from_ptr_size(size: u8) -> WasmValType {
@@ -175,7 +160,10 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             resolved_globals: HashMap::new(),
             ptr_type,
             heap_access_spectre_mitigation: isa.flags().enable_heap_access_spectre_mitigation(),
+            table_access_spectre_mitigation: isa.flags().enable_table_access_spectre_mitigation(),
             builtins,
+            name_map: Default::default(),
+            name_intern: Default::default(),
         }
     }
 
@@ -185,38 +173,17 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 
     /// Resolves a [`Callee::FuncRef`] from a type index.
-    pub(crate) fn funcref<A>(&mut self, idx: TypeIndex) -> Callee
-    where
-        A: ABI,
-    {
-        let val = || {
-            let sig_index = self.translation.module.types[idx].unwrap_function();
-            let ty = &self.types[sig_index];
-            let sig = wasm_sig::<A>(ty);
-            sig
-        };
-        Callee::FuncRef(self.resolved_sigs.entry(idx).or_insert_with(val))
+    pub(crate) fn funcref(&mut self, idx: TypeIndex) -> Callee {
+        Callee::FuncRef(idx)
     }
 
     /// Resolves a function [`Callee`] from an index.
-    pub(crate) fn callee_from_index<A>(&mut self, idx: FuncIndex) -> Callee
-    where
-        A: ABI,
-    {
-        let types = self.translation.get_types();
-        let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
+    pub(crate) fn callee_from_index(&mut self, idx: FuncIndex) -> Callee {
         let import = self.translation.module.is_imported_function(idx);
-        let val = || {
-            let converter = TypeConverter::new(self.translation, self.types);
-            let ty = converter.convert_func_type(&ty);
-            let sig = wasm_sig::<A>(&ty);
-            CalleeInfo { sig, index: idx }
-        };
-
         if import {
-            Callee::Import(self.resolved_callees.entry(idx).or_insert_with(val))
+            Callee::Import(idx)
         } else {
-            Callee::Local(self.resolved_callees.entry(idx).or_insert_with(val))
+            Callee::Local(idx)
         }
     }
 
@@ -230,15 +197,14 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                 BlockSig::new(control::BlockType::single(ty))
             }
             FuncType(idx) => {
-                let sig_index =
-                    self.translation.module.types[TypeIndex::from_u32(idx)].unwrap_function();
-                let sig = &self.types[sig_index];
+                let sig_index = self.translation.module.types[TypeIndex::from_u32(idx)];
+                let sig = self.types[sig_index].unwrap_func();
                 BlockSig::new(control::BlockType::func(sig.clone()))
             }
         }
     }
 
-    /// Resolves [GlobalData] of a global at the given index.
+    /// Resolves `GlobalData` of a global at the given index.
     pub fn resolve_global(&mut self, index: GlobalIndex) -> GlobalData {
         let ty = self.translation.module.globals[index].wasm_ty;
         let val = || match self.translation.module.defined_global_index(index) {
@@ -290,7 +256,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         }
     }
 
-    /// Resolve a [HeapData] from a [MemoryIndex].
+    /// Resolve a `HeapData` from a [MemoryIndex].
     // TODO: (@saulecabrera)
     // Handle shared memories when implementing support for Wasm Threads.
     pub fn resolve_heap(&mut self, index: MemoryIndex) -> HeapData {
@@ -328,8 +294,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     current_length_offset,
                     style,
                     ty: if plan.memory.memory64 {
-                        // TODO: Add support for 64-bit memories.
-                        unimplemented!("memory64")
+                        WasmValType::I64
                     } else {
                         WasmValType::I32
                     },
@@ -350,6 +315,71 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     pub fn heap_access_spectre_mitigation(&self) -> bool {
         self.heap_access_spectre_mitigation
     }
+
+    /// Returns true if Spectre mitigations are enabled for table element
+    /// accesses.
+    pub fn table_access_spectre_mitigation(&self) -> bool {
+        self.table_access_spectre_mitigation
+    }
+
+    pub(crate) fn callee_sig<'b, A>(&'b mut self, callee: &'b Callee) -> &'b ABISig
+    where
+        A: ABI,
+    {
+        match callee {
+            Callee::Local(idx) | Callee::Import(idx) => {
+                let types = self.translation.get_types();
+                let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
+                let val = || {
+                    let converter = TypeConverter::new(self.translation, self.types);
+                    let ty = converter.convert_func_type(&ty);
+                    wasm_sig::<A>(&ty)
+                };
+                self.resolved_callees.entry(*idx).or_insert_with(val)
+            }
+            Callee::FuncRef(idx) => {
+                let val = || {
+                    let sig_index = self.translation.module.types[*idx];
+                    let ty = self.types[sig_index].unwrap_func();
+                    let sig = wasm_sig::<A>(ty);
+                    sig
+                };
+                self.resolved_sigs.entry(*idx).or_insert_with(val)
+            }
+            Callee::Builtin(b) => b.sig(),
+        }
+    }
+
+    /// Creates a name to reference the `builtin` provided.
+    pub fn name_builtin(&mut self, builtin: BuiltinFunctionIndex) -> UserExternalNameRef {
+        self.intern_name(UserExternalName {
+            namespace: wasmtime_cranelift::NS_WASMTIME_BUILTIN,
+            index: builtin.index(),
+        })
+    }
+
+    /// Creates a name to reference the wasm function `index` provided.
+    pub fn name_wasm(&mut self, index: FuncIndex) -> UserExternalNameRef {
+        self.intern_name(UserExternalName {
+            namespace: wasmtime_cranelift::NS_WASM_FUNC,
+            index: index.as_u32(),
+        })
+    }
+
+    /// Interns `name` into a `UserExternalNameRef` and ensures that duplicate
+    /// instances of `name` are given a unique name ref index.
+    fn intern_name(&mut self, name: UserExternalName) -> UserExternalNameRef {
+        *self
+            .name_intern
+            .entry(name.clone())
+            .or_insert_with(|| self.name_map.push(name))
+    }
+
+    /// Extracts the name map that was created while translating this function.
+    pub fn take_name_map(&mut self) -> PrimaryMap<UserExternalNameRef, UserExternalName> {
+        self.name_intern.clear();
+        mem::take(&mut self.name_map)
+    }
 }
 
 /// A wrapper struct over a reference to a [ModuleTranslation] and
@@ -361,11 +391,16 @@ pub(crate) struct TypeConverter<'a, 'data: 'a> {
 
 impl TypeConvert for TypeConverter<'_, '_> {
     fn lookup_heap_type(&self, idx: wasmparser::UnpackedIndex) -> WasmHeapType {
-        wasmtime_environ::WasmparserTypeConverter {
-            module: &self.translation.module,
-            types: self.types,
-        }
-        .lookup_heap_type(idx)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, &self.translation.module)
+            .lookup_heap_type(idx)
+    }
+
+    fn lookup_type_index(
+        &self,
+        index: wasmparser::UnpackedIndex,
+    ) -> wasmtime_environ::EngineOrModuleTypeIndex {
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, &self.translation.module)
+            .lookup_type_index(index)
     }
 }
 
@@ -378,12 +413,12 @@ impl<'a, 'data> TypeConverter<'a, 'data> {
 fn heap_style_and_offset_guard_size(plan: &MemoryPlan) -> (HeapStyle, u64) {
     match plan {
         MemoryPlan {
-            style: MemoryStyle::Static { bound },
+            style: MemoryStyle::Static { byte_reservation },
             offset_guard_size,
             ..
         } => (
             HeapStyle::Static {
-                bound: bound * u64::from(WASM_PAGE_SIZE),
+                bound: *byte_reservation,
             },
             *offset_guard_size,
         ),

@@ -1102,8 +1102,8 @@ impl<'a> Verifier<'a> {
                 return errors.fatal((
                     next_block,
                     format!(
-                        "invalid domtree, rpo_cmp_block does not says {} is greater than {}",
-                        prev_block, next_block
+                        "invalid domtree, rpo_cmp_block does not say {} is greater than {}; rpo = {:#?}",
+                        prev_block, next_block, domtree.cfg_postorder()
                     ),
                 ));
             }
@@ -1834,7 +1834,7 @@ mod tests {
             args: Default::default(),
         });
 
-        func.dfg.append_result(test_inst, ctrl_typevar);
+        func.dfg.make_inst_results(test_inst, ctrl_typevar);
         func.layout.append_inst(test_inst, block0);
         func.layout.append_inst(end_inst, block0);
 
@@ -1920,13 +1920,11 @@ mod tests {
         let block0 = func.dfg.make_block();
         func.layout.append_block(block0);
 
-        // Build instruction: v0, v1 = iconst 42
-        let inst = func.dfg.make_inst(InstructionData::UnaryImm {
-            opcode: Opcode::Iconst,
-            imm: 42.into(),
+        // Build instruction "f64const 0.0" (missing one required result)
+        let inst = func.dfg.make_inst(InstructionData::UnaryIeee64 {
+            opcode: Opcode::F64const,
+            imm: 0.into(),
         });
-        func.dfg.append_result(inst, types::I32);
-        func.dfg.append_result(inst, types::I32);
         func.layout.append_inst(inst, block0);
 
         // Setup verifier.
@@ -1935,11 +1933,11 @@ mod tests {
         let verifier = Verifier::new(&func, flags.into());
 
         // Now the error message, when printed, should contain the instruction sequence causing the
-        // error (i.e. v0, v1 = iconst.i32 42) and not only its entity value (i.e. inst0)
+        // error (i.e. f64const 0.0) and not only its entity value (i.e. inst0)
         let _ = verifier.typecheck_results(inst, types::I32, &mut errors);
         assert_eq!(
             format!("{}", errors.0[0]),
-            "inst0 (v0, v1 = iconst.i32 42): has more result values than expected"
+            "inst0 (f64const 0.0): has fewer result values than expected"
         )
     }
 

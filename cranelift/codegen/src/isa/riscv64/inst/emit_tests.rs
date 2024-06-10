@@ -631,7 +631,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Lb,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I8),
+            from: AMode::RegOffset(a1(), 100),
         },
         "lb a0,100(a1)",
         0x6458503,
@@ -641,7 +641,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Lh,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I16),
+            from: AMode::RegOffset(a1(), 100),
         },
         "lh a0,100(a1)",
         0x6459503,
@@ -652,7 +652,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Lw,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I32),
+            from: AMode::RegOffset(a1(), 100),
         },
         "lw a0,100(a1)",
         0x645a503,
@@ -663,7 +663,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Ld,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I64),
+            from: AMode::RegOffset(a1(), 100),
         },
         "ld a0,100(a1)",
         0x645b503,
@@ -673,7 +673,7 @@ fn test_riscv64_binemit() {
             rd: Writable::from_reg(fa0()),
             op: LoadOP::Flw,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I64),
+            from: AMode::RegOffset(a1(), 100),
         },
         "flw fa0,100(a1)",
         0x645a507,
@@ -684,14 +684,14 @@ fn test_riscv64_binemit() {
             rd: Writable::from_reg(fa0()),
             op: LoadOP::Fld,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I64),
+            from: AMode::RegOffset(a1(), 100),
         },
         "fld fa0,100(a1)",
         0x645b507,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I8),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sb,
             flags: MemFlags::new(),
             src: a0(),
@@ -701,7 +701,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I16),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sh,
             flags: MemFlags::new(),
             src: a0(),
@@ -711,7 +711,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I32),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sw,
             flags: MemFlags::new(),
             src: a0(),
@@ -721,7 +721,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I64),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sd,
             flags: MemFlags::new(),
             src: a0(),
@@ -731,7 +731,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I64),
+            to: AMode::SPOffset(100),
             op: StoreOP::Fsw,
             flags: MemFlags::new(),
             src: fa0(),
@@ -741,7 +741,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I64),
+            to: AMode::SPOffset(100),
             op: StoreOP::Fsd,
             flags: MemFlags::new(),
             src: fa0(),
@@ -2084,19 +2084,37 @@ fn test_riscv64_binemit() {
         0x22b59553,
     ));
 
+    insns.push(TestUnit::new(
+        Inst::Fli {
+            ty: F32,
+            rd: writable_fa0(),
+            imm: FliConstant::new(0),
+        },
+        "fli.s fa0,-1.0",
+        0xf0100553,
+    ));
+
+    insns.push(TestUnit::new(
+        Inst::Fli {
+            ty: F64,
+            rd: writable_fa0(),
+            imm: FliConstant::new(13),
+        },
+        "fli.d fa0,0.625",
+        0xf2168553,
+    ));
+
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
 
     for unit in insns.iter() {
         println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
         // Check the printed text is as expected.
-        let actual_printing = unit
-            .inst
-            .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
+        let actual_printing = unit.inst.print_with_state(&mut EmitState::default());
         assert_eq!(unit.assembly, actual_printing);
         let mut buffer = MachBuffer::new();
         unit.inst
-            .emit(&[], &mut buffer, &emit_info, &mut Default::default());
+            .emit(&mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let actual_encoding = buffer.stringify_code_bytes();
 
@@ -2120,19 +2138,70 @@ fn riscv64_worst_case_instruction_size() {
     //there are all candidates potential generate a lot of bytes.
     let mut candidates: Vec<MInst> = vec![];
 
-    candidates.push(Inst::FloatRound {
-        op: FloatRoundOP::Trunc,
-        int_tmp: writable_a0(),
-        f_tmp: writable_a0(),
-        rd: writable_fa0(),
-        rs: fa0(),
-        ty: F64,
+    candidates.push(Inst::Popcnt {
+        sum: writable_a0(),
+        tmp: writable_a0(),
+        step: writable_a0(),
+        rs: a0(),
+        ty: I64,
     });
+
+    candidates.push(Inst::Cltz {
+        sum: writable_a0(),
+        tmp: writable_a0(),
+        step: writable_a0(),
+        rs: a0(),
+        leading: true,
+        ty: I64,
+    });
+
+    candidates.push(Inst::Brev8 {
+        rd: writable_a0(),
+        tmp: writable_a0(),
+        step: writable_a0(),
+        tmp2: writable_a0(),
+        rs: a0(),
+        ty: I64,
+    });
+
+    candidates.push(Inst::AtomicCas {
+        offset: a0(),
+        t0: writable_a0(),
+        dst: writable_a0(),
+        e: a0(),
+        addr: a0(),
+        v: a0(),
+        ty: I64,
+    });
+
+    candidates.push(Inst::AtomicCas {
+        offset: a0(),
+        t0: writable_a0(),
+        dst: writable_a0(),
+        e: a0(),
+        addr: a0(),
+        v: a0(),
+        ty: I16,
+    });
+
+    candidates.extend(
+        crate::ir::AtomicRmwOp::all()
+            .iter()
+            .map(|op| Inst::AtomicRmwLoop {
+                op: *op,
+                offset: a0(),
+                dst: writable_a0(),
+                ty: I16,
+                p: a0(),
+                x: a0(),
+                t0: writable_a0(),
+            }),
+    );
 
     let mut max: (u32, MInst) = (0, Inst::Nop0);
     for i in candidates {
         let mut buffer = MachBuffer::new();
-        i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
+        i.emit(&mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let length = buffer.data().len() as u32;
         if length > max.0 {

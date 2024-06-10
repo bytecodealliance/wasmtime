@@ -10,6 +10,16 @@ block0:
 ; nextln:     trap user0
 ; nextln: }
 
+; The same small function, but with empty parens on the first block.
+function %minimal_empty_parens() {
+block0():
+    trap user0
+}
+; sameln: function %minimal_empty_parens() fast {
+; nextln: block0:
+; nextln:     trap user0
+; nextln: }
+
 ; Create and use values.
 ; Polymorphic instructions with type suffix.
 function %ivalues() {
@@ -111,7 +121,7 @@ block0(v90: f32, v91: f32):
 ; nextln: }
 
 ; The bitcast instruction has two type variables: The controlling type variable
-; controls the outout type, and the input type is a free variable.
+; controls the output type, and the input type is a free variable.
 function %bitcast(i32, f32) {
 block0(v90: i32, v91: f32):
     v0 = bitcast.i8x4 v90

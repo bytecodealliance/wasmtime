@@ -349,34 +349,66 @@ block2:
 }
 
 ; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s1,8(sp)
 ; block0:
-;   slt a5,a3,a1
+;   slt s1,a3,a1
 ;   sltu a4,a2,a0
-;   xor a0,a3,a1
-;   select a1,a4,a5##condition=(a0 eq zero)
+;   xor a5,a3,a1
+;   select a1,a4,s1##condition=(a5 eq zero)
 ;   bne a1,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
+;   ld s1,8(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
 ;   ret
 ; block2:
 ;   li a0,1
+;   ld s1,8(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slt a5, a3, a1
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+; block1: ; offset 0x18
+;   slt s1, a3, a1
 ;   sltu a4, a2, a0
-;   xor a0, a3, a1
-;   bnez a0, 0xc
+;   xor a5, a3, a1
 ;   mv a1, a4
-;   j 8
-;   mv a1, a5
-;   bnez a1, 0xc
-; block1: ; offset 0x20
+;   beqz a5, 8
+;   mv a1, s1
+;   bnez a1, 0x20
+; block2: ; offset 0x34
 ;   mv a0, zero
+;   ld s1, 8(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
-; block2: ; offset 0x28
+; block3: ; offset 0x50
 ;   addi a0, zero, 1
+;   ld s1, 8(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 
 function %brif_fcmp_f32(f32, f32) -> i8 {

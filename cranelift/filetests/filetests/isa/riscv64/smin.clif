@@ -23,9 +23,8 @@ block0(v0: i8, v1: i8):
 ;   srai a5, a3, 0x38
 ;   slli a1, a1, 0x38
 ;   srai a3, a1, 0x38
-;   bge a5, a3, 0xc
 ;   mv a0, a5
-;   j 8
+;   blt a5, a3, 8
 ;   mv a0, a3
 ;   ret
 
@@ -50,9 +49,8 @@ block0(v0: i16, v1: i16):
 ;   srai a5, a3, 0x30
 ;   slli a1, a1, 0x30
 ;   srai a3, a1, 0x30
-;   bge a5, a3, 0xc
 ;   mv a0, a5
-;   j 8
+;   blt a5, a3, 8
 ;   mv a0, a3
 ;   ret
 
@@ -73,9 +71,8 @@ block0(v0: i32, v1: i32):
 ; block0: ; offset 0x0
 ;   sext.w a3, a0
 ;   sext.w a5, a1
-;   bge a3, a5, 0xc
 ;   mv a0, a3
-;   j 8
+;   blt a3, a5, 8
 ;   mv a0, a5
 ;   ret
 
@@ -87,12 +84,15 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   select a0,a0,a1##condition=(a0 slt a1)
+;   mv a4,a0
+;   select a0,a4,a1##condition=(a4 slt a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   blt a0, a1, 8
+;   mv a4, a0
+;   mv a0, a4
+;   blt a4, a1, 8
 ;   mv a0, a1
 ;   ret
 
@@ -107,21 +107,20 @@ block0(v0: i128, v1: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s7,-8(sp)
-;   sd s9,-16(sp)
 ;   addi sp,sp,-16
+;   sd s1,8(sp)
+;   sd s9,0(sp)
 ; block0:
 ;   slt a5,a1,a3
-;   sltu a4,a0,a2
-;   mv s7,a0
-;   xor a0,a1,a3
+;   sltu s1,a0,a2
+;   xor a4,a1,a3
 ;   mv s9,a1
-;   select a5,a4,a5##condition=(a0 eq zero)
-;   mv a4,s7
+;   select a5,s1,a5##condition=(a4 eq zero)
+;   mv a4,a0
 ;   select [a0,a1],[a4,s9],[a2,a3]##condition=(a5 ne zero)
+;   ld s1,8(sp)
+;   ld s9,0(sp)
 ;   addi sp,sp,16
-;   ld s7,-8(sp)
-;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -133,27 +132,25 @@ block0(v0: i128, v1: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s7, -8(sp)
-;   sd s9, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+;   sd s9, 0(sp)
 ; block1: ; offset 0x1c
 ;   slt a5, a1, a3
-;   sltu a4, a0, a2
-;   mv s7, a0
-;   xor a0, a1, a3
+;   sltu s1, a0, a2
+;   xor a4, a1, a3
 ;   mv s9, a1
-;   bnez a0, 8
-;   mv a5, a4
-;   mv a4, s7
-;   beqz a5, 0x10
+;   bnez a4, 8
+;   mv a5, s1
+;   mv a4, a0
 ;   mv a0, a4
 ;   mv a1, s9
-;   j 0xc
+;   bnez a5, 0xc
 ;   mv a0, a2
 ;   mv a1, a3
+;   ld s1, 8(sp)
+;   ld s9, 0(sp)
 ;   addi sp, sp, 0x10
-;   ld s7, -8(sp)
-;   ld s9, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

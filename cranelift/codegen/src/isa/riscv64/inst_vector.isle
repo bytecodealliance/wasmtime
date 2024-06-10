@@ -229,6 +229,7 @@
   (VfnmaccVF)
   (VfmsacVF)
   (VfnmsacVF)
+  (Vslide1upVX)
 ))
 
 ;; Register-Imm ALU Ops
@@ -1017,7 +1018,7 @@
 (rule (rv_vfabs_v vs mask vstate) (rv_vfsgnjx_vv vs vs mask vstate))
 
 ;; Helper for emitting the `vfsqrt.v` instruction.
-;; This instruction splats the F regsiter into all elements of the destination vector.
+;; This instruction splats the F register into all elements of the destination vector.
 (decl rv_vfsqrt_v (VReg VecOpMasking VState) VReg)
 (rule (rv_vfsqrt_v vs mask vstate)
   (vec_alu_rr (VecAluOpRR.VfsqrtV) vs mask vstate))
@@ -1095,43 +1096,50 @@
 (rule (rv_vslideup_vvi vd vs2 imm mask vstate)
   (vec_alu_rrr_uimm5 (VecAluOpRRRImm5.VslideupVI) vd vs2 imm mask vstate))
 
+;; Helper for emitting the `vslide1up.vx` instruction.
+;;
+;; # vd[0]=x[rs1], vd[i+1] = vs2[i]
+(decl rv_vslide1up_vx (VReg VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vslide1up_vx vd vs2 rs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.Vslide1upVX) vd vs2 rs1 mask vstate))
+
 ;; Helper for emitting the `vmv.x.s` instruction.
 ;; This instruction copies the first element of the source vector to the destination X register.
-;; Masked versions of this instuction are not supported.
+;; Masked versions of this instruction are not supported.
 (decl rv_vmv_xs (VReg VState) XReg)
 (rule (rv_vmv_xs vs vstate)
   (vec_alu_rr (VecAluOpRR.VmvXS) vs (unmasked) vstate))
 
 ;; Helper for emitting the `vfmv.f.s` instruction.
 ;; This instruction copies the first element of the source vector to the destination F register.
-;; Masked versions of this instuction are not supported.
+;; Masked versions of this instruction are not supported.
 (decl rv_vfmv_fs (VReg VState) FReg)
 (rule (rv_vfmv_fs vs vstate)
   (vec_alu_rr (VecAluOpRR.VfmvFS) vs (unmasked) vstate))
 
 ;; Helper for emitting the `vmv.s.x` instruction.
 ;; This instruction copies the source X register into first element of the source vector.
-;; Masked versions of this instuction are not supported.
+;; Masked versions of this instruction are not supported.
 (decl rv_vmv_sx (XReg VState) VReg)
 (rule (rv_vmv_sx vs vstate)
   (vec_alu_rr (VecAluOpRR.VmvSX) vs (unmasked) vstate))
 
 ;; Helper for emitting the `vfmv.s.f` instruction.
 ;; This instruction copies the source F register into first element of the source vector.
-;; Masked versions of this instuction are not supported.
+;; Masked versions of this instruction are not supported.
 (decl rv_vfmv_sf (FReg VState) VReg)
 (rule (rv_vfmv_sf vs vstate)
   (vec_alu_rr (VecAluOpRR.VfmvSF) vs (unmasked) vstate))
 
 ;; Helper for emitting the `vmv.v.x` instruction.
-;; This instruction splats the X regsiter into all elements of the destination vector.
+;; This instruction splats the X register into all elements of the destination vector.
 ;; Masked versions of this instruction are called `vmerge`
 (decl rv_vmv_vx (XReg VState) VReg)
 (rule (rv_vmv_vx vs vstate)
   (vec_alu_rr (VecAluOpRR.VmvVX) vs (unmasked) vstate))
 
 ;; Helper for emitting the `vfmv.v.f` instruction.
-;; This instruction splats the F regsiter into all elements of the destination vector.
+;; This instruction splats the F register into all elements of the destination vector.
 ;; Masked versions of this instruction are called `vmerge`
 (decl rv_vfmv_vf (FReg VState) VReg)
 (rule (rv_vfmv_vf vs vstate)
@@ -1862,7 +1870,7 @@
     res))
 
 
-;; Retruns the maximum value integer value that can be represented by a float
+;; Returns the maximum value integer value that can be represented by a float
 (decl float_int_max (Type) u64)
 (rule (float_int_max $F32) 0x4B000000)
 (rule (float_int_max $F64) 0x4330000000000000)

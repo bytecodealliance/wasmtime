@@ -5,9 +5,9 @@ use crate::{
     masm::{DivKind, ExtendKind, IntCmpKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
-    entity::EntityRef,
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, Opcode, TrapCode, UserExternalNameRef,
+        types, ConstantPool, ExternalName, LibCall, MemFlags, Opcode, SourceLoc, TrapCode,
+        UserExternalNameRef,
     },
     isa::{
         unwind::UnwindInst,
@@ -200,6 +200,11 @@ impl Assembler {
         &mut self.buffer
     }
 
+    /// Get a reference to the underlying machine buffer.
+    pub fn buffer(&self) -> &MachBuffer<Inst> {
+        &self.buffer
+    }
+
     /// Adds a constant to the constant pool and returns its address.
     pub fn add_constant(&mut self, constant: &[u8]) -> Address {
         let handle = self.pool.insert(constant.into());
@@ -207,15 +212,15 @@ impl Assembler {
     }
 
     /// Return the emitted code.
-    pub fn finalize(mut self) -> MachBufferFinalized<Final> {
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
         let stencil = self
             .buffer
             .finish(&self.constants, self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(Default::default())
+        stencil.apply_base_srcloc(loc.unwrap_or_default())
     }
 
     fn emit(&mut self, inst: Inst) {
-        inst.emit(&[], &mut self.buffer, &self.emit_info, &mut self.emit_state);
+        inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
     fn to_synthetic_amode(
@@ -830,8 +835,8 @@ impl Assembler {
             DivKind::Signed => {
                 self.emit(Inst::CmpRmiR {
                     size: size.into(),
-                    src: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
-                    dst: divisor.into(),
+                    src1: divisor.into(),
+                    src2: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
                     opcode: CmpOpcode::Cmp,
                 });
                 self.emit(Inst::TrapIf {
@@ -970,29 +975,29 @@ impl Assembler {
         });
     }
 
-    pub fn cmp_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+    pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
 
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
-            src: GprMemImm::new(imm).expect("valid immediate"),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: GprMemImm::new(imm).expect("valid immediate"),
         });
     }
 
-    pub fn cmp_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn cmp_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
-            src: src.into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: src2.into(),
         });
     }
 
-    /// Compares values in src and dst and sets ZF, PF, and CF flags in EFLAGS
+    /// Compares values in src1 and src2 and sets ZF, PF, and CF flags in EFLAGS
     /// register.
-    pub fn ucomis(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn ucomis(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => SseOpcode::Ucomiss,
             OperandSize::S64 => SseOpcode::Ucomisd,
@@ -1001,8 +1006,8 @@ impl Assembler {
 
         self.emit(Inst::XmmCmpRmR {
             op,
-            src: Xmm::from(src).into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: Xmm::from(src2).into(),
         });
     }
 
@@ -1020,12 +1025,12 @@ impl Assembler {
     }
 
     /// Emit a test instruction with two register operands.
-    pub fn test_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn test_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Test,
-            src: src.into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: src2.into(),
         })
     }
 
@@ -1181,7 +1186,7 @@ impl Assembler {
         });
     }
 
-    /// Mininum for src and dst XMM registers with results put in dst.
+    /// Minimum for src and dst XMM registers with results put in dst.
     pub fn xmm_min_seq(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::XmmMinMaxSeq {
             size: size.into(),
@@ -1252,8 +1257,8 @@ impl Assembler {
     }
 
     /// Emit a call to a locally defined function through an index.
-    pub fn call_with_index(&mut self, index: u32) {
-        let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
+    pub fn call_with_name(&mut self, name: UserExternalNameRef) {
+        let dest = ExternalName::user(name);
         self.emit(Inst::CallKnown {
             dest,
             opcode: Opcode::Call,
@@ -1271,7 +1276,7 @@ impl Assembler {
         // emitting to binary.
         //
         // See [wasmtime::engine::Engine::check_compatible_with_shared_flag] and
-        // [wasmtime_cranelift_shared::obj::ModuleTextBuilder::apend_func]
+        // [wasmtime_cranelift::obj::ModuleTextBuilder::apend_func]
         self.emit(Inst::LoadExtName {
             dst: Writable::from_reg(dst.into()),
             name: Box::new(dest),

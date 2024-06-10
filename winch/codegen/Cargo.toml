@@ -4,7 +4,7 @@ name = "winch-codegen"
 description = "Winch code generation library"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-version = "0.18.0"
+version = "0.21.0"
 edition.workspace = true
 
 [lints]
@@ -23,6 +23,7 @@ cranelift-codegen = { workspace = true, features = ["unwind"] }
 regalloc2 = { workspace = true }
 gimli = { workspace = true }
 wasmtime-environ = { workspace = true }
+wasmtime-cranelift = { workspace = true }
 
 [features]
 x64 = ["cranelift-codegen/x86"]

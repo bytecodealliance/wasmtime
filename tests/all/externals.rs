@@ -161,7 +161,7 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
     )?;
     assert!(global.get(&mut store).unwrap_externref().is_none());
 
-    let hello = ExternRef::new(&mut store, "hello".to_string());
+    let hello = ExternRef::new(&mut store, "hello".to_string())?;
     global.set(&mut store, hello.into())?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
     assert!(r.data(&store)?.is::<String>());
@@ -169,7 +169,7 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
 
     // Initialize with a non-null externref.
 
-    let externref = ExternRef::new(&mut store, 42_i32);
+    let externref = ExternRef::new(&mut store, 42_i32)?;
     let global = Global::new(
         &mut store,
         GlobalType::new(ValType::EXTERNREF, Mutability::Const),
@@ -287,7 +287,7 @@ fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
     let mut store = Store::new(&engine, ());
 
     let table_ty = TableType::new(RefType::EXTERNREF, 10, None);
-    let init = ExternRef::new(&mut store, 42_usize);
+    let init = ExternRef::new(&mut store, 42_usize)?;
     let table = Table::new(&mut store, table_ty, init.into())?;
 
     assert_eq!(
@@ -321,7 +321,7 @@ fn fill_externref_tables_via_api() -> anyhow::Result<()> {
         assert!(table.get(&mut store, i).unwrap().unwrap_extern().is_none());
     }
 
-    let val = ExternRef::new(&mut store, 42_usize);
+    let val = ExternRef::new(&mut store, 42_usize)?;
     table.fill(&mut store, 2, val.into(), 4)?;
 
     for i in (0..2).chain(7..10) {
@@ -421,38 +421,76 @@ fn dummy_funcs_and_subtypes(
 ) -> (FuncType, Func, FuncType, Func, FuncType, Func) {
     let engine = store.engine().clone();
 
-    let a_ty = FuncType::new(&engine, None, Some(ValType::NULLFUNCREF));
-    let a = Func::new(
-        &mut *store,
-        a_ty.clone(),
-        |_caller, _args, _results| unreachable!(),
-    );
-
-    let b_ty = FuncType::new(
+    let c_ty = FuncType::with_finality_and_supertype(
         &engine,
+        Finality::NonFinal,
         None,
-        Some(ValType::Ref(RefType::new(
-            true,
-            HeapType::Concrete(FuncType::new(&engine, None, None)),
-        ))),
-    );
-    let b = Func::new(
-        &mut *store,
-        b_ty.clone(),
-        |_caller, _args, _results| unreachable!(),
-    );
-
-    let c_ty = FuncType::new(&engine, None, Some(ValType::FUNCREF));
+        [],
+        [ValType::FUNCREF],
+    )
+    .unwrap();
     let c = Func::new(
         &mut *store,
         c_ty.clone(),
         |_caller, _args, _results| unreachable!(),
     );
 
+    let b_ty = FuncType::with_finality_and_supertype(
+        &engine,
+        Finality::NonFinal,
+        Some(&c_ty),
+        [],
+        [ValType::Ref(RefType::new(
+            true,
+            HeapType::ConcreteFunc(FuncType::new(&engine, None, None)),
+        ))],
+    )
+    .unwrap();
+    let b = Func::new(
+        &mut *store,
+        b_ty.clone(),
+        |_caller, _args, _results| unreachable!(),
+    );
+
+    let a_ty = FuncType::with_finality_and_supertype(
+        &engine,
+        Finality::NonFinal,
+        Some(&b_ty),
+        [],
+        [ValType::NULLFUNCREF],
+    )
+    .unwrap();
+    let a = Func::new(
+        &mut *store,
+        a_ty.clone(),
+        |_caller, _args, _results| unreachable!(),
+    );
+
+    assert!(a_ty.matches(&a_ty));
+    assert!(a_ty.matches(&b_ty));
+    assert!(a_ty.matches(&c_ty));
+    assert!(!b_ty.matches(&a_ty));
+    assert!(b_ty.matches(&b_ty));
+    assert!(b_ty.matches(&c_ty));
+    assert!(!c_ty.matches(&a_ty));
+    assert!(!c_ty.matches(&b_ty));
+    assert!(c_ty.matches(&c_ty));
+
+    assert!(a.matches_ty(&store, &a_ty));
+    assert!(a.matches_ty(&store, &b_ty));
+    assert!(a.matches_ty(&store, &c_ty));
+    assert!(!b.matches_ty(&store, &a_ty));
+    assert!(b.matches_ty(&store, &b_ty));
+    assert!(b.matches_ty(&store, &c_ty));
+    assert!(!c.matches_ty(&store, &a_ty));
+    assert!(!c.matches_ty(&store, &b_ty));
+    assert!(c.matches_ty(&store, &c_ty));
+
     (a_ty, a, b_ty, b, c_ty, c)
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn new_global_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -492,6 +530,7 @@ fn new_global_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn global_set_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -528,6 +567,7 @@ fn global_set_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn new_table_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -558,6 +598,7 @@ fn new_table_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_set_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -600,6 +641,7 @@ fn table_set_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_grow_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -643,6 +685,7 @@ fn table_grow_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_fill_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
@@ -682,13 +725,16 @@ fn table_fill_func_subtyping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_copy_func_subtyping() {
+    let _ = env_logger::try_init();
+
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
 
     let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
 
-    for (table_ty, a_expected, b_expected, c_expected) in [
+    for (dst_ty, a_expected, b_expected, c_expected) in [
         // a <: a, b </: a, c </: a
         (a_ty.clone(), true, false, false),
         // a <: b, b <: b, c </: a
@@ -698,7 +744,7 @@ fn table_copy_func_subtyping() {
     ] {
         let dest_table = Table::new(
             &mut store,
-            TableType::new(RefType::new(true, table_ty.clone().into()), 10, None),
+            TableType::new(RefType::new(true, dst_ty.clone().into()), 10, None),
             Ref::Func(None),
         )
         .unwrap();

@@ -8,6 +8,7 @@
 #define WASMTIME_SHAREDMEMORY_H
 
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 
 #ifdef __cplusplus
@@ -21,6 +22,8 @@ extern "C" {
  * https://docs.wasmtime.dev/api/wasmtime/struct.SharedMemory.html
  */
 typedef struct wasmtime_sharedmemory wasmtime_sharedmemory_t;
+
+#ifdef WASMTIME_FEATURE_THREADS
 
 /**
  * \brief Creates a new WebAssembly shared linear memory
@@ -36,6 +39,8 @@ WASM_API_EXTERN wasmtime_error_t *
 wasmtime_sharedmemory_new(const wasm_engine_t *engine,
                           const wasm_memorytype_t *ty,
                           wasmtime_sharedmemory_t **ret);
+
+#endif // WASMTIME_FEATURE_THREADS
 
 /**
  * \brief Deletes shared linear memory
@@ -55,18 +60,6 @@ wasmtime_sharedmemory_delete(wasmtime_sharedmemory_t *memory);
  */
 WASM_API_EXTERN wasmtime_sharedmemory_t *
 wasmtime_sharedmemory_clone(const wasmtime_sharedmemory_t *memory);
-
-/**
- * \brief Moves shared linear memory into wasmtime_extern_t object
- *
- * \param memory memory to be moved
- * \param out where to store resulting `wasmtime_extern_t`
- *
- * This function moves ownership of `memory` into resulting `wasmtime_extern_t`.
- */
-WASM_API_EXTERN void
-wasmtime_sharedmemory_into_extern(wasmtime_sharedmemory_t *memory,
-                                  wasmtime_extern_t *out);
 
 /**
  * \brief Returns the type of the shared memory specified

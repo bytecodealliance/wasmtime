@@ -13,15 +13,14 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r12, %r15, 96(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   larl %r12, %ElfGlobalOffsetTable + 0
 ;   bras %r1, 12 ; data userextname0@tlsgd ; lg %r2, 0(%r1)
 ;   brasl %r14, %ElfTlsGetOffset:tls_gdcall:userextname0
-;   ear %r3, %a0
-;   sllg %r5, %r3, 32
-;   ear %r5, %a1
-;   agr %r2, %r5
+;   ear %r4, %a0
+;   sllg %r3, %r4, 32
+;   ear %r3, %a1
+;   agr %r2, %r3
 ;   lmg %r12, %r15, 256(%r15)
 ;   br %r14
 ;
@@ -38,10 +37,10 @@ block0(v0: i32):
 ;   .byte 0x00, 0x00
 ;   lg %r2, 0(%r1)
 ;   brasl %r14, 0x22 ; reloc_external PLTRel32Dbl %ElfTlsGetOffset 2 ; reloc_external TlsGdCall u1:0 0
-;   ear %r3, %a0
-;   sllg %r5, %r3, 0x20
-;   ear %r5, %a1
-;   agr %r2, %r5
+;   ear %r4, %a0
+;   sllg %r3, %r4, 0x20
+;   ear %r3, %a1
+;   agr %r2, %r3
 ;   lmg %r12, %r15, 0x100(%r15)
 ;   br %r14
 

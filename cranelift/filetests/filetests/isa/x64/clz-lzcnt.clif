@@ -1,5 +1,42 @@
 test compile precise-output
+set enable_llvm_abi_extensions=true
 target x86_64 has_lzcnt
+
+
+function %clz(i128) -> i128 {
+block0(v0: i128):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lzcntq  %rsi, %rcx
+;   lzcntq  %rdi, %rax
+;   addq    %rax, $64, %rax
+;   cmpq    $64, %rcx
+;   cmovnzq %rcx, %rax, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   lzcntq %rsi, %rcx
+;   lzcntq %rdi, %rax
+;   addq $0x40, %rax
+;   cmpq $0x40, %rcx
+;   cmovneq %rcx, %rax
+;   xorq %rdx, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %clz(i64) -> i64 {
 block0(v0: i64):
@@ -47,6 +84,64 @@ block0(v0: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   lzcntl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %clz(i16) -> i16 {
+block0(v0: i16):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzwq  %di, %rax
+;   lzcntq  %rax, %rax
+;   subq    %rax, $48, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzwq %di, %rax
+;   lzcntq %rax, %rax
+;   subq $0x30, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %clz(i8) -> i8 {
+block0(v0: i8):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbq  %dil, %rax
+;   lzcntq  %rax, %rax
+;   subq    %rax, $56, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbq %dil, %rax
+;   lzcntq %rax, %rax
+;   subq $0x38, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

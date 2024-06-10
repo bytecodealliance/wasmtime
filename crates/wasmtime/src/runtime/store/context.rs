@@ -32,7 +32,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Unfortunately there's not a ton of debug asserts we can add here, so we
     /// rely on testing to largely help show that this is correctly used.
     pub(crate) unsafe fn from_raw(
-        store: *mut dyn wasmtime_runtime::Store,
+        store: *mut dyn crate::runtime::vm::Store,
     ) -> StoreContextMut<'a, T> {
         StoreContextMut(&mut *(store as *mut StoreInner<T>))
     }

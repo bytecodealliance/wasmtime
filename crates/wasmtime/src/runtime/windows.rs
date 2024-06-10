@@ -9,6 +9,7 @@
 //! throughout the `wasmtime` crate with extra functionality that's only
 //! available on Windows.
 
+use crate::prelude::*;
 use crate::{AsContextMut, Store};
 use windows_sys::Win32::System::Diagnostics::Debug::EXCEPTION_POINTERS;
 

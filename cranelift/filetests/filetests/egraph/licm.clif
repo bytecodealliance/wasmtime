@@ -58,7 +58,6 @@ block2(v8: i64x2):
 ; check:      v9 = iconst.i32 1
 ; check:      v10 = isub v3, v9
 ; check:      v5 = iadd v2, v4
-; check:      v8 -> v5
 ; check:      brif v10, block1(v5, v10), block2
 ; check:  block2:
 ; check:      return v5

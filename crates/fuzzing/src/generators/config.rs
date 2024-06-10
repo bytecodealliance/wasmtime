@@ -1,8 +1,8 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
 use super::{
-    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, NormalMemoryConfig,
-    UnalignedMemoryCreator,
+    AsyncConfig, CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig,
+    NormalMemoryConfig, UnalignedMemoryCreator,
 };
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
@@ -76,7 +76,7 @@ impl Config {
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.wasmtime.strategy {
             // One single-page memory
             pooling.total_memories = config.max_memories as u32;
-            pooling.memory_pages = 10;
+            pooling.max_memory_size = 10 << 16;
             pooling.max_memories_per_module = config.max_memories as u32;
 
             pooling.total_tables = config.max_tables as u32;
@@ -84,6 +84,13 @@ impl Config {
             pooling.max_tables_per_module = config.max_tables as u32;
 
             pooling.core_instance_size = 1_000_000;
+
+            if let MemoryConfig::Normal(cfg) = &mut self.wasmtime.memory_config {
+                match &mut cfg.static_memory_maximum_size {
+                    Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                    other @ None => *other = Some(pooling.max_memory_size as u64),
+                }
+            }
         }
     }
 
@@ -135,7 +142,7 @@ impl Config {
             if pooling.total_memories < 1
                 || pooling.total_tables < 5
                 || pooling.table_elements < 1_000
-                || pooling.memory_pages < 900
+                || pooling.max_memory_size < (900 << 16)
                 || pooling.total_core_instances < 500
                 || pooling.core_instance_size < 64 * 1024
             {
@@ -165,7 +172,6 @@ impl Config {
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
-            .memory_init_cow(self.wasmtime.memory_init_cow)
             .memory_guaranteed_dense_image_size(std::cmp::min(
                 // Clamp this at 16MiB so we don't get huge in-memory
                 // images during fuzzing.
@@ -173,7 +179,9 @@ impl Config {
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map);
+            .generate_address_map(self.wasmtime.generate_address_map)
+            .cache_call_indirects(self.wasmtime.cache_call_indirects)
+            .max_call_indirect_cache_slots(self.wasmtime.max_call_indirect_cache_slots);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -184,6 +192,13 @@ impl Config {
         cfg.strategy(self.wasmtime.compiler_strategy.to_wasmtime());
 
         self.wasmtime.codegen.configure(&mut cfg);
+
+        // Determine whether we will actually enable PCC -- this is
+        // disabled if the module requires memory64, which is not yet
+        // compatible (due to the need for dynamic checks).
+        let pcc = cfg!(feature = "fuzz-pcc")
+            && self.wasmtime.pcc
+            && !self.module_config.config.memory64_enabled;
 
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
@@ -217,8 +232,13 @@ impl Config {
                 }
             }
 
-            cfg.cranelift_pcc(self.wasmtime.pcc);
+            cfg.cranelift_pcc(pcc);
+
+            // Eager init is currently only supported on Cranelift, not Winch.
+            cfg.table_lazy_init(self.wasmtime.table_lazy_init);
         }
+
+        self.wasmtime.async_config.configure(&mut cfg);
 
         // Vary the memory configuration, but only if threads are not enabled.
         // When the threads proposal is enabled we might generate shared memory,
@@ -233,12 +253,14 @@ impl Config {
         if !self.module_config.config.threads_enabled {
             // If PCC is enabled, force other options to be compatible: PCC is currently only
             // supported when bounds checks are elided.
-            let memory_config = if self.wasmtime.pcc {
+            let memory_config = if pcc {
                 MemoryConfig::Normal(NormalMemoryConfig {
                     static_memory_maximum_size: Some(4 << 30), // 4 GiB
                     static_memory_guard_size: Some(2 << 30),   // 2 GiB
                     dynamic_memory_guard_size: Some(0),
+                    dynamic_memory_reserved_for_growth: Some(0),
                     guard_before_linear_memory: false,
+                    memory_init_cow: true,
                 })
             } else {
                 self.wasmtime.memory_config.clone()
@@ -246,19 +268,16 @@ impl Config {
 
             match &memory_config {
                 MemoryConfig::Normal(memory_config) => {
-                    cfg.static_memory_maximum_size(
-                        memory_config.static_memory_maximum_size.unwrap_or(0),
-                    )
-                    .static_memory_guard_size(memory_config.static_memory_guard_size.unwrap_or(0))
-                    .dynamic_memory_guard_size(memory_config.dynamic_memory_guard_size.unwrap_or(0))
-                    .guard_before_linear_memory(memory_config.guard_before_linear_memory);
+                    memory_config.apply_to(&mut cfg);
                 }
                 MemoryConfig::CustomUnaligned => {
                     cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
                         .static_memory_maximum_size(0)
                         .dynamic_memory_guard_size(0)
+                        .dynamic_memory_reserved_for_growth(0)
                         .static_memory_guard_size(0)
-                        .guard_before_linear_memory(false);
+                        .guard_before_linear_memory(false)
+                        .memory_init_cow(false);
                 }
             }
         }
@@ -278,20 +297,26 @@ impl Config {
     /// Configures a store based on this configuration.
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
-        if self.wasmtime.consume_fuel {
-            store.set_fuel(u64::MAX).unwrap();
-        }
-        if self.wasmtime.epoch_interruption {
-            // Without fuzzing of async execution, we can't test the
-            // "update deadline and continue" behavior, but we can at
-            // least test the codegen paths and checks with the
-            // trapping behavior, which works synchronously too. We'll
-            // set the deadline one epoch tick in the future; then
-            // this works exactly like an interrupt flag. We expect no
-            // traps/interrupts unless we bump the epoch, which we do
-            // as one particular Timeout mode (`Timeout::Epoch`).
-            store.epoch_deadline_trap();
-            store.set_epoch_deadline(1);
+        match self.wasmtime.async_config {
+            AsyncConfig::Disabled => {
+                if self.wasmtime.consume_fuel {
+                    store.set_fuel(u64::MAX).unwrap();
+                }
+                if self.wasmtime.epoch_interruption {
+                    store.epoch_deadline_trap();
+                    store.set_epoch_deadline(1);
+                }
+            }
+            AsyncConfig::YieldWithFuel(amt) => {
+                assert!(self.wasmtime.consume_fuel);
+                store.fuel_async_yield_interval(Some(amt)).unwrap();
+                store.set_fuel(amt).unwrap();
+            }
+            AsyncConfig::YieldWithEpochs { ticks, .. } => {
+                assert!(self.wasmtime.epoch_interruption);
+                store.set_epoch_deadline(ticks);
+                store.epoch_deadline_async_yield_and_update(ticks);
+            }
         }
     }
 
@@ -342,12 +367,28 @@ impl Config {
     pub fn disable_unimplemented_winch_proposals(&mut self) {
         self.module_config.config.simd_enabled = false;
         self.module_config.config.relaxed_simd_enabled = false;
-        self.module_config.config.memory64_enabled = false;
         self.module_config.config.gc_enabled = false;
         self.module_config.config.threads_enabled = false;
         self.module_config.config.tail_call_enabled = false;
         self.module_config.config.exceptions_enabled = false;
         self.module_config.config.reference_types_enabled = false;
+    }
+
+    /// Updates this configuration to forcibly enable async support. Only useful
+    /// in fuzzers which do async calls.
+    pub fn enable_async(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
+        if self.wasmtime.consume_fuel || u.arbitrary()? {
+            self.wasmtime.async_config =
+                AsyncConfig::YieldWithFuel(u.int_in_range(1000..=100_000)?);
+            self.wasmtime.consume_fuel = true;
+        } else {
+            self.wasmtime.async_config = AsyncConfig::YieldWithEpochs {
+                dur: Duration::from_millis(u.int_in_range(1..=10)?),
+                ticks: u.int_in_range(1..=10)?,
+            };
+            self.wasmtime.epoch_interruption = true;
+        }
+        Ok(())
     }
 }
 
@@ -362,13 +403,20 @@ impl<'a> Arbitrary<'a> for Config {
             config.disable_unimplemented_winch_proposals();
         }
 
-        // This is pulled from `u` by default via `wasm-smith`, but Wasmtime
-        // doesn't implement this yet, so forcibly always disable it.
-        config.module_config.config.tail_call_enabled = false;
+        // Wasm-smith implements the most up-to-date version of memory64 where
+        // it supports 64-bit tables as well, but Wasmtime doesn't support that
+        // yet, so disable the memory64 proposal in fuzzing for now.
+        config.module_config.config.memory64_enabled = false;
 
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {
+            // Forcibly don't use the `CustomUnaligned` memory configuration
+            // with the pooling allocator active.
+            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
+                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
+            }
+
             let cfg = &mut config.module_config.config;
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
@@ -377,33 +425,34 @@ impl<'a> Arbitrary<'a> for Config {
 
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
-            let min = cfg
-                .max_memory32_pages
-                .min(cfg.max_memory64_pages)
-                .min(pooling.memory_pages);
-            pooling.memory_pages = min;
-            cfg.max_memory32_pages = min;
-            cfg.max_memory64_pages = min;
+            let min_pages = cfg.max_memory32_pages.min(cfg.max_memory64_pages);
+            let mut min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            if let MemoryConfig::Normal(cfg) = &config.wasmtime.memory_config {
+                min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
+            }
+            pooling.max_memory_size = min as usize;
+            cfg.max_memory32_pages = min >> 16;
+            cfg.max_memory64_pages = min >> 16;
 
             // If traps are disallowed then memories must have at least one page
             // of memory so if we still are only allowing 0 pages of memory then
             // increase that to one here.
             if cfg.disallow_traps {
-                if pooling.memory_pages == 0 {
-                    pooling.memory_pages = 1;
+                if pooling.max_memory_size < (1 << 16) {
+                    pooling.max_memory_size = 1 << 16;
                     cfg.max_memory32_pages = 1;
                     cfg.max_memory64_pages = 1;
+                    if let MemoryConfig::Normal(cfg) = &mut config.wasmtime.memory_config {
+                        match &mut cfg.static_memory_maximum_size {
+                            Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                            size @ None => *size = Some(pooling.max_memory_size as u64),
+                        }
+                    }
                 }
                 // .. additionally update tables
                 if pooling.table_elements == 0 {
                     pooling.table_elements = 1;
                 }
-            }
-
-            // Forcibly don't use the `CustomUnaligned` memory configuration
-            // with the pooling allocator active.
-            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
-                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
             }
 
             // Don't allow too many linear memories per instance since massive
@@ -445,9 +494,18 @@ pub struct WasmtimeConfig {
     native_unwind_info: bool,
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
+    /// Whether we enable indirect-call caching.
+    cache_call_indirects: bool,
+    /// The maximum number of call-indirect cache slots.
+    max_call_indirect_cache_slots: usize,
+    table_lazy_init: bool,
 
     /// Whether or not fuzzing should enable PCC.
     pcc: bool,
+
+    /// Configuration for whether wasm is invoked in an async fashion and how
+    /// it's cooperatively time-sliced.
+    pub async_config: AsyncConfig,
 }
 
 impl WasmtimeConfig {

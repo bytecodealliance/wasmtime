@@ -131,10 +131,9 @@ block0(v0: i8):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
+;   sub sp, sp, #16
 ; block0:
 ;   movz w7, #42
-;   sub sp, sp, #16
-;   virtual_sp_offset_adjust 16
 ;   strb w0, [sp]
 ;   load_ext_name x8, TestCase(%g)+0
 ;   mov x0, x7
@@ -146,7 +145,6 @@ block0(v0: i8):
 ;   mov x6, x7
 ;   blr x8
 ;   add sp, sp, #16
-;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -154,9 +152,9 @@ block0(v0: i8):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block1: ; offset 0x8
-;   mov w7, #0x2a
 ;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov w7, #0x2a
 ;   sturb w0, [sp]
 ;   ldr x8, #0x1c
 ;   b #0x24
@@ -671,8 +669,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x0, [fp, #16]
-;   ldr x1, [fp, #24]
+;   ldr x0, [sp, #16]
+;   ldr x1, [sp, #24]
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -681,8 +679,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldur x0, [x29, #0x10]
-;   ldur x1, [x29, #0x18]
+;   ldur x0, [sp, #0x10]
+;   ldur x1, [sp, #0x18]
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -697,22 +695,20 @@ block0(v0: i128, v1: i64):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
+;   sub sp, sp, #16
 ; block0:
 ;   mov x6, x2
-;   sub sp, sp, #16
-;   virtual_sp_offset_adjust 16
 ;   str x0, [sp]
 ;   mov x4, x0
 ;   str x1, [sp, #8]
 ;   mov x5, x1
-;   load_ext_name x10, TestCase(%f14)+0
+;   load_ext_name x8, TestCase(%f14)+0
 ;   mov x0, x4
 ;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
-;   blr x10
+;   blr x8
 ;   add sp, sp, #16
-;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -720,14 +716,14 @@ block0(v0: i128, v1: i64):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block1: ; offset 0x8
-;   mov x6, x2
 ;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x6, x2
 ;   stur x0, [sp]
 ;   mov x4, x0
 ;   stur x1, [sp, #8]
 ;   mov x5, x1
-;   ldr x10, #0x28
+;   ldr x8, #0x28
 ;   b #0x30
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f14 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -735,7 +731,7 @@ block0(v0: i128, v1: i64):
 ;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
-;   blr x10
+;   blr x8
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -749,8 +745,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x0, [fp, #16]
-;   ldr x1, [fp, #24]
+;   ldr x0, [sp, #16]
+;   ldr x1, [sp, #24]
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -759,8 +755,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldur x0, [x29, #0x10]
-;   ldur x1, [x29, #0x18]
+;   ldur x0, [sp, #0x10]
+;   ldur x1, [sp, #0x18]
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -775,22 +771,20 @@ block0(v0: i128, v1: i64):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
+;   sub sp, sp, #16
 ; block0:
 ;   mov x6, x2
-;   sub sp, sp, #16
-;   virtual_sp_offset_adjust 16
 ;   str x0, [sp]
 ;   mov x4, x0
 ;   str x1, [sp, #8]
 ;   mov x5, x1
-;   load_ext_name x10, TestCase(%f15)+0
+;   load_ext_name x8, TestCase(%f15)+0
 ;   mov x0, x4
 ;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
-;   blr x10
+;   blr x8
 ;   add sp, sp, #16
-;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -798,14 +792,14 @@ block0(v0: i128, v1: i64):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block1: ; offset 0x8
-;   mov x6, x2
 ;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x6, x2
 ;   stur x0, [sp]
 ;   mov x4, x0
 ;   stur x1, [sp, #8]
 ;   mov x5, x1
-;   ldr x10, #0x28
+;   ldr x8, #0x28
 ;   b #0x30
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f15 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -813,7 +807,7 @@ block0(v0: i128, v1: i64):
 ;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
-;   blr x10
+;   blr x8
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret

@@ -8,7 +8,7 @@ fn successful_instantiation() -> Result<()> {
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module (memory 1) (table 10 funcref))"#)?;
@@ -24,12 +24,12 @@ fn successful_instantiation() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn memory_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
-    pool.memory_pages(3);
+    pool.max_memory_size(3 << 16);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
-    config.static_memory_guard_size(65536);
-    config.static_memory_maximum_size(3 * 65536);
+    config.static_memory_guard_size(1 << 16);
+    config.static_memory_maximum_size(3 << 16);
     config.wasm_multi_memory(true);
 
     let engine = Engine::new(&config)?;
@@ -97,7 +97,7 @@ fn memory_limit() -> Result<()> {
 #[test]
 fn memory_init() -> Result<()> {
     let mut pool = crate::small_pool_config();
-    pool.memory_pages(2).table_elements(0);
+    pool.max_memory_size(2 << 16).table_elements(0);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
@@ -131,7 +131,7 @@ fn memory_init() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn memory_guard_page_trap() -> Result<()> {
     let mut pool = crate::small_pool_config();
-    pool.memory_pages(2).table_elements(0);
+    pool.max_memory_size(2 << 16).table_elements(0);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
@@ -198,12 +198,12 @@ fn memory_zeroed() -> Result<()> {
     }
 
     let mut pool = crate::small_pool_config();
-    pool.memory_pages(1).table_elements(0);
+    pool.max_memory_size(1 << 16).table_elements(0);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
 
@@ -241,7 +241,7 @@ fn table_limit() -> Result<()> {
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
 
@@ -318,7 +318,7 @@ fn table_limit() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn table_init() -> Result<()> {
     let mut pool = crate::small_pool_config();
-    pool.memory_pages(0).table_elements(6);
+    pool.max_memory_size(0).table_elements(6);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
@@ -377,7 +377,7 @@ fn table_zeroed() -> Result<()> {
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
 
@@ -415,7 +415,7 @@ fn total_core_instances_limit() -> Result<()> {
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module)"#)?;
@@ -430,13 +430,7 @@ fn total_core_instances_limit() -> Result<()> {
 
         match Instance::new(&mut store, &module, &[]) {
             Ok(_) => panic!("instantiation should fail"),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                format!(
-                    "maximum concurrent core instance limit of {} reached",
-                    INSTANCE_LIMIT
-                )
-            ),
+            Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
         }
     }
 
@@ -650,18 +644,18 @@ fn instance_too_large() -> Result<()> {
     let engine = Engine::new(&config)?;
     let expected = if cfg!(feature = "wmemcheck") {
         "\
-instance allocation for this module requires 336 bytes which exceeds the \
+        instance allocation for this module requires 352 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 76.19% - 256 bytes - instance state management
+ * 72.73% - 256 bytes - instance state management
 "
     } else {
         "\
-instance allocation for this module requires 240 bytes which exceeds the \
+instance allocation for this module requires 256 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 66.67% - 160 bytes - instance state management
- * 6.67% - 16 bytes - jit store state
+ * 62.50% - 160 bytes - instance state management
+ * 6.25% - 16 bytes - jit store state
 "
     };
     match Module::new(&engine, "(module)") {
@@ -677,19 +671,19 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 
     let expected = if cfg!(feature = "wmemcheck") {
         "\
-instance allocation for this module requires 1936 bytes which exceeds the \
+instance allocation for this module requires 1952 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 13.22% - 256 bytes - instance state management
- * 82.64% - 1600 bytes - defined globals
+ * 13.11% - 256 bytes - instance state management
+ * 81.97% - 1600 bytes - defined globals
 "
     } else {
         "\
-instance allocation for this module requires 1840 bytes which exceeds the \
+instance allocation for this module requires 1856 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 8.70% - 160 bytes - instance state management
- * 86.96% - 1600 bytes - defined globals
+ * 8.62% - 160 bytes - instance state management
+ * 86.21% - 1600 bytes - defined globals
 "
     };
     match Module::new(&engine, &lots_of_globals) {
@@ -706,7 +700,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
     for guard_size in [0, 1 << 16] {
         let max_size = 128 << 20;
         let mut pool = crate::small_pool_config();
-        pool.memory_pages(max_size / (64 * 1024));
+        pool.max_memory_size(max_size as usize);
         let mut config = Config::new();
         config.static_memory_maximum_size(max_size);
         config.dynamic_memory_guard_size(guard_size);
@@ -812,7 +806,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn zero_memory_pages_disallows_oob() -> Result<()> {
     let mut pool = crate::small_pool_config();
-    pool.memory_pages(0);
+    pool.max_memory_size(0);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
@@ -867,13 +861,7 @@ fn total_component_instances_limit() -> Result<()> {
 
     match linker.instantiate(&mut store, &component) {
         Ok(_) => panic!("should have hit component instance limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!(
-                "maximum concurrent component instance limit of {} reached",
-                TOTAL_COMPONENT_INSTANCES
-            ),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     drop(store);
@@ -929,10 +917,7 @@ fn total_tables_limit() -> Result<()> {
 
     match linker.instantiate(&mut store, &module) {
         Ok(_) => panic!("should have hit table limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!("maximum concurrent table limit of {} reached", TOTAL_TABLES),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     drop(store);
@@ -1006,10 +991,7 @@ async fn total_stacks_limit() -> Result<()> {
     let mut store3 = Store::new(&engine, ());
     match linker.instantiate_async(&mut store3, &module).await {
         Ok(_) => panic!("should have hit stack limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!("maximum concurrent fiber limit of {} reached", TOTAL_STACKS),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     // Finish the futures and return their Wasm stacks to the pool.
@@ -1185,19 +1167,51 @@ fn total_memories_limit() -> Result<()> {
 
     match linker.instantiate(&mut store, &module) {
         Ok(_) => panic!("should have hit memory limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            format!(
-                "maximum concurrent memory limit of {} reached for stripe 0",
-                TOTAL_MEMORIES
-            ),
-        ),
+        Err(e) => assert!(e.is::<PoolConcurrencyLimitError>()),
     }
 
     drop(store);
     let mut store = Store::new(&engine, ());
     for _ in 0..TOTAL_MEMORIES {
         linker.instantiate(&mut store, &module)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn decommit_batching() -> Result<()> {
+    for (capacity, batch_size) in [
+        // A reasonable batch size.
+        (10, 5),
+        // Batch sizes of zero and one should effectively disable batching.
+        (10, 1),
+        (10, 0),
+        // A bigger batch size than capacity, which forces the allocation path
+        // to flush the decommit queue.
+        (10, 99),
+    ] {
+        let mut pool = crate::small_pool_config();
+        pool.total_memories(capacity)
+            .total_core_instances(capacity)
+            .decommit_batch_size(batch_size)
+            .memory_protection_keys(MpkEnabled::Disable);
+        let mut config = Config::new();
+        config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+
+        let engine = Engine::new(&config)?;
+        let linker = Linker::new(&engine);
+        let module = Module::new(&engine, "(module (memory 1 1))")?;
+
+        // Just make sure that we can instantiate all slots a few times and the
+        // pooling allocator must be flushing the decommit queue as necessary.
+        for _ in 0..3 {
+            let mut store = Store::new(&engine, ());
+            for _ in 0..capacity {
+                linker.instantiate(&mut store, &module)?;
+            }
+        }
     }
 
     Ok(())

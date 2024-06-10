@@ -32,7 +32,7 @@ async fn smoke() {
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 
-    let func = Func::wrap0_async(&mut store, move |_caller| Box::new(async { Ok(()) }));
+    let func = Func::wrap_async(&mut store, move |_caller, _: ()| Box::new(async { Ok(()) }));
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 }
@@ -49,7 +49,9 @@ async fn smoke_host_func() -> Result<()> {
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     )?;
 
-    linker.func_wrap0_async("", "second", move |_caller| Box::new(async { Ok(()) }))?;
+    linker.func_wrap_async("", "second", move |_caller, _: ()| {
+        Box::new(async { Ok(()) })
+    })?;
 
     let func = linker
         .get(&mut store, "", "first")
@@ -83,7 +85,7 @@ async fn smoke_with_suspension() {
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 
-    let func = Func::wrap0_async(&mut store, move |_caller| {
+    let func = Func::wrap_async(&mut store, move |_caller, _: ()| {
         Box::new(async {
             tokio::task::yield_now().await;
             Ok(())
@@ -110,7 +112,7 @@ async fn smoke_host_func_with_suspension() -> Result<()> {
         },
     )?;
 
-    linker.func_wrap0_async("", "second", move |_caller| {
+    linker.func_wrap_async("", "second", move |_caller, _: ()| {
         Box::new(async {
             tokio::task::yield_now().await;
             Ok(())
@@ -344,13 +346,15 @@ async fn fuel_eventually_finishes() {
 #[tokio::test]
 async fn async_with_pooling_stacks() {
     let mut pool = crate::small_pool_config();
-    pool.total_stacks(1).memory_pages(1).table_elements(0);
+    pool.total_stacks(1)
+        .max_memory_size(1 << 16)
+        .table_elements(0);
     let mut config = Config::new();
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
@@ -366,13 +370,16 @@ async fn async_with_pooling_stacks() {
 #[tokio::test]
 async fn async_host_func_with_pooling_stacks() -> Result<()> {
     let mut pooling = crate::small_pool_config();
-    pooling.total_stacks(1).memory_pages(1).table_elements(0);
+    pooling
+        .total_stacks(1)
+        .max_memory_size(1 << 16)
+        .table_elements(0);
     let mut config = Config::new();
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
 
     let mut store = Store::new(&Engine::new(&config)?, ());
     let mut linker = Linker::new(store.engine());
@@ -399,7 +406,7 @@ async fn async_mpk_protection() -> Result<()> {
     pooling
         .total_memories(10)
         .total_stacks(2)
-        .memory_pages(1)
+        .max_memory_size(1 << 16)
         .table_elements(0);
     let mut config = Config::new();
     config.async_support(true);
@@ -504,7 +511,7 @@ async fn resume_separate_thread() {
             ",
         )
         .unwrap();
-        let func = Func::wrap0_async(&mut store, |_| {
+        let func = Func::wrap_async(&mut store, |_, _: ()| {
             Box::new(async {
                 tokio::task::yield_now().await;
                 Err::<(), _>(anyhow!("test"))
@@ -536,7 +543,7 @@ async fn resume_separate_thread2() {
             ",
         )
         .unwrap();
-        let func = Func::wrap0_async(&mut store, |_| {
+        let func = Func::wrap_async(&mut store, |_, _: ()| {
             Box::new(async {
                 tokio::task::yield_now().await;
             })
@@ -577,7 +584,7 @@ async fn resume_separate_thread3() {
                 ",
             )
             .unwrap();
-            let func = Func::wrap0_async(&mut store, |_| {
+            let func = Func::wrap_async(&mut store, |_, _: ()| {
                 Box::new(async {
                     tokio::task::yield_now().await;
                 })
@@ -622,7 +629,7 @@ async fn recursive_async() -> Result<()> {
     let i = Instance::new_async(&mut store, &m, &[]).await?;
     let overflow = i.get_typed_func::<(), ()>(&mut store, "overflow")?;
     let normal = i.get_typed_func::<(), ()>(&mut store, "normal")?;
-    let f2 = Func::wrap0_async(&mut store, move |mut caller| {
+    let f2 = Func::wrap_async(&mut store, move |mut caller, _: ()| {
         let normal = normal.clone();
         let overflow = overflow.clone();
         Box::new(async move {
@@ -826,17 +833,17 @@ async fn non_stacky_async_activations() -> Result<()> {
         stacks.push(wasmtime::WasmBacktrace::force_capture(store));
     }
 
-    linker1.func_wrap0_async("", "host_capture_stack", {
+    linker1.func_wrap_async("", "host_capture_stack", {
         let stacks = stacks.clone();
-        move |caller| {
+        move |caller, _: ()| {
             capture_stack(&stacks, &caller);
             Box::new(async { Ok(()) })
         }
     })?;
 
-    linker1.func_wrap0_async("", "start_async_instance", {
+    linker1.func_wrap_async("", "start_async_instance", {
         let stacks = stacks.clone();
-        move |mut caller| {
+        move |mut caller, _: ()| {
             let stacks = stacks.clone();
             capture_stack(&stacks, &caller);
 
@@ -844,9 +851,9 @@ async fn non_stacky_async_activations() -> Result<()> {
             let mut store2 = Store::new(caller.engine(), ());
             let mut linker2 = Linker::new(caller.engine());
             linker2
-                .func_wrap0_async("", "yield", {
+                .func_wrap_async("", "yield", {
                     let stacks = stacks.clone();
-                    move |caller| {
+                    move |caller, _: ()| {
                         let stacks = stacks.clone();
                         Box::new(async move {
                             capture_stack(&stacks, &caller);
@@ -967,17 +974,85 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
             Ok(())
         },
     )?;
-    linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, _>, val: i32| {
-        let func = cx.data().clone().unwrap();
-        let r = Some(ExternRef::new(&mut cx, val));
-        Box::new(async move { func.call_async(&mut cx, (val, r)).await })
-    })?;
+    linker.func_wrap_async(
+        "",
+        "recurse",
+        |mut cx: Caller<'_, Option<F>>, (val,): (i32,)| {
+            let func = cx.data().clone().unwrap();
+            Box::new(async move {
+                let r = Some(ExternRef::new(&mut cx, val)?);
+                Ok(func.call_async(&mut cx, (val, r)).await)
+            })
+        },
+    )?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let func: F = instance.get_typed_func(&mut store, "run")?;
     *store.data_mut() = Some(func.clone());
 
-    let r = Some(ExternRef::new(&mut store, 5));
+    let r = Some(ExternRef::new(&mut store, 5)?);
     func.call_async(&mut store, (5, r)).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn async_gc_with_func_new_and_func_wrap() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module $m1
+                (import "" "a" (func $a (result externref)))
+                (import "" "b" (func $b (result externref)))
+
+                (table 2 funcref)
+                (elem (i32.const 0) func $a $b)
+
+                (func (export "a")
+                    (call $call (i32.const 0))
+                )
+                (func (export "b")
+                    (call $call (i32.const 1))
+                )
+
+                (func $call (param i32)
+                    (local $cnt i32)
+                    (loop $l
+                        (drop (call_indirect (result externref) (local.get 0)))
+                        (local.set $cnt (i32.add (local.get $cnt) (i32.const 1)))
+
+                        (if (i32.lt_u (local.get $cnt) (i32.const 1000))
+                         (then (br $l)))
+                    )
+                )
+            )
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap("", "a", |mut cx: Caller<'_, _>| {
+        Ok(Some(ExternRef::new(&mut cx, 100)?))
+    })?;
+    let ty = FuncType::new(&engine, [], [ValType::EXTERNREF]);
+    linker.func_new("", "b", ty, |mut cx, _, results| {
+        results[0] = ExternRef::new(&mut cx, 100)?.into();
+        Ok(())
+    })?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let a = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+    a.call_async(&mut store, ()).await?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let b = instance.get_typed_func::<(), ()>(&mut store, "b")?;
+    b.call_async(&mut store, ()).await?;
 
     Ok(())
 }

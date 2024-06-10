@@ -39,8 +39,8 @@
 //!         |                          by instruction emission code.
 //!         |                        - prologue and epilogue(s) built and emitted
 //!         |                          directly during emission.
-//!         |                        - nominal-SP-relative offsets resolved
-//!         |                          by tracking EmitState.)
+//!         |                        - SP-relative offsets resolved by tracking
+//!         |                          EmitState.)
 //!
 //! ```
 
@@ -56,7 +56,7 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
-use regalloc2::{Allocation, VReg};
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::string::String;
 
@@ -96,7 +96,7 @@ pub trait MachInst: Clone + Debug {
 
     /// Return the registers referenced by this machine instruction along with
     /// the modes of reference (use, def, modify).
-    fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>);
+    fn get_operands(&mut self, collector: &mut impl OperandVisitor);
 
     /// If this is a simple move, return the (source, destination) tuple of registers.
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)>;
@@ -287,15 +287,9 @@ pub trait MachInstEmit: MachInst {
     /// Constant information used in `emit` invocations.
     type Info;
     /// Emit the instruction.
-    fn emit(
-        &self,
-        allocs: &[Allocation],
-        code: &mut MachBuffer<Self>,
-        info: &Self::Info,
-        state: &mut Self::State,
-    );
+    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String;
+    fn pretty_print_inst(&self, state: &mut Self::State) -> String;
 }
 
 /// A trait describing the emission state carried between MachInsts when
@@ -317,6 +311,8 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// A hook that triggers when first emitting a new block.
     /// It is guaranteed to be called before any instructions are emitted.
     fn on_new_block(&mut self) {}
+    /// The [`FrameLayout`] for the function currently being compiled.
+    fn frame_layout(&self) -> &FrameLayout;
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

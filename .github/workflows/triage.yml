@@ -25,14 +25,17 @@ jobs:
     - uses: bytecodealliance/labeler@schedule-fork
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      continue-on-error: true
 
     # @-mention people who are subscribed to a label when an issue/PR is given
     # that label.
     - uses: bytecodealliance/subscribe-to-label-action@v1
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      continue-on-error: true
 
     # Leave pre-determined comments on issues/PRs that are given a certain label.
     - uses: bytecodealliance/label-messager-action@v1
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      continue-on-error: true

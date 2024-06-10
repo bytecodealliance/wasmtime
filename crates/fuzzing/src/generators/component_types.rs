@@ -3,7 +3,7 @@
 //!
 //! Each case includes a list of arbitrary interface types to use as parameters, plus another one to use as a
 //! result, and a component which exports a function and imports a function.  The exported function forwards its
-//! parameters to the imported one and forwards the result back to the caller.  This serves to excercise Wasmtime's
+//! parameters to the imported one and forwards the result back to the caller.  This serves to exercise Wasmtime's
 //! lifting and lowering code and verify the values remain intact during both processes.
 
 use arbitrary::{Arbitrary, Unstructured};

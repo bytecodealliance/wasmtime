@@ -16,7 +16,7 @@
 //! let gza = slab.alloc("Gary Grice");
 //! let bill = slab.alloc("Bill Gates");
 //!
-//! // Alloced elements can be accessed infallibly via indexing (and missing and
+//! // Allocated elements can be accessed infallibly via indexing (and missing and
 //! // deallocated entries will panic).
 //! assert_eq!(slab[rza], "Robert Fitzgerald Diggs");
 //!
@@ -120,17 +120,23 @@
 //! }
 //! ```
 
+#![no_std]
 #![forbid(unsafe_code)]
 #![deny(missing_docs, missing_debug_implementations)]
 
-use std::num::NonZeroU32;
+extern crate alloc;
+
+use alloc::vec::Vec;
+use core::fmt;
+use core::num::NonZeroU32;
 
 /// An identifier for an allocated value inside a `slab`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct Id(EntryIndex);
 
-impl std::fmt::Debug for Id {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Id {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Id").field(&self.0.index()).finish()
     }
 }
@@ -166,11 +172,11 @@ pub struct Slab<T> {
     len: u32,
 }
 
-impl<T> std::fmt::Debug for Slab<T>
+impl<T> fmt::Debug for Slab<T>
 where
-    T: std::fmt::Debug,
+    T: fmt::Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_map().entries(self.iter()).finish()
     }
 }
@@ -188,6 +194,7 @@ enum Entry<T> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 struct EntryIndex(NonZeroU32);
 
 impl EntryIndex {
@@ -216,7 +223,7 @@ impl<T> Default for Slab<T> {
     }
 }
 
-impl<T> std::ops::Index<Id> for Slab<T> {
+impl<T> core::ops::Index<Id> for Slab<T> {
     type Output = T;
 
     #[inline]
@@ -226,7 +233,7 @@ impl<T> std::ops::Index<Id> for Slab<T> {
     }
 }
 
-impl<T> std::ops::IndexMut<Id> for Slab<T> {
+impl<T> core::ops::IndexMut<Id> for Slab<T> {
     #[inline]
     fn index_mut(&mut self, id: Id) -> &mut Self::Output {
         self.get_mut(id)
@@ -280,7 +287,7 @@ impl<T> Slab<T> {
         // we add some amount of minimum additional capacity, since doubling
         // zero capacity isn't useful.
         const MIN_CAPACITY: usize = 16;
-        let additional = std::cmp::max(self.entries.capacity(), MIN_CAPACITY);
+        let additional = core::cmp::max(self.entries.capacity(), MIN_CAPACITY);
         self.reserve(additional);
     }
 
@@ -413,20 +420,23 @@ impl<T> Slab<T> {
 
     /// Deallocate the value associated with the given `id`.
     ///
-    /// If `id` comes from a different `Slab` instance, this method may panic,
-    /// do nothing, or deallocate an arbitrary value.
+    /// If `id` comes from a different `Slab` instance, this method may panic or
+    /// deallocate an arbitrary value.
     #[inline]
-    pub fn dealloc(&mut self, id: Id) {
-        match self
-            .entries
-            .get_mut(id.0.index())
-            .expect("id from a different slab")
-        {
+    pub fn dealloc(&mut self, id: Id) -> T {
+        let entry = core::mem::replace(
+            self.entries
+                .get_mut(id.0.index())
+                .expect("id from a different slab"),
+            Entry::Free { next_free: None },
+        );
+        match entry {
             Entry::Free { .. } => panic!("attempt to deallocate an entry that is already vacant"),
-            e @ Entry::Occupied(_) => {
-                let next_free = std::mem::replace(&mut self.free, Some(id.0));
-                *e = Entry::Free { next_free };
+            Entry::Occupied(value) => {
+                let next_free = core::mem::replace(&mut self.free, Some(id.0));
+                self.entries[id.0.index()] = Entry::Free { next_free };
                 self.len -= 1;
+                value
             }
         }
     }

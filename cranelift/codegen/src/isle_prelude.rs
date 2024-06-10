@@ -684,6 +684,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u32_shl(&mut self, x: u32, y: u32) -> u32 {
+            x << y
+        }
+
+        #[inline]
         fn s32_add_fallible(&mut self, a: i32, b: i32) -> Option<i32> {
             a.checked_add(b)
         }
@@ -952,6 +957,30 @@ macro_rules! isle_common_prelude_methods {
             } else {
                 None
             }
+        }
+
+        fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
+            n.neg()
+        }
+
+        fn f32_abs(&mut self, n: Ieee32) -> Ieee32 {
+            n.abs()
+        }
+
+        fn f32_copysign(&mut self, a: Ieee32, b: Ieee32) -> Ieee32 {
+            a.copysign(b)
+        }
+
+        fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {
+            n.neg()
+        }
+
+        fn f64_abs(&mut self, n: Ieee64) -> Ieee64 {
+            n.abs()
+        }
+
+        fn f64_copysign(&mut self, a: Ieee64, b: Ieee64) -> Ieee64 {
+            a.copysign(b)
         }
     };
 }

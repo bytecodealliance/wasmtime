@@ -158,14 +158,12 @@ impl Type {
 
     /// Get a type with the same number of lanes as this type, but with the lanes replaced by
     /// integers of the same size.
-    ///
-    /// Scalar types follow this same rule, but `b1` is converted into `i8`
     pub fn as_int(self) -> Self {
         self.replace_lanes(match self.lane_type() {
             I8 => I8,
             I16 => I16,
-            I32 | F32 => I32,
-            I64 | F64 => I64,
+            I32 | F32 | R32 => I32,
+            I64 | F64 | R64 => I64,
             I128 => I128,
             _ => unimplemented!(),
         })

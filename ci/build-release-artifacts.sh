@@ -25,16 +25,30 @@ if [[ "$build" = *-min ]]; then
   # Configure a whole bunch of compile-time options which help reduce the size
   # of the binary artifact produced.
   export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
-  export RUSTFLAGS=-Zlocation-detail=none
+  export RUSTFLAGS="-Zlocation-detail=none $RUSTFLAGS"
   export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
   export CARGO_PROFILE_RELEASE_LTO=true
-  flags="-Zbuild-std=std,panic_abort --no-default-features -Zbuild-std-features=std_detect_dlsym_getauxval"
-  flags="$flags --features disable-logging"
+  build_std=-Zbuild-std=std,panic_abort
+  build_std_features=-Zbuild-std-features=std_detect_dlsym_getauxval
+  flags="$build_std $build_std_features --no-default-features --features disable-logging"
+  cmake_flags="-DWASMTIME_DISABLE_ALL_FEATURES=ON"
+  cmake_flags="$cmake_flags -DWASMTIME_FEATURE_DISABLE_LOGGING=ON"
+  cmake_flags="$cmake_flags -DWASMTIME_USER_CARGO_BUILD_OPTIONS:LIST=$build_std;$build_std_features"
 else
   # For release builds the CLI is built a bit more feature-ful than the Cargo
   # defaults to provide artifacts that can do as much as possible.
   bin_flags="--features all-arch,component-model"
 fi
 
-cargo build --release $flags --target $target -p wasmtime-cli $bin_flags
-cargo build --release $flags --target $target -p wasmtime-c-api
+cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --features run
+
+mkdir -p target/c-api-build
+cd target/c-api-build
+cmake \
+  ../../crates/c-api \
+  $cmake_flags \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DWASMTIME_TARGET=$target \
+  -DCMAKE_INSTALL_PREFIX=../c-api-install \
+  -DCMAKE_INSTALL_LIBDIR=../c-api-install/lib
+cmake --build . --target install

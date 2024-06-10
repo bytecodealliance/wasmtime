@@ -53,7 +53,7 @@ impl SubTest for TestCompile {
         let params = func.params.clone();
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
-        // With `MachBackend`s, we need to explicitly request dissassembly results.
+        // With `MachBackend`s, we need to explicitly request disassembly results.
         comp_ctx.set_disasm(true);
 
         let compiled_code = comp_ctx.compile(isa, &mut Default::default());

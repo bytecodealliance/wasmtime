@@ -10,7 +10,7 @@ use std::{
     },
 };
 use wasmtime::component::{InstancePre, Linker};
-use wasmtime::{Engine, Store, StoreLimits};
+use wasmtime::{Config, Engine, Memory, MemoryType, Store, StoreLimits};
 use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
@@ -77,7 +77,7 @@ impl ServeCommand {
     pub fn execute(mut self) -> Result<()> {
         self.run.common.init_logging()?;
 
-        // We force cli errors before starting to listen for connections so tha we don't
+        // We force cli errors before starting to listen for connections so then we don't
         // accidentally delay them to the first request.
         if self.run.common.wasi.nn == Some(true) {
             #[cfg(not(feature = "wasi-nn"))]
@@ -132,8 +132,9 @@ impl ServeCommand {
 
     fn new_store(&self, engine: &Engine, req_id: u64) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
+        self.run.configure_wasip2(&mut builder)?;
 
-        builder.envs(&[("REQUEST_ID", req_id.to_string())]);
+        builder.env("REQUEST_ID", req_id.to_string());
 
         builder.stdout(LogStream {
             prefix: format!("stdout [{req_id}] :: "),
@@ -148,7 +149,7 @@ impl ServeCommand {
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
             ctx: builder.build(),
-            http: WasiHttpCtx,
+            http: WasiHttpCtx::new(),
 
             limits: StoreLimits::default(),
 
@@ -215,7 +216,7 @@ impl ServeCommand {
         // bindings which adds just those interfaces that the proxy interface
         // uses.
         if cli == Some(true) {
-            wasmtime_wasi::command::add_to_linker(linker)?;
+            wasmtime_wasi::add_to_linker_async(linker)?;
             wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
         } else {
             wasmtime_wasi_http::proxy::add_to_linker(linker)?;
@@ -246,23 +247,10 @@ impl ServeCommand {
     async fn serve(mut self) -> Result<()> {
         use hyper::server::conn::http1;
 
-        let mut config = self.run.common.config(None)?;
-        match self.run.common.opts.pooling_allocator {
-            // If explicitly enabled on the CLI then the pooling allocator was
-            // already configured in the `config` method above. If the allocator
-            // is explicitly disabled, then we don't want it. In both cases do
-            // nothing.
-            Some(true) | Some(false) => {}
-
-            // Otherwise though if not explicitly specified then always enable
-            // the pooling allocator. The `wasmtime serve` use case is
-            // tailor-made for pooling allocation and there's no downside to
-            // enabling it.
-            None => {
-                let cfg = wasmtime::PoolingAllocationConfig::default();
-                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
-            }
-        }
+        let mut config = self
+            .run
+            .common
+            .config(None, use_pooling_allocator_by_default().unwrap_or(None))?;
         config.wasm_component_model(true);
         config.async_support(true);
 
@@ -293,15 +281,19 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
 
-        // Tokio by default sets `SO_REUSEADDR` for listeners but that makes it
-        // a bit confusing if you run Wasmtime but forget to close a previous
-        // `serve` session. To avoid that we explicitly disable `SO_REUSEADDR`
-        // here.
         let socket = match &self.addr {
             SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
             SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
         };
-        socket.set_reuseaddr(false)?;
+        // Conditionally enable `SO_REUSEADDR` depending on the current
+        // platform. On Unix we want this to be able to rebind an address in
+        // the `TIME_WAIT` state which can happen then a server is killed with
+        // active TCP connections and then restarted. On Windows though if
+        // `SO_REUSEADDR` is specified then it enables multiple applications to
+        // bind the port at the same time which is not something we want. Hence
+        // this is conditionally set based on the platform (and deviates from
+        // Tokio's default from always-on).
+        socket.set_reuseaddr(!cfg!(windows))?;
         socket.bind(self.addr)?;
         let listener = socket.listen(100)?;
 
@@ -564,4 +556,42 @@ impl wasmtime_wasi::HostOutputStream for LogStream {
 #[async_trait::async_trait]
 impl wasmtime_wasi::Subscribe for LogStream {
     async fn ready(&mut self) {}
+}
+
+/// The pooling allocator is tailor made for the `wasmtime serve` use case, so
+/// try to use it when we can. The main cost of the pooling allocator, however,
+/// is the virtual memory required to run it. Not all systems support the same
+/// amount of virtual memory, for example some aarch64 and riscv64 configuration
+/// only support 39 bits of virtual address space.
+///
+/// The pooling allocator, by default, will request 1000 linear memories each
+/// sized at 6G per linear memory. This is 6T of virtual memory which ends up
+/// being about 42 bits of the address space. This exceeds the 39 bit limit of
+/// some systems, so there the pooling allocator will fail by default.
+///
+/// This function attempts to dynamically determine the hint for the pooling
+/// allocator. This returns `Some(true)` if the pooling allocator should be used
+/// by default, or `None` or an error otherwise.
+///
+/// The method for testing this is to allocate a 0-sized 64-bit linear memory
+/// with a maximum size that's N bits large where we force all memories to be
+/// static. This should attempt to acquire N bits of the virtual address space.
+/// If successful that should mean that the pooling allocator is OK to use, but
+/// if it fails then the pooling allocator is not used and the normal mmap-based
+/// implementation is used instead.
+fn use_pooling_allocator_by_default() -> Result<Option<bool>> {
+    const BITS_TO_TEST: u32 = 42;
+    let mut config = Config::new();
+    config.wasm_memory64(true);
+    config.static_memory_maximum_size(1 << BITS_TO_TEST);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    // NB: the maximum size is in wasm pages to take out the 16-bits of wasm
+    // page size here from the maximum size.
+    let ty = MemoryType::new64(0, Some(1 << (BITS_TO_TEST - 16)));
+    if Memory::new(&mut store, ty).is_ok() {
+        Ok(Some(true))
+    } else {
+        Ok(None)
+    }
 }

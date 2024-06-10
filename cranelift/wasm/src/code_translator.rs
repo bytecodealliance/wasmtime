@@ -2492,14 +2492,27 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(r);
         }
 
+        Operator::RefI31 => {
+            let val = state.pop1();
+            let i31ref = environ.translate_ref_i31(builder.cursor(), val)?;
+            state.push1(i31ref);
+        }
+        Operator::I31GetS => {
+            let i31ref = state.pop1();
+            let val = environ.translate_i31_get_s(builder.cursor(), i31ref)?;
+            state.push1(val);
+        }
+        Operator::I31GetU => {
+            let i31ref = state.pop1();
+            let val = environ.translate_i31_get_u(builder.cursor(), i31ref)?;
+            state.push1(val);
+        }
+
         Operator::TryTable { .. } | Operator::ThrowRef => {
             unimplemented!("exception operators not yet implemented")
         }
 
-        Operator::RefI31
-        | Operator::I31GetS
-        | Operator::I31GetU
-        | Operator::RefEq
+        Operator::RefEq
         | Operator::RefTestNonNull { .. }
         | Operator::RefTestNullable { .. }
         | Operator::RefCastNonNull { .. }
@@ -2529,6 +2542,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::StructSet { .. }
         | Operator::StructGet { .. } => {
             unimplemented!("GC operators not yet implemented")
+        }
+
+        Operator::GlobalAtomicGet { .. }
+        | Operator::GlobalAtomicSet { .. }
+        | Operator::GlobalAtomicRmwAdd { .. }
+        | Operator::GlobalAtomicRmwSub { .. }
+        | Operator::GlobalAtomicRmwOr { .. }
+        | Operator::GlobalAtomicRmwXor { .. }
+        | Operator::GlobalAtomicRmwAnd { .. }
+        | Operator::GlobalAtomicRmwXchg { .. }
+        | Operator::GlobalAtomicRmwCmpxchg { .. } => {
+            unimplemented!("shared-everything-threads not yet implemented")
         }
     };
     Ok(())
@@ -2760,7 +2785,7 @@ where
     //   legalization of `heap_addr`, eliding the bounds check entirely.
     //
     // * For wasm64 offsets <=2gb will generate a single `heap_addr`
-    //   instruction, but at this time all heaps are "dyanmic" which means that
+    //   instruction, but at this time all heaps are "dynamic" which means that
     //   a single bounds check is forced. Ideally we'd do better here, but
     //   that's the current state of affairs.
     //

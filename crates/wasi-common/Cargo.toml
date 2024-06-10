@@ -15,7 +15,7 @@ include = ["src/**/*", "tests/**/*", "witx", "README.md", "LICENSE", "build.rs"]
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 thiserror = { workspace = true }
 wiggle = { workspace = true }
 tracing = { workspace = true }
@@ -54,6 +54,7 @@ features = [
 ]
 
 [dev-dependencies]
+wasi-common = { path = '.', features = ['tokio'] }
 tempfile = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -98,4 +99,3 @@ all-features = true
 
 [[test]]
 name = "all"
-required-features = ["wasmtime", "sync", "tokio"]

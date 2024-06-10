@@ -16,19 +16,6 @@ block0:
 ; block0: ; offset 0x0
 ;   ret
 
-function %stack_limit_leaf_zero(i64 stack_limit) {
-block0(v0: i64):
-    return
-}
-
-; VCode:
-; block0:
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   ret
-
 function %stack_limit_gv_leaf_zero(i64 vmctx) {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0
@@ -44,47 +31,6 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ret
-
-function %stack_limit_call_zero(i64 stack_limit) {
-    fn0 = %foo()
-block0(v0: i64):
-    call fn0()
-    return
-}
-
-; VCode:
-;   addi sp,sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
-;   trap_if stk_ovf##(sp ult a0)
-; block0:
-;   load_sym a2,%foo+0
-;   callind a2
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   addi sp,sp,16
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-;   bgeu sp, a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-; block1: ; offset 0x18
-;   auipc a2, 0
-;   ld a2, 0xc(a2)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a2
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
 ;   ret
 
 function %stack_limit_gv_call_zero(i64 vmctx) {
@@ -105,10 +51,11 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   ld t6,0(a0)
 ;   ld t6,4(t6)
+;   addi t6,t6,16
 ;   trap_if stk_ovf##(sp ult t6)
 ; block0:
-;   load_sym a2,%foo+0
-;   callind a2
+;   load_sym a0,%foo+0
+;   callind a0
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -122,113 +69,16 @@ block0(v0: i64):
 ;   mv s0, sp
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
+;   addi t6, t6, 0x10
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-; block1: ; offset 0x20
-;   auipc a2, 0
-;   ld a2, 0xc(a2)
+; block1: ; offset 0x24
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a2
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
-;   ret
-
-function %stack_limit(i64 stack_limit) {
-    ss0 = explicit_slot 168
-block0(v0: i64):
-    return
-}
-
-; VCode:
-;   addi sp,sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
-;   addi t6,a0,176
-;   trap_if stk_ovf##(sp ult t6)
-;   addi sp,sp,-176
-; block0:
-;   addi sp,sp,176
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   addi sp,sp,16
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-;   addi t6, a0, 0xb0
-;   bgeu sp, t6, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-;   addi sp, sp, -0xb0
-; block1: ; offset 0x20
-;   addi sp, sp, 0xb0
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
-;   ret
-
-function %huge_stack_limit(i64 stack_limit) {
-    ss0 = explicit_slot 400000
-block0(v0: i64):
-    return
-}
-
-; VCode:
-;   addi sp,sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
-;   trap_if stk_ovf##(sp ult a0)
-;   lui t5,98
-;   addi t5,t5,-1408
-;   add t6,t5,a0
-;   trap_if stk_ovf##(sp ult t6)
-;   lui a0,98
-;   addi a0,a0,-1408
-;   call %Probestack
-;   lui t6,-98
-;   addi t6,t6,1408
-;   add sp,sp,t6
-; block0:
-;   lui t6,98
-;   addi t6,t6,-1408
-;   add sp,sp,t6
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   addi sp,sp,16
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-;   bgeu sp, a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-;   lui t5, 0x62
-;   addi t5, t5, -0x580
-;   add t6, t5, a0
-;   bgeu sp, t6, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-;   lui a0, 0x62
-;   addi a0, a0, -0x580
-;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
-;   jalr ra
-;   lui t6, 0xfff9e
-;   addi t6, t6, 0x580
-;   add sp, sp, t6
-; block1: ; offset 0x48
-;   lui t6, 0x62
-;   addi t6, t6, -0x580
-;   add sp, sp, t6
+;   jalr a0
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt};
-
+use crate::prelude::*;
 use crate::{
     store::StoreOpaque, AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module,
     StoreContextMut, Val, ValType, WasmBacktrace,
 };
+use std::{collections::HashMap, fmt};
 
 /// Representation of a core dump of a WebAssembly module
 ///
@@ -41,7 +41,9 @@ impl WasmCoreDump {
         let modules: Vec<_> = store.modules().all_modules().cloned().collect();
         let instances: Vec<Instance> = store.all_instances().collect();
         let store_memories: Vec<Memory> = store.all_memories().collect();
-        let store_globals: Vec<Global> = store.all_globals().collect();
+
+        let mut store_globals: Vec<Global> = vec![];
+        store.for_each_global(|_store, global| store_globals.push(global));
 
         WasmCoreDump {
             name: String::from("store_name"),
@@ -122,6 +124,7 @@ impl WasmCoreDump {
                     maximum: ty.maximum(),
                     memory64: ty.is_64(),
                     shared: ty.is_shared(),
+                    page_size_log2: None,
                 });
 
                 // Attach the memory data, balancing number of data segments and
@@ -167,15 +170,23 @@ impl WasmCoreDump {
                     ValType::F32 => wasm_encoder::ValType::F32,
                     ValType::F64 => wasm_encoder::ValType::F64,
                     ValType::V128 => wasm_encoder::ValType::V128,
-                    ValType::Ref(r) => match r.heap_type() {
+
+                    // We encode all references as null in the core dump, so
+                    // choose the common super type of all the actual function
+                    // reference types. This lets us avoid needing to figure out
+                    // what a concrete type reference's index is in the local
+                    // core dump index space.
+                    ValType::Ref(r) => match r.heap_type().top() {
                         HeapType::Extern => wasm_encoder::ValType::EXTERNREF,
 
-                        // We encode all function references as null in the core
-                        // dump, so choose the common super type of all the
-                        // actual function reference types.
-                        HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => {
-                            wasm_encoder::ValType::FUNCREF
-                        }
+                        HeapType::Func => wasm_encoder::ValType::FUNCREF,
+
+                        HeapType::Any => wasm_encoder::ValType::Ref(wasm_encoder::RefType {
+                            nullable: true,
+                            heap_type: wasm_encoder::HeapType::Any,
+                        }),
+
+                        ty => unreachable!("not a top type: {ty:?}"),
                     },
                 };
                 let init = match g.get(&mut store) {
@@ -194,8 +205,18 @@ impl WasmCoreDump {
                     Val::ExternRef(_) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Extern)
                     }
+                    Val::AnyRef(_) => {
+                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Any)
+                    }
                 };
-                globals.global(wasm_encoder::GlobalType { val_type, mutable }, &init);
+                globals.global(
+                    wasm_encoder::GlobalType {
+                        val_type,
+                        mutable,
+                        shared: false,
+                    },
+                    &init,
+                );
             }
             core_dump.section(&globals);
         }

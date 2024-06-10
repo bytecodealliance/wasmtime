@@ -16,18 +16,19 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FlatType, InterfaceType, StringEncoding,
-    TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
-    FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
+    StringEncoding, Transcode, TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex,
+    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeVariantIndex,
+    VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use crate::fact::signature::Signature;
-use crate::fact::transcode::{FixedEncoding as FE, Transcode, Transcoder};
+use crate::fact::transcode::Transcoder;
 use crate::fact::traps::Trap;
 use crate::fact::{
     AdapterData, Body, Context, Function, FunctionId, Helper, HelperLocation, HelperType, Module,
     Options,
 };
+use crate::prelude::*;
 use crate::{FuncIndex, GlobalIndex};
 use std::collections::HashMap;
 use std::mem;
@@ -520,7 +521,7 @@ impl Compiler<'_, '_> {
         // The general goal is to avoid creating an exponentially sized function
         // for a linearly sized input (the type section). By outlining helper
         // functions there will ideally be a constant set of helper functions
-        // per type (to accomodate in-memory or on-stack transfers as well as
+        // per type (to accommodate in-memory or on-stack transfers as well as
         // src/dst options) which means that each function is at most a certain
         // size and we have a linear number of functions which should guarantee
         // an overall linear size of the output.
@@ -1228,7 +1229,7 @@ impl Compiler<'_, '_> {
         self.validate_string_length(src, src_enc);
 
         // Optimistically assume that the code unit length of the source is
-        // all that's needed in the destination. Perform that allocaiton
+        // all that's needed in the destination. Perform that allocation
         // here and proceed to transcoding below.
         self.convert_src_len_to_dst(src.len.idx, src.opts.ptr(), dst_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_opts.ptr());
@@ -1734,7 +1735,7 @@ impl Compiler<'_, '_> {
         self.instruction(Block(BlockType::Empty));
 
         // Calculate the full byte size of memory with `memory.size`. Note that
-        // arithmetic here is done always in 64-bits to accomodate 4G memories.
+        // arithmetic here is done always in 64-bits to accommodate 4G memories.
         // Additionally it's assumed that 64-bit memories never fill up
         // entirely.
         self.instruction(MemorySize(opts.memory.unwrap().as_u32()));

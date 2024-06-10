@@ -1,27 +1,26 @@
 use crate::component::matching::InstanceType;
 use crate::component::types;
+use crate::prelude::*;
+use crate::runtime::vm::component::ComponentRuntimeInfo;
+use crate::runtime::vm::{VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction};
 use crate::{
-    code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
-    type_registry::TypeCollection, Engine, Module, ResourcesRequired,
+    code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
+    ResourcesRequired,
 };
 use crate::{FuncType, ValType};
-use anyhow::{bail, Context, Result};
-use std::fs;
-use std::mem;
-use std::ops::Range;
+use alloc::sync::Arc;
+use anyhow::Result;
+use core::any::Any;
+use core::mem;
+use core::ops::Range;
+use core::ptr::NonNull;
+#[cfg(feature = "std")]
 use std::path::Path;
-use std::ptr::NonNull;
-use std::sync::Arc;
 use wasmtime_environ::component::{
     AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, GlobalInitializer,
     InstantiateModule, StaticModuleIndex, TrampolineIndex, TypeComponentIndex, VMComponentOffsets,
 };
-
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
-use wasmtime_runtime::component::ComponentRuntimeInfo;
-use wasmtime_runtime::{
-    VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
-};
 
 /// A compiled WebAssembly Component.
 ///
@@ -80,13 +79,12 @@ struct ComponentInner {
     /// A cached handle to the `wasmtime::FuncType` for the canonical ABI's
     /// `realloc`, to avoid the need to look up types in the registry and take
     /// locks when calling `realloc` via `TypedFunc::call_raw`.
-    realloc_func_type: Arc<dyn std::any::Any + Send + Sync>,
+    realloc_func_type: Arc<dyn Any + Send + Sync>,
 }
 
 pub(crate) struct AllCallFuncPointers {
     pub wasm_call: NonNull<VMWasmCallFunction>,
     pub array_call: VMArrayCallFunction,
-    pub native_call: NonNull<VMNativeCallFunction>,
 }
 
 impl Component {
@@ -149,12 +147,10 @@ impl Component {
     /// # Ok(())
     /// # }
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
-        let bytes = bytes.as_ref();
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(bytes)?;
-        Component::from_binary(engine, &bytes)
+        crate::CodeBuilder::new(engine)
+            .wasm(bytes.as_ref(), None)?
+            .compile_component()
     }
 
     /// Compiles a new WebAssembly component from a wasm file on disk pointed
@@ -162,26 +158,11 @@ impl Component {
     ///
     /// This is a convenience function for reading the contents of `file` on
     /// disk and then calling [`Component::new`].
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg(all(feature = "std", any(feature = "cranelift", feature = "winch")))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
-        match Self::new(
-            engine,
-            &fs::read(&file).with_context(|| "failed to read input file")?,
-        ) {
-            Ok(m) => Ok(m),
-            Err(e) => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "wat")] {
-                        let mut e = e.downcast::<wat::Error>()?;
-                        e.set_path(file);
-                        bail!(e)
-                    } else {
-                        Err(e)
-                    }
-                }
-            }
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm_file(file.as_ref())?
+            .compile_component()
     }
 
     /// Compiles a new WebAssembly component from the in-memory wasm image
@@ -194,58 +175,11 @@ impl Component {
     ///
     /// For more information on semantics and errors see [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
-        use crate::compile::build_component_artifacts;
-        use crate::module::HashedEngineCompileEnv;
-        use wasmtime_runtime::MmapVec;
-
-        engine
-            .check_compatible_with_native_host()
-            .context("compilation settings are not compatible with the native host")?;
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "cache")] {
-                let state = (HashedEngineCompileEnv(engine), binary);
-                let (code, artifacts) = wasmtime_cache::ModuleCacheEntry::new(
-                    "wasmtime",
-                    engine.cache_config(),
-                )
-                .get_data_raw(
-                    &state,
-
-                    // Cache miss, compute the actual artifacts
-                    |(engine, wasm)| -> Result<_> {
-                        let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
-                        let code = publish_mmap(mmap.0)?;
-                        Ok((code, Some(artifacts)))
-                    },
-
-                    // Implementation of how to serialize artifacts
-                    |(_engine, _wasm), (code, _info_and_types)| {
-                        Some(code.mmap().to_vec())
-                    },
-
-                    // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm), serialized_bytes| {
-                        let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Component).ok()?;
-                        Some((code, None))
-                    },
-                )?;
-            } else {
-                let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine, binary)?;
-                let artifacts = Some(artifacts);
-                let code = publish_mmap(mmap.0)?;
-            }
-        };
-
-        return Component::from_parts(engine, code, artifacts);
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm(binary, None)?
+            .wat(false)?
+            .compile_component()
     }
 
     /// Same as [`Module::deserialize`], but for components.
@@ -281,6 +215,7 @@ impl Component {
     /// [`Module::deserialize_file`] method.
     ///
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
+    #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Component> {
         let code = engine.load_code_file(path.as_ref(), ObjectKind::Component)?;
         Component::from_parts(engine, code, None)
@@ -425,7 +360,7 @@ impl Component {
     ///
     /// If the `artifacts` are specified as `None` here then they will be
     /// deserialized from `code_memory`.
-    fn from_parts(
+    pub(crate) fn from_parts(
         engine: &Engine,
         code_memory: Arc<CodeMemory>,
         artifacts: Option<ComponentArtifacts>,
@@ -437,7 +372,7 @@ impl Component {
             static_modules,
         } = match artifacts {
             Some(artifacts) => artifacts,
-            None => bincode::deserialize(code_memory.wasmtime_info())?,
+            None => postcard::from_bytes(code_memory.wasmtime_info()).err2anyhow()?,
         };
 
         // Validate that the component can be used with the current instance
@@ -512,7 +447,6 @@ impl Component {
         let AllCallFunc {
             wasm_call,
             array_call,
-            native_call,
         } = &self.inner.info.trampolines[index];
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
@@ -521,7 +455,6 @@ impl Component {
                     self.func(array_call),
                 )
             },
-            native_call: self.func(native_call).cast(),
         }
     }
 
@@ -567,7 +500,7 @@ impl Component {
         let wasm_call = self
             .inner
             .info
-            .resource_drop_wasm_to_native_trampoline
+            .resource_drop_wasm_to_array_trampoline
             .as_ref()
             .map(|i| self.func(i).cast());
         VMFuncRef {
@@ -666,7 +599,7 @@ impl Component {
     /// compiled code resides at.
     ///
     /// For more information see
-    /// [`Module;:image_range`](crate::Module::image_range).
+    /// [`Module::image_range`](crate::Module::image_range).
     pub fn image_range(&self) -> Range<*const u8> {
         self.inner.code.code_memory().mmap().image_range()
     }
@@ -686,7 +619,7 @@ impl ComponentRuntimeInfo for ComponentInner {
         }
     }
 
-    fn realloc_func_type(&self) -> &Arc<dyn std::any::Any + Send + Sync> {
+    fn realloc_func_type(&self) -> &Arc<dyn Any + Send + Sync> {
         &self.realloc_func_type
     }
 }

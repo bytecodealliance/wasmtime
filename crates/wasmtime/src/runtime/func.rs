@@ -1,3 +1,8 @@
+use crate::prelude::*;
+use crate::runtime::vm::{
+    ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
+    VMFunctionImport, VMOpaqueContext,
+};
 use crate::runtime::Uninhabited;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
@@ -5,18 +10,15 @@ use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, Ref,
     StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
+use alloc::sync::Arc;
 use anyhow::{bail, Context as _, Error, Result};
-use std::ffi::c_void;
-use std::future::Future;
-use std::mem;
-use std::panic::{self, AssertUnwindSafe};
-use std::pin::Pin;
-use std::ptr::{self, NonNull};
-use std::sync::Arc;
-use wasmtime_runtime::{
-    ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
-    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedTypeIndex,
-};
+use core::ffi::c_void;
+use core::future::Future;
+use core::mem::{self, MaybeUninit};
+use core::num::NonZeroUsize;
+use core::pin::Pin;
+use core::ptr::{self, NonNull};
+use wasmtime_environ::VMSharedTypeIndex;
 
 /// A reference to the abstract `nofunc` heap value.
 ///
@@ -88,12 +90,14 @@ impl NoFunc {
 
     /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
     /// [`Ref`].
+    #[inline]
     pub fn null_ref() -> Ref {
         Ref::Func(None)
     }
 
     /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
     /// [`Val`].
+    #[inline]
     pub fn null_val() -> Val {
         Val::FuncRef(None)
     }
@@ -311,7 +315,7 @@ enum FuncKind {
     /// is dropped.
     ///
     /// Note that this is intentionally placed behind a `Box` to minimize the
-    /// size of this enum since the most common variant for high-peformance
+    /// size of this enum since the most common variant for high-performance
     /// situations is `SharedHost` and `StoreOwned`, so this ideally isn't
     /// larger than those two.
     Host(Box<HostFunc>),
@@ -356,39 +360,6 @@ macro_rules! for_each_function_signature {
 
 mod typed;
 pub use typed::*;
-
-macro_rules! generate_wrap_async_func {
-    ($num:tt $($args:ident)*) => (paste::paste!{
-        /// Same as [`Func::wrap`], except the closure asynchronously produces
-        /// its result. For more information see the [`Func`] documentation.
-        ///
-        /// # Panics
-        ///
-        /// This function will panic if called with a non-asynchronous store.
-        #[allow(non_snake_case)]
-        #[cfg(feature = "async")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
-        pub fn [<wrap $num _async>]<T, $($args,)* R>(
-            store: impl AsContextMut<Data = T>,
-            func: impl for<'a> Fn(Caller<'a, T>, $($args),*) -> Box<dyn Future<Output = R> + Send + 'a> + Send + Sync + 'static,
-        ) -> Func
-        where
-            $($args: WasmTy,)*
-            R: WasmRet,
-        {
-            assert!(store.as_context().async_support(), concat!("cannot use `wrap", $num, "_async` without enabling async support on the config"));
-            Func::wrap(store, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                let async_cx = caller.store.as_context_mut().0.async_cx().expect("Attempt to start async function on dying fiber");
-                let mut future = Pin::from(func(caller, $($args),*));
-
-                match unsafe { async_cx.block_on(future.as_mut()) } {
-                    Ok(ret) => ret.into_fallible(),
-                    Err(e) => R::fallible_from_error(e),
-                }
-            })
-        }
-    })
-}
 
 impl Func {
     /// Creates a new `Func` with the given arguments, typically to create a
@@ -443,8 +414,6 @@ impl Func {
     ///
     /// Panics if the given function type is not associated with this store's
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -454,7 +423,7 @@ impl Func {
         let ty_clone = ty.clone();
         unsafe {
             Func::new_unchecked(store, ty, move |caller, values| {
-                Func::invoke(caller, &ty_clone, values, &func)
+                Func::invoke_host_func_for_wasm(caller, &ty_clone, values, &func)
             })
         }
     }
@@ -487,8 +456,6 @@ impl Func {
     ///
     /// Panics if the given function type is not associated with this store's
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -573,7 +540,6 @@ impl Func {
     /// # }
     /// ```
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
@@ -622,21 +588,27 @@ impl Func {
     /// function being called is known statically so the type signature can
     /// be inferred. Rust types will map to WebAssembly types as follows:
     ///
-    /// | Rust Argument Type                | WebAssembly Type                      |
-    /// |-----------------------------------|---------------------------------------|
-    /// | `i32`                             | `i32`                                 |
-    /// | `u32`                             | `i32`                                 |
-    /// | `i64`                             | `i64`                                 |
-    /// | `u64`                             | `i64`                                 |
-    /// | `f32`                             | `f32`                                 |
-    /// | `f64`                             | `f64`                                 |
-    /// | `V128` on x86-64 and aarch64 only | `v128`                                |
-    /// | `Option<Func>`                    | `funcref` aka `(ref null func)`       |
-    /// | `Func`                            | `(ref func)`                          |
-    /// | `Option<Nofunc>`                  | `nullfuncref` aka `(ref null nofunc)` |
-    /// | `NoFunc`                          | `(ref nofunc)`                        |
-    /// | `Option<ExternRef>`               | `externref` aka `(ref null extern)`   |
-    /// | `ExternRef`                       | `(ref extern)`                        |
+    /// | Rust Argument Type                | WebAssembly Type                          |
+    /// |-----------------------------------|-------------------------------------------|
+    /// | `i32`                             | `i32`                                     |
+    /// | `u32`                             | `i32`                                     |
+    /// | `i64`                             | `i64`                                     |
+    /// | `u64`                             | `i64`                                     |
+    /// | `f32`                             | `f32`                                     |
+    /// | `f64`                             | `f64`                                     |
+    /// | `V128` on x86-64 and aarch64 only | `v128`                                    |
+    /// | `Option<Func>`                    | `funcref` aka `(ref null func)`           |
+    /// | `Func`                            | `(ref func)`                              |
+    /// | `Option<Nofunc>`                  | `nullfuncref` aka `(ref null nofunc)`     |
+    /// | `NoFunc`                          | `(ref nofunc)`                            |
+    /// | `Option<ExternRef>`               | `externref` aka `(ref null extern)`       |
+    /// | `ExternRef`                       | `(ref extern)`                            |
+    /// | `Option<NoExtern>`                | `nullexternref` aka `(ref null noextern)` |
+    /// | `NoExtern`                        | `(ref noextern)`                          |
+    /// | `Option<AnyRef>`                  | `anyref` aka `(ref null any)`             |
+    /// | `AnyRef`                          | `(ref any)`                               |
+    /// | `Option<I31>`                     | `i31ref` aka `(ref null i31)`             |
+    /// | `I31`                             | `(ref i31)`                               |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
@@ -856,7 +828,57 @@ impl Func {
         }
     }
 
-    for_each_function_signature!(generate_wrap_async_func);
+    fn wrap_inner<F, T, Params, Results>(mut store: impl AsContextMut<Data = T>, func: F) -> Func
+    where
+        F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
+        Params: WasmTyList,
+        Results: WasmRet,
+    {
+        let store = store.as_context_mut().0;
+        // part of this unsafety is about matching the `T` to a `Store<T>`,
+        // which is done through the `AsContextMut` bound above.
+        unsafe {
+            let host = HostFunc::wrap_inner(store.engine(), func);
+            host.into_func(store)
+        }
+    }
+
+    /// Same as [`Func::wrap`], except the closure asynchronously produces the
+    /// result and the arguments are passed within a tuple. For more information
+    /// see the [`Func`] documentation.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if called with a non-asynchronous store.
+    #[cfg(feature = "async")]
+    pub fn wrap_async<T, F, P, R>(store: impl AsContextMut<Data = T>, func: F) -> Func
+    where
+        F: for<'a> Fn(Caller<'a, T>, P) -> Box<dyn Future<Output = R> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+        P: WasmTyList,
+        R: WasmRet,
+    {
+        assert!(
+            store.as_context().async_support(),
+            concat!("cannot use `wrap_async` without enabling async support on the config")
+        );
+        Func::wrap_inner(store, move |mut caller: Caller<'_, T>, args| {
+            let async_cx = caller
+                .store
+                .as_context_mut()
+                .0
+                .async_cx()
+                .expect("Attempt to start async function on dying fiber");
+            let mut future = Pin::from(func(caller, args));
+
+            match unsafe { async_cx.block_on(future.as_mut()) } {
+                Ok(ret) => ret.into_fallible(),
+                Err(e) => R::fallible_from_error(e),
+            }
+        })
+    }
 
     /// Returns the underlying wasm type that this `Func` has.
     ///
@@ -972,7 +994,12 @@ impl Func {
             !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config",
         );
-        self.call_impl(&mut store.as_context_mut(), params, results)
+        let mut store = store.as_context_mut();
+        let need_gc = self.call_impl_check_args(&mut store, params, results)?;
+        if need_gc {
+            store.0.gc();
+        }
+        unsafe { self.call_impl_do_call(&mut store, params, results) }
     }
 
     /// Invokes this function in an "unchecked" fashion, reading parameters and
@@ -1103,7 +1130,6 @@ impl Func {
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1118,23 +1144,32 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config",
         );
+        let need_gc = self.call_impl_check_args(&mut store, params, results)?;
+        if need_gc {
+            store.0.gc_async().await;
+        }
         let result = store
-            .on_fiber(|store| self.call_impl(store, params, results))
+            .on_fiber(|store| unsafe { self.call_impl_do_call(store, params, results) })
             .await??;
         Ok(result)
     }
 
-    fn call_impl<T>(
+    /// Perform dynamic checks that the arguments given to us match
+    /// the signature of this function and are appropriate to pass to this
+    /// function.
+    ///
+    /// This involves checking to make sure we have the right number and types
+    /// of arguments as well as making sure everything is from the same `Store`.
+    ///
+    /// This must be called just before `call_impl_do_call`.
+    ///
+    /// Returns whether we need to GC before calling `call_impl_do_call`.
+    fn call_impl_check_args<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<()> {
-        // We need to perform a dynamic check that the arguments given to us
-        // match the signature of this function and are appropriate to pass to
-        // this function. This involves checking to make sure we have the right
-        // number and types of arguments as well as making sure everything is
-        // from the same `Store`.
+    ) -> Result<bool> {
         let (ty, opaque) = self.ty_ref(store.0);
         if ty.params().len() != params.len() {
             bail!(
@@ -1158,31 +1193,46 @@ impl Func {
             }
         }
 
-        let values_vec_size = params.len().max(ty.results().len());
-
         #[cfg(feature = "gc")]
         {
-            // Whenever we pass `externref`s from host code to Wasm code, they
-            // go into the `VMExternRefActivationsTable`. But the table might be
-            // at capacity already, so check for that. If it is at capacity
-            // (unlikely) then do a GC to free up space. This is necessary
-            // because otherwise we would either keep filling up the bump chunk
-            // and making it larger and larger or we would always take the slow
-            // path when inserting references into the table.
-            if ty.as_wasm_func_type().externref_params_count()
-                > store
-                    .0
-                    .externref_activations_table()
-                    .bump_capacity_remaining()
-            {
-                store.gc();
+            // Check whether we need to GC before calling into Wasm.
+            //
+            // For example, with the DRC collector, whenever we pass GC refs
+            // from host code to Wasm code, they go into the
+            // `VMGcRefActivationsTable`. But the table might be at capacity
+            // already. If it is at capacity (unlikely) then we need to do a GC
+            // to free up space.
+            let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_params_count();
+            if let Some(num_gc_refs) = NonZeroUsize::new(num_gc_refs) {
+                return Ok(opaque
+                    .gc_store()?
+                    .gc_heap
+                    .need_gc_before_entering_wasm(num_gc_refs));
             }
         }
 
+        Ok(false)
+    }
+
+    /// Do the actual call into Wasm.
+    ///
+    /// # Safety
+    ///
+    /// You must have type checked the arguments by calling
+    /// `call_impl_check_args` immediately before calling this function. It is
+    /// only safe to call this function if that one did not return an error.
+    unsafe fn call_impl_do_call<T>(
+        &self,
+        store: &mut StoreContextMut<'_, T>,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
         // Store the argument values into `values_vec`.
+        let (ty, _) = self.ty_ref(store.0);
+        let values_vec_size = params.len().max(ty.results().len());
         let mut values_vec = store.0.take_wasm_val_raw_storage();
         debug_assert!(values_vec.is_empty());
-        values_vec.resize_with(values_vec_size, || ValRaw::i32(0));
+        values_vec.resize_with(values_vec_size, || ValRaw::v128(0));
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
             unsafe {
                 *slot = arg.to_raw(&mut *store)?;
@@ -1263,18 +1313,17 @@ impl Func {
                 wasm_call: if let Some(wasm_call) = f.as_ref().wasm_call {
                     wasm_call
                 } else {
-                    // Assert that this is a native-call function, since those
+                    // Assert that this is a array-call function, since those
                     // are the only ones that could be missing a `wasm_call`
                     // trampoline.
-                    let _ = VMNativeCallHostFuncContext::from_opaque(f.as_ref().vmctx);
+                    let _ = VMArrayCallHostFuncContext::from_opaque(f.as_ref().vmctx);
 
                     let sig = self.type_index(store.store_data());
-                    module.runtime_info().wasm_to_native_trampoline(sig).expect(
-                        "must have a wasm-to-native trampoline for this signature if the Wasm \
-                         module is importing a function of this signature",
+                    module.runtime_info().wasm_to_array_trampoline(sig).expect(
+                        "if the wasm is importing a function of a given type, it must have the \
+                         type's trampoline",
                     )
                 },
-                native_call: f.as_ref().native_call,
                 array_call: f.as_ref().array_call,
                 vmctx: f.as_ref().vmctx,
             }
@@ -1285,7 +1334,7 @@ impl Func {
         store.store_data().contains(self.0)
     }
 
-    fn invoke<T>(
+    fn invoke_host_func_for_wasm<T>(
         mut caller: Caller<'_, T>,
         ty: &FuncType,
         values_vec: &mut [ValRaw],
@@ -1311,20 +1360,6 @@ impl Func {
         val_vec.extend((0..ty.results().len()).map(|_| Val::null_func_ref()));
         let (params, results) = val_vec.split_at_mut(nparams);
         func(caller.sub_caller(), params, results)?;
-
-        #[cfg(feature = "gc")]
-        {
-            // See the comment in `Func::call_impl`'s `write_params` function.
-            if ty.as_wasm_func_type().externref_returns_count()
-                > caller
-                    .store
-                    .0
-                    .externref_activations_table()
-                    .bump_capacity_remaining()
-            {
-                caller.store.gc();
-            }
-        }
 
         // Unlike our arguments we need to dynamically check that the return
         // values produced are correct. There could be a bug in `func` that
@@ -1375,21 +1410,27 @@ impl Func {
     ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
-    /// | WebAssembly                           | Rust                                  |
-    /// |---------------------------------------|---------------------------------------|
-    /// | `i32`                                 | `i32` or `u32`                        |
-    /// | `i64`                                 | `i64` or `u64`                        |
-    /// | `f32`                                 | `f32`                                 |
-    /// | `f64`                                 | `f64`                                 |
-    /// | `externref` aka `(ref null extern)`   | `Option<ExternRef>`                   |
-    /// | `(ref extern)`                        | `ExternRef`                           |
-    /// | `funcref` aka `(ref null func)`       | `Option<Func>`                        |
-    /// | `(ref func)`                          | `Func`                                |
-    /// | `(ref null <func type index>)`        | `Option<Func>`                        |
-    /// | `(ref <func type index>)`             | `Func`                                |
-    /// | `nullfuncref` aka `(ref null nofunc)` | `Option<NoFunc>`                      |
-    /// | `(ref nofunc)`                        | `NoFunc`                              |
-    /// | `v128`                                | `V128` on `x86-64` and `aarch64` only |
+    /// | WebAssembly                               | Rust                                  |
+    /// |-------------------------------------------|---------------------------------------|
+    /// | `i32`                                     | `i32` or `u32`                        |
+    /// | `i64`                                     | `i64` or `u64`                        |
+    /// | `f32`                                     | `f32`                                 |
+    /// | `f64`                                     | `f64`                                 |
+    /// | `externref` aka `(ref null extern)`       | `Option<ExternRef>`                   |
+    /// | `(ref extern)`                            | `ExternRef`                           |
+    /// | `(ref noextern)`                          | `NoExtern`                            |
+    /// | `nullexternref` aka `(ref null noextern)` | `Option<NoExtern>`                    |
+    /// | `anyref` aka `(ref null any)`             | `Option<AnyRef>`                      |
+    /// | `(ref any)`                               | `AnyRef`                              |
+    /// | `i31ref` aka `(ref null i31)`             | `Option<I31>`                         |
+    /// | `(ref i31)`                               | `I31`                                 |
+    /// | `funcref` aka `(ref null func)`           | `Option<Func>`                        |
+    /// | `(ref func)`                              | `Func`                                |
+    /// | `(ref null <func type index>)`            | `Option<Func>`                        |
+    /// | `(ref <func type index>)`                 | `Func`                                |
+    /// | `nullfuncref` aka `(ref null nofunc)`     | `Option<NoFunc>`                      |
+    /// | `(ref nofunc)`                            | `NoFunc`                              |
+    /// | `v128`                                    | `V128` on `x86-64` and `aarch64` only |
     ///
     /// (Note that this mapping is the same as that of [`Func::wrap`]).
     ///
@@ -1520,7 +1561,7 @@ impl Func {
     /// multiple times and becomes multiple `wasmtime::Func`s, this hash key
     /// will be consistent across all of these functions.
     #[allow(dead_code)] // Not used yet, but added for consistency.
-    pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl std::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl core::hash::Hash + Eq {
         self.vm_func_ref(store).as_ptr() as usize
     }
 }
@@ -1544,7 +1585,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
             exit_wasm(store, exit);
             return Err(trap);
         }
-        let result = wasmtime_runtime::catch_traps(
+        let result = crate::runtime::vm::catch_traps(
             store.0.signal_handler(),
             store.0.engine().config().wasm_backtrace,
             store.0.engine().config().coredump_on_trap,
@@ -1566,7 +1607,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 ///   allocated by WebAssembly code and it's relative to the initial stack
 ///   pointer that called into wasm.
 ///
-/// This function may fail if the the stack limit can't be set because an
+/// This function may fail if the stack limit can't be set because an
 /// interrupt already happened.
 fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     // If this is a recursive call, e.g. our stack limit is already set, then
@@ -1592,7 +1633,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
         return None;
     }
 
-    let stack_pointer = wasmtime_runtime::get_stack_pointer();
+    let stack_pointer = crate::runtime::vm::get_stack_pointer();
 
     // Determine the stack pointer where, after which, any wasm code will
     // immediately trap. This is checked on the entry to all wasm functions.
@@ -1641,40 +1682,35 @@ fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
 ///
 /// For more information see [`Func::wrap`]
 pub unsafe trait WasmRet {
-    // Same as `WasmTy::Abi`.
-    #[doc(hidden)]
-    type Abi: 'static + Copy;
-    #[doc(hidden)]
-    type Retptr: Copy;
-
     // Same as `WasmTy::compatible_with_store`.
     #[doc(hidden)]
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool;
 
-    // Similar to `WasmTy::into_abi_for_arg` but used when host code is
-    // returning a value into Wasm, rather than host code passing an argument to
-    // a Wasm call. Unlike `into_abi_for_arg`, implementors of this method can
-    // raise traps, which means that callers must ensure that
-    // `invoke_wasm_and_catch_traps` is on the stack, and therefore this method
-    // is unsafe.
+    /// Stores this return value into the `ptr` specified using the rooted
+    /// `store`.
+    ///
+    /// Traps are communicated through the `Result<_>` return value.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe as `ptr` must have the correct length to store
+    /// this result. This property is only checked in debug mode, not in release
+    /// mode.
     #[doc(hidden)]
-    unsafe fn into_abi_for_ret(
+    unsafe fn store(
         self,
         store: &mut AutoAssertNoGc<'_>,
-        ptr: Self::Retptr,
-    ) -> Result<Self::Abi>;
+        ptr: &mut [MaybeUninit<ValRaw>],
+    ) -> Result<()>;
 
     #[doc(hidden)]
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType;
-
-    #[doc(hidden)]
-    unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi);
 
     // Utilities used to convert an instance of this type to a `Result`
     // explicitly, used when wrapping async functions which always bottom-out
     // in a function that returns a trap because futures can be cancelled.
     #[doc(hidden)]
-    type Fallible: WasmRet<Abi = Self::Abi, Retptr = Self::Retptr>;
+    type Fallible: WasmRet;
     #[doc(hidden)]
     fn into_fallible(self) -> Self::Fallible;
     #[doc(hidden)]
@@ -1685,28 +1721,23 @@ unsafe impl<T> WasmRet for T
 where
     T: WasmTy,
 {
-    type Abi = <T as WasmTy>::Abi;
-    type Retptr = ();
     type Fallible = Result<T>;
 
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret(
+    unsafe fn store(
         self,
         store: &mut AutoAssertNoGc<'_>,
-        _retptr: (),
-    ) -> Result<Self::Abi> {
-        <Self as WasmTy>::into_abi(self, store)
+        ptr: &mut [MaybeUninit<ValRaw>],
+    ) -> Result<()> {
+        debug_assert!(ptr.len() > 0);
+        <Self as WasmTy>::store(self, store, ptr.get_unchecked_mut(0))
     }
 
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
         FuncType::new(engine, params, Some(<Self as WasmTy>::valtype()))
-    }
-
-    unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
-        T::abi_into_raw(f(()), ptr);
     }
 
     fn into_fallible(self) -> Result<T> {
@@ -1722,8 +1753,6 @@ unsafe impl<T> WasmRet for Result<T>
 where
     T: WasmRet,
 {
-    type Abi = <T as WasmRet>::Abi;
-    type Retptr = <T as WasmRet>::Retptr;
     type Fallible = Self;
 
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
@@ -1733,20 +1762,16 @@ where
         }
     }
 
-    unsafe fn into_abi_for_ret(
+    unsafe fn store(
         self,
         store: &mut AutoAssertNoGc<'_>,
-        retptr: Self::Retptr,
-    ) -> Result<Self::Abi> {
-        self.and_then(|val| val.into_abi_for_ret(store, retptr))
+        ptr: &mut [MaybeUninit<ValRaw>],
+    ) -> Result<()> {
+        self.and_then(|val| val.store(store, ptr))
     }
 
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
         T::func_type(engine, params)
-    }
-
-    unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
-        T::wrap_trampoline(ptr, f)
     }
 
     fn into_fallible(self) -> Result<T> {
@@ -1764,10 +1789,7 @@ macro_rules! impl_wasm_host_results {
         unsafe impl<$($t),*> WasmRet for ($($t,)*)
         where
             $($t: WasmTy,)*
-            ($($t::Abi,)*): HostAbi,
         {
-            type Abi = <($($t::Abi,)*) as HostAbi>::Abi;
-            type Retptr = <($($t::Abi,)*) as HostAbi>::Retptr;
             type Fallible = Result<Self>;
 
             #[inline]
@@ -1777,14 +1799,20 @@ macro_rules! impl_wasm_host_results {
             }
 
             #[inline]
-            unsafe fn into_abi_for_ret(
+            unsafe fn store(
                 self,
                 _store: &mut AutoAssertNoGc<'_>,
-                ptr: Self::Retptr,
-            ) -> Result<Self::Abi> {
+                _ptr: &mut [MaybeUninit<ValRaw>],
+            ) -> Result<()> {
                 let ($($t,)*) = self;
-                let abi = ($($t.into_abi(_store)?,)*);
-                Ok(<($($t::Abi,)*) as HostAbi>::into_abi(abi, ptr))
+                let mut _cur = 0;
+                $(
+                    debug_assert!(_cur < _ptr.len());
+                    let val = _ptr.get_unchecked_mut(_cur);
+                    _cur += 1;
+                    WasmTy::store($t, _store, val)?;
+                )*
+                Ok(())
             }
 
             fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
@@ -1793,15 +1821,6 @@ macro_rules! impl_wasm_host_results {
                     params,
                     IntoIterator::into_iter([$($t::valtype(),)*]),
                 )
-            }
-
-            #[allow(unused_assignments)]
-            unsafe fn wrap_trampoline(mut _ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
-                let ($($t,)*) = <($($t::Abi,)*) as HostAbi>::call(f);
-                $(
-                    $t::abi_into_raw($t, _ptr);
-                    _ptr = _ptr.add(1);
-                )*
             }
 
             #[inline]
@@ -1819,113 +1838,6 @@ macro_rules! impl_wasm_host_results {
 
 for_each_function_signature!(impl_wasm_host_results);
 
-// Internal trait representing how to communicate tuples of return values across
-// an ABI boundary. This internally corresponds to the "wasmtime" ABI inside of
-// cranelift itself. Notably the first element of each tuple is returned via the
-// typical system ABI (e.g. systemv or fastcall depending on platform) and all
-// other values are returned packed via the stack.
-//
-// This trait helps to encapsulate all the details of that.
-#[doc(hidden)]
-pub trait HostAbi {
-    // A value returned from native functions which return `Self`
-    type Abi: Copy;
-    // A return pointer, added to the end of the argument list, for native
-    // functions that return `Self`. Note that a 0-sized type here should get
-    // elided at the ABI level.
-    type Retptr: Copy;
-
-    // Converts a value of `self` into its components. Stores necessary values
-    // into `ptr` and then returns whatever needs to be returned from the
-    // function.
-    unsafe fn into_abi(self, ptr: Self::Retptr) -> Self::Abi;
-
-    // Calls `f` with a suitably sized return area and requires `f` to return
-    // the raw abi value of the first element of our tuple. This will then
-    // unpack the `Retptr` and assemble it with `Self::Abi` to return an
-    // instance of the whole tuple.
-    unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self;
-}
-
-macro_rules! impl_host_abi {
-    // Base case, everything is `()`
-    (0) => {
-        impl HostAbi for () {
-            type Abi = ();
-            type Retptr = ();
-
-            #[inline]
-            unsafe fn into_abi(self, _ptr: Self::Retptr) -> Self::Abi {}
-
-            #[inline]
-            unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
-                f(())
-            }
-        }
-    };
-
-    // In the 1-case the retptr is not present, so it's a 0-sized value.
-    (1 $a:ident) => {
-        impl<$a: Copy> HostAbi for ($a,) {
-            type Abi = $a;
-            type Retptr = ();
-
-            unsafe fn into_abi(self, _ptr: Self::Retptr) -> Self::Abi {
-                self.0
-            }
-
-            unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
-                (f(()),)
-            }
-        }
-    };
-
-    // This is where the more interesting case happens. The first element of the
-    // tuple is returned via `Abi` and all other elements are returned via
-    // `Retptr`. We create a `TupleRetNN` structure to represent all of the
-    // return values here.
-    //
-    // Also note that this isn't implemented for the old backend right now due
-    // to the original author not really being sure how to implement this in the
-    // old backend.
-    ($n:tt $t:ident $($u:ident)*) => {paste::paste!{
-        #[doc(hidden)]
-        #[allow(non_snake_case)]
-        #[repr(C)]
-        pub struct [<TupleRet $n>]<$($u,)*> {
-            $($u: $u,)*
-        }
-
-        #[allow(non_snake_case, unused_assignments)]
-        impl<$t: Copy, $($u: Copy,)*> HostAbi for ($t, $($u,)*) {
-            type Abi = $t;
-            type Retptr = *mut [<TupleRet $n>]<$($u,)*>;
-
-            unsafe fn into_abi(self, ptr: Self::Retptr) -> Self::Abi {
-                let ($t, $($u,)*) = self;
-                // Store the tail of our tuple into the return pointer...
-                $((*ptr).$u = $u;)*
-                // ... and return the head raw.
-                $t
-            }
-
-            unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
-                // Create space to store all the return values and then invoke
-                // the function.
-                let mut space = std::mem::MaybeUninit::uninit();
-                let t = f(space.as_mut_ptr());
-                let space = space.assume_init();
-
-                // Use the return value as the head of the tuple and unpack our
-                // return area to get the rest of the tuple.
-                (t, $(space.$u,)*)
-            }
-        }
-    }};
-}
-
-for_each_function_signature!(impl_host_abi);
-
 /// Internal trait implemented for all arguments that can be passed to
 /// [`Func::wrap`] and [`Linker::func_wrap`](crate::Linker::func_wrap).
 ///
@@ -1937,6 +1849,122 @@ pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
     #[doc(hidden)]
     fn into_func(self, engine: &Engine) -> HostContext;
 }
+
+macro_rules! impl_into_func {
+    ($num:tt $arg:ident) => {
+        // Implement for functions without a leading `&Caller` parameter,
+        // delegating to the implementation below which does have the leading
+        // `Caller` parameter.
+        #[allow(non_snake_case)]
+        impl<T, F, $arg, R> IntoFunc<T, $arg, R> for F
+        where
+            F: Fn($arg) -> R + Send + Sync + 'static,
+            $arg: WasmTy,
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                let f = move |_: Caller<'_, T>, $arg: $arg| {
+                    self($arg)
+                };
+
+                f.into_func(engine)
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<T, F, $arg, R> IntoFunc<T, (Caller<'_, T>, $arg), R> for F
+        where
+            F: Fn(Caller<'_, T>, $arg) -> R + Send + Sync + 'static,
+            $arg: WasmTy,
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                HostContext::from_closure(engine, move |caller: Caller<'_, T>, ($arg,)| {
+                    self(caller, $arg)
+                })
+            }
+        }
+    };
+    ($num:tt $($args:ident)*) => {
+        // Implement for functions without a leading `&Caller` parameter,
+        // delegating to the implementation below which does have the leading
+        // `Caller` parameter.
+        #[allow(non_snake_case)]
+        impl<T, F, $($args,)* R> IntoFunc<T, ($($args,)*), R> for F
+        where
+            F: Fn($($args),*) -> R + Send + Sync + 'static,
+            $($args: WasmTy,)*
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                let f = move |_: Caller<'_, T>, $($args:$args),*| {
+                    self($($args),*)
+                };
+
+                f.into_func(engine)
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<T, F, $($args,)* R> IntoFunc<T, (Caller<'_, T>, $($args,)*), R> for F
+        where
+            F: Fn(Caller<'_, T>, $($args),*) -> R + Send + Sync + 'static,
+            $($args: WasmTy,)*
+            R: WasmRet,
+        {
+            fn into_func(self, engine: &Engine) -> HostContext {
+                HostContext::from_closure(engine, move |caller: Caller<'_, T>, ( $( $args ),* )| {
+                    self(caller, $( $args ),* )
+                })
+            }
+        }
+    }
+}
+
+for_each_function_signature!(impl_into_func);
+
+/// Trait implemented for various tuples made up of types which implement
+/// [`WasmTy`] that can be passed to [`Func::wrap_inner`] and
+/// [`HostContext::from_closure`].
+pub unsafe trait WasmTyList {
+    /// Get the value type that each Type in the list represents.
+    fn valtypes() -> impl Iterator<Item = ValType>;
+
+    // Load a version of `Self` from the `values` provided.
+    //
+    // # Safety
+    //
+    // This function is unsafe as it's up to the caller to ensure that `values` are
+    // valid for this given type.
+    #[doc(hidden)]
+    unsafe fn load(store: &mut AutoAssertNoGc<'_>, values: &mut [MaybeUninit<ValRaw>]) -> Self;
+}
+
+macro_rules! impl_wasm_ty_list {
+    ($num:tt $($args:ident)*) => (paste::paste!{
+        #[allow(non_snake_case)]
+        unsafe impl<$($args),*> WasmTyList for ($($args,)*)
+        where
+            $($args: WasmTy,)*
+        {
+            fn valtypes() -> impl Iterator<Item = ValType> {
+                IntoIterator::into_iter([$($args::valtype(),)*])
+            }
+
+            unsafe fn load(_store: &mut AutoAssertNoGc<'_>, _values: &mut [MaybeUninit<ValRaw>]) -> Self {
+                let mut _cur = 0;
+                ($({
+                    debug_assert!(_cur < _values.len());
+                    let ptr = _values.get_unchecked(_cur).assume_init_ref();
+                    _cur += 1;
+                    $args::load(_store, ptr)
+                },)*)
+            }
+        }
+    });
+}
+
+for_each_function_signature!(impl_wasm_ty_list);
 
 /// A structure representing the caller's context when creating a function
 /// via [`Func::wrap`].
@@ -1960,7 +1988,7 @@ pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
 /// recommended to use this type.
 pub struct Caller<'a, T> {
     pub(crate) store: StoreContextMut<'a, T>,
-    caller: &'a wasmtime_runtime::Instance,
+    caller: &'a crate::runtime::vm::Instance,
 }
 
 impl<T> Caller<'_, T> {
@@ -1973,7 +2001,7 @@ impl<T> Caller<'_, T> {
         R: 'static,
     {
         assert!(!caller.is_null());
-        wasmtime_runtime::Instance::from_vmctx(caller, |instance| {
+        crate::runtime::vm::Instance::from_vmctx(caller, |instance| {
             let store = StoreContextMut::from_raw(instance.store());
             let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
 
@@ -1985,7 +2013,7 @@ impl<T> Caller<'_, T> {
             // Safe to recreate a mutable borrow of the store because `ret`
             // cannot be borrowing from the store.
             let store = StoreContextMut::<T>::from_raw(instance.store());
-            store.0.gc_roots_mut().exit_lifo_scope(gc_lifo_scope);
+            store.0.exit_gc_lifo_scope(gc_lifo_scope);
 
             ret
         })
@@ -2052,13 +2080,23 @@ impl<T> Caller<'_, T> {
         self.store.engine()
     }
 
-    /// Perform garbage collection of `ExternRef`s.
+    /// Perform garbage collection.
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
     #[cfg(feature = "gc")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn gc(&mut self) {
         self.store.gc()
+    }
+
+    /// Perform garbage collection asynchronously.
+    ///
+    /// Same as [`Store::gc_async`](crate::Store::gc_async).
+    #[cfg(all(feature = "async", feature = "gc"))]
+    pub async fn gc_async(&mut self)
+    where
+        T: Send,
+    {
+        self.store.gc_async().await;
     }
 
     /// Returns the remaining fuel in the store.
@@ -2097,7 +2135,7 @@ impl<T> AsContextMut for Caller<'_, T> {
     }
 }
 
-// State stored inside a `VMNativeCallHostFuncContext`.
+// State stored inside a `VMArrayCallHostFuncContext`.
 struct HostFuncState<F> {
     // The actual host function.
     func: F,
@@ -2108,213 +2146,113 @@ struct HostFuncState<F> {
     ty: RegisteredType,
 }
 
-macro_rules! impl_into_func {
-    ($num:tt $($args:ident)*) => {
-        // Implement for functions without a leading `&Caller` parameter,
-        // delegating to the implementation below which does have the leading
-        // `Caller` parameter.
-        #[allow(non_snake_case)]
-        impl<T, F, $($args,)* R> IntoFunc<T, ($($args,)*), R> for F
-        where
-            F: Fn($($args),*) -> R + Send + Sync + 'static,
-            $($args: WasmTy,)*
-            R: WasmRet,
-        {
-            fn into_func(self, engine: &Engine) -> HostContext {
-                let f = move |_: Caller<'_, T>, $($args:$args),*| {
-                    self($($args),*)
-                };
-
-                f.into_func(engine)
-            }
-        }
-
-        #[allow(non_snake_case)]
-        impl<T, F, $($args,)* R> IntoFunc<T, (Caller<'_, T>, $($args,)*), R> for F
-        where
-            F: Fn(Caller<'_, T>, $($args),*) -> R + Send + Sync + 'static,
-            $($args: WasmTy,)*
-            R: WasmRet,
-        {
-            fn into_func(self, engine: &Engine) -> HostContext {
-                /// This shim is a regular, non-closure function we can stuff
-                /// inside `VMFuncRef::native_call`.
-                ///
-                /// It reads the actual callee closure out of
-                /// `VMNativeCallHostFuncContext::host_state`, forwards
-                /// arguments to that function, and finally forwards the results
-                /// back out to the caller. It also handles traps and panics
-                /// along the way.
-                unsafe extern "C" fn native_call_shim<T, F, $($args,)* R>(
-                    vmctx: *mut VMOpaqueContext,
-                    caller_vmctx: *mut VMOpaqueContext,
-                    $( $args: $args::Abi, )*
-                    retptr: R::Retptr,
-                ) -> R::Abi
-                where
-                    F: Fn(Caller<'_, T>, $( $args ),*) -> R + 'static,
-                    $( $args: WasmTy, )*
-                    R: WasmRet,
-                {
-                    enum CallResult<U> {
-                        Ok(U),
-                        Trap(anyhow::Error),
-                        Panic(Box<dyn std::any::Any + Send>),
-                    }
-
-                    // Note that this `result` is intentionally scoped into a
-                    // separate block. Handling traps and panics will involve
-                    // longjmp-ing from this function which means we won't run
-                    // destructors. As a result anything requiring a destructor
-                    // should be part of this block, and the long-jmp-ing
-                    // happens after the block in handling `CallResult`.
-                    let caller_vmctx = VMContext::from_opaque(caller_vmctx);
-                    let result = Caller::with(caller_vmctx, |mut caller| {
-                        let vmctx = VMNativeCallHostFuncContext::from_opaque(vmctx);
-                        let state = (*vmctx).host_state();
-
-                        // Double-check ourselves in debug mode, but we control
-                        // the `Any` here so an unsafe downcast should also
-                        // work.
-                        debug_assert!(state.is::<HostFuncState<F>>());
-                        let state = &*(state as *const _ as *const HostFuncState<F>);
-                        let func = &state.func;
-
-                        let ret = {
-                            panic::catch_unwind(AssertUnwindSafe(|| {
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
-                                    return R::fallible_from_error(trap);
-                                }
-
-                                let mut store = AutoAssertNoGc::new(caller.store.0);
-                                $(let $args = $args::from_abi($args, &mut store);)*
-                                let _ = &mut store;
-                                drop(store);
-
-                                let r = func(
-                                    caller.sub_caller(),
-                                    $( $args, )*
-                                );
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
-                                    return R::fallible_from_error(trap);
-                                }
-                                r.into_fallible()
-                            }))
-                        };
-
-                        // Note that we need to be careful when dealing with traps
-                        // here. Traps are implemented with longjmp/setjmp meaning
-                        // that it's not unwinding and consequently no Rust
-                        // destructors are run. We need to be careful to ensure that
-                        // nothing on the stack needs a destructor when we exit
-                        // abnormally from this `match`, e.g. on `Err`, on
-                        // cross-store-issues, or if `Ok(Err)` is raised.
-                        match ret {
-                            Err(panic) => CallResult::Panic(panic),
-                            Ok(ret) => {
-                                // Because the wrapped function is not `unsafe`, we
-                                // can't assume it returned a value that is
-                                // compatible with this store.
-                                if !ret.compatible_with_store(caller.store.0) {
-                                    CallResult::Trap(anyhow::anyhow!("host function attempted to return cross-`Store` value to Wasm"))
-                                } else {
-                                    let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
-                                    match ret.into_abi_for_ret(&mut store, retptr) {
-                                        Ok(val) => CallResult::Ok(val),
-                                        Err(trap) => CallResult::Trap(trap.into()),
-                                    }
-                                }
-
-                            }
-                        }
-                    });
-
-                    match result {
-                        CallResult::Ok(val) => val,
-                        CallResult::Trap(err) => crate::trap::raise(err),
-                        CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
-                    }
-                }
-
-                /// This trampoline allows host code to indirectly call the
-                /// wrapped function (e.g. via `Func::call` on a `funcref` that
-                /// happens to reference our wrapped function).
-                ///
-                /// It reads the arguments out of the incoming `args` array,
-                /// calls the given function pointer, and then stores the result
-                /// back into the `args` array.
-                unsafe extern "C" fn array_call_trampoline<T, F, $($args,)* R>(
-                    callee_vmctx: *mut VMOpaqueContext,
-                    caller_vmctx: *mut VMOpaqueContext,
-                    args: *mut ValRaw,
-                    _args_len: usize
-                )
-                where
-                    F: Fn(Caller<'_, T>, $( $args ),*) -> R + 'static,
-                    $($args: WasmTy,)*
-                    R: WasmRet,
-                {
-                    let mut _n = 0;
-                    $(
-                        debug_assert!(_n < _args_len);
-                        let $args = $args::abi_from_raw(args.add(_n));
-                        _n += 1;
-                    )*
-
-                    R::wrap_trampoline(args, |retptr| {
-                        native_call_shim::<T, F, $( $args, )* R>(callee_vmctx, caller_vmctx, $( $args, )* retptr)
-                    });
-                }
-
-                let ty = R::func_type(
-                    engine,
-                    None::<ValType>.into_iter()
-                        $(.chain(Some($args::valtype())))*
-                );
-                let type_index = ty.type_index();
-
-                let array_call = array_call_trampoline::<T, F, $($args,)* R>;
-                let native_call = NonNull::new(native_call_shim::<T, F, $($args,)* R> as *mut _).unwrap();
-
-                let ctx = unsafe {
-                    VMNativeCallHostFuncContext::new(
-                        VMFuncRef {
-                            native_call,
-                            array_call,
-                            wasm_call: None,
-                            type_index,
-                            vmctx: ptr::null_mut(),
-                        },
-                        Box::new(HostFuncState {
-                            func: self,
-                            ty: ty.into_registered_type(),
-                        }),
-                    )
-                };
-
-                ctx.into()
-            }
-        }
-    }
-}
-
-for_each_function_signature!(impl_into_func);
-
 #[doc(hidden)]
 pub enum HostContext {
-    Native(StoreBox<VMNativeCallHostFuncContext>),
     Array(StoreBox<VMArrayCallHostFuncContext>),
-}
-
-impl From<StoreBox<VMNativeCallHostFuncContext>> for HostContext {
-    fn from(ctx: StoreBox<VMNativeCallHostFuncContext>) -> Self {
-        HostContext::Native(ctx)
-    }
 }
 
 impl From<StoreBox<VMArrayCallHostFuncContext>> for HostContext {
     fn from(ctx: StoreBox<VMArrayCallHostFuncContext>) -> Self {
         HostContext::Array(ctx)
+    }
+}
+
+impl HostContext {
+    fn from_closure<F, T, P, R>(engine: &Engine, func: F) -> Self
+    where
+        F: Fn(Caller<'_, T>, P) -> R + Send + Sync + 'static,
+        P: WasmTyList,
+        R: WasmRet,
+    {
+        let ty = R::func_type(engine, None::<ValType>.into_iter().chain(P::valtypes()));
+        let type_index = ty.type_index();
+
+        let array_call = Self::array_call_trampoline::<T, F, P, R>;
+
+        let ctx = unsafe {
+            VMArrayCallHostFuncContext::new(
+                VMFuncRef {
+                    array_call,
+                    wasm_call: None,
+                    type_index,
+                    vmctx: ptr::null_mut(),
+                },
+                Box::new(HostFuncState {
+                    func,
+                    ty: ty.into_registered_type(),
+                }),
+            )
+        };
+
+        ctx.into()
+    }
+
+    unsafe extern "C" fn array_call_trampoline<T, F, P, R>(
+        callee_vmctx: *mut VMOpaqueContext,
+        caller_vmctx: *mut VMOpaqueContext,
+        args: *mut ValRaw,
+        args_len: usize,
+    ) where
+        F: Fn(Caller<'_, T>, P) -> R + 'static,
+        P: WasmTyList,
+        R: WasmRet,
+    {
+        // Note that this function is intentionally scoped into a
+        // separate closure. Handling traps and panics will involve
+        // longjmp-ing from this function which means we won't run
+        // destructors. As a result anything requiring a destructor
+        // should be part of this closure, and the long-jmp-ing
+        // happens after the closure in handling the result.
+        let run = move |mut caller: Caller<'_, T>| {
+            let args =
+                core::slice::from_raw_parts_mut(args.cast::<MaybeUninit<ValRaw>>(), args_len);
+            let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx);
+            let state = (*vmctx).host_state();
+
+            // Double-check ourselves in debug mode, but we control
+            // the `Any` here so an unsafe downcast should also
+            // work.
+            debug_assert!(state.is::<HostFuncState<F>>());
+            let state = &*(state as *const _ as *const HostFuncState<F>);
+            let func = &state.func;
+
+            let ret = 'ret: {
+                if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
+                    break 'ret R::fallible_from_error(trap);
+                }
+
+                let mut store = AutoAssertNoGc::new(caller.store.0);
+                let params = P::load(&mut store, args);
+                let _ = &mut store;
+                drop(store);
+
+                let r = func(caller.sub_caller(), params);
+                if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
+                    break 'ret R::fallible_from_error(trap);
+                }
+                r.into_fallible()
+            };
+
+            if !ret.compatible_with_store(caller.store.0) {
+                bail!("host function attempted to return cross-`Store` value to Wasm")
+            } else {
+                let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
+                let ret = ret.store(&mut store, args)?;
+                Ok(ret)
+            }
+        };
+
+        // With nothing else on the stack move `run` into this
+        // closure and then run it as part of `Caller::with`.
+        let result = crate::runtime::vm::catch_unwind_and_longjmp(move || {
+            let caller_vmctx = VMContext::from_opaque(caller_vmctx);
+            Caller::with(caller_vmctx, run)
+        });
+
+        match result {
+            Ok(val) => val,
+            Err(err) => crate::trap::raise(err),
+        }
     }
 }
 
@@ -2343,7 +2281,6 @@ impl HostFunc {
     ///
     /// Panics if the given function type is not associated with the given
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,
@@ -2353,7 +2290,7 @@ impl HostFunc {
         let ty_clone = ty.clone();
         unsafe {
             HostFunc::new_unchecked(engine, ty, move |caller, values| {
-                Func::invoke(caller, &ty_clone, values, &func)
+                Func::invoke_host_func_for_wasm(caller, &ty_clone, values, &func)
             })
         }
     }
@@ -2364,7 +2301,6 @@ impl HostFunc {
     ///
     /// Panics if the given function type is not associated with the given
     /// engine.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
@@ -2379,9 +2315,20 @@ impl HostFunc {
                 Ok(result)
             })
         };
-        let ctx = crate::trampoline::create_array_call_function(&ty, func, engine)
+        let ctx = crate::trampoline::create_array_call_function(&ty, func)
             .expect("failed to create function");
         HostFunc::_new(engine, ctx.into())
+    }
+
+    /// Analog of [`Func::wrap_inner`]
+    pub fn wrap_inner<F, T, Params, Results>(engine: &Engine, func: F) -> Self
+    where
+        F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
+        Params: WasmTyList,
+        Results: WasmRet,
+    {
+        let ctx = HostContext::from_closure(engine, func);
+        HostFunc::_new(engine, ctx)
     }
 
     /// Analog of [`Func::wrap`]
@@ -2445,7 +2392,7 @@ impl HostFunc {
 
         if rooted_func_ref.is_some() {
             debug_assert!(self.func_ref().wasm_call.is_none());
-            debug_assert!(matches!(self.ctx, HostContext::Native(_)));
+            debug_assert!(matches!(self.ctx, HostContext::Array(_)));
         }
 
         Func::from_func_kind(
@@ -2477,7 +2424,6 @@ impl HostFunc {
 
     pub(crate) fn func_ref(&self) -> &VMFuncRef {
         match &self.ctx {
-            HostContext::Native(ctx) => unsafe { (*ctx.get()).func_ref() },
             HostContext::Array(ctx) => unsafe { (*ctx.get()).func_ref() },
         }
     }
@@ -2524,11 +2470,10 @@ use self::rooted::*;
 /// `RootedHostFunc` instead of accidentally safely allowing access to its
 /// constructor.
 mod rooted {
-    use wasmtime_runtime::{SendSyncPtr, VMFuncRef};
-
     use super::HostFunc;
-    use std::ptr::NonNull;
-    use std::sync::Arc;
+    use crate::runtime::vm::{SendSyncPtr, VMFuncRef};
+    use alloc::sync::Arc;
+    use core::ptr::NonNull;
 
     /// A variant of a pointer-to-a-host-function used in `FuncKind::RootedHost`
     /// above.
@@ -2547,7 +2492,7 @@ mod rooted {
         /// value past the lifetime of the provided `func`.
         ///
         /// Similarly, callers must ensure that the given `func_ref` is valid
-        /// for the liftime of the return value.
+        /// for the lifetime of the return value.
         pub(crate) unsafe fn new(
             func: &Arc<HostFunc>,
             func_ref: Option<NonNull<VMFuncRef>>,

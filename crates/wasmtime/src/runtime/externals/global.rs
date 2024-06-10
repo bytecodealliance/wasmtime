@@ -1,11 +1,14 @@
+use crate::runtime::vm::{GcRootsList, SendSyncPtr};
 use crate::{
     store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
     trampoline::generate_global_export,
-    AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref, Val, ValType,
+    AnyRef, AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref,
+    RootedGcRefImpl, Val, ValType,
 };
 use anyhow::{bail, Context, Result};
-use std::mem;
-use std::ptr;
+use core::ptr;
+use core::ptr::NonNull;
+use wasmtime_environ::TypeTrace;
 
 /// A WebAssembly `global` value which can be read and written to.
 ///
@@ -21,7 +24,7 @@ use std::ptr;
 /// methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
-pub struct Global(pub(super) Stored<wasmtime_runtime::ExportGlobal>);
+pub struct Global(pub(super) Stored<crate::runtime::vm::ExportGlobal>);
 
 impl Global {
     /// Creates a new WebAssembly `global` value with the provide type `ty` and
@@ -113,19 +116,40 @@ impl Global {
                 ValType::F64 => Val::F64(*definition.as_u64()),
                 ValType::V128 => Val::V128((*definition.as_u128()).into()),
                 ValType::Ref(ref_ty) => {
-                    let reference = match ref_ty.heap_type() {
-                        HeapType::Func | HeapType::Concrete(_) => {
-                            Ref::Func(Func::_from_raw(&mut store, definition.as_func_ref().cast()))
+                    let reference: Ref = match ref_ty.heap_type() {
+                        HeapType::Func | HeapType::ConcreteFunc(_) => {
+                            Func::_from_raw(&mut store, definition.as_func_ref().cast()).into()
                         }
 
                         HeapType::NoFunc => Ref::Func(None),
 
                         HeapType::Extern => Ref::Extern(
                             definition
-                                .as_externref()
-                                .clone()
-                                .map(|inner| ExternRef::from_vm_extern_ref(&mut store, inner)),
+                                .as_gc_ref()
+                                .map(|r| {
+                                    let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                                    ExternRef::from_cloned_gc_ref(&mut store, r)
+                                })
+                                .into(),
                         ),
+
+                        HeapType::NoExtern => Ref::Extern(None),
+
+                        HeapType::Any
+                        | HeapType::Eq
+                        | HeapType::I31
+                        | HeapType::Struct
+                        | HeapType::ConcreteStruct(_)
+                        | HeapType::Array
+                        | HeapType::ConcreteArray(_) => definition
+                            .as_gc_ref()
+                            .map(|r| {
+                                let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                                AnyRef::from_cloned_gc_ref(&mut store, r)
+                            })
+                            .into(),
+
+                        HeapType::None => Ref::Any(None),
                     };
                     debug_assert!(
                         ref_ty.is_nullable() || !reference.is_null(),
@@ -172,22 +196,53 @@ impl Global {
                 Val::ExternRef(e) => {
                     let new = match e {
                         None => None,
-                        Some(e) => Some(e.try_to_vm_extern_ref(&mut store)?),
+                        Some(e) => Some(e.try_gc_ref(&mut store)?.unchecked_copy()),
                     };
-                    // Take care to invoke the `Drop` implementation of the
-                    // existing `VMExternRef` so that it doesn't leak.
-                    let old = mem::replace(definition.as_externref_mut(), new);
-                    drop(old);
+                    let new = new.as_ref();
+                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
+                }
+                Val::AnyRef(a) => {
+                    let new = match a {
+                        None => None,
+                        Some(a) => Some(a.try_gc_ref(&mut store)?.unchecked_copy()),
+                    };
+                    let new = new.as_ref();
+                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
                 }
             }
         }
         Ok(())
     }
 
+    pub(crate) fn trace_root(&self, store: &mut StoreOpaque, gc_roots_list: &mut GcRootsList) {
+        if let Some(ref_ty) = self._ty(store).content().as_ref() {
+            if !ref_ty.is_vmgcref_type_and_points_to_object() {
+                return;
+            }
+
+            if let Some(gc_ref) = unsafe { (*store[self.0].definition).as_gc_ref() } {
+                let gc_ref = NonNull::from(gc_ref);
+                let gc_ref = SendSyncPtr::new(gc_ref);
+                unsafe {
+                    gc_roots_list.add_root(gc_ref);
+                }
+            }
+        }
+    }
+
     pub(crate) unsafe fn from_wasmtime_global(
-        wasmtime_export: wasmtime_runtime::ExportGlobal,
+        mut wasmtime_export: crate::runtime::vm::ExportGlobal,
         store: &mut StoreOpaque,
     ) -> Global {
+        wasmtime_export
+            .global
+            .wasm_ty
+            .canonicalize_for_runtime_usage(&mut |module_index| {
+                crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
+                    instance.engine_type_index(module_index)
+                })
+            });
+
         Global(store.store_data_mut().insert(wasmtime_export))
     }
 
@@ -195,8 +250,8 @@ impl Global {
         &data[self.0].global
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMGlobalImport {
-        wasmtime_runtime::VMGlobalImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMGlobalImport {
+        crate::runtime::vm::VMGlobalImport {
             from: store[self.0].definition,
         }
     }
@@ -206,7 +261,7 @@ impl Global {
     /// Even if the same underlying global definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Global`s,
     /// this hash key will be consistent across all of these globals.
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq {
         store[self.0].definition as usize
     }
 }

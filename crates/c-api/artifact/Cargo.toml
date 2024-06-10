@@ -30,6 +30,14 @@ default = [
   'coredump',
   'addr2line',
   'demangle',
+  'threads',
+  'gc',
+  'cranelift',
+  'winch',
+  # ... if you add a line above this be sure to also change:
+  #
+  #   crates/c-api/CMakeLists.txt
+  #   crates/c-api/Cargo.toml
 ]
 async = ['wasmtime-c-api/async']
 profiling = ["wasmtime-c-api/profiling"]
@@ -42,3 +50,9 @@ coredump = ["wasmtime-c-api/coredump"]
 addr2line = ["wasmtime-c-api/addr2line"]
 demangle = ["wasmtime-c-api/demangle"]
 wat = ["wasmtime-c-api/wat"]
+threads = ["wasmtime-c-api/threads"]
+gc = ["wasmtime-c-api/gc"]
+cranelift = ["wasmtime-c-api/cranelift"]
+winch = ["wasmtime-c-api/winch"]
+# ... if you add a line above this be sure to read the comment at the end of
+# `default`

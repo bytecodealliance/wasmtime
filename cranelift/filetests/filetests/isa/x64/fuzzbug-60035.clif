@@ -15,25 +15,14 @@ block0:
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $64, %rsp
-;   movq    %rbx, 16(%rsp)
-;   movq    %r12, 24(%rsp)
-;   movq    %r13, 32(%rsp)
-;   movq    %r14, 40(%rsp)
-;   movq    %r15, 48(%rsp)
+;   subq    %rsp, $16, %rsp
+;   movq    %rbx, 0(%rsp)
 ; block0:
-;   load_ext_name userextname0+0, %r15
-;   movq    %r15, rsp(0 + virtual offset)
-;   movq    rsp(0 + virtual offset), %r15
-;   call    *%r15
-;   movq    rsp(0 + virtual offset), %r15
-;   call    *%r15
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r12
-;   movq    32(%rsp), %r13
-;   movq    40(%rsp), %r14
-;   movq    48(%rsp), %r15
-;   addq    %rsp, $64, %rsp
+;   load_ext_name userextname0+0, %rbx
+;   call    *%rbx
+;   call    *%rbx
+;   movq    0(%rsp), %rbx
+;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -42,25 +31,14 @@ block0:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   subq $0x40, %rsp
-;   movq %rbx, 0x10(%rsp)
-;   movq %r12, 0x18(%rsp)
-;   movq %r13, 0x20(%rsp)
-;   movq %r14, 0x28(%rsp)
-;   movq %r15, 0x30(%rsp)
-; block1: ; offset 0x21
-;   movabsq $0, %r15 ; reloc_external Abs8 u1:7 0
-;   movq %r15, (%rsp)
-;   movq (%rsp), %r15
-;   callq *%r15
-;   movq (%rsp), %r15
-;   callq *%r15
-;   movq 0x10(%rsp), %rbx
-;   movq 0x18(%rsp), %r12
-;   movq 0x20(%rsp), %r13
-;   movq 0x28(%rsp), %r14
-;   movq 0x30(%rsp), %r15
-;   addq $0x40, %rsp
+;   subq $0x10, %rsp
+;   movq %rbx, (%rsp)
+; block1: ; offset 0xc
+;   movabsq $0, %rbx ; reloc_external Abs8 u1:7 0
+;   callq *%rbx
+;   callq *%rbx
+;   movq (%rsp), %rbx
+;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

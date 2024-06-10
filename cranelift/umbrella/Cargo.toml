@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift"
-version = "0.107.0"
+version = "0.110.0"
 description = "Umbrella for commonly-used cranelift crates"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift"
@@ -13,9 +13,28 @@ edition.workspace = true
 
 [dependencies]
 cranelift-codegen = { workspace = true }
-cranelift-frontend = { workspace = true }
+cranelift-frontend = { workspace = true, optional = true }
+cranelift-interpreter = { workspace = true, optional = true }
+cranelift-jit = { workspace = true, optional = true }
+cranelift-module = { workspace = true, optional = true }
+cranelift-native = { workspace = true, optional = true }
+cranelift-object = { workspace = true, optional = true }
 
 [features]
-default = ["std"]
-std = ["cranelift-codegen/std", "cranelift-frontend/std"]
-core = ["cranelift-codegen/core", "cranelift-frontend/core"]
+default = ["std", "frontend"]
+frontend = ["dep:cranelift-frontend"]
+interpreter = ["dep:cranelift-interpreter"]
+jit = ["dep:cranelift-jit"]
+module = ["dep:cranelift-module"]
+native = ["dep:cranelift-native"]
+object = ["dep:cranelift-object"]
+std = [
+    "cranelift-codegen/std",
+    "cranelift-frontend?/std",
+    "cranelift-module?/std",
+]
+core = [
+    "cranelift-codegen/core",
+    "cranelift-frontend?/core",
+    "cranelift-module?/core",
+]

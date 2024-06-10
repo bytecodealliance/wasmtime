@@ -10,7 +10,13 @@ edition.workspace = true
 
 [dependencies]
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
-serde = "1.0.188"
-serde_derive = "1.0.188"
-thiserror = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+smallvec = { workspace = true, features = ["serde"] }
 wasmparser = { workspace = true }
+
+[lints]
+workspace = true
+
+[features]
+std = ['wasmparser/std']

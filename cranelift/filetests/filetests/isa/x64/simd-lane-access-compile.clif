@@ -15,11 +15,12 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(3), %xmm0
-;   movdqu  const(2), %xmm2
+;   uninit  %xmm0
+;   pxor    %xmm0, %xmm0, %xmm0
+;   movdqu  const(2), %xmm3
 ;   pshufb  %xmm0, const(0), %xmm0
-;   pshufb  %xmm2, const(1), %xmm2
-;   por     %xmm0, %xmm2, %xmm0
+;   pshufb  %xmm3, const(1), %xmm3
+;   por     %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -29,20 +30,14 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x24(%rip), %xmm0
-;   movdqu 0x2c(%rip), %xmm2
-;   pshufb 0x33(%rip), %xmm0
-;   pshufb 0x3a(%rip), %xmm2
-;   por %xmm2, %xmm0
+;   pxor %xmm0, %xmm0
+;   movdqu 0x20(%rip), %xmm3
+;   pshufb 0x27(%rip), %xmm0
+;   pshufb 0x2e(%rip), %xmm3
+;   por %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rcx)

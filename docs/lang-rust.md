@@ -36,12 +36,11 @@ $ cd wasmtime_hello
 
 Next you'll want to add `hello.wat` to the root of your project.
 
-We will be using the `wasmtime` crate to run the wasm file, so next up we need a
-dependency in `Cargo.toml`:
+We will be using the `wasmtime` crate to run the wasm file. Please execute the command `cargo add wasmtime` to use the latest version of the crate. The `dependencies` block in the `Cargo.toml` file will appear as follows:
 
 ```toml
 [dependencies]
-wasmtime = "1.0.0"
+wasmtime = "19.0.0"
 ```
 
 Next up let's write the code that we need to execute this wasm file. The

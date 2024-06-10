@@ -1,13 +1,19 @@
+use crate::prelude::*;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
+#[cfg(feature = "runtime")]
+use crate::runtime::vm::GcRuntime;
+use crate::sync::OnceLock;
 use crate::Config;
+use alloc::sync::Arc;
 use anyhow::{Context, Result};
+use core::sync::atomic::{AtomicU64, Ordering};
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
-use once_cell::sync::OnceCell;
+#[cfg(feature = "std")]
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
 
@@ -46,19 +52,20 @@ struct EngineInner {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler: Box<dyn wasmtime_environ::Compiler>,
     #[cfg(feature = "runtime")]
-    allocator: Box<dyn wasmtime_runtime::InstanceAllocator + Send + Sync>,
+    allocator: Box<dyn crate::runtime::vm::InstanceAllocator + Send + Sync>,
+    #[cfg(feature = "runtime")]
+    gc_runtime: Arc<dyn GcRuntime>,
     #[cfg(feature = "runtime")]
     profiler: Box<dyn crate::profiling_agent::ProfilingAgent>,
     #[cfg(feature = "runtime")]
     signatures: TypeRegistry,
     #[cfg(feature = "runtime")]
     epoch: AtomicU64,
-    #[cfg(feature = "runtime")]
-    unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator,
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
-    compatible_with_native_host: OnceCell<Result<(), String>>,
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    compatible_with_native_host: OnceLock<Result<(), String>>,
 }
 
 impl Default for Engine {
@@ -83,15 +90,24 @@ impl Engine {
     pub fn new(config: &Config) -> Result<Engine> {
         #[cfg(feature = "runtime")]
         {
-            // Ensure that wasmtime_runtime's signal handlers are configured. This
-            // is the per-program initialization required for handling traps, such
-            // as configuring signals, vectored exception handlers, etc.
-            wasmtime_runtime::init_traps(crate::module::get_wasm_trap, config.macos_use_mach_ports);
+            // Ensure that crate::runtime::vm's signal handlers are
+            // configured. This is the per-program initialization required for
+            // handling traps, such as configuring signals, vectored exception
+            // handlers, etc.
+            crate::runtime::vm::init_traps(
+                crate::module::get_wasm_trap,
+                config.macos_use_mach_ports,
+            );
             #[cfg(feature = "debug-builtins")]
-            wasmtime_runtime::debug_builtins::ensure_exported();
+            crate::runtime::vm::debug_builtins::ensure_exported();
         }
 
-        let config = config.clone();
+        let config = {
+            let mut config = config.clone();
+            config.conditionally_enable_defaults();
+            config
+        };
+
         let tunables = config.validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -104,14 +120,15 @@ impl Engine {
                 #[cfg(feature = "runtime")]
                 allocator: config.build_allocator(&tunables)?,
                 #[cfg(feature = "runtime")]
+                gc_runtime: config.build_gc_runtime()?,
+                #[cfg(feature = "runtime")]
                 profiler: config.build_profiler()?,
                 #[cfg(feature = "runtime")]
                 signatures: TypeRegistry::new(),
                 #[cfg(feature = "runtime")]
                 epoch: AtomicU64::new(0),
-                #[cfg(feature = "runtime")]
-                unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator::new(),
-                compatible_with_native_host: OnceCell::new(),
+                #[cfg(any(feature = "cranelift", feature = "winch"))]
+                compatible_with_native_host: OnceLock::new(),
                 config,
                 tunables,
             }),
@@ -191,6 +208,7 @@ impl Engine {
     }
 
     /// Like [`Engine::detect_precompiled`], but performs the detection on a file.
+    #[cfg(feature = "std")]
     pub fn detect_precompiled_file(&self, path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
         serialization::detect_precompiled_file(path)
     }
@@ -215,11 +233,18 @@ impl Engine {
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
-        self.inner
-            .compatible_with_native_host
-            .get_or_init(|| self._check_compatible_with_native_host())
-            .clone()
-            .map_err(anyhow::Error::msg)
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            self.inner
+                .compatible_with_native_host
+                .get_or_init(|| self._check_compatible_with_native_host())
+                .clone()
+                .map_err(anyhow::Error::msg)
+        }
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        {
+            Ok(())
+        }
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
@@ -292,7 +317,7 @@ impl Engine {
             // like typed function references and GC) are enabled this must be
             // enabled, otherwise this setting can have any value.
             "enable_safepoints" => {
-                if self.config().features.reference_types {
+                if self.config().features.contains(WasmFeatures::REFERENCE_TYPES) {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())
@@ -326,7 +351,6 @@ impl Engine {
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
-            | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled
             | "regalloc" // shouldn't change semantics
             | "enable_incremental_compilation_cache_checks" // shouldn't change semantics
@@ -375,117 +399,84 @@ impl Engine {
             }
         }
 
-        #[allow(unused_assignments)]
-        let mut enabled = None;
+        let host_feature = match flag {
+            // aarch64 features to detect
+            "has_lse" => "lse",
+            "has_pauth" => "paca",
 
-        #[cfg(target_arch = "aarch64")]
-        {
-            enabled = match flag {
-                "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
-                // No effect on its own, but in order to simplify the code on a
-                // platform without pointer authentication support we fail if
-                // "has_pauth" is enabled, but "sign_return_address" is not.
-                "has_pauth" => Some(std::arch::is_aarch64_feature_detected!("paca")),
-                // No effect on its own.
-                "sign_return_address_all" => Some(true),
-                // The pointer authentication instructions act as a `NOP` when
-                // unsupported (but keep in mind "has_pauth" as well), so it is
-                // safe to enable them.
-                "sign_return_address" => Some(true),
-                // No effect on its own.
-                "sign_return_address_with_bkey" => Some(true),
-                // The `BTI` instruction acts as a `NOP` when unsupported, so it
-                // is safe to enable it.
-                "use_bti" => Some(true),
-                // fall through to the very bottom to indicate that support is
-                // not enabled to test whether this feature is enabled on the
-                // host.
-                _ => None,
-            };
-        }
+            // aarch64 features which don't need detection
+            // No effect on its own.
+            "sign_return_address_all" => return Ok(()),
+            // The pointer authentication instructions act as a `NOP` when
+            // unsupported, so it is safe to enable them.
+            "sign_return_address" => return Ok(()),
+            // No effect on its own.
+            "sign_return_address_with_bkey" => return Ok(()),
+            // The `BTI` instruction acts as a `NOP` when unsupported, so it
+            // is safe to enable it regardless of whether the host supports it
+            // or not.
+            "use_bti" => return Ok(()),
 
-        // There is no is_s390x_feature_detected macro yet, so for now
-        // we use getauxval from the libc crate directly.
-        #[cfg(all(target_arch = "s390x", target_os = "linux"))]
-        {
-            let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
-            const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
+            // s390x features to detect
+            "has_vxrs_ext2" => "vxrs_ext2",
+            "has_mie2" => "mie2",
 
-            enabled = match flag {
-                // There is no separate HWCAP bit for mie2, so assume
-                // that any machine with vxrs_ext2 also has mie2.
-                "has_vxrs_ext2" | "has_mie2" => Some((v & HWCAP_S390X_VXRS_EXT2) != 0),
-                // fall through to the very bottom to indicate that support is
-                // not enabled to test whether this feature is enabled on the
-                // host.
-                _ => None,
-            }
-        }
+            // x64 features to detect
+            "has_sse3" => "sse3",
+            "has_ssse3" => "ssse3",
+            "has_sse41" => "sse4.1",
+            "has_sse42" => "sse4.2",
+            "has_popcnt" => "popcnt",
+            "has_avx" => "avx",
+            "has_avx2" => "avx2",
+            "has_fma" => "fma",
+            "has_bmi1" => "bmi1",
+            "has_bmi2" => "bmi2",
+            "has_avx512bitalg" => "avx512bitalg",
+            "has_avx512dq" => "avx512dq",
+            "has_avx512f" => "avx512f",
+            "has_avx512vl" => "avx512vl",
+            "has_avx512vbmi" => "avx512vbmi",
+            "has_lzcnt" => "lzcnt",
 
-        #[cfg(target_arch = "riscv64")]
-        {
-            enabled = match flag {
-                // make sure `test_isa_flags_mismatch` test pass.
-                "not_a_flag" => None,
-                // due to `is_riscv64_feature_detected` is not stable.
-                // we cannot use it.
-                _ => Some(true),
-            }
-        }
-
-        #[cfg(target_arch = "x86_64")]
-        {
-            enabled = match flag {
-                "has_sse3" => Some(std::is_x86_feature_detected!("sse3")),
-                "has_ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
-                "has_sse41" => Some(std::is_x86_feature_detected!("sse4.1")),
-                "has_sse42" => Some(std::is_x86_feature_detected!("sse4.2")),
-                "has_popcnt" => Some(std::is_x86_feature_detected!("popcnt")),
-                "has_avx" => Some(std::is_x86_feature_detected!("avx")),
-                "has_avx2" => Some(std::is_x86_feature_detected!("avx2")),
-                "has_fma" => Some(std::is_x86_feature_detected!("fma")),
-                "has_bmi1" => Some(std::is_x86_feature_detected!("bmi1")),
-                "has_bmi2" => Some(std::is_x86_feature_detected!("bmi2")),
-                "has_avx512bitalg" => Some(std::is_x86_feature_detected!("avx512bitalg")),
-                "has_avx512dq" => Some(std::is_x86_feature_detected!("avx512dq")),
-                "has_avx512f" => Some(std::is_x86_feature_detected!("avx512f")),
-                "has_avx512vl" => Some(std::is_x86_feature_detected!("avx512vl")),
-                "has_avx512vbmi" => Some(std::is_x86_feature_detected!("avx512vbmi")),
-                "has_lzcnt" => Some(std::is_x86_feature_detected!("lzcnt")),
-
-                // fall through to the very bottom to indicate that support is
-                // not enabled to test whether this feature is enabled on the
-                // host.
-                _ => None,
-            };
-        }
-
-        #[cfg(target_family = "wasm")]
-        {
-            let _ = &mut enabled;
-        }
-
-        match enabled {
-            Some(true) => return Ok(()),
-            Some(false) => {
+            _ => {
+                // FIXME: should enumerate risc-v features and plumb them
+                // through to the `detect_host_feature` function.
+                if cfg!(target_arch = "riscv64") && flag != "not_a_flag" {
+                    return Ok(());
+                }
                 return Err(format!(
-                    "compilation setting {:?} is enabled, but not available on the host",
-                    flag
+                    "don't know how to test for target-specific flag {flag:?} at runtime"
+                ));
+            }
+        };
+
+        let detect = match self.config().detect_host_feature {
+            Some(detect) => detect,
+            None => {
+                return Err(format!(
+                    "cannot determine if host feature {host_feature:?} is \
+                     available at runtime, configure a probing function with \
+                     `Config::detect_host_feature`"
                 ))
             }
-            // fall through
-            None => {}
-        }
+        };
 
-        Err(format!(
-            "cannot test if target-specific flag {:?} is available at runtime",
-            flag
-        ))
+        match detect(host_feature) {
+            Some(true) => Ok(()),
+            Some(false) => Err(format!(
+                "compilation setting {flag:?} is enabled, but not \
+                 available on the host",
+            )),
+            None => Err(format!(
+                "failed to detect if target-specific flag {flag:?} is \
+                 available at runtime"
+            )),
+        }
     }
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
 impl Engine {
     pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
         &*self.inner.compiler
@@ -514,21 +505,18 @@ impl Engine {
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(self, &bytes)?;
-        Ok(v)
+        crate::CodeBuilder::new(self)
+            .wasm(bytes, None)?
+            .compile_module_serialized()
     }
 
     /// Same as [`Engine::precompile_module`] except for a
     /// [`Component`](crate::component::Component)
     #[cfg(feature = "component-model")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_component_artifacts::<Vec<u8>>(self, &bytes)?;
-        Ok(v)
+        crate::CodeBuilder::new(self)
+            .wasm(bytes, None)?
+            .compile_component_serialized()
     }
 
     /// Produces a blob of bytes by serializing the `engine`'s configuration data to
@@ -541,6 +529,7 @@ impl Engine {
         serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self))
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
@@ -566,7 +555,6 @@ pub enum Precompiled {
 }
 
 #[cfg(feature = "runtime")]
-#[cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
 impl Engine {
     /// Eagerly initialize thread-local functionality shared by all [`Engine`]s.
     ///
@@ -586,11 +574,15 @@ impl Engine {
     /// latency of WebAssembly calls are extra-important, which is not
     /// necessarily true of all embeddings.
     pub fn tls_eager_initialize() {
-        wasmtime_runtime::tls_eager_initialize();
+        crate::runtime::vm::tls_eager_initialize();
     }
 
-    pub(crate) fn allocator(&self) -> &dyn wasmtime_runtime::InstanceAllocator {
+    pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
         self.inner.allocator.as_ref()
+    }
+
+    pub(crate) fn gc_runtime(&self) -> &Arc<dyn GcRuntime> {
+        &self.inner.gc_runtime
     }
 
     pub(crate) fn profiler(&self) -> &dyn crate::profiling_agent::ProfilingAgent {
@@ -643,10 +635,6 @@ impl Engine {
         self.inner.epoch.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(crate) fn unique_id_allocator(&self) -> &wasmtime_runtime::CompiledModuleIdAllocator {
-        &self.inner.unique_id_allocator
-    }
-
     /// Returns a [`std::hash::Hash`] that can be used to check precompiled WebAssembly compatibility.
     ///
     /// The outputs of [`Engine::precompile_module`] and [`Engine::precompile_component`]
@@ -654,9 +642,8 @@ impl Engine {
     /// compatible [`Config`]s. If this Hash matches between two [`Engine`]s then binaries
     /// from one are guaranteed to deserialize in the other.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
-        crate::module::HashedEngineCompileEnv(self)
+        crate::compile::HashedEngineCompileEnv(self)
     }
 
     /// Executes `f1` and `f2` in parallel if parallel compilation is enabled at
@@ -688,17 +675,18 @@ impl Engine {
         bytes: &[u8],
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
-        self.load_code(wasmtime_runtime::MmapVec::from_slice(bytes)?, expected)
+        self.load_code(crate::runtime::vm::MmapVec::from_slice(bytes)?, expected)
     }
 
     /// Like `load_code_bytes`, but creates a mmap from a file on disk.
+    #[cfg(feature = "std")]
     pub(crate) fn load_code_file(
         &self,
         path: &Path,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
         self.load_code(
-            wasmtime_runtime::MmapVec::from_file(path).with_context(|| {
+            crate::runtime::vm::MmapVec::from_file(path).with_context(|| {
                 format!("failed to create file mapping for: {}", path.display())
             })?,
             expected,
@@ -707,7 +695,7 @@ impl Engine {
 
     pub(crate) fn load_code(
         &self,
-        mmap: wasmtime_runtime::MmapVec,
+        mmap: crate::runtime::vm::MmapVec,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
         serialization::check_compatible(self, &mmap, expected)?;
@@ -720,13 +708,13 @@ impl Engine {
 /// A weak reference to an [`Engine`].
 #[derive(Clone)]
 pub struct EngineWeak {
-    inner: std::sync::Weak<EngineInner>,
+    inner: alloc::sync::Weak<EngineInner>,
 }
 
 impl EngineWeak {
     /// Upgrade this weak reference into an [`Engine`]. Returns `None` if
     /// strong references (the [`Engine`] type itself) no longer exist.
     pub fn upgrade(&self) -> Option<Engine> {
-        std::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
+        alloc::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
     }
 }

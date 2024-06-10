@@ -22,7 +22,7 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-2048
 ; block0:
-;   load_addr a0,0(nominal_sp)
+;   load_addr a0,0(slot)
 ;   lui t6,1
 ;   addi t6,t6,-2048
 ;   add sp,sp,t6
@@ -73,7 +73,7 @@ block0:
 ;   lui t6,-3
 ;   add sp,sp,t6
 ; block0:
-;   load_addr a0,0(nominal_sp)
+;   load_addr a0,0(slot)
 ;   lui t6,3
 ;   add sp,sp,t6
 ;   ld ra,8(sp)
@@ -125,7 +125,7 @@ block0:
 ;   addi t6,t6,-1696
 ;   add sp,sp,t6
 ; block0:
-;   load_addr a0,0(nominal_sp)
+;   load_addr a0,0(slot)
 ;   lui t6,24
 ;   addi t6,t6,1696
 ;   add sp,sp,t6

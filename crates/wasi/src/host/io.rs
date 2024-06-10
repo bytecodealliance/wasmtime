@@ -6,9 +6,9 @@ use crate::{
 };
 use wasmtime::component::Resource;
 
-impl<T: WasiView> error::Host for T {}
+impl error::Host for dyn WasiView + '_ {}
 
-impl<T: WasiView> streams::Host for T {
+impl streams::Host for dyn WasiView + '_ {
     fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
         match err {
             StreamError::Closed => Ok(streams::StreamError::Closed),
@@ -20,7 +20,7 @@ impl<T: WasiView> streams::Host for T {
     }
 }
 
-impl<T: WasiView> error::HostError for T {
+impl error::HostError for dyn WasiView + '_ {
     fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
         self.table().delete(err)?;
         Ok(())
@@ -32,7 +32,7 @@ impl<T: WasiView> error::HostError for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> streams::HostOutputStream for T {
+impl streams::HostOutputStream for dyn WasiView + '_ {
     fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
         self.table().delete(stream)?;
         Ok(())
@@ -172,7 +172,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> streams::HostInputStream for T {
+impl streams::HostInputStream for dyn WasiView + '_ {
     fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
         self.table().delete(stream)?;
         Ok(())
@@ -230,8 +230,8 @@ pub mod sync {
             self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
             HostOutputStream as AsyncHostOutputStream,
         },
-        bindings::sync_io::io::poll::Pollable,
-        bindings::sync_io::io::streams::{self, InputStream, OutputStream},
+        bindings::sync::io::poll::Pollable,
+        bindings::sync::io::streams::{self, InputStream, OutputStream},
         runtime::in_tokio,
         StreamError, StreamResult, WasiView,
     };
@@ -246,7 +246,7 @@ pub mod sync {
         }
     }
 
-    impl<T: WasiView> streams::Host for T {
+    impl streams::Host for dyn WasiView + '_ {
         fn convert_stream_error(
             &mut self,
             err: StreamError,
@@ -255,7 +255,7 @@ pub mod sync {
         }
     }
 
-    impl<T: WasiView> streams::HostOutputStream for T {
+    impl streams::HostOutputStream for dyn WasiView + '_ {
         fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
             AsyncHostOutputStream::drop(self, stream)
         }
@@ -332,7 +332,7 @@ pub mod sync {
         }
     }
 
-    impl<T: WasiView> streams::HostInputStream for T {
+    impl streams::HostInputStream for dyn WasiView + '_ {
         fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
             AsyncHostInputStream::drop(self, stream)
         }

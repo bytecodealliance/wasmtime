@@ -149,6 +149,7 @@ impl TargetIsa for X64Backend {
             .x86()
             .mode(arch::x86::ArchMode::Mode64)
             .syntax(arch::x86::ArchSyntax::Att)
+            .detail(true)
             .build()
     }
 

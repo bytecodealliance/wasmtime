@@ -9,7 +9,7 @@
 //
 // * This representation of a `Component` avoids the need to create a
 //   `PrimaryMap` of some form for each of the index spaces within a component.
-//   This is less so an issue about allocations and moreso that this information
+//   This is less so an issue about allocations and more so that this information
 //   generally just isn't needed any time after instantiation. Avoiding creating
 //   these altogether helps components be lighter weight at runtime and
 //   additionally accelerates instantiation.
@@ -47,8 +47,8 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
+use crate::prelude::*;
 use crate::{EntityIndex, PrimaryMap, WasmValType};
-use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_types::ModuleInternedTypeIndex;
 
@@ -455,7 +455,85 @@ pub enum StringEncoding {
     CompactUtf16,
 }
 
-pub use crate::fact::{FixedEncoding, Transcode};
+/// Possible transcoding operations that must be provided by the host.
+///
+/// Note that each transcoding operation may have a unique signature depending
+/// on the precise operation.
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum Transcode {
+    Copy(FixedEncoding),
+    Latin1ToUtf16,
+    Latin1ToUtf8,
+    Utf16ToCompactProbablyUtf16,
+    Utf16ToCompactUtf16,
+    Utf16ToLatin1,
+    Utf16ToUtf8,
+    Utf8ToCompactUtf16,
+    Utf8ToLatin1,
+    Utf8ToUtf16,
+}
+
+impl Transcode {
+    /// Get this transcoding's symbol fragment.
+    pub fn symbol_fragment(&self) -> &'static str {
+        match self {
+            Transcode::Copy(x) => match x {
+                FixedEncoding::Utf8 => "copy_utf8",
+                FixedEncoding::Utf16 => "copy_utf16",
+                FixedEncoding::Latin1 => "copy_latin1",
+            },
+            Transcode::Latin1ToUtf16 => "latin1_to_utf16",
+            Transcode::Latin1ToUtf8 => "latin1_to_utf8",
+            Transcode::Utf16ToCompactProbablyUtf16 => "utf16_to_compact_probably_utf16",
+            Transcode::Utf16ToCompactUtf16 => "utf16_to_compact_utf16",
+            Transcode::Utf16ToLatin1 => "utf16_to_latin1",
+            Transcode::Utf16ToUtf8 => "utf16_to_utf8",
+            Transcode::Utf8ToCompactUtf16 => "utf8_to_compact_utf16",
+            Transcode::Utf8ToLatin1 => "utf8_to_latin1",
+            Transcode::Utf8ToUtf16 => "utf8_to_utf16",
+        }
+    }
+
+    /// Returns a human-readable description for this transcoding operation.
+    pub fn desc(&self) -> &'static str {
+        match self {
+            Transcode::Copy(FixedEncoding::Utf8) => "utf8-to-utf8",
+            Transcode::Copy(FixedEncoding::Utf16) => "utf16-to-utf16",
+            Transcode::Copy(FixedEncoding::Latin1) => "latin1-to-latin1",
+            Transcode::Latin1ToUtf16 => "latin1-to-utf16",
+            Transcode::Latin1ToUtf8 => "latin1-to-utf8",
+            Transcode::Utf16ToCompactProbablyUtf16 => "utf16-to-compact-probably-utf16",
+            Transcode::Utf16ToCompactUtf16 => "utf16-to-compact-utf16",
+            Transcode::Utf16ToLatin1 => "utf16-to-latin1",
+            Transcode::Utf16ToUtf8 => "utf16-to-utf8",
+            Transcode::Utf8ToCompactUtf16 => "utf8-to-compact-utf16",
+            Transcode::Utf8ToLatin1 => "utf8-to-latin1",
+            Transcode::Utf8ToUtf16 => "utf8-to-utf16",
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub enum FixedEncoding {
+    Utf8,
+    Utf16,
+    Latin1,
+}
+
+impl FixedEncoding {
+    /// Returns the byte width of unit loads/stores for this encoding, for
+    /// example the unit length is multiplied by this return value to get the
+    /// byte width of a string.
+    pub fn width(&self) -> u8 {
+        match self {
+            FixedEncoding::Utf8 => 1,
+            FixedEncoding::Utf16 => 2,
+            FixedEncoding::Latin1 => 1,
+        }
+    }
+}
 
 /// Description of a new resource declared in a `GlobalInitializer::Resource`
 /// variant.

@@ -1,0 +1,499 @@
+test compile precise-output
+target x86_64
+
+;; This test ensures that Cranelift does not attempt to too eagerly sink loads
+;; into float comparison operations. When a single `fcmp` is used multiple times
+;; it'll regenerate `ucomiss` instructions, for example, but if this duplication
+;; happens then it shouldn't have a load sunk into it because that would load
+;; at two different points in the program, possibly seeing two different
+;; results.
+;;
+;; Exactly how this guarantee is provided has changed a bit over time with
+;; Cranelift. Originally in #3934 this was done explicitly in ISLE by avoiding
+;; the use of `put_in_xmm_mem`. Later in #4061 that ended up removing the need
+;; for the safeguards in #3934. Today there are no guards in ISLE for this any
+;; more and this test is intended to serve as a reference-test for notifying
+;; reviewers if anything changes.
+
+function %select_cond_rhs(f32, i64, i32, i32) -> i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v0, v4
+  v6 = select v5, v2, v3
+  return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss 0(%rdi), %xmm0
+;   cmovpl  %edx, %esi, %esi
+;   movq    %rsi, %rax
+;   cmovnzl %edx, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss (%rdi), %xmm0
+;   cmovpl %edx, %esi
+;   movq %rsi, %rax
+;   cmovnel %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+
+function %select_cond_lhs(f32, i64, i32, i32) -> i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v4, v0
+  v6 = select v5, v2, v3
+  return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm7
+;   ucomiss %xmm0, %xmm7
+;   cmovpl  %edx, %esi, %esi
+;   movq    %rsi, %rax
+;   cmovnzl %edx, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm7
+;   ucomiss %xmm0, %xmm7
+;   cmovpl %edx, %esi
+;   movq %rsi, %rax
+;   cmovnel %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %select_cond_used_twice_rhs(f32, i64, i32, i32) -> i32, i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  ;; this load should NOT sink into either `select` below
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v0, v4
+  v6 = select v5, v2, v3
+  v7 = select v5, v3, v2
+  return v6, v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm1
+;   ucomiss %xmm1, %xmm0
+;   movq    %rsi, %rax
+;   cmovpl  %edx, %eax, %eax
+;   cmovnzl %edx, %eax, %eax
+;   ucomiss %xmm1, %xmm0
+;   cmovpl  %esi, %edx, %edx
+;   cmovnzl %esi, %edx, %edx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm1
+;   ucomiss %xmm1, %xmm0
+;   movq %rsi, %rax
+;   cmovpl %edx, %eax
+;   cmovnel %edx, %eax
+;   ucomiss %xmm1, %xmm0
+;   cmovpl %esi, %edx
+;   cmovnel %esi, %edx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+
+function %select_cond_used_twice_lhs(f32, i64, i32, i32) -> i32, i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  ;; this load should NOT sink into either `select` below
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v4, v0
+  v6 = select v5, v2, v3
+  v7 = select v5, v3, v2
+  return v6, v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm1
+;   ucomiss %xmm0, %xmm1
+;   movq    %rsi, %rax
+;   cmovpl  %edx, %eax, %eax
+;   cmovnzl %edx, %eax, %eax
+;   ucomiss %xmm0, %xmm1
+;   cmovpl  %esi, %edx, %edx
+;   cmovnzl %esi, %edx, %edx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm1
+;   ucomiss %xmm0, %xmm1
+;   movq %rsi, %rax
+;   cmovpl %edx, %eax
+;   cmovnel %edx, %eax
+;   ucomiss %xmm0, %xmm1
+;   cmovpl %esi, %edx
+;   cmovnel %esi, %edx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %brif_cond_rhs(f32, i64, i32, i32) -> i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v0, v4
+  brif v5, block1(v2), block1(v3)
+block1(v8: i32):
+  return v8
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm1
+;   ucomiss %xmm1, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movq    %rsi, %rax
+;   jmp     label3
+; block2:
+;   movq    %rdx, %rax
+;   jmp     label3
+; block3:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm1
+;   ucomiss %xmm1, %xmm0
+;   jp 0x1f
+;   jne 0x1f
+; block2: ; offset 0x17
+;   movq %rsi, %rax
+;   jmp 0x22
+; block3: ; offset 0x1f
+;   movq %rdx, %rax
+; block4: ; offset 0x22
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %brif_cond_lhs(f32, i64, i32, i32) -> i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v4, v0
+  brif v5, block1(v2), block1(v3)
+block1(v8: i32):
+  return v8
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm1
+;   ucomiss %xmm0, %xmm1
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movq    %rsi, %rax
+;   jmp     label3
+; block2:
+;   movq    %rdx, %rax
+;   jmp     label3
+; block3:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm1
+;   ucomiss %xmm0, %xmm1
+;   jp 0x1f
+;   jne 0x1f
+; block2: ; offset 0x17
+;   movq %rsi, %rax
+;   jmp 0x22
+; block3: ; offset 0x1f
+;   movq %rdx, %rax
+; block4: ; offset 0x22
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %brif_cond_used_twice_rhs(f32, i64, i32, i32) -> i32, i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v0, v4
+  brif v5, block1(v2), block1(v3)
+block1(v6: i32):
+  brif v5, block2(v3), block2(v2)
+block2(v7: i32):
+  return v6, v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm3
+;   ucomiss %xmm3, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movq    %rsi, %rax
+;   jmp     label3
+; block2:
+;   movq    %rdx, %rax
+;   jmp     label3
+; block3:
+;   ucomiss %xmm3, %xmm0
+;   jp      label5
+;   jnz     label5; j label4
+; block4:
+;   jmp     label6
+; block5:
+;   movq    %rsi, %rdx
+;   jmp     label6
+; block6:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm3
+;   ucomiss %xmm3, %xmm0
+;   jp 0x1f
+;   jne 0x1f
+; block2: ; offset 0x17
+;   movq %rsi, %rax
+;   jmp 0x22
+; block3: ; offset 0x1f
+;   movq %rdx, %rax
+; block4: ; offset 0x22
+;   ucomiss %xmm3, %xmm0
+;   jp 0x31
+;   je 0x34
+; block5: ; offset 0x31
+;   movq %rsi, %rdx
+; block6: ; offset 0x34
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %brif_cond_used_twice_lhs(f32, i64, i32, i32) -> i32, i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v4, v0
+  brif v5, block1(v2), block1(v3)
+block1(v6: i32):
+  brif v5, block2(v3), block2(v2)
+block2(v7: i32):
+  return v6, v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm3
+;   ucomiss %xmm0, %xmm3
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movq    %rsi, %rax
+;   jmp     label3
+; block2:
+;   movq    %rdx, %rax
+;   jmp     label3
+; block3:
+;   ucomiss %xmm0, %xmm3
+;   jp      label5
+;   jnz     label5; j label4
+; block4:
+;   jmp     label6
+; block5:
+;   movq    %rsi, %rdx
+;   jmp     label6
+; block6:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm3
+;   ucomiss %xmm0, %xmm3
+;   jp 0x1f
+;   jne 0x1f
+; block2: ; offset 0x17
+;   movq %rsi, %rax
+;   jmp 0x22
+; block3: ; offset 0x1f
+;   movq %rdx, %rax
+; block4: ; offset 0x22
+;   ucomiss %xmm0, %xmm3
+;   jp 0x31
+;   je 0x34
+; block5: ; offset 0x31
+;   movq %rsi, %rdx
+; block6: ; offset 0x34
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mix_select_and_brif_rhs(f32, i64, i32, i32) -> i32, i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v0, v4
+  v6 = select v5, v2, v3
+  brif v5, block1(v3), block1(v2)
+block1(v7: i32):
+  return v6, v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm2
+;   ucomiss %xmm2, %xmm0
+;   movq    %rsi, %rax
+;   cmovpl  %edx, %eax, %eax
+;   cmovnzl %edx, %eax, %eax
+;   ucomiss %xmm2, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   jmp     label3
+; block2:
+;   movq    %rsi, %rdx
+;   jmp     label3
+; block3:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm2
+;   ucomiss %xmm2, %xmm0
+;   movq %rsi, %rax
+;   cmovpl %edx, %eax
+;   cmovnel %edx, %eax
+;   ucomiss %xmm2, %xmm0
+;   jp 0x23
+;   je 0x26
+; block2: ; offset 0x23
+;   movq %rsi, %rdx
+; block3: ; offset 0x26
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mix_select_and_brif_lhs(f32, i64, i32, i32) -> i32, i32 {
+block0(v0: f32, v1: i64, v2: i32, v3: i32):
+  v4 = load.f32 notrap aligned v1
+  v5 = fcmp eq v4, v0
+  v6 = select v5, v2, v3
+  brif v5, block1(v3), block1(v2)
+block1(v7: i32):
+  return v6, v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm2
+;   ucomiss %xmm0, %xmm2
+;   movq    %rsi, %rax
+;   cmovpl  %edx, %eax, %eax
+;   cmovnzl %edx, %eax, %eax
+;   ucomiss %xmm0, %xmm2
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   jmp     label3
+; block2:
+;   movq    %rsi, %rdx
+;   jmp     label3
+; block3:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm2
+;   ucomiss %xmm0, %xmm2
+;   movq %rsi, %rax
+;   cmovpl %edx, %eax
+;   cmovnel %edx, %eax
+;   ucomiss %xmm0, %xmm2
+;   jp 0x23
+;   je 0x26
+; block2: ; offset 0x23
+;   movq %rsi, %rdx
+; block3: ; offset 0x26
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

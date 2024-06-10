@@ -18,66 +18,54 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a1,[const(0)]
-;;   add a1,a2,a1
-;;   trap_if heap_oob##(a1 ult a2)
-;;   ld a4,88(a0)
-;;   bgtu a1,a4,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a4,80(a0)
-;;   add a2,a4,a2
-;;   lui a1,65535
-;;   slli a4,a1,4
-;;   add a2,a2,a4
-;;   sb a3,0(a2)
-;;   j label2
-;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a5, 0
+;;       ld      a5, 0x48(a5)
+;;       add     a5, a2, a5
+;;       bgeu    a5, a2, 8
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       ld      a1, 0x68(a0)
+;;       bltu    a1, a5, 0x2c
+;;       ld      a1, 0x60(a0)
+;;       add     a1, a1, a2
+;;       lui     a0, 0xffff
+;;       slli    a2, a0, 4
+;;       add     a1, a1, a2
+;;       sb      a3, 0(a1)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0x01, 0x00, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a1,[const(0)]
-;;   add a1,a2,a1
-;;   trap_if heap_oob##(a1 ult a2)
-;;   ld a3,88(a0)
-;;   bgtu a1,a3,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a3,80(a0)
-;;   add a2,a3,a2
-;;   lui a1,65535
-;;   slli a3,a1,4
-;;   add a2,a2,a3
-;;   lbu a0,0(a2)
-;;   j label2
-;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a5, 0
+;;       ld      a5, 0x48(a5)
+;;       add     a5, a2, a5
+;;       bgeu    a5, a2, 8
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       ld      a1, 0x68(a0)
+;;       bltu    a1, a5, 0x2c
+;;       ld      a1, 0x60(a0)
+;;       add     a1, a1, a2
+;;       lui     a0, 0xffff
+;;       slli    a2, a0, 4
+;;       add     a1, a1, a2
+;;       lbu     a0, 0(a1)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0x01, 0x00, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00

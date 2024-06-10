@@ -26,4 +26,8 @@ doc = false
 required-features = ["component-model"]
 
 [features]
-component-model = ["wasmtime-environ/component-model", "dep:component-fuzz-util"]
+component-model = [
+  "wasmtime-environ/component-model",
+  "wasmtime-environ/compile",
+  "dep:component-fuzz-util",
+]

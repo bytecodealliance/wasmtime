@@ -23,8 +23,61 @@ pub struct Pollable {
     remove_index_on_delete: Option<fn(&mut ResourceTable, u32) -> Result<()>>,
 }
 
+/// A trait used internally within a [`Pollable`] to create a `pollable`
+/// resource in `wasi:io/poll`.
+///
+/// This trait is the internal implementation detail of any pollable resource in
+/// this crate's implementation of WASI. The `ready` function is an `async fn`
+/// which resolves when the implementation is ready. Using native `async` Rust
+/// enables this type's readiness to compose with other types' readiness
+/// throughout the WASI implementation.
+///
+/// This trait is used in conjunction with [`subscribe`] to create a `pollable`
+/// resource.
+///
+/// # Example
+///
+/// This is a simple example of creating a `Pollable` resource from a few
+/// parameters.
+///
+/// ```
+/// use tokio::time::{self, Duration, Instant};
+/// use wasmtime_wasi::{WasiView, Subscribe, subscribe, Pollable, async_trait};
+/// use wasmtime::component::Resource;
+/// use wasmtime::Result;
+///
+/// fn sleep(cx: &mut dyn WasiView, dur: Duration) -> Result<Resource<Pollable>> {
+///     let end = Instant::now() + dur;
+///     let sleep = MySleep { end };
+///     let sleep_resource = cx.table().push(sleep)?;
+///     subscribe(cx.table(), sleep_resource)
+/// }
+///
+/// struct MySleep {
+///     end: Instant,
+/// }
+///
+/// #[async_trait]
+/// impl Subscribe for MySleep {
+///     async fn ready(&mut self) {
+///         tokio::time::sleep_until(self.end).await;
+///     }
+/// }
+/// ```
 #[async_trait::async_trait]
 pub trait Subscribe: Send + 'static {
+    /// An asynchronous function which resolves when this object's readiness
+    /// operation is ready.
+    ///
+    /// This function is invoked as part of `poll` in `wasi:io/poll`. The
+    /// meaning of when this function Returns depends on what object this
+    /// [`Subscribe`] is attached to. When the returned future resolves then the
+    /// corresponding call to `wasi:io/poll` will return.
+    ///
+    /// Note that this method does not return an error. Returning an error
+    /// should be done through accessors on the object that this `pollable` is
+    /// connected to. The call to `wasi:io/poll` itself does not return errors,
+    /// only a list of ready objects.
     async fn ready(&mut self);
 }
 
@@ -64,7 +117,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> poll::Host for T {
+impl poll::Host for dyn WasiView + '_ {
     async fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
         type ReadylistIndex = u32;
 
@@ -123,7 +176,7 @@ impl<T: WasiView> poll::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> crate::bindings::io::poll::HostPollable for T {
+impl crate::bindings::io::poll::HostPollable for dyn WasiView + '_ {
     async fn block(&mut self, pollable: Resource<Pollable>) -> Result<()> {
         let table = self.table();
         let pollable = table.get(&pollable)?;
@@ -153,20 +206,20 @@ impl<T: WasiView> crate::bindings::io::poll::HostPollable for T {
 pub mod sync {
     use crate::{
         bindings::io::poll as async_poll,
-        bindings::sync_io::io::poll::{self, Pollable},
+        bindings::sync::io::poll::{self, Pollable},
         runtime::in_tokio,
         WasiView,
     };
     use anyhow::Result;
     use wasmtime::component::Resource;
 
-    impl<T: WasiView> poll::Host for T {
+    impl poll::Host for dyn WasiView + '_ {
         fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
             in_tokio(async { async_poll::Host::poll(self, pollables).await })
         }
     }
 
-    impl<T: WasiView> crate::bindings::sync_io::io::poll::HostPollable for T {
+    impl crate::bindings::sync::io::poll::HostPollable for dyn WasiView + '_ {
         fn ready(&mut self, pollable: Resource<Pollable>) -> Result<bool> {
             in_tokio(async { async_poll::HostPollable::ready(self, pollable).await })
         }

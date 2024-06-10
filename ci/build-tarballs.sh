@@ -34,28 +34,29 @@ fi
 bin_pkgname=wasmtime-$tag-$build_pkgname
 api_pkgname=wasmtime-$tag-$build_pkgname-c-api
 
+api_install=target/c-api-install
 mkdir tmp/$api_pkgname
-mkdir tmp/$api_pkgname/lib
-mkdir tmp/$api_pkgname/include
 mkdir tmp/$bin_pkgname
 cp LICENSE README.md tmp/$api_pkgname
 cp LICENSE README.md tmp/$bin_pkgname
-cp -r crates/c-api/include tmp/$api_pkgname
 
 # For *-min builds rename artifacts with a `-min` suffix to avoid eventual
 # clashes with the normal builds when the tarballs are unioned together.
 if [[ $build == *-min ]]; then
   min="-min"
+  cp -r $api_install/include tmp/$api_pkgname/min
+  cp -r $api_install/lib tmp/$api_pkgname/min
+else
+  cp -r $api_install/include tmp/$api_pkgname
+  cp -r $api_install/lib tmp/$api_pkgname
 fi
+
 
 fmt=tar
 
 case $build in
   x86_64-windows*)
     cp target/$target/release/wasmtime.exe tmp/$bin_pkgname/wasmtime$min.exe
-    cp target/$target/release/wasmtime.dll tmp/$api_pkgname/lib/wasmtime$min.dll
-    cp target/$target/release/wasmtime.lib tmp/$api_pkgname/lib/wasmtime$min.lib
-    cp target/$target/release/wasmtime.dll.lib tmp/$api_pkgname/lib/wasmtime$min.dll.lib
     fmt=zip
 
     if [ "$min" = "" ]; then
@@ -69,26 +70,15 @@ case $build in
 
   x86_64-mingw*)
     cp target/$target/release/wasmtime.exe tmp/$bin_pkgname/wasmtime$min.exe
-    cp target/$target/release/wasmtime.dll tmp/$api_pkgname/lib/wasmtime$min.dll
-    cp target/$target/release/libwasmtime.a tmp/$api_pkgname/lib/libwasmtime$min.a
-    cp target/$target/release/libwasmtime.dll.a tmp/$api_pkgname/lib/libwasmtime$min.dll.a
     fmt=zip
     ;;
 
   *-macos*)
-    # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
-    # directive than the default one that comes out of the linker when typically
-    # doing `cargo build`. For more info see #984
-    install_name_tool -id "@rpath/libwasmtime$min.dylib" target/$target/release/libwasmtime.dylib
     cp target/$target/release/wasmtime tmp/$bin_pkgname/wasmtime$min
-    cp target/$target/release/libwasmtime.a tmp/$api_pkgname/lib/libwasmtime$min.a
-    cp target/$target/release/libwasmtime.dylib tmp/$api_pkgname/lib/libwasmtime$min.dylib
     ;;
 
   *)
     cp target/$target/release/wasmtime tmp/$bin_pkgname/wasmtime$min
-    cp target/$target/release/libwasmtime.a tmp/$api_pkgname/lib/libwasmtime$min.a
-    cp target/$target/release/libwasmtime.so tmp/$api_pkgname/lib/libwasmtime$min.so
     ;;
 esac
 

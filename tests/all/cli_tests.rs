@@ -1059,169 +1059,6 @@ fn preview2_stdin() -> Result<()> {
 }
 
 #[test]
-fn old_cli_warn_if_ambiguous_flags() -> Result<()> {
-    // This is accepted in the old CLI parser and the new but it's interpreted
-    // differently so a warning should be printed.
-    let output = get_wasmtime_command()?
-        .args(&["tests/all/cli_tests/simple.wat", "--invoke", "get_f32"])
-        .output()?;
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "100\n");
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        "\
-warning: this CLI invocation of Wasmtime will be parsed differently in future
-         Wasmtime versions -- see this online issue for more information:
-         https://github.com/bytecodealliance/wasmtime/issues/7384
-
-         Wasmtime will now execute with the old (<= Wasmtime 13) CLI parsing,
-         however this behavior can also be temporarily configured with an
-         environment variable:
-
-         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silence this warning, or
-         - WASMTIME_NEW_CLI=1 to indicate new semantics are desired and use the latest behavior
-warning: using `--invoke` with a function that returns values is experimental and may break in the future
-"
-    );
-
-    // Test disabling the warning
-    let output = get_wasmtime_command()?
-        .args(&["tests/all/cli_tests/simple.wat", "--invoke", "get_f32"])
-        .env("WASMTIME_NEW_CLI", "0")
-        .output()?;
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "100\n");
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        "\
-warning: using `--invoke` with a function that returns values is experimental and may break in the future
-"
-    );
-
-    // Test forcing the new behavior where nothing happens because the file is
-    // invoked with `--invoke` as its own argument.
-    let output = get_wasmtime_command()?
-        .args(&["tests/all/cli_tests/simple.wat", "--invoke", "get_f32"])
-        .env("WASMTIME_NEW_CLI", "1")
-        .output()?;
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
-
-    // This is unambiguous
-    let output = get_wasmtime_command()?
-        .args(&["--invoke", "get_f32", "tests/all/cli_tests/simple.wat"])
-        .output()?;
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "100\n");
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        "\
-warning: using `--invoke` with a function that returns values is experimental and may break in the future
-"
-    );
-
-    // This fails to parse in the old but succeeds in the new, so it should run
-    // under the new semantics with no warning.
-    let output = get_wasmtime_command()?
-        .args(&["run", "tests/all/cli_tests/print-arguments.wat", "--arg"])
-        .output()?;
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "print-arguments.wat\n--arg\n"
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
-
-    // Old behavior can be forced however
-    let output = get_wasmtime_command()?
-        .args(&["run", "tests/all/cli_tests/print-arguments.wat", "--arg"])
-        .env("WASMTIME_NEW_CLI", "0")
-        .output()?;
-    assert!(!output.status.success());
-
-    // This works in both the old and the new, so no warnings
-    let output = get_wasmtime_command()?
-        .args(&["run", "tests/all/cli_tests/print-arguments.wat", "arg"])
-        .output()?;
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "print-arguments.wat\narg\n"
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
-
-    // This works in both the old and the new, so no warnings
-    let output = get_wasmtime_command()?
-        .args(&[
-            "run",
-            "--",
-            "tests/all/cli_tests/print-arguments.wat",
-            "--arg",
-        ])
-        .output()?;
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "print-arguments.wat\n--arg\n"
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
-
-    // Old flags still work, but with a warning
-    let output = get_wasmtime_command()?
-        .args(&[
-            "run",
-            "--max-wasm-stack",
-            "1000000",
-            "tests/all/cli_tests/print-arguments.wat",
-        ])
-        .output()?;
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "print-arguments.wat\n"
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        "\
-warning: this CLI invocation of Wasmtime is going to break in the future -- for
-         more information see this issue online:
-         https://github.com/bytecodealliance/wasmtime/issues/7384
-
-         Wasmtime will now execute with the old (<= Wasmtime 13) CLI parsing,
-         however this behavior can also be temporarily configured with an
-         environment variable:
-
-         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silence this warning, or
-         - WASMTIME_NEW_CLI=1 to indicate new semantics are desired and see the error
-"
-    );
-
-    // Old flags warning is suppressible.
-    let output = get_wasmtime_command()?
-        .args(&[
-            "run",
-            "--max-wasm-stack",
-            "1000000",
-            "tests/all/cli_tests/print-arguments.wat",
-        ])
-        .env("WASMTIME_NEW_CLI", "0")
-        .output()?;
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "print-arguments.wat\n"
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
-
-    // the `--dir` flag prints no warning when used with `::`
-    let dir = tempfile::tempdir()?;
-    std::fs::write(dir.path().join("bar.txt"), b"And stood awhile in thought")?;
-    let output = get_wasmtime_command()?
-        .args(&[
-            "run",
-            &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            test_programs_artifacts::CLI_FILE_READ,
-        ])
-        .output()?;
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
-
-    Ok(())
-}
-
-#[test]
 fn float_args() -> Result<()> {
     let result = run_wasmtime(&[
         "--invoke",
@@ -1260,10 +1097,14 @@ fn mpk_without_pooling() -> Result<()> {
 
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
-    use anyhow::Result;
-    use std::io::{Read, Write};
-    use std::process::Stdio;
+    use anyhow::{bail, Context, Result};
+    use http_body_util::BodyExt;
+    use hyper::header::HeaderValue;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::SocketAddr;
+    use std::process::{Child, Command, Stdio};
     use test_programs_artifacts::*;
+    use tokio::net::TcpStream;
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
@@ -1594,6 +1435,335 @@ mod test_programs {
         )?;
         println!("{}", String::from_utf8_lossy(&output.stderr));
         assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_sleep() -> Result<()> {
+        run_wasmtime(&["run", CLI_SLEEP])?;
+        run_wasmtime(&["run", CLI_SLEEP_COMPONENT])?;
+        Ok(())
+    }
+
+    /// Helper structure to manage an invocation of `wasmtime serve`
+    struct WasmtimeServe {
+        child: Option<Child>,
+        addr: SocketAddr,
+    }
+
+    impl WasmtimeServe {
+        /// Creates a new server which will serve the wasm component pointed to
+        /// by `wasm`.
+        ///
+        /// A `configure` callback is provided to specify how `wasmtime serve`
+        /// will be invoked and configure arguments such as headers.
+        fn new(wasm: &str, configure: impl FnOnce(&mut Command)) -> Result<WasmtimeServe> {
+            // Spawn `wasmtime serve` on port 0 which will randomly assign it a
+            // port.
+            let mut cmd = super::get_wasmtime_command()?;
+            cmd.arg("serve").arg("--addr=127.0.0.1:0").arg(wasm);
+            configure(&mut cmd);
+            Self::spawn(&mut cmd)
+        }
+
+        fn spawn(cmd: &mut Command) -> Result<WasmtimeServe> {
+            cmd.stdin(Stdio::null());
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
+            let mut child = cmd.spawn()?;
+
+            // Read the first line of stderr which will say which address it's
+            // listening on.
+            //
+            // NB: this intentionally discards any extra buffered data in the
+            // `BufReader` once the newline is found. The server shouldn't print
+            // anything interesting other than the address so once we get a line
+            // all remaining output is left to be captured by future requests
+            // send to the server.
+            let mut line = String::new();
+            let mut reader = BufReader::new(child.stderr.take().unwrap());
+            reader.read_line(&mut line)?;
+
+            match line.find("127.0.0.1").and_then(|addr_start| {
+                let addr = &line[addr_start..];
+                let addr_end = addr.find("/")?;
+                addr[..addr_end].parse().ok()
+            }) {
+                Some(addr) => {
+                    assert!(reader.buffer().is_empty());
+                    child.stderr = Some(reader.into_inner());
+                    Ok(WasmtimeServe {
+                        child: Some(child),
+                        addr,
+                    })
+                }
+                None => {
+                    child.kill()?;
+                    child.wait()?;
+                    reader.read_to_string(&mut line)?;
+                    bail!("failed to start child: {line}")
+                }
+            }
+        }
+
+        /// Completes this server gracefully by printing the output on failure.
+        fn finish(mut self) -> Result<String> {
+            let mut child = self.child.take().unwrap();
+
+            // If the child process has already exited then collect the output
+            // and test if it succeeded. Otherwise it's still running so kill it
+            // and then reap it. Assume that if it's still running then the test
+            // has otherwise passed so no need to print the output.
+            let known_failure = if child.try_wait()?.is_some() {
+                false
+            } else {
+                child.kill()?;
+                true
+            };
+            let output = child.wait_with_output()?;
+            if !known_failure && !output.status.success() {
+                bail!("child failed {output:?}");
+            }
+
+            Ok(String::from_utf8_lossy(&output.stderr).into_owned())
+        }
+
+        /// Send a request to this server and wait for the response.
+        async fn send_request(&self, req: http::Request<String>) -> Result<http::Response<String>> {
+            let (mut send, conn_task) = self.start_requests().await?;
+
+            let response = send
+                .send_request(req)
+                .await
+                .context("error sending request")?;
+            drop(send);
+            let (parts, body) = response.into_parts();
+
+            let body = body.collect().await.context("failed to read body")?;
+            assert!(body.trailers().is_none());
+            let body = std::str::from_utf8(&body.to_bytes())?.to_string();
+
+            conn_task.await??;
+
+            Ok(http::Response::from_parts(parts, body))
+        }
+
+        async fn start_requests(
+            &self,
+        ) -> Result<(
+            hyper::client::conn::http1::SendRequest<String>,
+            tokio::task::JoinHandle<hyper::Result<()>>,
+        )> {
+            let tcp = TcpStream::connect(&self.addr)
+                .await
+                .context("failed to connect")?;
+            let tcp = wasmtime_wasi_http::io::TokioIo::new(tcp);
+            let (send, conn) = hyper::client::conn::http1::handshake(tcp)
+                .await
+                .context("failed http handshake")?;
+            Ok((send, tokio::task::spawn(conn)))
+        }
+    }
+
+    // Don't leave child processes running by accident so kill the child process
+    // if our server goes away.
+    impl Drop for WasmtimeServe {
+        fn drop(&mut self) {
+            let mut child = match self.child.take() {
+                Some(child) => child,
+                None => return,
+            };
+            if child.kill().is_err() {
+                return;
+            }
+            let output = match child.wait_with_output() {
+                Ok(output) => output,
+                Err(_) => return,
+            };
+
+            println!("server status: {}", output.status);
+            if !output.stdout.is_empty() {
+                println!(
+                    "server stdout:\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                );
+            }
+            if !output.stderr.is_empty() {
+                println!(
+                    "server stderr:\n{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cli_serve_echo_env() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("--env=FOO=bar");
+            cmd.arg("--env=BAR");
+            cmd.arg("-Scli");
+            cmd.env_remove("BAR");
+        })?;
+
+        let foo_env = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(foo_env.status().is_success());
+        assert!(foo_env.body().is_empty());
+        let headers = foo_env.headers();
+        assert_eq!(headers.get("env"), Some(&HeaderValue::from_static("bar")));
+
+        let bar_env = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "BAR")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(bar_env.status().is_success());
+        assert!(bar_env.body().is_empty());
+        let headers = bar_env.headers();
+        assert_eq!(headers.get("env"), None);
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore] // TODO: printing stderr in the child and killing the child at the
+              // end of this test race so the stderr may be present or not. Need
+              // to implement a more graceful shutdown routine for `wasmtime
+              // serve`.
+    async fn cli_serve_respect_pooling_options() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("-Opooling-total-memories=0").arg("-Scli");
+        })?;
+
+        let result = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+        assert!(result.is_err());
+        let stderr = server.finish()?;
+        assert!(
+            stderr.contains("maximum concurrent memory limit of 0 reached"),
+            "bad stderr: {stderr}",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cli_large_env() -> Result<()> {
+        for wasm in [CLI_LARGE_ENV, CLI_LARGE_ENV_COMPONENT] {
+            println!("run {wasm:?}");
+            let mut cmd = get_wasmtime_command()?;
+            cmd.arg("run").arg("-Sinherit-env").arg(wasm);
+
+            let debug_cmd = format!("{cmd:?}");
+            for i in 0..512 {
+                let var = format!("KEY{i}");
+                let val = (0..1024).map(|_| 'x').collect::<String>();
+                cmd.env(&var, &val);
+            }
+            let output = cmd.output()?;
+            if !output.status.success() {
+                bail!(
+                    "Failed to execute wasmtime with: {debug_cmd}\n{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_only_one_process_allowed() -> Result<()> {
+        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let server = WasmtimeServe::new(wasm, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        let err = WasmtimeServe::spawn(
+            super::get_wasmtime_command()?
+                .arg("serve")
+                .arg("-Scli")
+                .arg(format!("--addr={}", server.addr))
+                .arg(wasm),
+        )
+        .err()
+        .expect("server spawn should have failed but it succeeded");
+        drop(server);
+
+        let err = format!("{err:?}");
+        println!("{err}");
+        assert!(err.contains("os error"));
+        Ok(())
+    }
+
+    // Technically this test is a little racy. This binds port 0 to acquire a
+    // random port, issues a single request to this port, but then kills this
+    // server while the request is still processing. The port is then rebound
+    // in the next process while it technically could be stolen by another
+    // process.
+    #[tokio::test]
+    async fn cli_serve_quick_rebind_allowed() -> Result<()> {
+        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let server = WasmtimeServe::new(wasm, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        let addr = server.addr;
+
+        // Start up a `send` and `conn_task` which represents a connection to
+        // this server.
+        let (mut send, conn_task) = server.start_requests().await?;
+        let _ = send
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+
+        // ... once a response has been received (or at least the status
+        // code/headers) then kill the server. THis is done while `conn_task`
+        // and `send` are still alive so we're guaranteed that the other side
+        // got a request (we got a response) and our connection is still open.
+        //
+        // This forces the address/port into the `TIME_WAIT` state. The rebind
+        // below in the next process will fail if `SO_REUSEADDR` isn't set.
+        drop(server);
+        drop(send);
+        let _ = conn_task.await;
+
+        // If this is successfully bound then we'll create `WasmtimeServe`
+        // which reads off the first line of output to know which address was
+        // bound.
+        let _server2 = WasmtimeServe::spawn(
+            super::get_wasmtime_command()?
+                .arg("serve")
+                .arg("-Scli")
+                .arg(format!("--addr={addr}"))
+                .arg(wasm),
+        )?;
+
         Ok(())
     }
 }

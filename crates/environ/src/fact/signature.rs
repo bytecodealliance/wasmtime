@@ -2,6 +2,7 @@
 
 use crate::component::{ComponentTypesBuilder, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::fact::{AdapterOptions, Context, Options};
+use crate::prelude::*;
 use wasm_encoder::ValType;
 
 /// Metadata about a core wasm signature which is created for a component model
@@ -12,14 +13,6 @@ pub struct Signature {
     pub params: Vec<ValType>,
     /// Core wasm results.
     pub results: Vec<ValType>,
-    /// Indicator to whether parameters are indirect, meaning that the first
-    /// entry of `params` is a pointer type which all parameters are loaded
-    /// through.
-    pub params_indirect: bool,
-    /// Indicator whether results are passed indirectly. This may mean that
-    /// `results` is an `i32` or that `params` ends with an `i32` depending on
-    /// the `Context`.
-    pub results_indirect: bool,
 }
 
 impl ComponentTypesBuilder {
@@ -33,7 +26,6 @@ impl ComponentTypesBuilder {
         let ty = &self[options.ty];
         let ptr_ty = options.options.ptr();
 
-        let mut params_indirect = false;
         let mut params = match self.flatten_types(
             &options.options,
             MAX_FLAT_PARAMS,
@@ -41,12 +33,10 @@ impl ComponentTypesBuilder {
         ) {
             Some(list) => list,
             None => {
-                params_indirect = true;
                 vec![ptr_ty]
             }
         };
 
-        let mut results_indirect = false;
         let results = match self.flatten_types(
             &options.options,
             MAX_FLAT_RESULTS,
@@ -54,7 +44,6 @@ impl ComponentTypesBuilder {
         ) {
             Some(list) => list,
             None => {
-                results_indirect = true;
                 match context {
                     // For a lifted function too-many-results gets translated to a
                     // returned pointer where results are read from. The callee
@@ -70,12 +59,7 @@ impl ComponentTypesBuilder {
                 }
             }
         };
-        Signature {
-            params,
-            results,
-            params_indirect,
-            results_indirect,
-        }
+        Signature { params, results }
     }
 
     /// Pushes the flat version of a list of component types into a final result

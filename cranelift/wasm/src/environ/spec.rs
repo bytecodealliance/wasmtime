@@ -8,8 +8,8 @@
 
 use crate::state::FuncTranslationState;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
-    MemoryIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData, Memory, MemoryIndex,
+    Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
     WasmHeapType, WasmResult,
 };
 use cranelift_codegen::cursor::FuncCursor;
@@ -21,7 +21,7 @@ use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
 use std::string::ToString;
 use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
-use wasmtime_types::ModuleInternedTypeIndex;
+use wasmtime_types::{ConstExpr, ModuleInternedTypeIndex};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -522,6 +522,15 @@ pub trait FuncEnvironment: TargetEnvironment {
         count: ir::Value,
     ) -> WasmResult<ir::Value>;
 
+    /// Translate an `i32` value into an `i31ref`.
+    fn translate_ref_i31(&mut self, pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value>;
+
+    /// Sign-extend an `i31ref` into an `i32`.
+    fn translate_i31_get_s(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
+
+    /// Zero-extend an `i31ref` into an `i32`.
+    fn translate_i31_get_u(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
+
     /// Emit code at the beginning of every wasm loop.
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at
@@ -793,7 +802,7 @@ pub trait ModuleEnvironment<'data>: TypeConvert {
     }
 
     /// Declares a global to the environment.
-    fn declare_global(&mut self, global: Global, init: GlobalInit) -> WasmResult<()>;
+    fn declare_global(&mut self, global: Global, init: ConstExpr) -> WasmResult<()>;
 
     /// Provides the number of exports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.

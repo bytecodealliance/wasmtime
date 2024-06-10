@@ -18,52 +18,30 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movz x8, #65535
-;;   subs xzr, x2, x8
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x10, [x0, #80]
-;;   add x10, x10, x2
-;;   movz x11, #65535, LSL #16
-;;   strb w3, [x10, x11]
-;;   b label2
-;; block2:
-;;   ldp fp, lr, [sp], #16
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     x7, #0xffff
+;;       cmp     x4, x7
+;;       b.hi    #0x2c
+;;   14: ldr     x9, [x2, #0x60]
+;;       add     x9, x9, x4
+;;       mov     x10, #0xffff0000
+;;       strb    w5, [x9, x10]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;   2c: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movz x8, #65535
-;;   subs xzr, x2, x8
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x10, [x0, #80]
-;;   add x10, x10, x2
-;;   movz x11, #65535, LSL #16
-;;   ldrb w0, [x10, x11]
-;;   b label2
-;; block2:
-;;   ldp fp, lr, [sp], #16
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     x7, #0xffff
+;;       cmp     x4, x7
+;;       b.hi    #0x6c
+;;   54: ldr     x9, [x2, #0x60]
+;;       add     x9, x9, x4
+;;       mov     x10, #0xffff0000
+;;       ldrb    w2, [x9, x10]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;   6c: .byte   0x1f, 0xc1, 0x00, 0x00

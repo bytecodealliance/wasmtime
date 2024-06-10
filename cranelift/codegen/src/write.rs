@@ -218,7 +218,7 @@ fn write_arg(w: &mut dyn Write, func: &Function, arg: Value) -> fmt::Result {
 ///
 ///    block1:
 ///    block1(v1: i32):
-///    block10(v4: f64, v5: b1):
+///    block10(v4: f64, v5: i8):
 ///
 pub fn write_block_header(
     w: &mut dyn Write,
@@ -441,7 +441,10 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
         Call {
             func_ref, ref args, ..
-        } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),
+        } => {
+            write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool)))?;
+            write_user_stack_map_entries(w, dfg, inst)
+        }
         CallIndirect {
             sig_ref, ref args, ..
         } => {
@@ -452,7 +455,8 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 sig_ref,
                 args[0],
                 DisplayValues(&args[1..])
-            )
+            )?;
+            write_user_stack_map_entries(w, dfg, inst)
         }
         FuncAddr { func_ref, .. } => write!(w, " {}", func_ref),
         StackLoad {
@@ -504,6 +508,24 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     Ok(())
 }
 
+fn write_user_stack_map_entries(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
+    let entries = match dfg.user_stack_map_entries(inst) {
+        None => return Ok(()),
+        Some(es) => es,
+    };
+    write!(w, ", stack_map=[")?;
+    let mut need_comma = false;
+    for entry in entries {
+        if need_comma {
+            write!(w, ", ")?;
+        }
+        write!(w, "{} @ {}+{}", entry.ty, entry.slot, entry.offset)?;
+        need_comma = true;
+    }
+    write!(w, "]")?;
+    Ok(())
+}
+
 /// Displayable slice of values.
 struct DisplayValues<'a>(&'a [Value]);
 
@@ -535,7 +557,7 @@ mod tests {
         f.name = UserFuncName::testcase("foo");
         assert_eq!(f.to_string(), "function %foo() fast {\n}\n");
 
-        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));
+        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 0));
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n}\n"
@@ -568,6 +590,13 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n\nblock0(v0: i8, v1: f32x4):\n    return\n}\n"
+        );
+
+        let mut f = Function::new();
+        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 2));
+        assert_eq!(
+            f.to_string(),
+            "function u0:0() fast {\n    ss0 = explicit_slot 4, align = 4\n}\n"
         );
     }
 

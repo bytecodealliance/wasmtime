@@ -1,19 +1,18 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime_wasi::command::Command;
+use wasmtime_wasi::bindings::Command;
 
 foreach_http!(assert_test_exists);
 
 async fn run(path: &str, server: &Server) -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-    config.wasm_component_model(true);
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+        config.async_support(true);
+    });
     let component = Component::from_file(&engine, path)?;
     let mut store = store(&engine, server);
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::command::add_to_linker(&mut linker)?;
+    wasmtime_wasi::add_to_linker_async(&mut linker)?;
     wasmtime_wasi_http::proxy::add_only_http_to_linker(&mut linker)?;
     let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
     let result = command.wasi_cli_run().call_run(&mut store).await?;
@@ -96,4 +95,14 @@ async fn http_outbound_request_response_build() -> Result<()> {
 async fn http_outbound_request_content_length() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn http_outbound_request_missing_path_and_query() -> Result<()> {
+    let server = Server::http1()?;
+    run(
+        HTTP_OUTBOUND_REQUEST_MISSING_PATH_AND_QUERY_COMPONENT,
+        &server,
+    )
+    .await
 }

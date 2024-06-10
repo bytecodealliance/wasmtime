@@ -23,7 +23,7 @@ cranelift-module = { workspace = true }
 cranelift-control = { workspace = true }
 file-per-thread-logger = { workspace = true }
 filecheck = { workspace = true }
-gimli = { workspace = true }
+gimli = { workspace = true, features = ['std'] }
 log = { workspace = true }
 num_cpus = "1.8.0"
 target-lexicon = { workspace = true }

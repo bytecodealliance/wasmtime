@@ -101,13 +101,13 @@
 //! algorithm is a one-pass approach to partitioning everything into adapter
 //! modules.
 //!
-//! Adapters were indentified in-order as part of the inlining phase of
+//! Adapters were identified in-order as part of the inlining phase of
 //! translation where we're guaranteed that once an adapter is identified
 //! it can't depend on anything identified later. The pass implemented here is
 //! to visit all transitive dependencies of an adapter. If one of the
 //! dependencies of an adapter is an adapter in the current adapter module
 //! being built then the current module is finished and a new adapter module is
-//! started. This should quickly parition adapters into contiugous chunks of
+//! started. This should quickly partition adapters into contiugous chunks of
 //! their index space which can be in adapter modules together.
 //!
 //! There's probably more general algorithms for this but for now this should be
@@ -119,7 +119,6 @@ use crate::component::translate::*;
 use crate::fact;
 use crate::EntityType;
 use std::collections::HashSet;
-use wasmparser::WasmFeatures;
 
 /// Metadata information about a fused adapter.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -171,7 +170,7 @@ impl<'data> Translator<'_, 'data> {
     /// metadata for adapter modules.
     pub(super) fn partition_adapter_modules(&mut self, component: &mut dfg::ComponentDfg) {
         // Visit each adapter, in order of its original definition, during the
-        // paritioning. This allows for the guarantee that dependencies are
+        // partitioning. This allows for the guarantee that dependencies are
         // visited in a topological fashion ideally.
         let mut state = PartitionAdapterModules::default();
         for (id, adapter) in component.adapters.iter() {
@@ -212,13 +211,10 @@ impl<'data> Translator<'_, 'data> {
             // specifically enabled here since the adapter module is highly
             // likely to use that if anything is actually indirected through
             // memory.
-            let mut validator = Validator::new_with_features(WasmFeatures {
-                multi_memory: true,
-                ..*self.validator.features()
-            });
+            self.validator.reset();
             let translation = ModuleEnvironment::new(
                 self.tunables,
-                &mut validator,
+                &mut self.validator,
                 self.types.module_types_builder(),
             )
             .translate(Parser::new(0), wasm)
@@ -259,7 +255,9 @@ fn fact_import_to_core_def(
 ) -> dfg::CoreDef {
     let mut simple_intrinsic = |trampoline: dfg::Trampoline| {
         let signature = ty.unwrap_func();
-        let index = dfg.trampolines.push((signature, trampoline));
+        let index = dfg
+            .trampolines
+            .push((signature.unwrap_module_type_index(), trampoline));
         dfg::CoreDef::Trampoline(index)
     };
     match import {
@@ -285,7 +283,7 @@ fn fact_import_to_core_def(
             let to = dfg.memories.push(unwrap_memory(to));
             let signature = ty.unwrap_func();
             let index = dfg.trampolines.push((
-                signature,
+                signature.unwrap_module_type_index(),
                 dfg::Trampoline::Transcoder {
                     op: *op,
                     from,

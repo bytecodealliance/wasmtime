@@ -2,37 +2,25 @@ use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
-    Config, Engine, Store,
+    Engine, Store,
 };
+use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{
-    pipe::MemoryOutputPipe,
-    preview1::{WasiPreview1Adapter, WasiPreview1View},
-    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,
+    pipe::MemoryOutputPipe, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct Ctx {
-    table: ResourceTable,
-    wasi: WasiCtx,
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
-    adapter: WasiPreview1Adapter,
+    wasi: WasiP1Ctx,
 }
 
 impl WasiView for Ctx {
     fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+        self.wasi.table()
     }
     fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
-    }
-}
-
-impl WasiPreview1View for Ctx {
-    fn adapter(&self) -> &WasiPreview1Adapter {
-        &self.adapter
-    }
-    fn adapter_mut(&mut self) -> &mut WasiPreview1Adapter {
-        &mut self.adapter
+        self.wasi.ctx()
     }
 }
 
@@ -42,37 +30,34 @@ fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
     Ok(tempdir)
 }
 
-fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>, TempDir)> {
+fn store(
+    engine: &Engine,
+    name: &str,
+    configure: impl FnOnce(&mut WasiCtxBuilder),
+) -> Result<(Store<Ctx>, TempDir)> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
     let workspace = prepare_workspace(name)?;
 
     // Create our wasi context.
     let mut builder = WasiCtxBuilder::new();
-    if inherit_stdio {
-        builder.inherit_stdio();
-    } else {
-        builder.stdout(stdout.clone()).stderr(stderr.clone());
-    }
+    builder.stdout(stdout.clone()).stderr(stderr.clone());
 
     builder
         .args(&[name, "."])
         .inherit_network()
         .allow_ip_name_lookup(true);
     println!("preopen: {:?}", workspace);
-    let preopen_dir =
-        cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
-    builder.preopened_dir(preopen_dir, DirPerms::all(), FilePerms::all(), ".");
+    builder.preopened_dir(workspace.path(), ".", DirPerms::all(), FilePerms::all())?;
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
         builder.env(var, val);
     }
 
+    configure(&mut builder);
     let ctx = Ctx {
-        table: ResourceTable::new(),
-        wasi: builder.build(),
+        wasi: builder.build_p1(),
         stderr,
         stdout,
-        adapter: WasiPreview1Adapter::new(),
     };
 
     Ok((Store::new(&engine, ctx), workspace))

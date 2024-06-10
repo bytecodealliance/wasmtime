@@ -61,6 +61,18 @@ update existing dependencies or add new dependencies will not be mergeable by
 default (CI will fail). This is expected from our project's configuration and
 this situation will be handled one of a few ways:
 
+Note that this process is not in place to prevent new dependencies or prevent
+updates, but rather it ensures that development of Wasmtime is done with a
+trusted set of code that has been reviewed by trusted parties. We welcome
+dependency updates and new functionality, so please don't be too alarmed when
+contributing and seeing a failure of `cargo vet` on CI!
+
+### `cargo vet` for Contributors
+
+If you're a contributor to Wasmtime and you've landed on this documentation,
+hello and thanks for your contribution! Here's some guidelines for changing the
+set of dependencies in Wasmtime:
+
 * If a new dependency is being added it might be worth trying to slim down
   what's required or avoiding the dependency altogether. Avoiding new
   dependencies is best when reasonable, but it is not always reasonable to do
@@ -72,17 +84,76 @@ this situation will be handled one of a few ways:
   to leave dependency updates to their own PRs. It's ok to update dependencies
   "just for the update" but we prefer to have that as separate PRs.
 
-* If a new dependency or dependency update is required, then a trusted
-  contributor of Wasmtime will be required to perform a vet of the new
-  crate/version. This will be done through a separate PR to Wasmtime so we ask
-  contributors to not run `cargo vet` themselves to get CI passing. Reviewers
-  understand what `cargo vet` failures are on CI and how it doesn't reflect on
-  the quality of the PR itself. Once the reviewer (or another maintainer) merges
-  a PR adding the vet entries necessary for the original contribution it can be
-  rebased to get CI passing.
+Dependency additions or updates require action on behalf of project maintainers
+so we ask that you don't run `cargo vet` yourself or update the `supply-chain`
+folder yourself. Instead a maintainer will review your PR and perform the `cargo
+vet` entries themselves. Reviewers will typically make a separate pull request
+to add `cargo vet` entries and once that lands yours will be added to the queue.
 
-Note that this process is not in place to prevent new dependencies or prevent
-updates, but rather it ensures that development of Wasmtime is done with a
-trusted set of code that has been reviewed by trusted parties. We welcome
-dependency updates and new functionality, so please don't be too alarmed when
-contributing and seeing a failure of `cargo vet` on CI!
+### `cargo vet` for Maintainers
+
+Maintainers of Wasmtime are required to explicitly vet and approve all
+dependency updates and modifications to Wasmtime. This means that when reviewing
+a PR you should ensure that contributors are not modifying the `supply-chain`
+directory themselves outside of commits authored by other maintainers. Otherwise
+though to add vet entries this is done through one of a few methods:
+
+* For a PR where maintainers themselves are modifying dependencies the `cargo
+  vet` entries can be included inline with the PR itself by the author. The
+  reviewer knows that the author of the PR is themself a maintainer.
+
+* PRs that "just update dependencies" are ok to have at any time. You can do
+  this in preparation for a future feature or for a future contributor. This
+  more-or-less is the same as the previous categories.
+
+* For contributors who should not add vet entries themselves maintainers should
+  review the PR and add vet entries either in a separate PR or as part of the
+  contributor's PR itself. As a separate PR you'll check out the branch, run
+  `cargo vet`, then rebase away the contributor's commits and push your `cargo
+  vet` commit alone to merge. For pushing directly to the contributor's own PR
+  be sure to read the notes below.
+
+Note for the last case it's important to ensure that if you push directly to a
+contributor's PR any future updates pushed by the contributor either contain or
+don't overwrite your vet entries. Also verify that if the PR branch is rebased
+or force-pushed, the details of your previously pushed vetting remain the same:
+e.g., versions were not bumped and descriptive reasons remain the same. If
+pushing a vetting commit to a contributor's PR and also asking for more changes,
+request that the contributor make the requested fixes in an additional commit
+rather than force-pushing a rewritten history, so your existing vetting commit
+remains untouched. These guidelines make it easier to verify no tampering has
+occurred.
+
+### Policy for adding `cargo vet` entries
+
+For maintainers this is intended to document the project's policy on adding
+`cargo vet` entries. The goal of this policy is to not make dependency updates
+so onerous that they never happen while still achieving much of the intended
+benefit of `cargo vet` in protection against supply-chain style attacks.
+
+* For dependencies **that receive at least 10,000 downloads a day** on crates.io
+  it's ok to add an entry to `exemptions` in `supply-chain/config.toml`. This
+  does not require careful review or review at all of these dependencies. The
+  assumption here is that a supply chain attack against a popular crate is
+  statistically likely to be discovered relatively quickly. Changes to `main` in
+  Wasmtime take at least 2 weeks to be released due to our release process, so
+  the assumption is that popular crates that are victim of a supply chain attack
+  would be discovered during this time. This policy additionally greatly helps
+  when updating dependencies on popular crates that are common to see without
+  increasing the burden too much on maintainers.
+
+* For other dependencies a manual vet is required. The `cargo vet` tool will
+  assist in adding a vet by pointing you towards the source code, as published
+  on crates.io, to be browsed online. Manual review should be done to ensure
+  that "nothing nefarious" is happening. For example `unsafe` should be
+  inspected as well as use of ambient system capabilities such as `std::fs`,
+  `std::net`, or `std::process`, and build scripts. Note that you're not
+  reviewing for correctness, instead only for whether a supply-chain attack
+  appears to be present.
+
+This policy intends to strike a rough balance between usability and security.
+It's always recommended to add vet entries where possible, but the first bullet
+above can be used to update an `exemptions` entry or add a new entry. Note that
+when the "popular threshold" is used **do not add a vet entry** because the
+crate is, in fact, not vetted. This is required to go through an
+`[[exemptions]]` entry.

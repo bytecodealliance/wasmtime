@@ -18,58 +18,38 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   lui a1,262144
-;;   addi a4,a1,-1
-;;   slli a5,a4,2
-;;   bgtu a2,a5,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a4,80(a0)
-;;   add a4,a4,a2
-;;   sw a3,0(a4)
-;;   j label2
-;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       lui     a1, 0x40000
+;;       addi    a4, a1, -1
+;;       slli    a4, a4, 2
+;;       bltu    a4, a2, 0x20
+;;       ld      a4, 0x60(a0)
+;;       add     a4, a4, a2
+;;       sw      a3, 0(a4)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   lui a1,262144
-;;   addi a3,a1,-1
-;;   slli a5,a3,2
-;;   bgtu a2,a5,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a4,80(a0)
-;;   add a4,a4,a2
-;;   lw a0,0(a4)
-;;   j label2
-;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       lui     a1, 0x40000
+;;       addi    a3, a1, -1
+;;       slli    a4, a3, 2
+;;       bltu    a4, a2, 0x20
+;;       ld      a3, 0x60(a0)
+;;       add     a3, a3, a2
+;;       lw      a0, 0(a3)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00

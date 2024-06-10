@@ -185,6 +185,7 @@ impl TargetIsa for AArch64Backend {
         let mut cs = Capstone::new()
             .arm64()
             .mode(arch::arm64::ArchMode::Arm)
+            .detail(true)
             .build()?;
         // AArch64 uses inline constants rather than a separate constant pool right now.
         // Without this option, Capstone will stop disassembling as soon as it sees

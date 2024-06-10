@@ -1,3 +1,9 @@
+use crate::prelude::*;
+use crate::runtime::vm::{
+    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
+    VMWasmCallFunction,
+};
+use crate::sync::OnceLock;
 use crate::{
     code::CodeObject,
     code_memory::CodeMemory,
@@ -7,24 +13,19 @@ use crate::{
     types::{ExportType, ExternType, ImportType},
     Engine,
 };
-use anyhow::{bail, Context, Result};
-use once_cell::sync::OnceCell;
-use std::fs;
-use std::mem;
-use std::ops::Range;
+use alloc::sync::Arc;
+use anyhow::{bail, Result};
+use core::fmt;
+use core::mem;
+use core::ops::Range;
+use core::ptr::NonNull;
+#[cfg(feature = "std")]
 use std::path::Path;
-use std::ptr::NonNull;
-use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
-    ObjectKind, VMOffsets,
+    ObjectKind, TypeTrace, VMOffsets, VMSharedTypeIndex,
 };
-use wasmtime_runtime::{
-    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
-    VMNativeCallFunction, VMSharedTypeIndex, VMWasmCallFunction,
-};
-
 mod registry;
 
 pub use registry::{
@@ -154,7 +155,7 @@ struct ModuleInner {
     /// image this is a pretty expensive operation, so by deferring it this
     /// improves memory usage for modules that are created but may not ever be
     /// instantiated.
-    memory_images: OnceCell<Option<ModuleMemoryImages>>,
+    memory_images: OnceLock<Option<ModuleMemoryImages>>,
 
     /// Flag indicating whether this module can be serialized or not.
     serializable: bool,
@@ -163,10 +164,18 @@ struct ModuleInner {
     offsets: VMOffsets<HostPtr>,
 }
 
-impl std::fmt::Debug for Module {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Module {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Module")
             .field("name", &self.name())
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for ModuleInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ModuleInner")
+            .field("name", &self.module.module().name.as_ref())
             .finish_non_exhaustive()
     }
 }
@@ -237,12 +246,10 @@ impl Module {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        let bytes = bytes.as_ref();
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(bytes)?;
-        Self::from_binary(engine, &bytes)
+        crate::CodeBuilder::new(engine)
+            .wasm(bytes.as_ref(), None)?
+            .compile_module()
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given
@@ -273,28 +280,11 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg(all(feature = "std", any(feature = "cranelift", feature = "winch")))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
-        let file = file.as_ref();
-        match Self::new(
-            engine,
-            &fs::read(file)
-                .with_context(|| format!("failed to read input file: {}", file.display()))?,
-        ) {
-            Ok(m) => Ok(m),
-            Err(e) => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "wat")] {
-                        let mut e = e.downcast::<wat::Error>()?;
-                        e.set_path(file);
-                        bail!(e)
-                    } else {
-                        Err(e)
-                    }
-                }
-            }
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm_file(file.as_ref())?
+            .compile_module()
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -329,56 +319,11 @@ impl Module {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
-
-        engine
-            .check_compatible_with_native_host()
-            .context("compilation settings are not compatible with the native host")?;
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "cache")] {
-                let state = (HashedEngineCompileEnv(engine), binary);
-                let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
-                    "wasmtime",
-                    engine.cache_config(),
-                )
-                .get_data_raw(
-                    &state,
-
-                    // Cache miss, compute the actual artifacts
-                    |(engine, wasm)| -> Result<_> {
-                        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
-                        let code = publish_mmap(mmap.0)?;
-                        Ok((code, info))
-                    },
-
-                    // Implementation of how to serialize artifacts
-                    |(_engine, _wasm), (code, _info_and_types)| {
-                        Some(code.mmap().to_vec())
-                    },
-
-                    // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm), serialized_bytes| {
-                        let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Module).ok()?;
-                        Some((code, None))
-                    },
-                )?;
-            } else {
-                let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary)?;
-                let code = publish_mmap(mmap.0)?;
-            }
-        };
-
-        let info_and_types = info_and_types.map(|(info, types)| (info, types.into()));
-        return Self::from_parts(engine, code, info_and_types);
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm(binary, None)?
+            .wat(false)?
+            .compile_module()
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given `file`
@@ -402,8 +347,7 @@ impl Module {
     /// This is because the file is mapped into memory and lazily loaded pages
     /// reflect the current state of the file, not necessarily the original
     /// state of the file.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg(all(feature = "std", any(feature = "cranelift", feature = "winch")))]
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
         if &mmap[0..4] == b"\x7fELF" {
@@ -411,7 +355,9 @@ impl Module {
             return Module::from_parts(engine, code, None);
         }
 
-        Module::new(engine, &*mmap)
+        crate::CodeBuilder::new(engine)
+            .wasm(&mmap, Some(file.as_ref()))?
+            .compile_module()
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -482,21 +428,22 @@ impl Module {
     /// entire lifetime of the [`Module`] returned. Any changes to the file on
     /// disk may change future instantiations of the module to be incorrect.
     /// This is because the file is mapped into memory and lazily loaded pages
-    /// reflect the current state of the file, not necessarily the origianl
+    /// reflect the current state of the file, not necessarily the original
     /// state of the file.
+    #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let code = engine.load_code_file(path.as_ref(), ObjectKind::Module)?;
         Module::from_parts(engine, code, None)
     }
 
     /// Entrypoint for creating a `Module` for all above functions, both
-    /// of the AOT and jit-compiled cateogries.
+    /// of the AOT and jit-compiled categories.
     ///
     /// In all cases the compilation artifact, `code_memory`, is provided here.
     /// The `info_and_types` argument is `None` when a module is being
     /// deserialized from a precompiled artifact or it's `Some` if it was just
     /// compiled and the values are already available.
-    fn from_parts(
+    pub(crate) fn from_parts(
         engine: &Engine,
         code_memory: Arc<CodeMemory>,
         info_and_types: Option<(CompiledModuleInfo, ModuleTypes)>,
@@ -506,7 +453,7 @@ impl Module {
         // already.
         let (info, types) = match info_and_types {
             Some((info, types)) => (info, types),
-            None => bincode::deserialize(code_memory.wasmtime_info())?,
+            None => postcard::from_bytes(code_memory.wasmtime_info()).err2anyhow()?,
         };
 
         // Register function type signatures into the engine for the lifetime
@@ -531,12 +478,8 @@ impl Module {
         info: CompiledModuleInfo,
         serializable: bool,
     ) -> Result<Self> {
-        let module = CompiledModule::from_artifacts(
-            code.code_memory().clone(),
-            info,
-            engine.profiler(),
-            engine.unique_id_allocator(),
-        )?;
+        let module =
+            CompiledModule::from_artifacts(code.code_memory().clone(), info, engine.profiler())?;
 
         // Validate the module can be used with the current instance allocator.
         let offsets = VMOffsets::new(HostPtr, module.module());
@@ -548,7 +491,7 @@ impl Module {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 code,
-                memory_images: OnceCell::new(),
+                memory_images: OnceLock::new(),
                 module,
                 serializable,
                 offsets,
@@ -580,8 +523,8 @@ impl Module {
 
         let mut functions = Vec::new();
         for payload in Parser::new(0).parse_all(binary) {
-            let payload = payload?;
-            if let ValidPayload::Func(a, b) = validator.payload(&payload)? {
+            let payload = payload.err2anyhow()?;
+            if let ValidPayload::Func(a, b) = validator.payload(&payload).err2anyhow()? {
                 functions.push((a, b));
             }
             if let wasmparser::Payload::Version { encoding, .. } = &payload {
@@ -591,13 +534,15 @@ impl Module {
             }
         }
 
-        engine.run_maybe_parallel(functions, |(validator, body)| {
-            // FIXME: it would be best here to use a rayon-specific parallel
-            // iterator that maintains state-per-thread to share the function
-            // validator allocations (`Default::default` here) across multiple
-            // functions.
-            validator.into_validator(Default::default()).validate(&body)
-        })?;
+        engine
+            .run_maybe_parallel(functions, |(validator, body)| {
+                // FIXME: it would be best here to use a rayon-specific parallel
+                // iterator that maintains state-per-thread to share the function
+                // validator allocations (`Default::default` here) across multiple
+                // functions.
+                validator.into_validator(Default::default()).validate(&body)
+            })
+            .err2anyhow()?;
         Ok(())
     }
 
@@ -611,7 +556,6 @@ impl Module {
     /// this method can be useful to get the serialized version without
     /// compiling twice.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn serialize(&self) -> Result<Vec<u8>> {
         // The current representation of compiled modules within a compiled
         // component means that it cannot be serialized. The mmap returned here
@@ -739,7 +683,12 @@ impl Module {
         let engine = self.engine();
         module
             .imports()
-            .map(move |(module, field, ty)| ImportType::new(module, field, ty, types, engine))
+            .map(move |(imp_mod, imp_field, mut ty)| {
+                ty.canonicalize_for_runtime_usage(&mut |i| {
+                    self.signatures().shared_type(i).unwrap()
+                });
+                ImportType::new(imp_mod, imp_field, ty, types, engine)
+            })
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -957,13 +906,13 @@ impl Module {
 
     /// Returns the `ModuleInner` cast as `ModuleRuntimeInfo` for use
     /// by the runtime.
-    pub(crate) fn runtime_info(&self) -> Arc<dyn wasmtime_runtime::ModuleRuntimeInfo> {
+    pub(crate) fn runtime_info(&self) -> Arc<dyn crate::runtime::vm::ModuleRuntimeInfo> {
         // N.B.: this needs to return a clone because we cannot
         // statically cast the &Arc<ModuleInner> to &Arc<dyn Trait...>.
         self.inner.clone()
     }
 
-    pub(crate) fn module_info(&self) -> &dyn wasmtime_runtime::ModuleInfo {
+    pub(crate) fn module_info(&self) -> &dyn crate::runtime::vm::ModuleInfo {
         &*self.inner
     }
 
@@ -1064,19 +1013,35 @@ impl Module {
         self.code_object().code_memory().text()
     }
 
-    /// Get the locations of functions in this module's `.text` section.
+    /// Get information about functions in this module's `.text` section: their
+    /// index, name, and offset+length.
     ///
-    /// Each function's location is a (`.text` section offset, length) pair.
-    pub fn function_locations<'a>(&'a self) -> impl ExactSizeIterator<Item = (usize, usize)> + 'a {
-        self.compiled_module().finished_functions().map(|(f, _)| {
-            let loc = self.compiled_module().func_loc(f);
-            (loc.start as usize, loc.length as usize)
+    /// Results are yielded in a ModuleFunction struct.
+    pub fn functions<'a>(&'a self) -> impl ExactSizeIterator<Item = ModuleFunction> + 'a {
+        let module = self.compiled_module();
+        module.finished_functions().map(|(idx, _)| {
+            let loc = module.func_loc(idx);
+            let idx = module.module().func_index(idx);
+            ModuleFunction {
+                index: idx,
+                name: module.func_name(idx).map(|n| n.to_string()),
+                offset: loc.start as usize,
+                len: loc.length as usize,
+            }
         })
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
         self.inner.module.unique_id()
     }
+}
+
+/// Describes a function for a given module.
+pub struct ModuleFunction {
+    pub index: wasmtime_environ::FuncIndex,
+    pub name: Option<String>,
+    pub offset: usize,
+    pub len: usize,
 }
 
 impl ModuleInner {
@@ -1117,38 +1082,19 @@ fn _assert_send_sync() {
     _assert::<Module>();
 }
 
-/// This is a helper struct used when caching to hash the state of an `Engine`
-/// used for module compilation.
-///
-/// The hash computed for this structure is used to key the global wasmtime
-/// cache and dictates whether artifacts are reused. Consequently the contents
-/// of this hash dictate when artifacts are or aren't re-used.
-#[cfg(any(feature = "cranelift", feature = "winch"))]
-pub(crate) struct HashedEngineCompileEnv<'a>(pub &'a Engine);
-
-#[cfg(any(feature = "cranelift", feature = "winch"))]
-impl std::hash::Hash for HashedEngineCompileEnv<'_> {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
-        // Hash the compiler's state based on its target and configuration.
-        let compiler = self.0.compiler();
-        compiler.triple().hash(hasher);
-        compiler.flags().hash(hasher);
-        compiler.isa_flags().hash(hasher);
-
-        // Hash configuration state read for compilation
-        let config = self.0.config();
-        self.0.tunables().hash(hasher);
-        config.features.hash(hasher);
-        config.wmemcheck.hash(hasher);
-
-        // Catch accidental bugs of reusing across crate versions.
-        config.module_version.hash(hasher);
-    }
-}
-
-impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
+impl crate::runtime::vm::ModuleRuntimeInfo for ModuleInner {
     fn module(&self) -> &Arc<wasmtime_environ::Module> {
         self.module.module()
+    }
+
+    fn engine_type_index(
+        &self,
+        module_index: wasmtime_environ::ModuleInternedTypeIndex,
+    ) -> VMSharedTypeIndex {
+        self.code
+            .signatures()
+            .shared_type(module_index)
+            .expect("bad module-level interned type index")
     }
 
     fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
@@ -1161,32 +1107,37 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         NonNull::new(ptr).unwrap()
     }
 
-    fn native_to_wasm_trampoline(
-        &self,
-        index: DefinedFuncIndex,
-    ) -> Option<NonNull<VMNativeCallFunction>> {
-        let ptr = self
-            .module
-            .native_to_wasm_trampoline(index)?
-            .as_ptr()
-            .cast::<VMNativeCallFunction>()
-            .cast_mut();
-        Some(NonNull::new(ptr).unwrap())
-    }
-
     fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction> {
         let ptr = self.module.array_to_wasm_trampoline(index)?.as_ptr();
         Some(unsafe { mem::transmute::<*const u8, VMArrayCallFunction>(ptr) })
     }
 
-    fn wasm_to_native_trampoline(
+    fn wasm_to_array_trampoline(
         &self,
         signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>> {
-        let sig = self.code.signatures().module_local_type(signature)?;
+        log::trace!("Looking up trampoline for {signature:?}");
+        let trampoline_shared_ty = self.engine.signatures().trampoline_type(signature);
+        let trampoline_module_ty = self
+            .code
+            .signatures()
+            .trampoline_type(trampoline_shared_ty)?;
+        debug_assert!(self
+            .engine
+            .signatures()
+            .borrow(
+                self.code
+                    .signatures()
+                    .shared_type(trampoline_module_ty)
+                    .unwrap()
+            )
+            .unwrap()
+            .unwrap_func()
+            .is_trampoline_type());
+
         let ptr = self
             .module
-            .wasm_to_native_trampoline(sig)
+            .wasm_to_array_trampoline(trampoline_module_ty)
             .as_ptr()
             .cast::<VMWasmCallFunction>()
             .cast_mut();
@@ -1215,7 +1166,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 }
 
-impl wasmtime_runtime::ModuleInfo for ModuleInner {
+impl crate::runtime::vm::ModuleInfo for ModuleInner {
     fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
         let text_offset = pc - self.module.text().as_ptr() as usize;
         let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
@@ -1267,14 +1218,21 @@ impl BareModuleInfo {
         }
     }
 
-    pub(crate) fn into_traitobj(self) -> Arc<dyn wasmtime_runtime::ModuleRuntimeInfo> {
+    pub(crate) fn into_traitobj(self) -> Arc<dyn crate::runtime::vm::ModuleRuntimeInfo> {
         Arc::new(self)
     }
 }
 
-impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
+impl crate::runtime::vm::ModuleRuntimeInfo for BareModuleInfo {
     fn module(&self) -> &Arc<wasmtime_environ::Module> {
         &self.module
+    }
+
+    fn engine_type_index(
+        &self,
+        _module_index: wasmtime_environ::ModuleInternedTypeIndex,
+    ) -> VMSharedTypeIndex {
+        unreachable!()
     }
 
     fn function(&self, _index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
@@ -1285,14 +1243,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
         unreachable!()
     }
 
-    fn native_to_wasm_trampoline(
-        &self,
-        _index: DefinedFuncIndex,
-    ) -> Option<NonNull<VMNativeCallFunction>> {
-        unreachable!()
-    }
-
-    fn wasm_to_native_trampoline(
+    fn wasm_to_array_trampoline(
         &self,
         _signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>> {
@@ -1313,7 +1264,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
 
     fn type_ids(&self) -> &[VMSharedTypeIndex] {
         match &self.one_signature {
-            Some(id) => std::slice::from_ref(id),
+            Some(id) => core::slice::from_ref(id),
             None => &[],
         }
     }

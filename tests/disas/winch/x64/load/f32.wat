@@ -1,0 +1,28 @@
+;;! target = "x86_64"
+;;! test = "winch"
+
+(module
+  (memory (data "\00\00\a0\7f"))
+
+  (func (export "f32.load") (result f32) (f32.load (i32.const 0)))
+)
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x10, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x41
+;;   1b: movq    %rdi, %r14
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       movl    $0, %eax
+;;       movq    0x60(%r14), %rcx
+;;       addq    %rax, %rcx
+;;       movss   (%rcx), %xmm0
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
+;;   41: ud2

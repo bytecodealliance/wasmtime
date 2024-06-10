@@ -52,13 +52,11 @@
   (export "main2" (func $main2))
 )
 
-;; function u0:0(i64 vmctx, i64) -> i8x16, i8x16, i8x16 fast {
+;; function u0:0(i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
-;;     sig0 = (i64 vmctx, i64) -> i8x16, i8x16, i8x16 fast
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     sig0 = (i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail
 ;;     fn0 = colocated u0:0 sig0
 ;;     stack_limit = gv2
 ;;
@@ -94,13 +92,11 @@
 ;; @0055                               return v2, v3, v4
 ;; }
 ;;
-;; function u0:1(i64 vmctx, i64) -> i8x16, i8x16, i8x16 fast {
+;; function u0:1(i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
-;;     sig0 = (i64 vmctx, i64) -> i8x16, i8x16, i8x16 fast
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     sig0 = (i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail
 ;;     fn0 = colocated u0:1 sig0
 ;;     stack_limit = gv2
 ;;

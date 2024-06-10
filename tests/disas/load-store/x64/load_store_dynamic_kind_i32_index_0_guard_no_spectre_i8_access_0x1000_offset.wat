@@ -18,54 +18,32 @@
     local.get 0
     i32.load8_u offset=0x1000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r9
-;;   movl    %edx, %r11d
-;;   subq    %r9, $4097, %r9
-;;   cmpq    %r9, %r11
-;;   jnbe    label3; j label1
-;; block1:
-;;   movq    80(%rdi), %rdi
-;;   movb    %cl, 4096(%rdi,%r11,1)
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x68(%rdi), %r8
+;;       movl    %edx, %r10d
+;;       subq    $0x1001, %r8
+;;       cmpq    %r8, %r10
+;;       ja      0x2c
+;;   1b: movq    0x60(%rdi), %rsi
+;;       movb    %cl, 0x1000(%rsi, %r10)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   2c: ud2
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r9
-;;   movl    %edx, %r11d
-;;   subq    %r9, $4097, %r9
-;;   cmpq    %r9, %r11
-;;   jnbe    label3; j label1
-;; block1:
-;;   movq    80(%rdi), %rdi
-;;   movzbq  4096(%rdi,%r11,1), %rax
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x68(%rdi), %r8
+;;       movl    %edx, %r10d
+;;       subq    $0x1001, %r8
+;;       cmpq    %r8, %r10
+;;       ja      0x6d
+;;   5b: movq    0x60(%rdi), %rsi
+;;       movzbq  0x1000(%rsi, %r10), %rax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   6d: ud2

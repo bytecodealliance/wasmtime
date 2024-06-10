@@ -4,38 +4,36 @@
 //! corresponding to your source program written in another language.
 //!
 //! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and
-//! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
+//! pass it as an argument to a [`FunctionBuilder`].
 //!
 //! # Mutable variables and Cranelift IR values
 //!
 //! The most interesting feature of this API is that it provides a single way to deal with all your
-//! variable problems. Indeed, the [`FunctionBuilder`](struct.FunctionBuilder.html) struct has a
+//! variable problems. Indeed, the [`FunctionBuilder`] struct has a
 //! type `Variable` that should be an index of your source language variables. Then, through
 //! calling the functions
-//! [`declare_var`](struct.FunctionBuilder.html#method.declare_var),
-//! [`def_var`](struct.FunctionBuilder.html#method.def_var) and
-//! [`use_var`](struct.FunctionBuilder.html#method.use_var), the
-//! [`FunctionBuilder`](struct.FunctionBuilder.html) will create for you all the Cranelift IR
-//! values corresponding to your variables.
+//! [`declare_var`](FunctionBuilder::declare_var), [`def_var`](FunctionBuilder::def_var) and
+//! [`use_var`](FunctionBuilder::use_var), the [`FunctionBuilder`] will create for you all the
+//! Cranelift IR values corresponding to your variables.
 //!
 //! This API has been designed to help you translate your mutable variables into
 //! [`SSA`](https://en.wikipedia.org/wiki/Static_single_assignment_form) form.
-//! [`use_var`](struct.FunctionBuilder.html#method.use_var) will return the Cranelift IR value
+//! [`use_var`](FunctionBuilder::use_var) will return the Cranelift IR value
 //! that corresponds to your mutable variable at a precise point in the program. However, if you know
 //! beforehand that one of your variables is defined only once, for instance if it is the result
 //! of an intermediate expression in an expression-based language, then you can translate it
 //! directly by the Cranelift IR value returned by the instruction builder. Using the
-//! [`use_var`](struct.FunctionBuilder.html#method.use_var) API for such an immutable variable
+//! [`use_var`](FunctionBuilder::use_var) API for such an immutable variable
 //! would also work but with a slight additional overhead (the SSA algorithm does not know
 //! beforehand if a variable is immutable or not).
 //!
 //! The moral is that you should use these three functions to handle all your mutable variables,
 //! even those that are not present in the source code but artifacts of the translation. It is up
-//! to you to keep a mapping between the mutable variables of your language and their `Variable`
-//! index that is used by Cranelift. Caution: as the `Variable` is used by Cranelift to index an
-//! array containing information about your mutable variables, when you create a new `Variable`
-//! with [`Variable::new(var_index)`] you should make sure that `var_index` is provided by a
-//! counter incremented by 1 each time you encounter a new mutable variable.
+//! to you to keep a mapping between the mutable variables of your language and their [`Variable`]
+//! index that is used by Cranelift. Caution: as the [`Variable`] is used by Cranelift to index an
+//! array containing information about your mutable variables, when you create a new [`Variable`]
+//! with `Variable::new(var_index)` you should make sure that `var_index`
+//! is provided by a counter incremented by 1 each time you encounter a new mutable variable.
 //!
 //! # Example
 //!
@@ -60,7 +58,7 @@
 //! }
 //! ```
 //!
-//! Here is how you build the corresponding Cranelift IR function using `FunctionBuilderContext`:
+//! Here is how you build the corresponding Cranelift IR function using [`FunctionBuilderContext`]:
 //!
 //! ```rust
 //! extern crate cranelift_codegen;

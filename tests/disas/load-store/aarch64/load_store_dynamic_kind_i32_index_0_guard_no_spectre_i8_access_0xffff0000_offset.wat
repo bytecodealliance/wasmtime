@@ -18,60 +18,40 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   mov w11, w2
-;;   movn w12, #65534
-;;   adds x11, x11, x12
-;;   b.hs #trap=heap_oob
-;;   ldr x12, [x0, #88]
-;;   subs xzr, x11, x12
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x14, [x0, #80]
-;;   add x14, x14, x2, UXTW
-;;   movz x15, #65535, LSL #16
-;;   strb w3, [x14, x15]
-;;   b label2
-;; block2:
-;;   ldp fp, lr, [sp], #16
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w10, w4
+;;       mov     w11, #-0xffff
+;;       adds    x10, x10, x11
+;;       b.hs    #0x40
+;;   18: ldr     x11, [x2, #0x68]
+;;       cmp     x10, x11
+;;       b.hi    #0x3c
+;;   24: ldr     x13, [x2, #0x60]
+;;       add     x13, x13, w4, uxtw
+;;       mov     x14, #0xffff0000
+;;       strb    w5, [x13, x14]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;   3c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   40: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   mov w11, w2
-;;   movn w12, #65534
-;;   adds x11, x11, x12
-;;   b.hs #trap=heap_oob
-;;   ldr x12, [x0, #88]
-;;   subs xzr, x11, x12
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x14, [x0, #80]
-;;   add x14, x14, x2, UXTW
-;;   movz x15, #65535, LSL #16
-;;   ldrb w0, [x14, x15]
-;;   b label2
-;; block2:
-;;   ldp fp, lr, [sp], #16
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w10, w4
+;;       mov     w11, #-0xffff
+;;       adds    x10, x10, x11
+;;       b.hs    #0xa0
+;;   78: ldr     x11, [x2, #0x68]
+;;       cmp     x10, x11
+;;       b.hi    #0x9c
+;;   84: ldr     x13, [x2, #0x60]
+;;       add     x13, x13, w4, uxtw
+;;       mov     x14, #0xffff0000
+;;       ldrb    w2, [x13, x14]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;   9c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   a0: .byte   0x1f, 0xc1, 0x00, 0x00

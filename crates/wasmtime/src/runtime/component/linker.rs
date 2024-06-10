@@ -5,14 +5,15 @@ use crate::component::types;
 use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
+use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
+use alloc::sync::Arc;
 use anyhow::{bail, Context, Result};
+use core::future::Future;
+use core::marker;
+use core::pin::Pin;
+use hashbrown::hash_map::{Entry, HashMap};
 use semver::Version;
-use std::collections::hash_map::{Entry, HashMap};
-use std::future::Future;
-use std::marker;
-use std::pin::Pin;
-use std::sync::Arc;
 use wasmtime_environ::PrimaryMap;
 
 /// A type used to instantiate [`Component`]s.
@@ -195,7 +196,6 @@ impl<T> Linker<T> {
 
     fn typecheck<'a>(&'a self, component: &'a Component) -> Result<TypeChecker<'a>> {
         let mut cx = TypeChecker {
-            component: component.env_component(),
             types: component.types(),
             strings: &self.strings,
             imported_resources: Default::default(),
@@ -320,7 +320,6 @@ impl<T> Linker<T> {
     /// can return an error if something goes wrong during instantiation such as
     /// a runtime trap or a runtime limit being exceeded.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         store: impl AsContextMut<Data = T>,
@@ -336,6 +335,73 @@ impl<T> Linker<T> {
         self.instantiate_pre(component)?
             .instantiate_async(store)
             .await
+    }
+
+    /// Implement any imports of the given [`Component`] with a function which traps.
+    ///
+    /// By default a [`Linker`] will error when unknown imports are encountered when instantiating a [`Component`].
+    /// This changes this behavior from an instant error to a trap that will happen if the import is called.
+    pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
+        use wasmtime_environ::component::ComponentTypes;
+        use wasmtime_environ::component::TypeDef;
+        // Recursively stub out all imports of the component with a function that traps.
+        fn stub_item<T>(
+            linker: &mut LinkerInstance<T>,
+            item_name: &str,
+            item_def: &TypeDef,
+            parent_instance: Option<&str>,
+            types: &ComponentTypes,
+        ) -> Result<()> {
+            // Skip if the item isn't an instance and has already been defined in the linker.
+            if !matches!(item_def, TypeDef::ComponentInstance(_)) && linker.get(item_name).is_some()
+            {
+                return Ok(());
+            }
+
+            match item_def {
+                TypeDef::ComponentFunc(_) => {
+                    let fully_qualified_name = parent_instance
+                        .map(|parent| format!("{}#{}", parent, item_name))
+                        .unwrap_or_else(|| item_name.to_owned());
+                    linker.func_new(&item_name, move |_, _, _| {
+                        bail!("unknown import: `{fully_qualified_name}` has not been defined")
+                    })?;
+                }
+                TypeDef::ComponentInstance(i) => {
+                    let instance = &types[*i];
+                    let mut linker_instance = linker.instance(item_name)?;
+                    for (export_name, export) in instance.exports.iter() {
+                        stub_item(
+                            &mut linker_instance,
+                            export_name,
+                            export,
+                            Some(item_name),
+                            types,
+                        )?;
+                    }
+                }
+                TypeDef::Resource(_) => {
+                    let ty = crate::component::ResourceType::host::<()>();
+                    linker.resource(item_name, ty, |_, _| Ok(()))?;
+                }
+                TypeDef::Component(_) | TypeDef::Module(_) => {
+                    bail!("unable to define {} imports as traps", item_def.desc())
+                }
+                _ => {}
+            }
+            Ok(())
+        }
+
+        for (_, (import_name, import_type)) in &component.env_component().import_types {
+            stub_item(
+                &mut self.root(),
+                import_name,
+                import_type,
+                None,
+                component.types(),
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -385,7 +451,6 @@ impl<T> LinkerInstance<'_, T> {
     /// This is exactly like [`Self::func_wrap`] except it takes an async
     /// host function.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: for<'a> Fn(
@@ -523,7 +588,6 @@ impl<T> LinkerInstance<'_, T> {
     /// This is exactly like [`Self::func_new`] except it takes an async
     /// host function.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn func_new_async<F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: for<'a> Fn(
@@ -585,9 +649,9 @@ impl<T> LinkerInstance<'_, T> {
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
-        let dtor = Arc::new(crate::func::HostFunc::wrap(
+        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
+            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
@@ -619,6 +683,10 @@ impl<T> LinkerInstance<'_, T> {
         self.map
             .insert(name, &mut self.strings, self.allow_shadowing, item)
     }
+
+    fn get(&self, name: &str) -> Option<&Definition> {
+        self.map.get(name, &self.strings)
+    }
 }
 
 impl NameMap {
@@ -645,7 +713,7 @@ impl NameMap {
         let (alternate_name, _version) = alternate_lookup_key(name)?;
         let alternate_key = strings.lookup(alternate_name)?;
         let (exact_key, _version) = self.alternate_lookups.get(&alternate_key)?;
-        self.definitions.get(&exact_key)
+        self.definitions.get(exact_key)
     }
 
     /// Inserts the `name` specified into this map.

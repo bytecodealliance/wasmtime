@@ -83,8 +83,9 @@ impl TableOps {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: RefType::EXTERNREF,
-            minimum: self.table_size as u32,
+            minimum: self.table_size as u64,
             maximum: None,
+            table64: false,
         });
 
         // Define our globals.
@@ -94,6 +95,7 @@ impl TableOps {
                 wasm_encoder::GlobalType {
                     val_type: wasm_encoder::ValType::EXTERNREF,
                     mutable: true,
+                    shared: false,
                 },
                 &ConstExpr::ref_null(wasm_encoder::HeapType::Extern),
             );
@@ -282,11 +284,7 @@ mod tests {
             let u = Unstructured::new(&buf);
             if let Ok(ops) = TableOps::arbitrary_take_rest(u) {
                 let wasm = ops.to_wasm_binary();
-                let mut validator =
-                    wasmparser::Validator::new_with_features(wasmparser::WasmFeatures {
-                        reference_types: true,
-                        ..Default::default()
-                    });
+                let mut validator = wasmparser::Validator::new();
                 let result = validator.validate_all(&wasm);
                 assert!(result.is_ok());
             }

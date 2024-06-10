@@ -1,8 +1,6 @@
 use super::regs;
 use crate::abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
-use crate::masm::OperandSize;
-use smallvec::SmallVec;
 use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
@@ -75,10 +73,6 @@ impl ABI for Aarch64ABI {
         16
     }
 
-    fn ret_addr_offset() -> u8 {
-        8
-    }
-
     fn word_bits() -> u8 {
         64
     }
@@ -124,23 +118,11 @@ impl ABI for Aarch64ABI {
     }
 
     fn float_scratch_reg() -> Reg {
-        todo!()
-    }
-
-    fn sp_reg() -> Reg {
-        todo!()
-    }
-
-    fn fp_reg() -> Reg {
-        regs::fp()
+        regs::float_scratch()
     }
 
     fn vmctx_reg() -> Reg {
         regs::xreg(9)
-    }
-
-    fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
-        regs::callee_saved()
     }
 
     fn stack_slot_size() -> u8 {

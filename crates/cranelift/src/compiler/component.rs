@@ -1,13 +1,12 @@
 //! Compilation support for the component model.
 
-use crate::compiler::{Compiler, NativeRet};
+use crate::{compiler::Compiler, ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::ModuleInternedTypeIndex;
 use std::any::Any;
-use wasmtime_cranelift_shared::{ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use wasmtime_environ::component::*;
 use wasmtime_environ::{PtrSize, WasmValType};
 
@@ -26,7 +25,6 @@ struct TrampolineCompiler<'a> {
 #[derive(Copy, Clone)]
 enum Abi {
     Wasm,
-    Native,
     Array,
 }
 
@@ -41,12 +39,11 @@ impl<'a> TrampolineCompiler<'a> {
     ) -> TrampolineCompiler<'a> {
         let isa = &*compiler.isa;
         let signature = component.trampolines[index];
-        let ty = &types[signature];
+        let ty = types[signature].unwrap_func();
         let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
             match abi {
                 Abi::Wasm => crate::wasm_call_signature(isa, ty, &compiler.tunables),
-                Abi::Native => crate::native_call_signature(isa, ty),
                 Abi::Array => crate::array_call_signature(isa),
             },
         );
@@ -79,7 +76,7 @@ impl<'a> TrampolineCompiler<'a> {
                     }
                     // Transcoders can only actually be called by Wasm, so let's assert
                     // that here.
-                    Abi::Native | Abi::Array => {
+                    Abi::Array => {
                         self.builder
                             .ins()
                             .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
@@ -125,18 +122,12 @@ impl<'a> TrampolineCompiler<'a> {
         let pointer_type = self.isa.pointer_type();
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
-        let wasm_func_ty = &self.types[self.signature];
-
-        // More handling is necessary here if this changes
-        assert!(matches!(
-            NativeRet::classify(pointer_type, wasm_func_ty),
-            NativeRet::Bare
-        ));
+        let wasm_func_ty = self.types[self.signature].unwrap_func();
 
         // Start off by spilling all the wasm arguments into a stack slot to be
         // passed to the host function.
         let (values_vec_ptr, values_vec_len) = match self.abi {
-            Abi::Wasm | Abi::Native => {
+            Abi::Wasm => {
                 let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
                     wasm_func_ty,
                     &mut self.builder,
@@ -253,7 +244,7 @@ impl<'a> TrampolineCompiler<'a> {
             .call_indirect(host_sig, host_fn, &callee_args);
 
         match self.abi {
-            Abi::Wasm | Abi::Native => {
+            Abi::Wasm => {
                 // After the host function has returned the results are loaded from
                 // `values_vec_ptr` and then returned.
                 let results = self.compiler.load_values_from_array(
@@ -289,7 +280,10 @@ impl<'a> TrampolineCompiler<'a> {
         host_args.push(args[2]);
 
         // Currently this only support resources represented by `i32`
-        assert_eq!(self.types[self.signature].params()[0], WasmValType::I32);
+        assert_eq!(
+            self.types[self.signature].unwrap_func().params()[0],
+            WasmValType::I32
+        );
         let (host_sig, offset) = host::resource_new32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);
@@ -320,7 +314,10 @@ impl<'a> TrampolineCompiler<'a> {
         host_args.push(args[2]);
 
         // Currently this only support resources represented by `i32`
-        assert_eq!(self.types[self.signature].returns()[0], WasmValType::I32);
+        assert_eq!(
+            self.types[self.signature].unwrap_func().returns()[0],
+            WasmValType::I32
+        );
         let (host_sig, offset) = host::resource_rep32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);
@@ -491,7 +488,7 @@ impl<'a> TrampolineCompiler<'a> {
 
             let sig = crate::wasm_call_signature(
                 self.isa,
-                &self.types[self.signature],
+                &self.types[self.signature].unwrap_func(),
                 &self.compiler.tunables,
             );
             let sig_ref = self.builder.import_signature(sig);
@@ -528,7 +525,7 @@ impl<'a> TrampolineCompiler<'a> {
 
             // These trampolines can only actually be called by Wasm, so
             // let's assert that here.
-            Abi::Native | Abi::Array => {
+            Abi::Array => {
                 self.builder
                     .ins()
                     .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
@@ -578,13 +575,13 @@ impl<'a> TrampolineCompiler<'a> {
         match self.abi {
             // Wasm and native ABIs pass parameters as normal function
             // parameters.
-            Abi::Wasm | Abi::Native => block0_params,
+            Abi::Wasm => block0_params,
 
             // The array ABI passes a pointer/length as the 3rd/4th arguments
             // and those are used to load the actual wasm parameters.
             Abi::Array => {
                 let results = self.compiler.load_values_from_array(
-                    self.types[self.signature].params(),
+                    self.types[self.signature].unwrap_func().params(),
                     &mut self.builder,
                     block0_params[2],
                     block0_params[3],
@@ -599,7 +596,7 @@ impl<'a> TrampolineCompiler<'a> {
     fn abi_store_results(&mut self, results: &[ir::Value]) {
         match self.abi {
             // Wasm/native ABIs return values as usual.
-            Abi::Wasm | Abi::Native => {
+            Abi::Wasm => {
                 self.builder.ins().return_(results);
             }
 
@@ -611,7 +608,7 @@ impl<'a> TrampolineCompiler<'a> {
                 let (ptr, len) = (block0_params[2], block0_params[3]);
                 self.compiler.store_values_to_array(
                     &mut self.builder,
-                    self.types[self.signature].returns(),
+                    self.types[self.signature].unwrap_func().returns(),
                     results,
                     ptr,
                     len,
@@ -676,7 +673,6 @@ impl ComponentCompiler for Compiler {
         Ok(AllCallFunc {
             wasm_call: compile(Abi::Wasm)?,
             array_call: compile(Abi::Array)?,
-            native_call: compile(Abi::Native)?,
         })
     }
 }
@@ -767,6 +763,7 @@ impl TrampolineCompiler<'_> {
                 .create_sized_stack_slot(ir::StackSlotData::new(
                     ir::StackSlotKind::ExplicitSlot,
                     pointer_type.bytes(),
+                    0,
                 ));
             args.push(self.builder.ins().stack_addr(pointer_type, slot, 0));
         }

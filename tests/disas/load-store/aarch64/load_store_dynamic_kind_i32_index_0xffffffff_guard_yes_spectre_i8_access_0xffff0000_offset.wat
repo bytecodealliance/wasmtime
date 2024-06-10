@@ -18,54 +18,36 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x12, [x0, #88]
-;;   ldr x15, [x0, #80]
-;;   mov w13, w2
-;;   movz x14, #0
-;;   add x15, x15, x2, UXTW
-;;   movz x0, #65535, LSL #16
-;;   add x15, x15, x0
-;;   subs xzr, x13, x12
-;;   csel x13, x14, x15, hi
-;;   csdb
-;;   strb w3, [x13]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x11, [x2, #0x68]
+;;       ldr     x14, [x2, #0x60]
+;;       mov     w12, w4
+;;       mov     x13, #0
+;;       add     x14, x14, w4, uxtw
+;;       mov     x15, #0xffff0000
+;;       add     x14, x14, x15
+;;       cmp     x12, x11
+;;       csel    x12, x13, x14, hi
+;;       csdb
+;;       strb    w5, [x12]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x12, [x0, #88]
-;;   ldr x15, [x0, #80]
-;;   mov w13, w2
-;;   movz x14, #0
-;;   add x15, x15, x2, UXTW
-;;   movz x0, #65535, LSL #16
-;;   add x15, x15, x0
-;;   subs xzr, x13, x12
-;;   csel x13, x14, x15, hi
-;;   csdb
-;;   ldrb w0, [x13]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x11, [x2, #0x68]
+;;       ldr     x14, [x2, #0x60]
+;;       mov     w12, w4
+;;       mov     x13, #0
+;;       add     x14, x14, w4, uxtw
+;;       mov     x15, #0xffff0000
+;;       add     x14, x14, x15
+;;       cmp     x12, x11
+;;       csel    x12, x13, x14, hi
+;;       csdb
+;;       ldrb    w2, [x12]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

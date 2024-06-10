@@ -100,6 +100,10 @@ fn create() -> GlobalStdin {
 #[derive(Clone)]
 pub struct Stdin;
 
+/// Returns a stream that represents the host's standard input.
+///
+/// Suitable for passing to
+/// [`WasiCtxBuilder::stdin`](crate::WasiCtxBuilder::stdin).
 pub fn stdin() -> Stdin {
     Stdin
 }

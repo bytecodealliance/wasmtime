@@ -78,7 +78,7 @@
 ;; !!! Important !!!
 ;; These rules only work for (ishl (uextend _) _) and not for (uextend (ishl _ _))!
 ;; Getting this wrong means a potential misscalculation of the shift amount.
-;; Additionaly we can only ensure that this is correct if the uextend is 32 to 64 bits.
+;; Additionally we can only ensure that this is correct if the uextend is 32 to 64 bits.
 (decl pure partial match_shnadd_uw (Imm64) AluOPRRR)
 (rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
 (rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
@@ -1508,43 +1508,56 @@
   (rv_vfsgnj_vf x y (unmasked) ty))
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_scalar_float ty) (fma x y z)))
-  (rv_fmadd ty (FRM.RNE) x y z))
 
-;; (fma x y z) computes x * y + z
-;; vfmacc computes vd[i] = +(vs1[i] * vs2[i]) + vd[i]
-;; We need to reverse the order of the arguments
+;; RISC-V has 4 FMA instructions that do a slightly different computation.
+;;
+;; fmadd:   (rs1 * rs2) + rs3
+;; fmsub:   (rs1 * rs2) - rs3
+;; fnmadd: -(rs1 * rs2) - rs3
+;; fnmsub: -(rs1 * rs2) + rs3
+;;
+;; Additionally there are vector versions of these instructions with slightly different names.
+;; The vector instructions also have two variants each. `.vv` and `.vf`, where `.vv` variants
+;; take two vector operands and the `.vf` variants take a vector operand and a scalar operand.
+;;
+;; Due to this, variation they receive the arguments in a different order. So we need to swap
+;; the arguments below.
+;;
+;; vfmacc:  vd[i] = +(vs1[i] * vs2[i]) + vd[i]
+;; vfmsac:  vd[i] = +(vs1[i] * vs2[i]) - vd[i]
+;; vfnmacc: vd[i] = -(vs1[i] * vs2[i]) - vd[i]
+;; vfnmsac: vd[i] = -(vs1[i] * vs2[i]) + vd[i]
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fma x y z)))
-  (rv_vfmacc_vv z y x (unmasked) ty))
+(type IsFneg (enum (Result (negate u64) (value Value))))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y z)))
-  (rv_vfmacc_vf z y x (unmasked) ty))
+(decl pure is_fneg (Value) IsFneg)
+(rule 1 (is_fneg (fneg x)) (IsFneg.Result 1 x))
+(rule 0 (is_fneg x) (IsFneg.Result 0 x))
 
-;; vfmsac computes vd[i] = +(vs1[i] * vs2[i]) - vd[i]
+(rule (lower (has_type ty (fma x_src y_src z_src)))
+  (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
+  (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
+  (if-let (IsFneg.Result neg_z z) (is_fneg z_src))
+  (rv_fma ty (u64_xor neg_x neg_y) neg_z x y z))
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fma x y (fneg z))))
-  (rv_vfmsac_vv z y x (unmasked) ty))
-
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y (fneg z))))
-  (rv_vfmsac_vf z y x (unmasked) ty))
-
-;; vfnmacc computes vd[i] = -(vs1[i] * vs2[i]) - vd[i]
-
-(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y (fneg z))))
-  (rv_vfnmacc_vv z y x (unmasked) ty))
-
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y (fneg z))))
-  (rv_vfnmacc_vf z y x (unmasked) ty))
-
-;; vfnmsac computes vd[i] = -(vs1[i] * vs2[i]) + vd[i]
-
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y z)))
-  (rv_vfnmsac_vv z y x (unmasked) ty))
-
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y z)))
-  (rv_vfnmsac_vf z y x (unmasked) ty))
-
+; parity arguments indicate whether to negate the x*y term or the z term, respectively
+(decl rv_fma (Type u64 u64 Value Value Value) InstOutput)
+(rule 0 (rv_fma (ty_scalar_float ty) 0 0 x y z) (rv_fmadd ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 0 1 x y z) (rv_fmsub ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 1 0 x y z) (rv_fnmsub ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 1 1 x y z) (rv_fnmadd ty (FRM.RNE) x y z))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 0 0 x y z) (rv_vfmacc_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 0 1 x y z) (rv_vfmsac_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 1 0 x y z) (rv_vfnmsac_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 1 1 x y z) (rv_vfnmacc_vv z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 0 0 (splat x) y z) (rv_vfmacc_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 0 1 (splat x) y z) (rv_vfmsac_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 1 0 (splat x) y z) (rv_vfnmsac_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 1 1 (splat x) y z) (rv_vfnmacc_vf z y x (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 0 0 x (splat y) z) (rv_vfmacc_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 0 1 x (splat y) z) (rv_vfmsac_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 1 0 x (splat y) z) (rv_vfnmsac_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 1 1 x (splat y) z) (rv_vfnmacc_vf z x y (unmasked) ty))
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (sqrt x)))
@@ -1744,13 +1757,19 @@
         (min FReg (rv_fmin ty x y)))
     (gen_select_freg is_ordered min nan)))
 
+;; With Zfa we can use the special `fminm` that precisely matches the expected
+;; NaN behavior.
+(rule 1 (lower (has_type (ty_scalar_float ty) (fmin x y)))
+  (if-let $true (has_zfa))
+  (rv_fminm ty x y))
+
 ;; vfmin does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmin returns the
 ;; number input instead.
 ;;
 ;; TODO: We can improve this by using a masked `fmin` instruction that modifies
 ;; the canonical nan register. That way we could avoid the `vmerge.vv` instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmin x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmin x y)))
   (let ((is_not_nan VReg (gen_fcmp_mask ty (FloatCC.Ordered) x y))
         (nan XReg (imm $I64 (canonical_nan_u64 (lane_type ty))))
         (vec_nan VReg (rv_vmv_vx nan ty))
@@ -1770,6 +1789,11 @@
         (max FReg (rv_fmax ty x y)))
     (gen_select_freg is_ordered max nan)))
 
+;; With Zfa we can use the special `fmaxm` that precisely matches the expected
+;; NaN behavior.
+(rule 1 (lower (has_type (ty_scalar_float ty) (fmax x y)))
+  (if-let $true (has_zfa))
+  (rv_fmaxm ty x y))
 
 ;; vfmax does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmax returns the
@@ -1777,7 +1801,7 @@
 ;;
 ;; TODO: We can improve this by using a masked `fmax` instruction that modifies
 ;; the canonical nan register. That way we could avoid the `vmerge.vv` instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmax x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmax x y)))
   (let ((is_not_nan VReg (gen_fcmp_mask ty (FloatCC.Ordered) x y))
         (nan XReg (imm $I64 (canonical_nan_u64 (lane_type ty))))
         (vec_nan VReg (rv_vmv_vx nan ty))
@@ -1802,16 +1826,27 @@
   (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
+
+;; Manually matching (iconst 0) here is a bit of a hack. We can't do that as part
+;; of the iconst rule because that runs into regalloc issues. gen_select_xreg
+;; has some optimizations based on the use of the zero register so we have to
+;; manually match it here.
+(rule 5 (lower (has_type (ty_int_ref_scalar_64 _) (select c (i64_from_iconst 0) y)))
+  (gen_select_xreg (is_nonzero_cmp c) (zero_reg) y))
+
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 _) (select c x (i64_from_iconst 0))))
+  (gen_select_xreg (is_nonzero_cmp c) x (zero_reg)))
+
+(rule 3 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
   (gen_select_xreg (is_nonzero_cmp c) x y))
 
-(rule 1 (lower (has_type $I128 (select c x y)))
+(rule 2 (lower (has_type $I128 (select c x y)))
   (gen_select_regs (is_nonzero_cmp c) x y))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
   (gen_select_vreg (is_nonzero_cmp c) x y))
 
-(rule 3 (lower (has_type (ty_scalar_float _) (select c x y)))
+(rule 0 (lower (has_type (ty_scalar_float _) (select c x y)))
   (gen_select_freg (is_nonzero_cmp c) x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
@@ -1826,7 +1861,7 @@
 ;; For vectors, we also do the same operation.
 ;; We can technically use any type in the bitwise operations, but prefer
 ;; using the type of the inputs so that we avoid emitting unnecessary
-;; `vsetvl` instructions. it's likeley that the vector unit is already
+;; `vsetvl` instructions. it's likely that the vector unit is already
 ;; configured for that type.
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bitselect c x y)))
   (let ((tmp_x VReg (rv_vand_vv c x (unmasked) ty))
@@ -1979,41 +2014,41 @@
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))
-  (gen_load (amode addr offset $I8) (LoadOP.Lbu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lbu) flags))
 
 ;;;;;  Rules for `sload8`;;;;;;;;;
 (rule (lower (sload8 flags addr offset))
-  (gen_load (amode addr offset $I8) (LoadOP.Lb) flags))
+  (gen_load (amode addr offset) (LoadOP.Lb) flags))
 
 ;;;;;  Rules for `uload16`;;;;;;;;;
 (rule (lower (uload16 flags addr offset))
-  (gen_load (amode addr offset $I16) (LoadOP.Lhu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lhu) flags))
 
 ;;;;;  Rules for `iload16`;;;;;;;;;
 (rule (lower (sload16 flags addr offset))
-  (gen_load (amode addr offset $I16) (LoadOP.Lh) flags))
+  (gen_load (amode addr offset) (LoadOP.Lh) flags))
 
 ;;;;;  Rules for `uload32`;;;;;;;;;
 (rule (lower (uload32 flags addr offset))
-  (gen_load (amode addr offset $I32) (LoadOP.Lwu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lwu) flags))
 
 ;;;;;  Rules for `sload32`;;;;;;;;;
 (rule (lower (sload32 flags addr offset))
-  (gen_load (amode addr offset $I32) (LoadOP.Lw) flags))
+  (gen_load (amode addr offset) (LoadOP.Lw) flags))
 
 ;;;;;  Rules for `load`;;;;;;;;;
 (rule (lower (has_type ty (load flags addr offset)))
-  (gen_load (amode addr offset ty) (load_op ty) flags))
+  (gen_load (amode addr offset) (load_op ty) flags))
 
 (rule 1 (lower (has_type $I128 (load flags addr offset)))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((lo XReg (gen_load (amode addr offset $I64) (LoadOP.Ld) flags))
-        (hi XReg (gen_load (amode addr offset_plus_8 $I64) (LoadOP.Ld) flags)))
+  (let ((lo XReg (gen_load (amode addr offset) (LoadOP.Ld) flags))
+        (hi XReg (gen_load (amode addr offset_plus_8) (LoadOP.Ld) flags)))
     (value_regs lo hi)))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (load flags addr offset)))
   (let ((eew VecElementWidth (element_width_from_type ty))
-        (amode AMode (amode addr offset ty)))
+        (amode AMode (amode addr offset)))
     (vec_load eew (VecAMode.UnitStride amode) flags (unmasked) ty)))
 
 ;;;;;  Rules for Load + Extend Combos ;;;;;;;;;
@@ -2039,52 +2074,52 @@
 
 ;;;;;  Rules for `uload8x8`;;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (uload8x8 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `uload16x4`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (uload16x4 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `uload32x2`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (uload32x2 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload8x8`;;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (sload8x8 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload16x4`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (sload16x4 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload32x2`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (sload32x2 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule (lower (istore8 flags src addr offset))
-  (gen_store (amode addr offset $I8) (StoreOP.Sb) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sb) flags src))
 
 ;;;;;  Rules for `istore16`;;;;;;;;;
 (rule (lower (istore16 flags src addr offset))
-  (gen_store (amode addr offset $I16) (StoreOP.Sh) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sh) flags src))
 
 ;;;;;  Rules for `istore32`;;;;;;;;;
 (rule (lower (istore32 flags src addr offset))
-  (gen_store (amode addr offset $I32) (StoreOP.Sw) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sw) flags src))
 
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule (lower (store flags src @ (value_type ty) addr offset))
-  (gen_store (amode addr offset ty) (store_op ty) flags src))
+  (gen_store (amode addr offset) flags src))
 
 (rule 1 (lower (store flags src @ (value_type $I128) addr offset))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((_ InstOutput (gen_store (amode addr offset $I64) (StoreOP.Sd) flags (value_regs_get src 0))))
-    (gen_store (amode addr offset_plus_8 $I64) (StoreOP.Sd) flags (value_regs_get src 1))))
+  (let ((_ InstOutput (rv_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
+    (rv_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
 
 (rule 2 (lower (store flags src @ (value_type (ty_vec_fits_in_register ty)) addr offset))
   (let ((eew VecElementWidth (element_width_from_type ty))
-        (amode AMode (amode addr offset ty)))
+        (amode AMode (amode addr offset)))
     (vec_store eew (VecAMode.UnitStride amode) src flags (unmasked) ty)))
 
 
@@ -2412,34 +2447,50 @@
       (elf_tls_get_addr name))
 
 ;;;;;  Rules for `bitcast`;;;;;;;;;
-(rule
-   (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
+
+;; These rules should probably be handled in `gen_bitcast`, but it's convenient to have that return
+;; a single register, instead of a `ValueRegs`
+(rule 2 (lower (has_type $I128 (bitcast _ v @ (value_type (ty_vec_fits_in_register _)))))
+    (value_regs
+      (gen_extractlane $I64X2 v 0)
+      (gen_extractlane $I64X2 v 1)))
+
+;; Move the high half into a vector register, and then use vslide1up to move it up and
+;; insert the lower half in one instruction.
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (bitcast _ v @ (value_type $I128))))
+    (let ((lo XReg (value_regs_get v 0))
+          (hi XReg (value_regs_get v 1))
+          (vstate VState (vstate_from_type $I64X2))
+          (vec VReg (rv_vmv_sx hi vstate)))
+      (rv_vslide1up_vx vec vec lo (unmasked) vstate)))
+
+(rule 0 (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
    (gen_bitcast v in_ty out_ty))
 
 ;;;;;  Rules for `ceil`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (ceil x)))
-  (gen_float_round (FloatRoundOP.Ceil) x ty))
+  (gen_float_round (FRM.RUP) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ceil x)))
   (gen_vec_round x (FRM.RUP) ty))
 
 ;;;;;  Rules for `floor`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (floor x)))
-  (gen_float_round (FloatRoundOP.Floor) x ty))
+  (gen_float_round (FRM.RDN) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (floor x)))
   (gen_vec_round x (FRM.RDN) ty))
 
 ;;;;;  Rules for `trunc`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (trunc x)))
-  (gen_float_round (FloatRoundOP.Trunc) x ty))
+  (gen_float_round (FRM.RTZ) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (trunc x)))
   (gen_vec_round x (FRM.RTZ) ty))
 
 ;;;;;  Rules for `nearest`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (nearest x)))
-  (gen_float_round (FloatRoundOP.Nearest) x ty))
+  (gen_float_round (FRM.RNE) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (nearest x)))
   (gen_vec_round x (FRM.RNE) ty))
@@ -2763,7 +2814,7 @@
 ;; elements. Using vcompress we can extract the elements and group them together.
 ;;
 ;; This is likely not the optimal way of doing this. LLVM does this using a bunch
-;; of vrgathers (See: https://godbolt.org/z/jq8Wj8WG4), that doesen't seem to be
+;; of vrgathers (See: https://godbolt.org/z/jq8Wj8WG4), that doesn't seem to be
 ;; too much better than this.
 ;;
 ;; However V8 does something better. They use 2 vcompresses using LMUL2, that means
@@ -2797,7 +2848,7 @@
 ;; we use a special rounding mode in the right shift instruction.
 ;;
 ;; For the right shift instruction we use `vssrl` which is a Scaling Shift
-;; Right Logical instruction using the `vxrm` fixed-point rouding mode. The
+;; Right Logical instruction using the `vxrm` fixed-point rounding mode. The
 ;; default rounding mode is `rnu` (round-to-nearest-up (add +0.5 LSB)).
 ;; Which is coincidentally the rounding mode we want for `avg_round`.
 (rule (lower (has_type (ty_vec_fits_in_register ty) (avg_round x y)))

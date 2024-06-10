@@ -18,7 +18,7 @@ use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
         immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, StackSlot, TrapCode, Value, ValueList,
+        MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
     machinst::{ArgPair, InstOutput},
@@ -82,6 +82,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
+            Opcode::ReturnCall,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -172,7 +173,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
-                from: AMode::FPOffset(8, I64),
+                from: AMode::FPOffset(8),
             });
             tmp.to_reg()
         } else {
@@ -186,6 +187,20 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn imm12_and(&mut self, imm: Imm12, x: u64) -> Imm12 {
         Imm12::from_i16(imm.as_i16() & (x as i16))
+    }
+
+    fn fli_constant_from_u64(&mut self, ty: Type, imm: u64) -> Option<FliConstant> {
+        FliConstant::maybe_from_u64(ty, imm)
+    }
+
+    fn fli_constant_from_negated_u64(&mut self, ty: Type, imm: u64) -> Option<FliConstant> {
+        let negated_imm = match ty {
+            F64 => imm ^ 0x8000000000000000,
+            F32 => imm ^ 0x80000000,
+            _ => unimplemented!(),
+        };
+
+        FliConstant::maybe_from_u64(ty, negated_imm)
     }
 
     fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
@@ -285,6 +300,13 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn zero_reg(&mut self) -> XReg {
         XReg::new(zero_reg()).unwrap()
     }
+    fn is_non_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg != self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
+    }
     fn is_zero_reg(&mut self, reg: XReg) -> Option<()> {
         if reg == self.zero_reg() {
             Some(())
@@ -360,6 +382,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_m()
     }
 
+    fn has_zfa(&mut self) -> bool {
+        self.backend.isa_flags.has_zfa()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -380,24 +406,27 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
-        AMode::RegOffset(base, offset, ty)
+    fn has_zicond(&mut self) -> bool {
+        self.backend.isa_flags.has_zicond()
     }
 
-    fn gen_sp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
-        AMode::SPOffset(offset, ty)
+    fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64) -> AMode {
+        AMode::RegOffset(base, offset)
     }
 
-    fn gen_fp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
-        AMode::FPOffset(offset, ty)
+    fn gen_sp_offset_amode(&mut self, offset: i64) -> AMode {
+        AMode::SPOffset(offset)
     }
 
-    fn gen_stack_slot_amode(&mut self, ss: StackSlot, offset: i64, ty: Type) -> AMode {
-        // Offset from beginning of stackslot area, which is at nominal SP (see
-        // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
+    fn gen_fp_offset_amode(&mut self, offset: i64) -> AMode {
+        AMode::FPOffset(offset)
+    }
+
+    fn gen_stack_slot_amode(&mut self, ss: StackSlot, offset: i64) -> AMode {
+        // Offset from beginning of stackslot area.
         let stack_off = self.lower_ctx.abi().sized_stackslot_offsets()[ss] as i64;
         let sp_off: i64 = stack_off + offset;
-        AMode::NominalSPOffset(sp_off, ty)
+        AMode::SlotOffset(sp_off)
     }
 
     fn gen_const_amode(&mut self, c: VCodeConstant) -> AMode {

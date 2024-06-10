@@ -12,10 +12,15 @@
 //! and the `GlobalAlloc for T` trait impl. This should be used when hooking
 //! up to an allocator elsewhere in the system.
 
+use alloc::alloc::{GlobalAlloc, Layout};
+use core::cell::UnsafeCell;
+use core::ops::{Deref, DerefMut};
+use core::ptr;
+use core::sync::atomic::{
+    AtomicBool,
+    Ordering::{Acquire, Release},
+};
 use dlmalloc::Dlmalloc;
-use std::alloc::{GlobalAlloc, Layout};
-use std::ptr;
-use std::sync::Mutex;
 
 #[global_allocator]
 static MALLOC: MyGlobalDmalloc = MyGlobalDmalloc {
@@ -26,42 +31,39 @@ struct MyGlobalDmalloc {
     dlmalloc: Mutex<Dlmalloc<MyAllocator>>,
 }
 
-unsafe impl Send for MyGlobalDmalloc {}
-unsafe impl Sync for MyGlobalDmalloc {}
-
 struct MyAllocator;
 
 unsafe impl GlobalAlloc for MyGlobalDmalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         self.dlmalloc
-            .lock()
+            .try_lock()
             .unwrap()
             .malloc(layout.size(), layout.align())
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         self.dlmalloc
-            .lock()
+            .try_lock()
             .unwrap()
             .calloc(layout.size(), layout.align())
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         self.dlmalloc
-            .lock()
+            .try_lock()
             .unwrap()
             .realloc(ptr, layout.size(), layout.align(), new_size)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.dlmalloc
-            .lock()
+            .try_lock()
             .unwrap()
             .free(ptr, layout.size(), layout.align())
     }
 }
 
-// Hand-copied from `crates/runtime/src/sys/custom/capi.rs`.
+// Hand-copied from `crates/wasmtime/src/runtime/vm/sys/custom/capi.rs`.
 const PROT_READ: u32 = 1 << 0;
 const PROT_WRITE: u32 = 1 << 1;
 extern "C" {
@@ -84,7 +86,7 @@ unsafe impl dlmalloc::Allocator for MyAllocator {
     }
 
     fn remap(&self, _ptr: *mut u8, _old: usize, _new: usize, _can_move: bool) -> *mut u8 {
-        std::ptr::null_mut()
+        core::ptr::null_mut()
     }
 
     fn free_part(&self, _ptr: *mut u8, _old: usize, _new: usize) -> bool {
@@ -108,5 +110,56 @@ unsafe impl dlmalloc::Allocator for MyAllocator {
 
     fn page_size(&self) -> usize {
         unsafe { wasmtime_page_size() }
+    }
+}
+
+// Simple mutex which only supports `try_lock` at this time. This would probably
+// be replaced with a "real" mutex in a "real" embedding.
+struct Mutex<T> {
+    data: UnsafeCell<T>,
+    locked: AtomicBool,
+}
+
+unsafe impl<T: Send> Send for Mutex<T> {}
+unsafe impl<T: Send> Sync for Mutex<T> {}
+
+impl<T> Mutex<T> {
+    const fn new(val: T) -> Mutex<T> {
+        Mutex {
+            data: UnsafeCell::new(val),
+            locked: AtomicBool::new(false),
+        }
+    }
+
+    fn try_lock(&self) -> Option<impl DerefMut<Target = T> + '_> {
+        if self.locked.swap(true, Acquire) {
+            None
+        } else {
+            Some(MutexGuard { lock: self })
+        }
+    }
+}
+
+struct MutexGuard<'a, T> {
+    lock: &'a Mutex<T>,
+}
+
+impl<T> Deref for MutexGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        unsafe { &*self.lock.data.get() }
+    }
+}
+
+impl<T> DerefMut for MutexGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        unsafe { &mut *self.lock.data.get() }
+    }
+}
+
+impl<T> Drop for MutexGuard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Release);
     }
 }

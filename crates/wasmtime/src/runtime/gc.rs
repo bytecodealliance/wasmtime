@@ -8,7 +8,11 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 pub use disabled::*;
 
-use std::ops::Deref;
+mod noextern;
+pub use noextern::NoExtern;
+
+use core::fmt;
+use core::ops::Deref;
 
 /// A common trait implemented by all garbage-collected reference types.
 ///
@@ -41,4 +45,48 @@ where
     T: GcRef,
     U: RootedGcRefImpl<T> + Deref<Target = T>,
 {
+}
+
+/// An error returned when attempting to allocate a GC-managed object, but the
+/// GC heap is out of memory.
+///
+/// This error wraps an inner `T` value -- which is the host value, if any, that
+/// was passed to [`ExternRef::new`][crate::ExternRef::new] -- and you can
+/// recover this value via the
+/// [`into_inner`][crate::GcHeapOutOfMemory::into_inner] method. This lets you
+/// try to allocate the `externref` again, after performing a GC to hopefully
+/// free up space in the heap, or otherwise do whatever you want with the inner
+/// value.
+///
+/// For errors that occur when attempting to allocate non-`externref` objects
+/// when the GC heap is at capacity, the `T` type parameter is just the unit
+/// type `()`.
+pub struct GcHeapOutOfMemory<T> {
+    inner: T,
+}
+
+impl<T> fmt::Debug for GcHeapOutOfMemory<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+impl<T> fmt::Display for GcHeapOutOfMemory<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "GC heap out of memory")
+    }
+}
+
+#[cfg(feature = "std")]
+impl<T> std::error::Error for GcHeapOutOfMemory<T> {}
+
+impl<T> GcHeapOutOfMemory<T> {
+    pub(crate) fn new(inner: T) -> Self {
+        Self { inner }
+    }
+
+    /// Recover this error's inner host value.
+    pub fn into_inner(self) -> T {
+        self.inner
+    }
 }

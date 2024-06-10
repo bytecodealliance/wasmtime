@@ -18,52 +18,34 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x11, [x0, #88]
-;;   ldr x13, [x0, #80]
-;;   movz x12, #0
-;;   add x13, x13, x2
-;;   movz x14, #65535, LSL #16
-;;   add x13, x13, x14
-;;   subs xzr, x2, x11
-;;   csel x12, x12, x13, hi
-;;   csdb
-;;   strb w3, [x12]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x10, [x2, #0x68]
+;;       ldr     x12, [x2, #0x60]
+;;       mov     x11, #0
+;;       add     x12, x12, x4
+;;       mov     x13, #0xffff0000
+;;       add     x12, x12, x13
+;;       cmp     x4, x10
+;;       csel    x11, x11, x12, hi
+;;       csdb
+;;       strb    w5, [x11]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x11, [x0, #88]
-;;   ldr x13, [x0, #80]
-;;   movz x12, #0
-;;   add x13, x13, x2
-;;   movz x14, #65535, LSL #16
-;;   add x13, x13, x14
-;;   subs xzr, x2, x11
-;;   csel x12, x12, x13, hi
-;;   csdb
-;;   ldrb w0, [x12]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x10, [x2, #0x68]
+;;       ldr     x12, [x2, #0x60]
+;;       mov     x11, #0
+;;       add     x12, x12, x4
+;;       mov     x13, #0xffff0000
+;;       add     x12, x12, x13
+;;       cmp     x4, x10
+;;       csel    x11, x11, x12, hi
+;;       csdb
+;;       ldrb    w2, [x11]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

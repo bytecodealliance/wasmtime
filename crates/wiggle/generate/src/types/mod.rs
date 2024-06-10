@@ -70,8 +70,8 @@ fn define_witx_pointer(
 
 fn define_witx_list(name: &witx::Id, arr_raw: &witx::TypeRef) -> TokenStream {
     let ident = names::type_(name);
-    let pointee_type = names::type_ref(arr_raw, quote!('a));
-    quote!(pub type #ident<'a> = wiggle::GuestPtr<'a, [#pointee_type]>;)
+    let pointee_type = names::type_ref(arr_raw, quote!());
+    quote!(pub type #ident = wiggle::GuestPtr<[#pointee_type]>;)
 }
 
 pub fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {

@@ -1,18 +1,12 @@
-pub mod bindings {
-    wit_bindgen::generate!({
-        path: "../wasi-http/wit",
-        world: "wasi:http/proxy",
-        default_bindings_module: "bindings",
-    });
-}
-
-use bindings::wasi::http::types::{IncomingRequest, ResponseOutparam};
+use test_programs::wasi::http::types::{
+    Headers, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
+};
 
 struct T;
 
-bindings::export!(T);
+test_programs::proxy::export!(T);
 
-impl bindings::exports::wasi::http::incoming_handler::Guest for T {
+impl test_programs::proxy::exports::wasi::http::incoming_handler::Guest for T {
     fn handle(request: IncomingRequest, outparam: ResponseOutparam) {
         assert!(request.scheme().is_some());
         assert!(request.authority().is_some());
@@ -41,19 +35,18 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
             "forbidden host header present in incoming request"
         );
 
-        let hdrs = bindings::wasi::http::types::Headers::new();
-        let resp = bindings::wasi::http::types::OutgoingResponse::new(hdrs);
+        let hdrs = Headers::new();
+        let resp = OutgoingResponse::new(hdrs);
         let body = resp.body().expect("outgoing response");
 
-        bindings::wasi::http::types::ResponseOutparam::set(outparam, Ok(resp));
+        ResponseOutparam::set(outparam, Ok(resp));
 
         let out = body.write().expect("outgoing stream");
         out.blocking_write_and_flush(b"hello, world!")
             .expect("writing response");
 
         drop(out);
-        bindings::wasi::http::types::OutgoingBody::finish(body, None)
-            .expect("outgoing-body.finish");
+        OutgoingBody::finish(body, None).expect("outgoing-body.finish");
     }
 }
 

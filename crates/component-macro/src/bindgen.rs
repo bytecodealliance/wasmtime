@@ -2,12 +2,13 @@ use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Token};
-use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError};
+use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError, TrappableImports};
 use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
 
 pub struct Config {
@@ -15,6 +16,7 @@ pub struct Config {
     resolve: Resolve,
     world: WorldId,
     files: Vec<PathBuf>,
+    include_generated_code_from_file: bool,
 }
 
 pub fn expand(input: &Config) -> Result<TokenStream> {
@@ -25,13 +27,20 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
         ));
     }
 
-    let mut src = input.opts.generate(&input.resolve, input.world);
+    let mut src = match input.opts.generate(&input.resolve, input.world) {
+        Ok(s) => s,
+        Err(e) => return Err(Error::new(Span::call_site(), e.to_string())),
+    };
+
+    if input.opts.stringify {
+        return Ok(quote::quote!(#src));
+    }
 
     // If a magical `WASMTIME_DEBUG_BINDGEN` environment variable is set then
     // place a formatted version of the expanded code into a file. This file
     // will then show up in rustc error messages for any codegen issues and can
     // be inspected manually.
-    if std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
+    if input.include_generated_code_from_file || std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
         static INVOCATION: AtomicUsize = AtomicUsize::new(0);
         let root = Path::new(env!("DEBUG_OUTPUT_DIR"));
         let world_name = &input.resolve.worlds[input.world].name;
@@ -73,6 +82,8 @@ impl Parse for Config {
         let mut inline = None;
         let mut path = None;
         let mut async_configured = false;
+        let mut features = Vec::new();
+        let mut include_generated_code_from_file = false;
 
         if input.peek(token::Brace) {
             let content;
@@ -107,6 +118,7 @@ impl Parse for Config {
                         opts.async_ = val;
                     }
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
+                    Opt::TrappableImports(val) => opts.trappable_imports = val,
                     Opt::Ownership(val) => opts.ownership = val,
                     Opt::Interfaces(s) => {
                         if inline.is_some() {
@@ -134,6 +146,22 @@ impl Parse for Config {
                         opts.only_interfaces = true;
                     }
                     Opt::With(val) => opts.with.extend(val),
+                    Opt::AdditionalDerives(paths) => {
+                        opts.additional_derive_attributes = paths
+                            .into_iter()
+                            .map(|p| p.into_token_stream().to_string())
+                            .collect()
+                    }
+                    Opt::Stringify(val) => opts.stringify = val,
+                    Opt::SkipMutForwardingImpls(val) => opts.skip_mut_forwarding_impls = val,
+                    Opt::Features(f) => {
+                        features.extend(f.into_iter().map(|f| f.value()));
+                    }
+                    Opt::RequireStoreDataSend(val) => opts.require_store_data_send = val,
+                    Opt::WasmtimeCrate(f) => {
+                        opts.wasmtime_crate = Some(f.into_token_stream().to_string())
+                    }
+                    Opt::IncludeGeneratedCodeFromFile(i) => include_generated_code_from_file = i,
                 }
             }
         } else {
@@ -142,7 +170,7 @@ impl Parse for Config {
                 path = Some(input.parse::<syn::LitStr>()?.value());
             }
         }
-        let (resolve, pkg, files) = parse_source(&path, &inline)
+        let (resolve, pkg, files) = parse_source(&path, &inline, &features)
             .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
 
         let world = resolve
@@ -153,6 +181,7 @@ impl Parse for Config {
             resolve,
             world,
             files,
+            include_generated_code_from_file,
         })
     }
 }
@@ -160,8 +189,10 @@ impl Parse for Config {
 fn parse_source(
     path: &Option<String>,
     inline: &Option<String>,
+    features: &[String],
 ) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
     let mut resolve = Resolve::default();
+    resolve.features.extend(features.iter().cloned());
     let mut files = Vec::new();
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
@@ -201,6 +232,14 @@ mod kw {
     syn::custom_keyword!(with);
     syn::custom_keyword!(except_imports);
     syn::custom_keyword!(only_imports);
+    syn::custom_keyword!(trappable_imports);
+    syn::custom_keyword!(additional_derives);
+    syn::custom_keyword!(stringify);
+    syn::custom_keyword!(skip_mut_forwarding_impls);
+    syn::custom_keyword!(features);
+    syn::custom_keyword!(require_store_data_send);
+    syn::custom_keyword!(wasmtime_crate);
+    syn::custom_keyword!(include_generated_code_from_file);
 }
 
 enum Opt {
@@ -213,6 +252,14 @@ enum Opt {
     Ownership(Ownership),
     Interfaces(syn::LitStr),
     With(HashMap<String, String>),
+    TrappableImports(TrappableImports),
+    AdditionalDerives(Vec<syn::Path>),
+    Stringify(bool),
+    SkipMutForwardingImpls(bool),
+    Features(Vec<syn::LitStr>),
+    RequireStoreDataSend(bool),
+    WasmtimeCrate(syn::Path),
+    IncludeGeneratedCodeFromFile(bool),
 }
 
 impl Parse for Opt {
@@ -330,6 +377,62 @@ impl Parse for Opt {
             let fields: Punctuated<(String, String), Token![,]> =
                 contents.parse_terminated(with_field_parse, Token![,])?;
             Ok(Opt::With(HashMap::from_iter(fields)))
+        } else if l.peek(kw::trappable_imports) {
+            input.parse::<kw::trappable_imports>()?;
+            input.parse::<Token![:]>()?;
+            let config = if input.peek(syn::LitBool) {
+                match input.parse::<syn::LitBool>()?.value {
+                    true => TrappableImports::All,
+                    false => TrappableImports::None,
+                }
+            } else {
+                let contents;
+                syn::bracketed!(contents in input);
+                let fields: Punctuated<syn::LitStr, Token![,]> =
+                    contents.parse_terminated(Parse::parse, Token![,])?;
+                TrappableImports::Only(fields.iter().map(|s| s.value()).collect())
+            };
+            Ok(Opt::TrappableImports(config))
+        } else if l.peek(kw::additional_derives) {
+            input.parse::<kw::additional_derives>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            syn::bracketed!(contents in input);
+            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
+            Ok(Opt::AdditionalDerives(list.iter().cloned().collect()))
+        } else if l.peek(kw::stringify) {
+            input.parse::<kw::stringify>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::Stringify(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::skip_mut_forwarding_impls) {
+            input.parse::<kw::skip_mut_forwarding_impls>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::SkipMutForwardingImpls(
+                input.parse::<syn::LitBool>()?.value,
+            ))
+        } else if l.peek(kw::features) {
+            input.parse::<kw::features>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            syn::bracketed!(contents in input);
+            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
+            Ok(Opt::Features(list.into_iter().collect()))
+        } else if l.peek(kw::require_store_data_send) {
+            input.parse::<kw::require_store_data_send>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::RequireStoreDataSend(
+                input.parse::<syn::LitBool>()?.value,
+            ))
+        } else if l.peek(kw::wasmtime_crate) {
+            input.parse::<kw::wasmtime_crate>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::WasmtimeCrate(input.parse()?))
+        } else if l.peek(kw::include_generated_code_from_file) {
+            input.parse::<kw::include_generated_code_from_file>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::IncludeGeneratedCodeFromFile(
+                input.parse::<syn::LitBool>()?.value,
+            ))
         } else {
             Err(l.error())
         }

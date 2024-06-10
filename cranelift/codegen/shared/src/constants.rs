@@ -13,7 +13,7 @@
 // Vector types are encoded with the lane type in the low 4 bits and log2(lanes)
 // in the next highest 4 bits, giving a range of 2-256 lanes.
 
-// Dynamic vector types are encoded similarily.
+// Dynamic vector types are encoded similarly.
 
 /// Start of the lane types.
 pub const LANE_BASE: u16 = 0x70;

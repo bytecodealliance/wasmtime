@@ -461,13 +461,13 @@ fn linker_instantiate_with_concrete_func_refs() -> Result<()> {
     )?;
 
     let a = FuncType::new(&engine, None, Some(ValType::I32));
-    let ref_null_a = ValType::from(RefType::new(true, HeapType::Concrete(a.clone())));
+    let ref_null_a = ValType::from(RefType::new(true, HeapType::ConcreteFunc(a.clone())));
 
     let b = FuncType::new(&engine, None, Some(ref_null_a));
-    let ref_null_b = ValType::from(RefType::new(true, HeapType::Concrete(b.clone())));
+    let ref_null_b = ValType::from(RefType::new(true, HeapType::ConcreteFunc(b.clone())));
 
     let c = FuncType::new(&engine, None, Some(ref_null_b));
-    let ref_null_c = ValType::from(RefType::new(true, HeapType::Concrete(c.clone())));
+    let ref_null_c = ValType::from(RefType::new(true, HeapType::ConcreteFunc(c.clone())));
 
     let mut store = Store::new(&engine, ());
     let a_func = Func::new(&mut store, a, |_caller, _args, results| {
@@ -540,7 +540,7 @@ fn linker_defines_func_subtype() -> Result<()> {
         |_caller, _args, _results| Ok(()),
     )?;
     let nop_ty = FuncType::new(&engine, None, None);
-    let ref_null_nop = ValType::from(RefType::new(true, HeapType::Concrete(nop_ty)));
+    let ref_null_nop = ValType::from(RefType::new(true, HeapType::ConcreteFunc(nop_ty)));
     linker.func_new(
         "env",
         "h",
@@ -676,7 +676,7 @@ fn linker_defines_global_subtype_mut_err() -> Result<()> {
     // Not mutable.
     let mut linker = Linker::new(&engine);
     let nop = FuncType::new(&engine, None, None);
-    let ref_null_nop = ValType::from(RefType::new(true, HeapType::Concrete(nop)));
+    let ref_null_nop = ValType::from(RefType::new(true, HeapType::ConcreteFunc(nop)));
     let g = Global::new(
         &mut store,
         GlobalType::new(ref_null_nop, Mutability::Const),

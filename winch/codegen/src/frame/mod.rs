@@ -187,7 +187,7 @@ impl Frame {
     /// Returns the address of the local at the given index.
     ///
     /// # Panics
-    /// This function panics if the the index is not associated to a local.
+    /// This function panics if the index is not associated to a local.
     pub fn get_local_address<M: MacroAssembler>(
         &self,
         index: u32,

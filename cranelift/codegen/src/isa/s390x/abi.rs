@@ -50,11 +50,11 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | spill slots               |
-//!                              | (accessed via nominal SP) |
+//!                              | (accessed via SP)         |
 //!                              |          ...              |
 //!                              | stack slots               |
-//!                              | (accessed via nominal SP) |
-//! nominal SP --------------->  | (alloc'd by prologue)     |
+//!                              | (accessed via SP)         |
+//!                              | (alloc'd by prologue)     |
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | args for call             |
@@ -79,7 +79,7 @@ use crate::machinst::*;
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::{MachineEnv, PReg, PRegSet};
+use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::sync::OnceLock;
 
@@ -191,9 +191,10 @@ pub static REG_SAVE_AREA_SIZE: u32 = 160;
 impl Into<MemArg> for StackAMode {
     fn into(self) -> MemArg {
         match self {
-            StackAMode::FPOffset(off, _ty) => MemArg::InitialSPOffset { off },
-            StackAMode::NominalSPOffset(off, _ty) => MemArg::NominalSPOffset { off },
-            StackAMode::SPOffset(off, _ty) => {
+            // Argument area always begins at the initial SP.
+            StackAMode::IncomingArg(off, _) => MemArg::InitialSPOffset { off },
+            StackAMode::Slot(off) => MemArg::SlotOffset { off },
+            StackAMode::OutgoingArg(off) => {
                 MemArg::reg_plus_off(stack_reg(), off, MemFlags::trusted())
             }
         }
@@ -220,17 +221,14 @@ impl ABIMachineSpec for S390xMachineDeps {
         8
     }
 
-    fn compute_arg_locs<'a, I>(
+    fn compute_arg_locs(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        params: I,
+        params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-        mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(u32, Option<usize>)>
-    where
-        I: IntoIterator<Item = &'a ir::AbiParam>,
-    {
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<(u32, Option<usize>)> {
         assert_ne!(
             call_conv,
             isa::CallConv::Tail,
@@ -407,10 +405,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         Ok((next_stack, extra_arg))
     }
 
-    fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        0
-    }
-
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
         Inst::gen_load(into_reg, mem.into(), ty)
     }
@@ -501,7 +495,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {
         let mem = mem.into();
         Inst::LoadAddr { rd: into_reg, mem }
     }
@@ -544,12 +538,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_nominal_sp_adj(offset: i32) -> Inst {
-        Inst::VirtualSPOffsetAdj {
-            offset: offset.into(),
-        }
-    }
-
     fn gen_prologue_frame_setup(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
@@ -566,13 +554,20 @@ impl ABIMachineSpec for S390xMachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        if call_conv == isa::CallConv::Tail && frame_layout.stack_args_size > 0 {
+        if call_conv == isa::CallConv::Tail && frame_layout.incoming_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.stack_args_size.try_into().unwrap(),
+                frame_layout.incoming_args_size.try_into().unwrap(),
             ));
         }
-        insts.push(Inst::Ret { link: gpr(14) });
         insts
+    }
+
+    fn gen_return(
+        _call_conv: isa::CallConv,
+        _isa_flags: &s390x_settings::Flags,
+        _frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Inst> {
+        smallvec![Inst::Ret { link: gpr(14) }]
     }
 
     fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
@@ -598,8 +593,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut insts = SmallVec::new();
 
         // Collect clobbered registers.
-        let (first_clobbered_gpr, clobbered_fpr) =
-            get_clobbered_gpr_fpr(&frame_layout.clobbered_callee_saves);
+        let (first_clobbered_gpr, clobbered_fpr) = get_clobbered_gpr_fpr(frame_layout);
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::DefineNewFrame {
@@ -647,11 +641,6 @@ impl ABIMachineSpec for S390xMachineDeps {
             });
         }
 
-        let sp_adj = frame_layout.outgoing_args_size as i32;
-        if sp_adj > 0 {
-            insts.push(Self::gen_nominal_sp_adj(sp_adj));
-        }
-
         // Write the stack backchain if requested, using the value saved above.
         if flags.preserve_frame_pointers() {
             insts.push(Inst::Store64 {
@@ -695,8 +684,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut insts = SmallVec::new();
 
         // Collect clobbered registers.
-        let (first_clobbered_gpr, clobbered_fpr) =
-            get_clobbered_gpr_fpr(&frame_layout.clobbered_callee_saves);
+        let (first_clobbered_gpr, clobbered_fpr) = get_clobbered_gpr_fpr(frame_layout);
 
         // Restore FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
@@ -777,16 +765,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    /// Get the current virtual-SP offset from an instruction-emission state.
-    fn get_virtual_sp_offset_from_state(s: &EmitState) -> i64 {
-        s.virtual_sp_offset
-    }
-
-    /// Get the nominal-SP-to-FP offset from an instruction-emission state.
-    fn get_nominal_sp_to_fp(s: &EmitState) -> i64 {
-        s.initial_sp_offset
-    }
-
     fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
         MACHINE_ENV.get_or_init(create_machine_env)
@@ -809,7 +787,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         _sig: &Signature,
         regs: &[Writable<RealReg>],
         _is_leaf: bool,
-        stack_args_size: u32,
+        incoming_args_size: u32,
+        tail_args_size: u32,
         fixed_frame_storage_size: u32,
         mut outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -849,7 +828,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| PReg::from(r.to_reg()).index());
+        regs.sort_unstable();
 
         // Compute clobber size.  We only need to count FPR save slots.
         let mut clobber_size = 0;
@@ -865,7 +844,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Return FrameLayout structure.
         FrameLayout {
-            stack_args_size,
+            incoming_args_size,
+            tail_args_size,
             setup_area_size: 0,
             clobber_size,
             fixed_frame_storage_size,
@@ -889,28 +869,18 @@ fn is_reg_saved_in_prologue(_call_conv: isa::CallConv, r: RealReg) -> bool {
     }
 }
 
-fn get_clobbered_gpr_fpr(
-    clobbered_callee_saves: &[Writable<RealReg>],
-) -> (u8, SmallVec<[Writable<RealReg>; 8]>) {
+fn get_clobbered_gpr_fpr(frame_layout: &FrameLayout) -> (u8, &[Writable<RealReg>]) {
     // Collect clobbered registers.  Note we save/restore GPR always as
     // a block of registers using LOAD MULTIPLE / STORE MULTIPLE, starting
     // with the clobbered GPR with the lowest number up to %r15.  We
     // return the number of that first GPR (or 16 if none is to be saved).
-    let mut clobbered_fpr = SmallVec::new();
-    let mut first_clobbered_gpr = 16;
+    let (clobbered_gpr, clobbered_fpr) = frame_layout.clobbered_callee_saves_by_class();
 
-    for &reg in clobbered_callee_saves.iter() {
-        match reg.to_reg().class() {
-            RegClass::Int => {
-                let enc = reg.to_reg().hw_enc();
-                if enc < first_clobbered_gpr {
-                    first_clobbered_gpr = enc;
-                }
-            }
-            RegClass::Float => clobbered_fpr.push(reg),
-            RegClass::Vector => unreachable!(),
-        }
-    }
+    let first_clobbered_gpr = clobbered_gpr.split_first().map_or(16, |(first, rest)| {
+        let first = first.to_reg().hw_enc();
+        debug_assert!(rest.iter().all(|r| r.to_reg().hw_enc() > first));
+        first
+    });
 
     (first_clobbered_gpr, clobbered_fpr)
 }

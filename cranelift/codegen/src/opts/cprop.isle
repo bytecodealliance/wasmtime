@@ -264,3 +264,34 @@
 (extern constructor f32_from_sint f32_from_sint)
 (decl f64_from_sint (i64) Ieee64)
 (extern constructor f64_from_sint f64_from_sint)
+
+;; Constant fold bswap of a constant.
+(rule (simplify (bswap $I16 (iconst ty (u64_from_imm64 n))))
+      (subsume (iconst $I16 (imm64 (u64_bswap16 n)))))
+(rule (simplify (bswap $I32 (iconst ty (u64_from_imm64 n))))
+      (subsume (iconst $I32 (imm64 (u64_bswap32 n)))))
+(rule (simplify (bswap $I64 (iconst ty (u64_from_imm64 n))))
+      (subsume (iconst $I64 (imm64 (u64_bswap64 n)))))
+
+(decl pure u64_bswap16 (u64) u64)
+(extern constructor u64_bswap16 u64_bswap16)
+(decl pure u64_bswap32 (u64) u64)
+(extern constructor u64_bswap32 u64_bswap32)
+(decl pure u64_bswap64 (u64) u64)
+(extern constructor u64_bswap64 u64_bswap64)
+
+;; Constant fold bitwise float operations (fneg/fabs/fcopysign)
+(rule (simplify (fneg $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_neg n))))
+(rule (simplify (fneg $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_neg n))))
+
+(rule (simplify (fabs $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_abs n))))
+(rule (simplify (fabs $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_abs n))))
+
+(rule (simplify (fcopysign $F32 (f32const $F32 n) (f32const $F32 m)))
+      (subsume (f32const $F32 (f32_copysign n m))))
+(rule (simplify (fcopysign $F64 (f64const $F64 n) (f64const $F64 m)))
+      (subsume (f64const $F64 (f64_copysign n m))))

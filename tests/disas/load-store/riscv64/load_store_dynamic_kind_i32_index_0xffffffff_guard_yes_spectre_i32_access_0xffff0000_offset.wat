@@ -18,64 +18,48 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a4,88(a0)
-;;   ld a5,80(a0)
-;;   slli a0,a2,32
-;;   srli a0,a0,32
-;;   sltu a4,a4,a0
-;;   add a5,a5,a0
-;;   lui a0,65535
-;;   slli a0,a0,4
-;;   add a5,a5,a0
-;;   sub a2,zero,a4
-;;   not a4,a2
-;;   and a0,a5,a4
-;;   sw a3,0(a0)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a4, 0x68(a0)
+;;       ld      a5, 0x60(a0)
+;;       slli    a2, a2, 0x20
+;;       srli    a0, a2, 0x20
+;;       sltu    a4, a4, a0
+;;       add     a5, a5, a0
+;;       lui     a2, 0xffff
+;;       slli    a0, a2, 4
+;;       add     a5, a5, a0
+;;       neg     a1, a4
+;;       not     a4, a1
+;;       and     a5, a5, a4
+;;       sw      a3, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a4,88(a0)
-;;   ld a5,80(a0)
-;;   slli a3,a2,32
-;;   srli a0,a3,32
-;;   sltu a4,a4,a0
-;;   add a5,a5,a0
-;;   lui a3,65535
-;;   slli a0,a3,4
-;;   add a5,a5,a0
-;;   sub a2,zero,a4
-;;   not a4,a2
-;;   and a0,a5,a4
-;;   lw a0,0(a0)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a3, 0x68(a0)
+;;       ld      a4, 0x60(a0)
+;;       slli    a2, a2, 0x20
+;;       srli    a5, a2, 0x20
+;;       sltu    a3, a3, a5
+;;       add     a4, a4, a5
+;;       lui     a2, 0xffff
+;;       slli    a5, a2, 4
+;;       add     a4, a4, a5
+;;       neg     a1, a3
+;;       not     a3, a1
+;;       and     a5, a4, a3
+;;       lw      a0, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

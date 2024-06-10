@@ -3,13 +3,13 @@
 use crate::environ::ModuleEnvironment;
 use crate::sections_translator::{
     parse_data_section, parse_element_section, parse_export_section, parse_function_section,
-    parse_global_section, parse_import_section, parse_memory_section, parse_name_section,
-    parse_start_section, parse_table_section, parse_tag_section, parse_type_section,
+    parse_global_section, parse_import_section, parse_memory_section, parse_start_section,
+    parse_table_section, parse_tag_section, parse_type_section,
 };
 use crate::WasmResult;
 use cranelift_codegen::timing;
 use std::prelude::v1::*;
-use wasmparser::{NameSectionReader, Parser, Payload, Validator};
+use wasmparser::{Parser, Payload, Validator};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR
 /// [`Function`](cranelift_codegen::ir::Function).
@@ -105,14 +105,6 @@ pub fn translate_module<'data>(
 
                 // NOTE: the count here is the total segment count, not the passive segment count
                 environ.reserve_passive_data(count)?;
-            }
-
-            Payload::CustomSection(s) if s.name() == "name" => {
-                let result =
-                    parse_name_section(NameSectionReader::new(s.data(), s.data_offset()), environ);
-                if let Err(e) = result {
-                    log::warn!("failed to parse name section {:?}", e);
-                }
             }
 
             Payload::CustomSection(s) => environ.custom_section(s.name(), s.data())?,

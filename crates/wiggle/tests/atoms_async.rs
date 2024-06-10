@@ -2,7 +2,7 @@ use proptest::prelude::*;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use wiggle::GuestMemory;
+use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -14,12 +14,18 @@ impl_errno!(types::Errno);
 
 #[wiggle::async_trait]
 impl<'a> atoms::Atoms for WasiCtx<'a> {
-    async fn int_float_args(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
+    async fn int_float_args(
+        &mut self,
+        _memory: &mut GuestMemory<'_>,
+        an_int: u32,
+        an_float: f32,
+    ) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())
     }
     async fn double_int_return_float(
         &mut self,
+        _memory: &mut GuestMemory<'_>,
         an_int: u32,
     ) -> Result<types::AliasToFloat, types::Errno> {
         Ok((an_int as f32) * 2.0)
@@ -37,11 +43,12 @@ struct IntFloatExercise {
 impl IntFloatExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
         let e = run(atoms::int_float_args(
             &mut ctx,
-            &host_memory,
+            &mut memory,
             self.an_int as i32,
             self.an_float,
         ))
@@ -72,19 +79,19 @@ struct DoubleIntExercise {
 impl DoubleIntExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
         let e = run(atoms::double_int_return_float(
             &mut ctx,
-            &host_memory,
+            &mut memory,
             self.input as i32,
             self.return_loc.ptr as i32,
         ))
         .unwrap();
 
-        let return_val = host_memory
-            .ptr::<types::AliasToFloat>(self.return_loc.ptr)
-            .read()
+        let return_val = memory
+            .read(GuestPtr::<types::AliasToFloat>::new(self.return_loc.ptr))
             .expect("failed to read return");
         assert_eq!(e, types::Errno::Ok as i32, "errno");
         assert_eq!(return_val, (self.input as f32) * 2.0, "return val");

@@ -518,8 +518,8 @@
             (zero Gpr (imm $I64 0))
             ;; Nullify the carry if we are shifting in by a multiple of 128.
             (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64)
-                                              (RegMemImm.Imm 127)
-                                              amt)
+                                              amt
+                                              (RegMemImm.Imm 127))
                                         (cmove $I64
                                                (CC.Z)
                                                zero
@@ -529,7 +529,7 @@
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the low bits are zero and the high bits are our
         ;; low bits.
-        (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 64) amt)
+        (with_flags (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 64))
                     (consumes_flags_concat
                      (cmove $I64 (CC.Z) lo_shifted zero)
                      (cmove $I64 (CC.Z) hi_shifted_ lo_shifted)))))
@@ -629,14 +629,14 @@
             (zero Gpr (imm $I64 0))
 
             ;; Nullify the carry if we are shifting by a multiple of 128.
-            (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64) (RegMemImm.Imm 127) amt)
+            (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 127))
                                         (cmove $I64 (CC.Z) zero carry)))
             ;; Add the carry bits into the lo.
             (lo_shifted_ Gpr (x64_or $I64 carry_ lo_shifted)))
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the hi bits are zero and the lo bits are what
         ;; would otherwise be our hi bits.
-        (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 64) amt)
+        (with_flags (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 64))
                     (consumes_flags_concat
                      (cmove $I64 (CC.Z) lo_shifted_ hi_shifted)
                      (cmove $I64 (CC.Z) hi_shifted zero)))))
@@ -739,7 +739,7 @@
                                  (imm $I64 64)
                                  amt)))
             ;; Nullify the carry if we are shifting by a multiple of 128.
-            (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64) (RegMemImm.Imm 127) amt)
+            (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 127))
                                         (cmove $I64 (CC.Z) (imm $I64 0) carry)))
             ;; Add the carry into the low half.
             (lo_shifted_ Gpr (x64_or $I64 lo_shifted carry_))
@@ -748,7 +748,7 @@
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the hi bits are all sign bits and the lo bits are
         ;; what would otherwise be our hi bits.
-        (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 64) amt)
+        (with_flags (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 64))
                     (consumes_flags_concat
                      (cmove $I64 (CC.Z) lo_shifted_ hi_shifted)
                      (cmove $I64 (CC.Z) hi_shifted sign_bits)))))
@@ -1428,6 +1428,7 @@
 (decl pure partial all_ones_or_all_zeros (Value) bool)
 (rule (all_ones_or_all_zeros (and (icmp _ _ _) (value_type (multi_lane _ _)))) $true)
 (rule (all_ones_or_all_zeros (and (fcmp _ _ _) (value_type (multi_lane _ _)))) $true)
+(rule (all_ones_or_all_zeros (and (bitcast _ (fcmp _ _ _)) (value_type (multi_lane _ _)))) $true)
 (rule (all_ones_or_all_zeros (vconst (vconst_all_ones_or_all_zeros))) $true)
 
 (decl pure vconst_all_ones_or_all_zeros () Constant)
@@ -1577,6 +1578,15 @@
 (rule (lower (insertlane vec @ (value_type $I64X2) val (u8_from_uimm8 1)))
       (x64_punpcklqdq vec (x64_movq_to_xmm val)))
 
+;; (i64x2.replace_lane 1) with a splat as source for lane 0 -- we can elide
+;; the splat and just do a move. This turns out to be a common pattern when
+;; constructing an i64x2 out of two i64s.
+(rule 3 (lower (insertlane (has_type $I64X2 (splat lane0))
+                           lane1
+                           (u8_from_uimm8 1)))
+        (if-let $true (use_sse41))
+        (x64_pinsrq (bitcast_gpr_to_xmm $I64 lane0) lane1 1))
+
 (rule 1 (lower (insertlane vec @ (value_type $F32X4) (sinkable_load val) (u8_from_uimm8 idx)))
   (if-let $true (use_sse41))
   (x64_insertps vec val (sse_insertps_lane_imm idx)))
@@ -1649,7 +1659,7 @@
             ;; allow for load-op merging, here we cannot do that.
             (x_reg Reg x)
             (y_reg Reg y))
-        (with_flags_reg (x64_cmp size x_reg y_reg)
+        (with_flags_reg (x64_cmp size y_reg x_reg)
                         (cmove ty cc y_reg x_reg))))
 
 (rule -1 (lower (has_type (fits_in_64 ty) (umin x y)))
@@ -2119,21 +2129,14 @@
 
 ;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; If available, we can use a plain lzcnt instruction here. Note no
-;; special handling is required for zero inputs, because the machine
-;; instruction does what the CLIF expects for zero, i.e. it returns
-;; zero.
-(rule 3 (lower (has_type (ty_32_or_64 ty) (clz src)))
-      (if-let $true (use_lzcnt))
-      (x64_lzcnt ty src))
-
 (rule 2 (lower (has_type (ty_32_or_64 ty) (clz src)))
       (do_clz ty ty src))
 
-(rule 1 (lower
-       (has_type (ty_8_or_16 ty)
-                 (clz src)))
-      (do_clz $I32 ty (extend_to_gpr src $I32 (ExtendKind.Zero))))
+(rule 1 (lower (has_type (ty_8_or_16 ty) (clz src)))
+      (let ((extended Gpr (extend_to_gpr src $I64 (ExtendKind.Zero)))
+            (clz Gpr (do_clz $I64 $I64 extended)))
+        (x64_sub $I64 clz (RegMemImm.Imm (u32_sub 64 (ty_bits ty))))))
+
 
 (rule 0 (lower
        (has_type $I128
@@ -2144,33 +2147,35 @@
                             (RegMemImm.Imm 64)))
             (result_lo Gpr
               (with_flags_reg
-               (x64_cmp_imm (OperandSize.Size64) 64 upper)
+               (x64_cmp_imm (OperandSize.Size64) upper 64)
                (cmove $I64 (CC.NZ) upper lower))))
         (value_regs result_lo (imm $I64 0))))
 
 ;; Implementation helper for clz; operates on 32 or 64-bit units.
 (decl do_clz (Type Type Gpr) Gpr)
-(rule (do_clz ty orig_ty src)
+
+;; If available, we can use a plain lzcnt instruction here. Note no
+;; special handling is required for zero inputs, because the machine
+;; instruction does what the CLIF expects for zero, i.e. it returns
+;; zero.
+(rule 1 (do_clz ty orig_ty src)
+      (if-let $true (use_lzcnt))
+      (x64_lzcnt ty src))
+
+(rule 0 (do_clz ty orig_ty src)
       (let ((highest_bit_index Reg (bsr_or_else ty src (imm_i64 $I64 -1)))
             (bits_minus_1 Reg (imm ty (u64_sub (ty_bits_u64 orig_ty) 1))))
         (x64_sub ty bits_minus_1 highest_bit_index)))
 
 ;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Analogous to `clz` cases above, but using mirror instructions
-;; (tzcnt vs lzcnt, bsf vs bsr).
-
-(rule 3 (lower (has_type (ty_32_or_64 ty) (ctz src)))
-      (if-let $true (use_bmi1))
-      (x64_tzcnt ty src))
-
 (rule 2 (lower (has_type (ty_32_or_64 ty) (ctz src)))
       (do_ctz ty ty src))
 
-(rule 1 (lower
-       (has_type (ty_8_or_16 ty)
-                 (ctz src)))
-      (do_ctz $I32 ty (extend_to_gpr src $I32 (ExtendKind.Zero))))
+(rule 1 (lower (has_type (ty_8_or_16 ty) (ctz src)))
+      (let ((extended Gpr (extend_to_gpr src $I32 (ExtendKind.Zero)))
+            (stopbit Gpr (x64_or $I32 extended (RegMemImm.Imm (u32_shl 1 (ty_bits ty))))))
+        (do_ctz $I32 ty stopbit)))
 
 (rule 0 (lower
        (has_type $I128
@@ -2181,12 +2186,19 @@
                             (RegMemImm.Imm 64)))
             (result_lo Gpr
               (with_flags_reg
-               (x64_cmp_imm (OperandSize.Size64) 64 lower)
+               (x64_cmp_imm (OperandSize.Size64) lower 64)
                (cmove $I64 (CC.Z) upper lower))))
         (value_regs result_lo (imm $I64 0))))
 
 (decl do_ctz (Type Type Gpr) Gpr)
-(rule (do_ctz ty orig_ty src)
+
+;; Analogous to `clz` cases above, but using mirror instructions
+;; (tzcnt vs lzcnt, bsf vs bsr).
+(rule 1 (do_ctz ty orig_ty src)
+      (if-let $true (use_bmi1))
+      (x64_tzcnt ty src))
+
+(rule 0 (do_ctz ty orig_ty src)
       (bsf_or_else ty src (imm $I64 (ty_bits_u64 orig_ty))))
 
 ;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2442,7 +2454,7 @@
 ;; Null references are represented by the constant value `0`.
 (rule (lower (is_null src @ (value_type $R64)))
       (with_flags
-       (x64_cmp_imm (OperandSize.Size64) 0 src)
+       (x64_cmp_imm (OperandSize.Size64) src 0)
        (x64_setcc (CC.Z))))
 
 ;; Rules for `is_invalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2450,7 +2462,7 @@
 ;; Invalid references are represented by the constant value `-1`.
 (rule (lower (is_invalid src @ (value_type $R64)))
       (with_flags
-       (x64_cmp_imm (OperandSize.Size64) 0xffffffff src)  ;; simm32 0xffff_ffff is sign-extended to -1.
+       (x64_cmp_imm (OperandSize.Size64) src 0xffffffff)  ;; simm32 0xffff_ffff is sign-extended to -1.
        (x64_setcc (CC.Z))))
 
 
@@ -3313,7 +3325,7 @@
 
 
 ;; Compare an I128 value to zero, returning a flags result suitable for making a
-;; jump decision. The comparison is implemented as `(hi == 0) && (low == 0)`,
+;; jump decision. The comparison is implemented as `(hi | low) == 0`,
 ;; and the result can be interpreted as follows
 ;; * CC.Z indicates that the value was non-zero, as one or both of the halves of
 ;;   the value were non-zero
@@ -3321,12 +3333,10 @@
 (decl cmp_zero_i128 (CC ValueRegs) IcmpCondResult)
 (rule (cmp_zero_i128 (cc_nz_or_z cc) val)
       (let ((lo Gpr (value_regs_get_gpr val 0))
-            (hi Gpr (value_regs_get_gpr val 1))
-            (lo_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) (RegMemImm.Imm 0) lo)
-                                      (x64_setcc (CC.Z))))
-            (hi_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) (RegMemImm.Imm 0) hi)
-                                      (x64_setcc (CC.Z)))))
-          (icmp_cond_result (x64_test (OperandSize.Size8) lo_z hi_z) cc)))
+            (hi Gpr (value_regs_get_gpr val 1)))
+          (icmp_cond_result
+            (x64_alurmi_flags_side_effect (AluRmiROpcode.Or) $I64 lo hi)
+            (cc_invert cc))))
 
 
 (decl cmp_zero_int_bool_ref (Value) ProducesFlags)
@@ -3343,7 +3353,7 @@
             (size_reg Reg (imm ty (u32_as_u64 jt_size)))
             (idx_reg Gpr (extend_to_gpr idx $I64 (ExtendKind.Zero)))
             (clamped_idx Reg (with_flags_reg
-              (x64_cmp size size_reg idx_reg)
+              (x64_cmp size idx_reg size_reg)
               (cmove ty (CC.B) idx_reg size_reg))))
       (emit_side_effect (jmp_table_seq ty clamped_idx default_target jt_targets))))
 
@@ -3595,7 +3605,7 @@
 ;; Step 7 - Prep the converted second set by zeroing out negative lanes (these have already been
 ;;          converted correctly with the first set) and by setting overflow lanes to 0x7FFFFFFF
 ;;          as this will allow us to properly saturate overflow lanes when adding to 0x80000000
-;; Step 8 - Add the orginal converted src and the converted tmp1 where float values originally less
+;; Step 8 - Add the original converted src and the converted tmp1 where float values originally less
 ;;          than and equal to INT_MAX will be unchanged, float values originally between INT_MAX+1 and
 ;;          UINT_MAX will add together (INT_MAX) + (SRC - INT_MAX), and float values originally
 ;;          greater than UINT_MAX will be saturated to UINT_MAX (0xFFFFFFFF) after adding (0x8000000 + 0x7FFFFFFF).
@@ -3624,7 +3634,7 @@
 
             ;; Set tmp2 to INT_MAX+1. It is important to note here that after it looks
             ;; like we are only converting INT_MAX (0x7FFFFFFF) but in fact because
-            ;; single precision IEEE-754 floats can only accurately represent contingous
+            ;; single precision IEEE-754 floats can only accurately represent contiguous
             ;; integers up to 2^23 and outside of this range it rounds to the closest
             ;; integer that it can represent. In the case of INT_MAX, this value gets
             ;; represented as 0x4f000000 which is the integer value (INT_MAX+1).
@@ -3983,11 +3993,27 @@
 
 ;; Bitcast between types residing in GPR registers is a no-op.
 (rule 1 (lower (has_type (is_gpr_type _)
-                         (bitcast _ x @ (value_type (is_gpr_type _))))) x)
+                         (bitcast _ x @ (value_type (is_gpr_type _)))))
+      x)
+
+;; Bitcasts between `r{32,64}` and `i{32,64}` need to be a copy to avoid
+;; conflicting regalloc constraints on reference type values that both need to
+;; be in some register but also some safepoint stack slot at the same time.
+(rule 2 (lower (has_type (is_gpr_type dst_ty)
+                         (bitcast _ x @ (value_type (is_gpr_type src_ty)))))
+      (if-let $true (is_ref_type src_ty))
+      (if-let $false (is_ref_type dst_ty))
+      (copy_gpr dst_ty x))
+(rule 2 (lower (has_type (is_gpr_type dst_ty)
+                         (bitcast _ x @ (value_type (is_gpr_type src_ty)))))
+      (if-let $false (is_ref_type src_ty))
+      (if-let $true (is_ref_type dst_ty))
+      (copy_gpr dst_ty x))
 
 ;; Bitcast between types residing in XMM registers is a no-op.
-(rule 2 (lower (has_type (is_xmm_type _)
-                         (bitcast _ x @ (value_type (is_xmm_type _))))) x)
+(rule 3 (lower (has_type (is_xmm_type _)
+                         (bitcast _ x @ (value_type (is_xmm_type _)))))
+      x)
 
 ;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4241,6 +4267,11 @@
 (rule (lower (has_type ty (vconst const)))
       ;; TODO use Inst::gen_constant() instead.
       (x64_xmm_load_const ty (const_to_vconst const)))
+
+;; Special case for a zero-vector: don't load, xor instead.
+(rule 1 (lower (has_type ty (vconst (u128_from_constant 0))))
+    (let ((dst Xmm (xmm_uninit_value)))
+      (x64_pxor dst dst)))
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4608,7 +4639,7 @@
           (any_byte_zero Xmm (x64_pcmpeqb val (xmm_zero $I8X16)))
           (mask Gpr (x64_pmovmskb (OperandSize.Size32) any_byte_zero))
         )
-        (with_flags (x64_cmp (OperandSize.Size32) (RegMemImm.Imm 0xffff) mask)
+        (with_flags (x64_cmp_imm (OperandSize.Size32) mask 0xffff)
                     (x64_setcc (CC.NZ)))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

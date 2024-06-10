@@ -8,16 +8,15 @@
   (table (;0;) 23 23 funcref)
 )
 
-;; function u0:0(i64 vmctx, i64, i32, f32) -> i32 fast {
+;; function u0:0(i64 vmctx, i64, i32, f32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
-;;     sig0 = (i64 vmctx, i64, f32) -> i32 fast
+;;     gv4 = load.i64 notrap aligned readonly gv3+88
+;;     sig0 = (i64 vmctx, i64, f32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
-;;     sig2 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig3 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     fn0 = colocated u1:9 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: f32):
@@ -36,22 +35,20 @@
 ;;                                 block2 cold:
 ;; @0033                               v16 = iconst.i32 0
 ;; @0033                               v17 = global_value.i64 gv3
-;; @0033                               v18 = load.i64 notrap aligned readonly v17+56
-;; @0033                               v19 = load.i64 notrap aligned readonly v18+72
-;; @0033                               v20 = call_indirect sig1, v19(v17, v16, v2)  ; v16 = 0
-;; @0033                               jump block3(v20)
+;; @0033                               v18 = call fn0(v17, v16, v2)  ; v16 = 0
+;; @0033                               jump block3(v18)
 ;;
 ;;                                 block3(v15: i64):
-;; @0033                               v21 = global_value.i64 gv3
-;; @0033                               v22 = load.i64 notrap aligned readonly v21+64
-;; @0033                               v23 = load.i32 notrap aligned readonly v22
-;; @0033                               v24 = load.i32 icall_null aligned readonly v15+24
-;; @0033                               v25 = icmp eq v24, v23
-;; @0033                               trapz v25, bad_sig
-;; @0033                               v26 = load.i64 notrap aligned readonly v15+16
-;; @0033                               v27 = load.i64 notrap aligned readonly v15+32
-;; @0033                               v28 = call_indirect sig0, v26(v27, v0, v3)
-;; @0036                               jump block1(v28)
+;; @0033                               v19 = global_value.i64 gv3
+;; @0033                               v20 = load.i64 notrap aligned readonly v19+80
+;; @0033                               v21 = load.i32 notrap aligned readonly v20
+;; @0033                               v22 = load.i32 icall_null aligned readonly v15+16
+;; @0033                               v23 = icmp eq v22, v21
+;; @0033                               trapz v23, bad_sig
+;; @0033                               v24 = load.i64 notrap aligned readonly v15+8
+;; @0033                               v25 = load.i64 notrap aligned readonly v15+24
+;; @0033                               v26 = call_indirect sig0, v24(v25, v0, v3)
+;; @0036                               jump block1(v26)
 ;;
 ;;                                 block1(v4: i32):
 ;; @0036                               return v4

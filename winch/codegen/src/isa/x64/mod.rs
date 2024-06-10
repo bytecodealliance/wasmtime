@@ -8,7 +8,6 @@ use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
-use crate::trampoline::{Trampoline, TrampolineKind};
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegBitSet,
@@ -19,6 +18,7 @@ use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFin
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
@@ -94,7 +94,7 @@ impl TargetIsa for X64 {
         types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
-    ) -> Result<MachBufferFinalized<Final>> {
+    ) -> Result<CompiledFunction> {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
 
@@ -136,8 +136,14 @@ impl TargetIsa for X64 {
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
+        let base = codegen.source_location.base;
 
-        Ok(masm.finalize())
+        let names = codegen.env.take_name_map();
+        Ok(CompiledFunction::new(
+            masm.finalize(base),
+            names,
+            self.function_alignment(),
+        ))
     }
 
     fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
@@ -147,37 +153,6 @@ impl TargetIsa for X64 {
     fn function_alignment(&self) -> u32 {
         // See `cranelift_codegen`'s value of this for more information.
         16
-    }
-
-    fn compile_trampoline(
-        &self,
-        ty: &WasmFuncType,
-        kind: TrampolineKind,
-    ) -> Result<MachBufferFinalized<Final>> {
-        use TrampolineKind::*;
-
-        let mut masm = X64Masm::new(
-            self.pointer_bytes(),
-            self.shared_flags.clone(),
-            self.isa_flags.clone(),
-        );
-        let call_conv = self.wasmtime_call_conv();
-
-        let trampoline = Trampoline::new(
-            &mut masm,
-            regs::scratch(),
-            regs::argv(),
-            &call_conv,
-            self.pointer_bytes(),
-        );
-
-        match kind {
-            ArrayToWasm(idx) => trampoline.emit_array_to_wasm(ty, idx)?,
-            NativeToWasm(idx) => trampoline.emit_native_to_wasm(ty, idx)?,
-            WasmToNative => trampoline.emit_wasm_to_native(ty)?,
-        }
-
-        Ok(masm.finalize())
     }
 
     fn emit_unwind_info(

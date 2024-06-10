@@ -1,8 +1,9 @@
 use crate::bindings::wasi::cli::{stderr, stdin, stdout};
 use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
-use crate::{BlockingMode, BumpArena, ImportAlloc, TrappingUnwrap, WasmStr};
+use crate::{BlockingMode, ImportAlloc, State, TrappingUnwrap, WasmStr};
 use core::cell::{Cell, OnceCell, UnsafeCell};
 use core::mem::MaybeUninit;
+use core::num::NonZeroUsize;
 use wasi::{Errno, Fd};
 
 #[cfg(not(feature = "proxy"))]
@@ -145,21 +146,21 @@ pub struct Descriptors {
 
     /// Points to the head of a free-list of closed file descriptors.
     closed: Option<Fd>,
+}
 
-    /// Preopened directories. Initialized lazily. Access with `State::get_preopens`
-    /// to take care of initialization.
-    #[cfg(not(feature = "proxy"))]
-    preopens: Cell<Option<&'static [Preopen]>>,
+#[cfg(not(feature = "proxy"))]
+#[link(wasm_import_module = "wasi:filesystem/preopens@0.2.0")]
+extern "C" {
+    #[link_name = "get-directories"]
+    fn wasi_filesystem_get_directories(rval: *mut PreopenList);
 }
 
 impl Descriptors {
-    pub fn new(import_alloc: &ImportAlloc, arena: &BumpArena) -> Self {
+    pub fn new(state: &State) -> Self {
         let d = Descriptors {
             table: UnsafeCell::new(MaybeUninit::uninit()),
             table_len: Cell::new(0),
             closed: None,
-            #[cfg(not(feature = "proxy"))]
-            preopens: Cell::new(None),
         };
 
         fn new_once<T>(val: T) -> OnceCell<T> {
@@ -188,52 +189,78 @@ impl Descriptors {
         .trapping_unwrap();
 
         #[cfg(not(feature = "proxy"))]
-        d.open_preopens(import_alloc, arena);
+        d.open_preopens(state);
         d
     }
 
     #[cfg(not(feature = "proxy"))]
-    fn open_preopens(&self, import_alloc: &ImportAlloc, arena: &BumpArena) {
-        #[link(wasm_import_module = "wasi:filesystem/preopens@0.2.0")]
-        #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
-        extern "C" {
-            #[link_name = "get-directories"]
-            fn get_preopens_import(rval: *mut PreopenList);
+    fn open_preopens(&self, state: &State) {
+        unsafe {
+            let alloc = ImportAlloc::CountAndDiscardStrings {
+                strings_size: 0,
+                alloc: state.temporary_alloc(),
+            };
+            let (preopens, _) = state.with_import_alloc(alloc, || {
+                let mut preopens = PreopenList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_filesystem_get_directories(&mut preopens);
+                preopens
+            });
+            for i in 0..preopens.len {
+                let preopen = preopens.base.add(i).read();
+                // Expectation is that the descriptor index is initialized with
+                // stdio (0,1,2) and no others, so that preopens are 3..
+                let descriptor_type = preopen.descriptor.get_type().trapping_unwrap();
+                self.push(Descriptor::Streams(Streams {
+                    input: OnceCell::new(),
+                    output: OnceCell::new(),
+                    type_: StreamType::File(File {
+                        fd: preopen.descriptor,
+                        descriptor_type,
+                        position: Cell::new(0),
+                        append: false,
+                        blocking_mode: BlockingMode::Blocking,
+                        preopen_name_len: NonZeroUsize::new(preopen.path.len),
+                    }),
+                }))
+                .trapping_unwrap();
+            }
         }
-        let mut list = PreopenList {
-            base: std::ptr::null(),
-            len: 0,
-        };
-        import_alloc.with_arena(arena, || unsafe {
-            get_preopens_import(&mut list as *mut _)
-        });
-        let preopens: &'static [Preopen] = unsafe {
-            // allocation comes from long lived arena, so it is safe to
-            // cast this to a &'static slice:
-            std::slice::from_raw_parts(list.base, list.len)
-        };
-        for preopen in preopens {
-            // Acquire ownership of the descriptor, leaving the rest of the
-            // `Preopen` struct in place.
-            let descriptor = unsafe { preopen.descriptor.assume_init_read() };
-            // Expectation is that the descriptor index is initialized with
-            // stdio (0,1,2) and no others, so that preopens are 3..
-            let descriptor_type = descriptor.get_type().trapping_unwrap();
-            self.push(Descriptor::Streams(Streams {
-                input: OnceCell::new(),
-                output: OnceCell::new(),
-                type_: StreamType::File(File {
-                    fd: descriptor,
-                    descriptor_type,
-                    position: Cell::new(0),
-                    append: false,
-                    blocking_mode: BlockingMode::Blocking,
-                }),
-            }))
-            .trapping_unwrap();
-        }
+    }
 
-        self.preopens.set(Some(preopens));
+    #[cfg(not(feature = "proxy"))]
+    pub unsafe fn get_preopen_path(&self, state: &State, fd: Fd, path: *mut u8, len: usize) {
+        let nth = fd - 3;
+        let alloc = ImportAlloc::GetPreopenPath {
+            cur: 0,
+            nth,
+            alloc: state.temporary_alloc(),
+        };
+        let (preopens, _) = state.with_import_alloc(alloc, || {
+            let mut preopens = PreopenList {
+                base: std::ptr::null(),
+                len: 0,
+            };
+            wasi_filesystem_get_directories(&mut preopens);
+            preopens
+        });
+
+        // NB: we just got owned handles for all preopened directories. We're
+        // only interested in one individual string allocation, however, so
+        // discard all of the descriptors and close them since we otherwise
+        // don't want to leak them.
+        for i in 0..preopens.len {
+            let preopen = preopens.base.add(i).read();
+            drop(preopen.descriptor);
+
+            if (i as u32) != nth {
+                continue;
+            }
+            assert!(preopen.path.len <= len);
+            core::ptr::copy(preopen.path.ptr, path, preopen.path.len);
+        }
     }
 
     fn push(&self, desc: Descriptor) -> Result<Fd, Errno> {
@@ -278,7 +305,7 @@ impl Descriptors {
                     Descriptor::Closed(next) => *next,
                     _ => unreachable!("impossible: freelist points to a closed descriptor"),
                 };
-                // Write descriptor to the entry at the nead of the list
+                // Write descriptor to the entry at the head of the list
                 *freelist_desc = d;
                 // Point closed to the following item
                 self.closed = next_closed;
@@ -297,14 +324,6 @@ impl Descriptors {
         self.table_mut()
             .get_mut(usize::try_from(fd).trapping_unwrap())
             .ok_or(wasi::ERRNO_BADF)
-    }
-
-    #[cfg(not(feature = "proxy"))]
-    pub fn get_preopen(&self, fd: Fd) -> Option<&Preopen> {
-        let preopens = self.preopens.get().trapping_unwrap();
-        // Subtract 3 for the stdio indices to compute the preopen index.
-        let index = fd.checked_sub(3)? as usize;
-        preopens.get(index)
     }
 
     // Internal: close a fd, returning the descriptor.
@@ -437,9 +456,7 @@ impl Descriptors {
 #[cfg(not(feature = "proxy"))]
 #[repr(C)]
 pub struct Preopen {
-    /// This is `MaybeUninit` because we take ownership of the `Descriptor` to
-    /// put it in our own table.
-    pub descriptor: MaybeUninit<filesystem::Descriptor>,
+    pub descriptor: filesystem::Descriptor,
     pub path: WasmStr,
 }
 

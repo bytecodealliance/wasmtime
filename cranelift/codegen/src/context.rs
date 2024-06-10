@@ -10,7 +10,6 @@
 //! single ISA instance.
 
 use crate::alias_analysis::AliasAnalysis;
-use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
@@ -31,6 +30,7 @@ use crate::{timing, CompileError};
 use alloc::string::String;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
+use target_lexicon::Architecture;
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;
@@ -181,12 +181,9 @@ impl Context {
 
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
-
-        if opt_level != OptLevel::None {
-            self.dce(isa)?;
-        }
-
         self.remove_constant_phis(isa)?;
+
+        self.func.dfg.resolve_all_aliases();
 
         if opt_level != OptLevel::None {
             self.egraph_pass(isa, ctrl_plane)?;
@@ -263,13 +260,6 @@ impl Context {
         Ok(())
     }
 
-    /// Perform dead-code elimination on the function.
-    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
-        do_dce(&mut self.func, &mut self.domtree);
-        self.verify_if(fisa)?;
-        Ok(())
-    }
-
     /// Perform constant-phi removal on the function.
     pub fn remove_constant_phis<'a, FOI: Into<FlagsOrIsa<'a>>>(
         &mut self,
@@ -282,7 +272,15 @@ impl Context {
 
     /// Perform NaN canonicalizing rewrites on the function.
     pub fn canonicalize_nans(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_nan_canonicalization(&mut self.func);
+        // Currently only RiscV64 is the only arch that may not have vector support.
+        let has_vector_support = match isa.triple().architecture {
+            Architecture::Riscv64(_) => match isa.isa_flags().iter().find(|f| f.name == "has_v") {
+                Some(value) => value.as_bool().unwrap_or(false),
+                None => false,
+            },
+            _ => true,
+        };
+        do_nan_canonicalization(&mut self.func, has_vector_support);
         self.verify_if(isa)
     }
 

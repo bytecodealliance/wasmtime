@@ -93,6 +93,7 @@ fn build_raw_intrinsics() -> Vec<u8> {
         GlobalType {
             val_type: ValType::I32,
             mutable: true,
+            shared: false,
         },
         &ConstExpr::i32_const(0),
     );
@@ -101,6 +102,7 @@ fn build_raw_intrinsics() -> Vec<u8> {
         GlobalType {
             val_type: ValType::I32,
             mutable: true,
+            shared: false,
         },
         &ConstExpr::i32_const(0),
     );

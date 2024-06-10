@@ -12,13 +12,13 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 base64 = "0.21.0"
-bincode = "1.1.4"
+postcard = { workspace = true }
 directories-next = "2.0"
 log = { workspace = true }
-serde = "1.0.188"
-serde_derive = "1.0.188"
+serde = { workspace = true }
+serde_derive = { workspace = true }
 sha2 = "0.10.2"
 toml = { workspace = true }
 zstd = { version = "0.13.0", default-features = false }

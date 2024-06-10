@@ -5,7 +5,6 @@ use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::egraph::elaborate::Elaborator;
-use crate::fx::FxHashSet;
 use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
 use crate::ir::pcc::Fact;
 use crate::ir::{
@@ -22,6 +21,7 @@ use core::cmp::Ordering;
 use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
+use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 use std::hash::Hasher;
 
@@ -209,7 +209,7 @@ where
                 }
             };
 
-            self.attach_constant_fact(inst, result);
+            self.attach_constant_fact(inst, result, ty);
 
             self.available_block[result] = self.get_available_block(inst);
             let opt_value = self.optimize_pure_enode(inst);
@@ -485,7 +485,7 @@ where
     /// Helper to propagate facts on constant values: if PCC is
     /// enabled, then unconditionally add a fact attesting to the
     /// Value's concrete value.
-    fn attach_constant_fact(&mut self, inst: Inst, value: Value) {
+    fn attach_constant_fact(&mut self, inst: Inst, value: Value, ty: Type) {
         if self.flags.enable_pcc() {
             if let InstructionData::UnaryImm {
                 opcode: Opcode::Iconst,
@@ -493,7 +493,8 @@ where
             } = self.func.dfg.insts[inst]
             {
                 let imm: i64 = imm.into();
-                self.func.dfg.facts[value] = Some(Fact::constant(64, imm as u64));
+                self.func.dfg.facts[value] =
+                    Some(Fact::constant(ty.bits().try_into().unwrap(), imm as u64));
             }
         }
     }
@@ -661,8 +662,7 @@ impl<'a> EgraphPass<'a> {
 
                         // Rewrite args of *all* instructions using the
                         // value-to-opt-value map.
-                        cursor.func.dfg.resolve_aliases_in_arguments(inst);
-                        cursor.func.dfg.map_inst_values(inst, |_, arg| {
+                        cursor.func.dfg.map_inst_values(inst, |arg| {
                             let new_value = value_to_opt_value[arg];
                             trace!("rewriting arg {} of inst {} to {}", arg, inst, new_value);
                             debug_assert_ne!(new_value, Value::reserved_value());

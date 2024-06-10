@@ -18,66 +18,58 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a4,[const(0)]
-;;   add a4,a2,a4
-;;   trap_if heap_oob##(a4 ult a2)
-;;   ld a5,88(a0)
-;;   ld a0,80(a0)
-;;   sltu a5,a5,a4
-;;   add a0,a0,a2
-;;   lui a4,65535
-;;   slli a1,a4,4
-;;   add a0,a0,a1
-;;   sub a4,zero,a5
-;;   not a5,a4
-;;   and a1,a0,a5
-;;   sb a3,0(a1)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a4, 0
+;;       ld      a4, 0x50(a4)
+;;       add     a4, a2, a4
+;;       bgeu    a4, a2, 8
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       ld      a5, 0x68(a0)
+;;       ld      a0, 0x60(a0)
+;;       sltu    a4, a5, a4
+;;       add     a5, a0, a2
+;;       lui     a0, 0xffff
+;;       slli    a0, a0, 4
+;;       add     a5, a5, a0
+;;       neg     a2, a4
+;;       not     a4, a2
+;;       and     a0, a5, a4
+;;       sb      a3, 0(a0)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x01, 0x00, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a4,[const(0)]
-;;   add a4,a2,a4
-;;   trap_if heap_oob##(a4 ult a2)
-;;   ld a5,88(a0)
-;;   ld a0,80(a0)
-;;   sltu a5,a5,a4
-;;   add a0,a0,a2
-;;   lui a4,65535
-;;   slli a1,a4,4
-;;   add a0,a0,a1
-;;   sub a3,zero,a5
-;;   not a5,a3
-;;   and a1,a0,a5
-;;   lbu a0,0(a1)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a3, 0
+;;       ld      a3, 0x50(a3)
+;;       add     a3, a2, a3
+;;       bgeu    a3, a2, 8
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       ld      a4, 0x68(a0)
+;;       ld      a5, 0x60(a0)
+;;       sltu    a4, a4, a3
+;;       add     a5, a5, a2
+;;       lui     a3, 0xffff
+;;       slli    a0, a3, 4
+;;       add     a5, a5, a0
+;;       neg     a2, a4
+;;       not     a4, a2
+;;       and     a0, a5, a4
+;;       lbu     a0, 0(a0)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x01, 0x00, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00

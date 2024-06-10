@@ -29,6 +29,7 @@ wasm-smith = { workspace = true }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = "0.31.1"
+futures = { workspace = true }
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
 # binary for MinGW which is built on our CI. It does have one for Windows-msvc,
@@ -48,4 +49,7 @@ rand = { version = "0.8.0", features = ["small_rng"] }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, features = ['build-libinterpret'] }
 
 [features]
-fuzz-spec-interpreter = ['wasm-spec-interpreter']
+fuzz-spec-interpreter = ['dep:wasm-spec-interpreter']
+
+# Fuzz proof-carrying code. Off by default.
+fuzz-pcc = []

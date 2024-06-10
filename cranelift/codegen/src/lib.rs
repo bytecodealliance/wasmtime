@@ -18,9 +18,9 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap, HashSet};
+use hashbrown::{hash_map, HashMap};
 #[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap, HashSet};
+use std::collections::{hash_map, HashMap};
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
@@ -49,6 +49,7 @@ pub mod loop_analysis;
 pub mod print_errors;
 pub mod settings;
 pub mod timing;
+pub mod traversals;
 pub mod verifier;
 pub mod write;
 
@@ -68,15 +69,14 @@ mod bitset;
 mod constant_hash;
 mod context;
 mod ctxhash;
-mod dce;
 mod egraph;
-mod fx;
 mod inst_predicates;
 mod isle_prelude;
 mod iterators;
 mod legalizer;
 mod nan_canonicalization;
 mod opts;
+mod ranges;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;

@@ -244,13 +244,6 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
-    settings.add_bool(
-        "probestack_func_adjusts_sp",
-        "Enable if the stack probe adjusts the stack pointer.",
-        "",
-        false,
-    );
-
     settings.add_num(
         "probestack_size_log2",
         "The log2 of the size of the stack guard region.",

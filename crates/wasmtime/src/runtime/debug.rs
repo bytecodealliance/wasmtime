@@ -1,4 +1,6 @@
+use crate::prelude::*;
 use anyhow::{anyhow, bail, ensure, Error};
+use core::mem::size_of;
 use object::elf::*;
 use object::endian::{BigEndian, Endian, Endianness, LittleEndian};
 use object::read::elf::{FileHeader, SectionHeader};
@@ -6,7 +8,6 @@ use object::{
     File, NativeEndian as NE, Object, ObjectSection, ObjectSymbol, RelocationEncoding,
     RelocationKind, RelocationTarget, U64Bytes,
 };
-use std::mem::size_of;
 
 pub(crate) fn create_gdbjit_image(
     mut bytes: Vec<u8>,
@@ -32,7 +33,7 @@ pub(crate) fn create_gdbjit_image(
 
 fn relocate_dwarf_sections(bytes: &mut [u8], code_region: (*const u8, usize)) -> Result<(), Error> {
     let mut relocations = Vec::new();
-    let obj = File::parse(&bytes[..])?;
+    let obj = File::parse(&bytes[..]).err2anyhow()?;
     for section in obj.sections() {
         let section_start = match section.file_range() {
             Some((start, _)) => start,
@@ -126,7 +127,7 @@ fn convert_object_elf_to_loadable_file<E: Endian>(
     let text_range = match sections.section_by_name(e, b".text") {
         Some((i, text)) => {
             let range = text.file_range(e);
-            let off = header.e_shoff.get(e) as usize + i * header.e_shentsize.get(e) as usize;
+            let off = header.e_shoff.get(e) as usize + i.0 * header.e_shentsize.get(e) as usize;
 
             let section: &mut SectionHeader64<E> =
                 object::from_bytes_mut(&mut bytes[off..]).unwrap().0;

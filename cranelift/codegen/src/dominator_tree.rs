@@ -5,6 +5,7 @@ use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::{Block, Function, Inst, Layout, ProgramPoint};
 use crate::packed_option::PackedOption;
 use crate::timing;
+use crate::traversals::Dfs;
 use alloc::vec::Vec;
 use core::cmp;
 use core::cmp::Ordering;
@@ -13,9 +14,6 @@ use core::mem;
 /// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
 /// room for modifications of the dominator tree.
 const STRIDE: u32 = 4;
-
-/// Special RPO numbers used during `compute_postorder`.
-const SEEN: u32 = 1;
 
 /// Dominator tree node. We keep one of these per block.
 #[derive(Clone, Default)]
@@ -34,12 +32,6 @@ struct DomNode {
     idom: PackedOption<Inst>,
 }
 
-/// DFT stack state marker for computing the cfg postorder.
-enum Visit {
-    First,
-    Last,
-}
-
 /// The dominator tree for a single function.
 pub struct DominatorTree {
     nodes: SecondaryMap<Block, DomNode>,
@@ -47,8 +39,8 @@ pub struct DominatorTree {
     /// CFG post-order of all reachable blocks.
     postorder: Vec<Block>,
 
-    /// Scratch memory used by `compute_postorder()`.
-    stack: Vec<(Visit, Block)>,
+    /// Scratch traversal state used by `compute_postorder()`.
+    dfs: Dfs,
 
     valid: bool,
 }
@@ -225,7 +217,7 @@ impl DominatorTree {
         Self {
             nodes: SecondaryMap::new(),
             postorder: Vec::new(),
-            stack: Vec::new(),
+            dfs: Dfs::new(),
             valid: false,
         }
     }
@@ -236,7 +228,7 @@ impl DominatorTree {
         let mut domtree = Self {
             nodes: SecondaryMap::with_capacity(block_capacity),
             postorder: Vec::with_capacity(block_capacity),
-            stack: Vec::new(),
+            dfs: Dfs::new(),
             valid: false,
         };
         domtree.compute(func, cfg);
@@ -257,7 +249,6 @@ impl DominatorTree {
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.postorder.clear();
-        debug_assert!(self.stack.is_empty());
         self.valid = false;
     }
 
@@ -276,73 +267,7 @@ impl DominatorTree {
     fn compute_postorder(&mut self, func: &Function) {
         self.clear();
         self.nodes.resize(func.dfg.num_blocks());
-
-        // This algorithm is a depth first traversal (DFT) of the control flow graph, computing a
-        // post-order of the blocks that are reachable form the entry block. A DFT post-order is not
-        // unique. The specific order we get is controlled by the order each node's children are
-        // visited.
-        //
-        // We view the CFG as a graph where each `BlockCall` value of a terminating branch
-        // instruction is an edge. A consequence of this is that we visit successor nodes in the
-        // reverse order specified by the branch instruction that terminates the basic block.
-        // (Reversed because we are using a stack to control traversal, and push the successors in
-        // the order the branch instruction specifies -- there's no good reason for this particular
-        // order.)
-        //
-        // During this algorithm only, use `rpo_number` to hold the following state:
-        //
-        //   0:    block has not yet had its first visit
-        //   SEEN: block has been visited at least once, implying that all of its successors are on
-        //         the stack
-
-        match func.layout.entry_block() {
-            Some(block) => {
-                self.stack.push((Visit::First, block));
-            }
-            None => return,
-        }
-
-        while let Some((visit, block)) = self.stack.pop() {
-            match visit {
-                Visit::First => {
-                    if self.nodes[block].rpo_number == 0 {
-                        // This is the first time we pop the block, so we need to scan its
-                        // successors and then revisit it.
-                        self.nodes[block].rpo_number = SEEN;
-                        self.stack.push((Visit::Last, block));
-                        if let Some(inst) = func.stencil.layout.last_inst(block) {
-                            // Heuristic: chase the children in reverse. This puts the first
-                            // successor block first in the postorder, all other things being
-                            // equal, which tends to prioritize loop backedges over out-edges,
-                            // putting the edge-block closer to the loop body and minimizing
-                            // live-ranges in linear instruction space. This heuristic doesn't have
-                            // any effect on the computation of dominators, and is purely for other
-                            // consumers of the postorder we cache here.
-                            for block in func.stencil.dfg.insts[inst]
-                                .branch_destination(&func.stencil.dfg.jump_tables)
-                                .iter()
-                                .rev()
-                            {
-                                let succ = block.block(&func.stencil.dfg.value_lists);
-
-                                // This is purely an optimization to avoid additional iterations of
-                                // the loop, and is not required; it's merely inlining the check
-                                // from the outer conditional of this case to avoid the extra loop
-                                // iteration.
-                                if self.nodes[succ].rpo_number == 0 {
-                                    self.stack.push((Visit::First, succ))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Visit::Last => {
-                    // We've finished all this node's successors.
-                    self.postorder.push(block);
-                }
-            }
-        }
+        self.postorder.extend(self.dfs.post_order_iter(func));
     }
 
     /// Build a dominator tree from a control flow graph using Keith D. Cooper's
@@ -467,7 +392,6 @@ impl DominatorTreePreorder {
     /// Recompute this data structure to match `domtree`.
     pub fn compute(&mut self, domtree: &DominatorTree, layout: &Layout) {
         self.nodes.clear();
-        debug_assert_eq!(self.stack.len(), 0);
 
         // Step 1: Populate the child and sibling links.
         //

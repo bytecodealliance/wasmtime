@@ -2,10 +2,11 @@ use crate::{
     abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
     codegen::BlockSig,
     isa::reg::Reg,
-    masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
-    stack::TypedReg,
+    masm::{
+        ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode,
+    },
+    stack::{TypedReg, Val},
 };
-
 use anyhow::Result;
 use smallvec::SmallVec;
 use wasmparser::{
@@ -13,7 +14,12 @@ use wasmparser::{
 };
 use wasmtime_environ::{
     GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_MASK,
+    FUNCREF_MASK, WASM_PAGE_SIZE,
+};
+
+use cranelift_codegen::{
+    binemit::CodeOffset,
+    ir::{RelSourceLoc, SourceLoc},
 };
 
 mod context;
@@ -29,6 +35,18 @@ pub use builtin::*;
 pub(crate) mod bounds;
 
 use bounds::{Bounds, ImmOffset, Index};
+
+/// Holds metadata about the source code location and the machine code emission.
+/// The fields of this struct are opaque and are not interpreted in any way.
+/// They serve as a mapping between source code and machine code.
+#[derive(Default)]
+pub(crate) struct SourceLocation {
+    /// The base source location.
+    pub base: Option<SourceLoc>,
+    /// The current relative source code location along with its associated
+    /// machine code offset.
+    pub current: (CodeOffset, RelSourceLoc),
+}
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M>
@@ -51,6 +69,9 @@ where
     // NB The 64 is set arbitrarily, we can adjust it as
     // we see fit.
     pub control_frames: SmallVec<[ControlStackFrame; 64]>,
+
+    /// Information about the source code location.
+    pub source_location: SourceLocation,
 }
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
@@ -68,6 +89,7 @@ where
             context,
             masm,
             env,
+            source_location: Default::default(),
             control_frames: Default::default(),
         }
     }
@@ -85,6 +107,15 @@ where
         Ok(())
     }
 
+    /// Derives a [RelSourceLoc] from a [SourceLoc].
+    pub fn source_loc_from(&mut self, loc: SourceLoc) -> RelSourceLoc {
+        if self.source_location.base.is_none() && !loc.is_default() {
+            self.source_location.base = Some(loc);
+        }
+
+        RelSourceLoc::from_base_offset(self.source_location.base.unwrap_or_default(), loc)
+    }
+
     fn emit_start(&mut self) -> Result<()> {
         let vmctx = self
             .sig
@@ -94,15 +125,16 @@ where
             .unwrap_reg()
             .into();
 
-        // We need to use the vmctx paramter before pinning it for stack checking, and we don't
-        // have any callee save registers in the winch calling convention.
-        self.masm.prologue(vmctx, &[]);
-
+        self.masm.start_source_loc(Default::default());
+        // We need to use the vmctx parameter before pinning it for stack checking.
+        self.masm.prologue(vmctx);
         // Pin the `VMContext` pointer.
         self.masm
             .mov(vmctx.into(), vmctx!(M), self.env.ptr_type().into());
 
         self.masm.reserve_stack(self.context.frame.locals_size);
+
+        self.masm.end_source_loc();
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
@@ -181,7 +213,7 @@ where
                     let addr = self.masm.local_address(results_base_slot);
                     self.masm.store((*reg).into(), addr, (*ty).into());
                 }
-                // The result base parameter is a stack paramter, addressed
+                // The result base parameter is a stack parameter, addressed
                 // from FP.
                 _ => {}
             }
@@ -189,12 +221,16 @@ where
 
         while !body.eof() {
             let offset = body.original_position();
-            body.visit_operator(&mut ValidateThenVisit(validator.visitor(offset), self))??;
+            body.visit_operator(&mut ValidateThenVisit(
+                validator.visitor(offset),
+                self,
+                offset,
+            ))??;
         }
         validator.finish(body.original_position())?;
         return Ok(());
 
-        struct ValidateThenVisit<'a, T, U>(T, &'a mut U);
+        struct ValidateThenVisit<'a, T, U>(T, &'a mut U, usize);
 
         macro_rules! validate_then_visit {
             ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
@@ -202,13 +238,17 @@ where
                     fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                         self.0.$visit($($($arg.clone()),*)?)?;
                         // Only visit operators if the compiler is in a reachable code state. If
-                        // the compiler is in an unrechable code state, most of the operators are
+                        // the compiler is in an unreachable code state, most of the operators are
                         // ignored except for If, Block, Loop, Else and End. These operators need
                         // to be observed in order to keep the control stack frames balanced and to
                         // determine if reachability should be restored.
                         let visit_when_unreachable = visit_op_when_unreachable(Operator::$op $({ $($arg: $arg.clone()),* })?);
                         if self.1.is_reachable() || visit_when_unreachable  {
-                            Ok(self.1.$visit($($($arg),*)?))
+                            let location = SourceLoc::new(self.2 as u32);
+                            self.1.start(location);
+                            let res = Ok(self.1.$visit($($($arg),*)?));
+                            self.1.end();
+                            res
                         } else {
                             Ok(U::Output::default())
                         }
@@ -231,6 +271,12 @@ where
             fn is_reachable(&self) -> bool;
         }
 
+        /// Trait to map source locations to machine code.
+        trait SourceLocator {
+            fn start(&mut self, loc: SourceLoc);
+            fn end(&mut self);
+        }
+
         impl<'a, 'translation, 'data, M: MacroAssembler> ReachableState
             for CodeGen<'a, 'translation, 'data, M>
         {
@@ -239,10 +285,31 @@ where
             }
         }
 
+        impl<'a, 'translation, 'data, M: MacroAssembler> SourceLocator
+            for CodeGen<'a, 'translation, 'data, M>
+        {
+            fn start(&mut self, loc: SourceLoc) {
+                let rel = self.source_loc_from(loc);
+                self.source_location.current = self.masm.start_source_loc(rel);
+            }
+
+            fn end(&mut self) {
+                // Because in Winch binary emission is done in a single pass
+                // and because the MachBuffer performs optimizations during
+                // emission, we have to be careful when calling
+                // [MacroAssembler::end_source_location] to avoid breaking the
+                // invariant that checks that the end [CodeOffset] must be equal
+                // or greater than the start [CodeOffset].
+                if self.masm.current_code_offset() >= self.source_location.current.0 {
+                    self.masm.end_source_loc();
+                }
+            }
+        }
+
         impl<'a, T, U> VisitOperator<'a> for ValidateThenVisit<'_, T, U>
         where
             T: VisitOperator<'a, Output = wasmparser::Result<()>>,
-            U: VisitOperator<'a> + ReachableState,
+            U: VisitOperator<'a> + ReachableState + SourceLocator,
             U::Output: Default,
         {
             type Output = Result<U::Output>;
@@ -256,7 +323,7 @@ where
         let ptr_size: OperandSize = self.env.ptr_type().into();
         let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_type_index();
         let sig_size = OperandSize::from_bytes(sig_index_bytes);
-        let sig_index = self.env.translation.module.types[type_index].unwrap_function();
+        let sig_index = self.env.translation.module.types[type_index];
         let sig_offset = sig_index
             .as_u32()
             .checked_mul(sig_index_bytes.into())
@@ -289,7 +356,7 @@ where
         );
 
         // Typecheck.
-        self.masm.cmp(callee_id.into(), caller_id, OperandSize::S32);
+        self.masm.cmp(caller_id, callee_id.into(), OperandSize::S32);
         self.masm.trapif(IntCmpKind::Ne, TrapCode::BadSignature);
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
@@ -301,6 +368,7 @@ where
         // to the stack); so when reaching the end, we pop them taking as
         // reference the current function's signature.
         let base = SPOffset::from_u32(self.context.frame.locals_size);
+        self.masm.start_source_loc(Default::default());
         if self.context.reachable {
             ControlStackFrame::pop_abi_results_impl(
                 &mut self.sig.results,
@@ -309,15 +377,16 @@ where
                 |results, _, _| results.ret_area().copied(),
             );
         } else {
-            // If we reach the end of the function in a unreachable code state,
-            // simly truncate to the the expected values.
-            // The compiler could enter in this state through an infinite loop.
+            // If we reach the end of the function in an unreachable code state,
+            // simply truncate to the expected values.
+            // The compiler could enter this state through an infinite loop.
             self.context.truncate_stack_to(0);
             self.masm.reset_stack_pointer(base);
         }
         debug_assert_eq!(self.context.stack.len(), 0);
         self.masm.free_stack(self.context.frame.locals_size);
-        self.masm.epilogue(&[]);
+        self.masm.epilogue();
+        self.masm.end_source_loc();
         Ok(())
     }
 
@@ -408,9 +477,7 @@ where
         let index = self.context.pop_to_reg(self.masm, None);
         let base = self.context.any_gpr(self.masm);
 
-        let elem_addr =
-            self.masm
-                .table_elem_address(index.into(), base, &table_data, &mut self.context);
+        let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data);
         self.masm.load_ptr(elem_addr, elem_value);
         // Free the register used as base, once we have loaded the element
         // address into the element value register.
@@ -425,8 +492,8 @@ where
 
         self.masm.branch(
             IntCmpKind::Ne,
-            elem_value.into(),
             elem_value,
+            elem_value.into(),
             defined,
             ptr_type.into(),
         );
@@ -434,7 +501,8 @@ where
         // This is safe since the FnCall::emit call below, will ensure
         // that the result register is placed on the value stack.
         self.context.free_reg(elem_value);
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
@@ -477,7 +545,7 @@ where
     /// of doing the least amount of work possible at compile time. For static
     /// heaps, Winch does a bit more of work, given that some of the cases that
     /// are checked against, can benefit compilation times, like for example,
-    /// detecting an out of bouds access at compile time.
+    /// detecting an out of bounds access at compile time.
     pub fn emit_compute_heap_address(
         &mut self,
         memarg: &MemArg,
@@ -545,8 +613,8 @@ where
                     |masm, bounds, _| {
                         let bounds_reg = bounds.as_typed_reg().reg;
                         masm.cmp(
-                            bounds_reg.into(),
                             index_offset_and_access_size.into(),
+                            bounds_reg.into(),
                             heap.ty.into(),
                         );
                         IntCmpKind::GtU
@@ -578,7 +646,7 @@ where
             //
             //      index <= u32::MAX
             //
-            // Therfore if any 32-bit index access occurs in the region
+            // Therefore if any 32-bit index access occurs in the region
             // represented by
             //
             //      bound + guard_size - (offset + access_size)
@@ -629,8 +697,8 @@ where
                         let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
                         let index_reg = index.as_typed_reg().reg;
                         masm.cmp(
-                            RegImm::i64(adjusted_bounds as i64),
                             index_reg,
+                            RegImm::i64(adjusted_bounds as i64),
                             heap.ty.into(),
                         );
                         IntCmpKind::GtU
@@ -676,6 +744,132 @@ where
             self.context.free_reg(addr);
         }
         self.context.free_reg(src);
+    }
+
+    /// Loads the address of the table element at a given index. Returns the
+    /// address of the table element using the provided register as base.
+    pub fn emit_compute_table_elem_addr(
+        &mut self,
+        index: Reg,
+        base: Reg,
+        table_data: &TableData,
+    ) -> M::Address {
+        let scratch = <M::ABI as ABI>::scratch_reg();
+        let bound = self.context.any_gpr(self.masm);
+        let tmp = self.context.any_gpr(self.masm);
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+
+        if let Some(offset) = table_data.import_from {
+            // If the table data declares a particular offset base,
+            // load the address into a register to further use it as
+            // the table address.
+            self.masm.load_ptr(self.masm.address_at_vmctx(offset), base);
+        } else {
+            // Else, simply move the vmctx register into the addr register as
+            // the base to calculate the table address.
+            self.masm.mov(vmctx!(M).into(), base, ptr_size);
+        };
+
+        // OOB check.
+        let bound_addr = self
+            .masm
+            .address_at_reg(base, table_data.current_elems_offset);
+        let bound_size = table_data.current_elements_size;
+        self.masm.load(bound_addr, bound, bound_size.into());
+        self.masm.cmp(index, bound.into(), bound_size);
+        self.masm
+            .trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
+
+        // Move the index into the scratch register to calculate the table
+        // element address.
+        // Moving the value of the index register to the scratch register
+        // also avoids overwriting the context of the index register.
+        self.masm.mov(index.into(), scratch, bound_size);
+        self.masm.mul(
+            scratch,
+            scratch,
+            RegImm::i32(table_data.element_size.bytes() as i32),
+            table_data.element_size,
+        );
+        self.masm
+            .load_ptr(self.masm.address_at_reg(base, table_data.offset), base);
+        // Copy the value of the table base into a temporary register
+        // so that we can use it later in case of a misspeculation.
+        self.masm.mov(base.into(), tmp, ptr_size);
+        // Calculate the address of the table element.
+        self.masm.add(base, base, scratch.into(), ptr_size);
+        if self.env.table_access_spectre_mitigation() {
+            // Perform a bounds check and override the value of the
+            // table element address in case the index is out of bounds.
+            self.masm.cmp(index, bound.into(), OperandSize::S32);
+            self.masm.cmov(tmp, base, IntCmpKind::GeU, ptr_size);
+        }
+        self.context.free_reg(bound);
+        self.context.free_reg(tmp);
+        self.masm.address_at_reg(base, 0)
+    }
+
+    /// Retrieves the size of the table, pushing the result to the value stack.
+    pub fn emit_compute_table_size(&mut self, table_data: &TableData) {
+        let scratch = <M::ABI as ABI>::scratch_reg();
+        let size = self.context.any_gpr(self.masm);
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+
+        if let Some(offset) = table_data.import_from {
+            self.masm
+                .load_ptr(self.masm.address_at_vmctx(offset), scratch);
+        } else {
+            self.masm.mov(vmctx!(M).into(), scratch, ptr_size);
+        };
+
+        let size_addr = self
+            .masm
+            .address_at_reg(scratch, table_data.current_elems_offset);
+        self.masm
+            .load(size_addr, size, table_data.current_elements_size.into());
+
+        self.context.stack.push(TypedReg::i32(size).into());
+    }
+
+    /// Retrieves the size of the memory, pushing the result to the value stack.
+    pub fn emit_compute_memory_size(&mut self, heap_data: &HeapData) {
+        let size_reg = self.context.any_gpr(self.masm);
+        let scratch = <M::ABI as ABI>::scratch_reg();
+
+        let base = if let Some(offset) = heap_data.import_from {
+            self.masm
+                .load_ptr(self.masm.address_at_vmctx(offset), scratch);
+            scratch
+        } else {
+            vmctx!(M)
+        };
+
+        let size_addr = self
+            .masm
+            .address_at_reg(base, heap_data.current_length_offset);
+        self.masm.load_ptr(size_addr, size_reg);
+        // Prepare the stack to emit a shift to get the size in pages rather
+        // than in bytes.
+        self.context
+            .stack
+            .push(TypedReg::new(heap_data.ty, size_reg).into());
+
+        // Since the page size is a power-of-two, verify that 2^16, equals the
+        // defined constant. This is mostly a safeguard in case the constant
+        // value ever changes.
+        let pow = 16;
+        debug_assert_eq!(2u32.pow(pow), WASM_PAGE_SIZE);
+
+        // Ensure that the constant is correctly typed according to the heap
+        // type to reduce register pressure when emitting the shift operation.
+        match heap_data.ty {
+            WasmValType::I32 => self.context.stack.push(Val::i32(pow as i32)),
+            WasmValType::I64 => self.context.stack.push(Val::i64(pow as i64)),
+            _ => unreachable!(),
+        }
+
+        self.masm
+            .shift(&mut self.context, ShiftKind::ShrU, heap_data.ty.into());
     }
 }
 

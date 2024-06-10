@@ -18,60 +18,46 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r6, %r15, 48(%r15)
-;;   unwind SaveReg { clobber_offset: 48, reg: p6i }
-;;   unwind SaveReg { clobber_offset: 56, reg: p7i }
-;;   unwind SaveReg { clobber_offset: 64, reg: p8i }
-;;   unwind SaveReg { clobber_offset: 72, reg: p9i }
-;;   unwind SaveReg { clobber_offset: 80, reg: p10i }
-;;   unwind SaveReg { clobber_offset: 88, reg: p11i }
-;;   unwind SaveReg { clobber_offset: 96, reg: p12i }
-;;   unwind SaveReg { clobber_offset: 104, reg: p13i }
-;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
-;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lgr %r3, %r4
-;;   algfi %r3, 4294901761
-;;   jgnle .+2 # trap=heap_oob
-;;   lg %r6, 88(%r2)
-;;   clgr %r3, %r6
-;;   jgh label3 ; jg label1
-;; block1:
-;;   ag %r4, 80(%r2)
-;;   llilh %r2, 65535
-;;   stc %r5, 0(%r2,%r4)
-;;   jg label2
-;; block2:
-;;   lmg %r6, %r15, 48(%r15)
-;;   br %r14
-;; block3:
-;;   .word 0x0000 # trap=heap_oob
+;; wasm[0]::function[0]:
+;;       lg      %r1, 8(%r2)
+;;       lg      %r1, 0(%r1)
+;;       la      %r1, 0xa0(%r1)
+;;       clgrtle %r15, %r1
+;;       stmg    %r14, %r15, 0x70(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r3, %r4
+;;       algfi   %r3, 0xffff0001
+;;       jgnle   0x34
+;;       lg      %r14, 0x68(%r2)
+;;       clgr    %r3, %r14
+;;       jgh     0x5e
+;;       ag      %r4, 0x60(%r2)
+;;       llilh   %r2, 0xffff
+;;       stc     %r5, 0(%r2, %r4)
+;;       lmg     %r14, %r15, 0x110(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00
 ;;
-;; function u0:1:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lgr %r3, %r4
-;;   algfi %r3, 4294901761
-;;   jgnle .+2 # trap=heap_oob
-;;   lg %r5, 88(%r2)
-;;   clgr %r3, %r5
-;;   jgh label3 ; jg label1
-;; block1:
-;;   ag %r4, 80(%r2)
-;;   llilh %r5, 65535
-;;   llc %r2, 0(%r5,%r4)
-;;   jg label2
-;; block2:
-;;   br %r14
-;; block3:
-;;   .word 0x0000 # trap=heap_oob
+;; wasm[0]::function[1]:
+;;       lg      %r1, 8(%r2)
+;;       lg      %r1, 0(%r1)
+;;       la      %r1, 0xa0(%r1)
+;;       clgrtle %r15, %r1
+;;       stmg    %r14, %r15, 0x70(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r5, %r4
+;;       algfi   %r5, 0xffff0001
+;;       jgnle   0x94
+;;       lg      %r3, 0x68(%r2)
+;;       clgr    %r5, %r3
+;;       jgh     0xc0
+;;       ag      %r4, 0x60(%r2)
+;;       llilh   %r5, 0xffff
+;;       llc     %r2, 0(%r5, %r4)
+;;       lmg     %r14, %r15, 0x110(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00

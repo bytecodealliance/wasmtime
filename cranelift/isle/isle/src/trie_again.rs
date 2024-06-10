@@ -1,9 +1,10 @@
 //! A strongly-normalizing intermediate representation for ISLE rules. This representation is chosen
 //! to closely reflect the operations we can implement in Rust, to make code generation easy.
+use crate::disjointsets::DisjointSets;
 use crate::error::{Error, Span};
 use crate::lexer::Pos;
 use crate::sema;
-use crate::{DisjointSets, StableSet};
+use crate::stablemapset::StableSet;
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.

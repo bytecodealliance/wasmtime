@@ -13,3 +13,6 @@ jobs:
       - uses: rustsec/audit-check@v1.4.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+        # This seems to hit rate limits about 50% of the time, unclear why, but
+        # emailing us once every few days is not the most useful thing.
+        continue-on-error: true

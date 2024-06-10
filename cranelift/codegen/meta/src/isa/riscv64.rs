@@ -56,6 +56,14 @@ pub(crate) fn define() -> TargetIsa {
         "Double-precision floating point",
         true,
     );
+
+    let _has_zfa = setting.add_bool(
+        "has_zfa",
+        "has extension Zfa?",
+        "Zfa: Extension for Additional Floating-Point Instructions",
+        false,
+    );
+
     let _has_v = setting.add_bool(
         "has_v",
         "has extension V?",
@@ -118,6 +126,12 @@ pub(crate) fn define() -> TargetIsa {
         "Zbs: Single-bit instructions",
         false,
     );
+    let _has_zicond = setting.add_bool(
+        "has_zicond",
+        "has extension zicond?",
+        "ZiCond: Integer Conditional Operations",
+        false,
+    );
 
     let has_zicsr = setting.add_bool(
         "has_zicsr",
@@ -133,7 +147,7 @@ pub(crate) fn define() -> TargetIsa {
     );
 
     // Zvl*: Minimum Vector Length Standard Extensions
-    // These extension specifiy the minimum number of bits in a vector register.
+    // These extension specify the minimum number of bits in a vector register.
     // Since it is a minimum, Zvl64b implies Zvl32b, Zvl128b implies Zvl64b, etc.
     // The V extension supports a maximum of 64K bits in a single register.
     //

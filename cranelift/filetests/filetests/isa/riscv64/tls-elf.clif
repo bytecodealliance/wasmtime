@@ -15,15 +15,15 @@ block0(v0: i32):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s1,-8(sp)
 ;   addi sp,sp,-16
+;   sd s1,8(sp)
 ; block0:
 ;   mv s1,a0
 ;   elf_tls_get_addr a0,userextname0
 ;   mv a1,a0
 ;   mv a0,s1
+;   ld s1,8(sp)
 ;   addi sp,sp,16
-;   ld s1,-8(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -35,8 +35,8 @@ block0(v0: i32):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s1, -8(sp)
 ;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
 ; block1: ; offset 0x18
 ;   mv s1, a0
 ;   auipc a0, 0 ; reloc_external RiscvTlsGdHi20 u1:0 0
@@ -45,8 +45,8 @@ block0(v0: i32):
 ;   jalr ra
 ;   mv a1, a0
 ;   mv a0, s1
+;   ld s1, 8(sp)
 ;   addi sp, sp, 0x10
-;   ld s1, -8(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -70,8 +70,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   elf_tls_get_addr a0,userextname0
-;   li a4,0
-;   sb a4,0(a0)
+;   sb zero,0(a0)
 ;   li a0,0
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -89,8 +88,7 @@ block0(v0: i64):
 ;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+16 0
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt %ElfTlsGetAddr 0
 ;   jalr ra
-;   mv a4, zero
-;   sb a4, 0(a0)
+;   sb zero, 0(a0)
 ;   mv a0, zero
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)

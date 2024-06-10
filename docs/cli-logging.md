@@ -1,21 +1,22 @@
 # Logging in the `wasmtime` CLI
 
 Wasmtime's libraries use Rust's [`log`] crate to log diagnostic
-information, and the `wasmtime` CLI executable uses [`pretty_env_logger`]
-by default for logging this information to the console.
+information, and the `wasmtime` CLI executable uses [`tracing-subscriber`]
+for displaying this information on the console.
 
-Basic logging is controlled by the `RUST_LOG` environment variable. For example,
+Basic logging is controlled by the `WASMTIME_LOG` environment variable. For example,
 To enable logging of WASI system calls, similar to the `strace` command on Linux,
-set `RUST_LOG=wasi_common=trace`.
+set `WASMTIME_LOG=wasmtime_wasi=trace`. For more information on specifying
+filters, see [tracing-subscriber's EnvFilter docs].
 
 ```sh
-$ RUST_LOG=wasi_common=trace wasmtime hello.wasm
+$ WASMTIME_LOG=wasmtime_wasi=trace wasmtime hello.wasm
 [...]
- TRACE wasi_common::hostcalls_impl::fs                       > fd_write(fd=1, iovs_ptr=0x10408, iovs_len=1, nwritten=0x10404)
+TRACE wiggle abi{module="wasi_snapshot_preview1" function="fd_write"} wasmtime_wasi::preview1::wasi_snapshot_preview1                     > fd=Fd(1) iovs=*guest 0x14/1
 Hello, world!
- TRACE wasi_common::hostcalls_impl::fs                       >      | *nwritten=14
- TRACE wasi_common::hostcalls                                >      | errno=ESUCCESS (No error occurred. System call completed successfully.)
- TRACE wasi_common::hostcalls_impl::misc                     > proc_exit(rval=1)
+TRACE wiggle abi{module="wasi_snapshot_preview1" function="fd_write"}: wasmtime_wasi::preview1::wasi_snapshot_preview1: result=Ok(14)
+TRACE wiggle abi{module="wasi_snapshot_preview1" function="proc_exit"}: wasmtime_wasi::preview1::wasi_snapshot_preview1: rval=1
+TRACE wiggle abi{module="wasi_snapshot_preview1" function="proc_exit"}: wasmtime_wasi::preview1::wasi_snapshot_preview1: result=Exited with i32 exit status 1
 ```
 
 Wasmtime can also redirect the log messages into log files, with the
@@ -23,4 +24,5 @@ Wasmtime can also redirect the log messages into log files, with the
 the files named `wasmtime.dbg.*`.
 
 [`log`]: https://crates.io/crates/log
-[`pretty_env_logger`]: https://crates.io/crates/pretty_env_logger
+[`tracing-subscriber`]: https://crates.io/crates/tracing-subscriber
+[tracing-subscriber's EnvFilter docs]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives

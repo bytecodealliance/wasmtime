@@ -4,9 +4,7 @@
 
 use alloc::{string::String, vec::Vec};
 use core::{fmt::Debug, hash::Hash};
-use regalloc2::{
-    Allocation, Operand, OperandConstraint, OperandKind, OperandPos, PReg, PRegSet, VReg,
-};
+use regalloc2::{Operand, OperandConstraint, OperandKind, OperandPos, PReg, PRegSet, VReg};
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
@@ -53,11 +51,7 @@ impl Reg {
     /// Get the physical register (`RealReg`), if this register is
     /// one.
     pub fn to_real_reg(self) -> Option<RealReg> {
-        if pinned_vreg_to_preg(self.0).is_some() {
-            Some(RealReg(self.0))
-        } else {
-            None
-        }
+        pinned_vreg_to_preg(self.0).map(RealReg)
     }
 
     /// Get the virtual (non-physical) register, if this register is
@@ -100,11 +94,17 @@ impl std::fmt::Debug for Reg {
     }
 }
 
+impl AsMut<Reg> for Reg {
+    fn as_mut(&mut self) -> &mut Reg {
+        self
+    }
+}
+
 /// A real (physical) register. This corresponds to one of the target
 /// ISA's named registers and can be used as an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct RealReg(VReg);
+pub struct RealReg(PReg);
 
 impl RealReg {
     /// Get the class of this register.
@@ -114,7 +114,7 @@ impl RealReg {
 
     /// The physical register number.
     pub fn hw_enc(self) -> u8 {
-        PReg::from(self).hw_enc() as u8
+        self.0.hw_enc() as u8
     }
 }
 
@@ -161,11 +161,11 @@ impl std::fmt::Debug for VirtualReg {
 /// temporary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Writable<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> {
+pub struct Writable<T> {
     reg: T,
 }
 
-impl<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> Writable<T> {
+impl<T> Writable<T> {
     /// Explicitly construct a `Writable<T>` from a `T`. As noted in
     /// the documentation for `Writable`, this is not hidden or
     /// disallowed from the outside; anyone can perform the "cast";
@@ -180,16 +180,12 @@ impl<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> Writabl
     }
 
     /// Map the underlying register to another value or type.
-    pub fn map<U, F>(self, f: F) -> Writable<U>
-    where
-        U: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash,
-        F: Fn(T) -> U,
-    {
+    pub fn map<U>(self, f: impl Fn(T) -> U) -> Writable<U> {
         Writable { reg: f(self.reg) }
     }
 }
 
-// Conversions between regalloc2 types (VReg) and our types
+// Conversions between regalloc2 types (VReg, PReg) and our types
 // (VirtualReg, RealReg, Reg).
 
 impl std::convert::From<regalloc2::VReg> for Reg {
@@ -202,13 +198,6 @@ impl std::convert::From<regalloc2::VReg> for VirtualReg {
     fn from(vreg: regalloc2::VReg) -> VirtualReg {
         debug_assert!(pinned_vreg_to_preg(vreg).is_none());
         VirtualReg(vreg)
-    }
-}
-
-impl std::convert::From<regalloc2::VReg> for RealReg {
-    fn from(vreg: regalloc2::VReg) -> RealReg {
-        debug_assert!(pinned_vreg_to_preg(vreg).is_some());
-        RealReg(vreg)
     }
 }
 
@@ -234,31 +223,33 @@ impl std::convert::From<VirtualReg> for regalloc2::VReg {
 
 impl std::convert::From<RealReg> for regalloc2::VReg {
     fn from(reg: RealReg) -> regalloc2::VReg {
-        reg.0
+        // This representation is redundant: the class is implied in the vreg
+        // index as well as being in the vreg class field.
+        VReg::new(reg.0.index(), reg.0.class())
     }
 }
 
 impl std::convert::From<RealReg> for regalloc2::PReg {
     fn from(reg: RealReg) -> regalloc2::PReg {
-        PReg::from_index(reg.0.vreg())
+        reg.0
     }
 }
 
 impl std::convert::From<regalloc2::PReg> for RealReg {
     fn from(preg: regalloc2::PReg) -> RealReg {
-        RealReg(VReg::new(preg.index(), preg.class()))
+        RealReg(preg)
     }
 }
 
 impl std::convert::From<regalloc2::PReg> for Reg {
     fn from(preg: regalloc2::PReg) -> Reg {
-        Reg(VReg::new(preg.index(), preg.class()))
+        RealReg(preg).into()
     }
 }
 
 impl std::convert::From<RealReg> for Reg {
     fn from(reg: RealReg) -> Reg {
-        Reg(reg.0)
+        Reg(reg.into())
     }
 }
 
@@ -295,7 +286,6 @@ pub type RegClass = regalloc2::RegClass;
 #[derive(Debug)]
 pub struct OperandCollector<'a, F: Fn(VReg) -> VReg> {
     operands: &'a mut Vec<Operand>,
-    operands_start: usize,
     clobbers: PRegSet,
 
     /// The subset of physical registers that are allocatable.
@@ -307,170 +297,171 @@ pub struct OperandCollector<'a, F: Fn(VReg) -> VReg> {
 impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Start gathering operands into one flattened operand array.
     pub fn new(operands: &'a mut Vec<Operand>, allocatable: PRegSet, renamer: F) -> Self {
-        let operands_start = operands.len();
         Self {
             operands,
-            operands_start,
             clobbers: PRegSet::default(),
             allocatable,
             renamer,
         }
     }
 
-    /// Returns true if no reuse_def constraints have been added.
-    pub fn no_reuse_def(&self) -> bool {
-        !self.operands[self.operands_start..]
-            .iter()
-            .any(|operand| match operand.constraint() {
-                OperandConstraint::Reuse(_) => true,
-                _ => false,
-            })
-    }
-
-    fn is_allocatable_preg(&self, reg: PReg) -> bool {
-        self.allocatable.contains(reg)
-    }
-
-    /// Add an operand.
-    fn add_operand(&mut self, operand: Operand) {
-        let vreg = (self.renamer)(operand.vreg());
-        let operand = Operand::new(vreg, operand.constraint(), operand.kind(), operand.pos());
-        self.operands.push(operand);
-    }
-
     /// Finish the operand collection and return the tuple giving the
     /// range of indices in the flattened operand array, and the
     /// clobber set.
-    pub fn finish(self) -> ((u32, u32), PRegSet) {
-        let start = self.operands_start as u32;
-        let end = self.operands.len() as u32;
-        ((start, end), self.clobbers)
+    pub fn finish(self) -> (usize, PRegSet) {
+        let end = self.operands.len();
+        (end, self.clobbers)
     }
+}
 
+pub trait OperandVisitor {
+    fn add_operand(
+        &mut self,
+        reg: &mut Reg,
+        constraint: OperandConstraint,
+        kind: OperandKind,
+        pos: OperandPos,
+    );
+
+    fn debug_assert_is_allocatable_preg(&self, _reg: PReg, _expected: bool) {}
+
+    /// Add a register clobber set. This is a set of registers that
+    /// are written by the instruction, so must be reserved (not used)
+    /// for the whole instruction, but are not used afterward.
+    fn reg_clobbers(&mut self, _regs: PRegSet) {}
+}
+
+pub trait OperandVisitorImpl: OperandVisitor {
     /// Add a use of a fixed, nonallocatable physical register.
-    pub fn reg_fixed_nonallocatable(&mut self, preg: PReg) {
-        debug_assert!(!self.is_allocatable_preg(preg));
-        self.add_operand(Operand::fixed_nonallocatable(preg))
+    fn reg_fixed_nonallocatable(&mut self, preg: PReg) {
+        self.debug_assert_is_allocatable_preg(preg, false);
+        // Since this operand does not participate in register allocation,
+        // there's nothing to do here.
     }
 
     /// Add a register use, at the start of the instruction (`Before`
     /// position).
-    pub fn reg_use(&mut self, reg: Reg) {
-        if let Some(rreg) = reg.to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.is_virtual());
-            self.add_operand(Operand::reg_use(reg.into()));
-        }
+    fn reg_use(&mut self, reg: &mut impl AsMut<Reg>) {
+        self.reg_maybe_fixed(reg.as_mut(), OperandKind::Use, OperandPos::Early);
     }
 
     /// Add a register use, at the end of the instruction (`After` position).
-    pub fn reg_late_use(&mut self, reg: Reg) {
-        if let Some(rreg) = reg.to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.is_virtual());
-            self.add_operand(Operand::reg_use_at_end(reg.into()));
-        }
-    }
-
-    /// Add multiple register uses.
-    pub fn reg_uses(&mut self, regs: &[Reg]) {
-        for &reg in regs {
-            self.reg_use(reg);
-        }
+    fn reg_late_use(&mut self, reg: &mut impl AsMut<Reg>) {
+        self.reg_maybe_fixed(reg.as_mut(), OperandKind::Use, OperandPos::Late);
     }
 
     /// Add a register def, at the end of the instruction (`After`
     /// position). Use only when this def will be written after all
     /// uses are read.
-    pub fn reg_def(&mut self, reg: Writable<Reg>) {
-        if let Some(rreg) = reg.to_reg().to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.to_reg().is_virtual());
-            self.add_operand(Operand::reg_def(reg.to_reg().into()));
-        }
-    }
-
-    /// Add multiple register defs.
-    pub fn reg_defs(&mut self, regs: &[Writable<Reg>]) {
-        for &reg in regs {
-            self.reg_def(reg);
-        }
+    fn reg_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>) {
+        self.reg_maybe_fixed(reg.reg.as_mut(), OperandKind::Def, OperandPos::Late);
     }
 
     /// Add a register "early def", which logically occurs at the
     /// beginning of the instruction, alongside all uses. Use this
     /// when the def may be written before all uses are read; the
     /// regalloc will ensure that it does not overwrite any uses.
-    pub fn reg_early_def(&mut self, reg: Writable<Reg>) {
-        if let Some(rreg) = reg.to_reg().to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.to_reg().is_virtual());
-            self.add_operand(Operand::reg_def_at_start(reg.to_reg().into()));
-        }
+    fn reg_early_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>) {
+        self.reg_maybe_fixed(reg.reg.as_mut(), OperandKind::Def, OperandPos::Early);
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at the end of the instruction.
-    pub fn reg_fixed_late_use(&mut self, reg: Reg, rreg: Reg) {
-        debug_assert!(reg.is_virtual());
-        let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        debug_assert!(self.is_allocatable_preg(rreg.into()));
-        self.add_operand(Operand::new(
-            reg.into(),
-            OperandConstraint::FixedReg(rreg.into()),
-            OperandKind::Use,
-            OperandPos::Late,
-        ));
+    fn reg_fixed_late_use(&mut self, reg: &mut impl AsMut<Reg>, rreg: Reg) {
+        self.reg_fixed(reg.as_mut(), rreg, OperandKind::Use, OperandPos::Late);
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at this point.
-    pub fn reg_fixed_use(&mut self, reg: Reg, rreg: Reg) {
-        debug_assert!(reg.is_virtual());
-        let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        debug_assert!(self.is_allocatable_preg(rreg.into()));
-        self.add_operand(Operand::reg_fixed_use(reg.into(), rreg.into()));
+    fn reg_fixed_use(&mut self, reg: &mut impl AsMut<Reg>, rreg: Reg) {
+        self.reg_fixed(reg.as_mut(), rreg, OperandKind::Use, OperandPos::Early);
     }
 
     /// Add a register "fixed def", which ties a vreg to a particular
     /// RealReg at this point.
-    pub fn reg_fixed_def(&mut self, reg: Writable<Reg>, rreg: Reg) {
-        debug_assert!(reg.to_reg().is_virtual());
+    fn reg_fixed_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>, rreg: Reg) {
+        self.reg_fixed(reg.reg.as_mut(), rreg, OperandKind::Def, OperandPos::Late);
+    }
+
+    /// Add an operand tying a virtual register to a physical register.
+    fn reg_fixed(&mut self, reg: &mut Reg, rreg: Reg, kind: OperandKind, pos: OperandPos) {
+        debug_assert!(reg.is_virtual());
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        debug_assert!(
-            self.is_allocatable_preg(rreg.into()),
-            "{rreg:?} is not allocatable"
-        );
-        self.add_operand(Operand::reg_fixed_def(reg.to_reg().into(), rreg.into()));
+        self.debug_assert_is_allocatable_preg(rreg.into(), true);
+        let constraint = OperandConstraint::FixedReg(rreg.into());
+        self.add_operand(reg, constraint, kind, pos);
+    }
+
+    /// Add an operand which might already be a physical register.
+    fn reg_maybe_fixed(&mut self, reg: &mut Reg, kind: OperandKind, pos: OperandPos) {
+        if let Some(rreg) = reg.to_real_reg() {
+            self.reg_fixed_nonallocatable(rreg.into());
+        } else {
+            debug_assert!(reg.is_virtual());
+            self.add_operand(reg, OperandConstraint::Reg, kind, pos);
+        }
     }
 
     /// Add a register def that reuses an earlier use-operand's
     /// allocation. The index of that earlier operand (relative to the
     /// current instruction's start of operands) must be known.
-    pub fn reg_reuse_def(&mut self, reg: Writable<Reg>, idx: usize) {
-        if let Some(rreg) = reg.to_reg().to_real_reg() {
+    fn reg_reuse_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>, idx: usize) {
+        let reg = reg.reg.as_mut();
+        if let Some(rreg) = reg.to_real_reg() {
             // In some cases we see real register arguments to a reg_reuse_def
             // constraint. We assume the creator knows what they're doing
             // here, though we do also require that the real register be a
             // fixed-nonallocatable register.
             self.reg_fixed_nonallocatable(rreg.into());
         } else {
+            debug_assert!(reg.is_virtual());
             // The operand we're reusing must not be fixed-nonallocatable, as
             // that would imply that the register has been allocated to a
             // virtual register.
-            self.add_operand(Operand::reg_reuse_def(reg.to_reg().into(), idx));
+            let constraint = OperandConstraint::Reuse(idx);
+            self.add_operand(reg, constraint, OperandKind::Def, OperandPos::Late);
         }
     }
+}
 
-    /// Add a register clobber set. This is a set of registers that
-    /// are written by the instruction, so must be reserved (not used)
-    /// for the whole instruction, but are not used afterward.
-    pub fn reg_clobbers(&mut self, regs: PRegSet) {
+impl<T: OperandVisitor> OperandVisitorImpl for T {}
+
+impl<'a, F: Fn(VReg) -> VReg> OperandVisitor for OperandCollector<'a, F> {
+    fn add_operand(
+        &mut self,
+        reg: &mut Reg,
+        constraint: OperandConstraint,
+        kind: OperandKind,
+        pos: OperandPos,
+    ) {
+        reg.0 = (self.renamer)(reg.0);
+        self.operands
+            .push(Operand::new(reg.0, constraint, kind, pos));
+    }
+
+    fn debug_assert_is_allocatable_preg(&self, reg: PReg, expected: bool) {
+        debug_assert_eq!(
+            self.allocatable.contains(reg),
+            expected,
+            "{reg:?} should{} be allocatable",
+            if expected { "" } else { " not" }
+        );
+    }
+
+    fn reg_clobbers(&mut self, regs: PRegSet) {
         self.clobbers.union_from(regs);
+    }
+}
+
+impl<T: FnMut(&mut Reg, OperandConstraint, OperandKind, OperandPos)> OperandVisitor for T {
+    fn add_operand(
+        &mut self,
+        reg: &mut Reg,
+        constraint: OperandConstraint,
+        kind: OperandKind,
+        pos: OperandPos,
+    ) {
+        self(reg, constraint, kind, pos)
     }
 }
 
@@ -480,83 +471,9 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
 /// `eax` for the register by those names on x86-64, depending on a
 /// 64- or 32-bit context.
 pub trait PrettyPrint {
-    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer<'_>) -> String;
+    fn pretty_print(&self, size_bytes: u8) -> String;
 
     fn pretty_print_default(&self) -> String {
-        self.pretty_print(0, &mut AllocationConsumer::new(&[]))
-    }
-}
-
-/// A consumer of an (optional) list of Allocations along with Regs
-/// that provides RealRegs where available.
-///
-/// This is meant to be used during code emission or
-/// pretty-printing. In at least the latter case, regalloc results may
-/// or may not be available, so we may end up printing either vregs or
-/// rregs. Even pre-regalloc, though, some registers may be RealRegs
-/// that were provided when the instruction was created.
-///
-/// This struct should be used in a specific way: when matching on an
-/// instruction, provide it the Regs in the same order as they were
-/// provided to the OperandCollector.
-#[derive(Clone)]
-pub struct AllocationConsumer<'a> {
-    allocs: std::slice::Iter<'a, Allocation>,
-}
-
-impl<'a> AllocationConsumer<'a> {
-    pub fn new(allocs: &'a [Allocation]) -> Self {
-        Self {
-            allocs: allocs.iter(),
-        }
-    }
-
-    pub fn next_fixed_nonallocatable(&mut self, preg: PReg) {
-        let alloc = self.allocs.next();
-        let alloc = alloc.map(|alloc| {
-            Reg::from(
-                alloc
-                    .as_reg()
-                    .expect("Should not have gotten a stack allocation"),
-            )
-        });
-
-        match alloc {
-            Some(alloc) => {
-                assert_eq!(preg, alloc.to_real_reg().unwrap().into());
-            }
-            None => {}
-        }
-    }
-
-    pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {
-        let alloc = self.allocs.next();
-        let alloc = alloc.map(|alloc| {
-            Reg::from(
-                alloc
-                    .as_reg()
-                    .expect("Should not have gotten a stack allocation"),
-            )
-        });
-
-        match (pre_regalloc_reg.to_real_reg(), alloc) {
-            (Some(rreg), None) => rreg.into(),
-            (Some(rreg), Some(alloc)) => {
-                debug_assert_eq!(Reg::from(rreg), alloc);
-                alloc
-            }
-            (None, Some(alloc)) => alloc,
-            _ => pre_regalloc_reg,
-        }
-    }
-
-    pub fn next_writable(&mut self, pre_regalloc_reg: Writable<Reg>) -> Writable<Reg> {
-        Writable::from_reg(self.next(pre_regalloc_reg.to_reg()))
-    }
-}
-
-impl<'a> std::default::Default for AllocationConsumer<'a> {
-    fn default() -> Self {
-        Self { allocs: [].iter() }
+        self.pretty_print(0)
     }
 }

@@ -9,6 +9,7 @@
 
 #include <wasi.h>
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 
 #ifdef __cplusplus
@@ -43,8 +44,8 @@ typedef struct wasmtime_store wasmtime_store_t;
  * \brief An interior pointer into a #wasmtime_store_t which is used as
  * "context" for many functions.
  *
- * This context pointer is used pervasively throught Wasmtime's API. This can be
- * acquired from #wasmtime_store_context or #wasmtime_caller_context. The
+ * This context pointer is used pervasively throughout Wasmtime's API. This can
+ * be acquired from #wasmtime_store_context or #wasmtime_caller_context. The
  * context pointer for a store is the same for the entire lifetime of a store,
  * so it can safely be stored adjacent to a #wasmtime_store_t itself.
  *
@@ -175,6 +176,8 @@ wasmtime_context_set_fuel(wasmtime_context_t *store, uint64_t fuel);
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_context_get_fuel(const wasmtime_context_t *context, uint64_t *fuel);
 
+#ifdef WASMTIME_FEATURE_WASI
+
 /**
  * \brief Configures WASI state within the specified store.
  *
@@ -188,6 +191,8 @@ wasmtime_context_get_fuel(const wasmtime_context_t *context, uint64_t *fuel);
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
+
+#endif // WASMTIME_FEATURE_WASI
 
 /**
  * \brief Configures the relative deadline at which point WebAssembly code will

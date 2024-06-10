@@ -17,6 +17,7 @@ mod empty_error {
 
             export empty-error: func(a: float64) -> result<float64>;
         }",
+        trappable_imports: true,
     });
 
     #[test]
@@ -118,6 +119,7 @@ mod string_error {
 
             export string-error: func(a: float64) -> result<float64, string>;
         }",
+        trappable_imports: true,
     });
 
     #[test]
@@ -238,7 +240,8 @@ mod enum_error {
                 enum-error: func(a: float64) -> result<float64, e1>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports/e1" => TrappableE1 }
+        trappable_error_type: { "inline:inline/imports/e1" => TrappableE1 },
+        trappable_imports: true,
     });
 
     // You can create concrete trap types which make it all the way out to the
@@ -418,7 +421,8 @@ mod record_error {
                 record-error: func(a: float64) -> result<float64, e2>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports/e2" => TrappableE2 }
+        trappable_error_type: { "inline:inline/imports/e2" => TrappableE2 },
+        trappable_imports: true,
     });
 
     pub enum TrappableE2 {
@@ -589,7 +593,8 @@ mod variant_error {
                 variant-error: func(a: float64) -> result<float64, e3>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports/e3" => TrappableE3 }
+        trappable_error_type: { "inline:inline/imports/e3" => TrappableE3 },
+        trappable_imports: true,
     });
 
     pub enum TrappableE3 {
@@ -784,7 +789,8 @@ mod multiple_interfaces_error {
                 enum-error: func(a: float64) -> result<float64, e1>;
             }
         }",
-        trappable_error_type: { "inline:inline/types/e1" => TrappableE1 }
+        trappable_error_type: { "inline:inline/types/e1" => TrappableE1 },
+        trappable_imports: true,
     });
 
     pub enum TrappableE1 {
@@ -967,6 +973,7 @@ mod with_remapping {
             import imports: interface {
                 empty-error: func(a: float64) -> result<float64>;
             }",
+            trappable_imports: true,
         });
     }
 
@@ -983,6 +990,7 @@ mod with_remapping {
         with: {
             "imports": interfaces::imports,
         },
+        trappable_imports: true,
     });
 
     #[test]

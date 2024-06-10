@@ -1,8 +1,7 @@
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use wasmtime::*;
-use wasmtime_runtime::mpk;
 
 fn module(engine: &Engine) -> Result<Module> {
     let mut wat = format!("(module\n");
@@ -193,7 +192,7 @@ fn guards_present_pooling() -> Result<()> {
 
     let mut pool = crate::small_pool_config();
     pool.total_memories(2)
-        .memory_pages(10)
+        .max_memory_size(10 << 16)
         .memory_protection_keys(MpkEnabled::Disable);
     let mut config = Config::new();
     config.static_memory_maximum_size(1 << 20);
@@ -247,7 +246,7 @@ fn guards_present_pooling() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn guards_present_pooling_mpk() -> Result<()> {
-    if !mpk::is_supported() {
+    if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
         println!("skipping `guards_present_pooling_mpk` test; mpk is not supported");
         return Ok(());
     }
@@ -255,7 +254,7 @@ fn guards_present_pooling_mpk() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
     let mut pool = crate::small_pool_config();
     pool.total_memories(4)
-        .memory_pages(10)
+        .max_memory_size(10 << 16)
         .memory_protection_keys(MpkEnabled::Enable)
         .max_memory_protection_keys(2);
     let mut config = Config::new();
@@ -397,7 +396,7 @@ fn tiny_static_heap() -> Result<()> {
     // specifically test that a load of all the valid addresses of the memory
     // all pass bounds-checks in cranelift to help weed out any off-by-one bugs.
     let mut config = Config::new();
-    config.static_memory_maximum_size(65536);
+    config.static_memory_maximum_size(1 << 16);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -430,7 +429,7 @@ fn tiny_static_heap() -> Result<()> {
 #[test]
 fn static_forced_max() -> Result<()> {
     let mut config = Config::new();
-    config.static_memory_maximum_size(5 * 65536);
+    config.static_memory_maximum_size(5 << 16);
     config.static_memory_forced(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
@@ -588,7 +587,7 @@ fn shared_memory_basics() -> Result<()> {
     assert_eq!(memory.atomic_wait64(8, 1, None), Ok(WaitResult::Mismatch));
 
     // timeout
-    let near_future = Instant::now() + Duration::new(0, 100);
+    let near_future = Duration::new(0, 100);
     assert_eq!(
         memory.atomic_wait32(8, 0, Some(near_future)),
         Ok(WaitResult::TimedOut)
@@ -609,8 +608,8 @@ fn shared_memory_wait_notify() -> Result<()> {
 
     let engine = Engine::default();
     let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
-    let data = unsafe { &*(memory.data().as_ptr() as *const AtomicU32) };
-    let locked = unsafe { &*(memory.data().as_ptr().add(4) as *const AtomicU32) };
+    let data = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().cast_mut().cast()) };
+    let locked = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().add(4).cast_mut().cast()) };
 
     // Note that `SeqCst` is used here to not think much about the orderings
     // here, and it also somewhat more closely mirrors what's happening in wasm.
@@ -657,5 +656,16 @@ fn init_with_negative_segment() -> Result<()> {
     )?;
     let mut store = Store::new(&engine, ());
     Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
+
+#[test]
+fn non_page_aligned_static_memory() -> Result<()> {
+    let mut config = Config::new();
+    config.static_memory_maximum_size(100_000);
+    config.static_memory_forced(true);
+    let engine = Engine::new(&config)?;
+    let ty = MemoryType::new(1, None);
+    Memory::new(&mut Store::new(&engine, ()), ty)?;
     Ok(())
 }

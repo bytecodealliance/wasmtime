@@ -1,0 +1,51 @@
+test run
+target x86_64
+
+function %reverse_args(i32, i64, i32, i64) -> i64, i32, i64, i32 winch {
+block0(v0: i32, v1: i64, v2: i32, v3: i64):
+    return v3, v2, v1, v0
+}
+
+function %call_winch() -> i64, i32, i64, i32 {
+    fn0 = %reverse_args(i32, i64, i32, i64) -> i64, i32, i64, i32 winch
+
+block0:
+    v0 = iconst.i32 0
+    v1 = iconst.i64 1
+    v2 = iconst.i32 2
+    v3 = iconst.i64 3
+    v4, v5, v6, v7 = call fn0(v0, v1, v2, v3)
+    return v4, v5, v6, v7
+}
+
+; run: %call_winch() == [3, 2, 1, 0]
+
+function %f1() -> i8 uext, i64, i8 uext winch {
+block0:
+    v0 = iconst.i64 0x40070000ffff2222
+    v1 = iconst.i8 85
+    v2 = iconst.i8 11
+    return v1, v0, v2
+}
+
+; run: %f1() == [85, 0x40070000ffff2222, 11]
+
+function %f2() -> i64, i8 uext, i8 uext winch {
+block0:
+    v0 = iconst.i64 0x00000000ffff2222
+    v1 = iconst.i8 85
+    v2 = iconst.i8 11
+    return v0, v1, v2
+}
+
+; run: %f2() == [0x00000000ffff2222, 85, 11]
+
+function %f3() -> f64, i8, i8 winch {
+block0:
+    v0 = f64const 0x0.400070088f700p-1022
+    v1 = iconst.i8 85
+    v2 = iconst.i8 11
+    return v0, v1, v2
+}
+
+; run: %f3() == [0x0.400070088f700p-1022, 85, 11]

@@ -1,13 +1,15 @@
 //! Memory management for executable code.
 
+use crate::prelude::*;
+use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
 use anyhow::{anyhow, bail, Context, Result};
-use object::read::{File, Object, ObjectSection};
+use core::mem::ManuallyDrop;
+use core::ops::Range;
+use object::endian::NativeEndian;
+use object::read::{elf::ElfFile64, Object, ObjectSection};
 use object::ObjectSymbol;
-use std::mem::ManuallyDrop;
-use std::ops::Range;
 use wasmtime_environ::obj;
 use wasmtime_jit_icache_coherence as icache_coherence;
-use wasmtime_runtime::{libcalls, MmapVec, UnwindRegistration};
 
 /// Management of executable memory within a `MmapVec`
 ///
@@ -56,7 +58,8 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Result<Self> {
-        let obj = File::parse(&mmap[..])
+        let obj = ElfFile64::<NativeEndian>::parse(&mmap[..])
+            .err2anyhow()
             .with_context(|| "failed to parse internal compilation artifact")?;
 
         let mut relocations = Vec::new();
@@ -70,8 +73,8 @@ impl CodeMemory {
         let mut info_data = 0..0;
         let mut dwarf = 0..0;
         for section in obj.sections() {
-            let data = section.data()?;
-            let name = section.name()?;
+            let data = section.data().err2anyhow()?;
+            let name = section.name().err2anyhow()?;
             let range = subslice_range(data, &mmap);
 
             // Double-check that sections are all aligned properly.
@@ -102,7 +105,7 @@ impl CodeMemory {
                     for (offset, reloc) in section.relocations() {
                         assert_eq!(reloc.kind(), object::RelocationKind::Absolute);
                         assert_eq!(reloc.encoding(), object::RelocationEncoding::Generic);
-                        assert_eq!(usize::from(reloc.size()), std::mem::size_of::<usize>());
+                        assert_eq!(usize::from(reloc.size()), core::mem::size_of::<usize>() * 8);
                         assert_eq!(reloc.addend(), 0);
                         let sym = match reloc.target() {
                             object::RelocationTarget::Symbol(id) => id,

@@ -22,21 +22,30 @@
 //!   functions. It is up to the caller to serialize the relevant parts of the
 //!   `Artifacts` into the ELF file.
 
+use crate::prelude::*;
 use crate::Engine;
 use anyhow::{Context, Result};
 use std::{
     any::Any,
-    collections::{btree_map, BTreeMap, BTreeSet, HashMap},
+    borrow::Cow,
+    collections::{btree_map, BTreeMap, BTreeSet, HashMap, HashSet},
     mem,
 };
+
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
-    FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex,
-    WasmFunctionInfo,
+    BuiltinFunctionIndex, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex,
+    FinishedObject, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, RelocationTarget,
+    StaticModuleIndex, WasmFunctionInfo,
 };
+
+mod code_builder;
+pub use self::code_builder::{CodeBuilder, HashedEngineCompileEnv};
+
+#[cfg(feature = "runtime")]
+mod runtime;
 
 /// Converts an input binary-encoded WebAssembly module to compilation
 /// artifacts and type information.
@@ -53,6 +62,7 @@ use wasmtime_environ::{
 pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
+    dwarf_package: Option<&[u8]>,
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
     let tunables = engine.tunables();
 
@@ -60,9 +70,9 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     // about the wasm module. This is where the WebAssembly is parsed and
     // validated. Afterwards `types` will have all the type information for
     // this module.
-    let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
     let parser = wasmparser::Parser::new(0);
-    let mut types = Default::default();
+    let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
+    let mut types = ModuleTypesBuilder::new(&validator);
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
         .translate(parser, wasm)
         .context("failed to parse WebAssembly module")?;
@@ -70,7 +80,6 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 
     let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
     let unlinked_compile_outputs = compile_inputs.compile(engine)?;
-    let types = types.finish();
     let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
     // Emplace all compiled functions into the object file with any other
@@ -89,13 +98,16 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+        &types,
         object,
         engine,
         compiled_funcs,
         std::iter::once(translation).collect(),
+        dwarf_package,
     )?;
 
     let info = compilation_artifacts.unwrap_as_module_info();
+    let types = types.finish();
     object.serialize_info(&(&info, &types));
     let result = T::finish_object(object)?;
 
@@ -113,8 +125,11 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
-) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
-    use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
+    _dwarf_package: Option<&[u8]>,
+) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
+    use wasmtime_environ::component::{
+        CompiledComponentInfo, ComponentArtifacts, ComponentTypesBuilder,
+    };
     use wasmtime_environ::ScopeVec;
 
     let tunables = engine.tunables();
@@ -122,7 +137,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
 
     let scope = ScopeVec::new();
     let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
-    let mut types = Default::default();
+    let mut types = ComponentTypesBuilder::new(&validator);
     let (component, mut module_translations) =
         Translator::new(tunables, &mut validator, &mut types, &scope)
             .translate(binary)
@@ -145,10 +160,12 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+        types.module_types_builder(),
         object,
         engine,
         compiled_funcs,
         module_translations,
+        None, // TODO: Support dwarf packages for components.
     )?;
     let (types, ty) = types.finish(
         &compilation_artifacts.modules,
@@ -167,8 +184,8 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     let info = CompiledComponentInfo {
         component: component.component,
         trampolines: compilation_artifacts.trampolines,
-        resource_drop_wasm_to_native_trampoline: compilation_artifacts
-            .resource_drop_wasm_to_native_trampoline,
+        resource_drop_wasm_to_array_trampoline: compilation_artifacts
+            .resource_drop_wasm_to_array_trampoline,
     };
     let artifacts = ComponentArtifacts {
         info,
@@ -179,7 +196,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     object.serialize_info(&artifacts);
 
     let result = T::finish_object(object)?;
-    Ok((result, artifacts))
+    Ok((result, Some(artifacts)))
 }
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
@@ -212,8 +229,8 @@ impl CompileKey {
 
     const WASM_FUNCTION_KIND: u32 = Self::new_kind(0);
     const ARRAY_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(1);
-    const NATIVE_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(2);
-    const WASM_TO_NATIVE_TRAMPOLINE_KIND: u32 = Self::new_kind(3);
+    const WASM_TO_ARRAY_TRAMPOLINE_KIND: u32 = Self::new_kind(2);
+    const WASM_TO_BUILTIN_TRAMPOLINE_KIND: u32 = Self::new_kind(3);
 
     const fn new_kind(kind: u32) -> u32 {
         assert!(kind < (1 << Self::KIND_BITS));
@@ -238,18 +255,17 @@ impl CompileKey {
         }
     }
 
-    fn native_to_wasm_trampoline(module: StaticModuleIndex, index: DefinedFuncIndex) -> Self {
-        debug_assert_eq!(module.as_u32() & Self::KIND_MASK, 0);
+    fn wasm_to_array_trampoline(index: ModuleInternedTypeIndex) -> Self {
         Self {
-            namespace: Self::NATIVE_TO_WASM_TRAMPOLINE_KIND | module.as_u32(),
+            namespace: Self::WASM_TO_ARRAY_TRAMPOLINE_KIND,
             index: index.as_u32(),
         }
     }
 
-    fn wasm_to_native_trampoline(index: ModuleInternedTypeIndex) -> Self {
+    fn wasm_to_builtin_trampoline(index: BuiltinFunctionIndex) -> Self {
         Self {
-            namespace: Self::WASM_TO_NATIVE_TRAMPOLINE_KIND,
-            index: index.as_u32(),
+            namespace: Self::WASM_TO_BUILTIN_TRAMPOLINE_KIND,
+            index: index.index(),
         }
     }
 }
@@ -257,7 +273,7 @@ impl CompileKey {
 #[cfg(feature = "component-model")]
 impl CompileKey {
     const TRAMPOLINE_KIND: u32 = Self::new_kind(4);
-    const RESOURCE_DROP_WASM_TO_NATIVE_KIND: u32 = Self::new_kind(5);
+    const RESOURCE_DROP_WASM_TO_ARRAY_KIND: u32 = Self::new_kind(5);
 
     fn trampoline(index: wasmtime_environ::component::TrampolineIndex) -> Self {
         Self {
@@ -266,9 +282,9 @@ impl CompileKey {
         }
     }
 
-    fn resource_drop_wasm_to_native_trampoline() -> Self {
+    fn resource_drop_wasm_to_array_trampoline() -> Self {
         Self {
-            namespace: Self::RESOURCE_DROP_WASM_TO_NATIVE_KIND,
+            namespace: Self::RESOURCE_DROP_WASM_TO_ARRAY_KIND,
             index: 0,
         }
     }
@@ -378,9 +394,10 @@ impl<'a> CompileInputs<'a> {
         if component.component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
                 ret.push_input(move |compiler| {
-                    let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
+                    let trampoline =
+                        compiler.compile_wasm_to_array_trampoline(types[sig].unwrap_func())?;
                     Ok(CompileOutput {
-                        key: CompileKey::resource_drop_wasm_to_native_trampoline(),
+                        key: CompileKey::resource_drop_wasm_to_array_trampoline(),
                         symbol: "resource_drop_trampoline".to_string(),
                         function: CompiledFunction::Function(trampoline),
                         info: None,
@@ -390,6 +407,36 @@ impl<'a> CompileInputs<'a> {
         }
 
         ret
+    }
+
+    fn clean_symbol(name: &str) -> Cow<str> {
+        /// Maximum length of symbols generated in objects.
+        const MAX_SYMBOL_LEN: usize = 96;
+
+        // Just to be on the safe side, filter out characters that could
+        // pose issues to tools such as "perf" or "objdump".  To avoid
+        // having to update a list of allowed characters for each different
+        // language that compiles to Wasm, allows only graphic ASCII
+        // characters; replace runs of everything else with a "?".
+        let bad_char = |c: char| !c.is_ascii_graphic();
+        if name.chars().any(bad_char) {
+            let mut last_char_seen = '\u{0000}';
+            Cow::Owned(
+                name.chars()
+                    .map(|c| if bad_char(c) { '?' } else { c })
+                    .filter(|c| {
+                        let skip = last_char_seen == '?' && *c == '?';
+                        last_char_seen = *c;
+                        !skip
+                    })
+                    .take(MAX_SYMBOL_LEN)
+                    .collect::<String>(),
+            )
+        } else if name.len() <= MAX_SYMBOL_LEN {
+            Cow::Borrowed(&name[..])
+        } else {
+            Cow::Borrowed(&name[..MAX_SYMBOL_LEN])
+        }
     }
 
     fn collect_inputs_in_translations(
@@ -403,21 +450,34 @@ impl<'a> CompileInputs<'a> {
             ),
         >,
     ) {
-        let mut sigs = BTreeSet::new();
-
         for (module, translation, functions) in translations {
             for (def_func_index, func_body) in functions {
                 self.push_input(move |compiler| {
                     let func_index = translation.module.func_index(def_func_index);
                     let (info, function) =
                         compiler.compile_function(translation, def_func_index, func_body, types)?;
-                    Ok(CompileOutput {
-                        key: CompileKey::wasm_function(module, def_func_index),
-                        symbol: format!(
+                    let symbol = match translation
+                        .debuginfo
+                        .name_section
+                        .func_names
+                        .get(&func_index)
+                    {
+                        Some(name) => format!(
+                            "wasm[{}]::function[{}]::{}",
+                            module.as_u32(),
+                            func_index.as_u32(),
+                            Self::clean_symbol(&name)
+                        ),
+                        None => format!(
                             "wasm[{}]::function[{}]",
                             module.as_u32(),
                             func_index.as_u32()
                         ),
+                    };
+
+                    Ok(CompileOutput {
+                        key: CompileKey::wasm_function(module, def_func_index),
+                        symbol,
                         function: CompiledFunction::Function(function),
                         info: Some(info),
                     })
@@ -443,42 +503,24 @@ impl<'a> CompileInputs<'a> {
                             info: None,
                         })
                     });
-
-                    self.push_input(move |compiler| {
-                        let func_index = translation.module.func_index(def_func_index);
-                        let trampoline = compiler.compile_native_to_wasm_trampoline(
-                            translation,
-                            types,
-                            def_func_index,
-                        )?;
-                        Ok(CompileOutput {
-                            key: CompileKey::native_to_wasm_trampoline(module, def_func_index),
-                            symbol: format!(
-                                "wasm[{}]::native_to_wasm_trampoline[{}]",
-                                module.as_u32(),
-                                func_index.as_u32()
-                            ),
-                            function: CompiledFunction::Function(trampoline),
-                            info: None,
-                        })
-                    });
                 }
             }
-
-            sigs.extend(translation.module.types.iter().map(|(_, ty)| match ty {
-                ModuleType::Function(ty) => *ty,
-            }));
         }
 
-        for signature in sigs {
+        let mut trampoline_types_seen = HashSet::new();
+        for (_func_type_index, trampoline_type_index) in types.trampoline_types() {
+            let is_new = trampoline_types_seen.insert(trampoline_type_index);
+            if !is_new {
+                continue;
+            }
+            let trampoline_func_ty = types[trampoline_type_index].unwrap_func();
             self.push_input(move |compiler| {
-                let wasm_func_ty = &types[signature];
-                let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
+                let trampoline = compiler.compile_wasm_to_array_trampoline(trampoline_func_ty)?;
                 Ok(CompileOutput {
-                    key: CompileKey::wasm_to_native_trampoline(signature),
+                    key: CompileKey::wasm_to_array_trampoline(trampoline_type_index),
                     symbol: format!(
-                        "signatures[{}]::wasm_to_native_trampoline",
-                        signature.as_u32()
+                        "signatures[{}]::wasm_to_array_trampoline",
+                        trampoline_type_index.as_u32()
                     ),
                     function: CompiledFunction::Function(trampoline),
                     info: None,
@@ -493,7 +535,13 @@ impl<'a> CompileInputs<'a> {
         let compiler = engine.compiler();
 
         // Compile each individual input in parallel.
-        let raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
+        let mut raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
+
+        // Now that all functions have been compiled see if any
+        // wasmtime-builtin functions are necessary. If so those need to be
+        // collected and then those trampolines additionally need to be
+        // compiled.
+        compile_required_builtins(engine, &mut raw_outputs)?;
 
         // Bucket the outputs by kind.
         let mut outputs: BTreeMap<u32, Vec<CompileOutput>> = BTreeMap::new();
@@ -501,22 +549,46 @@ impl<'a> CompileInputs<'a> {
             outputs.entry(output.key.kind()).or_default().push(output);
         }
 
-        // Assert that the elements within a bucket are all sorted as we expect
-        // them to be.
-        fn is_sorted_by_key<T, K>(items: &[T], f: impl Fn(&T) -> K) -> bool
-        where
-            K: PartialOrd,
-        {
-            items
-                .windows(2)
-                .all(|window| f(&window[0]) <= f(&window[1]))
-        }
-        debug_assert!(outputs
-            .values()
-            .all(|funcs| is_sorted_by_key(funcs, |x| x.key)));
-
         Ok(UnlinkedCompileOutputs { outputs })
     }
+}
+
+fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutput>) -> Result<()> {
+    let compiler = engine.compiler();
+    let mut builtins = HashSet::new();
+    let mut new_inputs: Vec<CompileInput<'_>> = Vec::new();
+
+    let compile_builtin = |builtin: BuiltinFunctionIndex| {
+        Box::new(move |compiler: &dyn Compiler| {
+            let symbol = format!("wasmtime_builtin_{}", builtin.name());
+            Ok(CompileOutput {
+                key: CompileKey::wasm_to_builtin_trampoline(builtin),
+                symbol,
+                function: CompiledFunction::Function(compiler.compile_wasm_to_builtin(builtin)?),
+                info: None,
+            })
+        })
+    };
+
+    for output in raw_outputs.iter() {
+        let f = match &output.function {
+            CompiledFunction::Function(f) => f,
+            #[cfg(feature = "component-model")]
+            CompiledFunction::AllCallFunc(_) => continue,
+        };
+        for reloc in compiler.compiled_function_relocation_targets(&**f) {
+            match reloc {
+                RelocationTarget::Builtin(i) => {
+                    if builtins.insert(i) {
+                        new_inputs.push(compile_builtin(i));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    raw_outputs.extend(engine.run_maybe_parallel(new_inputs, |c| c(compiler))?);
+    Ok(())
 }
 
 #[derive(Default)]
@@ -547,13 +619,10 @@ impl UnlinkedCompileOutputs {
                 CompiledFunction::AllCallFunc(f) => {
                     let array_call = compiled_funcs.len();
                     compiled_funcs.push((format!("{}_array_call", x.symbol), f.array_call));
-                    let native_call = compiled_funcs.len();
-                    compiled_funcs.push((format!("{}_native_call", x.symbol), f.native_call));
                     let wasm_call = compiled_funcs.len();
                     compiled_funcs.push((format!("{}_wasm_call", x.symbol), f.wasm_call));
                     CompiledFunction::AllCallFunc(wasmtime_environ::component::AllCallFunc {
                         array_call,
-                        native_call,
                         wasm_call,
                     })
                 }
@@ -561,7 +630,6 @@ impl UnlinkedCompileOutputs {
 
             if x.key.kind() == CompileKey::WASM_FUNCTION_KIND
                 || x.key.kind() == CompileKey::ARRAY_TO_WASM_TRAMPOLINE_KIND
-                || x.key.kind() == CompileKey::NATIVE_TO_WASM_TRAMPOLINE_KIND
             {
                 indices
                     .compiled_func_index_to_module
@@ -599,10 +667,12 @@ impl FunctionIndices {
     /// them to the given ELF file.
     fn link_and_append_code<'a>(
         mut self,
+        types: &ModuleTypesBuilder,
         mut obj: object::write::Object<'static>,
         engine: &'a Engine,
         compiled_funcs: Vec<(String, Box<dyn Any + Send>)>,
         translations: PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
+        dwarf_package_bytes: Option<&[u8]>,
     ) -> Result<(wasmtime_environ::ObjectBuilder<'a>, Artifacts)> {
         // Append all the functions to the ELF file.
         //
@@ -614,57 +684,55 @@ impl FunctionIndices {
         let symbol_ids_and_locs = compiler.append_code(
             &mut obj,
             &compiled_funcs,
-            &|caller_index: usize, callee_index: FuncIndex| {
-                let module = self
-                    .compiled_func_index_to_module
-                    .get(&caller_index)
-                    .copied()
-                    .expect("should only reloc inside wasm function callers");
-                let def_func_index = translations[module]
-                    .module
-                    .defined_func_index(callee_index)
-                    .unwrap();
-                self.indices[&CompileKey::WASM_FUNCTION_KIND]
-                    [&CompileKey::wasm_function(module, def_func_index)]
-                    .unwrap_function()
+            &|caller_index: usize, callee: RelocationTarget| match callee {
+                RelocationTarget::Wasm(callee_index) => {
+                    let module = self
+                        .compiled_func_index_to_module
+                        .get(&caller_index)
+                        .copied()
+                        .expect("should only reloc inside wasm function callers");
+                    let def_func_index = translations[module]
+                        .module
+                        .defined_func_index(callee_index)
+                        .unwrap();
+                    self.indices[&CompileKey::WASM_FUNCTION_KIND]
+                        [&CompileKey::wasm_function(module, def_func_index)]
+                        .unwrap_function()
+                }
+                RelocationTarget::Builtin(builtin) => self.indices
+                    [&CompileKey::WASM_TO_BUILTIN_TRAMPOLINE_KIND]
+                    [&CompileKey::wasm_to_builtin_trampoline(builtin)]
+                    .unwrap_function(),
+                RelocationTarget::HostLibcall(_) => {
+                    unreachable!("relocation is resolved at runtime, not compile time");
+                }
             },
         )?;
 
         // If requested, generate and add DWARF information.
-        if tunables.generate_native_debuginfo &&
-            // We can only add DWARF once. Supporting DWARF for components of
-            // multiple Wasm modules will require merging the DWARF sections
-            // together.
-            translations.len() == 1
-        {
-            for (module, translation) in &translations {
-                let funcs: PrimaryMap<_, _> = self
-                    .indices
-                    .get(&CompileKey::WASM_FUNCTION_KIND)
-                    .map(|xs| {
-                        xs.range(
-                            CompileKey::wasm_function(module, DefinedFuncIndex::from_u32(0))
-                                ..=CompileKey::wasm_function(
-                                    module,
-                                    DefinedFuncIndex::from_u32(u32::MAX - 1),
-                                ),
-                        )
-                    })
-                    .into_iter()
-                    .flat_map(|x| x)
-                    .map(|(_, x)| {
-                        let i = x.unwrap_function();
-                        (symbol_ids_and_locs[i].0, &*compiled_funcs[i].1)
-                    })
-                    .collect();
-                if !funcs.is_empty() {
-                    compiler.append_dwarf(&mut obj, translation, &funcs)?;
-                }
-            }
+        if tunables.generate_native_debuginfo {
+            compiler.append_dwarf(
+                &mut obj,
+                &translations,
+                &|module, func| {
+                    let bucket = &self.indices[&CompileKey::WASM_FUNCTION_KIND];
+                    let i = bucket[&CompileKey::wasm_function(module, func)].unwrap_function();
+                    (symbol_ids_and_locs[i].0, &*compiled_funcs[i].1)
+                },
+                dwarf_package_bytes,
+                tunables,
+            )?;
         }
 
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);
         let mut artifacts = Artifacts::default();
+
+        // Remove this as it's not needed by anything below and we'll debug
+        // assert `self.indices` is empty, so this is acknowledgement that this
+        // is a pure runtime implementation detail and not needed in any
+        // metadata generated below.
+        self.indices
+            .remove(&CompileKey::WASM_TO_BUILTIN_TRAMPOLINE_KIND);
 
         // Finally, build our binary artifacts that map things like `FuncIndex`
         // to a function location and all of that using the indices we saved
@@ -699,16 +767,11 @@ impl FunctionIndices {
             .remove(&CompileKey::ARRAY_TO_WASM_TRAMPOLINE_KIND)
             .unwrap_or_default();
 
-        let mut native_to_wasm_trampolines = self
-            .indices
-            .remove(&CompileKey::NATIVE_TO_WASM_TRAMPOLINE_KIND)
-            .unwrap_or_default();
-
         // NB: unlike the above maps this is not emptied out during iteration
         // since each module may reach into different portions of this map.
-        let wasm_to_native_trampolines = self
+        let wasm_to_array_trampolines = self
             .indices
-            .remove(&CompileKey::WASM_TO_NATIVE_TRAMPOLINE_KIND)
+            .remove(&CompileKey::WASM_TO_ARRAY_TRAMPOLINE_KIND)
             .unwrap_or_default();
 
         artifacts.modules = translations
@@ -727,7 +790,9 @@ impl FunctionIndices {
                 // Attempt to convert table initializer segments to
                 // FuncTable representation where possible, to enable
                 // table lazy init.
-                translation.try_func_table_init();
+                if engine.tunables().table_lazy_init {
+                    translation.try_func_table_init();
+                }
 
                 let funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo> =
                     wasm_functions_for_module(&mut wasm_functions, module)
@@ -743,40 +808,33 @@ impl FunctionIndices {
                                 ))
                                 .map(|x| symbol_ids_and_locs[x.unwrap_function()].1);
 
-                            let native_to_wasm_trampoline = native_to_wasm_trampolines
-                                .remove(&CompileKey::native_to_wasm_trampoline(
-                                    key.module(),
-                                    DefinedFuncIndex::from_u32(key.index),
-                                ))
-                                .map(|x| symbol_ids_and_locs[x.unwrap_function()].1);
-
                             CompiledFunctionInfo {
                                 wasm_func_info,
                                 wasm_func_loc,
                                 array_to_wasm_trampoline,
-                                native_to_wasm_trampoline,
                             }
                         })
                         .collect();
 
-                let unique_and_sorted_sigs = translation
+                let unique_and_sorted_trampoline_sigs = translation
                     .module
                     .types
                     .iter()
-                    .map(|(_, ty)| match ty {
-                        ModuleType::Function(ty) => *ty,
-                    })
+                    .map(|(_, ty)| *ty)
+                    .filter(|idx| types[*idx].is_func())
+                    .map(|idx| types.trampoline_type(idx))
                     .collect::<BTreeSet<_>>();
-                let wasm_to_native_trampolines = unique_and_sorted_sigs
+                let wasm_to_array_trampolines = unique_and_sorted_trampoline_sigs
                     .iter()
                     .map(|idx| {
-                        let key = CompileKey::wasm_to_native_trampoline(*idx);
-                        let compiled = wasm_to_native_trampolines[&key];
+                        let trampoline = types.trampoline_type(*idx);
+                        let key = CompileKey::wasm_to_array_trampoline(trampoline);
+                        let compiled = wasm_to_array_trampolines[&key];
                         (*idx, symbol_ids_and_locs[compiled.unwrap_function()].1)
                     })
                     .collect();
 
-                obj.append(translation, funcs, wasm_to_native_trampolines)
+                obj.append(translation, funcs, wasm_to_array_trampolines)
             })
             .collect::<Result<PrimaryMap<_, _>>>()?;
 
@@ -791,10 +849,10 @@ impl FunctionIndices {
                 .collect();
             let map = self
                 .indices
-                .remove(&CompileKey::RESOURCE_DROP_WASM_TO_NATIVE_KIND)
+                .remove(&CompileKey::RESOURCE_DROP_WASM_TO_ARRAY_KIND)
                 .unwrap_or_default();
             assert!(map.len() <= 1);
-            artifacts.resource_drop_wasm_to_native_trampoline = map
+            artifacts.resource_drop_wasm_to_array_trampoline = map
                 .into_iter()
                 .next()
                 .map(|(_id, x)| symbol_ids_and_locs[x.unwrap_function()].1);
@@ -820,7 +878,7 @@ struct Artifacts {
         wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
-    resource_drop_wasm_to_native_trampoline: Option<wasmtime_environ::FunctionLoc>,
+    resource_drop_wasm_to_array_trampoline: Option<wasmtime_environ::FunctionLoc>,
 }
 
 impl Artifacts {

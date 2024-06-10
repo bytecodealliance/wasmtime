@@ -18,52 +18,30 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r10
-;;   cmpq    %r10, %rdx
-;;   jnbe    label3; j label1
-;; block1:
-;;   addq    %rdx, 80(%rdi), %rdx
-;;   movl    $-65536, %esi
-;;   movb    %cl, 0(%rdx,%rsi,1)
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x68(%rdi), %r9
+;;       cmpq    %r9, %rdx
+;;       ja      0x24
+;;   11: addq    0x60(%rdi), %rdx
+;;       movl    $0xffff0000, %r11d
+;;       movb    %cl, (%rdx, %r11)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   24: ud2
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r10
-;;   cmpq    %r10, %rdx
-;;   jnbe    label3; j label1
-;; block1:
-;;   addq    %rdx, 80(%rdi), %rdx
-;;   movl    $-65536, %esi
-;;   movzbq  0(%rdx,%rsi,1), %rax
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x68(%rdi), %r9
+;;       cmpq    %r9, %rdx
+;;       ja      0x65
+;;   51: addq    0x60(%rdi), %rdx
+;;       movl    $0xffff0000, %r11d
+;;       movzbq  (%rdx, %r11), %rax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   65: ud2

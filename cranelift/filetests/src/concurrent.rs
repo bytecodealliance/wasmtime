@@ -21,7 +21,6 @@ struct Request(usize, PathBuf);
 pub enum Reply {
     Starting {
         jobid: usize,
-        thread_num: usize,
     },
     Done {
         jobid: usize,
@@ -145,7 +144,7 @@ fn worker_thread(
 
                 // Tell them we're starting this job.
                 // The receiver should always be present for this as long as we have jobs.
-                replies.send(Reply::Starting { jobid, thread_num }).unwrap();
+                replies.send(Reply::Starting { jobid }).unwrap();
 
                 let result = catch_unwind(|| runone::run(path.as_path(), None, None))
                     .unwrap_or_else(|e| {

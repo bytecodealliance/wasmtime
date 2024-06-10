@@ -153,7 +153,7 @@ const ZSTD_COMPRESSION_LEVELS: std::ops::RangeInclusive<i32> = 0..=21;
 // Default settings, you're welcome to tune them!
 // TODO: what do we want to warn users about?
 
-// At the moment of writing, the modules couldn't depend on anothers,
+// At the moment of writing, the modules couldn't depend on another,
 // so we have at most one module per wasmtime instance
 // if changed, update cli-cache.md
 const DEFAULT_WORKER_EVENT_QUEUE_SIZE: u64 = 0x10;

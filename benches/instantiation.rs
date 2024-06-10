@@ -20,7 +20,7 @@ fn instantiate(pre: &InstancePre<WasiCtx>, engine: &Engine) -> Result<()> {
     Ok(())
 }
 
-fn benchmark_name<'a>(strategy: &InstanceAllocationStrategy) -> &'static str {
+fn benchmark_name(strategy: &InstanceAllocationStrategy) -> &'static str {
     match strategy {
         InstanceAllocationStrategy::OnDemand => "default",
         InstanceAllocationStrategy::Pooling { .. } => "pooling",
@@ -219,7 +219,7 @@ fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
         InstanceAllocationStrategy::OnDemand,
         InstanceAllocationStrategy::Pooling({
             let mut config = PoolingAllocationConfig::default();
-            config.memory_pages(10_000);
+            config.max_memory_size(10_000 << 16);
             config
         }),
     ]

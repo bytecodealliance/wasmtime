@@ -15,6 +15,7 @@ pub trait RustGenerator<'a> {
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
     fn is_imported_interface(&self, interface: InterfaceId) -> bool;
+    fn wasmtime_path(&self) -> String;
 
     /// This determines whether we generate owning types or (where appropriate)
     /// borrowing types.
@@ -39,8 +40,8 @@ pub trait RustGenerator<'a> {
             Type::S16 => self.push_str("i16"),
             Type::S32 => self.push_str("i32"),
             Type::S64 => self.push_str("i64"),
-            Type::Float32 => self.push_str("f32"),
-            Type::Float64 => self.push_str("f64"),
+            Type::F32 => self.push_str("f32"),
+            Type::F64 => self.push_str("f64"),
             Type::Char => self.push_str("char"),
             Type::String => match mode {
                 TypeMode::AllBorrowed(lt) => {
@@ -51,7 +52,10 @@ pub trait RustGenerator<'a> {
                     }
                     self.push_str("str");
                 }
-                TypeMode::Owned => self.push_str("String"),
+                TypeMode::Owned => {
+                    let wt = self.wasmtime_path();
+                    self.push_str(&format!("{wt}::component::__internal::String"))
+                }
             },
         }
     }
@@ -212,7 +216,8 @@ pub trait RustGenerator<'a> {
                 self.push_str("]");
             }
             TypeMode::Owned => {
-                self.push_str("Vec<");
+                let wt = self.wasmtime_path();
+                self.push_str(&format!("{wt}::component::__internal::Vec<"));
                 self.print_ty(ty, next_mode);
                 self.push_str(">");
             }
@@ -242,15 +247,16 @@ pub trait RustGenerator<'a> {
             TypeOwner::Interface(i) => self.is_imported_interface(i),
             _ => true,
         };
+        let wt = self.wasmtime_path();
         if is_host_defined {
-            self.push_str("wasmtime::component::Resource<");
+            self.push_str(&format!("{wt}::component::Resource<"));
             self.print_type_name_in_interface(
                 ty.owner,
                 &ty.name.as_ref().unwrap().to_upper_camel_case(),
             );
             self.push_str(">");
         } else {
-            self.push_str("wasmtime::component::ResourceAny");
+            self.push_str(&format!("{wt}::component::ResourceAny"));
         }
     }
 

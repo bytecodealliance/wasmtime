@@ -1,11 +1,20 @@
-use std::ffi::c_void;
-use std::io::Result;
+use core::ffi::c_void;
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+extern crate std;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub use std::io::Result;
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+pub use anyhow::Result;
 
 #[cfg(all(
     target_arch = "aarch64",
     any(target_os = "linux", target_os = "android")
 ))]
 mod details {
+    extern crate std;
+
     use super::*;
     use libc::{syscall, EINVAL, EPERM};
     use std::io::Error;
@@ -87,20 +96,26 @@ mod details {
     any(target_os = "linux", target_os = "android")
 )))]
 mod details {
-    pub(crate) fn pipeline_flush_mt() -> std::io::Result<()> {
+    // NB: this uses `anyhow::Result` instead of `std::io::Result` to compile on
+    // `no_std`.
+    pub(crate) fn pipeline_flush_mt() -> super::Result<()> {
         Ok(())
     }
 }
+
 #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
 fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "one-core")] {
-            use std::arch::asm;
+            use core::arch::asm;
+            let _ = (start, end);
             unsafe {
                 asm!("fence.i");
             };
             Ok(())
         } else {
+            extern crate std;
+
             match unsafe {
                 libc::syscall(
                     {

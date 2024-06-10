@@ -1,6 +1,7 @@
 use crate::{
     bad_utf8, handle_result, wasm_engine_t, wasm_functype_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_instance_pre_t, wasmtime_module_t, CStoreContext, CStoreContextMut,
+    wasmtime_extern_t, wasmtime_instance_pre_t, wasmtime_module_t, WasmtimeStoreContext,
+    WasmtimeStoreContextMut,
 };
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
@@ -9,7 +10,7 @@ use wasmtime::{Func, Instance, Linker};
 
 #[repr(C)]
 pub struct wasmtime_linker_t {
-    pub(crate) linker: Linker<crate::StoreData>,
+    pub(crate) linker: Linker<crate::WasmtimeStoreData>,
 }
 
 wasmtime_c_api_macros::declare_own!(wasmtime_linker_t);
@@ -50,7 +51,7 @@ pub(crate) use to_str;
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define(
     linker: &mut wasmtime_linker_t,
-    store: CStoreContext<'_>,
+    store: WasmtimeStoreContext<'_>,
     module: *const u8,
     module_len: usize,
     name: *const u8,
@@ -111,10 +112,8 @@ pub extern "C" fn wasmtime_linker_define_wasi(
     linker: &mut wasmtime_linker_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        wasi_common::sync::add_to_linker(&mut linker.linker, |cx| {
-            cx.wasi.as_mut().expect(
-                "failed to define WASI on linker; did you set a WASI configuration in the store?",
-            )
+        wasmtime_wasi::preview1::add_to_linker_sync(&mut linker.linker, |ctx| {
+            ctx.wasi.as_mut().expect("wasi context must be populated")
         }),
         |_linker| (),
     )
@@ -123,7 +122,7 @@ pub extern "C" fn wasmtime_linker_define_wasi(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define_instance(
     linker: &mut wasmtime_linker_t,
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     name: *const u8,
     name_len: usize,
     instance: &Instance,
@@ -136,7 +135,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_instance(
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_instantiate(
     linker: &wasmtime_linker_t,
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     module: &wasmtime_module_t,
     instance_ptr: &mut Instance,
     trap_ptr: &mut *mut wasm_trap_t,
@@ -161,7 +160,7 @@ pub unsafe extern "C" fn wasmtime_linker_instantiate_pre(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_module(
     linker: &mut wasmtime_linker_t,
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     name: *const u8,
     name_len: usize,
     module: &wasmtime_module_t,
@@ -174,7 +173,7 @@ pub unsafe extern "C" fn wasmtime_linker_module(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_get_default(
     linker: &wasmtime_linker_t,
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     name: *const u8,
     name_len: usize,
     func: &mut Func,
@@ -187,7 +186,7 @@ pub unsafe extern "C" fn wasmtime_linker_get_default(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_get(
     linker: &wasmtime_linker_t,
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     module: *const u8,
     module_len: usize,
     name: *const u8,

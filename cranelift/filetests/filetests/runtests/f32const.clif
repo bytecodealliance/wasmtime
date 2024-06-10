@@ -1,0 +1,61 @@
+test interpret
+test run
+target x86_64
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_zfa
+target riscv64 has_c has_zcb
+
+
+;; These values are special for RISC-V since it has a dedicated
+;; instruction to generate them.
+
+function %special_f32_values() -> f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32 {
+block0:
+    v0 = f32const -0x1.p0
+    v1 = f32const 0x1.p-126
+    v2 = f32const 0x1.p-16
+    v3 = f32const 0x1.p-15
+    v4 = f32const 0x1.p-8
+    v5 = f32const 0x1.p-7
+    v6 = f32const 0x1.p-4
+    v7 = f32const 0x1.p-3
+    v8 = f32const 0x1.p-2
+    v9 = f32const 0x1.4p-2
+    v10 = f32const 0x1.8p-2
+    v11 = f32const 0x1.cp-2
+    v12 = f32const 0x1.p-1
+    v13 = f32const 0x1.4p-1
+    v14 = f32const 0x1.8p-1
+    v15 = f32const 0x1.cp-1
+    v16 = f32const 0x1.p0
+    v17 = f32const 0x1.4p0
+    v18 = f32const 0x1.8p0
+    v19 = f32const 0x1.cp0
+    v20 = f32const 0x1.p1
+    v21 = f32const 0x1.4p1
+    v22 = f32const 0x1.8p1
+    v23 = f32const 0x1.p2
+    v24 = f32const 0x1.p3
+    v25 = f32const 0x1.p4
+    v26 = f32const 0x1.p7
+    v27 = f32const 0x1.p8
+    v28 = f32const 0x1.p15
+    v29 = f32const 0x1.p16
+    v30 = f32const +Inf
+    v31 = f32const +NaN
+
+    return v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31
+}
+
+; run: %special_f32_values() == [-0x1.p0, 0x1.p-126, 0x1.p-16, 0x1.p-15, 0x1.p-8, 0x1.p-7, 0x1.p-4, 0x1.p-3, 0x1.p-2, 0x1.4p-2, 0x1.8p-2, 0x1.cp-2, 0x1.p-1, 0x1.4p-1, 0x1.8p-1, 0x1.cp-1, 0x1.p0, 0x1.4p0, 0x1.8p0, 0x1.cp0, 0x1.p1, 0x1.4p1, 0x1.8p1, 0x1.p2, 0x1.p3, 0x1.p4, 0x1.p7, 0x1.p8, 0x1.p15, 0x1.p16, +Inf, +NaN]
+
+
+function %f32const_neg_nan() -> f32 {
+block0:
+    v0 = f32const -NaN
+    return v0
+}
+
+; run: %f32const_neg_nan() == -NaN

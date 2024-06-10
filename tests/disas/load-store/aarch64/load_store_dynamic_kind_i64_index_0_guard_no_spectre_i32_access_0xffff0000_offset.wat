@@ -18,58 +18,38 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movn w10, #65531
-;;   adds x10, x2, x10
-;;   b.hs #trap=heap_oob
-;;   ldr x11, [x0, #88]
-;;   subs xzr, x10, x11
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x13, [x0, #80]
-;;   add x13, x13, x2
-;;   movz x14, #65535, LSL #16
-;;   str w3, [x13, x14]
-;;   b label2
-;; block2:
-;;   ldp fp, lr, [sp], #16
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w9, #-0xfffc
+;;       adds    x9, x4, x9
+;;       b.hs    #0x3c
+;;   14: ldr     x10, [x2, #0x68]
+;;       cmp     x9, x10
+;;       b.hi    #0x38
+;;   20: ldr     x12, [x2, #0x60]
+;;       add     x12, x12, x4
+;;       mov     x13, #0xffff0000
+;;       str     w5, [x12, x13]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;   38: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   3c: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movn w10, #65531
-;;   adds x10, x2, x10
-;;   b.hs #trap=heap_oob
-;;   ldr x11, [x0, #88]
-;;   subs xzr, x10, x11
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x13, [x0, #80]
-;;   add x13, x13, x2
-;;   movz x14, #65535, LSL #16
-;;   ldr w0, [x13, x14]
-;;   b label2
-;; block2:
-;;   ldp fp, lr, [sp], #16
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w9, #-0xfffc
+;;       adds    x9, x4, x9
+;;       b.hs    #0x7c
+;;   54: ldr     x10, [x2, #0x68]
+;;       cmp     x9, x10
+;;       b.hi    #0x78
+;;   60: ldr     x12, [x2, #0x60]
+;;       add     x12, x12, x4
+;;       mov     x13, #0xffff0000
+;;       ldr     w2, [x12, x13]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;   78: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   7c: .byte   0x1f, 0xc1, 0x00, 0x00

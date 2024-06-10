@@ -2,9 +2,9 @@
 
 use crate::component::matching::InstanceType;
 use crate::{Engine, ExternType, FuncType};
-use std::fmt;
-use std::ops::Deref;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use core::fmt;
+use core::ops::Deref;
 use wasmtime_environ::component::{
     ComponentTypes, InterfaceType, ResourceIndex, TypeComponentIndex, TypeComponentInstanceIndex,
     TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex, TypeListIndex, TypeModuleIndex,
@@ -263,7 +263,7 @@ impl List {
         List(Handle::new(index, ty))
     }
 
-    /// Retreive the element type of this `list`.
+    /// Retrieve the element type of this `list`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index].element, &self.0.instance())
     }
@@ -425,7 +425,7 @@ impl ResultType {
         ResultType(Handle::new(index, ty))
     }
 
-    /// Retrieve the `ok` type parameter for this `option`.
+    /// Retrieve the `ok` type parameter for this `result`.
     pub fn ok(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].ok.as_ref()?,
@@ -433,7 +433,7 @@ impl ResultType {
         ))
     }
 
-    /// Retrieve the `err` type parameter for this `option`.
+    /// Retrieve the `err` type parameter for this `result`.
     pub fn err(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].err.as_ref()?,
@@ -871,10 +871,15 @@ impl ComponentItem {
             TypeDef::ComponentFunc(idx) => Self::ComponentFunc(ComponentFunc::from(*idx, ty)),
             TypeDef::Interface(iface_ty) => Self::Type(Type::from(iface_ty, ty)),
             TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
-            TypeDef::CoreFunc(idx) => Self::CoreFunc(FuncType::from_wasm_func_type(
-                engine,
-                ty.types[*idx].clone(),
-            )),
+            TypeDef::CoreFunc(idx) => {
+                let subty = &ty.types[*idx];
+                Self::CoreFunc(FuncType::from_wasm_func_type(
+                    engine,
+                    subty.is_final,
+                    subty.supertype,
+                    subty.unwrap_func().clone(),
+                ))
+            }
             TypeDef::Resource(idx) => {
                 let resource_index = ty.types[*idx].ty;
                 let ty = match ty.resources.get(resource_index) {

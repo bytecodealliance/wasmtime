@@ -1,8 +1,7 @@
 use super::expression::{CompiledExpression, FunctionFrameInfo};
-use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
+use super::utils::{add_internal_types, append_vmctx_info};
 use super::AddressTransform;
-use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctionsMetadata;
+use crate::debug::{Compilation, ModuleMemoryOffset};
 use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_wasm::get_vmctx_value_label;
@@ -12,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime_environ::{
-    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo,
+    DebugInfoData, EntityRef, FunctionMetadata, PrimaryMap, StaticModuleIndex, WasmFileInfo,
     WasmValType,
 };
 
@@ -31,8 +30,8 @@ macro_rules! assert_dwarf_str {
 }
 
 fn generate_line_info(
-    addr_tr: &AddressTransform,
-    translated: &HashSet<DefinedFuncIndex>,
+    addr_tr: &PrimaryMap<StaticModuleIndex, AddressTransform>,
+    translated: &HashSet<usize>,
     out_encoding: gimli::Encoding,
     w: &WasmFileInfo,
     comp_dir_id: write::StringId,
@@ -58,12 +57,17 @@ fn generate_line_info(
         None,
     );
 
-    for (i, map) in addr_tr.map() {
-        let symbol = i.index();
-        if translated.contains(&i) {
-            continue;
-        }
+    let maps = addr_tr.iter().flat_map(|(_, transform)| {
+        transform.map().iter().filter_map(|(_, map)| {
+            if translated.contains(&map.symbol) {
+                None
+            } else {
+                Some((map.symbol, map))
+            }
+        })
+    });
 
+    for (symbol, map) in maps {
         let base_addr = map.offset;
         out_program.begin_sequence(Some(write::Address::Symbol { symbol, addend: 0 }));
         for addr_map in map.addresses.iter() {
@@ -200,7 +204,7 @@ fn generate_vars(
 ) -> Result<(), Error> {
     let vmctx_label = get_vmctx_value_label();
 
-    // Normalize order of ValueLabelsRanges keys to have reproducable results.
+    // Normalize order of ValueLabelsRanges keys to have reproducible results.
     let mut vars = frame_info.value_ranges.keys().collect::<Vec<_>>();
     vars.sort_by(|a, b| a.index().cmp(&b.index()));
 
@@ -279,26 +283,24 @@ fn check_invalid_chars_in_path(path: PathBuf) -> Option<PathBuf> {
 }
 
 pub fn generate_simulated_dwarf(
-    addr_tr: &AddressTransform,
-    di: &DebugInfoData,
-    memory_offset: &ModuleMemoryOffset,
-    funcs: &CompiledFunctionsMetadata,
-    translated: &HashSet<DefinedFuncIndex>,
+    compilation: &mut Compilation<'_>,
+    addr_tr: &PrimaryMap<StaticModuleIndex, AddressTransform>,
+    translated: &HashSet<usize>,
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
     isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
-    let path = di
-        .wasm_file
-        .path
-        .to_owned()
-        .and_then(check_invalid_chars_in_path)
-        .unwrap_or_else(|| autogenerate_dwarf_wasm_path(di));
-
-    let func_names = &di.name_section.func_names;
-    let locals_names = &di.name_section.locals_names;
-    let imported_func_count = di.wasm_file.imported_func_count;
+    let (wasm_file, path) = {
+        let di = &compilation.translations.iter().next().unwrap().1.debuginfo;
+        let path = di
+            .wasm_file
+            .path
+            .to_owned()
+            .and_then(check_invalid_chars_in_path)
+            .unwrap_or_else(|| autogenerate_dwarf_wasm_path(di));
+        (&di.wasm_file, path)
+    };
 
     let (unit, root_id, name_id) = {
         let comp_dir_id = out_strings.add(assert_dwarf_str!(path
@@ -317,7 +319,7 @@ pub fn generate_simulated_dwarf(
             addr_tr,
             translated,
             out_encoding,
-            &di.wasm_file,
+            wasm_file,
             comp_dir_id,
             name_id,
             name,
@@ -343,14 +345,21 @@ pub fn generate_simulated_dwarf(
         (unit, root_id, name_id)
     };
 
-    let wasm_types = add_wasm_types(unit, root_id, out_strings, memory_offset);
+    let mut module_wasm_types = PrimaryMap::new();
+    for (module, memory_offset) in compilation.module_memory_offsets.iter() {
+        let wasm_types = add_wasm_types(unit, root_id, out_strings, memory_offset);
+        let i = module_wasm_types.push(wasm_types);
+        assert_eq!(i, module);
+    }
 
-    for (i, map) in addr_tr.map().iter() {
-        let index = i.index();
-        if translated.contains(&i) {
+    for (module, index) in compilation.indexes().collect::<Vec<_>>() {
+        let (symbol, _) = compilation.function(module, index);
+        if translated.contains(&symbol) {
             continue;
         }
 
+        let addr_tr = &addr_tr[module];
+        let map = &addr_tr.map()[index];
         let start = map.offset as u64;
         let end = start + map.len as u64;
         let die_id = unit.add(root_id, gimli::DW_TAG_subprogram);
@@ -358,7 +367,7 @@ pub fn generate_simulated_dwarf(
         die.set(
             gimli::DW_AT_low_pc,
             write::AttributeValue::Address(write::Address::Symbol {
-                symbol: index,
+                symbol,
                 addend: start as i64,
             }),
         );
@@ -367,13 +376,17 @@ pub fn generate_simulated_dwarf(
             write::AttributeValue::Udata(end - start),
         );
 
-        let func_index = imported_func_count + (index as u32);
-        let id = match func_names
-            .get(&FuncIndex::from_u32(func_index))
+        let translation = &compilation.translations[module];
+        let func_index = translation.module.func_index(index);
+        let di = &translation.debuginfo;
+        let id = match di
+            .name_section
+            .func_names
+            .get(&func_index)
             .and_then(|s| check_invalid_chars_in_name(s))
         {
             Some(n) => out_strings.add(assert_dwarf_str!(n)),
-            None => out_strings.add(format!("wasm-function[{}]", func_index)),
+            None => out_strings.add(format!("wasm-function[{}]", func_index.as_u32())),
         };
 
         die.set(gimli::DW_AT_name, write::AttributeValue::StringRef(id));
@@ -390,21 +403,20 @@ pub fn generate_simulated_dwarf(
             write::AttributeValue::Udata(wasm_offset),
         );
 
-        if let Some(frame_info) = get_function_frame_info(memory_offset, funcs, i) {
-            let source_range = addr_tr.func_source_range(i);
-            generate_vars(
-                unit,
-                die_id,
-                addr_tr,
-                &frame_info,
-                &[(source_range.0, source_range.1)],
-                &wasm_types,
-                &di.wasm_file.funcs[index],
-                locals_names.get(&FuncIndex::from_u32(index as u32)),
-                out_strings,
-                isa,
-            )?;
-        }
+        let frame_info = compilation.function_frame_info(module, index);
+        let source_range = addr_tr.func_source_range(index);
+        generate_vars(
+            unit,
+            die_id,
+            addr_tr,
+            &frame_info,
+            &[(source_range.0, source_range.1)],
+            &module_wasm_types[module],
+            &di.wasm_file.funcs[index.as_u32() as usize],
+            di.name_section.locals_names.get(&func_index),
+            out_strings,
+            isa,
+        )?;
     }
 
     Ok(())

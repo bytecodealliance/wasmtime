@@ -47,7 +47,7 @@
 //! |                               |
 use crate::codegen::ptr_type_from_ptr_size;
 use crate::isa::{reg::Reg, CallingConvention};
-use crate::masm::{OperandSize, SPOffset};
+use crate::masm::SPOffset;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
@@ -88,60 +88,6 @@ pub(crate) fn vmctx_types<A: ABI>() -> [WasmValType; 2] {
     [A::ptr_type(), A::ptr_type()]
 }
 
-/// Returns an [ABISig] for the array calling convention.
-/// The signature looks like:
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     values_ptr: *mut ValRaw,
-///     values_len: usize,
-/// )
-/// ```
-pub(crate) fn array_sig<A: ABI>(call_conv: &CallingConvention) -> ABISig {
-    let params = [A::ptr_type(), A::ptr_type(), A::ptr_type(), A::ptr_type()];
-    A::sig_from(&params, &[], call_conv)
-}
-
-/// Returns an [ABISig] that follows a variation of the system's
-/// calling convention.
-/// The main difference between the flavor of the returned signature
-/// and the vanilla signature is how multiple values are returned.
-/// Multiple returns are handled following Wasmtime's expectations:
-/// * A single value is returned via a register according to the calling
-///   convention.
-/// * More than one values are returned via a return pointer.
-/// These variations look like:
-///
-/// Single return value.
-///
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     // rest of parameters
-/// ) -> // single result
-/// ```
-///
-/// Multiple return values.
-///
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     // rest of parameters
-///     retptr: *mut (), // 2+ results
-/// ) -> // first result
-/// ```
-pub(crate) fn native_sig<A: ABI>(ty: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
-    // 6 is used semi-arbitrarily here, we can modify as we see fit.
-    let mut params: SmallVec<[WasmValType; 6]> = SmallVec::new();
-    params.extend_from_slice(&vmctx_types::<A>());
-    params.extend_from_slice(ty.params());
-
-    A::sig_from(&params, ty.returns(), call_conv)
-}
-
 /// Trait implemented by a specific ISA and used to provide
 /// information about alignment, parameter passing, usage of
 /// specific registers, etc.
@@ -154,9 +100,6 @@ pub(crate) trait ABI {
 
     /// The offset to the argument base, relative to the frame pointer.
     fn arg_base_offset() -> u8;
-
-    /// The offset to the return address, relative to the frame pointer.
-    fn ret_addr_offset() -> u8;
 
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
@@ -203,19 +146,9 @@ pub(crate) trait ABI {
         }
     }
 
-    /// Returns the frame pointer register.
-    fn fp_reg() -> Reg;
-
-    /// Returns the stack pointer register.
-    fn sp_reg() -> Reg;
-
     /// Returns the pinned register used to hold
     /// the `VMContext`.
     fn vmctx_reg() -> Reg;
-
-    /// Returns the callee-saved registers for the given
-    /// calling convention.
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
 
     /// The size, in bytes, of each stack slot used for stack parameter passing.
     fn stack_slot_size() -> u8;
@@ -533,7 +466,7 @@ impl ABIResults {
 pub(crate) struct ABIParams {
     /// The param operands.
     operands: ABIOperands,
-    /// Whether [`ABIParams`] contains an extra paramter for the stack
+    /// Whether [`ABIParams`] contains an extra parameter for the stack
     /// result area.
     has_retptr: bool,
 }
@@ -609,6 +542,7 @@ impl ABIParams {
     }
 
     /// Get the [`ABIOperand`] param in the nth position.
+    #[allow(unused)]
     pub fn get(&self, n: usize) -> Option<&ABIOperand> {
         self.operands.inner.get(n)
     }
@@ -689,7 +623,7 @@ impl ABISig {
     }
 
     /// Returns a slice over the signature params, excluding the results
-    /// base paramter, if any.
+    /// base parameter, if any.
     pub fn params_without_retptr(&self) -> &[ABIOperand] {
         if self.params.has_retptr() {
             &self.params()[0..(self.params.len() - 1)]

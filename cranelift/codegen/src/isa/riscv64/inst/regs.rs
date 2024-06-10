@@ -3,12 +3,10 @@
 
 use crate::machinst::{Reg, Writable};
 
-use crate::machinst::RealReg;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use regalloc2::VReg;
-use regalloc2::{PReg, RegClass};
+use regalloc2::{PReg, RegClass, VReg};
 
 // first argument of function call
 #[inline]
@@ -154,11 +152,6 @@ pub fn f_reg(enc: usize) -> Reg {
 }
 pub const fn pf_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Float)
-}
-#[inline]
-pub(crate) fn real_reg_to_reg(x: RealReg) -> Reg {
-    let v_reg = VReg::new(x.hw_enc() as usize, x.class());
-    Reg::from(v_reg)
 }
 
 #[allow(dead_code)]

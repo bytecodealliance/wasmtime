@@ -14,7 +14,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lea     10(%rax), %rax
+;   lea     10(%rdi), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -24,7 +24,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   addq $0xa, %rax
+;   leaq 0xa(%rdi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -42,20 +42,18 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i64+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;   load_ext_name %callee_i64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rdx ; reloc_external Abs8 %callee_i64 0
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_i64 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%r10
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -72,20 +70,18 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i64+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;   load_ext_name %callee_i64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leaq (%rip), %rdx ; reloc_external CallPCRel4 %callee_i64 -4
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   leaq (%rip), %r10 ; reloc_external CallPCRel4 %callee_i64 -4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%r10
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -143,20 +139,18 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_f64+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %xmm0=%xmm0
+;   load_ext_name %callee_f64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%r11 %xmm0=%xmm0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rdx ; reloc_external Abs8 %callee_f64 0
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_f64 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%r10
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -171,7 +165,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   testb   %al, %al
+;   testb   %dil, %dil
 ;   setz    %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -182,7 +176,7 @@ block0(v0: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   testb %al, %al
+;   testb %dil, %dil
 ;   sete %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -201,18 +195,247 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i8+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;   load_ext_name %callee_i8+0, %r10
+;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rdx ; reloc_external Abs8 %callee_i8 0
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_i8 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%r10
+
+;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %tail_caller_stack_args() -> i64 tail {
+    fn0 = %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    v26 = func_addr.i64 fn0
+    return_call_indirect sig0, v26(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25)
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $160, %rsp
+;   movq    %rsp, %rbp
+;   movq    160(%rsp), %r11
+;   movq    %r11, 0(%rsp)
+;   movq    168(%rsp), %r11
+;   movq    %r11, 8(%rsp)
+;   subq    %rsp, $160, %rsp
+;   movq    %rbx, 112(%rsp)
+;   movq    %r12, 120(%rsp)
+;   movq    %r13, 128(%rsp)
+;   movq    %r14, 136(%rsp)
+;   movq    %r15, 144(%rsp)
+; block0:
+;   movl    $10, %edi
+;   movq    %rdi, rsp(104 + virtual offset)
+;   movl    $15, %esi
+;   movq    %rsi, rsp(96 + virtual offset)
+;   movl    $20, %edx
+;   movq    %rdx, rsp(88 + virtual offset)
+;   movl    $25, %ecx
+;   movq    %rcx, rsp(80 + virtual offset)
+;   movl    $30, %r8d
+;   movq    %r8, rsp(72 + virtual offset)
+;   movl    $35, %r9d
+;   movq    %r9, rsp(64 + virtual offset)
+;   movl    $40, %eax
+;   movl    $45, %r10d
+;   movl    $50, %r11d
+;   movl    $55, %r13d
+;   movl    $60, %r14d
+;   movl    $65, %r15d
+;   movl    $70, %ebx
+;   movl    $75, %r12d
+;   movl    $80, %edi
+;   movl    $85, %esi
+;   movq    %rsi, rsp(56 + virtual offset)
+;   movl    $90, %edx
+;   movl    $95, %ecx
+;   movl    $100, %r8d
+;   movl    $105, %r9d
+;   movl    $110, %esi
+;   movq    %rsi, rsp(48 + virtual offset)
+;   movl    $115, %esi
+;   movq    %rsi, rsp(40 + virtual offset)
+;   movl    $120, %esi
+;   movq    %rsi, rsp(32 + virtual offset)
+;   movl    $125, %esi
+;   movq    %rsi, rsp(24 + virtual offset)
+;   movl    $130, %esi
+;   movq    %rsi, rsp(16 + virtual offset)
+;   movl    $135, %esi
+;   movq    %rsi, rsp(8 + virtual offset)
+;   load_ext_name %tail_callee_stack_args+0, %rsi
+;   movq    %rsi, rsp(0 + virtual offset)
+;   movq    %rax, rbp(stack args max - 160)
+;   movq    %r10, rbp(stack args max - 152)
+;   movq    %r11, rbp(stack args max - 144)
+;   movq    %r13, rbp(stack args max - 136)
+;   movq    %r14, rbp(stack args max - 128)
+;   movq    %r15, rbp(stack args max - 120)
+;   movq    %rbx, rbp(stack args max - 112)
+;   movq    %r12, rbp(stack args max - 104)
+;   movq    %rdi, rbp(stack args max - 96)
+;   movq    rsp(56 + virtual offset), %rdi
+;   movq    %rdi, rbp(stack args max - 88)
+;   movq    %rdx, rbp(stack args max - 80)
+;   movq    %rcx, rbp(stack args max - 72)
+;   movq    %r8, rbp(stack args max - 64)
+;   movq    %r9, rbp(stack args max - 56)
+;   movq    rsp(48 + virtual offset), %rsi
+;   movq    %rsi, rbp(stack args max - 48)
+;   movq    rsp(40 + virtual offset), %rsi
+;   movq    %rsi, rbp(stack args max - 40)
+;   movq    rsp(32 + virtual offset), %rsi
+;   movq    %rsi, rbp(stack args max - 32)
+;   movq    rsp(24 + virtual offset), %rsi
+;   movq    %rsi, rbp(stack args max - 24)
+;   movq    rsp(16 + virtual offset), %rsi
+;   movq    %rsi, rbp(stack args max - 16)
+;   movq    rsp(8 + virtual offset), %rsi
+;   movq    %rsi, rbp(stack args max - 8)
+;   movq    rsp(80 + virtual offset), %rcx
+;   movq    rsp(88 + virtual offset), %rdx
+;   movq    rsp(96 + virtual offset), %rsi
+;   movq    rsp(104 + virtual offset), %rdi
+;   movq    rsp(72 + virtual offset), %r8
+;   movq    rsp(64 + virtual offset), %r9
+;   movq    rsp(0 + virtual offset), %r10
+;   return_call_unknown %r10 (160) tmp=%r11 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0xa0, %rsp
+;   movq %rsp, %rbp
+;   movq 0xa0(%rsp), %r11
+;   movq %r11, (%rsp)
+;   movq 0xa8(%rsp), %r11
+;   movq %r11, 8(%rsp)
+;   subq $0xa0, %rsp
+;   movq %rbx, 0x70(%rsp)
+;   movq %r12, 0x78(%rsp)
+;   movq %r13, 0x80(%rsp)
+;   movq %r14, 0x88(%rsp)
+;   movq %r15, 0x90(%rsp)
+; block1: ; offset 0x50
+;   movl $0xa, %edi
+;   movq %rdi, 0x68(%rsp)
+;   movl $0xf, %esi
+;   movq %rsi, 0x60(%rsp)
+;   movl $0x14, %edx
+;   movq %rdx, 0x58(%rsp)
+;   movl $0x19, %ecx
+;   movq %rcx, 0x50(%rsp)
+;   movl $0x1e, %r8d
+;   movq %r8, 0x48(%rsp)
+;   movl $0x23, %r9d
+;   movq %r9, 0x40(%rsp)
+;   movl $0x28, %eax
+;   movl $0x2d, %r10d
+;   movl $0x32, %r11d
+;   movl $0x37, %r13d
+;   movl $0x3c, %r14d
+;   movl $0x41, %r15d
+;   movl $0x46, %ebx
+;   movl $0x4b, %r12d
+;   movl $0x50, %edi
+;   movl $0x55, %esi
+;   movq %rsi, 0x38(%rsp)
+;   movl $0x5a, %edx
+;   movl $0x5f, %ecx
+;   movl $0x64, %r8d
+;   movl $0x69, %r9d
+;   movl $0x6e, %esi
+;   movq %rsi, 0x30(%rsp)
+;   movl $0x73, %esi
+;   movq %rsi, 0x28(%rsp)
+;   movl $0x78, %esi
+;   movq %rsi, 0x20(%rsp)
+;   movl $0x7d, %esi
+;   movq %rsi, 0x18(%rsp)
+;   movl $0x82, %esi
+;   movq %rsi, 0x10(%rsp)
+;   movl $0x87, %esi
+;   movq %rsi, 8(%rsp)
+;   movabsq $0, %rsi ; reloc_external Abs8 %tail_callee_stack_args 0
+;   movq %rsi, (%rsp)
+;   movq %rax, 0x10(%rbp)
+;   movq %r10, 0x18(%rbp)
+;   movq %r11, 0x20(%rbp)
+;   movq %r13, 0x28(%rbp)
+;   movq %r14, 0x30(%rbp)
+;   movq %r15, 0x38(%rbp)
+;   movq %rbx, 0x40(%rbp)
+;   movq %r12, 0x48(%rbp)
+;   movq %rdi, 0x50(%rbp)
+;   movq 0x38(%rsp), %rdi
+;   movq %rdi, 0x58(%rbp)
+;   movq %rdx, 0x60(%rbp)
+;   movq %rcx, 0x68(%rbp)
+;   movq %r8, 0x70(%rbp)
+;   movq %r9, 0x78(%rbp)
+;   movq 0x30(%rsp), %rsi
+;   movq %rsi, 0x80(%rbp)
+;   movq 0x28(%rsp), %rsi
+;   movq %rsi, 0x88(%rbp)
+;   movq 0x20(%rsp), %rsi
+;   movq %rsi, 0x90(%rbp)
+;   movq 0x18(%rsp), %rsi
+;   movq %rsi, 0x98(%rbp)
+;   movq 0x10(%rsp), %rsi
+;   movq %rsi, 0xa0(%rbp)
+;   movq 8(%rsp), %rsi
+;   movq %rsi, 0xa8(%rbp)
+;   movq 0x50(%rsp), %rcx
+;   movq 0x58(%rsp), %rdx
+;   movq 0x60(%rsp), %rsi
+;   movq 0x68(%rsp), %rdi
+;   movq 0x48(%rsp), %r8
+;   movq 0x40(%rsp), %r9
+;   movq (%rsp), %r10
+;   movq 0x70(%rsp), %rbx
+;   movq 0x78(%rsp), %r12
+;   movq 0x80(%rsp), %r13
+;   movq 0x88(%rsp), %r14
+;   movq 0x90(%rsp), %r15
+;   addq $0xa0, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%r10
 

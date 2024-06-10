@@ -1,5 +1,5 @@
 use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
-use std::sync::Arc;
+use alloc::sync::Arc;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
 use wasmtime_environ::ModuleTypes;
@@ -25,7 +25,7 @@ pub struct CodeObject {
     ///
     /// Note that this type has a significant destructor which unregisters
     /// signatures within the `Engine` it was originally tied to, and this ends
-    /// up corresponding to the liftime of a `Component` or `Module`.
+    /// up corresponding to the lifetime of a `Component` or `Module`.
     signatures: TypeCollection,
 
     /// Type information for the loaded object.

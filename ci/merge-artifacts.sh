@@ -14,6 +14,7 @@ set -ex
 rm -rf dist
 mkdir dist
 mv -t dist bins-*/*.{msi,wasm}
+mv wasmtime-platform-header/* dist
 
 # Merge tarballs and zips by searching for `*-min` builds, unpacking the
 # min/normal builds, into the same destination, and then repacking into a

@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.
@@ -30,10 +30,17 @@ impl ExploreCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
-        let config = self.common.config(self.target.as_deref())?;
+        let config = self.common.config(self.target.as_deref(), None)?;
 
-        let wasm = std::fs::read(&self.module)
-            .with_context(|| format!("failed to read Wasm module: {}", self.module.display()))?;
+        let bytes =
+            Cow::Owned(std::fs::read(&self.module).with_context(|| {
+                format!("failed to read Wasm module: {}", self.module.display())
+            })?);
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(&bytes).map_err(|mut e| {
+            e.set_path(&self.module);
+            e
+        })?;
 
         let output = self
             .output
@@ -43,7 +50,7 @@ impl ExploreCommand {
             .with_context(|| format!("failed to create file: {}", output.display()))?;
         let mut output_file = std::io::BufWriter::new(output_file);
 
-        wasmtime_explorer::generate(&config, self.target.as_deref(), &wasm, &mut output_file)?;
+        wasmtime_explorer::generate(&config, self.target.as_deref(), &bytes, &mut output_file)?;
         println!("Exploration written to {}", output.display());
         Ok(())
     }

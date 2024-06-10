@@ -1,12 +1,6 @@
 //! Instruction predicates/properties, shared by various analyses.
 use crate::ir::immediates::Offset32;
-use crate::ir::{self, Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
-use cranelift_entity::EntityRef;
-
-/// Preserve instructions with used result values.
-pub fn any_inst_results_used(inst: Inst, live: &[bool], dfg: &DataFlowGraph) -> bool {
-    dfg.inst_results(inst).iter().any(|v| live[v.index()])
-}
+use crate::ir::{self, Block, Function, Inst, InstructionData, Opcode, Type, Value};
 
 /// Test whether the given opcode is unsafe to even consider as side-effect-free.
 #[inline(always)]
@@ -38,10 +32,21 @@ fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool
 /// Does the given instruction have any side-effect that would preclude it from being removed when
 /// its value is unused?
 #[inline(always)]
-pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
+fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let data = &func.dfg.insts[inst];
     let opcode = data.opcode();
     trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
+}
+
+/// Is the given instruction a bitcast to or from a reference type (e.g. `r64`)?
+pub fn is_bitcast_from_ref(func: &Function, inst: Inst) -> bool {
+    let op = func.dfg.insts[inst].opcode();
+    if op != ir::Opcode::Bitcast {
+        return false;
+    }
+
+    let arg = func.dfg.inst_args(inst)[0];
+    func.dfg.value_type(arg).is_ref()
 }
 
 /// Does the given instruction behave as a "pure" node with respect to
@@ -58,6 +63,7 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
         } => flags.readonly() && flags.notrap(),
         _ => false,
     };
+
     // Multi-value results do not play nicely with much of the egraph
     // infrastructure. They are in practice used only for multi-return
     // calls and some other odd instructions (e.g. uadd_overflow) which,
@@ -70,7 +76,11 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 
     let op = func.dfg.insts[inst].opcode();
 
-    has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
+    has_one_result
+        && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
+        // Cannot optimize ref-y bitcasts, as that can interact badly with
+        // safepoints and stack maps.
+        && !is_bitcast_from_ref(func, inst)
 }
 
 /// Can the given instruction be merged into another copy of itself?
@@ -90,6 +100,9 @@ pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
         && !op.can_store()
         // Can only have idempotent side-effects.
         && (!has_side_effect(func, inst) || op.side_effects_idempotent())
+        // Cannot optimize ref-y bitcasts, as that can interact badly with
+        // safepoints and stack maps.
+        && !is_bitcast_from_ref(func, inst)
 }
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,

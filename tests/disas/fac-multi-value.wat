@@ -20,12 +20,10 @@
   )
 )
 
-;; function u0:0(i64 vmctx, i64, i64) -> i64, i64 fast {
+;; function u0:0(i64 vmctx, i64, i64) -> i64, i64 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext) -> i32 uext system_v
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
@@ -35,12 +33,10 @@
 ;; @0040                               return v3, v4
 ;; }
 ;;
-;; function u0:1(i64 vmctx, i64, i64, i64) -> i64, i64, i64 fast {
+;; function u0:1(i64 vmctx, i64, i64, i64) -> i64, i64, i64 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext) -> i32 uext system_v
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i64):
@@ -50,14 +46,12 @@
 ;; @0049                               return v4, v5, v6
 ;; }
 ;;
-;; function u0:2(i64 vmctx, i64, i64) -> i64 fast {
+;; function u0:2(i64 vmctx, i64, i64) -> i64 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
-;;     sig0 = (i64 vmctx, i64, i64, i64) -> i64, i64, i64 fast
-;;     sig1 = (i64 vmctx, i64, i64) -> i64, i64 fast
-;;     sig2 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig3 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     sig0 = (i64 vmctx, i64, i64, i64) -> i64, i64, i64 tail
+;;     sig1 = (i64 vmctx, i64, i64) -> i64, i64 tail
 ;;     fn0 = colocated u0:1 sig0
 ;;     fn1 = colocated u0:0 sig1
 ;;     stack_limit = gv2

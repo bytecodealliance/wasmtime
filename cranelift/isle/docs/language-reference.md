@@ -568,7 +568,7 @@ functions).
 
 The universe of types is very simple: there are *primitives*, which
 can be integers or symbolic constants (imported from the Rust
-embedding), and *enums*, which correspond direclty to Rust enums with
+embedding), and *enums*, which correspond directly to Rust enums with
 variants that have named fields. There is no subtyping. Some examples
 of type definitions are:
 

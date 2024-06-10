@@ -1,8 +1,9 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
+use crate::codegen::{CodeGenContext, FuncEnv};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
-    ir::{Endianness, LibCall, MemFlags},
+    binemit::CodeOffset,
+    ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -365,9 +366,9 @@ pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
     /// A function call to a local function.
-    Direct(u32),
+    Direct(UserExternalNameRef),
     /// Call to a well known LibCall.
-    Known(LibCall),
+    LibCall(LibCall),
 }
 
 impl CalleeKind {
@@ -376,14 +377,14 @@ impl CalleeKind {
         Self::Indirect(reg)
     }
 
-    /// Creates a direct callee kind from a function index.
-    pub fn direct(index: u32) -> Self {
-        Self::Direct(index)
+    /// Creates a direct callee kind from a function name.
+    pub fn direct(name: UserExternalNameRef) -> Self {
+        Self::Direct(name)
     }
 
     /// Creates a known callee kind from a libcall.
-    pub fn known(call: LibCall) -> Self {
-        Self::Known(call)
+    pub fn libcall(call: LibCall) -> Self {
+        Self::LibCall(call)
     }
 }
 
@@ -424,6 +425,7 @@ impl From<Reg> for RegImm {
     }
 }
 
+#[derive(Debug)]
 pub enum RoundingMode {
     Nearest,
     Up,
@@ -436,7 +438,7 @@ pub const TRUSTED_FLAGS: MemFlags = MemFlags::trusted();
 
 /// Flags used for WebAssembly loads / stores.
 /// Untrusted by default so we don't set `no_trap`.
-/// We also ensure that the endianess is the right one for WebAssembly.
+/// We also ensure that the endianness is the right one for WebAssembly.
 pub const UNTRUSTED_FLAGS: MemFlags = MemFlags::new().with_endianness(Endianness::Little);
 
 /// Generic MacroAssembler interface used by the code generation.
@@ -468,10 +470,9 @@ pub(crate) trait MacroAssembler {
     type ABI: abi::ABI;
 
     /// Emit the function prologue.
-    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)]) {
+    fn prologue(&mut self, vmctx: Reg) {
         self.frame_setup();
         self.check_stack(vmctx);
-        self.save_clobbers(clobbers);
     }
 
     /// Generate the frame setup sequence.
@@ -480,29 +481,11 @@ pub(crate) trait MacroAssembler {
     /// Generate the frame restore sequence.
     fn frame_restore(&mut self);
 
-    /// Save all the given clobbered registers to the stack. By default this is the same as pushing
-    /// the registers, however it's present in the [`MacroAssembler`] trait to ensure that it's
-    /// possible to add unwind info for register saves in backends.
-    fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        for &(reg, size) in clobbers {
-            self.push(reg, size);
-        }
-    }
-
-    /// Restore all clobbered registers, assumed to be passed in the same order as to
-    /// [`save_clobbers`].
-    fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        for &(reg, size) in clobbers.iter().rev() {
-            self.pop(reg, size);
-        }
-    }
-
     /// Emit a stack check.
     fn check_stack(&mut self, vmctx: Reg);
 
     /// Emit the function epilogue.
-    fn epilogue(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        self.restore_clobbers(clobbers);
+    fn epilogue(&mut self) {
         self.frame_restore();
     }
 
@@ -520,22 +503,6 @@ pub(crate) trait MacroAssembler {
 
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
-
-    /// Loads the address of the table element at a given index. Returns the
-    /// address of the table element using the provided register as base.
-    fn table_elem_address(
-        &mut self,
-        index: Reg,
-        base: Reg,
-        table_data: &TableData,
-        context: &mut CodeGenContext,
-    ) -> Self::Address;
-
-    /// Retrieves the size of the table, pushing the result to the value stack.
-    fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
-
-    /// Retrieves the size of the memory, pushing the result to the value stack.
-    fn memory_size(&mut self, heap_data: &HeapData, context: &mut CodeGenContext);
 
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
@@ -573,7 +540,7 @@ pub(crate) trait MacroAssembler {
     /// [Self::store], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
-    /// regards to the endianess depending on the target ISA. For this reason,
+    /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_store], should be explicitly used when emitting WebAssembly
     /// stores.
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize);
@@ -586,7 +553,7 @@ pub(crate) trait MacroAssembler {
     /// [Self::load], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
-    /// regards to the endianess depending on the target ISA. For this reason,
+    /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_load], should be explicitly used when emitting WebAssembly
     /// loads.
     fn wasm_load(
@@ -740,7 +707,7 @@ pub(crate) trait MacroAssembler {
     /// expectations regarding the location of the instruction
     /// arguments and regarding the location of the quotient /
     /// remainder. To free the caller from having to deal with the
-    /// architecure specific contraints we give this function access
+    /// architecture specific constraints we give this function access
     /// to the code generation context, allowing each implementation
     /// to decide the lowering path.  For cases in which division is a
     /// unconstrained binary operation, the caller can decide to use
@@ -751,11 +718,20 @@ pub(crate) trait MacroAssembler {
     /// Calculate remainder.
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
-    /// Compare src and dst and put the result in dst.
-    fn cmp(&mut self, src: RegImm, dest: Reg, size: OperandSize);
+    /// Compares `src1` against `src2` for the side effect of setting processor
+    /// flags.
+    ///
+    /// Note that `src1` is the left-hand-side of the comparison and `src2` is
+    /// the right-hand-side, so if testing `a < b` then `src1 == a` and
+    /// `src2 == b`
+    fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize);
 
     /// Compare src and dst and put the result in dst.
     /// This function will potentially emit a series of instructions.
+    ///
+    /// The initial value in `dst` is the left-hand-side of the comparison and
+    /// the initial value in `src` is the right-hand-side of the comparison.
+    /// That means for `a < b` then `dst == a` and `src == b`.
     fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize);
 
     /// Compare floats in src1 and src2 and put the result in dst.
@@ -788,7 +764,7 @@ pub(crate) trait MacroAssembler {
     fn push(&mut self, src: Reg, size: OperandSize) -> StackSlot;
 
     /// Finalize the assembly and return the result.
-    fn finalize(self) -> MachBufferFinalized<Final>;
+    fn finalize(self, base: Option<SourceLoc>) -> MachBufferFinalized<Final>;
 
     /// Zero a particular register.
     fn zero(&mut self, reg: Reg);
@@ -915,8 +891,8 @@ pub(crate) trait MacroAssembler {
     fn branch(
         &mut self,
         kind: IntCmpKind,
-        lhs: RegImm,
-        rhs: Reg,
+        lhs: Reg,
+        rhs: RegImm,
         taken: MachLabel,
         size: OperandSize,
     );
@@ -952,4 +928,14 @@ pub(crate) trait MacroAssembler {
             self.free_stack(bytes);
         }
     }
+
+    /// Mark the start of a source location returning the machine code offset
+    /// and the relative source code location.
+    fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc);
+
+    /// Mark the end of a source location.
+    fn end_source_loc(&mut self);
+
+    /// The current offset, in bytes from the beginning of the function.
+    fn current_code_offset(&self) -> CodeOffset;
 }

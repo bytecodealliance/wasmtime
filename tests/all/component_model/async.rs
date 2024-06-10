@@ -219,7 +219,7 @@ async fn poll_through_wasm_activation() -> Result<()> {
 
     execute_across_threads(async move {
         let mut store = Store::new(&engine, Some(Box::pin(invoke_component)));
-        let poll_once = wasmtime::Func::wrap0_async(&mut store, |mut cx| {
+        let poll_once = wasmtime::Func::wrap_async(&mut store, |mut cx, _: ()| {
             let invoke_component = cx.data_mut().take().unwrap();
             Box::new(async move {
                 match PollOnce::new(invoke_component).await {

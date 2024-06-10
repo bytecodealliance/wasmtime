@@ -1656,7 +1656,7 @@ fn same_module_multiple_stores() -> Result<()> {
     ];
     eprintln!("expected = {expected_stacks:#?}");
     let actual_stacks = stacks.lock().unwrap();
-    eprintln!("actaul = {actual_stacks:#?}");
+    eprintln!("actual = {actual_stacks:#?}");
 
     assert_eq!(actual_stacks.len(), expected_stacks.len());
     for (expected_stack, actual_stack) in expected_stacks.into_iter().zip(actual_stacks.iter()) {

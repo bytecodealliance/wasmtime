@@ -2,18 +2,11 @@
 
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
-use cap_std::ambient_authority;
-use std::collections::HashMap;
-use std::ffi::CStr;
+use std::ffi::{c_char, CStr};
 use std::fs::File;
-use std::os::raw::{c_char, c_int};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::slice;
-use wasi_common::{
-    pipe::ReadPipe,
-    sync::{Dir, TcpListener, WasiCtxBuilder},
-    WasiCtx,
-};
+use wasmtime_wasi::{preview1::WasiP1Ctx, WasiCtxBuilder};
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
     CStr::from_ptr(path).to_str().map(Path::new).ok()
@@ -32,164 +25,73 @@ unsafe fn create_file(path: *const c_char) -> Option<File> {
 }
 
 #[repr(C)]
-#[derive(Default)]
 pub struct wasi_config_t {
-    args: Vec<Vec<u8>>,
-    env: Vec<(Vec<u8>, Vec<u8>)>,
-    stdin: WasiConfigReadPipe,
-    stdout: WasiConfigWritePipe,
-    stderr: WasiConfigWritePipe,
-    preopen_dirs: Vec<(Dir, PathBuf)>,
-    preopen_sockets: HashMap<u32, TcpListener>,
-    inherit_args: bool,
-    inherit_env: bool,
-}
-
-#[repr(C)]
-#[derive(Default)]
-pub enum WasiConfigReadPipe {
-    #[default]
-    None,
-    Inherit,
-    File(File),
-    Bytes(Vec<u8>),
-}
-
-#[repr(C)]
-#[derive(Default)]
-pub enum WasiConfigWritePipe {
-    #[default]
-    None,
-    Inherit,
-    File(File),
+    builder: WasiCtxBuilder,
 }
 
 wasmtime_c_api_macros::declare_own!(wasi_config_t);
 
 impl wasi_config_t {
-    pub fn into_wasi_ctx(self) -> Result<WasiCtx> {
-        let mut builder = WasiCtxBuilder::new();
-        if self.inherit_args {
-            builder.inherit_args()?;
-        } else if !self.args.is_empty() {
-            let args = self
-                .args
-                .into_iter()
-                .map(|bytes| Ok(String::from_utf8(bytes)?))
-                .collect::<Result<Vec<String>>>()?;
-            builder.args(&args)?;
-        }
-        if self.inherit_env {
-            builder.inherit_env()?;
-        } else if !self.env.is_empty() {
-            let env = self
-                .env
-                .into_iter()
-                .map(|(kbytes, vbytes)| {
-                    let k = String::from_utf8(kbytes)?;
-                    let v = String::from_utf8(vbytes)?;
-                    Ok((k, v))
-                })
-                .collect::<Result<Vec<(String, String)>>>()?;
-            builder.envs(&env)?;
-        }
-        match self.stdin {
-            WasiConfigReadPipe::None => {}
-            WasiConfigReadPipe::Inherit => {
-                builder.inherit_stdin();
-            }
-            WasiConfigReadPipe::File(file) => {
-                let file = cap_std::fs::File::from_std(file);
-                let file = wasi_common::sync::file::File::from_cap_std(file);
-                builder.stdin(Box::new(file));
-            }
-            WasiConfigReadPipe::Bytes(binary) => {
-                let binary = ReadPipe::from(binary);
-                builder.stdin(Box::new(binary));
-            }
-        };
-        match self.stdout {
-            WasiConfigWritePipe::None => {}
-            WasiConfigWritePipe::Inherit => {
-                builder.inherit_stdout();
-            }
-            WasiConfigWritePipe::File(file) => {
-                let file = cap_std::fs::File::from_std(file);
-                let file = wasi_common::sync::file::File::from_cap_std(file);
-                builder.stdout(Box::new(file));
-            }
-        };
-        match self.stderr {
-            WasiConfigWritePipe::None => {}
-            WasiConfigWritePipe::Inherit => {
-                builder.inherit_stderr();
-            }
-            WasiConfigWritePipe::File(file) => {
-                let file = cap_std::fs::File::from_std(file);
-                let file = wasi_common::sync::file::File::from_cap_std(file);
-                builder.stderr(Box::new(file));
-            }
-        };
-        for (dir, path) in self.preopen_dirs {
-            builder.preopened_dir(dir, path)?;
-        }
-        for (fd_num, listener) in self.preopen_sockets {
-            builder.preopened_socket(fd_num, listener)?;
-        }
-        Ok(builder.build())
+    pub fn into_wasi_ctx(mut self) -> Result<WasiP1Ctx> {
+        Ok(self.builder.build_p1())
     }
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_new() -> Box<wasi_config_t> {
-    Box::new(wasi_config_t::default())
+    Box::new(wasi_config_t {
+        builder: WasiCtxBuilder::new(),
+    })
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_argv(
     config: &mut wasi_config_t,
-    argc: c_int,
+    argc: usize,
     argv: *const *const c_char,
-) {
-    config.args = slice::from_raw_parts(argv, argc as usize)
-        .iter()
-        .map(|p| CStr::from_ptr(*p).to_bytes().to_owned())
-        .collect();
-    config.inherit_args = false;
+) -> bool {
+    for arg in slice::from_raw_parts(argv, argc) {
+        let arg = match CStr::from_ptr(*arg).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        config.builder.arg(arg);
+    }
+    true
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_argv(config: &mut wasi_config_t) {
-    config.args.clear();
-    config.inherit_args = true;
+    config.builder.inherit_args();
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_env(
     config: &mut wasi_config_t,
-    envc: c_int,
+    envc: usize,
     names: *const *const c_char,
     values: *const *const c_char,
-) {
-    let names = slice::from_raw_parts(names, envc as usize);
-    let values = slice::from_raw_parts(values, envc as usize);
+) -> bool {
+    let names = slice::from_raw_parts(names, envc);
+    let values = slice::from_raw_parts(values, envc);
 
-    config.env = names
-        .iter()
-        .map(|p| CStr::from_ptr(*p).to_bytes().to_owned())
-        .zip(
-            values
-                .iter()
-                .map(|p| CStr::from_ptr(*p).to_bytes().to_owned()),
-        )
-        .collect();
-    config.inherit_env = false;
+    for (k, v) in names.iter().zip(values) {
+        let k = match cstr_to_str(*k) {
+            Some(s) => s,
+            None => return false,
+        };
+        let v = match cstr_to_str(*v) {
+            Some(s) => s,
+            None => return false,
+        };
+        config.builder.env(k, v);
+    }
+    true
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_env(config: &mut wasi_config_t) {
-    config.env.clear();
-    config.inherit_env = true;
+    config.builder.inherit_env();
 }
 
 #[no_mangle]
@@ -202,7 +104,10 @@ pub unsafe extern "C" fn wasi_config_set_stdin_file(
         None => return false,
     };
 
-    config.stdin = WasiConfigReadPipe::File(file);
+    let file = tokio::fs::File::from_std(file);
+    let stdin_stream =
+        wasmtime_wasi::AsyncStdinStream::new(wasmtime_wasi::pipe::AsyncReadStream::new(file));
+    config.builder.stdin(stdin_stream);
 
     true
 }
@@ -213,13 +118,13 @@ pub unsafe extern "C" fn wasi_config_set_stdin_bytes(
     binary: &mut wasm_byte_vec_t,
 ) {
     let binary = binary.take();
-
-    config.stdin = WasiConfigReadPipe::Bytes(binary);
+    let binary = wasmtime_wasi::pipe::MemoryInputPipe::new(binary);
+    config.builder.stdin(binary);
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_stdin(config: &mut wasi_config_t) {
-    config.stdin = WasiConfigReadPipe::Inherit;
+    config.builder.inherit_stdin();
 }
 
 #[no_mangle]
@@ -232,14 +137,14 @@ pub unsafe extern "C" fn wasi_config_set_stdout_file(
         None => return false,
     };
 
-    config.stdout = WasiConfigWritePipe::File(file);
+    config.builder.stdout(wasmtime_wasi::OutputFile::new(file));
 
     true
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
-    config.stdout = WasiConfigWritePipe::Inherit;
+    config.builder.inherit_stdout();
 }
 
 #[no_mangle]
@@ -252,14 +157,14 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
         None => return false,
     };
 
-    config.stderr = WasiConfigWritePipe::File(file);
+    config.builder.stderr(wasmtime_wasi::OutputFile::new(file));
 
     true
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_stderr(config: &mut wasi_config_t) {
-    config.stderr = WasiConfigWritePipe::Inherit;
+    config.builder.inherit_stderr();
 }
 
 #[no_mangle]
@@ -268,59 +173,23 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     path: *const c_char,
     guest_path: *const c_char,
 ) -> bool {
-    let guest_path = match cstr_to_path(guest_path) {
+    let guest_path = match cstr_to_str(guest_path) {
         Some(p) => p,
         None => return false,
     };
 
-    let dir = match cstr_to_path(path) {
-        Some(p) => match Dir::open_ambient_dir(p, ambient_authority()) {
-            Ok(d) => d,
-            Err(_) => return false,
-        },
+    let host_path = match cstr_to_path(path) {
+        Some(p) => p,
         None => return false,
     };
 
-    (*config).preopen_dirs.push((dir, guest_path.to_owned()));
-
-    true
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasi_config_preopen_socket(
-    config: &mut wasi_config_t,
-    fd_num: u32,
-    host_port: *const c_char,
-) -> bool {
-    const VAR: &str = "WASMTIME_WASI_CONFIG_PREOPEN_SOCKET_ALLOW";
-    if std::env::var(VAR).is_err() {
-        panic!(
-            "wasmtime c-api: wasi_config_preopen_socket will be deprecated in the \
-            wasmtime 20.0.0 release. set {VAR} to enable temporarily"
-        );
-    }
-
-    let address = match cstr_to_str(host_port) {
-        Some(s) => s,
-        None => return false,
-    };
-    let listener = match std::net::TcpListener::bind(address) {
-        Ok(listener) => listener,
-        Err(_) => return false,
-    };
-
-    if let Err(_) = listener.set_nonblocking(true) {
-        return false;
-    }
-
-    // Caller cannot call in more than once with the same FD number so return an error.
-    if (*config).preopen_sockets.contains_key(&fd_num) {
-        return false;
-    }
-
-    (*config)
-        .preopen_sockets
-        .insert(fd_num, TcpListener::from_std(listener));
-
-    true
+    config
+        .builder
+        .preopened_dir(
+            host_path,
+            guest_path,
+            wasmtime_wasi::DirPerms::all(),
+            wasmtime_wasi::FilePerms::all(),
+        )
+        .is_ok()
 }

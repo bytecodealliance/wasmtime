@@ -236,3 +236,91 @@ block0(v0: i64, v1: i16):
 ;   sh a1, 3(a0) ; trap: heap_oob
 ;   c.jr ra
 
+function %no_compress_store_zero(i64) {
+    ss1 = explicit_slot 1
+    ss2 = explicit_slot 2
+    ss4 = explicit_slot 4
+    ss8 = explicit_slot 8
+block0(v0: i64):
+  v1 = iconst.i8 0
+  store.i8 notrap v1, v0
+  stack_store.i8 v1, ss1
+
+  v2 = iconst.i16 0
+  store.i16 notrap v2, v0
+  stack_store.i16 v2, ss2
+
+  v3 = iconst.i32 0
+  store.i32 notrap v3, v0
+  stack_store.i32 v3, ss4
+
+  v4 = iconst.i64 0
+  store.i64 notrap v4, v0
+  stack_store.i64 v4, ss8
+
+  v5 = f32const 0.0
+  store.f32 notrap v5, v0
+  stack_store.f32 v5, ss4
+
+  v6 = f64const 0.0
+  store.f64 notrap v6, v0
+  stack_store.f64 v6, ss8
+
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-32
+; block0:
+;   sb zero,0(a0)
+;   sb zero,0(slot)
+;   sh zero,0(a0)
+;   sh zero,8(slot)
+;   sw zero,0(a0)
+;   sw zero,16(slot)
+;   sd zero,0(a0)
+;   sd zero,24(slot)
+;   fmv.w.x fa5,zero
+;   fsw fa5,0(a0)
+;   fsw fa5,16(slot)
+;   fmv.d.x fa1,zero
+;   fsd fa1,0(a0)
+;   fsd fa1,24(slot)
+;   addi sp,sp,32
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x20
+; block1: ; offset 0xa
+;   sb zero, 0(a0)
+;   sb zero, 0(sp)
+;   sh zero, 0(a0)
+;   sh zero, 8(sp)
+;   sw zero, 0(a0)
+;   c.swsp zero, 0x10(sp)
+;   sd zero, 0(a0)
+;   c.sdsp zero, 0x18(sp)
+;   fmv.w.x fa5, zero
+;   fsw fa5, 0(a0)
+;   fsw fa5, 0x10(sp)
+;   fmv.d.x fa1, zero
+;   fsd fa1, 0(a0)
+;   fsd fa1, 0x18(sp)
+;   c.addi16sp sp, 0x20
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+

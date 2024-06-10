@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use std::fmt::{Display, LowerHex};
 use wasmtime::{ExternRef, Store, Val};
 use wast::core::{HeapType, NanPattern, V128Pattern, WastArgCore, WastRetCore};
-use wast::token::{Float32, Float64};
+use wast::token::{F32, F64};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
 pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
@@ -16,7 +16,7 @@ pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
         V128(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes()).into()),
         RefNull(HeapType::Extern) => Val::ExternRef(None),
         RefNull(HeapType::Func) => Val::FuncRef(None),
-        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x))),
+        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x)?)),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
 }
@@ -58,7 +58,10 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
         (Val::V128(a), WastRetCore::V128(b)) => match_v128(a.as_u128(), b),
 
         // Null references.
-        (Val::FuncRef(None) | Val::ExternRef(None), WastRetCore::RefNull(_))
+        (
+            Val::FuncRef(None) | Val::ExternRef(None) | Val::AnyRef(None),
+            WastRetCore::RefNull(_),
+        )
         | (Val::ExternRef(None), WastRetCore::RefExtern(None)) => Ok(()),
 
         // Null and non-null mismatches.
@@ -90,6 +93,14 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
             }
         }
 
+        (Val::AnyRef(Some(x)), WastRetCore::RefI31) => {
+            if x.is_i31(store)? {
+                Ok(())
+            } else {
+                bail!("expected a `(ref i31)`, found {x:?}");
+            }
+        }
+
         _ => bail!(
             "don't know how to compare {:?} and {:?} yet",
             actual,
@@ -114,7 +125,7 @@ where
     }
 }
 
-pub fn match_f32(actual: u32, expected: &NanPattern<Float32>) -> Result<()> {
+pub fn match_f32(actual: u32, expected: &NanPattern<F32>) -> Result<()> {
     match expected {
         // Check if an f32 (as u32 bits to avoid possible quieting when moving values in registers, e.g.
         // https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
@@ -179,7 +190,7 @@ pub fn match_f32(actual: u32, expected: &NanPattern<Float32>) -> Result<()> {
     }
 }
 
-pub fn match_f64(actual: u64, expected: &NanPattern<Float64>) -> Result<()> {
+pub fn match_f64(actual: u64, expected: &NanPattern<F64>) -> Result<()> {
     match expected {
         // Check if an f64 (as u64 bits to avoid possible quieting when moving values in registers, e.g.
         // https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)

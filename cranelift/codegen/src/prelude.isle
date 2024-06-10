@@ -133,6 +133,9 @@
 (decl pure u32_and (u32 u32) u32)
 (extern constructor u32_and u32_and)
 
+(decl pure u32_shl (u32 u32) u32)
+(extern constructor u32_shl u32_shl)
+
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
 (decl pure partial s32_add_fallible (i32 i32) i32)
@@ -234,6 +237,21 @@
 (decl u16_replicated_u8 (u8) u64)
 (extern extractor u16_replicated_u8 u16_replicated_u8)
 
+;; Floating point operations
+
+(decl pure f32_neg (Ieee32) Ieee32)
+(extern constructor f32_neg f32_neg)
+(decl pure f32_abs (Ieee32) Ieee32)
+(extern constructor f32_abs f32_abs)
+(decl pure f32_copysign (Ieee32 Ieee32) Ieee32)
+(extern constructor f32_copysign f32_copysign)
+(decl pure f64_neg (Ieee64) Ieee64)
+(extern constructor f64_neg f64_neg)
+(decl pure f64_abs (Ieee64) Ieee64)
+(extern constructor f64_abs f64_abs)
+(decl pure f64_copysign (Ieee64 Ieee64) Ieee64)
+(extern constructor f64_copysign f64_copysign)
+
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (extern const $I8 Type)
@@ -325,6 +343,11 @@
 ;; Compare two types for equality.
 (decl pure ty_equal (Type Type) bool)
 (extern constructor ty_equal ty_equal)
+
+(decl pure is_ref_type (Type) bool)
+(rule 1 (is_ref_type $R32) $true)
+(rule 1 (is_ref_type $R64) $true)
+(rule 0 (is_ref_type _) $false)
 
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

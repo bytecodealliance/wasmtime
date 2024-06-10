@@ -1,0 +1,86 @@
+test compile precise-output
+target x86_64 sse42 has_avx
+
+function %i64x2_make0() -> i64x2 {
+block0:
+    v0 = vconst.i64x2 [0 0]
+    return v0
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm0
+;   vpxor   %xmm0, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vpxor %xmm0, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %i64x2_make1(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = vconst.i64x2 [0 0]
+    v2 = insertlane.i64x2 v1, v0, 0
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm3
+;   vpxor   %xmm3, %xmm3, %xmm5
+;   vpinsrq $0, %xmm5, %rdi, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vpxor %xmm3, %xmm3, %xmm5
+;   vpinsrq $0, %rdi, %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %i64x2_make2(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+    v2 = splat.i64x2 v0
+    v3 = insertlane.i64x2 v2, v1, 1
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovq   %rdi, %xmm3
+;   vpinsrq $1, %xmm3, %rsi, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovq %rdi, %xmm3
+;   vpinsrq $1, %rsi, %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

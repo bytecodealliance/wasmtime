@@ -157,12 +157,72 @@ impl StdoutStream for pipe::ClosedOutputStream {
     }
 }
 
+/// This implementation will yield output streams that block on writes, and
+/// output directly to a file. If truly async output is required, [`AsyncStdoutStream`]
+/// should be used instead.
+pub struct OutputFile {
+    file: Arc<std::fs::File>,
+}
+
+impl OutputFile {
+    pub fn new(file: std::fs::File) -> Self {
+        Self {
+            file: Arc::new(file),
+        }
+    }
+}
+
+impl StdoutStream for OutputFile {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(OutputFileStream {
+            file: Arc::clone(&self.file),
+        })
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+struct OutputFileStream {
+    file: Arc<std::fs::File>,
+}
+
+#[async_trait::async_trait]
+impl Subscribe for OutputFileStream {
+    async fn ready(&mut self) {}
+}
+
+impl HostOutputStream for OutputFileStream {
+    fn write(&mut self, bytes: Bytes) -> StreamResult<()> {
+        use std::io::Write;
+        self.file
+            .write_all(&bytes)
+            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+    }
+
+    fn flush(&mut self) -> StreamResult<()> {
+        use std::io::Write;
+        self.file
+            .flush()
+            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+    }
+
+    fn check_write(&mut self) -> StreamResult<usize> {
+        Ok(1024 * 1024)
+    }
+}
+
 /// This implementation will yield output streams that block on writes, as they
 /// inherit the implementation directly from the rust std library. A different
 /// implementation of [`StdoutStream`] will be necessary if truly async output
 /// streams are required.
 pub struct Stdout;
 
+/// Returns a stream that represents the host's standard out.
+///
+/// Suitable for passing to
+/// [`WasiCtxBuilder::stdout`](crate::WasiCtxBuilder::stdout).
 pub fn stdout() -> Stdout {
     Stdout
 }
@@ -183,6 +243,10 @@ impl StdoutStream for Stdout {
 /// streams are required.
 pub struct Stderr;
 
+/// Returns a stream that represents the host's standard err.
+///
+/// Suitable for passing to
+/// [`WasiCtxBuilder::stderr`](crate::WasiCtxBuilder::stderr).
 pub fn stderr() -> Stderr {
     Stderr
 }
@@ -303,21 +367,21 @@ pub enum IsATTY {
     No,
 }
 
-impl<T: WasiView> stdin::Host for T {
+impl stdin::Host for dyn WasiView + '_ {
     fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
         let stream = self.ctx().stdin.stream();
         Ok(self.table().push(streams::InputStream::Host(stream))?)
     }
 }
 
-impl<T: WasiView> stdout::Host for T {
+impl stdout::Host for dyn WasiView + '_ {
     fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx().stdout.stream();
         Ok(self.table().push(stream)?)
     }
 }
 
-impl<T: WasiView> stderr::Host for T {
+impl stderr::Host for dyn WasiView + '_ {
     fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx().stderr.stream();
         Ok(self.table().push(stream)?)
@@ -327,21 +391,21 @@ impl<T: WasiView> stderr::Host for T {
 pub struct TerminalInput;
 pub struct TerminalOutput;
 
-impl<T: WasiView> terminal_input::Host for T {}
-impl<T: WasiView> terminal_input::HostTerminalInput for T {
+impl terminal_input::Host for dyn WasiView + '_ {}
+impl terminal_input::HostTerminalInput for dyn WasiView + '_ {
     fn drop(&mut self, r: Resource<TerminalInput>) -> anyhow::Result<()> {
         self.table().delete(r)?;
         Ok(())
     }
 }
-impl<T: WasiView> terminal_output::Host for T {}
-impl<T: WasiView> terminal_output::HostTerminalOutput for T {
+impl terminal_output::Host for dyn WasiView + '_ {}
+impl terminal_output::HostTerminalOutput for dyn WasiView + '_ {
     fn drop(&mut self, r: Resource<TerminalOutput>) -> anyhow::Result<()> {
         self.table().delete(r)?;
         Ok(())
     }
 }
-impl<T: WasiView> terminal_stdin::Host for T {
+impl terminal_stdin::Host for dyn WasiView + '_ {
     fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
         if self.ctx().stdin.isatty() {
             let fd = self.table().push(TerminalInput)?;
@@ -351,7 +415,7 @@ impl<T: WasiView> terminal_stdin::Host for T {
         }
     }
 }
-impl<T: WasiView> terminal_stdout::Host for T {
+impl terminal_stdout::Host for dyn WasiView + '_ {
     fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stdout.isatty() {
             let fd = self.table().push(TerminalOutput)?;
@@ -361,7 +425,7 @@ impl<T: WasiView> terminal_stdout::Host for T {
         }
     }
 }
-impl<T: WasiView> terminal_stderr::Host for T {
+impl terminal_stderr::Host for dyn WasiView + '_ {
     fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stderr.isatty() {
             let fd = self.table().push(TerminalOutput)?;

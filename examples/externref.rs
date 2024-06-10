@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     println!("Creating new `externref`...");
-    let externref = ExternRef::new(&mut store, "Hello, World!");
+    let externref = ExternRef::new(&mut store, "Hello, World!")?;
     assert!(externref.data(&store)?.is::<&'static str>());
     assert_eq!(
         *externref

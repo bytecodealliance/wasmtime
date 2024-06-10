@@ -18,42 +18,40 @@
     local.get 0
     i32.load8_u offset=0x1000))
 
-;; function u0:0:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r14, %r15, 112(%r15)
-;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
-;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lghi %r14, 0
-;;   lgr %r3, %r4
-;;   ag %r3, 80(%r2)
-;;   aghi %r3, 4096
-;;   clgfi %r4, 4294963199
-;;   locgrh %r3, %r14
-;;   stc %r5, 0(%r3)
-;;   jg label1
-;; block1:
-;;   lmg %r14, %r15, 112(%r15)
-;;   br %r14
+;; wasm[0]::function[0]:
+;;       lg      %r1, 8(%r2)
+;;       lg      %r1, 0(%r1)
+;;       la      %r1, 0xa0(%r1)
+;;       clgrtle %r15, %r1
+;;       stmg    %r13, %r15, 0x68(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lghi    %r13, 0
+;;       lgr     %r3, %r4
+;;       ag      %r3, 0x60(%r2)
+;;       aghi    %r3, 0x1000
+;;       clgfi   %r4, 0xffffefff
+;;       locgrh  %r3, %r13
+;;       stc     %r5, 0(%r3)
+;;       lmg     %r13, %r15, 0x108(%r15)
+;;       br      %r14
 ;;
-;; function u0:1:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lghi %r3, 0
-;;   lgr %r5, %r4
-;;   ag %r5, 80(%r2)
-;;   aghi %r5, 4096
-;;   clgfi %r4, 4294963199
-;;   locgrh %r5, %r3
-;;   llc %r2, 0(%r5)
-;;   jg label1
-;; block1:
-;;   br %r14
+;; wasm[0]::function[1]:
+;;       lg      %r1, 8(%r2)
+;;       lg      %r1, 0(%r1)
+;;       la      %r1, 0xa0(%r1)
+;;       clgrtle %r15, %r1
+;;       stmg    %r14, %r15, 0x70(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lghi    %r5, 0
+;;       lgr     %r3, %r4
+;;       ag      %r3, 0x60(%r2)
+;;       aghik   %r2, %r3, 0x1000
+;;       clgfi   %r4, 0xffffefff
+;;       locgrh  %r2, %r5
+;;       llc     %r2, 0(%r2)
+;;       lmg     %r14, %r15, 0x110(%r15)
+;;       br      %r14

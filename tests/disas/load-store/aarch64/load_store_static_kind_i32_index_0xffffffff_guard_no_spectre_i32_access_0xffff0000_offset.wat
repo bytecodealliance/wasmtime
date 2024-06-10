@@ -18,40 +18,22 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x7, [x0, #80]
-;;   add x7, x7, x2, UXTW
-;;   movz x8, #65535, LSL #16
-;;   str w3, [x7, x8]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x6, [x2, #0x60]
+;;       add     x6, x6, w4, uxtw
+;;       mov     x7, #0xffff0000
+;;       str     w5, [x6, x7]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x7, [x0, #80]
-;;   add x7, x7, x2, UXTW
-;;   movz x8, #65535, LSL #16
-;;   ldr w0, [x7, x8]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x6, [x2, #0x60]
+;;       add     x6, x6, w4, uxtw
+;;       mov     x7, #0xffff0000
+;;       ldr     w2, [x6, x7]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

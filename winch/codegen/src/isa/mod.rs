@@ -1,4 +1,4 @@
-use crate::{BuiltinFunctions, TrampolineKind};
+use crate::BuiltinFunctions;
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
@@ -11,6 +11,7 @@ use std::{
 };
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, WasmFuncType};
 
 #[cfg(feature = "x64")]
@@ -95,7 +96,7 @@ pub enum CallingConvention {
     AppleAarch64,
     /// The default calling convention for Winch. It largely follows SystemV
     /// for parameter and result handling. This calling convention is part of
-    /// Winch's default ABI [crate::abi::ABI].
+    /// Winch's default ABI `crate::abi::ABI`.
     Default,
 }
 
@@ -162,7 +163,7 @@ pub trait TargetIsa: Send + Sync {
         types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
-    ) -> Result<MachBufferFinalized<Final>>;
+    ) -> Result<CompiledFunction>;
 
     /// Get the default calling convention of the underlying target triple.
     fn default_call_conv(&self) -> CallConv {
@@ -180,7 +181,7 @@ pub trait TargetIsa: Send + Sync {
         }
     }
 
-    /// Get the endianess of the underlying target triple.
+    /// Get the endianness of the underlying target triple.
     fn endianness(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
     }
@@ -202,16 +203,6 @@ pub trait TargetIsa: Send + Sync {
 
     /// See `cranelift_codegen::isa::TargetIsa::function_alignment`.
     fn function_alignment(&self) -> u32;
-
-    /// Compile a trampoline kind.
-    ///
-    /// This function, internally dispatches to the right trampoline to emit
-    /// depending on the `kind` paramter.
-    fn compile_trampoline(
-        &self,
-        ty: &WasmFuncType,
-        kind: TrampolineKind,
-    ) -> Result<MachBufferFinalized<Final>>;
 
     /// Returns the pointer width of the ISA in bytes.
     fn pointer_bytes(&self) -> u8 {

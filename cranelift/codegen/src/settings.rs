@@ -532,7 +532,6 @@ unwind_info = true
 preserve_frame_pointers = false
 machine_code_cfg_info = false
 enable_probestack = false
-probestack_func_adjusts_sp = false
 enable_jump_tables = true
 enable_heap_access_spectre_mitigation = true
 enable_table_access_spectre_mitigation = true

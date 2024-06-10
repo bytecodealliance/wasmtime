@@ -64,7 +64,6 @@
 use crate::{
     cursor::{Cursor, FuncCursor},
     dominator_tree::DominatorTree,
-    fx::{FxHashMap, FxHashSet},
     inst_predicates::{
         has_memory_fence_semantics, inst_addr_offset_type, inst_store_data, visit_block_succs,
     },
@@ -72,6 +71,7 @@ use crate::{
     trace,
 };
 use cranelift_entity::{packed_option::PackedOption, EntityRef};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.
@@ -385,7 +385,7 @@ impl<'a> AliasAnalysis<'a> {
             while let Some(inst) = pos.next_inst() {
                 if let Some(replaced_result) = self.process_inst(pos.func, &mut state, inst) {
                     let result = pos.func.dfg.inst_results(inst)[0];
-                    pos.func.dfg.detach_results(inst);
+                    pos.func.dfg.clear_results(inst);
                     pos.func.dfg.change_to_alias(result, replaced_result);
                     pos.remove_inst_and_step_back();
                 }

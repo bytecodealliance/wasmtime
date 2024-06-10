@@ -12,16 +12,17 @@ pub(crate) use memory::MemoryCreatorProxy;
 use self::memory::create_memory;
 use self::table::create_table;
 use crate::module::BareModuleInfo;
+use crate::prelude::*;
+use crate::runtime::vm::{
+    Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
+    StorePtr, VMFunctionImport,
+};
 use crate::store::{InstanceId, StoreOpaque};
 use crate::{MemoryType, TableType};
+use alloc::sync::Arc;
 use anyhow::Result;
-use std::any::Any;
-use std::sync::Arc;
-use wasmtime_environ::{MemoryIndex, Module, TableIndex};
-use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
-    StorePtr, VMFunctionImport, VMSharedTypeIndex,
-};
+use core::any::Any;
+use wasmtime_environ::{MemoryIndex, Module, TableIndex, VMSharedTypeIndex};
 
 fn create_handle(
     module: Module,
@@ -59,7 +60,7 @@ pub fn generate_memory_export(
     store: &mut StoreOpaque,
     m: &MemoryType,
     preallocation: Option<&SharedMemory>,
-) -> Result<wasmtime_runtime::ExportMemory> {
+) -> Result<crate::runtime::vm::ExportMemory> {
     let instance = create_memory(store, m, preallocation)?;
     Ok(store
         .instance_mut(instance)
@@ -69,7 +70,7 @@ pub fn generate_memory_export(
 pub fn generate_table_export(
     store: &mut StoreOpaque,
     t: &TableType,
-) -> Result<wasmtime_runtime::ExportTable> {
+) -> Result<crate::runtime::vm::ExportTable> {
     let instance = create_table(store, t)?;
     Ok(store
         .instance_mut(instance)

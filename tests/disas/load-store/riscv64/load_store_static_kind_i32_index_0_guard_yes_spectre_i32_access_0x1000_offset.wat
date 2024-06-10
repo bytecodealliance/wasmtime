@@ -18,66 +18,50 @@
     local.get 0
     i32.load offset=0x1000))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   slli a4,a2,32
-;;   srli a1,a4,32
-;;   lui a4,262144
-;;   addi a5,a4,-1025
-;;   slli a2,a5,2
-;;   sltu a5,a2,a1
-;;   ld a0,80(a0)
-;;   add a0,a0,a1
-;;   lui a1,1
-;;   add a0,a0,a1
-;;   sub a4,zero,a5
-;;   not a5,a4
-;;   and a1,a0,a5
-;;   sw a3,0(a1)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       slli    a4, a2, 0x20
+;;       srli    a5, a4, 0x20
+;;       lui     a2, 0x40000
+;;       addi    a4, a2, -0x401
+;;       slli    a1, a4, 2
+;;       sltu    a4, a1, a5
+;;       ld      a0, 0x60(a0)
+;;       add     a5, a0, a5
+;;       lui     a0, 1
+;;       add     a5, a5, a0
+;;       neg     a2, a4
+;;       not     a4, a2
+;;       and     a0, a5, a4
+;;       sw      a3, 0(a0)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   slli a4,a2,32
-;;   srli a1,a4,32
-;;   lui a3,262144
-;;   addi a5,a3,-1025
-;;   slli a2,a5,2
-;;   sltu a5,a2,a1
-;;   ld a0,80(a0)
-;;   add a0,a0,a1
-;;   lui a1,1
-;;   add a0,a0,a1
-;;   sub a3,zero,a5
-;;   not a5,a3
-;;   and a1,a0,a5
-;;   lw a0,0(a1)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       slli    a3, a2, 0x20
+;;       srli    a5, a3, 0x20
+;;       lui     a2, 0x40000
+;;       addi    a4, a2, -0x401
+;;       slli    a1, a4, 2
+;;       sltu    a4, a1, a5
+;;       ld      a0, 0x60(a0)
+;;       add     a5, a0, a5
+;;       lui     a0, 1
+;;       add     a5, a5, a0
+;;       neg     a2, a4
+;;       not     a4, a2
+;;       and     a0, a5, a4
+;;       lw      a0, 0(a0)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

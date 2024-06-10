@@ -1,9 +1,15 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
+use crate::masm::RoundingMode;
 use crate::{masm::OperandSize, reg::Reg};
+use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
+use cranelift_codegen::isa::aarch64::inst::{
+    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
+    ScalarSize,
+};
 use cranelift_codegen::{
-    ir::MemFlags,
+    ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
@@ -19,6 +25,17 @@ impl From<OperandSize> for inst::OperandSize {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
             s => panic!("Invalid operand size {:?}", s),
+        }
+    }
+}
+impl Into<ScalarSize> for OperandSize {
+    fn into(self) -> ScalarSize {
+        match self {
+            OperandSize::S8 => ScalarSize::Size8,
+            OperandSize::S16 => ScalarSize::Size16,
+            OperandSize::S32 => ScalarSize::Size32,
+            OperandSize::S64 => ScalarSize::Size64,
+            OperandSize::S128 => ScalarSize::Size128,
         }
     }
 }
@@ -46,16 +63,16 @@ impl Assembler {
 
 impl Assembler {
     /// Return the emitted code.
-    pub fn finalize(mut self) -> MachBufferFinalized<Final> {
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
         let constants = Default::default();
         let stencil = self
             .buffer
             .finish(&constants, self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(Default::default())
+        stencil.apply_base_srcloc(loc.unwrap_or_default())
     }
 
     fn emit(&mut self, inst: Inst) {
-        inst.emit(&[], &mut self.buffer, &self.emit_info, &mut self.emit_state);
+        inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
     /// Load a constant into a register.
@@ -149,6 +166,33 @@ impl Assembler {
         });
     }
 
+    /// Floating point register to register move.
+    pub fn fmov_rr(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        let writable = Writable::from_reg(rd.into());
+        let inst = match size {
+            OperandSize::S32 => Inst::FpuMove32 {
+                rd: writable,
+                rn: rn.into(),
+            },
+            OperandSize::S64 => Inst::FpuMove64 {
+                rd: writable,
+                rn: rn.into(),
+            },
+            _ => unreachable!(),
+        };
+
+        self.emit(inst);
+    }
+
+    pub fn mov_to_fpu(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        let writable_rd = Writable::from_reg(rd.into());
+        self.emit(Inst::MovToFpu {
+            size: size.into(),
+            rd: writable_rd,
+            rn: rn.into(),
+        });
+    }
+
     /// Add with three registers.
     pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
@@ -166,7 +210,7 @@ impl Assembler {
         }
     }
 
-    /// Substract with three registers.
+    /// Subtract with three registers.
     pub fn sub_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size);
     }
@@ -193,6 +237,96 @@ impl Assembler {
         let scratch = regs::scratch();
         self.load_constant(imm, scratch);
         self.emit_alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
+    }
+
+    /// Float add with three registers.
+    pub fn fadd_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Add, rm, rn, rd, size);
+    }
+
+    /// Float sub with three registers.
+    pub fn fsub_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Sub, rm, rn, rd, size);
+    }
+
+    /// Float multiply with three registers.
+    pub fn fmul_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Mul, rm, rn, rd, size);
+    }
+
+    /// Float division with three registers.
+    pub fn fdiv_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Div, rm, rn, rd, size);
+    }
+
+    /// Float max with three registers.
+    pub fn fmax_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Max, rm, rn, rd, size);
+    }
+
+    /// Float min with three registers.
+    pub fn fmin_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Min, rm, rn, rd, size);
+    }
+
+    /// Float neg with two registers.
+    pub fn fneg_rr(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rr(FPUOp1::Neg, rn, rd, size);
+    }
+
+    /// Float abs with two registers.
+    pub fn fabs_rr(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rr(FPUOp1::Abs, rn, rd, size);
+    }
+
+    /// Float sqrt with two registers.
+    pub fn fsqrt_rr(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rr(FPUOp1::Sqrt, rn, rd, size);
+    }
+
+    /// Float round (ceil, trunc, floor) with two registers.
+    pub fn fround_rr(&mut self, rn: Reg, rd: Reg, mode: RoundingMode, size: OperandSize) {
+        let fpu_mode = match (mode, size) {
+            (RoundingMode::Nearest, OperandSize::S32) => FpuRoundMode::Nearest32,
+            (RoundingMode::Up, OperandSize::S32) => FpuRoundMode::Plus32,
+            (RoundingMode::Down, OperandSize::S32) => FpuRoundMode::Minus32,
+            (RoundingMode::Zero, OperandSize::S32) => FpuRoundMode::Zero32,
+            (RoundingMode::Nearest, OperandSize::S64) => FpuRoundMode::Nearest64,
+            (RoundingMode::Up, OperandSize::S64) => FpuRoundMode::Plus64,
+            (RoundingMode::Down, OperandSize::S64) => FpuRoundMode::Minus64,
+            (RoundingMode::Zero, OperandSize::S64) => FpuRoundMode::Zero64,
+            (m, o) => panic!("Invalid rounding mode or operand size {:?}, {:?}", m, o),
+        };
+        self.emit_fpu_round(fpu_mode, rn, rd)
+    }
+
+    /// Float unsigned shift right with two registers and an immediate.
+    pub fn fushr_rri(&mut self, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
+        let imm = FPURightShiftImm {
+            amount: amount,
+            lane_size_in_bits: size.num_bits(),
+        };
+        let ushr = match size {
+            OperandSize::S32 => UShr32(imm),
+            OperandSize::S64 => UShr64(imm),
+            _ => unreachable!(),
+        };
+        self.emit_fpu_rri(ushr, rn, rd)
+    }
+
+    /// Float unsigned shift left and insert with three registers
+    /// and an immediate.
+    pub fn fsli_rri_mod(&mut self, ri: Reg, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
+        let imm = FPULeftShiftImm {
+            amount: amount,
+            lane_size_in_bits: size.num_bits(),
+        };
+        let sli = match size {
+            OperandSize::S32 => FPUOpRIMod::Sli32(imm),
+            OperandSize::S64 => FPUOpRIMod::Sli64(imm),
+            _ => unreachable!(),
+        };
+        self.emit_fpu_rri_mod(sli, ri, rn, rd)
     }
 
     /// Return instruction.
@@ -234,6 +368,50 @@ impl Assembler {
         });
     }
 
+    fn emit_fpu_rrr(&mut self, op: FPUOp2, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::FpuRRR {
+            fpu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            rm: rm.into(),
+        });
+    }
+
+    fn emit_fpu_rri(&mut self, op: FPUOpRI, rn: Reg, rd: Reg) {
+        self.emit(Inst::FpuRRI {
+            fpu_op: op,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
+    fn emit_fpu_rri_mod(&mut self, op: FPUOpRIMod, ri: Reg, rn: Reg, rd: Reg) {
+        self.emit(Inst::FpuRRIMod {
+            fpu_op: op,
+            rd: Writable::from_reg(rd.into()),
+            ri: ri.into(),
+            rn: rn.into(),
+        });
+    }
+
+    fn emit_fpu_rr(&mut self, op: FPUOp1, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::FpuRR {
+            fpu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
+    fn emit_fpu_round(&mut self, op: FpuRoundMode, rn: Reg, rd: Reg) {
+        self.emit(Inst::FpuRound {
+            op: op,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
     /// Get a label from the underlying machine code buffer.
     pub fn get_label(&mut self) -> MachLabel {
         self.buffer.get_label()
@@ -243,5 +421,10 @@ impl Assembler {
     /// machine buffer.
     pub fn buffer_mut(&mut self) -> &mut MachBuffer<Inst> {
         &mut self.buffer
+    }
+
+    /// Get a reference to the underlying machine buffer.
+    pub fn buffer(&self) -> &MachBuffer<Inst> {
+        &self.buffer
     }
 }

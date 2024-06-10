@@ -22,10 +22,11 @@ use wasmtime::component::Resource;
 /// In practice, datagrams are typically less than 1500 bytes.
 const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
-impl<T: WasiView> udp::Host for T {}
+impl udp::Host for dyn WasiView + '_ {}
 
-impl<T: WasiView> udp::HostUdpSocket for T {
-    fn start_bind(
+#[async_trait::async_trait]
+impl udp::HostUdpSocket for dyn WasiView + '_ {
+    async fn start_bind(
         &mut self,
         this: Resource<udp::UdpSocket>,
         network: Resource<Network>,
@@ -53,7 +54,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            check.check(&local_address, SocketAddrUse::UdpBind)?;
+            check.check(local_address, SocketAddrUse::UdpBind).await?;
 
             // Perform the OS bind call.
             util::udp_bind(socket.udp_socket(), &local_address).map_err(|error| match error {
@@ -88,7 +89,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         }
     }
 
-    fn stream(
+    async fn stream(
         &mut self,
         this: Resource<udp::UdpSocket>,
         remote_address: Option<IpSocketAddress>,
@@ -133,7 +134,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
-            check.check(&connect_addr, SocketAddrUse::UdpConnect)?;
+            check.check(connect_addr, SocketAddrUse::UdpConnect).await?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -300,7 +301,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     }
 }
 
-impl<T: WasiView> udp::HostIncomingDatagramStream for T {
+impl udp::HostIncomingDatagramStream for dyn WasiView + '_ {
     fn receive(
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
@@ -391,7 +392,8 @@ impl Subscribe for IncomingDatagramStream {
     }
 }
 
-impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
+#[async_trait::async_trait]
+impl udp::HostOutgoingDatagramStream for dyn WasiView + '_ {
     fn check_send(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> SocketResult<u64> {
         let table = self.table();
         let stream = table.get_mut(&this)?;
@@ -409,12 +411,12 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
         Ok(permit.try_into().unwrap())
     }
 
-    fn send(
+    async fn send(
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
         datagrams: Vec<udp::OutgoingDatagram>,
     ) -> SocketResult<u64> {
-        fn send_one(
+        async fn send_one(
             stream: &OutgoingDatagramStream,
             datagram: &udp::OutgoingDatagram,
         ) -> SocketResult<()> {
@@ -428,7 +430,9 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
                     let Some(check) = stream.socket_addr_check.as_ref() else {
                         return Err(ErrorCode::InvalidState.into());
                     };
-                    check.check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
+                    check
+                        .check(addr, SocketAddrUse::UdpOutgoingDatagram)
+                        .await?;
                     addr
                 }
                 (Some(addr), None) => addr,
@@ -476,7 +480,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
         let mut count = 0;
 
         for datagram in datagrams {
-            match send_one(stream, &datagram) {
+            match send_one(stream, &datagram).await {
                 Ok(_) => count += 1,
                 Err(_) if count > 0 => {
                     // WIT: "If at least one datagram has been sent successfully, this function never returns an error."
@@ -526,6 +530,214 @@ impl Subscribe for OutgoingDatagramStream {
                     .await
                     .expect("failed to await UDP socket readiness");
                 self.send_state = SendState::Idle;
+            }
+        }
+    }
+}
+
+pub mod sync {
+    use wasmtime::component::Resource;
+
+    use crate::{
+        bindings::{
+            sockets::{
+                network::Network,
+                udp::{
+                    self as async_udp,
+                    HostIncomingDatagramStream as AsyncHostIncomingDatagramStream,
+                    HostOutgoingDatagramStream as AsyncHostOutgoingDatagramStream,
+                    HostUdpSocket as AsyncHostUdpSocket, IncomingDatagramStream,
+                    OutgoingDatagramStream,
+                },
+            },
+            sync::sockets::udp::{
+                self, HostIncomingDatagramStream, HostOutgoingDatagramStream, HostUdpSocket,
+                IncomingDatagram, IpAddressFamily, IpSocketAddress, OutgoingDatagram, Pollable,
+                UdpSocket,
+            },
+        },
+        runtime::in_tokio,
+        SocketError, WasiView,
+    };
+
+    impl udp::Host for dyn WasiView + '_ {}
+
+    impl HostUdpSocket for dyn WasiView + '_ {
+        fn start_bind(
+            &mut self,
+            self_: Resource<UdpSocket>,
+            network: Resource<Network>,
+            local_address: IpSocketAddress,
+        ) -> Result<(), SocketError> {
+            in_tokio(async {
+                AsyncHostUdpSocket::start_bind(self, self_, network, local_address).await
+            })
+        }
+
+        fn finish_bind(&mut self, self_: Resource<UdpSocket>) -> Result<(), SocketError> {
+            AsyncHostUdpSocket::finish_bind(self, self_)
+        }
+
+        fn stream(
+            &mut self,
+            self_: Resource<UdpSocket>,
+            remote_address: Option<IpSocketAddress>,
+        ) -> Result<
+            (
+                Resource<IncomingDatagramStream>,
+                Resource<OutgoingDatagramStream>,
+            ),
+            SocketError,
+        > {
+            in_tokio(async { AsyncHostUdpSocket::stream(self, self_, remote_address).await })
+        }
+
+        fn local_address(
+            &mut self,
+            self_: Resource<UdpSocket>,
+        ) -> Result<IpSocketAddress, SocketError> {
+            AsyncHostUdpSocket::local_address(self, self_)
+        }
+
+        fn remote_address(
+            &mut self,
+            self_: Resource<UdpSocket>,
+        ) -> Result<IpSocketAddress, SocketError> {
+            AsyncHostUdpSocket::remote_address(self, self_)
+        }
+
+        fn address_family(
+            &mut self,
+            self_: Resource<UdpSocket>,
+        ) -> wasmtime::Result<IpAddressFamily> {
+            AsyncHostUdpSocket::address_family(self, self_)
+        }
+
+        fn unicast_hop_limit(&mut self, self_: Resource<UdpSocket>) -> Result<u8, SocketError> {
+            AsyncHostUdpSocket::unicast_hop_limit(self, self_)
+        }
+
+        fn set_unicast_hop_limit(
+            &mut self,
+            self_: Resource<UdpSocket>,
+            value: u8,
+        ) -> Result<(), SocketError> {
+            AsyncHostUdpSocket::set_unicast_hop_limit(self, self_, value)
+        }
+
+        fn receive_buffer_size(&mut self, self_: Resource<UdpSocket>) -> Result<u64, SocketError> {
+            AsyncHostUdpSocket::receive_buffer_size(self, self_)
+        }
+
+        fn set_receive_buffer_size(
+            &mut self,
+            self_: Resource<UdpSocket>,
+            value: u64,
+        ) -> Result<(), SocketError> {
+            AsyncHostUdpSocket::set_receive_buffer_size(self, self_, value)
+        }
+
+        fn send_buffer_size(&mut self, self_: Resource<UdpSocket>) -> Result<u64, SocketError> {
+            AsyncHostUdpSocket::send_buffer_size(self, self_)
+        }
+
+        fn set_send_buffer_size(
+            &mut self,
+            self_: Resource<UdpSocket>,
+            value: u64,
+        ) -> Result<(), SocketError> {
+            AsyncHostUdpSocket::set_send_buffer_size(self, self_, value)
+        }
+
+        fn subscribe(
+            &mut self,
+            self_: Resource<UdpSocket>,
+        ) -> wasmtime::Result<Resource<Pollable>> {
+            AsyncHostUdpSocket::subscribe(self, self_)
+        }
+
+        fn drop(&mut self, rep: Resource<UdpSocket>) -> wasmtime::Result<()> {
+            AsyncHostUdpSocket::drop(self, rep)
+        }
+    }
+
+    impl HostIncomingDatagramStream for dyn WasiView + '_ {
+        fn receive(
+            &mut self,
+            self_: Resource<IncomingDatagramStream>,
+            max_results: u64,
+        ) -> Result<Vec<IncomingDatagram>, SocketError> {
+            Ok(
+                AsyncHostIncomingDatagramStream::receive(self, self_, max_results)?
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            )
+        }
+
+        fn subscribe(
+            &mut self,
+            self_: Resource<IncomingDatagramStream>,
+        ) -> wasmtime::Result<Resource<Pollable>> {
+            AsyncHostIncomingDatagramStream::subscribe(self, self_)
+        }
+
+        fn drop(&mut self, rep: Resource<IncomingDatagramStream>) -> wasmtime::Result<()> {
+            AsyncHostIncomingDatagramStream::drop(self, rep)
+        }
+    }
+
+    impl From<async_udp::IncomingDatagram> for IncomingDatagram {
+        fn from(other: async_udp::IncomingDatagram) -> Self {
+            let async_udp::IncomingDatagram {
+                data,
+                remote_address,
+            } = other;
+            Self {
+                data,
+                remote_address,
+            }
+        }
+    }
+
+    impl HostOutgoingDatagramStream for dyn WasiView + '_ {
+        fn check_send(
+            &mut self,
+            self_: Resource<OutgoingDatagramStream>,
+        ) -> Result<u64, SocketError> {
+            AsyncHostOutgoingDatagramStream::check_send(self, self_)
+        }
+
+        fn send(
+            &mut self,
+            self_: Resource<OutgoingDatagramStream>,
+            datagrams: Vec<OutgoingDatagram>,
+        ) -> Result<u64, SocketError> {
+            let datagrams = datagrams.into_iter().map(Into::into).collect();
+            in_tokio(async { AsyncHostOutgoingDatagramStream::send(self, self_, datagrams).await })
+        }
+
+        fn subscribe(
+            &mut self,
+            self_: Resource<OutgoingDatagramStream>,
+        ) -> wasmtime::Result<Resource<Pollable>> {
+            AsyncHostOutgoingDatagramStream::subscribe(self, self_)
+        }
+
+        fn drop(&mut self, rep: Resource<OutgoingDatagramStream>) -> wasmtime::Result<()> {
+            AsyncHostOutgoingDatagramStream::drop(self, rep)
+        }
+    }
+
+    impl From<OutgoingDatagram> for async_udp::OutgoingDatagram {
+        fn from(other: OutgoingDatagram) -> Self {
+            let OutgoingDatagram {
+                data,
+                remote_address,
+            } = other;
+            Self {
+                data,
+                remote_address,
             }
         }
     }

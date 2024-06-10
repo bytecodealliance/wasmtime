@@ -246,6 +246,14 @@
 //! * `component-model` - Enabled by default, this enables support for the
 //!   [`wasmtime::component`](component) API for working with components.
 //!
+//! * `gc` - Enabled by default, this enables support for a number of
+//!   WebAssembly proposals such as `reference-types`, `function-references`,
+//!   and `gc`. Note that the implementation of the `gc` proposal itself is not
+//!   yet complete at this time.
+//!
+//! * `threads` - Enabled by default, this enables compile-time support for the
+//!   WebAssembly `threads` proposal, notably shared memories.
+//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!
@@ -254,13 +262,82 @@
 #![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
 // Allow broken links when the default features is disabled because most of our
 // documentation is written for the "one build" of the `main` branch which has
 // most features enabled. This will present warnings in stripped-down doc builds
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
+#![no_std]
+
+#[cfg(any(feature = "std", unix, windows))]
+#[macro_use]
+extern crate std;
+extern crate alloc;
+
+use wasmtime_environ::prelude;
+
+/// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
+/// is a field projection within `T`.
+///
+/// This is intended to be invoked as:
+///
+/// ```ignore
+/// struct MyType {
+///     field: u32,
+/// }
+///
+/// let initial: &mut MaybeUninit<MyType> = ...;
+/// let field: &mut MaybeUninit<u32> = map_maybe_uninit!(initial.field);
+/// ```
+///
+/// Note that array accesses are also supported:
+///
+/// ```ignore
+///
+/// let initial: &mut MaybeUninit<[u32; 2]> = ...;
+/// let element: &mut MaybeUninit<u32> = map_maybe_uninit!(initial[1]);
+/// ```
+#[doc(hidden)]
+#[macro_export]
+macro_rules! map_maybe_uninit {
+    ($maybe_uninit:ident $($field:tt)*) => ({
+        #[allow(unused_unsafe)]
+        {
+            unsafe {
+                use $crate::MaybeUninitExt;
+
+                let m: &mut core::mem::MaybeUninit<_> = $maybe_uninit;
+                // Note the usage of `addr_of_mut!` here which is an attempt to "stay
+                // safe" here where we never accidentally create `&mut T` where `T` is
+                // actually uninitialized, hopefully appeasing the Rust unsafe
+                // guidelines gods.
+                m.map(|p| core::ptr::addr_of_mut!((*p)$($field)*))
+            }
+        }
+    })
+}
+
+#[doc(hidden)]
+pub trait MaybeUninitExt<T> {
+    /// Maps `MaybeUninit<T>` to `MaybeUninit<U>` using the closure provided.
+    ///
+    /// Note that this is `unsafe` as there is no guarantee that `U` comes from
+    /// `T`.
+    unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U)
+        -> &mut core::mem::MaybeUninit<U>;
+}
+
+impl<T> MaybeUninitExt<T> for core::mem::MaybeUninit<T> {
+    unsafe fn map<U>(
+        &mut self,
+        f: impl FnOnce(*mut T) -> *mut U,
+    ) -> &mut core::mem::MaybeUninit<U> {
+        let new_ptr = f(self.as_mut_ptr());
+        core::mem::transmute::<*mut U, &mut core::mem::MaybeUninit<U>>(new_ptr)
+    }
+}
 
 #[cfg(feature = "runtime")]
 mod runtime;
@@ -269,6 +346,8 @@ pub use runtime::*;
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 mod compile;
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+pub use compile::CodeBuilder;
 
 mod config;
 mod engine;
@@ -276,6 +355,16 @@ mod profiling_agent;
 
 pub use crate::config::*;
 pub use crate::engine::*;
+
+#[cfg(feature = "std")]
+mod sync_std;
+#[cfg(feature = "std")]
+use sync_std as sync;
+
+#[cfg_attr(feature = "std", allow(dead_code))]
+mod sync_nostd;
+#[cfg(not(feature = "std"))]
+use sync_nostd as sync;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.
 ///
@@ -290,4 +379,11 @@ fn _assert_send_and_sync<T: Send + Sync>() {}
 fn _assertions_lib() {
     _assert_send_and_sync::<Engine>();
     _assert_send_and_sync::<Config>();
+}
+
+#[cfg(feature = "runtime")]
+#[doc(hidden)]
+pub mod _internal {
+    // Exported just for the CLI.
+    pub use crate::runtime::vm::MmapVec;
 }

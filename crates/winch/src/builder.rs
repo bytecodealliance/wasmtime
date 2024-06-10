@@ -2,14 +2,15 @@ use crate::compiler::Compiler;
 use anyhow::{bail, Result};
 use std::sync::Arc;
 use target_lexicon::Triple;
-use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
-use wasmtime_environ::{CompilerBuilder, Setting};
+use wasmtime_cranelift::isa_builder::IsaBuilder;
+use wasmtime_environ::{CompilerBuilder, Setting, Tunables};
 use winch_codegen::{isa, TargetIsa};
 
 /// Compiler builder.
 struct Builder {
     inner: IsaBuilder<Result<Box<dyn TargetIsa>>>,
     cranelift: Box<dyn CompilerBuilder>,
+    tunables: Option<Tunables>,
 }
 
 pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
@@ -17,7 +18,11 @@ pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
         isa::lookup(triple).map_err(|e| e.into())
     })?;
     let cranelift = wasmtime_cranelift::builder(triple)?;
-    Ok(Box::new(Builder { inner, cranelift }))
+    Ok(Box::new(Builder {
+        inner,
+        cranelift,
+        tunables: None,
+    }))
 }
 
 impl CompilerBuilder for Builder {
@@ -47,8 +52,9 @@ impl CompilerBuilder for Builder {
         self.inner.settings()
     }
 
-    fn set_tunables(&mut self, tunables: wasmtime_environ::Tunables) -> Result<()> {
+    fn set_tunables(&mut self, tunables: Tunables) -> Result<()> {
         assert!(tunables.winch_callable);
+        self.tunables = Some(tunables.clone());
         self.cranelift.set_tunables(tunables)?;
         Ok(())
     }
@@ -56,7 +62,12 @@ impl CompilerBuilder for Builder {
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self.inner.build()?;
         let cranelift = self.cranelift.build()?;
-        Ok(Box::new(Compiler::new(isa, cranelift)))
+        let tunables = self
+            .tunables
+            .as_ref()
+            .expect("set_tunables not called")
+            .clone();
+        Ok(Box::new(Compiler::new(isa, cranelift, tunables)))
     }
 
     fn enable_incremental_compilation(

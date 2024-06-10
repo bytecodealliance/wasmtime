@@ -1,10 +1,11 @@
+use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
-use std::fmt;
-use std::marker;
-use std::num::NonZeroU64;
-use std::ops::{Index, IndexMut};
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use core::fmt;
+use core::marker;
+use core::num::NonZeroU64;
+use core::ops::{Index, IndexMut};
+use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 // This is defined here, in a private submodule, so we can explicitly reexport
 // it only as `pub(crate)`. This avoids a ton of
@@ -22,10 +23,10 @@ impl InstanceId {
 pub struct StoreData {
     id: StoreId,
     funcs: Vec<crate::func::FuncData>,
-    tables: Vec<wasmtime_runtime::ExportTable>,
-    globals: Vec<wasmtime_runtime::ExportGlobal>,
+    tables: Vec<crate::runtime::vm::ExportTable>,
+    globals: Vec<crate::runtime::vm::ExportGlobal>,
     instances: Vec<crate::instance::InstanceData>,
-    memories: Vec<wasmtime_runtime::ExportMemory>,
+    memories: Vec<crate::runtime::vm::ExportMemory>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
 }
@@ -48,10 +49,10 @@ macro_rules! impl_store_data {
 
 impl_store_data! {
     funcs => crate::func::FuncData,
-    tables => wasmtime_runtime::ExportTable,
-    globals => wasmtime_runtime::ExportGlobal,
+    tables => crate::runtime::vm::ExportTable,
+    globals => crate::runtime::vm::ExportGlobal,
     instances => crate::instance::InstanceData,
-    memories => wasmtime_runtime::ExportMemory,
+    memories => crate::runtime::vm::ExportMemory,
 }
 
 impl StoreData {
@@ -202,12 +203,13 @@ where
 /// it came from. Comparisons with this value are how panics are generated for
 /// mismatching the item that a store belongs to.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[repr(transparent)] // NB: relied on in the C API
 pub struct StoreId(NonZeroU64);
 
 impl StoreId {
     /// Allocates a new unique identifier for a store that has never before been
     /// used in this process.
-    fn allocate() -> StoreId {
+    pub fn allocate() -> StoreId {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
         // Only allow 2^63 stores at which point we start panicking to prevent
@@ -235,9 +237,19 @@ impl StoreId {
         }
         store_id_mismatch();
     }
+
+    /// Raw accessor for the C API.
+    pub fn as_raw(&self) -> NonZeroU64 {
+        self.0
+    }
+
+    /// Raw constructor for the C API.
+    pub fn from_raw(id: NonZeroU64) -> StoreId {
+        StoreId(id)
+    }
 }
 
-#[repr(C)] // used by reference in the C API
+#[repr(C)] // used by reference in the C API, also in `wasmtime_func_t`.
 pub struct Stored<T> {
     store_id: StoreId,
     index: usize,

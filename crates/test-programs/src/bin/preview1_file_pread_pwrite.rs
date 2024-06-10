@@ -165,7 +165,7 @@ unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
         buf: buf.as_ptr(),
         buf_len: buf.len(),
     };
-    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 2");
+    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 50");
     assert_eq!(n, 1);
 
     assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);

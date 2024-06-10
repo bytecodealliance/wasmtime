@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
+use wasmtime_wasi::WasiView;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -24,24 +25,6 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttpCtx;
-
-fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
-    let mut parts = s.splitn(2, '=');
-    Ok((
-        parts.next().unwrap().to_string(),
-        parts.next().map(|s| s.to_string()),
-    ))
-}
-
-fn parse_dirs(s: &str) -> Result<(String, String)> {
-    let mut parts = s.split("::");
-    let host = parts.next().unwrap();
-    let guest = match parts.next() {
-        Some(guest) => guest,
-        None => host,
-    };
-    Ok((host.into(), guest.into()))
-}
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
@@ -57,25 +40,6 @@ pub struct RunCommand {
     #[command(flatten)]
     #[allow(missing_docs)]
     pub run: RunCommon,
-
-    /// Grant access of a host directory to a guest.
-    ///
-    /// If specified as just `HOST_DIR` then the same directory name on the
-    /// host is made available within the guest. If specified as `HOST::GUEST`
-    /// then the `HOST` directory is opened and made available as the name
-    /// `GUEST` in the guest.
-    #[arg(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
-    pub dirs: Vec<(String, String)>,
-
-    /// Pass an environment variable to the program.
-    ///
-    /// The `--env FOO=BAR` form will set the environment variable named `FOO`
-    /// to the value `BAR` for the guest program using WASI. The `--env FOO`
-    /// form will set the environment variable named `FOO` to the same value it
-    /// has in the calling process for the guest, or in other words it will
-    /// cause the environment variable `FOO` to be inherited.
-    #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
-    pub vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
     #[arg(long, value_name = "FUNCTION")]
@@ -110,7 +74,7 @@ impl RunCommand {
     pub fn execute(mut self) -> Result<()> {
         self.run.common.init_logging()?;
 
-        let mut config = self.run.common.config(None)?;
+        let mut config = self.run.common.config(None, None)?;
 
         if self.run.common.wasm.timeout.is_some() {
             config.epoch_interruption(true);
@@ -207,15 +171,26 @@ impl RunCommand {
             }
         }
 
+        // Pre-emptively initialize and install a Tokio runtime ambiently in the
+        // environment when executing the module. Without this whenever a WASI
+        // call is made that needs to block on a future a Tokio runtime is
+        // configured and entered, and this appears to be slower than simply
+        // picking an existing runtime out of the environment and using that.
+        // The goal of this is to improve the performance of WASI-related
+        // operations that block in the CLI since the CLI doesn't use async to
+        // invoke WebAssembly.
+        let result = wasmtime_wasi::runtime::with_ambient_tokio_runtime(|| {
+            self.load_main_module(&mut store, &mut linker, &main, modules)
+                .with_context(|| {
+                    format!(
+                        "failed to run main module `{}`",
+                        self.module_and_args[0].to_string_lossy()
+                    )
+                })
+        });
+
         // Load the main wasm module.
-        match self
-            .load_main_module(&mut store, &mut linker, &main, modules)
-            .with_context(|| {
-                format!(
-                    "failed to run main module `{}`",
-                    self.module_and_args[0].to_string_lossy()
-                )
-            }) {
+        match result {
             Ok(()) => (),
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
@@ -249,34 +224,6 @@ impl RunCommand {
         }
 
         Ok(())
-    }
-
-    fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
-        let mut preopen_dirs = Vec::new();
-
-        for (host, guest) in self.dirs.iter() {
-            preopen_dirs.push((
-                guest.clone(),
-                Dir::open_ambient_dir(host, ambient_authority())
-                    .with_context(|| format!("failed to open directory '{}'", host))?,
-            ));
-        }
-
-        Ok(preopen_dirs)
-    }
-
-    fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
-        let mut listeners = vec![];
-
-        for address in &self.run.common.wasi.tcplisten {
-            let stdlistener = std::net::TcpListener::bind(address)
-                .with_context(|| format!("failed to bind to address '{}'", address))?;
-
-            let _ = stdlistener.set_nonblocking(true)?;
-
-            listeners.push(TcpListener::from_std(stdlistener))
-        }
-        Ok(listeners)
     }
 
     fn compute_argv(&self) -> Result<Vec<String>> {
@@ -473,7 +420,7 @@ impl RunCommand {
 
                 let component = module.unwrap_component();
 
-                let (command, _instance) = wasmtime_wasi::command::sync::Command::instantiate(
+                let (command, _instance) = wasmtime_wasi::bindings::sync::Command::instantiate(
                     &mut *store,
                     component,
                     linker,
@@ -568,6 +515,8 @@ impl RunCommand {
                 Val::ExternRef(Some(_)) => println!("<externref>"),
                 Val::FuncRef(None) => println!("<null funcref>"),
                 Val::FuncRef(Some(_)) => println!("<funcref>"),
+                Val::AnyRef(None) => println!("<null anyref>"),
+                Val::AnyRef(Some(_)) => println!("<anyref>"),
             }
         }
 
@@ -643,16 +592,20 @@ impl RunCommand {
                         // default-disabled in the future.
                         (Some(true), _) | (None, Some(false) | None) => {
                             if self.run.common.wasi.preview0 != Some(false) {
-                                wasmtime_wasi::preview0::add_to_linker_sync(linker, |t| t)?;
+                                wasmtime_wasi::preview0::add_to_linker_sync(linker, |t| {
+                                    t.preview2_ctx()
+                                })?;
                             }
-                            wasmtime_wasi::preview1::add_to_linker_sync(linker, |t| t)?;
+                            wasmtime_wasi::preview1::add_to_linker_sync(linker, |t| {
+                                t.preview2_ctx()
+                            })?;
                             self.set_preview2_ctx(store)?;
                         }
                     }
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    wasmtime_wasi::command::sync::add_to_linker(linker)?;
+                    wasmtime_wasi::add_to_linker_sync(linker)?;
                     self.set_preview2_ctx(store)?;
                 }
             }
@@ -744,7 +697,7 @@ impl RunCommand {
                     }
                 }
 
-                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx {}));
+                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
             }
         }
 
@@ -760,7 +713,7 @@ impl RunCommand {
                 builder.env(&k, &v)?;
             }
         }
-        for (key, value) in self.vars.iter() {
+        for (key, value) in self.run.vars.iter() {
             let value = match value {
                 Some(value) => value.clone(),
                 None => match std::env::var_os(key) {
@@ -782,13 +735,16 @@ impl RunCommand {
             num_fd = ctx_set_listenfd(num_fd, &mut builder)?;
         }
 
-        for listener in self.compute_preopen_sockets()? {
+        for listener in self.run.compute_preopen_sockets()? {
+            let listener = TcpListener::from_std(listener);
             builder.preopened_socket(num_fd as _, listener)?;
             num_fd += 1;
         }
 
-        for (name, dir) in self.compute_preopen_dirs()? {
-            builder.preopened_dir(dir, name)?;
+        for (host, guest) in self.run.dirs.iter() {
+            let dir = Dir::open_ambient_dir(host, ambient_authority())
+                .with_context(|| format!("failed to open directory '{}'", host))?;
+            builder.preopened_dir(dir, guest)?;
         }
 
         store.data_mut().preview1_ctx = Some(builder.build());
@@ -798,58 +754,8 @@ impl RunCommand {
     fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
-
-        if self.run.common.wasi.inherit_env == Some(true) {
-            for (k, v) in std::env::vars() {
-                builder.env(&k, &v);
-            }
-        }
-        for (key, value) in self.vars.iter() {
-            let value = match value {
-                Some(value) => value.clone(),
-                None => match std::env::var_os(key) {
-                    Some(val) => val
-                        .into_string()
-                        .map_err(|_| anyhow!("environment variable `{key}` not valid utf-8"))?,
-                    None => {
-                        // leave the env var un-set in the guest
-                        continue;
-                    }
-                },
-            };
-            builder.env(key, &value);
-        }
-
-        if self.run.common.wasi.listenfd == Some(true) {
-            bail!("components do not support --listenfd");
-        }
-        for _ in self.compute_preopen_sockets()? {
-            bail!("components do not support --tcplisten");
-        }
-
-        for (name, dir) in self.compute_preopen_dirs()? {
-            builder.preopened_dir(
-                dir,
-                wasmtime_wasi::DirPerms::all(),
-                wasmtime_wasi::FilePerms::all(),
-                name,
-            );
-        }
-
-        if self.run.common.wasi.inherit_network == Some(true) {
-            builder.inherit_network();
-        }
-        if let Some(enable) = self.run.common.wasi.allow_ip_name_lookup {
-            builder.allow_ip_name_lookup(enable);
-        }
-        if let Some(enable) = self.run.common.wasi.tcp {
-            builder.allow_tcp(enable);
-        }
-        if let Some(enable) = self.run.common.wasi.udp {
-            builder.allow_udp(enable);
-        }
-
-        let ctx = builder.build();
+        self.run.configure_wasip2(&mut builder)?;
+        let ctx = builder.build_p1();
         store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
         Ok(())
     }
@@ -862,16 +768,7 @@ struct Host {
     // The Mutex is only needed to satisfy the Sync constraint but we never
     // actually perform any locking on it as we use Mutex::get_mut for every
     // access.
-    preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::WasiCtx>>>,
-
-    // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
-    // "just" an empty table.
-    preview2_table: Arc<Mutex<wasmtime::component::ResourceTable>>,
-
-    // State necessary for the preview1 implementation of WASI backed by the
-    // preview2 host implementation. Only used with the `--preview2` flag right
-    // now when running core modules.
-    preview2_adapter: Arc<wasmtime_wasi::preview1::WasiPreview1Adapter>,
+    preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::preview1::WasiP1Ctx>>>,
 
     #[cfg(feature = "wasi-nn")]
     wasi_nn: Option<Arc<WasiNnCtx>>,
@@ -884,16 +781,12 @@ struct Host {
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
 }
 
-impl wasmtime_wasi::WasiView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table)
-            .expect("wasmtime_wasi is not compatible with threads")
-            .get_mut()
-            .unwrap()
-    }
-
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        let ctx = self.preview2_ctx.as_mut().unwrap();
+impl Host {
+    fn preview2_ctx(&mut self) -> &mut wasmtime_wasi::preview1::WasiP1Ctx {
+        let ctx = self
+            .preview2_ctx
+            .as_mut()
+            .expect("wasip2 is not configured");
         Arc::get_mut(ctx)
             .expect("wasmtime_wasi is not compatible with threads")
             .get_mut()
@@ -901,14 +794,13 @@ impl wasmtime_wasi::WasiView for Host {
     }
 }
 
-impl wasmtime_wasi::preview1::WasiPreview1View for Host {
-    fn adapter(&self) -> &wasmtime_wasi::preview1::WasiPreview1Adapter {
-        &self.preview2_adapter
+impl WasiView for Host {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        self.preview2_ctx().table()
     }
 
-    fn adapter_mut(&mut self) -> &mut wasmtime_wasi::preview1::WasiPreview1Adapter {
-        Arc::get_mut(&mut self.preview2_adapter)
-            .expect("wasmtime_wasi is not compatible with threads")
+    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
+        self.preview2_ctx().ctx()
     }
 }
 
@@ -920,10 +812,7 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     }
 
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table)
-            .expect("preview2 is not compatible with threads")
-            .get_mut()
-            .unwrap()
+        self.preview2_ctx().table()
     }
 }
 

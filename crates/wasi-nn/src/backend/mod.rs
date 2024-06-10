@@ -18,7 +18,6 @@ use self::onnxruntime::OnnxBackend;
 use self::openvino::OpenvinoBackend;
 
 use crate::backend::kserve::KServeBackend;
-use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph, Registry};
 
 #[cfg(all(feature = "winml", target_os = "windows"))]
@@ -31,6 +30,7 @@ use std::path::Path;
 use thiserror::Error;
 use wiggle::async_trait_crate::async_trait;
 use wiggle::GuestError;
+use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<Backend> {

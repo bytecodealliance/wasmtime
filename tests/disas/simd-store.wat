@@ -84,15 +84,12 @@
   (memory 0)
 )
 
-;; function u0:0(i64 vmctx, i64, i8x16) fast {
+;; function u0:0(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -108,15 +105,12 @@
 ;; @004b                               return
 ;; }
 ;;
-;; function u0:1(i64 vmctx, i64, i8x16) fast {
+;; function u0:1(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -134,15 +128,12 @@
 ;; @005a                               return
 ;; }
 ;;
-;; function u0:2(i64 vmctx, i64, i8x16) fast {
+;; function u0:2(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -160,15 +151,12 @@
 ;; @0069                               return
 ;; }
 ;;
-;; function u0:3(i64 vmctx, i64, i8x16) fast {
+;; function u0:3(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -186,15 +174,12 @@
 ;; @0079                               return
 ;; }
 ;;
-;; function u0:4(i64 vmctx, i64, i8x16) fast {
+;; function u0:4(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -210,15 +195,12 @@
 ;; @0088                               return
 ;; }
 ;;
-;; function u0:5(i64 vmctx, i64, i8x16) fast {
+;; function u0:5(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -236,15 +218,12 @@
 ;; @0097                               return
 ;; }
 ;;
-;; function u0:6(i64 vmctx, i64, i8x16) fast {
+;; function u0:6(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -262,15 +241,12 @@
 ;; @00a6                               return
 ;; }
 ;;
-;; function u0:7(i64 vmctx, i64, i8x16) fast {
+;; function u0:7(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -288,15 +264,12 @@
 ;; @00b6                               return
 ;; }
 ;;
-;; function u0:8(i64 vmctx, i64, i8x16) fast {
+;; function u0:8(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -312,15 +285,12 @@
 ;; @00c5                               return
 ;; }
 ;;
-;; function u0:9(i64 vmctx, i64, i8x16) fast {
+;; function u0:9(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -338,15 +308,12 @@
 ;; @00d4                               return
 ;; }
 ;;
-;; function u0:10(i64 vmctx, i64, i8x16) fast {
+;; function u0:10(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -364,15 +331,12 @@
 ;; @00e3                               return
 ;; }
 ;;
-;; function u0:11(i64 vmctx, i64, i8x16) fast {
+;; function u0:11(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -390,15 +354,12 @@
 ;; @00f3                               return
 ;; }
 ;;
-;; function u0:12(i64 vmctx, i64, i8x16) fast {
+;; function u0:12(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -414,15 +375,12 @@
 ;; @0102                               return
 ;; }
 ;;
-;; function u0:13(i64 vmctx, i64, i8x16) fast {
+;; function u0:13(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -440,15 +398,12 @@
 ;; @0111                               return
 ;; }
 ;;
-;; function u0:14(i64 vmctx, i64, i8x16) fast {
+;; function u0:14(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -466,15 +421,12 @@
 ;; @0120                               return
 ;; }
 ;;
-;; function u0:15(i64 vmctx, i64, i8x16) fast {
+;; function u0:15(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -490,15 +442,12 @@
 ;; @012f                               return
 ;; }
 ;;
-;; function u0:16(i64 vmctx, i64, i8x16) fast {
+;; function u0:16(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -516,15 +465,12 @@
 ;; @013e                               return
 ;; }
 ;;
-;; function u0:17(i64 vmctx, i64, i8x16) fast {
+;; function u0:17(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -542,15 +488,12 @@
 ;; @014d                               return
 ;; }
 ;;
-;; function u0:18(i64 vmctx, i64, i8x16) fast {
+;; function u0:18(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -568,15 +511,12 @@
 ;; @015d                               return
 ;; }
 ;;
-;; function u0:19(i64 vmctx, i64, i8x16) fast {
+;; function u0:19(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -592,15 +532,12 @@
 ;; @016c                               return
 ;; }
 ;;
-;; function u0:20(i64 vmctx, i64, i8x16) fast {
+;; function u0:20(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -618,15 +555,12 @@
 ;; @017b                               return
 ;; }
 ;;
-;; function u0:21(i64 vmctx, i64, i8x16) fast {
+;; function u0:21(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -644,15 +578,12 @@
 ;; @018a                               return
 ;; }
 ;;
-;; function u0:22(i64 vmctx, i64, i8x16) fast {
+;; function u0:22(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -670,15 +601,12 @@
 ;; @0199                               return
 ;; }
 ;;
-;; function u0:23(i64 vmctx, i64, i8x16) fast {
+;; function u0:23(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -696,15 +624,12 @@
 ;; @01a8                               return
 ;; }
 ;;
-;; function u0:24(i64 vmctx, i64, i8x16) fast {
+;; function u0:24(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -722,15 +647,12 @@
 ;; @01b7                               return
 ;; }
 ;;
-;; function u0:25(i64 vmctx, i64, i8x16) fast {
+;; function u0:25(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -748,15 +670,12 @@
 ;; @01c6                               return
 ;; }
 ;;
-;; function u0:26(i64 vmctx, i64, i8x16) fast {
+;; function u0:26(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -774,15 +693,12 @@
 ;; @01d5                               return
 ;; }
 ;;
-;; function u0:27(i64 vmctx, i64, i8x16) fast {
+;; function u0:27(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -800,15 +716,12 @@
 ;; @01e4                               return
 ;; }
 ;;
-;; function u0:28(i64 vmctx, i64, i8x16) fast {
+;; function u0:28(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -826,15 +739,12 @@
 ;; @01f3                               return
 ;; }
 ;;
-;; function u0:29(i64 vmctx, i64, i8x16) fast {
+;; function u0:29(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -852,15 +762,12 @@
 ;; @0202                               return
 ;; }
 ;;
-;; function u0:30(i64 vmctx, i64, i8x16) fast {
+;; function u0:30(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -878,15 +785,12 @@
 ;; @0211                               return
 ;; }
 ;;
-;; function u0:31(i64 vmctx, i64, i8x16) fast {
+;; function u0:31(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -904,15 +808,12 @@
 ;; @0220                               return
 ;; }
 ;;
-;; function u0:32(i64 vmctx, i64, i8x16) fast {
+;; function u0:32(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
@@ -930,15 +831,12 @@
 ;; @022f                               return
 ;; }
 ;;
-;; function u0:33(i64 vmctx, i64, i8x16) fast {
+;; function u0:33(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):

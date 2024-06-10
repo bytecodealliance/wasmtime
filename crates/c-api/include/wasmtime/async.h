@@ -7,13 +7,13 @@
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support
  *
  * All WebAssembly executes synchronously, but an async support enables the Wasm
- * code be executed on a seperate stack, so it can be paused and resumed. There
+ * code be executed on a separate stack, so it can be paused and resumed. There
  * are three mechanisms for yielding control from wasm to the caller: fuel,
  * epochs, and async host functions.
  *
  * When WebAssembly is executed, a #wasmtime_call_future_t is returned. This
  * struct represents the state of the execution and each call to
- * #wasmtime_call_future_poll will execute the WebAssembly code on a seperate
+ * #wasmtime_call_future_poll will execute the WebAssembly code on a separate
  * stack until the function returns or yields control back to the caller.
  *
  * It's expected these futures are pulled in a loop until completed, at which
@@ -34,11 +34,14 @@
 #define WASMTIME_ASYNC_H
 
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/config.h>
 #include <wasmtime/error.h>
 #include <wasmtime/func.h>
 #include <wasmtime/linker.h>
 #include <wasmtime/store.h>
+
+#ifdef WASMTIME_FEATURE_ASYNC
 
 #ifdef __cplusplus
 extern "C" {
@@ -365,5 +368,7 @@ wasmtime_config_host_stack_creator_set(wasm_config_t *,
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+#endif // WASMTIME_FEATURE_ASYNC
 
 #endif // WASMTIME_ASYNC_H

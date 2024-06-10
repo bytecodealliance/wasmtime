@@ -6,7 +6,6 @@
 // top of it, e.g. the side-effect/coloring analysis and the scan support.
 
 use crate::entity::SecondaryMap;
-use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::pcc::{Fact, FactContext, PccError, PccResult};
 use crate::ir::{
@@ -23,6 +22,7 @@ use crate::settings::Flags;
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
@@ -362,7 +362,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             VCodeBuildDirection::Backward,
         );
 
-        let mut vregs = VRegAllocator::new();
+        // We usually need two VRegs per instruction result, plus extras for
+        // various temporaries, but two per Value is a good starting point.
+        let mut vregs = VRegAllocator::with_capacity(f.dfg.num_values() * 2);
 
         let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
 
@@ -396,7 +398,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
 
         // Find the sret register, if it's used.
-        let mut sret_reg = None;
+        let mut sret_param = None;
         for ret in vcode.abi().signature().returns.iter() {
             if ret.purpose == ArgumentPurpose::StructReturn {
                 let entry_bb = f.stencil.layout.entry_block().unwrap();
@@ -407,17 +409,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     .zip(vcode.abi().signature().params.iter())
                 {
                     if sig_param.purpose == ArgumentPurpose::StructReturn {
-                        let regs = value_regs[param];
-                        assert!(regs.len() == 1);
-
-                        assert!(sret_reg.is_none());
-                        sret_reg = Some(regs);
+                        assert!(sret_param.is_none());
+                        sret_param = Some(param);
                     }
                 }
 
-                assert!(sret_reg.is_some());
+                assert!(sret_param.is_some());
             }
         }
+
+        let sret_reg = sret_param.map(|param| {
+            let regs = value_regs[param];
+            assert!(regs.len() == 1);
+            regs
+        });
 
         // Compute instruction colors, find constant instructions, and find instructions with
         // side-effects, in one combined pass.
@@ -447,7 +452,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_end_colors[bb] = InstColor::new(cur_color);
         }
 
-        let value_ir_uses = Self::compute_use_states(f);
+        let value_ir_uses = Self::compute_use_states(f, sret_param);
 
         Ok(Lower {
             f,
@@ -480,7 +485,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Pre-analysis: compute `value_ir_uses`. See comment on
     /// `ValueUseState` for a description of what this analysis
     /// computes.
-    fn compute_use_states<'a>(f: &'a Function) -> SecondaryMap<Value, ValueUseState> {
+    fn compute_use_states<'a>(
+        f: &'a Function,
+        sret_param: Option<Value>,
+    ) -> SecondaryMap<Value, ValueUseState> {
         // We perform the analysis without recursion, so we don't
         // overflow the stack on long chains of ops in the input.
         //
@@ -499,6 +507,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // efficient than a full indirect-use-counting pass.
 
         let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
+
+        if let Some(sret_param) = sret_param {
+            // There's an implicit use of the struct-return parameter in each
+            // copy of the function epilogue, which we count here.
+            value_ir_uses[sret_param] = ValueUseState::Multiple;
+        }
 
         // Stack of iterators over Values as we do DFS to mark
         // Multiple-state subtrees. The iterator type is whatever is
@@ -530,7 +544,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Iterate over all values used by all instructions, noting an
             // additional use on each operand.
             for arg in f.dfg.inst_values(inst) {
-                let arg = f.dfg.resolve_aliases(arg);
+                debug_assert!(f.dfg.value_is_real(arg));
                 let old = value_ir_uses[arg];
                 if force_multiple {
                     trace!(
@@ -553,7 +567,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 }
                 while let Some(iter) = stack.last_mut() {
                     if let Some(value) = iter.next() {
-                        let value = f.dfg.resolve_aliases(value);
+                        debug_assert!(f.dfg.value_is_real(value));
                         trace!(" -> DFS reaches {}", value);
                         if value_ir_uses[value] == ValueUseState::Multiple {
                             // Truncate DFS here: no need to go further,
@@ -561,7 +575,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             // With debug asserts, check one level of
                             // that invariant at least.
                             debug_assert!(uses(value).into_iter().flatten().all(|arg| {
-                                let arg = f.dfg.resolve_aliases(arg);
+                                debug_assert!(f.dfg.value_is_real(arg));
                                 value_ir_uses[arg] == ValueUseState::Multiple
                             }));
                             continue;
@@ -590,13 +604,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.f.dfg.block_params(entry_bb)
             );
 
-            // Make the vmctx available in debuginfo.
-            if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
-                self.emit_value_label_marks_for_value(vmctx_val);
-            }
-
             for (i, param) in self.f.dfg.block_params(entry_bb).iter().enumerate() {
-                if !self.vcode.abi().arg_is_needed_in_body(i) {
+                if self.value_ir_uses[*param] == ValueUseState::Unused {
                     continue;
                 }
                 let regs = writable_value_regs(self.value_regs[*param]);
@@ -667,8 +676,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // for the benefit of debuginfo.
         if self.f.dfg.values_labels.is_some() {
             if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
-                let vmctx_reg = self.value_regs[vmctx_val].only_reg().unwrap();
-                self.emit(I::gen_dummy_use(vmctx_reg));
+                if self.value_ir_uses[vmctx_val] != ValueUseState::Unused {
+                    let vmctx_reg = self.value_regs[vmctx_val].only_reg().unwrap();
+                    self.emit(I::gen_dummy_use(vmctx_reg));
+                }
             }
         }
 
@@ -754,9 +765,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
 
             // Normal instruction: codegen if the instruction is side-effecting
-            // or any of its outputs its used.
+            // or any of its outputs is used.
             if has_side_effect || value_needed {
-                trace!("lowering: inst {}: {:?}", inst, self.f.dfg.insts[inst]);
+                trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
                 let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
                     let ty = if self.num_outputs(inst) > 0 {
                         Some(self.output_ty(inst, 0))
@@ -780,26 +791,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 // regalloc to use. These aliases effectively rewrite any use of
                 // the pre-assigned register to the register that was returned by
                 // the ISLE lowering logic.
-                debug_assert_eq!(temp_regs.len(), self.num_outputs(inst));
-                for i in 0..self.num_outputs(inst) {
-                    let regs = temp_regs[i];
-                    let dsts = self.value_regs[self.f.dfg.inst_results(inst)[i]];
+                let results = self.f.dfg.inst_results(inst);
+                debug_assert_eq!(temp_regs.len(), results.len());
+                for (regs, &result) in temp_regs.iter().zip(results) {
+                    let dsts = self.value_regs[result];
                     debug_assert_eq!(regs.len(), dsts.len());
-                    for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
-                        self.set_vreg_alias(*dst, *temp);
-
-                        // If there was any PCC fact about the
-                        // original VReg, move it to the aliased reg
-                        // instead. Lookup goes through the alias, but
-                        // we want to preserve whatever was stated
-                        // about the vreg before its producer was
-                        // lowered.
-                        if let Some(fact) =
-                            self.vregs.take_fact(dst.to_virtual_reg().unwrap().into())
-                        {
-                            self.vregs
-                                .set_fact(temp.to_virtual_reg().unwrap().into(), fact);
-                        }
+                    for (&dst, &temp) in dsts.regs().iter().zip(regs.regs()) {
+                        trace!("set vreg alias: {result:?} = {dst:?}, lowering = {temp:?}");
+                        self.vregs.set_vreg_alias(dst, temp);
                     }
                 }
             }
@@ -838,12 +837,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn add_block_params(&mut self, block: Block) -> CodegenResult<()> {
         for &param in self.f.dfg.block_params(block) {
-            let ty = self.f.dfg.value_type(param);
-            let (_reg_rcs, reg_tys) = I::rc_for_type(ty)?;
-            debug_assert_eq!(reg_tys.len(), self.value_regs[param].len());
-            for (&reg, &rty) in self.value_regs[param].regs().iter().zip(reg_tys.iter()) {
+            for &reg in self.value_regs[param].regs() {
                 let vreg = reg.to_virtual_reg().unwrap();
-                self.vregs.set_vreg_type(vreg, rty);
                 self.vcode.add_block_param(vreg);
             }
         }
@@ -852,13 +847,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn get_value_labels<'a>(&'a self, val: Value, depth: usize) -> Option<&'a [ValueLabelStart]> {
         if let Some(ref values_labels) = self.f.dfg.values_labels {
+            debug_assert!(self.f.dfg.value_is_real(val));
             trace!(
-                "get_value_labels: val {} -> {} -> {:?}",
+                "get_value_labels: val {} -> {:?}",
                 val,
-                self.f.dfg.resolve_aliases(val),
-                values_labels.get(&self.f.dfg.resolve_aliases(val))
+                values_labels.get(&val)
             );
-            let val = self.f.dfg.resolve_aliases(val);
             match values_labels.get(&val) {
                 Some(&ValueLabelAssignments::Starts(ref list)) => Some(&list[..]),
                 Some(&ValueLabelAssignments::Alias { value, .. }) if depth < 10 => {
@@ -923,12 +917,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn finish_ir_inst(&mut self, loc: RelSourceLoc) {
-        self.vcode.set_srcloc(loc);
         // The VCodeBuilder builds in reverse order (and reverses at
         // the end), but `ir_insts` is in forward order, so reverse
         // it.
         for inst in self.ir_insts.drain(..).rev() {
-            self.vcode.push(inst);
+            self.vcode.push(inst, loc);
         }
     }
 
@@ -989,16 +982,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
             for &arg in branch_args {
-                let arg = self.f.dfg.resolve_aliases(arg);
+                debug_assert!(self.f.dfg.value_is_real(arg));
                 let regs = self.put_value_in_regs(arg);
-                for &vreg in regs.regs() {
-                    let vreg = self.vcode.vcode.resolve_vreg_alias(vreg.into());
-                    branch_arg_vregs.push(vreg.into());
-                }
+                branch_arg_vregs.extend_from_slice(regs.regs());
             }
             self.vcode.add_succ(succ, &branch_arg_vregs[..]);
         }
-        self.finish_ir_inst(Default::default());
     }
 
     fn collect_branches_and_targets(
@@ -1021,15 +1010,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     ) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
 
-        // Initialize the ABI object, giving it temps if requested.
-        let temps = self
-            .vcode
-            .abi()
-            .temps_needed(self.sigs())
-            .into_iter()
-            .map(|temp_ty| self.alloc_tmp(temp_ty).only_reg().unwrap())
-            .collect::<Vec<_>>();
-        self.vcode.init_abi(temps);
+        self.vcode.init_retval_area(&mut self.vregs)?;
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).
@@ -1115,8 +1096,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the
         // VCodeBuilder, let's build the VCode.
+        trace!(
+            "built vcode:\n{:?}Backwards {:?}",
+            &self.vregs,
+            &self.vcode.vcode
+        );
         let vcode = self.vcode.build(self.vregs);
-        trace!("built vcode: {:?}", vcode);
 
         Ok(vcode)
     }
@@ -1218,7 +1203,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
     /// value, if possible.
     pub fn get_constant(&self, ir_inst: Inst) -> Option<u64> {
-        self.inst_constants.get(&ir_inst).cloned()
+        self.inst_constants.get(&ir_inst).map(|&c| {
+            // The upper bits must be zero, enforced during legalization and by
+            // the CLIF verifier.
+            debug_assert_eq!(c, {
+                let input_size = self.output_ty(ir_inst, 0).bits() as u64;
+                let shift = 64 - input_size;
+                (c << shift) >> shift
+            });
+            c
+        })
     }
 
     /// Get the input as one of two options other than a direct register:
@@ -1239,7 +1233,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// not be codegen'd (it has been integrated into the current instruction).
     pub fn input_as_value(&self, ir_inst: Inst, idx: usize) -> Value {
         let val = self.f.dfg.inst_args(ir_inst)[idx];
-        self.f.dfg.resolve_aliases(val)
+        debug_assert!(self.f.dfg.value_is_real(val));
+        val
     }
 
     /// Like `get_input_as_source_or_const` but with a `Value`.
@@ -1339,7 +1334,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     /// Put the given value into register(s) and return the assigned register.
     pub fn put_value_in_regs(&mut self, val: Value) -> ValueRegs<Reg> {
-        let val = self.f.dfg.resolve_aliases(val);
+        debug_assert!(self.f.dfg.value_is_real(val));
         trace!("put_value_in_regs: val {}", val);
 
         if let Some(inst) = self.f.dfg.value_def(val).inst() {
@@ -1419,12 +1414,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             self.emit(I::gen_move(new_reg, reg, ty));
             new_reg.to_reg()
         }
-    }
-
-    /// Note that one vreg is to be treated as an alias of another.
-    pub fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
-        trace!("set vreg alias: from {:?} to {:?}", from, to);
-        self.vcode.set_vreg_alias(from, to);
     }
 
     /// Add a range fact to a register, if no other fact is present.

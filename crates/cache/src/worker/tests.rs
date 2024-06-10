@@ -605,12 +605,12 @@ fn test_on_update_cleanup_future_files() {
     let worker_lock_file = cache_dir.join(format!(".cleanup.wip-{}", process::id()));
 
     let scenarios: [&[_]; 5] = [
-        // NOT cleaning up, everythings ok
+        // NOT cleaning up, everything is ok
         &[
             (Duration::from_secs(0), None, true),
             (Duration::from_secs(24 * 60 * 60), None, true),
         ],
-        // NOT cleaning up, everythings ok
+        // NOT cleaning up, everything is ok
         &[
             (Duration::from_secs(0), None, true),
             (Duration::from_secs(24 * 60 * 60 + 1), None, true),

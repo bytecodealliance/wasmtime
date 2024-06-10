@@ -994,11 +994,6 @@
     (CondBreak
       (cond Cond))
 
-    ;; Marker, no-op in generated code SP "virtual offset" is adjusted. This
-    ;; controls how MemArg::NominalSPOffset args are lowered.
-    (VirtualSPOffsetAdj
-      (offset i64))
-
     ;; Pseudoinstruction to keep a value alive.
     (DummyUse
      (reg Reg))
@@ -1522,7 +1517,7 @@
 (extern extractor vr128_ty vr128_ty)
 
 
-;; Helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers for various immediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Special integer types and their constructors
 
@@ -1773,7 +1768,7 @@
 (decl memarg_got () MemArg)
 (extern constructor memarg_got memarg_got)
 
-;; Create a MemArg refering to a stack address formed by
+;; Create a MemArg referring to a stack address formed by
 ;; adding a base (relative to SP) and an offset.
 (decl memarg_stack_off (i64 i64) MemArg)
 (extern constructor memarg_stack_off memarg_stack_off)
@@ -3460,7 +3455,7 @@
 ;; Push an instruction sequence to rotate a value loaded from memory
 ;; to the well-defined location: the high bytes in case of a big-endian
 ;; memory operation, and the low bytes in the little-endian case.
-;; (This is somewhat arbitary but chosen to allow the most efficient
+;; (This is somewhat arbitrary but chosen to allow the most efficient
 ;; sequences to compute the various atomic operations.)
 ;; Note that $I8 accesses always use the big-endian case.
 (decl casloop_rotate_in (VecMInstBuilder Type MemFlags Reg Reg) Reg)

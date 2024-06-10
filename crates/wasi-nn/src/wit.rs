@@ -22,8 +22,9 @@ use std::{error::Error, fmt, hash::Hash, str::FromStr};
 mod gen_ {
     wasmtime::component::bindgen!({
     world: "ml",
-    path: "spec/wit/wasi-nn.wit",
+    path: "wit/wasi-nn.wit",
     async: true,
+    trappable_imports: true,
     });
 }
 use gen_::wasi::nn as gen; // Shortcut to the module containing the types we need.

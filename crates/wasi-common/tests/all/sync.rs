@@ -11,7 +11,7 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let stdout = WritePipe::new_in_memory();
     let stderr = WritePipe::new_in_memory();
     let r = {
-        let engine = Engine::default();
+        let engine = test_programs_artifacts::engine(|_| {});
         let mut linker = Linker::new(&engine);
         add_to_linker(&mut linker, |cx| cx)?;
 
@@ -123,6 +123,10 @@ fn preview1_file_allocate() {
 #[test_log::test]
 fn preview1_file_pread_pwrite() {
     run(PREVIEW1_FILE_PREAD_PWRITE, true).unwrap()
+}
+#[test_log::test]
+fn preview1_file_read_write() {
+    run(PREVIEW1_FILE_READ_WRITE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_file_seek_tell() {

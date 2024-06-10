@@ -8,33 +8,43 @@ fn main() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
+    use anyhow::{anyhow, Context};
     use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
-    use object::{Object, ObjectSymbol, SymbolKind};
+    use object::{Object, ObjectSymbol};
     use std::io::Write;
-    use std::path::Path;
+    use wasmtime::{Config, Engine};
 
-    let target = std::env::args().nth(1).unwrap();
-    let target = Path::new(&target).file_stem().unwrap().to_str().unwrap();
+    let mut args = std::env::args();
+    let _current_exe = args.next();
+    let triple = args
+        .next()
+        .ok_or_else(|| anyhow!("missing argument 1: triple"))?;
+    let embedding_so_path = args
+        .next()
+        .ok_or_else(|| anyhow!("missing argument 2: path to libembedding.so"))?;
+    let platform_so_path = args
+        .next()
+        .ok_or_else(|| anyhow!("missing argument 3: path to libwasmtime-platform.so"))?;
+
     // Path to the artifact which is the build of the embedding.
     //
     // In this example this is a dynamic library intended to be run on Linux.
     // Note that this is just an example of an artifact and custom build
     // processes can produce different kinds of artifacts.
-    let lib = format!("../../target/{target}/release/libembedding.so");
-    let binary = std::fs::read(&lib)?;
+    let binary = std::fs::read(&embedding_so_path)?;
     let object = object::File::parse(&binary[..])?;
 
     // Showcase verification that the dynamic library in question doesn't depend
     // on much. Wasmtime build in a "minimal platform" mode is allowed to
     // depend on some standard C symbols such as `memcpy` but any OS-related
     // symbol must be prefixed by `wasmtime_*` and be documented in
-    // `crates/runtime/src/sys/custom/capi.rs`.
+    // `crates/wasmtime/src/runtime/vm/sys/custom/capi.rs`.
     //
-    // This is effectively a double-check of the above assesrtion and showing
-    // how running `libembedding.so` in this case requires only minimal
+    // This is effectively a double-check of the above assertion and showing how
+    // running `libembedding.so` in this case requires only minimal
     // dependencies.
     for sym in object.symbols() {
-        if !sym.is_undefined() || sym.is_weak() || sym.kind() == SymbolKind::Null {
+        if !sym.is_undefined() || sym.is_weak() {
             continue;
         }
 
@@ -46,6 +56,34 @@ fn main() -> Result<()> {
             }
         }
     }
+
+    // Precompile modules for the embedding. Right now Wasmtime in no_std mode
+    // does not have support for Cranelift meaning that AOT mode must be used.
+    // Modules are compiled here and then given to the embedding via the `run`
+    // function below.
+    //
+    // Note that `Config::target` is used here to enable cross-compilation.
+    let mut config = Config::new();
+    config.target(&triple)?;
+    let engine = Engine::new(&config)?;
+    let smoke = engine.precompile_module(b"(module)")?;
+    let simple_add = engine.precompile_module(
+        br#"
+            (module
+                (func (export "add") (param i32 i32) (result i32)
+                    (i32.add (local.get 0) (local.get 1)))
+            )
+        "#,
+    )?;
+    let simple_host_fn = engine.precompile_module(
+        br#"
+            (module
+                (import "host" "multiply" (func $multiply (param i32 i32) (result i32)))
+                (func (export "add_and_mul") (param i32 i32 i32) (result i32)
+                    (i32.add (call $multiply (local.get 0) (local.get 1)) (local.get 2)))
+            )
+        "#,
+    )?;
 
     // Next is an example of running this embedding, which also serves as test
     // that basic functionality actually works.
@@ -66,17 +104,44 @@ fn main() -> Result<()> {
     // The embedding is then run to showcase an example and then an error, if
     // any, is written to stderr.
     unsafe {
-        let _platform_symbols =
-            Library::open(Some("./libwasmtime-platform.so"), RTLD_NOW | RTLD_GLOBAL)?;
+        let _platform_symbols = Library::open(Some(&platform_so_path), RTLD_NOW | RTLD_GLOBAL)
+            .with_context(|| {
+                format!(
+                    "failed to open {platform_so_path:?}; cwd = {:?}",
+                    std::env::current_dir()
+                )
+            })?;
 
-        let lib = Library::new(&lib)?;
-        let run: Symbol<extern "C" fn(*mut u8, usize) -> usize> = lib.get(b"run")?;
+        let lib = Library::new(&embedding_so_path).context("failed to create new library")?;
+        let run: Symbol<
+            extern "C" fn(
+                *mut u8,
+                usize,
+                *const u8,
+                usize,
+                *const u8,
+                usize,
+                *const u8,
+                usize,
+            ) -> usize,
+        > = lib
+            .get(b"run")
+            .context("failed to find the `run` symbol in the library")?;
 
-        let mut buf = Vec::with_capacity(1024);
-        let len = run(buf.as_mut_ptr(), buf.capacity());
-        buf.set_len(len);
+        let mut error_buf = Vec::with_capacity(1024);
+        let len = run(
+            error_buf.as_mut_ptr(),
+            error_buf.capacity(),
+            smoke.as_ptr(),
+            smoke.len(),
+            simple_add.as_ptr(),
+            simple_add.len(),
+            simple_host_fn.as_ptr(),
+            simple_host_fn.len(),
+        );
+        error_buf.set_len(len);
 
-        std::io::stderr().write_all(&buf).unwrap();
+        std::io::stderr().write_all(&error_buf).unwrap();
     }
     Ok(())
 }

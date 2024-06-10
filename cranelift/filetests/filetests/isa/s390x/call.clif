@@ -16,7 +16,6 @@ block0(v0: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
 ;   basr %r14, %r5
@@ -49,7 +48,6 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
 ;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
@@ -99,7 +97,6 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   lgfr %r2, %r2
 ;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
@@ -149,7 +146,6 @@ block0(v0: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   brasl %r14, %g
 ;   lmg %r14, %r15, 272(%r15)
@@ -175,7 +171,6 @@ block0(v0: i32):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
 ;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
@@ -209,7 +204,6 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   basr %r14, %r3
 ;   lmg %r14, %r15, 272(%r15)
@@ -332,14 +326,14 @@ block0(v0: i128, v1: i128, v2: i128, v3: i128, v4: i128, v5: i128, v6: i128, v7:
 ;   vl %v24, 0(%r5)
 ;   lg %r4, 184(%r15)
 ;   vl %v27, 0(%r4)
-;   vaq %v16, %v1, %v3
-;   vaq %v17, %v5, %v7
-;   vaq %v18, %v18, %v21
-;   vaq %v19, %v24, %v27
-;   vaq %v16, %v16, %v17
-;   vaq %v17, %v18, %v19
-;   vaq %v16, %v16, %v17
-;   vst %v16, 0(%r2)
+;   vaq %v4, %v1, %v3
+;   vaq %v5, %v5, %v7
+;   vaq %v6, %v18, %v21
+;   vaq %v7, %v24, %v27
+;   vaq %v4, %v4, %v5
+;   vaq %v5, %v6, %v7
+;   vaq %v4, %v4, %v5
+;   vst %v4, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
@@ -356,14 +350,14 @@ block0(v0: i128, v1: i128, v2: i128, v3: i128, v4: i128, v5: i128, v6: i128, v7:
 ;   vl %v24, 0(%r5)
 ;   lg %r4, 0xb8(%r15)
 ;   vl %v27, 0(%r4)
-;   vaq %v16, %v1, %v3
-;   vaq %v17, %v5, %v7
-;   vaq %v18, %v18, %v21
-;   vaq %v19, %v24, %v27
-;   vaq %v16, %v16, %v17
-;   vaq %v17, %v18, %v19
-;   vaq %v16, %v16, %v17
-;   vst %v16, 0(%r2)
+;   vaq %v4, %v1, %v3
+;   vaq %v5, %v5, %v7
+;   vaq %v6, %v18, %v21
+;   vaq %v7, %v24, %v27
+;   vaq %v4, %v4, %v5
+;   vaq %v5, %v6, %v7
+;   vaq %v4, %v4, %v5
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %call_sret() -> i64 {
@@ -378,7 +372,6 @@ block0:
 ; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
-;   virtual_sp_offset_adjust 160
 ; block0:
 ;   lghi %r2, 0
 ;   brasl %r14, %g

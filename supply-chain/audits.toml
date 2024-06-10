@@ -218,6 +218,18 @@ I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
 
+[[wildcard-audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
 [[wildcard-audits.wasm-metadata]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -229,6 +241,18 @@ This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
 repository of which I'm one of the primary maintainers and publishers for.
 I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasm-metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
 [[wildcard-audits.wasm-mutate]]
@@ -277,6 +301,18 @@ I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
 
+[[wildcard-audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
 [[wildcard-audits.wasmprinter]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -295,6 +331,18 @@ This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
 repository of which I'm one of the primary maintainers and publishers for.
 I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
 [[wildcard-audits.wasmtime]]
@@ -441,6 +489,18 @@ start = "2021-10-29"
 end = "2024-06-26"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-slab]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
 [[wildcard-audits.wasmtime-types]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -534,6 +594,18 @@ I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
 
+[[wildcard-audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
 [[wildcard-audits.wat]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -545,6 +617,18 @@ This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
 repository of which I'm one of the primary maintainers and publishers for.
 I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
 [[wildcard-audits.wiggle]]
@@ -600,7 +684,56 @@ I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
 
+[[wildcard-audits.wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
 [[wildcard-audits.wit-bindgen-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wit-bindgen`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-bindgen-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
+[[wildcard-audits.wit-bindgen-rt]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
+[[wildcard-audits.wit-bindgen-rust]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
@@ -616,14 +749,13 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-bindgen-rust]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1 # Alex Crichton (alexcrichton)
-start = "2020-12-11"
-end = "2024-04-14"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
 notes = """
-This is a Bytecode Alliance authored crate maintained in the `wit-bindgen`
-repository of which I'm one of the primary maintainers and publishers for.
-I am employed by a member of the Bytecode Alliance and plan to continue doing
-so and will actively maintain this crate over time.
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
 [[wildcard-audits.wit-bindgen-rust-lib]]
@@ -652,6 +784,18 @@ I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
 
+[[wildcard-audits.wit-bindgen-rust-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
 [[wildcard-audits.wit-component]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -672,6 +816,18 @@ user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2019-03-16"
 end = "2024-03-10"
 
+[[wildcard-audits.wit-component]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
+"""
+
 [[wildcard-audits.wit-parser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -683,6 +839,18 @@ This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
 repository of which I'm one of the primary maintainers and publishers for.
 I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-01"
+end = "2025-05-08"
+notes = """
+The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
+publication of this crate from CI. This repository requires all PRs are reviewed
+by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
 [[audits.addr2line]]
@@ -1062,6 +1230,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.2.0"
 
+[[audits.cobs]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.3"
+notes = "No `unsafe` code in the crate and no usage of `std`"
+
 [[audits.codespan-reporting]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1197,6 +1371,12 @@ This diff brings in a number of minor updates of which none are related to
 `unsafe` code or anything system-related like filesystems.
 """
 
+[[audits.embedded-io]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.4.0"
+notes = "No `unsafe` code and only uses `std` in ways one would expect the crate to do so."
+
 [[audits.errno]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1214,6 +1394,12 @@ who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.1.2"
 notes = "This should be portable to any POSIX system and seems like it should be part of the libc crate, but at any rate it's safe as is."
+
+[[audits.escape8259]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.5.2"
+notes = "No unsafe code, crate does what it says on the tin, small crate."
 
 [[audits.fallible-iterator]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1429,6 +1615,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.4.0"
 notes = "Contains `forbid_unsafe` and only uses `std::fmt` from the standard library. Otherwise only contains string manipulation."
+
+[[audits.heck]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.5.0"
+notes = "Minor changes for a `no_std` upgrade but otherwise everything looks as expected."
 
 [[audits.hermit-abi]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -1713,6 +1905,12 @@ This is a minor update which has some testing affordances as well as some
 updated math algorithms.
 """
 
+[[audits.libtest-mimic]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.6.1 -> 0.7.0"
+notes = "Only minor changes with new flags and such, no major updates to `unsafe` or anything outside of a test framework."
+
 [[audits.linux-raw-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1993,6 +2191,15 @@ delta = "0.3.26 -> 0.3.29"
 notes = """
 No `unsafe` additions or anything outside of the purview of the crate in this
 change.
+"""
+
+[[audits.postcard]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.8"
+notes = """
+I've audited the unsafe code to do what it looks like it's doing. Otherwise the
+crate is a standard serializer/deserializer crate.
 """
 
 [[audits.pretty_env_logger]]
@@ -3505,6 +3712,18 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-19"
 end = "2024-07-06"
 
+[[trusted.prettyplease]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2022-01-04"
+end = "2025-05-06"
+
+[[trusted.proc-macro2]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-04-23"
+end = "2025-05-06"
+
 [[trusted.quote]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
@@ -3679,60 +3898,6 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
 end = "2024-07-14"
 
-[[trusted.wasm-encoder]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wasm-metadata]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wasm-mutate]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wasm-smith]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wasmparser]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wasmprinter]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wasmtime-wmemcheck]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2023-09-20"
-end = "2024-09-27"
-
-[[trusted.wast]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wat]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
 [[trusted.winapi-util]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
@@ -3816,54 +3981,6 @@ criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-08-20"
 end = "2024-07-14"
-
-[[trusted.wit-bindgen]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-23"
-end = "2025-02-23"
-
-[[trusted.wit-bindgen-core]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-23"
-end = "2025-02-23"
-
-[[trusted.wit-bindgen-rt]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-03-04"
-end = "2025-03-11"
-
-[[trusted.wit-bindgen-rust]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-23"
-end = "2025-02-23"
-
-[[trusted.wit-bindgen-rust-macro]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-23"
-end = "2025-02-23"
-
-[[trusted.wit-component]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
-
-[[trusted.wit-parser]]
-criteria = "safe-to-deploy"
-user-id = 696 # Nick Fitzgerald (fitzgen)
-start = "2023-10-12"
-end = "2024-10-17"
-
-[[trusted.wit-parser]]
-criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2024-02-15"
-end = "2025-02-16"
 
 [[trusted.witx]]
 criteria = "safe-to-deploy"

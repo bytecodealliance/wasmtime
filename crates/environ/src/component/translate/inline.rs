@@ -224,7 +224,7 @@ struct InlinerFrame<'a> {
 //
 // FIXME: this is cloned quite a lot and given the internal maps if this is a
 // perf issue we may want to `Rc` these fields. Note that this is only a perf
-// hit at compile-time though which we in general don't pay too too much
+// hit at compile-time though which we in general don't pay too much
 // attention to.
 #[derive(Default, Clone)]
 struct ComponentClosure<'a> {

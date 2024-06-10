@@ -18,43 +18,40 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lgr %r3, %r4
-;;   lg %r4, 88(%r2)
-;;   llgfr %r3, %r3
-;;   clgr %r3, %r4
-;;   jgh label3 ; jg label1
-;; block1:
-;;   lg %r4, 80(%r2)
-;;   strv %r5, 0(%r3,%r4)
-;;   jg label2
-;; block2:
-;;   br %r14
-;; block3:
-;;   .word 0x0000 # trap=heap_oob
+;; wasm[0]::function[0]:
+;;       lg      %r1, 8(%r2)
+;;       lg      %r1, 0(%r1)
+;;       la      %r1, 0xa0(%r1)
+;;       clgrtle %r15, %r1
+;;       stmg    %r14, %r15, 0x70(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lg      %r3, 0x68(%r2)
+;;       llgfr   %r4, %r4
+;;       clgr    %r4, %r3
+;;       jgh     0x50
+;;       lg      %r2, 0x60(%r2)
+;;       strv    %r5, 0(%r4, %r2)
+;;       lmg     %r14, %r15, 0x110(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00
 ;;
-;; function u0:1:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lg %r3, 88(%r2)
-;;   llgfr %r5, %r4
-;;   clgr %r5, %r3
-;;   jgh label3 ; jg label1
-;; block1:
-;;   lg %r3, 80(%r2)
-;;   lrv %r2, 0(%r5,%r3)
-;;   jg label2
-;; block2:
-;;   br %r14
-;; block3:
-;;   .word 0x0000 # trap=heap_oob
+;; wasm[0]::function[1]:
+;;       lg      %r1, 8(%r2)
+;;       lg      %r1, 0(%r1)
+;;       la      %r1, 0xa0(%r1)
+;;       clgrtle %r15, %r1
+;;       stmg    %r14, %r15, 0x70(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lg      %r5, 0x68(%r2)
+;;       llgfr   %r4, %r4
+;;       clgr    %r4, %r5
+;;       jgh     0xa4
+;;       lg      %r2, 0x60(%r2)
+;;       lrv     %r2, 0(%r4, %r2)
+;;       lmg     %r14, %r15, 0x110(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00

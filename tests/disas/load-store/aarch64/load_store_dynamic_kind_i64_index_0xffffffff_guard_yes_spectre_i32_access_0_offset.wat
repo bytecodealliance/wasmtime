@@ -18,48 +18,30 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x9, [x0, #88]
-;;   ldr x11, [x0, #80]
-;;   movz x10, #0
-;;   add x11, x11, x2
-;;   subs xzr, x2, x9
-;;   csel x10, x10, x11, hi
-;;   csdb
-;;   str w3, [x10]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x8, [x2, #0x68]
+;;       ldr     x10, [x2, #0x60]
+;;       mov     x9, #0
+;;       add     x10, x10, x4
+;;       cmp     x4, x8
+;;       csel    x9, x9, x10, hi
+;;       csdb
+;;       str     w5, [x9]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ldr x9, [x0, #88]
-;;   ldr x11, [x0, #80]
-;;   movz x10, #0
-;;   add x11, x11, x2
-;;   subs xzr, x2, x9
-;;   csel x10, x10, x11, hi
-;;   csdb
-;;   ldr w0, [x10]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x8, [x2, #0x68]
+;;       ldr     x10, [x2, #0x60]
+;;       mov     x9, #0
+;;       add     x10, x10, x4
+;;       cmp     x4, x8
+;;       csel    x9, x9, x10, hi
+;;       csdb
+;;       ldr     w2, [x9]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

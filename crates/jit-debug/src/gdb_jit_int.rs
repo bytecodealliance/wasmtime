@@ -42,7 +42,7 @@ extern "C" {
 /// access to the __jit_debug_descriptor within this process.
 static GDB_REGISTRATION: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(Default::default()));
 
-/// Registeration for JIT image
+/// Registration for JIT image
 pub struct GdbJitImageRegistration {
     entry: Pin<Box<JITCodeEntry>>,
     file: Pin<Box<[u8]>>,

@@ -13,7 +13,7 @@ use wasmtime::component::Resource;
 
 mod sync;
 
-impl<T: WasiView> preopens::Host for T {
+impl preopens::Host for dyn WasiView + '_ {
     fn get_directories(
         &mut self,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
@@ -30,7 +30,7 @@ impl<T: WasiView> preopens::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> types::Host for T {
+impl types::Host for dyn WasiView + '_ {
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
@@ -52,7 +52,7 @@ impl<T: WasiView> types::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> HostDescriptor for T {
+impl HostDescriptor for dyn WasiView + '_ {
     async fn advise(
         &mut self,
         fd: Resource<types::Descriptor>,
@@ -493,6 +493,7 @@ impl<T: WasiView> HostDescriptor for T {
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
 
+        let allow_blocking_current_thread = self.ctx().allow_blocking_current_thread;
         let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
@@ -609,11 +610,15 @@ impl<T: WasiView> HostDescriptor for T {
                 d.perms,
                 d.file_perms,
                 open_mode,
+                allow_blocking_current_thread,
             )))?),
 
-            OpenResult::File(file) => {
-                Ok(table.push(Descriptor::File(File::new(file, d.file_perms, open_mode)))?)
-            }
+            OpenResult::File(file) => Ok(table.push(Descriptor::File(File::new(
+                file,
+                d.file_perms,
+                open_mode,
+                allow_blocking_current_thread,
+            )))?),
 
             OpenResult::NotDir => Err(ErrorCode::NotDirectory.into()),
         }
@@ -730,11 +735,9 @@ impl<T: WasiView> HostDescriptor for T {
         if !f.perms.contains(FilePerms::READ) {
             Err(types::ErrorCode::BadDescriptor)?;
         }
-        // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let reader = FileInputStream::new(clone, offset);
+        let reader = FileInputStream::new(f, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table().push(InputStream::File(reader))?;
@@ -754,11 +757,8 @@ impl<T: WasiView> HostDescriptor for T {
             Err(types::ErrorCode::BadDescriptor)?;
         }
 
-        // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = std::sync::Arc::clone(&f.file);
-
         // Create a stream view for it.
-        let writer = FileOutputStream::write_at(clone, offset);
+        let writer = FileOutputStream::write_at(f, offset);
         let writer: OutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
@@ -777,11 +777,9 @@ impl<T: WasiView> HostDescriptor for T {
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
         }
-        // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let appender = FileOutputStream::append(clone);
+        let appender = FileOutputStream::append(f);
         let appender: OutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
@@ -848,7 +846,7 @@ impl<T: WasiView> HostDescriptor for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> HostDirectoryEntryStream for T {
+impl HostDirectoryEntryStream for dyn WasiView + '_ {
     async fn read_directory_entry(
         &mut self,
         stream: Resource<types::DirectoryEntryStream>,

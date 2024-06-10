@@ -25,7 +25,7 @@ use std::task::{Context, Poll};
 
 pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
     once_cell::sync::Lazy::new(|| {
-        tokio::runtime::Builder::new_current_thread()
+        tokio::runtime::Builder::new_multi_thread()
             .enable_time()
             .enable_io()
             .build()

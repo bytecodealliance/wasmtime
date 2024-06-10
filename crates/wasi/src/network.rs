@@ -1,7 +1,8 @@
-use crate::bindings::sockets::network::{Ipv4Address, Ipv6Address};
-use crate::bindings::wasi::sockets::network::ErrorCode;
+use crate::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
 use crate::TrappableError;
+use std::future::Future;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::Arc;
 
 pub struct Network {
@@ -10,24 +11,28 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn check_socket_addr(
+    pub async fn check_socket_addr(
         &self,
-        addr: &SocketAddr,
+        addr: SocketAddr,
         reason: SocketAddrUse,
     ) -> std::io::Result<()> {
-        self.socket_addr_check.check(addr, reason)
+        self.socket_addr_check.check(addr, reason).await
     }
 }
 
 /// A check that will be called for each socket address that is used of whether the address is permitted.
 #[derive(Clone)]
 pub struct SocketAddrCheck(
-    pub(crate) Arc<dyn Fn(&SocketAddr, SocketAddrUse) -> bool + Send + Sync>,
+    pub(crate)  Arc<
+        dyn Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+            + Send
+            + Sync,
+    >,
 );
 
 impl SocketAddrCheck {
-    pub fn check(&self, addr: &SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
-        if (self.0)(addr, reason) {
+    pub async fn check(&self, addr: SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
+        if (self.0)(addr, reason).await {
             Ok(())
         } else {
             Err(std::io::Error::new(
@@ -40,7 +45,7 @@ impl SocketAddrCheck {
 
 impl Default for SocketAddrCheck {
     fn default() -> Self {
-        Self(Arc::new(|_, _| false))
+        Self(Arc::new(|_, _| Box::pin(async { false })))
     }
 }
 

@@ -3,17 +3,17 @@ use crate::component::matching::InstanceType;
 use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
+use crate::prelude::*;
+use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
+use crate::runtime::vm::VMFuncRef;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
+use alloc::sync::Arc;
 use anyhow::{anyhow, Context, Result};
-use indexmap::IndexMap;
-use std::marker;
-use std::ptr::NonNull;
-use std::sync::Arc;
-use wasmtime_environ::component::*;
+use core::marker;
+use core::ptr::{self, NonNull};
+use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
-use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
-use wasmtime_runtime::VMFuncRef;
 
 /// An instantiated component.
 ///
@@ -153,17 +153,18 @@ impl Instance {
 }
 
 impl InstanceData {
-    pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
+    pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> crate::runtime::vm::Export {
         match def {
             CoreDef::Export(e) => self.lookup_export(store, e),
             CoreDef::Trampoline(idx) => {
-                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                crate::runtime::vm::Export::Function(crate::runtime::vm::ExportFunction {
                     func_ref: self.state.trampoline_func_ref(*idx),
                 })
             }
             CoreDef::InstanceFlags(idx) => {
-                wasmtime_runtime::Export::Global(wasmtime_runtime::ExportGlobal {
+                crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
+                    vmctx: ptr::null_mut(),
                     global: Global {
                         wasm_ty: WasmValType::I32,
                         mutability: true,
@@ -177,7 +178,7 @@ impl InstanceData {
         &self,
         store: &mut StoreOpaque,
         item: &CoreExport<T>,
-    ) -> wasmtime_runtime::Export
+    ) -> crate::runtime::vm::Export
     where
         T: Copy + Into<EntityIndex>,
     {
@@ -318,18 +319,14 @@ impl<'a> Instantiator<'a> {
         // below, but the funcrefs can all be configured here.
         for (idx, sig) in env_component.trampolines.iter() {
             let ptrs = self.component.trampoline_ptrs(idx);
-            let signature = self
-                .component
-                .signatures()
-                .shared_type(*sig)
-                .expect("found unregistered signature");
-            self.data.state.set_trampoline(
-                idx,
-                ptrs.wasm_call,
-                ptrs.native_call,
-                ptrs.array_call,
-                signature,
-            );
+            let signature = match self.component.signatures().shared_type(*sig) {
+                Some(s) => s,
+                None => panic!("found unregistered signature: {sig:?}"),
+            };
+
+            self.data
+                .state
+                .set_trampoline(idx, ptrs.wasm_call, ptrs.array_call, signature);
         }
 
         for initializer in env_component.initializers.iter() {
@@ -409,7 +406,7 @@ impl<'a> Instantiator<'a> {
             .as_ref()
             .map(|dtor| self.data.lookup_def(store, dtor));
         let dtor = dtor.map(|export| match export {
-            wasmtime_runtime::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         });
         let index = self
@@ -424,7 +421,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
         let mem = match self.data.lookup_export(store, &memory.export) {
-            wasmtime_runtime::Export::Memory(m) => m,
+            crate::runtime::vm::Export::Memory(m) => m,
             _ => unreachable!(),
         };
         self.data
@@ -434,7 +431,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
         let func_ref = match self.data.lookup_def(store, &realloc.def) {
-            wasmtime_runtime::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
         self.data.state.set_runtime_realloc(realloc.index, func_ref);
@@ -442,7 +439,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
         let func_ref = match self.data.lookup_def(store, &post_return.def) {
-            wasmtime_runtime::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
         self.data
@@ -467,8 +464,8 @@ impl<'a> Instantiator<'a> {
             // made, so double-check this property of wasmtime in debug mode.
 
             if cfg!(debug_assertions) {
-                let (_, _, expected) = imports.next().unwrap();
-                self.assert_type_matches(store, module, arg, expected);
+                let (imp_module, imp_name, expected) = imports.next().unwrap();
+                self.assert_type_matches(store, module, arg, imp_module, imp_name, expected);
             }
 
             // The unsafety here should be ok since the `export` is loaded
@@ -489,6 +486,8 @@ impl<'a> Instantiator<'a> {
         store: &mut StoreOpaque,
         module: &Module,
         arg: &CoreDef,
+        imp_module: &str,
+        imp_name: &str,
         expected: EntityType,
     ) {
         let export = self.data.lookup_def(store, arg);
@@ -497,16 +496,28 @@ impl<'a> Instantiator<'a> {
         // here. This can otherwise fail `Extern::from_wasmtime_export` because
         // there's no guarantee that there exists a trampoline for `f` so this
         // can't fall through to the case below
-        if let wasmtime_runtime::Export::Function(f) = &export {
-            let expected = expected.unwrap_func();
+        if let crate::runtime::vm::Export::Function(f) = &export {
+            let expected = match expected.unwrap_func() {
+                EngineOrModuleTypeIndex::Engine(e) => Some(e),
+                EngineOrModuleTypeIndex::Module(m) => module.signatures().shared_type(m),
+                EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
+            };
             let actual = unsafe { f.func_ref.as_ref().type_index };
-            assert_eq!(module.signatures().shared_type(expected), Some(actual));
+            assert_eq!(
+                expected,
+                Some(actual),
+                "type mismatch for import {imp_module:?} {imp_name:?}!!!\n\n\
+                 expected {:#?}\n\n\
+                 found {:#?}",
+                expected.and_then(|e| store.engine().signatures().borrow(e)),
+                store.engine().signatures().borrow(actual)
+            );
             return;
         }
 
         let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
         let ty = DefinitionType::from(store, &val);
-        crate::types::matching::MatchCx::new(module)
+        crate::types::matching::MatchCx::new(module.engine())
             .definition(&expected, &ty)
             .expect("unexpected typecheck failure");
     }
@@ -576,7 +587,6 @@ impl<T> InstancePre<T> {
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,

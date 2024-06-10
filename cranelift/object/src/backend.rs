@@ -39,10 +39,10 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
-    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [ir::LibCall]
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [`ir::LibCall`]
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use [cranelift_module::default_libcall_names]().
+    /// argument, use [`cranelift_module::default_libcall_names`].
     pub fn new<V: Into<Vec<u8>>>(
         isa: OwnedTargetIsa,
         name: V,
@@ -154,6 +154,7 @@ impl ObjectModule {
     pub fn new(builder: ObjectBuilder) -> Self {
         let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
         object.flags = builder.flags;
+        object.set_subsections_via_symbols();
         object.add_file_symbol(builder.name);
         Self {
             isa: builder.isa,
@@ -368,19 +369,14 @@ impl Module for ObjectModule {
         let align = alignment
             .max(self.isa.function_alignment().minimum.into())
             .max(self.isa.symbol_alignment());
-        let (section, offset) = if self.per_function_section {
+        let section = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
-            let (section, offset) =
-                self.object
-                    .add_subsection(StandardSection::Text, &symbol_name, bytes, align);
-            self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
-            self.object.symbol_mut(symbol).value = offset;
-            (section, offset)
+            self.object
+                .add_subsection(StandardSection::Text, &symbol_name)
         } else {
-            let section = self.object.section_id(StandardSection::Text);
-            let offset = self.object.add_symbol_data(symbol, section, bytes, align);
-            (section, offset)
+            self.object.section_id(StandardSection::Text)
         };
+        let offset = self.object.add_symbol_data(symbol, section, bytes, align);
 
         if !relocs.is_empty() {
             let relocs = relocs
@@ -633,7 +629,6 @@ impl ObjectModule {
     }
 
     fn process_reloc(&self, record: &ModuleReloc) -> ObjectRelocRecord {
-        let mut addend = record.addend;
         let flags = match record.kind {
             Reloc::Abs4 => RelocationFlags::Generic {
                 kind: RelocationKind::Absolute,
@@ -693,7 +688,6 @@ impl ObjectModule {
                     object::BinaryFormat::MachO,
                     "MachOX86_64Tlv is not supported for this file format"
                 );
-                addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
                 RelocationFlags::MachO {
                     r_type: object::macho::X86_64_RELOC_TLV,
                     r_pcrel: true,
@@ -865,7 +859,7 @@ impl ObjectModule {
             offset: record.offset,
             name: record.name.clone(),
             flags,
-            addend,
+            addend: record.addend,
         }
     }
 }

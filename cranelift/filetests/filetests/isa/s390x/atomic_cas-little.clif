@@ -56,38 +56,33 @@ block0(v0: i64, v1: i16, v2: i16, v3: i64):
 }
 
 ; VCode:
-;   stmg %r11, %r15, 88(%r15)
 ; block0:
-;   sllk %r11, %r5, 3
+;   sllk %r2, %r5, 3
 ;   nill %r5, 65532
-;   lrvr %r2, %r3
-;   lrvr %r3, %r4
+;   lrvr %r3, %r3
+;   lrvr %r4, %r4
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r11) ; rxsbg %r1, %r2, 176, 64, 48 ; jglh 1f ; risbgn %r1, %r3, 48, 64, 48 ; rll %r1, %r1, 16(%r11) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
-;   rll %r5, %r0, 0(%r11)
-;   lrvr %r2, %r5
-;   lmg %r11, %r15, 88(%r15)
+;   0: rll %r1, %r0, 16(%r2) ; rxsbg %r1, %r3, 176, 64, 48 ; jglh 1f ; risbgn %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   rll %r4, %r0, 0(%r2)
+;   lrvr %r2, %r4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r11, %r15, 0x58(%r15)
-; block1: ; offset 0x6
-;   sllk %r11, %r5, 3
+;   sllk %r2, %r5, 3
 ;   nill %r5, 0xfffc
-;   lrvr %r2, %r3
-;   lrvr %r3, %r4
+;   lrvr %r3, %r3
+;   lrvr %r4, %r4
 ;   l %r0, 0(%r5) ; trap: heap_oob
-;   rll %r1, %r0, 0x10(%r11)
-;   rxsbg %r1, %r2, 0xb0, 0x40, 0x30
-;   jglh 0x44
-;   risbgn %r1, %r3, 0x30, 0x40, 0x30
-;   rll %r1, %r1, 0x10(%r11)
+;   rll %r1, %r0, 0x10(%r2)
+;   rxsbg %r1, %r3, 0xb0, 0x40, 0x30
+;   jglh 0x3e
+;   risbgn %r1, %r4, 0x30, 0x40, 0x30
+;   rll %r1, %r1, 0x10(%r2)
 ;   cs %r0, %r1, 0(%r5) ; trap: heap_oob
-;   jglh 0x1c
-;   rll %r5, %r0, 0(%r11)
-;   lrvr %r2, %r5
-;   lmg %r11, %r15, 0x58(%r15)
+;   jglh 0x16
+;   rll %r4, %r0, 0(%r2)
+;   lrvr %r2, %r4
 ;   br %r14
 
 function %atomic_cas_i8(i64, i8, i8, i64) -> i8 {
@@ -97,35 +92,33 @@ block0(v0: i64, v1: i8, v2: i8, v3: i64):
 }
 
 ; VCode:
-;   stmg %r10, %r15, 80(%r15)
+;   stmg %r14, %r15, 112(%r15)
 ; block0:
-;   lgr %r10, %r3
-;   sllk %r3, %r5, 3
+;   sllk %r2, %r5, 3
 ;   nill %r5, 65532
-;   lcr %r2, %r3
+;   lcr %r14, %r2
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r3) ; rxsbg %r1, %r10, 160, 40, 24 ; jglh 1f ; risbgn %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
-;   rll %r2, %r0, 8(%r3)
-;   lmg %r10, %r15, 80(%r15)
+;   0: rll %r1, %r0, 0(%r2) ; rxsbg %r1, %r3, 160, 40, 24 ; jglh 1f ; risbgn %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r14) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   rll %r2, %r0, 8(%r2)
+;   lmg %r14, %r15, 112(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r10, %r15, 0x50(%r15)
+;   stmg %r14, %r15, 0x70(%r15)
 ; block1: ; offset 0x6
-;   lgr %r10, %r3
-;   sllk %r3, %r5, 3
+;   sllk %r2, %r5, 3
 ;   nill %r5, 0xfffc
-;   lcr %r2, %r3
+;   lcr %r14, %r2
 ;   l %r0, 0(%r5) ; trap: heap_oob
-;   rll %r1, %r0, 0(%r3)
-;   rxsbg %r1, %r10, 0xa0, 0x28, 0x18
-;   jglh 0x42
+;   rll %r1, %r0, 0(%r2)
+;   rxsbg %r1, %r3, 0xa0, 0x28, 0x18
+;   jglh 0x3e
 ;   risbgn %r1, %r4, 0x20, 0x28, 0x18
-;   rll %r1, %r1, 0(%r2)
+;   rll %r1, %r1, 0(%r14)
 ;   cs %r0, %r1, 0(%r5) ; trap: heap_oob
-;   jglh 0x1a
-;   rll %r2, %r0, 8(%r3)
-;   lmg %r10, %r15, 0x50(%r15)
+;   jglh 0x16
+;   rll %r2, %r0, 8(%r2)
+;   lmg %r14, %r15, 0x70(%r15)
 ;   br %r14
 

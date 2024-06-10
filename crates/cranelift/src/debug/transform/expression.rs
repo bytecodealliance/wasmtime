@@ -3,7 +3,7 @@
 use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
 use anyhow::{Context, Error, Result};
-use cranelift_codegen::ir::{StackSlots, ValueLabel};
+use cranelift_codegen::ir::ValueLabel;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
@@ -13,42 +13,32 @@ use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
     pub value_ranges: &'a ValueLabelsRanges,
     pub memory_offset: ModuleMemoryOffset,
-    pub sized_stack_slots: &'a StackSlots,
-}
-
-impl<'a> FunctionFrameInfo<'a> {
-    fn vmctx_memory_offset(&self) -> Option<i64> {
-        match self.memory_offset {
-            ModuleMemoryOffset::Defined(x) => Some(x as i64),
-            ModuleMemoryOffset::Imported(_) => {
-                // TODO implement memory offset for imported memory
-                None
-            }
-            ModuleMemoryOffset::None => None,
-        }
-    }
 }
 
 struct ExpressionWriter(write::EndianVec<gimli::RunTimeEndian>);
 
+enum VmctxBase {
+    Reg(u16),
+    OnStack,
+}
+
 impl ExpressionWriter {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let endian = gimli::RunTimeEndian::Little;
         let writer = write::EndianVec::new(endian);
         ExpressionWriter(writer)
     }
 
-    pub fn write_op(&mut self, op: gimli::DwOp) -> write::Result<()> {
+    fn write_op(&mut self, op: gimli::DwOp) -> write::Result<()> {
         self.write_u8(op.0 as u8)
     }
 
-    pub fn write_op_reg(&mut self, reg: u16) -> write::Result<()> {
+    fn write_op_reg(&mut self, reg: u16) -> write::Result<()> {
         if reg < 32 {
             self.write_u8(gimli::constants::DW_OP_reg0.0 as u8 + reg as u8)
         } else {
@@ -57,7 +47,7 @@ impl ExpressionWriter {
         }
     }
 
-    pub fn write_op_breg(&mut self, reg: u16) -> write::Result<()> {
+    fn write_op_breg(&mut self, reg: u16) -> write::Result<()> {
         if reg < 32 {
             self.write_u8(gimli::constants::DW_OP_breg0.0 as u8 + reg as u8)
         } else {
@@ -66,24 +56,70 @@ impl ExpressionWriter {
         }
     }
 
-    pub fn write_u8(&mut self, b: u8) -> write::Result<()> {
+    fn write_u8(&mut self, b: u8) -> write::Result<()> {
         write::Writer::write_u8(&mut self.0, b)
     }
 
-    pub fn write_u32(&mut self, b: u32) -> write::Result<()> {
+    fn write_u32(&mut self, b: u32) -> write::Result<()> {
         write::Writer::write_u32(&mut self.0, b)
     }
 
-    pub fn write_uleb128(&mut self, i: u64) -> write::Result<()> {
+    fn write_uleb128(&mut self, i: u64) -> write::Result<()> {
         write::Writer::write_uleb128(&mut self.0, i)
     }
 
-    pub fn write_sleb128(&mut self, i: i64) -> write::Result<()> {
+    fn write_sleb128(&mut self, i: i64) -> write::Result<()> {
         write::Writer::write_sleb128(&mut self.0, i)
     }
 
-    pub fn into_vec(self) -> Vec<u8> {
+    fn into_vec(self) -> Vec<u8> {
         self.0.into_vec()
+    }
+
+    fn gen_address_of_memory_base_pointer(
+        &mut self,
+        vmctx: VmctxBase,
+        memory_base: &ModuleMemoryOffset,
+    ) -> write::Result<()> {
+        match *memory_base {
+            ModuleMemoryOffset::Defined(offset) => match vmctx {
+                VmctxBase::Reg(reg) => {
+                    self.write_op_breg(reg)?;
+                    self.write_sleb128(offset.into())?;
+                }
+                VmctxBase::OnStack => {
+                    self.write_op(gimli::constants::DW_OP_consts)?;
+                    self.write_sleb128(offset.into())?;
+                    self.write_op(gimli::constants::DW_OP_plus)?;
+                }
+            },
+            ModuleMemoryOffset::Imported {
+                offset_to_vm_memory_definition,
+                offset_to_memory_base,
+            } => {
+                match vmctx {
+                    VmctxBase::Reg(reg) => {
+                        self.write_op_breg(reg)?;
+                        self.write_sleb128(offset_to_vm_memory_definition.into())?;
+                    }
+                    VmctxBase::OnStack => {
+                        if offset_to_vm_memory_definition > 0 {
+                            self.write_op(gimli::constants::DW_OP_consts)?;
+                            self.write_sleb128(offset_to_vm_memory_definition.into())?;
+                        }
+                        self.write_op(gimli::constants::DW_OP_plus)?;
+                    }
+                }
+                self.write_op(gimli::constants::DW_OP_deref)?;
+                if offset_to_memory_base > 0 {
+                    self.write_op(gimli::constants::DW_OP_consts)?;
+                    self.write_sleb128(offset_to_memory_base.into())?;
+                    self.write_op(gimli::constants::DW_OP_plus)?;
+                }
+            }
+            ModuleMemoryOffset::None => return Err(write::Error::InvalidAttributeValue),
+        }
+        Ok(())
     }
 }
 
@@ -167,34 +203,16 @@ fn append_memory_deref(
     isa: &dyn TargetIsa,
 ) -> Result<bool> {
     let mut writer = ExpressionWriter::new();
-    // FIXME for imported memory
-    match vmctx_loc {
-        LabelValueLoc::Reg(r) => {
-            let reg = isa.map_regalloc_reg_to_dwarf(r)?;
-            writer.write_op_breg(reg)?;
-            let memory_offset = match frame_info.vmctx_memory_offset() {
-                Some(offset) => offset,
-                None => {
-                    return Ok(false);
-                }
-            };
-            writer.write_sleb128(memory_offset)?;
-        }
+    let vmctx_base = match vmctx_loc {
+        LabelValueLoc::Reg(r) => VmctxBase::Reg(isa.map_regalloc_reg_to_dwarf(r)?),
         LabelValueLoc::CFAOffset(off) => {
             writer.write_op(gimli::constants::DW_OP_fbreg)?;
             writer.write_sleb128(off)?;
             writer.write_op(gimli::constants::DW_OP_deref)?;
-            writer.write_op(gimli::constants::DW_OP_consts)?;
-            let memory_offset = match frame_info.vmctx_memory_offset() {
-                Some(offset) => offset,
-                None => {
-                    return Ok(false);
-                }
-            };
-            writer.write_sleb128(memory_offset)?;
-            writer.write_op(gimli::constants::DW_OP_plus)?;
+            VmctxBase::OnStack
         }
-    }
+    };
+    writer.gen_address_of_memory_base_pointer(vmctx_base, &frame_info.memory_offset)?;
     writer.write_op(gimli::constants::DW_OP_deref)?;
     writer.write_op(gimli::constants::DW_OP_swap)?;
     writer.write_op(gimli::constants::DW_OP_const4u)?;
@@ -235,9 +253,7 @@ impl CompiledExpression {
                 Box<dyn Iterator<Item = (write::Address, u64)> + 'a>,
                 Vec<u8>,
             ),
-            Ranges(
-                Box<dyn Iterator<Item = Result<(DefinedFuncIndex, usize, usize, Vec<u8>)>> + 'a>,
-            ),
+            Ranges(Box<dyn Iterator<Item = Result<(usize, usize, usize, Vec<u8>)>> + 'a>),
         }
         impl Iterator for BuildWithLocalsResult<'_> {
             type Item = Result<(write::Address, u64, write::Expression)>;
@@ -248,10 +264,10 @@ impl CompiledExpression {
                         .next()
                         .map(|(addr, len)| Ok((addr, len, write::Expression::raw(code.to_vec())))),
                     BuildWithLocalsResult::Ranges(it) => it.next().map(|r| {
-                        r.map(|(func_index, start, end, code_buf)| {
+                        r.map(|(symbol, start, end, code_buf)| {
                             (
                                 write::Address::Symbol {
-                                    symbol: func_index.index(),
+                                    symbol,
                                     addend: start as i64,
                                 },
                                 (end - start) as u64,
@@ -631,7 +647,7 @@ where
 
 #[derive(Debug, Clone)]
 struct CachedValueLabelRange {
-    func_index: DefinedFuncIndex,
+    func_index: usize,
     start: usize,
     end: usize,
     label_location: HashMap<ValueLabel, LabelValueLoc>,
@@ -1115,8 +1131,8 @@ mod tests {
     }
 
     fn create_mock_address_transform() -> AddressTransform {
+        use crate::FunctionAddressMap;
         use cranelift_entity::PrimaryMap;
-        use wasmtime_cranelift_shared::FunctionAddressMap;
         use wasmtime_environ::InstructionAddressMap;
         use wasmtime_environ::WasmFileInfo;
 
@@ -1157,7 +1173,7 @@ mod tests {
             imported_func_count: 0,
             path: None,
         };
-        AddressTransform::new(&module_map, &fi)
+        AddressTransform::mock(&module_map, fi)
     }
 
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
@@ -1206,15 +1222,11 @@ mod tests {
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
         use crate::debug::ModuleMemoryOffset;
-        use cranelift_codegen::ir::StackSlots;
-        use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
         let addr_tr = create_mock_address_transform();
-        let sized_stack_slots = StackSlots::new();
         let (value_ranges, value_labels) = create_mock_value_ranges();
         let fi = FunctionFrameInfo {
             memory_offset: ModuleMemoryOffset::None,
-            sized_stack_slots: &sized_stack_slots,
             value_ranges: &value_ranges,
         };
 
@@ -1222,7 +1234,7 @@ mod tests {
         let builder = ValueLabelRangesBuilder::new(&[(10, 20)], &addr_tr, Some(&fi));
         let ranges = builder.into_ranges().collect::<Vec<_>>();
         assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].func_index, DefinedFuncIndex::new(0));
+        assert_eq!(ranges[0].func_index, 0);
         assert_eq!(ranges[0].start, 0);
         assert_eq!(ranges[0].end, 30);
 

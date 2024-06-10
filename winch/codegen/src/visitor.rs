@@ -10,6 +10,7 @@ use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
     RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
 };
+use crate::reg::Reg;
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
 use regalloc2::RegClass;
@@ -460,7 +461,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.floor_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -473,7 +474,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.floor_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -486,7 +487,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.ceil_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -499,7 +500,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.ceil_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -512,7 +513,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.nearest_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin))
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         );
     }
@@ -525,7 +526,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.nearest_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -538,7 +539,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.trunc_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -551,7 +552,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.trunc_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -1352,12 +1353,8 @@ where
     }
 
     fn visit_call(&mut self, index: u32) {
-        FnCall::emit::<M, M::Ptr>(
-            self.masm,
-            &mut self.context,
-            self.env
-                .callee_from_index::<M::ABI>(FuncIndex::from_u32(index)),
-        )
+        let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
     }
 
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
@@ -1378,19 +1375,17 @@ where
         // This code assumes that [`Self::emit_lazy_init_funcref`] will
         // push the funcref to the value stack.
         match self.env.translation.module.table_plans[table_index].style {
-            TableStyle::CallerChecksSignature => {
+            TableStyle::CallerChecksSignature { lazy_init: true } => {
                 let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
                 self.masm
                     .trapz(funcref_ptr.into(), TrapCode::IndirectCallToNull);
                 self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
             }
+            _ => unimplemented!("Support for eager table init"),
         }
 
-        FnCall::emit::<M, M::Ptr>(
-            self.masm,
-            &mut self.context,
-            self.env.funcref::<M::ABI>(type_index),
-        )
+        let callee = self.env.funcref(type_index);
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
     }
 
     fn visit_table_init(&mut self, elem: u32, table: u32) {
@@ -1402,7 +1397,8 @@ where
             .insert_many(at, &[table.try_into().unwrap(), elem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.table_init::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
@@ -1417,7 +1413,12 @@ where
             .insert_many(at, &[dst.try_into().unwrap(), src.try_into().unwrap()]);
 
         let builtin = self.env.builtins.table_copy::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_table_get(&mut self, table: u32) {
@@ -1428,7 +1429,10 @@ where
 
         match heap_type {
             WasmHeapType::Func => match style {
-                TableStyle::CallerChecksSignature => self.emit_lazy_init_funcref(table_index),
+                TableStyle::CallerChecksSignature { lazy_init: true } => {
+                    self.emit_lazy_init_funcref(table_index)
+                }
+                _ => unimplemented!("Support for eager table init"),
             },
             t => unimplemented!("Support for WasmHeapType: {t}"),
         }
@@ -1458,7 +1462,8 @@ where
             .stack
             .insert_many(at, &[table.try_into().unwrap()]);
 
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
@@ -1468,7 +1473,7 @@ where
     fn visit_table_size(&mut self, table: u32) {
         let table_index = TableIndex::from_u32(table);
         let table_data = self.env.resolve_table_data(table_index);
-        self.masm.table_size(&table_data, &mut self.context);
+        self.emit_compute_table_size(&table_data);
     }
 
     fn visit_table_fill(&mut self, table: u32) {
@@ -1485,7 +1490,8 @@ where
         self.context
             .stack
             .insert_many(at, &[table.try_into().unwrap()]);
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
@@ -1499,17 +1505,12 @@ where
         let plan = self.env.table_plan(table_index);
         match plan.table.wasm_ty.heap_type {
             WasmHeapType::Func => match plan.style {
-                TableStyle::CallerChecksSignature => {
+                TableStyle::CallerChecksSignature { lazy_init: true } => {
                     let value = self.context.pop_to_reg(self.masm, None);
                     let index = self.context.pop_to_reg(self.masm, None);
                     let base = self.context.any_gpr(self.masm);
-                    let elem_addr = self.masm.table_elem_address(
-                        index.into(),
-                        base,
-                        &table_data,
-                        &mut self.context,
-                    );
-
+                    let elem_addr =
+                        self.emit_compute_table_elem_addr(index.into(), base, &table_data);
                     // Set the initialized bit.
                     self.masm.or(
                         value.into(),
@@ -1524,6 +1525,7 @@ where
                     self.context.free_reg(index);
                     self.context.free_reg(base);
                 }
+                _ => unimplemented!("Support for eager table init"),
             },
             ty => unimplemented!("Support for WasmHeapType: {ty}"),
         };
@@ -1532,7 +1534,12 @@ where
     fn visit_elem_drop(&mut self, index: u32) {
         let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>();
         self.context.stack.extend([index.try_into().unwrap()]);
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(elem_drop))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(elem_drop),
+        )
     }
 
     fn visit_memory_init(&mut self, data_index: u32, mem: u32) {
@@ -1543,7 +1550,12 @@ where
             &[mem.try_into().unwrap(), data_index.try_into().unwrap()],
         );
         let builtin = self.env.builtins.memory_init::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) {
@@ -1566,7 +1578,12 @@ where
 
         let builtin = self.env.builtins.memory_copy::<M::ABI, M::Ptr>();
 
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_memory_fill(&mut self, mem: u32) {
@@ -1578,12 +1595,17 @@ where
             .insert_many(at, &[mem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.memory_fill::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_memory_size(&mut self, mem: u32, _: u8) {
         let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
-        self.masm.memory_size(&heap, &mut self.context);
+        self.emit_compute_memory_size(&heap);
     }
 
     fn visit_memory_grow(&mut self, mem: u32, _: u8) {
@@ -1593,15 +1615,41 @@ where
         //   [ vmctx, delta, index ]
         self.context.stack.extend([mem.try_into().unwrap()]);
 
+        let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
         let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        );
+
+        // The memory32_grow builtin returns a pointer type, therefore we must
+        // ensure that the return type is representative of the address space of
+        // the heap type.
+        match (self.env.ptr_type(), heap.ty) {
+            (WasmValType::I64, WasmValType::I64) => {}
+            // When the heap type is smaller than the pointer type, we adjust
+            // the result of the memory32_grow builtin.
+            (WasmValType::I64, WasmValType::I32) => {
+                let top: Reg = self.context.pop_to_reg(self.masm, None).into();
+                self.masm.wrap(top.into(), top.into());
+                self.context.stack.push(TypedReg::i32(top).into());
+            }
+            _ => unimplemented!("Support for 32-bit platforms"),
+        }
     }
 
     fn visit_data_drop(&mut self, data_index: u32) {
         self.context.stack.extend([data_index.try_into().unwrap()]);
 
         let builtin = self.env.builtins.data_drop::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_nop(&mut self) {}
@@ -1667,9 +1715,9 @@ where
                 &mut self.context,
                 self.masm,
                 |results, context, masm| {
-                    // In the case of `br_if` theres a possibility that we'll
-                    // exit early from the block or falltrough, for
-                    // a falltrough, we cannot rely on the pre-computed return area;
+                    // In the case of `br_if` there's a possibility that we'll
+                    // exit early from the block or fallthrough, for
+                    // a fallthrough, we cannot rely on the pre-computed return area;
                     // it must be recalculated so that any values that are
                     // generated are correctly placed near the current stack
                     // pointer.
@@ -1842,8 +1890,8 @@ where
         let val2 = self.context.pop_to_reg(self.masm, None);
         let val1 = self.context.pop_to_reg(self.masm, None);
         self.masm
-            .cmp(RegImm::i32(0), cond.reg.into(), OperandSize::S32);
-        // Conditionally move val1 to val2 if the the comparision is
+            .cmp(cond.reg.into(), RegImm::i32(0), OperandSize::S32);
+        // Conditionally move val1 to val2 if the comparison is
         // not zero.
         self.masm
             .cmov(val1.into(), val2.into(), IntCmpKind::Ne, val1.ty.into());
@@ -2087,7 +2135,7 @@ impl From<WasmValType> for OperandSize {
             WasmValType::I64 | WasmValType::F64 => OperandSize::S64,
             WasmValType::Ref(rt) => {
                 match rt.heap_type {
-                    // TODO: Harcoded size, assuming 64-bit support only. Once
+                    // TODO: Hardcoded size, assuming 64-bit support only. Once
                     // Wasmtime supports 32-bit architectures, this will need
                     // to be updated in such a way that the calculation of the
                     // OperandSize will depend on the target's  pointer size.

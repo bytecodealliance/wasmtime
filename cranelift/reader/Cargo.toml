@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-reader"
-version = "0.107.0"
+version = "0.110.0"
 description = "Cranelift textual IR reader"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-reader"
@@ -13,7 +13,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-anyhow.workspace = true
+anyhow = { workspace = true, features = ['std'] }
 cranelift-codegen = { workspace = true }
 smallvec = { workspace = true }
-target-lexicon = { workspace = true }
+target-lexicon = { workspace = true, features = ['std'] }

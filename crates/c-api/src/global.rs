@@ -1,9 +1,9 @@
 use crate::{
     handle_result, wasm_extern_t, wasm_globaltype_t, wasm_store_t, wasm_val_t, wasmtime_error_t,
-    wasmtime_val_t, CStoreContext, CStoreContextMut,
+    wasmtime_val_t, WasmtimeStoreContext, WasmtimeStoreContextMut,
 };
 use std::mem::MaybeUninit;
-use wasmtime::{Extern, Global};
+use wasmtime::{Extern, Global, RootScope};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -79,13 +79,14 @@ pub unsafe extern "C" fn wasm_global_set(g: &mut wasm_global_t, val: &wasm_val_t
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_global_new(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     gt: &wasm_globaltype_t,
     val: &wasmtime_val_t,
     ret: &mut Global,
 ) -> Option<Box<wasmtime_error_t>> {
-    let val = val.to_val(&mut store);
-    let global = Global::new(store, gt.ty().ty.clone(), val);
+    let mut scope = RootScope::new(&mut store);
+    let val = val.to_val(&mut scope);
+    let global = Global::new(scope, gt.ty().ty.clone(), val);
     handle_result(global, |global| {
         *ret = global;
     })
@@ -93,7 +94,7 @@ pub unsafe extern "C" fn wasmtime_global_new(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_global_type(
-    store: CStoreContext<'_>,
+    store: WasmtimeStoreContext<'_>,
     global: &Global,
 ) -> Box<wasm_globaltype_t> {
     Box::new(wasm_globaltype_t::new(global.ty(store)))
@@ -101,20 +102,22 @@ pub extern "C" fn wasmtime_global_type(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_global_get(
-    mut store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     global: &Global,
     val: &mut MaybeUninit<wasmtime_val_t>,
 ) {
-    let gval = global.get(&mut store);
-    crate::initialize(val, wasmtime_val_t::from_val(store, gval))
+    let mut scope = RootScope::new(store);
+    let gval = global.get(&mut scope);
+    crate::initialize(val, wasmtime_val_t::from_val(&mut scope, gval))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_global_set(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     global: &Global,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let val = val.to_val(&mut store);
-    handle_result(global.set(store, val), |()| {})
+    let mut scope = RootScope::new(&mut store);
+    let val = val.to_val(&mut scope);
+    handle_result(global.set(scope, val), |()| {})
 }

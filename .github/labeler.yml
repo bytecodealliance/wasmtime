@@ -76,8 +76,12 @@
   - "docs/**"
 
 "wasmtime:ref-types":
-  - "crates/wasmtime/src/ref.rs"
-  - "crates/runtime/src/externref.rs"
+  - "crates/cranelift/src/gc.rs"
+  - "crates/cranelift/src/gc/**"
+  - "crates/wasmtime/src/runtime/gc.rs"
+  - "crates/wasmtime/src/runtime/gc/**"
+  - "crates/wasmtime/src/runtime/vm/gc.rs"
+  - "crates/wasmtime/src/runtime/vm/gc/**"
 
 "winch":
   - "winch/**"

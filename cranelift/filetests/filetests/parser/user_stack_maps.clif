@@ -1,0 +1,35 @@
+; Parser tests for user stack maps on call instructions.
+
+test cat
+
+function %foo() system_v {
+    ss0 = explicit_slot 12, align = 4
+    sig0 = (i32) system_v
+    fn0 = colocated u0:0 sig0
+
+block0:
+    v0 = iconst.i32 0
+    v1 = iconst.i32 1
+    v2 = iconst.i32 2
+    v3 = iconst.i32 3
+
+    stack_store v0, ss0
+    stack_store v1, ss0+4
+    stack_store v2, ss0+8
+    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4, i32 @ ss0+8]
+; check: call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4, i32 @ ss0+8]
+
+    stack_store v1, ss0
+    stack_store v2, ss0+4
+    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4]
+; check: call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4]
+
+    stack_store v2, ss0
+    call fn0(v1), stack_map=[i32 @ ss0+0]
+; check: call fn0(v1), stack_map=[i32 @ ss0+0]
+
+    call fn0(v2)
+; check: call fn0(v2)
+
+    return
+}

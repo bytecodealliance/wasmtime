@@ -3,27 +3,27 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
+use crate::prelude::*;
+use crate::runtime::vm::{CompiledModuleId, MmapVec};
 use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
-use anyhow::{Error, Result};
-use object::write::WritableBuffer;
-use std::str;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use anyhow::Result;
+use core::str;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FinishedObject, FuncIndex,
-    FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex, ObjectBuilder,
-    PrimaryMap, StackMapInformation, WasmFunctionInfo,
+    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FuncIndex, FunctionLoc,
+    FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap, StackMapInformation,
+    WasmFunctionInfo,
 };
-use wasmtime_runtime::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-    wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
+    wasm_to_array_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
     meta: Metadata,
     code_memory: Arc<CodeMemory>,
     #[cfg(feature = "debug-builtins")]
-    dbg_jit_registration: Option<wasmtime_runtime::GdbJitImageRegistration>,
+    dbg_jit_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
     func_names: Vec<FunctionName>,
@@ -50,17 +50,16 @@ impl CompiledModule {
         code_memory: Arc<CodeMemory>,
         info: CompiledModuleInfo,
         profiler: &dyn ProfilingAgent,
-        id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
-            wasm_to_native_trampolines: info.wasm_to_native_trampolines,
+            wasm_to_array_trampolines: info.wasm_to_array_trampolines,
             #[cfg(feature = "debug-builtins")]
             dbg_jit_registration: None,
             code_memory,
             meta: info.meta,
-            unique_id: id_allocator.alloc(),
+            unique_id: CompiledModuleId::new(),
             func_names: info.func_names,
         };
         ret.register_debug_and_profiling(profiler)?;
@@ -79,7 +78,7 @@ impl CompiledModule {
                 (text.as_ptr(), text.len()),
             )
             .context("failed to create jit image for gdb")?;
-            let reg = wasmtime_runtime::GdbJitImageRegistration::register(bytes);
+            let reg = crate::runtime::vm::GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
         }
         profiler.register_module(&self.code_memory.mmap()[..], &|addr| {
@@ -173,30 +172,21 @@ impl CompiledModule {
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
     }
 
-    /// Get the native-to-Wasm trampoline for the function `index` points to.
-    ///
-    /// If the function `index` points to does not escape, then `None` is
-    /// returned.
-    ///
-    /// These trampolines are used for native callers (e.g. `Func::wrap`)
-    /// calling Wasm callees.
-    #[inline]
-    pub fn native_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
-        let loc = self.funcs[index].native_to_wasm_trampoline?;
-        Some(&self.text()[loc.start as usize..][..loc.length as usize])
-    }
-
-    /// Get the Wasm-to-native trampoline for the given signature.
+    /// Get the Wasm-to-array trampoline for the given signature.
     ///
     /// These trampolines are used for filling in
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
-    pub fn wasm_to_native_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
-        let idx = self
-            .wasm_to_native_trampolines
+    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
+        let idx = match self
+            .wasm_to_array_trampolines
             .binary_search_by_key(&signature, |entry| entry.0)
-            .expect("should have a Wasm-to-native trampline for all signatures");
-        let (_, loc) = self.wasm_to_native_trampolines[idx];
+        {
+            Ok(idx) => idx,
+            Err(_) => panic!("missing trampoline for {signature:?}"),
+        };
+
+        let (_, loc) = self.wasm_to_array_trampolines[idx];
         &self.text()[loc.start as usize..][..loc.length as usize]
     }
 
@@ -342,82 +332,5 @@ impl<'a> SymbolizeContext<'a> {
     /// to calculate lookup values into the DWARF.
     pub fn code_section_offset(&self) -> u64 {
         self.code_section_offset
-    }
-}
-
-/// Write an object out to an [`MmapVec`] so that it can be marked executable
-/// before running.
-///
-/// The returned `MmapVec` will contain the serialized version of `obj`
-/// and is sized appropriately to the exact size of the object serialized.
-pub fn finish_object(obj: ObjectBuilder<'_>) -> Result<MmapVec> {
-    Ok(<MmapVecWrapper as FinishedObject>::finish_object(obj)?.0)
-}
-
-pub(crate) struct MmapVecWrapper(pub MmapVec);
-
-impl FinishedObject for MmapVecWrapper {
-    fn finish_object(obj: ObjectBuilder<'_>) -> Result<Self> {
-        let mut result = ObjectMmap::default();
-        return match obj.finish(&mut result) {
-            Ok(()) => {
-                assert!(result.mmap.is_some(), "no reserve");
-                let mmap = result.mmap.expect("reserve not called");
-                assert_eq!(mmap.len(), result.len);
-                Ok(MmapVecWrapper(mmap))
-            }
-            Err(e) => match result.err.take() {
-                Some(original) => Err(original.context(e)),
-                None => Err(e.into()),
-            },
-        };
-
-        /// Helper struct to implement the `WritableBuffer` trait from the `object`
-        /// crate.
-        ///
-        /// This enables writing an object directly into an mmap'd memory so it's
-        /// immediately usable for execution after compilation. This implementation
-        /// relies on a call to `reserve` happening once up front with all the needed
-        /// data, and the mmap internally does not attempt to grow afterwards.
-        #[derive(Default)]
-        struct ObjectMmap {
-            mmap: Option<MmapVec>,
-            len: usize,
-            err: Option<Error>,
-        }
-
-        impl WritableBuffer for ObjectMmap {
-            fn len(&self) -> usize {
-                self.len
-            }
-
-            fn reserve(&mut self, additional: usize) -> Result<(), ()> {
-                assert!(self.mmap.is_none(), "cannot reserve twice");
-                self.mmap = match MmapVec::with_capacity(additional) {
-                    Ok(mmap) => Some(mmap),
-                    Err(e) => {
-                        self.err = Some(e);
-                        return Err(());
-                    }
-                };
-                Ok(())
-            }
-
-            fn resize(&mut self, new_len: usize) {
-                // Resizing always appends 0 bytes and since new mmaps start out as 0
-                // bytes we don't actually need to do anything as part of this other
-                // than update our own length.
-                if new_len <= self.len {
-                    return;
-                }
-                self.len = new_len;
-            }
-
-            fn write_bytes(&mut self, val: &[u8]) {
-                let mmap = self.mmap.as_mut().expect("write before reserve");
-                mmap[self.len..][..val.len()].copy_from_slice(val);
-                self.len += val.len();
-            }
-        }
     }
 }

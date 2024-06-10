@@ -1,5 +1,5 @@
-//! Offsets and sizes of various structs in wasmtime-runtime's vmcontext
-//! module.
+//! Offsets and sizes of various structs in `wasmtime::runtime::vm::*` that are
+//! accessed directly by compiled Wasm code.
 
 // Currently the `VMContext` allocation by field looks like this:
 //
@@ -7,10 +7,12 @@
 //      magic: u32,
 //      _padding: u32, // (On 64-bit systems)
 //      runtime_limits: *const VMRuntimeLimits,
-//      callee: *mut VMFunctionBody,
-//      externref_activations_table: *mut VMExternRefActivationsTable,
-//      store: *mut dyn Store,
 //      builtins: *mut VMBuiltinFunctionsArray,
+//      callee: *mut VMFunctionBody,
+//      gc_heap_base: *mut u8,
+//      gc_heap_bound: *mut u8,
+//      gc_heap_data: *mut T, // Collector-specific pointer
+//      store: *mut dyn Store,
 //      type_ids: *const VMSharedTypeIndex,
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
@@ -21,11 +23,12 @@
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
+//      call_indirect_caches: [VMCallIndirectCache; module.num_call_indirect_caches],
 // }
 
 use crate::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, FuncRefIndex,
-    GlobalIndex, MemoryIndex, Module, TableIndex,
+    CallIndirectSiteIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    FuncRefIndex, GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use wasmtime_types::OwnedMemoryIndex;
@@ -70,15 +73,19 @@ pub struct VMOffsets<P> {
     /// The number of escaped functions in the module, the size of the func_refs
     /// array.
     pub num_escaped_funcs: u32,
+    /// The number of call_indirect cache entries in the cache array.
+    pub num_call_indirect_caches: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
     runtime_limits: u32,
+    builtin_functions: u32,
     callee: u32,
     epoch_ptr: u32,
-    externref_activations_table: u32,
+    gc_heap_base: u32,
+    gc_heap_bound: u32,
+    gc_heap_data: u32,
     store: u32,
-    builtin_functions: u32,
     type_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
@@ -89,6 +96,7 @@ pub struct VMOffsets<P> {
     owned_memories: u32,
     defined_globals: u32,
     defined_func_refs: u32,
+    call_indirect_caches: u32,
     size: u32,
 }
 
@@ -100,46 +108,45 @@ pub trait PtrSize {
     /// The offset of the `VMContext::runtime_limits` field
     fn vmcontext_runtime_limits(&self) -> u8 {
         u8::try_from(align(
-            u32::try_from(std::mem::size_of::<u32>()).unwrap(),
+            u32::try_from(core::mem::size_of::<u32>()).unwrap(),
             u32::from(self.size()),
         ))
         .unwrap()
     }
 
-    /// The offset of the `native_call` field.
-    #[inline]
-    fn vm_func_ref_native_call(&self) -> u8 {
-        0 * self.size()
+    /// The offset of the `VMContext::builtin_functions` field
+    fn vmcontext_builtin_functions(&self) -> u8 {
+        self.vmcontext_runtime_limits() + self.size()
     }
 
     /// The offset of the `array_call` field.
     #[inline]
     fn vm_func_ref_array_call(&self) -> u8 {
-        1 * self.size()
+        0 * self.size()
     }
 
     /// The offset of the `wasm_call` field.
     #[inline]
     fn vm_func_ref_wasm_call(&self) -> u8 {
-        2 * self.size()
+        1 * self.size()
     }
 
     /// The offset of the `type_index` field.
     #[inline]
     fn vm_func_ref_type_index(&self) -> u8 {
-        3 * self.size()
+        2 * self.size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
     fn vm_func_ref_vmctx(&self) -> u8 {
-        4 * self.size()
+        3 * self.size()
     }
 
     /// Return the size of `VMFuncRef`.
     #[inline]
     fn size_of_vm_func_ref(&self) -> u8 {
-        5 * self.size()
+        4 * self.size()
     }
 
     /// Return the size of `VMGlobalDefinition`; this is the size of the largest value type (i.e. a
@@ -212,15 +219,30 @@ pub trait PtrSize {
 
     // Offsets within `VMArrayCallHostFuncContext`.
 
-    // Offsets within `VMNativeCallHostFuncContext`.
-
-    /// Return the offset of `VMNativeCallHostFuncContext::func_ref`.
-    fn vmnative_call_host_func_context_func_ref(&self) -> u8 {
+    /// Return the offset of `VMArrayCallHostFuncContext::func_ref`.
+    fn vmarray_call_host_func_context_func_ref(&self) -> u8 {
         u8::try_from(align(
-            u32::try_from(std::mem::size_of::<u32>()).unwrap(),
+            u32::try_from(core::mem::size_of::<u32>()).unwrap(),
             u32::from(self.size()),
         ))
         .unwrap()
+    }
+
+    // Offsets within `VMCallIndirectCache`.
+
+    /// Return the offset of `VMCallIndirectCache::wasm_call`.
+    fn vmcall_indirect_cache_wasm_call(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMCallIndirectCache::index`.
+    fn vmcall_indirect_cache_index(&self) -> u8 {
+        self.size()
+    }
+
+    /// Return the size of a `VMCallIndirectCache`.
+    fn size_of_vmcall_indirect_cache(&self) -> u8 {
+        2 * self.size()
     }
 }
 
@@ -230,7 +252,7 @@ pub struct HostPtr;
 impl PtrSize for HostPtr {
     #[inline]
     fn size(&self) -> u8 {
-        std::mem::size_of::<usize>() as u8
+        core::mem::size_of::<usize>() as u8
     }
 }
 
@@ -265,6 +287,8 @@ pub struct VMOffsetsFields<P> {
     /// The number of escaped functions in the module, the size of the function
     /// references array.
     pub num_escaped_funcs: u32,
+    /// The number of call_indirect cache entries in the cache array.
+    pub num_call_indirect_caches: u32,
 }
 
 impl<P: PtrSize> VMOffsets<P> {
@@ -291,6 +315,7 @@ impl<P: PtrSize> VMOffsets<P> {
             num_owned_memories,
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
+            num_call_indirect_caches: cast_to_u32(module.num_call_indirect_caches),
         })
     }
 
@@ -320,6 +345,7 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_memories: _,
                     num_owned_memories: _,
                     num_escaped_funcs: _,
+                    num_call_indirect_caches: _,
 
                     // used as the initial size below
                     size,
@@ -345,6 +371,7 @@ impl<P: PtrSize> VMOffsets<P> {
         }
 
         calculate_sizes! {
+            call_indirect_caches: "call_indirect caches",
             defined_func_refs: "module functions",
             defined_globals: "defined globals",
             owned_memories: "owned memories",
@@ -355,11 +382,13 @@ impl<P: PtrSize> VMOffsets<P> {
             imported_tables: "imported tables",
             imported_functions: "imported functions",
             type_ids: "module types",
-            builtin_functions: "jit builtin functions state",
             store: "jit store state",
-            externref_activations_table: "jit host externref state",
+            gc_heap_data: "GC implementation-specific data",
+            gc_heap_bound: "GC heap bound",
+            gc_heap_base: "GC heap base",
             epoch_ptr: "jit current epoch state",
             callee: "callee function pointer",
+            builtin_functions: "jit builtin functions state",
             runtime_limits: "jit runtime limits state",
             magic: "magic value",
         }
@@ -379,13 +408,16 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_owned_memories: fields.num_owned_memories,
             num_defined_globals: fields.num_defined_globals,
             num_escaped_funcs: fields.num_escaped_funcs,
+            num_call_indirect_caches: fields.num_call_indirect_caches,
             magic: 0,
             runtime_limits: 0,
+            builtin_functions: 0,
             callee: 0,
             epoch_ptr: 0,
-            externref_activations_table: 0,
+            gc_heap_base: 0,
+            gc_heap_bound: 0,
+            gc_heap_data: 0,
             store: 0,
-            builtin_functions: 0,
             type_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
@@ -396,6 +428,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             owned_memories: 0,
             defined_globals: 0,
             defined_func_refs: 0,
+            call_indirect_caches: 0,
             size: 0,
         };
 
@@ -432,11 +465,13 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(runtime_limits) = ret.ptr.size(),
+            size(builtin_functions) = ret.ptr.size(),
             size(callee) = ret.ptr.size(),
             size(epoch_ptr) = ret.ptr.size(),
-            size(externref_activations_table) = ret.ptr.size(),
+            size(gc_heap_base) = ret.ptr.size(),
+            size(gc_heap_bound) = ret.ptr.size(),
+            size(gc_heap_data) = ret.ptr.size(),
             size(store) = ret.ptr.size() * 2,
-            size(builtin_functions) = ret.pointer_size(),
             size(type_ids) = ret.ptr.size(),
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
@@ -459,6 +494,10 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vm_func_ref(),
             ),
+            size(call_indirect_caches) = cmul(
+                ret.num_call_indirect_caches,
+                ret.ptr.size_of_vmcall_indirect_cache(),
+            ),
         }
 
         ret.size = next_field_offset;
@@ -479,28 +518,22 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
-    /// The offset of the `native_call` field.
-    #[inline]
-    pub fn vmfunction_import_native_call(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
     /// The offset of the `array_call` field.
     #[inline]
     pub fn vmfunction_import_array_call(&self) -> u8 {
-        2 * self.pointer_size()
+        1 * self.pointer_size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
     pub fn vmfunction_import_vmctx(&self) -> u8 {
-        3 * self.pointer_size()
+        2 * self.pointer_size()
     }
 
     /// Return the size of `VMFunctionImport`.
     #[inline]
     pub fn size_of_vmfunction_import(&self) -> u8 {
-        4 * self.pointer_size()
+        3 * self.pointer_size()
     }
 }
 
@@ -630,10 +663,25 @@ impl<P: PtrSize> VMOffsets<P> {
         self.epoch_ptr
     }
 
-    /// The offset of the `*mut VMExternRefActivationsTable` member.
+    /// Return the offset to the GC heap base in this `VMContext`.
     #[inline]
-    pub fn vmctx_externref_activations_table(&self) -> u32 {
-        self.externref_activations_table
+    pub fn vmctx_gc_heap_base(&self) -> u32 {
+        self.gc_heap_base
+    }
+
+    /// Return the offset to the GC heap bound in this `VMContext`.
+    #[inline]
+    pub fn vmctx_gc_heap_bound(&self) -> u32 {
+        self.gc_heap_bound
+    }
+
+    /// Return the offset to the `*mut T` collector-specific data.
+    ///
+    /// This is a pointer that different collectors can use however they see
+    /// fit.
+    #[inline]
+    pub fn vmctx_gc_heap_data(&self) -> u32 {
+        self.gc_heap_data
     }
 
     /// The offset of the `*const dyn Store` member.
@@ -706,6 +754,12 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_builtin_functions(&self) -> u32 {
         self.builtin_functions
+    }
+
+    /// The offset of the `call_indirect_caches` array.
+    #[inline]
+    pub fn vmctx_call_indirec_caches_begin(&self) -> u32 {
+        self.call_indirect_caches
     }
 
     /// Return the size of the `VMContext` allocation.
@@ -792,12 +846,6 @@ impl<P: PtrSize> VMOffsets<P> {
         self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_wasm_call())
     }
 
-    /// Return the offset to the `native_call` field in `*const VMFunctionBody` index `index`.
-    #[inline]
-    pub fn vmctx_vmfunction_import_native_call(&self, index: FuncIndex) -> u32 {
-        self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_native_call())
-    }
-
     /// Return the offset to the `array_call` field in `*const VMFunctionBody` index `index`.
     #[inline]
     pub fn vmctx_vmfunction_import_array_call(&self, index: FuncIndex) -> u32 {
@@ -858,28 +906,57 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vmctx_vmglobal_import_from(&self, index: GlobalIndex) -> u32 {
         self.vmctx_vmglobal_import(index) + u32::from(self.vmglobal_import_from())
     }
-}
 
-/// Offsets for `VMExternData`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset for `VMExternData::ref_count`.
+    /// Return the offset to the `VMCallIndirectCache` for the given
+    /// call-indirect site.
     #[inline]
-    pub fn vm_extern_data_ref_count(&self) -> u32 {
-        0
+    pub fn vmctx_call_indirect_cache(&self, call_site: CallIndirectSiteIndex) -> u32 {
+        assert!(call_site.as_u32() < self.num_call_indirect_caches);
+        self.vmctx_call_indirec_caches_begin()
+            + call_site.as_u32() * u32::from(self.ptr.size_of_vmcall_indirect_cache())
+    }
+
+    /// Return the offset to the `wasm_call` field in `*const
+    /// VMCallIndirectCache` with call-site ID `call_site`.
+    #[inline]
+    pub fn vmctx_call_indirect_cache_wasm_call(&self, call_site: CallIndirectSiteIndex) -> u32 {
+        self.vmctx_call_indirect_cache(call_site)
+            + u32::from(self.ptr.vmcall_indirect_cache_wasm_call())
+    }
+
+    /// Return the offset to the `index` field in `*const
+    /// VMCallIndirectCache` with call-site ID `call_site`.
+    #[inline]
+    pub fn vmctx_call_indirect_cache_index(&self, call_site: CallIndirectSiteIndex) -> u32 {
+        self.vmctx_call_indirect_cache(call_site)
+            + u32::from(self.ptr.vmcall_indirect_cache_index())
     }
 }
 
-/// Offsets for `VMExternRefActivationsTable`.
+/// Offsets for `VMDrcHeader`.
+///
+/// Should only be used when the DRC collector is enabled.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset for `VMExternRefActivationsTable::next`.
+    /// Return the offset for `VMDrcHeader::ref_count`.
     #[inline]
-    pub fn vm_extern_ref_activation_table_next(&self) -> u32 {
+    pub fn vm_drc_header_ref_count(&self) -> u32 {
+        8
+    }
+}
+
+/// Offsets for `VMGcRefActivationsTable`.
+///
+/// These should only be used when the DRC collector is enabled.
+impl<P: PtrSize> VMOffsets<P> {
+    /// Return the offset for `VMGcRefActivationsTable::next`.
+    #[inline]
+    pub fn vm_gc_ref_activation_table_next(&self) -> u32 {
         0
     }
 
-    /// Return the offset for `VMExternRefActivationsTable::end`.
+    /// Return the offset for `VMGcRefActivationsTable::end`.
     #[inline]
-    pub fn vm_extern_ref_activation_table_end(&self) -> u32 {
+    pub fn vm_gc_ref_activation_table_end(&self) -> u32 {
         self.pointer_size().into()
     }
 }
@@ -894,12 +971,6 @@ pub const VMCONTEXT_MAGIC: u32 = u32::from_le_bytes(*b"core");
 /// This is stored at the start of all `VMArrayCallHostFuncContext` structures
 /// and double-checked on `VMArrayCallHostFuncContext::from_opaque`.
 pub const VM_ARRAY_CALL_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"ACHF");
-
-/// Equivalent of `VMCONTEXT_MAGIC` except for native-call host functions.
-///
-/// This is stored at the start of all `VMNativeCallHostFuncContext` structures
-/// and double-checked on `VMNativeCallHostFuncContext::from_opaque`.
-pub const VM_NATIVE_CALL_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"NCHF");
 
 #[cfg(test)]
 mod tests {

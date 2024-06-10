@@ -45,8 +45,8 @@
 ;; errors on functions
 (assert_unlinkable
   (module (import "m" "f" (func (param i32))))
-  "expected func of type `(i32) -> ()`, found func of type `() -> ()`")
+  "expected type `(func (param i32))`, found type `(func)`")
 
 (assert_unlinkable
   (module (import "m" "f p1r2" (func (param i32 i32) (result f64))))
-  "expected func of type `(i32, i32) -> (f64)`, found func of type `(f32) -> (i32, i64)`")
+  "expected type `(func (param i32 i32) (result f64))`, found type `(func (param f32) (result i32 i64))`")

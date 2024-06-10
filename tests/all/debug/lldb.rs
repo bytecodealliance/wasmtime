@@ -34,14 +34,18 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     cmd.args(args);
 
     let output = cmd.output().expect("success");
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
     if !output.status.success() {
         bail!(
-            "failed to execute {:?}: {}",
-            cmd,
-            String::from_utf8_lossy(&output.stderr),
+            "failed to execute {cmd:?}:\n\
+            --- stderr ---\n\
+            {stderr}\n\
+            --- stdout ---\n\
+            {stdout}",
         );
     }
-    Ok(String::from_utf8(output.stdout)?)
+    Ok(stdout)
 }
 
 fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
@@ -166,7 +170,7 @@ check: Breakpoint 1: no locations (pending)
 check: stop reason = breakpoint 1.1
 check: frame #0
 sameln: norm(n=(__ptr =
-check: = 27
+check: 27
 check: resuming
 "#,
     )?;
@@ -246,4 +250,130 @@ check: exited with status
 "#,
     )?;
     Ok(())
+}
+
+/* C program used for this test, dwarf_fission.c, compiled with `emcc dwarf_fission.c -o dwarf_fission.wasm -gsplit-dwarf -gdwarf-5 -gpubnames -sWASM_BIGINT`:
+#include <stdio.h>
+
+int main()
+{
+    int i = 1;
+    i++;
+    return i - 2;
+}
+ */
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_debug_dwarf5_fission_lldb() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Ddebug-info",
+            "tests/all/debug/testsuite/dwarf_fission.wasm",
+        ],
+        r#"breakpoint set --file dwarf_fission.c --line 6
+r
+fr v
+s
+fr v
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: Breakpoint 1: no locations (pending)
+check: Unable to resolve breakpoint to any actual locations.
+check: 1 location added to breakpoint 1
+check: stop reason = breakpoint 1.1
+check: i = 1
+check: stop reason = step in
+check: i = 2
+check: resuming
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}
+
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+mod test_programs {
+    use super::{check_lldb_output, lldb_with_script};
+    use anyhow::Result;
+    use test_programs_artifacts::*;
+
+    macro_rules! assert_test_exists {
+        ($name:ident) => {
+            #[allow(unused_imports)]
+            use self::$name as _;
+        };
+    }
+    foreach_dwarf!(assert_test_exists);
+
+    fn test_dwarf_simple(wasm: &str, extra_args: &[&str]) -> Result<()> {
+        println!("testing {wasm:?}");
+        let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Ddebug-info"];
+        args.extend(extra_args);
+        args.push(wasm);
+        let output = lldb_with_script(
+            &args,
+            r#"
+breakpoint set --file dwarf_simple.rs --line 3
+breakpoint set --file dwarf_simple.rs --line 5
+r
+fr v
+c
+fr v
+c"#,
+        )?;
+
+        check_lldb_output(
+            &output,
+            r#"
+check: Breakpoint 1: no locations (pending)
+check: Unable to resolve breakpoint to any actual locations.
+check: 1 location added to breakpoint 1
+check: stop reason = breakpoint 1.1
+check: dwarf_simple.rs:3
+check: a = 100
+check: dwarf_simple.rs:5
+check: a = 110
+check: b = 117
+check: resuming
+check: exited with status = 0
+"#,
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn dwarf_simple() -> Result<()> {
+        for wasm in [DWARF_SIMPLE, DWARF_SIMPLE_COMPONENT] {
+            test_dwarf_simple(wasm, &[])?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn dwarf_imported_memory() -> Result<()> {
+        test_dwarf_simple(
+            DWARF_IMPORTED_MEMORY,
+            &["--preload=env=./tests/all/debug/satisfy_memory_import.wat"],
+        )
+    }
+
+    #[test]
+    #[ignore]
+    fn dwarf_shared_memory() -> Result<()> {
+        test_dwarf_simple(DWARF_SHARED_MEMORY, &[])
+    }
 }

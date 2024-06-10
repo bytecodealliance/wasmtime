@@ -26,7 +26,10 @@
     v128.not
     i64x2.bitmask)
   (export "" (func 0)))
-(assert_return (invoke "") (i32.const 0))
+;; the f64x2.promote_low_f32x4 operation may or may not preserve the sign bit
+;; on the NaN in the first operation. This leads to one of two results depending
+;; on how platforms propagate NaN bits.
+(assert_return (invoke "") (either (i32.const 0) (i32.const 1)))
 
 ;; from #3327
 (module

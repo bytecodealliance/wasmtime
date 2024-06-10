@@ -19,33 +19,34 @@ block0(v0: i64, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   movq    %rax, %r14
-;   addq    %r14, $16, %r14
-;   cmpq    %rsp, %r14
+;   movq    %rdi, %r10
+;   addq    %r10, $16, %r10
+;   cmpq    %rsp, %r10
 ;   jnbe #trap=stk_ovf
 ;   subq    %rsp, $16, %rsp
 ; block0:
-;   movq    %r10, %rax
-;   movq    %r11, %rcx
+;   movq    rbp(stack args max - 16), %rax
+;   movq    rbp(stack args max - 8), %rcx
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
-;   ret
+;   ret 32
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   movq %rax, %r14
-;   addq $0x10, %r14
-;   cmpq %rsp, %r14
-;   ja 0x27
+;   movq %rdi, %r10
+;   addq $0x10, %r10
+;   cmpq %rsp, %r10
+;   ja 0x2b
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x18
-;   movq %r10, %rax
-;   movq %r11, %rcx
+;   movq 0x20(%rbp), %rax
+;   movq 0x28(%rbp), %rcx
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   retq
+;   retq $0x20
 ;   ud2 ; trap: stk_ovf
+

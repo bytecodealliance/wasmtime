@@ -1,13 +1,13 @@
 use crate::{
     wasm_externkind_t, wasm_externtype_t, wasm_func_t, wasm_global_t, wasm_memory_t, wasm_table_t,
-    CStoreContext, StoreRef,
+    WasmStoreRef, WasmtimeStoreContext,
 };
 use std::mem::ManuallyDrop;
 use wasmtime::{Extern, Func, Global, Memory, SharedMemory, Table};
 
 #[derive(Clone)]
 pub struct wasm_extern_t {
-    pub(crate) store: StoreRef,
+    pub(crate) store: WasmStoreRef,
     pub(crate) which: Extern,
 }
 
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn wasmtime_extern_delete(e: &mut ManuallyDrop<wasmtime_ex
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_extern_type(
-    store: CStoreContext<'_>,
+    store: WasmtimeStoreContext<'_>,
     e: &wasmtime_extern_t,
 ) -> Box<wasm_externtype_t> {
     Box::new(wasm_externtype_t::from_extern_type(e.to_extern().ty(store)))

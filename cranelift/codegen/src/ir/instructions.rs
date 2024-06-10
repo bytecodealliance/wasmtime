@@ -6,6 +6,7 @@
 //! A large part of this module is auto-generated from the instruction descriptions in the meta
 //! directory.
 
+use crate::constant_hash::Table;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Deref, DerefMut};
@@ -211,17 +212,7 @@ impl FromStr for Opcode {
 
     /// Parse an Opcode name from a string.
     fn from_str(s: &str) -> Result<Self, &'static str> {
-        use crate::constant_hash::{probe, simple_hash, Table};
-
-        impl<'a> Table<&'a str> for [Option<Opcode>] {
-            fn len(&self) -> usize {
-                self.len()
-            }
-
-            fn key(&self, idx: usize) -> Option<&'a str> {
-                self[idx].map(opcode_name)
-            }
-        }
+        use crate::constant_hash::{probe, simple_hash};
 
         match probe::<&str, [Option<Self>]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
             Err(_) => Err("Unknown opcode"),
@@ -229,6 +220,16 @@ impl FromStr for Opcode {
             // at this index is not None.
             Ok(i) => Ok(OPCODE_HASH_TABLE[i].unwrap()),
         }
+    }
+}
+
+impl<'a> Table<&'a str> for [Option<Opcode>] {
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn key(&self, idx: usize) -> Option<&'a str> {
+        self[idx].map(opcode_name)
     }
 }
 
@@ -337,6 +338,25 @@ impl InstructionData {
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 &mut []
+            }
+        }
+    }
+
+    /// Replace the values used in this instruction according to the given
+    /// function.
+    pub fn map_values(
+        &mut self,
+        pool: &mut ValueListPool,
+        jump_tables: &mut ir::JumpTables,
+        mut f: impl FnMut(Value) -> Value,
+    ) {
+        for arg in self.arguments_mut(pool) {
+            *arg = f(*arg);
+        }
+
+        for block in self.branch_destination_mut(jump_tables) {
+            for arg in block.args_slice_mut(pool) {
+                *arg = f(*arg);
             }
         }
     }

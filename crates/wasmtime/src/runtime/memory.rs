@@ -1,16 +1,18 @@
+use crate::prelude::*;
+use crate::runtime::vm::{RuntimeLinearMemory, VMMemoryImport};
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
 use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use anyhow::{bail, Result};
-use std::cell::UnsafeCell;
-use std::ops::Range;
-use std::slice;
-use std::time::Instant;
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::ops::Range;
+use core::slice;
+use core::time::Duration;
 use wasmtime_environ::MemoryPlan;
-use wasmtime_runtime::{RuntimeLinearMemory, VMMemoryImport};
 
-pub use wasmtime_runtime::WaitResult;
+pub use crate::runtime::vm::WaitResult;
 
 /// Error for out of bounds [`Memory`] access.
 #[derive(Debug)]
@@ -20,12 +22,13 @@ pub struct MemoryAccessError {
     _private: (),
 }
 
-impl std::fmt::Display for MemoryAccessError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for MemoryAccessError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "out of bounds memory access")
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for MemoryAccessError {}
 
 /// A WebAssembly linear memory.
@@ -201,7 +204,7 @@ impl std::error::Error for MemoryAccessError {}
 /// be provided.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
-pub struct Memory(Stored<wasmtime_runtime::ExportMemory>);
+pub struct Memory(Stored<crate::runtime::vm::ExportMemory>);
 
 impl Memory {
     /// Creates a new WebAssembly memory given the configuration of `ty`.
@@ -237,7 +240,6 @@ impl Memory {
         Self::_new(store.as_context_mut().0, ty)
     }
 
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Memory::new`]. You must use this variant with
     /// [`Store`](`crate::Store`)s which have a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
@@ -519,7 +521,6 @@ impl Memory {
         }
     }
 
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Memory::grow`]. Required when using a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
@@ -544,17 +545,17 @@ impl Memory {
         store.on_fiber(|store| self.grow(store, delta)).await?
     }
 
-    fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut wasmtime_runtime::Memory {
+    fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut crate::runtime::vm::Memory {
         unsafe {
             let export = &store[self.0];
-            wasmtime_runtime::Instance::from_vmctx(export.vmctx, |handle| {
+            crate::runtime::vm::Instance::from_vmctx(export.vmctx, |handle| {
                 handle.get_defined_memory(export.index)
             })
         }
     }
 
     pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: wasmtime_runtime::ExportMemory,
+        wasmtime_export: crate::runtime::vm::ExportMemory,
         store: &mut StoreOpaque,
     ) -> Memory {
         Memory(store.store_data_mut().insert(wasmtime_export))
@@ -564,9 +565,9 @@ impl Memory {
         &store[self.0].memory.memory
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
         let export = &store[self.0];
-        wasmtime_runtime::VMMemoryImport {
+        crate::runtime::vm::VMMemoryImport {
             from: export.definition,
             vmctx: export.vmctx,
             index: export.index,
@@ -582,7 +583,7 @@ impl Memory {
     /// Even if the same underlying memory definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Memory`s,
     /// this hash key will be consistent across all of these memories.
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq {
         store[self.0].definition as usize
     }
 }
@@ -719,12 +720,13 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// # }
 /// ```
 #[derive(Clone)]
-pub struct SharedMemory(wasmtime_runtime::SharedMemory, Engine);
+pub struct SharedMemory(crate::runtime::vm::SharedMemory, Engine);
 
 impl SharedMemory {
     /// Construct a [`SharedMemory`] by providing both the `minimum` and
     /// `maximum` number of 64K-sized pages. This call allocates the necessary
     /// pages on the system.
+    #[cfg(feature = "threads")]
     pub fn new(engine: &Engine, ty: MemoryType) -> Result<Self> {
         if !ty.is_shared() {
             bail!("shared memory must have the `shared` flag enabled on its memory type")
@@ -733,7 +735,7 @@ impl SharedMemory {
 
         let tunables = engine.tunables();
         let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
-        let memory = wasmtime_runtime::SharedMemory::new(plan)?;
+        let memory = crate::runtime::vm::SharedMemory::new(plan)?;
         Ok(Self(memory, engine.clone()))
     }
 
@@ -843,9 +845,8 @@ impl SharedMemory {
     /// the byte address `addr` specified. The `addr` specified is an index
     /// into this linear memory.
     ///
-    /// The optional `timeout` argument is the point in time after which the
-    /// calling thread is guaranteed to be woken up. Blocking will not occur
-    /// past this point.
+    /// The optional `timeout` argument is the maximum amount of time to block
+    /// the current thread. If not specified the thread may sleep indefinitely.
     ///
     /// This function returns one of three possible values:
     ///
@@ -869,7 +870,7 @@ impl SharedMemory {
         &self,
         addr: u64,
         expected: u32,
-        timeout: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         self.0.atomic_wait32(addr, expected, timeout)
     }
@@ -887,7 +888,7 @@ impl SharedMemory {
         &self,
         addr: u64,
         expected: u64,
-        timeout: Option<Instant>,
+        timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
         self.0.atomic_wait64(addr, expected, timeout)
     }
@@ -900,7 +901,7 @@ impl SharedMemory {
 
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
-    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
+    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
         let export_memory = generate_memory_export(store, &self.ty(), Some(&self.0)).unwrap();
         VMMemoryImport {
             from: export_memory.definition,
@@ -913,25 +914,25 @@ impl SharedMemory {
     /// function is available to handle the case in which a Wasm module exports
     /// shared memory and the user wants host-side access to it.
     pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: wasmtime_runtime::ExportMemory,
+        wasmtime_export: crate::runtime::vm::ExportMemory,
         store: &mut StoreOpaque,
     ) -> Self {
-        wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
+        crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
             let memory = handle
                 .get_defined_memory(wasmtime_export.index)
                 .as_mut()
                 .unwrap();
-            let shared_memory = memory
-                .as_shared_memory()
-                .expect("unable to convert from a shared memory")
-                .clone();
-            Self(shared_memory, store.engine().clone())
+            match memory.as_shared_memory() {
+                #[cfg_attr(not(feature = "threads"), allow(unreachable_code))]
+                Some(mem) => Self(mem.clone(), store.engine().clone()),
+                None => panic!("unable to convert from a shared memory"),
+            }
         })
     }
 }
 
-impl std::fmt::Debug for SharedMemory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for SharedMemory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SharedMemory").finish_non_exhaustive()
     }
 }

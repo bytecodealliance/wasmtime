@@ -1,12 +1,11 @@
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctionsMetadata;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
-use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_versioned_export_macros::versioned_stringify_ident;
+
 ///Adds internal Wasm utility types DIEs such as WebAssemblyPtr and
 /// WasmtimeVMContext.
 ///
@@ -60,7 +59,7 @@ pub(crate) fn add_internal_types(
         gimli::DW_AT_type = write::AttributeValue::UnitRef(memory_byte_die_id)
     });
 
-    // Create artificial VMContext type and its reference for convinience viewing
+    // Create artificial VMContext type and its reference for convenience viewing
     // its fields (such as memory ref) in a debugger. Build DW_TAG_structure_type:
     //   .. DW_AT_name = "WasmtimeVMContext"
     let vmctx_die_id = comp_unit.add(root_id, gimli::DW_TAG_structure_type);
@@ -92,8 +91,8 @@ pub(crate) fn add_internal_types(
                 gimli::DW_AT_data_member_location = write::AttributeValue::Udata(memory_offset as u64)
             });
         }
-        ModuleMemoryOffset::Imported(_) => {
-            // TODO implement convinience pointer to and additional types for VMMemoryImport.
+        ModuleMemoryOffset::Imported { .. } => {
+            // TODO implement convenience pointer to and additional types for VMMemoryImport.
         }
         ModuleMemoryOffset::None => (),
     }
@@ -163,25 +162,4 @@ pub(crate) fn append_vmctx_info(
     var_die.set(gimli::DW_AT_location, loc);
 
     Ok(())
-}
-
-pub(crate) fn get_function_frame_info<'a, 'b, 'c>(
-    memory_offset: &ModuleMemoryOffset,
-    funcs: &'b CompiledFunctionsMetadata,
-    func_index: DefinedFuncIndex,
-) -> Option<FunctionFrameInfo<'a>>
-where
-    'b: 'a,
-    'c: 'a,
-{
-    if let Some(func) = funcs.get(func_index) {
-        let frame_info = FunctionFrameInfo {
-            value_ranges: &func.value_labels_ranges,
-            memory_offset: memory_offset.clone(),
-            sized_stack_slots: &func.sized_stack_slots,
-        };
-        Some(frame_info)
-    } else {
-        None
-    }
 }

@@ -18,56 +18,40 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a1,88(a0)
-;;   ld a0,80(a0)
-;;   addi a1,a1,-4
-;;   sltu a1,a1,a2
-;;   add a0,a0,a2
-;;   sub a4,zero,a1
-;;   not a1,a4
-;;   and a2,a0,a1
-;;   sw a3,0(a2)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x68(a0)
+;;       ld      a5, 0x60(a0)
+;;       addi    a0, a1, -4
+;;       sltu    a0, a0, a2
+;;       add     a5, a5, a2
+;;       neg     a4, a0
+;;       not     a0, a4
+;;       and     a1, a5, a0
+;;       sw      a3, 0(a1)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a1,88(a0)
-;;   ld a0,80(a0)
-;;   addi a1,a1,-4
-;;   sltu a1,a1,a2
-;;   add a0,a0,a2
-;;   sub a4,zero,a1
-;;   not a1,a4
-;;   and a2,a0,a1
-;;   lw a0,0(a2)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x68(a0)
+;;       ld      a5, 0x60(a0)
+;;       addi    a0, a1, -4
+;;       sltu    a0, a0, a2
+;;       add     a5, a5, a2
+;;       neg     a3, a0
+;;       not     a0, a3
+;;       and     a1, a5, a0
+;;       lw      a0, 0(a1)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

@@ -18,54 +18,32 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r11
-;;   movl    %edx, %r10d
-;;   cmpq    %r11, %r10
-;;   jnbe    label3; j label1
-;; block1:
-;;   addq    %r10, 80(%rdi), %r10
-;;   movl    $-65536, %edi
-;;   movb    %cl, 0(%r10,%rdi,1)
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x68(%rdi), %r10
+;;       movl    %edx, %r9d
+;;       cmpq    %r10, %r9
+;;       ja      0x26
+;;   14: addq    0x60(%rdi), %r9
+;;       movl    $0xffff0000, %esi
+;;       movb    %cl, (%r9, %rsi)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   26: ud2
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r11
-;;   movl    %edx, %r10d
-;;   cmpq    %r11, %r10
-;;   jnbe    label3; j label1
-;; block1:
-;;   addq    %r10, 80(%rdi), %r10
-;;   movl    $-65536, %edi
-;;   movzbq  0(%r10,%rdi,1), %rax
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x68(%rdi), %r10
+;;       movl    %edx, %r9d
+;;       cmpq    %r10, %r9
+;;       ja      0x67
+;;   54: addq    0x60(%rdi), %r9
+;;       movl    $0xffff0000, %esi
+;;       movzbq  (%r9, %rsi), %rax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   67: ud2

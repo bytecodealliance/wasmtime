@@ -15,19 +15,6 @@ block0:
 ; block0: ; offset 0x0
 ;   ret
 
-function %stack_limit_leaf_zero(i64 stack_limit) {
-block0(v0: i64):
-    return
-}
-
-; VCode:
-; block0:
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   ret
-
 function %stack_limit_gv_leaf_zero(i64 vmctx) {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0
@@ -45,40 +32,6 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   ret
 
-function %stack_limit_call_zero(i64 stack_limit) {
-    fn0 = %foo()
-block0(v0: i64):
-    call fn0()
-    return
-}
-
-; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   subs xzr, sp, x0, UXTX
-;   b.lo #trap=stk_ovf
-; block0:
-;   load_ext_name x2, TestCase(%foo)+0
-;   blr x2
-;   ldp fp, lr, [sp], #16
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-;   cmp sp, x0
-;   b.lo #0x2c
-; block1: ; offset 0x10
-;   ldr x2, #0x18
-;   b #0x20
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x2
-;   ldp x29, x30, [sp], #0x10
-;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-
 function %stack_limit_gv_call_zero(i64 vmctx) {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0
@@ -95,11 +48,12 @@ block0(v0: i64):
 ;   mov fp, sp
 ;   ldr x16, [x0]
 ;   ldr x16, [x16, #4]
+;   add x16, x16, #16
 ;   subs xzr, sp, x16, UXTX
 ;   b.lo #trap=stk_ovf
 ; block0:
-;   load_ext_name x2, TestCase(%foo)+0
-;   blr x2
+;   load_ext_name x0, TestCase(%foo)+0
+;   blr x0
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -109,97 +63,17 @@ block0(v0: i64):
 ;   mov x29, sp
 ;   ldur x16, [x0]
 ;   ldur x16, [x16, #4]
+;   add x16, x16, #0x10
 ;   cmp sp, x16
-;   b.lo #0x34
-; block1: ; offset 0x18
-;   ldr x2, #0x20
-;   b #0x28
+;   b.lo #0x38
+; block1: ; offset 0x1c
+;   ldr x0, #0x24
+;   b #0x2c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x2
+;   blr x0
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-
-function %stack_limit(i64 stack_limit) {
-    ss0 = explicit_slot 168
-block0(v0: i64):
-    return
-}
-
-; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   add x16, x0, #176
-;   subs xzr, sp, x16, UXTX
-;   b.lo #trap=stk_ovf
-;   sub sp, sp, #176
-; block0:
-;   add sp, sp, #176
-;   ldp fp, lr, [sp], #16
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-;   add x16, x0, #0xb0
-;   cmp sp, x16
-;   b.lo #0x24
-;   sub sp, sp, #0xb0
-; block1: ; offset 0x18
-;   add sp, sp, #0xb0
-;   ldp x29, x30, [sp], #0x10
-;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-
-function %huge_stack_limit(i64 stack_limit) {
-    ss0 = explicit_slot 400000
-block0(v0: i64):
-    return
-}
-
-; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   subs xzr, sp, x0, UXTX
-;   b.lo #trap=stk_ovf
-;   movz w17, #6784
-;   movk w17, w17, #6, LSL #16
-;   add x16, x0, x17, UXTX
-;   subs xzr, sp, x16, UXTX
-;   b.lo #trap=stk_ovf
-;   movz w16, #6784
-;   movk w16, w16, #6, LSL #16
-;   sub sp, sp, x16, UXTX
-; block0:
-;   movz w16, #6784
-;   movk w16, w16, #6, LSL #16
-;   add sp, sp, x16, UXTX
-;   ldp fp, lr, [sp], #16
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-;   cmp sp, x0
-;   b.lo #0x44
-;   mov w17, #0x1a80
-;   movk w17, #6, lsl #16
-;   add x16, x0, x17, uxtx
-;   cmp sp, x16
-;   b.lo #0x48
-;   mov w16, #0x1a80
-;   movk w16, #6, lsl #16
-;   sub sp, sp, x16
-; block1: ; offset 0x30
-;   mov w16, #0x1a80
-;   movk w16, #6, lsl #16
-;   add sp, sp, x16
-;   ldp x29, x30, [sp], #0x10
-;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 
 function %limit_preamble(i64 vmctx) {

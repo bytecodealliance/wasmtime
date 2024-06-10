@@ -18,8 +18,8 @@ pub fn val(v: &WastVal<'_>) -> Result<Val> {
         WastVal::S32(b) => Val::S32(*b),
         WastVal::U64(b) => Val::U64(*b),
         WastVal::S64(b) => Val::S64(*b),
-        WastVal::Float32(b) => Val::Float32(f32::from_bits(b.bits)),
-        WastVal::Float64(b) => Val::Float64(f64::from_bits(b.bits)),
+        WastVal::F32(b) => Val::Float32(f32::from_bits(b.bits)),
+        WastVal::F64(b) => Val::Float64(f64::from_bits(b.bits)),
         WastVal::Char(b) => Val::Char(*b),
         WastVal::String(s) => Val::String(s.to_string().into()),
         WastVal::List(vals) => {
@@ -101,11 +101,11 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             Val::S64(a) => core::match_int(a, e),
             _ => mismatch(expected, actual),
         },
-        WastVal::Float32(e) => match actual {
+        WastVal::F32(e) => match actual {
             Val::Float32(a) => core::match_f32(a.to_bits(), &NanPattern::Value(*e)),
             _ => mismatch(expected, actual),
         },
-        WastVal::Float64(e) => match actual {
+        WastVal::F64(e) => match actual {
             Val::Float64(a) => core::match_f64(a.to_bits(), &NanPattern::Value(*e)),
             _ => mismatch(expected, actual),
         },
@@ -248,8 +248,8 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         WastVal::S32(..) => "s32",
         WastVal::U64(..) => "u64",
         WastVal::S64(..) => "s64",
-        WastVal::Float32(..) => "float32",
-        WastVal::Float64(..) => "float64",
+        WastVal::F32(..) => "f32",
+        WastVal::F64(..) => "f64",
         WastVal::Char(..) => "char",
         WastVal::String(..) => "string",
         WastVal::List(..) => "list",
@@ -271,8 +271,8 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         Val::S32(..) => "s32",
         Val::U64(..) => "u64",
         Val::S64(..) => "s64",
-        Val::Float32(..) => "float32",
-        Val::Float64(..) => "float64",
+        Val::Float32(..) => "f32",
+        Val::Float64(..) => "f64",
         Val::Char(..) => "char",
         Val::String(..) => "string",
         Val::List(..) => "list",

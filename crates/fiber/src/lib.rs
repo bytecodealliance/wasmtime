@@ -61,6 +61,12 @@ impl FiberStack {
     pub fn range(&self) -> Option<Range<usize>> {
         self.0.range()
     }
+
+    /// Is this a manually-managed stack created from raw parts? If so, it is up
+    /// to whoever created it to manage the stack's memory allocation.
+    pub fn is_from_raw_parts(&self) -> bool {
+        self.0.is_from_raw_parts()
+    }
 }
 
 /// A creator of RuntimeFiberStacks.
@@ -82,7 +88,7 @@ pub unsafe trait RuntimeFiberStack: Send + Sync {
 }
 
 pub struct Fiber<'a, Resume, Yield, Return> {
-    stack: FiberStack,
+    stack: Option<FiberStack>,
     inner: imp::Fiber,
     done: Cell<bool>,
     _phantom: PhantomData<&'a (Resume, Yield, Return)>,
@@ -109,12 +115,12 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
     /// `Fiber::suspend`.
     pub fn new(
         stack: FiberStack,
-        func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return + 'a,
+        func: impl FnOnce(Resume, &mut Suspend<Resume, Yield, Return>) -> Return + 'a,
     ) -> io::Result<Self> {
         let inner = imp::Fiber::new(&stack.0, func)?;
 
         Ok(Self {
-            stack,
+            stack: Some(stack),
             inner,
             done: Cell::new(false),
             _phantom: PhantomData,
@@ -139,7 +145,7 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
     pub fn resume(&self, val: Resume) -> Result<Return, Yield> {
         assert!(!self.done.replace(true), "cannot resume a finished fiber");
         let result = Cell::new(RunResult::Resuming(val));
-        self.inner.resume(&self.stack.0, &result);
+        self.inner.resume(&self.stack().0, &result);
         match result.into_inner() {
             RunResult::Resuming(_) | RunResult::Executing => unreachable!(),
             RunResult::Yield(y) => {
@@ -158,7 +164,13 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
 
     /// Gets the stack associated with this fiber.
     pub fn stack(&self) -> &FiberStack {
-        &self.stack
+        self.stack.as_ref().unwrap()
+    }
+
+    /// When this fiber has finished executing, reclaim its stack.
+    pub fn into_stack(mut self) -> FiberStack {
+        assert!(self.done());
+        self.stack.take().unwrap()
     }
 }
 
@@ -172,7 +184,7 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
     /// # Panics
     ///
     /// Panics if the current thread is not executing a fiber from this library.
-    pub fn suspend(&self, value: Yield) -> Resume {
+    pub fn suspend(&mut self, value: Yield) -> Resume {
         self.inner
             .switch::<Resume, Yield, Return>(RunResult::Yield(value))
     }
@@ -180,13 +192,13 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
     fn execute(
         inner: imp::Suspend,
         initial: Resume,
-        func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return,
+        func: impl FnOnce(Resume, &mut Suspend<Resume, Yield, Return>) -> Return,
     ) {
-        let suspend = Suspend {
+        let mut suspend = Suspend {
             inner,
             _phantom: PhantomData,
         };
-        let result = panic::catch_unwind(AssertUnwindSafe(|| (func)(initial, &suspend)));
+        let result = panic::catch_unwind(AssertUnwindSafe(|| (func)(initial, &mut suspend)));
         suspend.inner.switch::<Resume, Yield, Return>(match result {
             Ok(result) => RunResult::Returned(result),
             Err(panic) => RunResult::Panicked(panic),

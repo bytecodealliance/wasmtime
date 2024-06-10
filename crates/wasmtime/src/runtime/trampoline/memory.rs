@@ -1,19 +1,21 @@
 use crate::memory::{LinearMemory, MemoryCreator};
 use crate::module::BareModuleInfo;
+use crate::prelude::*;
+use crate::runtime::vm::mpk::ProtectionKey;
+use crate::runtime::vm::{
+    CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
+    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator,
+    RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex,
+    VMMemoryDefinition,
+};
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
+use alloc::sync::Arc;
 use anyhow::{anyhow, Result};
-use std::ops::Range;
-use std::sync::Arc;
+use core::ops::Range;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
-    VMOffsets, WASM_PAGE_SIZE,
-};
-use wasmtime_runtime::mpk::ProtectionKey;
-use wasmtime_runtime::{
-    CompiledModuleId, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl,
-    Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator, RuntimeLinearMemory,
-    RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex, VMMemoryDefinition,
+    VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -105,7 +107,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         true
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
         self
     }
 
@@ -127,8 +129,8 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
         let ty = MemoryType::from_wasmtime_memory(&plan.memory);
         let reserved_size_in_bytes = match plan.style {
-            MemoryStyle::Static { bound } => {
-                Some(usize::try_from(bound * (WASM_PAGE_SIZE as u64)).unwrap())
+            MemoryStyle::Static { byte_reservation } => {
+                Some(usize::try_from(byte_reservation).unwrap())
             }
             MemoryStyle::Dynamic { .. } => None,
         };
@@ -246,7 +248,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     }
 
     #[cfg(feature = "async")]
-    unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
+    unsafe fn deallocate_fiber_stack(&self, _stack: wasmtime_fiber::FiberStack) {
         unreachable!()
     }
 
@@ -263,6 +265,23 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     }
 
     fn allow_all_pkeys(&self) {
+        unreachable!()
+    }
+
+    #[cfg(feature = "gc")]
+    fn allocate_gc_heap(
+        &self,
+        _gc_runtime: &dyn crate::runtime::vm::GcRuntime,
+    ) -> Result<(GcHeapAllocationIndex, Box<dyn crate::runtime::vm::GcHeap>)> {
+        unreachable!()
+    }
+
+    #[cfg(feature = "gc")]
+    fn deallocate_gc_heap(
+        &self,
+        _allocation_index: GcHeapAllocationIndex,
+        _gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
+    ) {
         unreachable!()
     }
 }

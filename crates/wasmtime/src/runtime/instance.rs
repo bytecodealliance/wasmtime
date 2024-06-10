@@ -1,20 +1,21 @@
 use crate::linker::{Definition, DefinitionType};
+use crate::prelude::*;
+use crate::runtime::vm::{
+    Imports, InstanceAllocationRequest, StorePtr, VMFuncRef, VMFunctionImport, VMGlobalImport,
+    VMMemoryImport, VMOpaqueContext, VMTableImport,
+};
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
     StoreContext, StoreContextMut, Table, TypedFunc,
 };
+use alloc::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
-use std::mem;
-use std::ptr::NonNull;
-use std::sync::Arc;
+use core::ptr::NonNull;
+use wasmparser::WasmFeatures;
 use wasmtime_environ::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex,
-};
-use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
-    VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext, VMTableImport,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TypeTrace,
 };
 
 /// An instantiated WebAssembly module.
@@ -39,7 +40,7 @@ pub(crate) struct InstanceData {
     /// `InstanceHandle`.
     id: InstanceId,
     /// A lazily-populated list of exports of this instance. The order of
-    /// exports here matches the order of the exports in the the original
+    /// exports here matches the order of the exports in the original
     /// module.
     exports: Vec<Option<Extern>>,
 }
@@ -144,7 +145,6 @@ impl Instance {
     /// This function will also panic, like [`Instance::new`], if any [`Extern`]
     /// specified does not belong to `store`.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn new_async<T>(
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
@@ -258,6 +258,9 @@ impl Instance {
         }
         store.bump_resource_counts(module)?;
 
+        // Allocate the GC heap, if necessary.
+        let _ = store.gc_store_mut()?;
+
         let compiled_module = module.compiled_module();
 
         // Register the module just before instantiation to ensure we keep the module
@@ -296,7 +299,7 @@ impl Instance {
         // we immediately insert it into the store to keep it alive.
         //
         // Note that we `clone` the instance handle just to make easier
-        // working the the borrow checker here easier. Technically the `&mut
+        // working the borrow checker here easier. Technically the `&mut
         // instance` has somewhat of a borrow on `store` (which
         // conflicts with the borrow on `store.engine`) but this doesn't
         // matter in practice since initialization isn't even running any
@@ -337,7 +340,11 @@ impl Instance {
         // look at them.
         instance_handle.initialize(
             compiled_module.module(),
-            store.engine().config().features.bulk_memory,
+            store
+                .engine()
+                .config()
+                .features
+                .contains(WasmFeatures::BULK_MEMORY),
         )?;
 
         Ok((instance, compiled_module.module().start_func))
@@ -356,11 +363,13 @@ impl Instance {
         let caller_vmctx = instance.vmctx();
         unsafe {
             super::func::invoke_wasm_and_catch_traps(store, |_default_caller| {
-                let func = mem::transmute::<
-                    NonNull<VMNativeCallFunction>,
-                    extern "C" fn(*mut VMOpaqueContext, *mut VMContext),
-                >(f.func_ref.as_ref().native_call);
-                func(f.func_ref.as_ref().vmctx, caller_vmctx)
+                let func = f.func_ref.as_ref().array_call;
+                func(
+                    f.func_ref.as_ref().vmctx,
+                    VMOpaqueContext::from_vmcontext(caller_vmctx),
+                    [].as_mut_ptr(),
+                    0,
+                )
             })?;
         }
         Ok(())
@@ -695,27 +704,26 @@ impl OwnedImports {
     /// Note that this is unsafe as the validity of `item` is not verified and
     /// it contains a bunch of raw pointers.
     #[cfg(feature = "component-model")]
-    pub(crate) unsafe fn push_export(&mut self, item: &wasmtime_runtime::Export) {
+    pub(crate) unsafe fn push_export(&mut self, item: &crate::runtime::vm::Export) {
         match item {
-            wasmtime_runtime::Export::Function(f) => {
+            crate::runtime::vm::Export::Function(f) => {
                 let f = f.func_ref.as_ref();
                 self.functions.push(VMFunctionImport {
                     wasm_call: f.wasm_call.unwrap(),
-                    native_call: f.native_call,
                     array_call: f.array_call,
                     vmctx: f.vmctx,
                 });
             }
-            wasmtime_runtime::Export::Global(g) => {
+            crate::runtime::vm::Export::Global(g) => {
                 self.globals.push(VMGlobalImport { from: g.definition });
             }
-            wasmtime_runtime::Export::Table(t) => {
+            crate::runtime::vm::Export::Table(t) => {
                 self.tables.push(VMTableImport {
                     from: t.definition,
                     vmctx: t.vmctx,
                 });
             }
-            wasmtime_runtime::Export::Memory(m) => {
+            crate::runtime::vm::Export::Memory(m) => {
                 self.memories.push(VMMemoryImport {
                     from: m.definition,
                     vmctx: m.vmctx,
@@ -773,7 +781,7 @@ pub struct InstancePre<T> {
     /// This is an `Arc<[T]>` for the same reason as `items`.
     func_refs: Arc<[VMFuncRef]>,
 
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: core::marker::PhantomData<fn() -> T>,
 }
 
 /// InstancePre's clone does not require T: Clone
@@ -811,11 +819,11 @@ impl<T> InstancePre<T> {
                     if f.func_ref().wasm_call.is_none() {
                         // `f` needs its `VMFuncRef::wasm_call` patched with a
                         // Wasm-to-native trampoline.
-                        debug_assert!(matches!(f.host_ctx(), crate::HostContext::Native(_)));
+                        debug_assert!(matches!(f.host_ctx(), crate::HostContext::Array(_)));
                         func_refs.push(VMFuncRef {
                             wasm_call: module
                                 .runtime_info()
-                                .wasm_to_native_trampoline(f.sig_index()),
+                                .wasm_to_array_trampoline(f.sig_index()),
                             ..*f.func_ref()
                         });
                     }
@@ -828,7 +836,7 @@ impl<T> InstancePre<T> {
             items: items.into(),
             host_funcs,
             func_refs: func_refs.into(),
-            _marker: std::marker::PhantomData,
+            _marker: core::marker::PhantomData,
         })
     }
 
@@ -880,7 +888,6 @@ impl<T> InstancePre<T> {
     /// Panics if any import closed over by this [`InstancePre`] isn't owned by
     /// `store`, or if `store` does not have async support enabled.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -972,8 +979,12 @@ fn typecheck<I>(
     if expected != imports.len() {
         bail!("expected {} imports, found {}", expected, imports.len());
     }
-    let cx = matching::MatchCx::new(module);
-    for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {
+    let cx = matching::MatchCx::new(module.engine());
+    for ((name, field, mut expected_ty), actual) in env_module.imports().zip(imports) {
+        expected_ty.canonicalize_for_runtime_usage(&mut |module_index| {
+            module.signatures().shared_type(module_index).unwrap()
+        });
+
         check(&cx, &expected_ty, actual)
             .with_context(|| format!("incompatible import type for `{name}::{field}`"))?;
     }

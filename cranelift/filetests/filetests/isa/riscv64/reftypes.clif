@@ -90,37 +90,37 @@ block3(v7: r64, v8: r64):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s5,-8(sp)
-;   sd s9,-16(sp)
 ;   addi sp,sp,-48
+;   sd s5,40(sp)
+;   sd s9,32(sp)
 ; block0:
 ;   mv a3,a0
 ;   mv s5,a2
-;   sd a1,16(nominal_sp)
-;   mv a3,a0
+;   sd a1,16(slot)
+;   mv a0,a3
 ;   mv s9,a3
 ;   load_sym a5,%f+0
-;   sd s9,8(nominal_sp)
+;   sd s9,8(slot)
 ;   callind a5
 ;   mv a3,s9
-;   sd a3,0(nominal_sp)
+;   sd a3,0(slot)
 ;   andi a5,a0,255
 ;   bne a5,zero,taken(label2),not_taken(label1)
 ; block1:
-;   ld a0,16(nominal_sp)
+;   ld a0,16(slot)
 ;   mv a1,s9
 ;   j label3
 ; block2:
 ;   mv a0,s9
-;   ld a1,16(nominal_sp)
+;   ld a1,16(slot)
 ;   j label3
 ; block3:
-;   ld a2,0(nominal_sp)
+;   ld a2,0(slot)
 ;   mv a3,s5
 ;   sd a2,0(a3)
+;   ld s5,40(sp)
+;   ld s9,32(sp)
 ;   addi sp,sp,48
-;   ld s5,-8(sp)
-;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -132,9 +132,9 @@ block3(v7: r64, v8: r64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s5, -8(sp)
-;   sd s9, -0x10(sp)
 ;   addi sp, sp, -0x30
+;   sd s5, 0x28(sp)
+;   sd s9, 0x20(sp)
 ; block1: ; offset 0x1c
 ;   mv a3, a0
 ;   mv s5, a2
@@ -163,9 +163,9 @@ block3(v7: r64, v8: r64):
 ;   ld a2, 0(sp)
 ;   mv a3, s5
 ;   sd a2, 0(a3)
+;   ld s5, 0x28(sp)
+;   ld s9, 0x20(sp)
 ;   addi sp, sp, 0x30
-;   ld s5, -8(sp)
-;   ld s9, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

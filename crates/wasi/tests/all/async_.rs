@@ -1,18 +1,23 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::command::{add_to_linker, Command};
+use wasmtime_wasi::add_to_linker_async;
+use wasmtime_wasi::bindings::Command;
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
-    let mut config = Config::new();
-    config.async_support(true).wasm_component_model(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|config| {
+        config.async_support(true);
+    });
     let mut linker = Linker::new(&engine);
-    add_to_linker(&mut linker)?;
+    add_to_linker_async(&mut linker)?;
 
-    let (mut store, _td) = store(&engine, name, inherit_stdio)?;
+    let (mut store, _td) = store(&engine, name, |builder| {
+        if inherit_stdio {
+            builder.inherit_stdio();
+        }
+    })?;
     let component = Component::from_file(&engine, path)?;
     let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
     command
@@ -90,6 +95,12 @@ async fn preview1_file_allocate() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_pread_pwrite() {
     run(PREVIEW1_FILE_PREAD_PWRITE_COMPONENT, false)
+        .await
+        .unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview1_file_read_write() {
+    run(PREVIEW1_FILE_READ_WRITE_COMPONENT, false)
         .await
         .unwrap()
 }
@@ -377,4 +388,10 @@ async fn preview2_pollable_traps() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview2_adapter_badfd() {
     run(PREVIEW2_ADAPTER_BADFD_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_file_read_write() {
+    run(PREVIEW2_FILE_READ_WRITE_COMPONENT, false)
+        .await
+        .unwrap()
 }

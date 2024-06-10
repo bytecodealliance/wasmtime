@@ -1,16 +1,16 @@
-use thiserror::Error;
+use alloc::string::String;
+use core::fmt;
 
 /// A WebAssembly translation error.
 ///
 /// When a WebAssembly function can't be translated, one of these error codes will be returned
 /// to describe the failure.
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum WasmError {
     /// The input WebAssembly code is invalid.
     ///
     /// This error code is used by a WebAssembly translator when it encounters invalid WebAssembly
     /// code. This should never happen for validated WebAssembly code.
-    #[error("Invalid input WebAssembly code at offset {offset}: {message}")]
     InvalidWebAssembly {
         /// A string describing the validation error.
         message: String,
@@ -21,7 +21,6 @@ pub enum WasmError {
     /// A feature used by the WebAssembly code is not supported by the embedding environment.
     ///
     /// Embedding environments may have their own limitations and feature restrictions.
-    #[error("Unsupported feature: {0}")]
     Unsupported(String),
 
     /// An implementation limit was exceeded.
@@ -30,11 +29,9 @@ pub enum WasmError {
     /// limits][limits] that cause compilation to fail when they are exceeded.
     ///
     /// [limits]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/docs/ir.md#implementation-limits
-    #[error("Implementation limit exceeded")]
     ImplLimitExceeded,
 
     /// Any user-defined error.
-    #[error("User error: {0}")]
     User(String),
 }
 
@@ -42,7 +39,7 @@ pub enum WasmError {
 /// on the arguments to this macro.
 #[macro_export]
 macro_rules! wasm_unsupported {
-    ($($arg:tt)*) => { $crate::WasmError::Unsupported(format!($($arg)*)) }
+    ($($arg:tt)*) => { $crate::WasmError::Unsupported($crate::__format!($($arg)*)) }
 }
 
 impl From<wasmparser::BinaryReaderError> for WasmError {
@@ -57,3 +54,28 @@ impl From<wasmparser::BinaryReaderError> for WasmError {
 
 /// A convenient alias for a `Result` that uses `WasmError` as the error type.
 pub type WasmResult<T> = Result<T, WasmError>;
+
+impl fmt::Display for WasmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WasmError::InvalidWebAssembly { message, offset } => {
+                write!(
+                    f,
+                    "Invalid input WebAssembly code at offset {offset}: {message}"
+                )
+            }
+            WasmError::Unsupported(s) => {
+                write!(f, "Unsupported feature: {s}")
+            }
+            WasmError::ImplLimitExceeded => {
+                write!(f, "Implementation limit exceeded")
+            }
+            WasmError::User(s) => {
+                write!(f, "User error: {s}")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for WasmError {}

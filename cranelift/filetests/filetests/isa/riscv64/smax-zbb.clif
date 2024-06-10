@@ -89,21 +89,20 @@ block0(v0: i128, v1: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s7,-8(sp)
-;   sd s9,-16(sp)
 ;   addi sp,sp,-16
+;   sd s1,8(sp)
+;   sd s9,0(sp)
 ; block0:
 ;   slt a5,a3,a1
-;   sltu a4,a2,a0
-;   mv s7,a0
-;   xor a0,a3,a1
+;   sltu s1,a2,a0
+;   xor a4,a3,a1
 ;   mv s9,a1
-;   select a5,a4,a5##condition=(a0 eq zero)
-;   mv a4,s7
+;   select a5,s1,a5##condition=(a4 eq zero)
+;   mv a4,a0
 ;   select [a0,a1],[a4,s9],[a2,a3]##condition=(a5 ne zero)
+;   ld s1,8(sp)
+;   ld s9,0(sp)
 ;   addi sp,sp,16
-;   ld s7,-8(sp)
-;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -115,27 +114,25 @@ block0(v0: i128, v1: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s7, -8(sp)
-;   sd s9, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+;   sd s9, 0(sp)
 ; block1: ; offset 0x1c
 ;   slt a5, a3, a1
-;   sltu a4, a2, a0
-;   mv s7, a0
-;   xor a0, a3, a1
+;   sltu s1, a2, a0
+;   xor a4, a3, a1
 ;   mv s9, a1
-;   bnez a0, 8
-;   mv a5, a4
-;   mv a4, s7
-;   beqz a5, 0x10
+;   bnez a4, 8
+;   mv a5, s1
+;   mv a4, a0
 ;   mv a0, a4
 ;   mv a1, s9
-;   j 0xc
+;   bnez a5, 0xc
 ;   mv a0, a2
 ;   mv a1, a3
+;   ld s1, 8(sp)
+;   ld s9, 0(sp)
 ;   addi sp, sp, 0x10
-;   ld s7, -8(sp)
-;   ld s9, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

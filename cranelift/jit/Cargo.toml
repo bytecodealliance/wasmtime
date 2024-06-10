@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-jit"
-version = "0.107.0"
+version = "0.110.0"
 authors = ["The Cranelift Project Developers"]
 description = "A JIT library backed by Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -20,7 +20,7 @@ cranelift-entity = { workspace = true }
 cranelift-control = { workspace = true }
 anyhow = { workspace = true }
 region = "2.2.0"
-libc = { version = "0.2.42" }
+libc = { workspace = true }
 target-lexicon = { workspace = true }
 memmap2 = { version = "0.2.1", optional = true }
 log = { workspace = true }
@@ -39,6 +39,6 @@ selinux-fix = ['memmap2']
 default = []
 
 [dev-dependencies]
-cranelift = { workspace = true }
+cranelift = { path = "../umbrella" }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }

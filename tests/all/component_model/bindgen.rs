@@ -1,4 +1,5 @@
 #![cfg(not(miri))]
+#![allow(dead_code)]
 
 use super::engine;
 use anyhow::Result;
@@ -105,9 +106,8 @@ mod one_import {
         }
 
         impl foo::Host for MyImports {
-            fn foo(&mut self) -> Result<()> {
+            fn foo(&mut self) {
                 self.hit = true;
-                Ok(())
             }
         }
 
@@ -181,9 +181,9 @@ mod resources_at_world_level {
         }
 
         impl HostX for MyImports {
-            fn new(&mut self) -> Result<Resource<X>> {
+            fn new(&mut self) -> Resource<X> {
                 self.ctor_hit = true;
-                Ok(Resource::new_own(80))
+                Resource::new_own(80)
             }
 
             fn drop(&mut self, val: Resource<X>) -> Result<()> {
@@ -286,9 +286,9 @@ mod resources_at_interface_level {
         use foo::foo::def::X;
 
         impl foo::foo::def::HostX for MyImports {
-            fn new(&mut self) -> Result<Resource<X>> {
+            fn new(&mut self) -> Resource<X> {
                 self.ctor_hit = true;
-                Ok(Resource::new_own(80))
+                Resource::new_own(80)
             }
 
             fn drop(&mut self, val: Resource<X>) -> Result<()> {
@@ -325,6 +325,9 @@ mod async_config {
             package foo:foo;
 
             world t1 {
+                import foo: interface {
+                    foo: func();
+                }
                 import x: func();
                 import y: func();
                 export z: func();
@@ -337,13 +340,9 @@ mod async_config {
 
     #[async_trait::async_trait]
     impl T1Imports for T {
-        async fn x(&mut self) -> Result<()> {
-            Ok(())
-        }
+        async fn x(&mut self) {}
 
-        async fn y(&mut self) -> Result<()> {
-            Ok(())
-        }
+        async fn y(&mut self) {}
     }
 
     async fn _test_t1(t1: &T1, store: &mut Store<()>) {
@@ -367,13 +366,9 @@ mod async_config {
 
     #[async_trait::async_trait]
     impl T2Imports for T {
-        fn x(&mut self) -> Result<()> {
-            Ok(())
-        }
+        fn x(&mut self) {}
 
-        async fn y(&mut self) -> Result<()> {
-            Ok(())
-        }
+        async fn y(&mut self) {}
     }
 
     async fn _test_t2(t2: &T2, store: &mut Store<()>) {
@@ -397,13 +392,9 @@ mod async_config {
 
     #[async_trait::async_trait]
     impl T3Imports for T {
-        async fn x(&mut self) -> Result<()> {
-            Ok(())
-        }
+        async fn x(&mut self) {}
 
-        fn y(&mut self) -> Result<()> {
-            Ok(())
-        }
+        fn y(&mut self) {}
     }
 
     async fn _test_t3(t3: &T3, store: &mut Store<()>) {
@@ -468,11 +459,11 @@ mod exported_resources {
     }
 
     impl a::HostX for MyImports {
-        fn new(&mut self) -> Result<Resource<a::X>> {
+        fn new(&mut self) -> Resource<a::X> {
             let rep = self.next_a_x;
             self.next_a_x += 1;
             self.hostcalls.push(Hostcall::NewA);
-            Ok(Resource::new_own(rep))
+            Resource::new_own(rep)
         }
 
         fn drop(&mut self, val: Resource<a::X>) -> Result<()> {

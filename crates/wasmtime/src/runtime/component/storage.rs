@@ -1,6 +1,6 @@
 use crate::ValRaw;
-use std::mem::{self, MaybeUninit};
-use std::slice;
+use core::mem::{self, MaybeUninit};
+use core::slice;
 
 fn assert_raw_slice_compat<T>() {
     assert!(mem::size_of::<T>() % mem::size_of::<ValRaw>() == 0);

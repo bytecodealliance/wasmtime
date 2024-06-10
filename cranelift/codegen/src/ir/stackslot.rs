@@ -70,32 +70,38 @@ pub struct StackSlotData {
 
     /// Size of stack slot in bytes.
     pub size: StackSize,
+
+    /// Alignment of stack slot as a power-of-two exponent (log2
+    /// value). The stack slot will be at least this aligned; it may
+    /// be aligned according to other considerations, such as minimum
+    /// stack slot size or machine word size, as well.
+    pub align_shift: u8,
 }
 
 impl StackSlotData {
-    /// Create a stack slot with the specified byte size.
-    pub fn new(kind: StackSlotKind, size: StackSize) -> Self {
-        Self { kind, size }
-    }
-
-    /// Get the alignment in bytes of this stack slot given the stack pointer alignment.
-    pub fn alignment(&self, max_align: StackSize) -> StackSize {
-        debug_assert!(max_align.is_power_of_two());
-        if self.kind == StackSlotKind::ExplicitDynamicSlot {
-            max_align
-        } else {
-            // We want to find the largest power of two that divides both `self.size` and `max_align`.
-            // That is the same as isolating the rightmost bit in `x`.
-            let x = self.size | max_align;
-            // C.f. Hacker's delight.
-            x & x.wrapping_neg()
+    /// Create a stack slot with the specified byte size and alignment.
+    pub fn new(kind: StackSlotKind, size: StackSize, align_shift: u8) -> Self {
+        Self {
+            kind,
+            size,
+            align_shift,
         }
     }
 }
 
 impl fmt::Display for StackSlotData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.kind, self.size)
+        if self.align_shift != 0 {
+            write!(
+                f,
+                "{} {}, align = {}",
+                self.kind,
+                self.size,
+                1u32 << self.align_shift
+            )
+        } else {
+            write!(f, "{} {}", self.kind, self.size)
+        }
     }
 }
 
@@ -146,8 +152,10 @@ mod tests {
     fn stack_slot() {
         let mut func = Function::new();
 
-        let ss0 = func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));
-        let ss1 = func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8));
+        let ss0 =
+            func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 0));
+        let ss1 =
+            func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8, 0));
         assert_eq!(ss0.to_string(), "ss0");
         assert_eq!(ss1.to_string(), "ss1");
 
@@ -196,21 +204,5 @@ mod tests {
             func.dynamic_stack_slots[dss1].to_string(),
             "explicit_dynamic_slot dt1"
         );
-    }
-
-    #[test]
-    fn alignment() {
-        let slot = StackSlotData::new(StackSlotKind::ExplicitSlot, 8);
-
-        assert_eq!(slot.alignment(4), 4);
-        assert_eq!(slot.alignment(8), 8);
-        assert_eq!(slot.alignment(16), 8);
-
-        let slot2 = StackSlotData::new(StackSlotKind::ExplicitSlot, 24);
-
-        assert_eq!(slot2.alignment(4), 4);
-        assert_eq!(slot2.alignment(8), 8);
-        assert_eq!(slot2.alignment(16), 8);
-        assert_eq!(slot2.alignment(32), 8);
     }
 }

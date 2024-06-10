@@ -1,19 +1,21 @@
 use crate::func::HostFunc;
 use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
+use crate::{prelude::*, IntoFunc};
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, IntoFunc, Module, StoreContextMut, Val, ValRaw, ValType,
+    Instance, Module, StoreContextMut, Val, ValRaw, ValType, WasmTyList,
 };
+use alloc::sync::Arc;
 use anyhow::{bail, Context, Result};
+use core::fmt;
+#[cfg(feature = "async")]
+use core::future::Future;
+use core::marker;
+#[cfg(feature = "async")]
+use core::pin::Pin;
+use hashbrown::hash_map::{Entry, HashMap};
 use log::warn;
-use std::collections::hash_map::{Entry, HashMap};
-#[cfg(feature = "async")]
-use std::future::Future;
-use std::marker;
-#[cfg(feature = "async")]
-use std::pin::Pin;
-use std::sync::Arc;
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -65,7 +67,7 @@ use std::sync::Arc;
 /// [`Linker`] value at program start up and use that continuously for each
 /// [`Store`] created over the lifetime of the program.
 ///
-/// Note that once [`Store`]-owned items, such as [`Global`], are defined witin
+/// Note that once [`Store`]-owned items, such as [`Global`], are defined within
 /// a [`Linker`] then it is no longer compatible with any [`Store`]. At that
 /// point only the [`Store`] that owns the [`Global`] can be used to instantiate
 /// modules.
@@ -122,7 +124,7 @@ pub(crate) enum Definition {
 /// size of the table/memory.
 #[derive(Clone)]
 pub(crate) enum DefinitionType {
-    Func(wasmtime_runtime::VMSharedTypeIndex),
+    Func(wasmtime_environ::VMSharedTypeIndex),
     Global(wasmtime_environ::Global),
     // Note that tables and memories store not only the original type
     // information but additionally the current size of the table/memory, as
@@ -130,45 +132,6 @@ pub(crate) enum DefinitionType {
     // no longer be the current size of the table/memory.
     Table(wasmtime_environ::Table, u32),
     Memory(wasmtime_environ::Memory, u64),
-}
-
-macro_rules! generate_wrap_async_func {
-    ($num:tt $($args:ident)*) => (paste::paste!{
-        /// Asynchronous analog of [`Linker::func_wrap`].
-        ///
-        /// For more information also see
-        /// [`Func::wrapN_async`](crate::Func::wrap1_async).
-        #[allow(non_snake_case)]
-        #[cfg(feature = "async")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
-        pub fn [<func_wrap $num _async>]<$($args,)* R>(
-            &mut self,
-            module: &str,
-            name: &str,
-            func: impl for<'a> Fn(Caller<'a, T>, $($args),*) -> Box<dyn Future<Output = R> + Send + 'a> + Send + Sync + 'static,
-        ) -> Result<&mut Self>
-        where
-            $($args: crate::WasmTy,)*
-            R: crate::WasmRet,
-        {
-            assert!(
-                self.engine.config().async_support,
-                concat!(
-                    "cannot use `func_wrap",
-                    $num,
-                    "_async` without enabling async support on the config",
-                ),
-            );
-            self.func_wrap(module, name, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                let async_cx = caller.store.as_context_mut().0.async_cx().expect("Attempt to start async function on dying fiber");
-                let mut future = Pin::from(func(caller, $($args),*));
-                match unsafe { async_cx.block_on(future.as_mut()) } {
-                    Ok(ret) => ret.into_fallible(),
-                    Err(e) => R::fallible_from_error(e),
-                }
-            })
-        }
-    })
 }
 
 impl<T> Linker<T> {
@@ -255,8 +218,7 @@ impl<T> Linker<T> {
     /// Implement any imports of the given [`Module`] with a function which traps.
     ///
     /// By default a [`Linker`] will error when unknown imports are encountered
-    /// in a command module while using [`Linker::module`]. Use this function
-    /// when
+    /// in a command module while using [`Linker::module`].
     ///
     /// This method can be used to allow unknown imports from command modules.
     ///
@@ -274,8 +236,6 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
@@ -310,14 +270,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_default_values(
         &mut self,
         module: &Module,
     ) -> anyhow::Result<()> {
-        use crate::HeapType;
-
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
                 if let ExternType::Func(func_ty) = import_err.ty() {
@@ -343,12 +299,7 @@ impl<T> Linker<T> {
                                     ValType::V128 => Val::V128(0_u128.into()),
                                     ValType::Ref(r) => {
                                         debug_assert!(r.is_nullable());
-                                        match r.heap_type() {
-                                            HeapType::Func
-                                            | HeapType::Concrete(_)
-                                            | HeapType::NoFunc => Val::null_func_ref(),
-                                            HeapType::Extern => Val::null_extern_ref(),
-                                        }
+                                        Val::null_ref(r.heap_type())
                                     }
                                 };
                             }
@@ -436,8 +387,6 @@ impl<T> Linker<T> {
     ///
     /// Panics if the given function type is not associated with the same engine
     /// as this linker.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn func_new(
         &mut self,
         module: &str,
@@ -460,8 +409,6 @@ impl<T> Linker<T> {
     ///
     /// Panics if the given function type is not associated with the same engine
     /// as this linker.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn func_new_unchecked(
         &mut self,
         module: &str,
@@ -490,7 +437,6 @@ impl<T> Linker<T> {
     /// * If the given function type is not associated with the same engine as
     ///   this linker.
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn func_new_async<F>(
         &mut self,
         module: &str,
@@ -596,7 +542,44 @@ impl<T> Linker<T> {
         Ok(self)
     }
 
-    for_each_function_signature!(generate_wrap_async_func);
+    /// Asynchronous analog of [`Linker::func_wrap`].
+    #[cfg(feature = "async")]
+    pub fn func_wrap_async<F, Params: WasmTyList, Args: crate::WasmRet>(
+        &mut self,
+        module: &str,
+        name: &str,
+        func: F,
+    ) -> Result<&mut Self>
+    where
+        F: for<'a> Fn(Caller<'a, T>, Params) -> Box<dyn Future<Output = Args> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `func_wrap_async` without enabling async support on the config",
+        );
+        let func = HostFunc::wrap_inner(
+            &self.engine,
+            move |mut caller: Caller<'_, T>, args: Params| {
+                let async_cx = caller
+                    .store
+                    .as_context_mut()
+                    .0
+                    .async_cx()
+                    .expect("Attempt to start async function on dying fiber");
+                let mut future = Pin::from(func(caller, args));
+                match unsafe { async_cx.block_on(future.as_mut()) } {
+                    Ok(ret) => ret.into_fallible(),
+                    Err(e) => Args::fallible_from_error(e),
+                }
+            },
+        );
+        let key = self.import_key(module, Some(name));
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        Ok(self)
+    }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.
     ///
@@ -792,8 +775,6 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn module(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -864,7 +845,6 @@ impl<T> Linker<T> {
     ///
     /// This is the same as [`Linker::module`], except for async `Store`s.
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub async fn module_async(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -1137,7 +1117,6 @@ impl<T> Linker<T> {
     /// Attempts to instantiate the `module` provided. This is the same as
     /// [`Linker::instantiate`], except for async `Store`s.
     #[cfg(feature = "async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1221,7 +1200,8 @@ impl<T> Linker<T> {
         let mut imports = module
             .imports()
             .map(|import| self._get_by_import(&import))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .err2anyhow()?;
         if let Some(store) = store {
             for import in imports.iter_mut() {
                 import.update_size(store);
@@ -1505,8 +1485,8 @@ impl UnknownImportError {
     }
 }
 
-impl std::fmt::Display for UnknownImportError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for UnknownImportError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "unknown import: `{}::{}` has not been defined",
@@ -1515,4 +1495,5 @@ impl std::fmt::Display for UnknownImportError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for UnknownImportError {}

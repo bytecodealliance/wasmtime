@@ -18,64 +18,48 @@
     local.get 0
     i32.load8_u offset=0x1000))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a5,88(a0)
-;;   ld a4,80(a0)
-;;   lui a0,1
-;;   addi a0,a0,1
-;;   sub a5,a5,a0
-;;   sltu a5,a5,a2
-;;   add a4,a4,a2
-;;   lui a0,1
-;;   add a4,a4,a0
-;;   sub a2,zero,a5
-;;   not a5,a2
-;;   and a0,a4,a5
-;;   sb a3,0(a0)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a5, 0x68(a0)
+;;       ld      a4, 0x60(a0)
+;;       lui     a0, 1
+;;       addi    a0, a0, 1
+;;       sub     a5, a5, a0
+;;       sltu    a5, a5, a2
+;;       add     a4, a4, a2
+;;       lui     a0, 1
+;;       add     a4, a4, a0
+;;       neg     a1, a5
+;;       not     a5, a1
+;;       and     a5, a4, a5
+;;       sb      a3, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   ld a5,88(a0)
-;;   ld a4,80(a0)
-;;   lui a3,1
-;;   addi a0,a3,1
-;;   sub a5,a5,a0
-;;   sltu a5,a5,a2
-;;   add a4,a4,a2
-;;   lui a0,1
-;;   add a4,a4,a0
-;;   sub a2,zero,a5
-;;   not a5,a2
-;;   and a0,a4,a5
-;;   lbu a0,0(a0)
-;;   j label1
-;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a4, 0x68(a0)
+;;       ld      a3, 0x60(a0)
+;;       lui     a5, 1
+;;       addi    a5, a5, 1
+;;       sub     a4, a4, a5
+;;       sltu    a4, a4, a2
+;;       add     a3, a3, a2
+;;       lui     a5, 1
+;;       add     a3, a3, a5
+;;       neg     a1, a4
+;;       not     a4, a1
+;;       and     a5, a3, a4
+;;       lbu     a0, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

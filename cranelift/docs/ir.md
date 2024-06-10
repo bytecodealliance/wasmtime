@@ -28,8 +28,7 @@ each other directly.
 This is a simple C function that computes the average of an array of floats:
 
 ```c
-float
-average(const float *array, size_t count)
+float average(const float *array, size_t count)
 {
     double sum = 0;
     for (size_t i = 0; i < count; i++)
@@ -557,7 +556,7 @@ GV = [colocated] symbol Name
 
 A few instructions have variants that take immediate operands, but in general
 an instruction is required to load a constant into an SSA value: `iconst`,
-`f32const`, `f64const` and `bconst` serve this purpose.
+`f32const` and `f64const` serve this purpose.
 
 ### Bitwise operations
 
