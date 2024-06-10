@@ -1,7 +1,10 @@
 use crate::bindings::cli::environment;
-use crate::WasiView;
+use crate::{WasiImpl, WasiView};
 
-impl environment::Host for dyn WasiView + '_ {
+impl<T> environment::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
         Ok(self.ctx().env.clone())
     }

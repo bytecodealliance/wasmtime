@@ -87,4 +87,4 @@ pub use crate::error::{
     http_request_error, hyper_request_error, hyper_response_error, HttpError, HttpResult,
 };
 #[doc(inline)]
-pub use crate::types::{WasiHttpCtx, WasiHttpView};
+pub use crate::types::{WasiHttpCtx, WasiHttpImpl, WasiHttpView};

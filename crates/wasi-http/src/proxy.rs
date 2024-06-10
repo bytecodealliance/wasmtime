@@ -3,7 +3,7 @@
 //! The implementation at the top of the module for use in async contexts,
 //! while the `sync` module provides implementation for use in sync contexts.
 
-use crate::WasiHttpView;
+use crate::{WasiHttpImpl, WasiHttpView};
 
 mod bindings {
     #![allow(missing_docs)]
@@ -83,7 +83,7 @@ pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Resul
 where
     T: WasiHttpView + wasmtime_wasi::WasiView,
 {
-    let closure = type_annotate_wasi::<T, _>(|t| t);
+    let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(t));
     wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::io::poll::add_to_linker_get_host(l, closure)?;
@@ -101,13 +101,13 @@ where
 // obsolete.
 fn type_annotate_http<T, F>(val: F) -> F
 where
-    F: Fn(&mut T) -> &mut dyn WasiHttpView,
+    F: Fn(&mut T) -> WasiHttpImpl<&mut T>,
 {
     val
 }
 fn type_annotate_wasi<T, F>(val: F) -> F
 where
-    F: Fn(&mut T) -> &mut dyn wasmtime_wasi::WasiView,
+    F: Fn(&mut T) -> wasmtime_wasi::WasiImpl<&mut T>,
 {
     val
 }
@@ -117,7 +117,7 @@ pub fn add_only_http_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> any
 where
     T: WasiHttpView,
 {
-    let closure = type_annotate_http::<T, _>(|t| t);
+    let closure = type_annotate_http::<T, _>(|t| WasiHttpImpl(t));
     crate::bindings::http::outgoing_handler::add_to_linker_get_host(l, closure)?;
     crate::bindings::http::types::add_to_linker_get_host(l, closure)?;
 
@@ -126,7 +126,7 @@ where
 
 /// Sync implementation of the `wasi:http/proxy` world.
 pub mod sync {
-    use crate::WasiHttpView;
+    use crate::{WasiHttpImpl, WasiHttpView};
 
     mod bindings {
         #![allow(missing_docs)]
@@ -203,7 +203,7 @@ pub mod sync {
     where
         T: WasiHttpView + wasmtime_wasi::WasiView,
     {
-        let closure = super::type_annotate_wasi::<T, _>(|t| t);
+        let closure = super::type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(t));
 
         wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
         wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
@@ -226,7 +226,7 @@ pub mod sync {
     where
         T: WasiHttpView,
     {
-        let closure = super::type_annotate_http::<T, _>(|t| t);
+        let closure = super::type_annotate_http::<T, _>(|t| WasiHttpImpl(t));
 
         crate::bindings::http::outgoing_handler::add_to_linker_get_host(l, closure)?;
         crate::bindings::http::types::add_to_linker_get_host(l, closure)?;

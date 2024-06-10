@@ -3,18 +3,24 @@ use crate::bindings::sockets::network::{
     Ipv6SocketAddress,
 };
 use crate::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
-use crate::{SocketError, WasiView};
+use crate::{SocketError, WasiImpl, WasiView};
 use rustix::io::Errno;
 use std::io;
 use wasmtime::component::Resource;
 
-impl network::Host for dyn WasiView + '_ {
+impl<T> network::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn convert_error_code(&mut self, error: SocketError) -> anyhow::Result<ErrorCode> {
         error.downcast()
     }
 }
 
-impl crate::bindings::sockets::network::HostNetwork for dyn WasiView + '_ {
+impl<T> crate::bindings::sockets::network::HostNetwork for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
         let table = self.table();
 
