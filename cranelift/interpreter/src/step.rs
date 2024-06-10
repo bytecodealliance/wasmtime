@@ -482,25 +482,13 @@ where
                 (cf, _) => cf,
             }
         }
-        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-            let kind = match inst.opcode() {
-                Opcode::Store => None,
-                Opcode::Istore8 => Some(ValueConversionKind::Truncate(types::I8)),
-                Opcode::Istore16 => Some(ValueConversionKind::Truncate(types::I16)),
-                Opcode::Istore32 => Some(ValueConversionKind::Truncate(types::I32)),
-                _ => unreachable!(),
-            };
-
+        Opcode::Store => {
+            let val = arg(0);
             let addr_value = calculate_addr(types::I64, imm(), args_range(1..)?)?;
             let mem_flags = inst.memflags().expect("instruction to have memory flags");
-            let reduced = if let Some(c) = kind {
-                arg(0).convert(c)?
-            } else {
-                arg(0)
-            };
             continue_or_memtrap(
                 Address::try_from(addr_value)
-                    .and_then(|addr| state.checked_store(addr, reduced, mem_flags)),
+                    .and_then(|addr| state.checked_store(addr, val, mem_flags)),
             )
         }
         Opcode::StackLoad => {

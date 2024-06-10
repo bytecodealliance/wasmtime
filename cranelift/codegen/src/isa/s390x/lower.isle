@@ -2794,10 +2794,6 @@
 
 ;;;; Rules for 8-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Main `istore8` lowering entry point, dispatching to the helper.
-(rule (lower (istore8 flags val addr offset))
-      (side_effect (istore8_impl flags val addr offset)))
-
 ;; Helper to store 8-bit integer types.
 (decl istore8_impl (MemFlags Value Value Offset32) SideEffectNoResult)
 
@@ -2811,10 +2807,6 @@
 
 
 ;;;; Rules for 16-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Main `istore16` lowering entry point, dispatching to the helper.
-(rule (lower (istore16 flags val addr offset))
-      (side_effect (istore16_impl flags val addr offset)))
 
 ;; Helper to store 16-bit integer types.
 (decl istore16_impl (MemFlags Value Value Offset32) SideEffectNoResult)
@@ -2837,10 +2829,6 @@
 
 
 ;;;; Rules for 32-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Main `istore32` lowering entry point, dispatching to the helper.
-(rule (lower (istore32 flags val addr offset))
-      (side_effect (istore32_impl flags val addr offset)))
 
 ;; Helper to store 32-bit integer types.
 (decl istore32_impl (MemFlags Value Value Offset32) SideEffectNoResult)

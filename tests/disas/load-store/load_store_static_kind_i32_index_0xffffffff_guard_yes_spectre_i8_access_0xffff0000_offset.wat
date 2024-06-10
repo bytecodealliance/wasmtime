@@ -27,12 +27,13 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @0040                               v4 = uextend.i64 v2
-;; @0040                               v5 = global_value.i64 gv4
-;; @0040                               v6 = iadd v5, v4
-;; @0040                               v7 = iconst.i64 0xffff_0000
-;; @0040                               v8 = iadd v6, v7  ; v7 = 0xffff_0000
-;; @0040                               istore8 little heap v3, v8
+;; @0040                               v4 = ireduce.i8 v3
+;; @0040                               v5 = uextend.i64 v2
+;; @0040                               v6 = global_value.i64 gv4
+;; @0040                               v7 = iadd v6, v5
+;; @0040                               v8 = iconst.i64 0xffff_0000
+;; @0040                               v9 = iadd v7, v8  ; v8 = 0xffff_0000
+;; @0040                               store little heap v4, v9
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:

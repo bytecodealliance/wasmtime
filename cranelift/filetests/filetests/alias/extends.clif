@@ -25,19 +25,20 @@ block0(v0: i64, v1: i32):
     ; check: v6 = load.i64 v2+8
 
     ;; 8-bit store only partially overwrites the address.
-    istore8 v6, v2+8
+    v7 = ireduce.i8 v6
+    store.i8 v7, v2+8
 
     ;; This must not pick up the store data.
-    v7 = load.i64 v2+8
-    ; check: v7 = load.i64 v2+8
+    v8 = load.i64 v2+8
+    ; check: v8 = load.i64 v2+8
 
     ;; Another store, this one non-truncating but actually using an
     ;; `i8` value.
-    v8 = iconst.i8 123
-    store.i8 v8, v2+8
+    v9 = iconst.i8 123
+    store.i8 v9, v2+8
 
-    v9 = load.i64 v2+8
-    ; check: v9 = load.i64 v2+8
+    v10 = load.i64 v2+8
+    ; check: v10 = load.i64 v2+8
 
-    return v3, v4, v5, v6, v7, v9
+    return v3, v4, v5, v6, v8, v10
 }

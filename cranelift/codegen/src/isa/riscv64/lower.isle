@@ -2116,18 +2116,6 @@
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (sload32x2 flags addr offset)))
   (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
-;;;;;  Rules for `istore8`;;;;;;;;;
-(rule (lower (istore8 flags src addr offset))
-  (rv_store (amode addr offset) (StoreOP.Sb) flags src))
-
-;;;;;  Rules for `istore16`;;;;;;;;;
-(rule (lower (istore16 flags src addr offset))
-  (rv_store (amode addr offset) (StoreOP.Sh) flags src))
-
-;;;;;  Rules for `istore32`;;;;;;;;;
-(rule (lower (istore32 flags src addr offset))
-  (rv_store (amode addr offset) (StoreOP.Sw) flags src))
-
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule (lower (store flags src @ (value_type ty) addr offset))
   (gen_store (amode addr offset) flags src))

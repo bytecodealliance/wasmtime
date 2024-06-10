@@ -2421,19 +2421,6 @@
        (aarch64_store64 (amode $I64 address offset) flags value)))
 
 (rule (lower
-       (istore8 flags value address offset))
-      (side_effect
-       (aarch64_store8 (amode $I8 address offset) flags value)))
-(rule (lower
-       (istore16 flags value address offset))
-      (side_effect
-       (aarch64_store16 (amode $I16 address offset) flags value)))
-(rule (lower
-       (istore32 flags value address offset))
-      (side_effect
-       (aarch64_store32 (amode $I32 address offset) flags value)))
-
-(rule (lower
        (store flags value @ (value_type $F32) address offset))
       (side_effect
        (aarch64_fpustore32 (amode $F32 address offset) flags value)))

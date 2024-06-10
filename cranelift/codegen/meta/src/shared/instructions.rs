@@ -800,25 +800,6 @@ pub(crate) fn define(
         .can_load(),
     );
 
-    ig.push(
-        Inst::new(
-            "istore8",
-            r#"
-        Store the low 8 bits of ``x`` to memory at ``p + Offset``.
-
-        This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
-        "#,
-            &formats.store,
-        )
-        .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
-            Operand::new("x", iExt8),
-            Operand::new("p", iAddr),
-            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
-        ])
-        .can_store(),
-    );
-
     let iExt16 = &TypeVar::new(
         "iExt16",
         "An integer type with more than 16 bits",
@@ -863,25 +844,6 @@ pub(crate) fn define(
         .can_load(),
     );
 
-    ig.push(
-        Inst::new(
-            "istore16",
-            r#"
-        Store the low 16 bits of ``x`` to memory at ``p + Offset``.
-
-        This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
-        "#,
-            &formats.store,
-        )
-        .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
-            Operand::new("x", iExt16),
-            Operand::new("p", iAddr),
-            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
-        ])
-        .can_store(),
-    );
-
     let iExt32 = &TypeVar::new(
         "iExt32",
         "An integer type with more than 32 bits",
@@ -924,25 +886,6 @@ pub(crate) fn define(
         ])
         .operands_out(vec![Operand::new("a", iExt32)])
         .can_load(),
-    );
-
-    ig.push(
-        Inst::new(
-            "istore32",
-            r#"
-        Store the low 32 bits of ``x`` to memory at ``p + Offset``.
-
-        This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
-        "#,
-            &formats.store,
-        )
-        .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
-            Operand::new("x", iExt32),
-            Operand::new("p", iAddr),
-            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
-        ])
-        .can_store(),
     );
 
     let I16x8 = &TypeVar::new(
