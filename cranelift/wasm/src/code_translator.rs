@@ -914,20 +914,24 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32Store { memarg }
         | Operator::I64Store { memarg }
         | Operator::F32Store { memarg }
-        | Operator::F64Store { memarg } => {
-            translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
+        | Operator::F64Store { memarg }
+        | Operator::V128Store { memarg } => {
+            translate_store(memarg, builder, state, environ)?;
         }
-        Operator::I32Store8 { memarg } | Operator::I64Store8 { memarg } => {
-            translate_store(memarg, ir::Opcode::Istore8, builder, state, environ)?;
-        }
-        Operator::I32Store16 { memarg } | Operator::I64Store16 { memarg } => {
-            translate_store(memarg, ir::Opcode::Istore16, builder, state, environ)?;
-        }
-        Operator::I64Store32 { memarg } => {
-            translate_store(memarg, ir::Opcode::Istore32, builder, state, environ)?;
-        }
-        Operator::V128Store { memarg } => {
-            translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
+        Operator::I32Store8 { memarg }
+        | Operator::I64Store8 { memarg }
+        | Operator::I32Store16 { memarg }
+        | Operator::I64Store16 { memarg }
+        | Operator::I64Store32 { memarg } => {
+            let val = state.pop1();
+            let store_ty = match op {
+                Operator::I32Store8 { .. } | Operator::I64Store8 { .. } => I8,
+                Operator::I32Store16 { .. } | Operator::I64Store16 { .. } => I16,
+                Operator::I64Store32 { .. } => I32,
+                _ => unreachable!(),
+            };
+            state.push1(builder.ins().ireduce(store_ty, val));
+            translate_store(memarg, builder, state, environ)?;
         }
         /****************************** Nullary Operators ************************************/
         Operator::I32Const { value } => {
@@ -1691,7 +1695,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::V128Store64Lane { memarg, lane } => {
             let vector = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().extractlane(vector, lane.clone()));
-            translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
+            translate_store(memarg, builder, state, environ)?;
         }
         Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
             let vector = pop1_with_bitcast(state, type_of(op), builder);
@@ -2969,14 +2973,13 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
 /// Translate a store instruction.
 fn translate_store<FE: FuncEnvironment + ?Sized>(
     memarg: &MemArg,
-    opcode: ir::Opcode,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
     let val = state.pop1();
     let val_ty = builder.func.dfg.value_type(val);
-    let mem_op_size = mem_op_size(opcode, val_ty);
+    let mem_op_size = u8::try_from(val_ty.bytes()).unwrap();
 
     let (flags, wasm_index, base) = unwrap_or_return_unreachable_state!(
         state,
@@ -2985,9 +2988,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 
     environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
 
-    builder
-        .ins()
-        .Store(opcode, val_ty, flags, Offset32::new(0), val, base);
+    builder.ins().store(flags, val, base, Offset32::new(0));
     Ok(())
 }
 
