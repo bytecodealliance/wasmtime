@@ -7,15 +7,18 @@ use crate::{
     },
     network::SocketAddressFamily,
 };
-use crate::{Pollable, SocketResult, WasiView};
+use crate::{Pollable, SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
 
-impl tcp::Host for dyn WasiView + '_ {}
+impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 
 #[async_trait::async_trait]
-impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
+impl<T> crate::host::tcp::tcp::HostTcpSocket for WasiImpl<T>
+where
+    T: WasiView,
+{
     async fn start_bind(
         &mut self,
         this: Resource<tcp::TcpSocket>,
@@ -325,12 +328,15 @@ pub mod sync {
             },
         },
         runtime::in_tokio,
-        SocketError, WasiView,
+        SocketError, WasiImpl, WasiView,
     };
 
-    impl tcp::Host for dyn WasiView + '_ {}
+    impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 
-    impl HostTcpSocket for dyn WasiView + '_ {
+    impl<T> HostTcpSocket for WasiImpl<T>
+    where
+        T: WasiView,
+    {
         fn start_bind(
             &mut self,
             self_: Resource<TcpSocket>,

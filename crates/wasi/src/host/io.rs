@@ -2,13 +2,16 @@ use crate::{
     bindings::io::error,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::subscribe,
-    Pollable, StreamError, StreamResult, WasiView,
+    Pollable, StreamError, StreamResult, WasiImpl, WasiView,
 };
 use wasmtime::component::Resource;
 
-impl error::Host for dyn WasiView + '_ {}
+impl<T> error::Host for WasiImpl<T> where T: WasiView {}
 
-impl streams::Host for dyn WasiView + '_ {
+impl<T> streams::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
         match err {
             StreamError::Closed => Ok(streams::StreamError::Closed),
@@ -20,7 +23,10 @@ impl streams::Host for dyn WasiView + '_ {
     }
 }
 
-impl error::HostError for dyn WasiView + '_ {
+impl<T> error::HostError for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
         self.table().delete(err)?;
         Ok(())
@@ -32,7 +38,10 @@ impl error::HostError for dyn WasiView + '_ {
 }
 
 #[async_trait::async_trait]
-impl streams::HostOutputStream for dyn WasiView + '_ {
+impl<T> streams::HostOutputStream for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
         self.table().delete(stream)?;
         Ok(())
@@ -172,7 +181,10 @@ impl streams::HostOutputStream for dyn WasiView + '_ {
 }
 
 #[async_trait::async_trait]
-impl streams::HostInputStream for dyn WasiView + '_ {
+impl<T> streams::HostInputStream for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
         self.table().delete(stream)?;
         Ok(())
@@ -233,7 +245,7 @@ pub mod sync {
         bindings::sync::io::poll::Pollable,
         bindings::sync::io::streams::{self, InputStream, OutputStream},
         runtime::in_tokio,
-        StreamError, StreamResult, WasiView,
+        StreamError, StreamResult, WasiImpl, WasiView,
     };
     use wasmtime::component::Resource;
 
@@ -246,7 +258,10 @@ pub mod sync {
         }
     }
 
-    impl streams::Host for dyn WasiView + '_ {
+    impl<T> streams::Host for WasiImpl<T>
+    where
+        T: WasiView,
+    {
         fn convert_stream_error(
             &mut self,
             err: StreamError,
@@ -255,7 +270,10 @@ pub mod sync {
         }
     }
 
-    impl streams::HostOutputStream for dyn WasiView + '_ {
+    impl<T> streams::HostOutputStream for WasiImpl<T>
+    where
+        T: WasiView,
+    {
         fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
             AsyncHostOutputStream::drop(self, stream)
         }
@@ -332,7 +350,10 @@ pub mod sync {
         }
     }
 
-    impl streams::HostInputStream for dyn WasiView + '_ {
+    impl<T> streams::HostInputStream for WasiImpl<T>
+    where
+        T: WasiView,
+    {
         fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
             AsyncHostInputStream::drop(self, stream)
         }

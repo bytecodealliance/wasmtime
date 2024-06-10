@@ -8,14 +8,17 @@ use crate::{
     error::internal_error,
     http_request_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
-    WasiHttpView,
+    WasiHttpImpl, WasiHttpView,
 };
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
 use wasmtime::component::Resource;
 
-impl outgoing_handler::Host for dyn WasiHttpView + '_ {
+impl<T> outgoing_handler::Host for WasiHttpImpl<T>
+where
+    T: WasiHttpView,
+{
     fn handle(
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
