@@ -49,7 +49,7 @@ fn memory_limit() -> Result<()> {
         Ok(_) => panic!("module instantiation should fail"),
         Err(e) => assert_eq!(
             e.to_string(),
-            "memory index 0 has a minimum byte size of 262144 which exceeds the limit of 196608",
+            "memory index 0 has a minimum byte size of 262144 which exceeds the limit of 196608 bytes",
         ),
     }
 
