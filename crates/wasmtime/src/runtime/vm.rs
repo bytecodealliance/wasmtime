@@ -5,7 +5,7 @@
 
 use crate::prelude::*;
 use alloc::sync::Arc;
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use core::fmt;
 use core::mem;
 use core::ptr::NonNull;
@@ -350,20 +350,24 @@ pub fn usize_is_multiple_of_host_page_size(bytes: usize) -> bool {
 }
 
 /// Round the given byte size up to a multiple of the host OS page size.
-pub fn round_u64_up_to_host_pages(bytes: u64) -> u64 {
-    let page_size = u64::try_from(crate::runtime::vm::host_page_size()).unwrap();
+///
+/// Returns an error if rounding up overflows.
+pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
+    let page_size = u64::try_from(crate::runtime::vm::host_page_size())?;
     debug_assert!(page_size.is_power_of_two());
     bytes
         .checked_add(page_size - 1)
+        .ok_or_else(|| anyhow!(
+            "{bytes} is too large to be rounded up to a multiple of the host page size of {page_size}"
+        ))
         .map(|val| val & !(page_size - 1))
-        .unwrap_or(u64::MAX / page_size + 1)
 }
 
 /// Same as `round_u64_up_to_host_pages` but for `usize`s.
-pub fn round_usize_up_to_host_pages(bytes: usize) -> usize {
-    let bytes = u64::try_from(bytes).unwrap();
-    let rounded = round_u64_up_to_host_pages(bytes);
-    usize::try_from(rounded).unwrap()
+pub fn round_usize_up_to_host_pages(bytes: usize) -> Result<usize> {
+    let bytes = u64::try_from(bytes)?;
+    let rounded = round_u64_up_to_host_pages(bytes)?;
+    Ok(usize::try_from(rounded)?)
 }
 
 /// Result of `Memory::atomic_wait32` and `Memory::atomic_wait64`

@@ -1394,7 +1394,7 @@ impl Config {
     /// for pooling allocation by using memory protection; see
     /// `PoolingAllocatorConfig::memory_protection_keys` for details.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
-        self.tunables.static_memory_reservation = Some(round_up_to_pages(max_size));
+        self.tunables.static_memory_reservation = Some(max_size);
         self
     }
 
@@ -1465,7 +1465,6 @@ impl Config {
     /// The `Engine::new` method will return an error if this option is smaller
     /// than the value configured for [`Config::dynamic_memory_guard_size`].
     pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
-        let guard_size = round_up_to_pages(guard_size);
         self.tunables.static_memory_offset_guard_size = Some(guard_size);
         self
     }
@@ -1498,7 +1497,6 @@ impl Config {
     /// The `Engine::new` method will return an error if this option is larger
     /// than the value configured for [`Config::static_memory_guard_size`].
     pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
-        let guard_size = round_up_to_pages(guard_size);
         self.tunables.dynamic_memory_offset_guard_size = Some(guard_size);
         self
     }
@@ -1538,7 +1536,7 @@ impl Config {
     /// For 64-bit platforms this defaults to 2GB, and for 32-bit platforms this
     /// defaults to 1MB.
     pub fn dynamic_memory_reserved_for_growth(&mut self, reserved: u64) -> &mut Self {
-        self.tunables.dynamic_memory_growth_reserve = Some(round_up_to_pages(reserved));
+        self.tunables.dynamic_memory_growth_reserve = Some(reserved);
         self
     }
 
@@ -2135,19 +2133,6 @@ impl Config {
     }
 }
 
-/// If building without the runtime feature we can't determine the page size of
-/// the platform where the execution will happen so just keep the original
-/// values.
-#[cfg(not(feature = "runtime"))]
-fn round_up_to_pages(val: u64) -> u64 {
-    val
-}
-
-#[cfg(feature = "runtime")]
-fn round_up_to_pages(val: u64) -> u64 {
-    crate::runtime::vm::round_u64_up_to_host_pages(val)
-}
-
 impl Default for Config {
     fn default() -> Config {
         Config::new()
@@ -2505,7 +2490,6 @@ impl PoolingAllocationConfig {
     /// never be decommitted.
     #[cfg(feature = "async")]
     pub fn async_stack_keep_resident(&mut self, size: usize) -> &mut Self {
-        let size = round_up_to_pages(size as u64) as usize;
         self.config.async_stack_keep_resident = size;
         self
     }
@@ -2522,7 +2506,6 @@ impl PoolingAllocationConfig {
     /// which can, in some configurations, reduce the number of page faults
     /// taken when a slot is reused.
     pub fn linear_memory_keep_resident(&mut self, size: usize) -> &mut Self {
-        let size = round_up_to_pages(size as u64) as usize;
         self.config.linear_memory_keep_resident = size;
         self
     }
@@ -2537,7 +2520,6 @@ impl PoolingAllocationConfig {
     /// [`PoolingAllocationConfig::linear_memory_keep_resident`] except that it
     /// is applicable to tables instead.
     pub fn table_keep_resident(&mut self, size: usize) -> &mut Self {
-        let size = round_up_to_pages(size as u64) as usize;
         self.config.table_keep_resident = size;
         self
     }
