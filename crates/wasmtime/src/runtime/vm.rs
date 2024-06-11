@@ -11,7 +11,7 @@ use core::mem;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleInternedTypeIndex, VMOffsets,
+    prelude::*, DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleInternedTypeIndex, VMOffsets,
     VMSharedTypeIndex,
 };
 
@@ -353,7 +353,7 @@ pub fn usize_is_multiple_of_host_page_size(bytes: usize) -> bool {
 ///
 /// Returns an error if rounding up overflows.
 pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
-    let page_size = u64::try_from(crate::runtime::vm::host_page_size())?;
+    let page_size = u64::try_from(crate::runtime::vm::host_page_size()).err2anyhow()?;
     debug_assert!(page_size.is_power_of_two());
     bytes
         .checked_add(page_size - 1)
@@ -365,9 +365,9 @@ pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
 
 /// Same as `round_u64_up_to_host_pages` but for `usize`s.
 pub fn round_usize_up_to_host_pages(bytes: usize) -> Result<usize> {
-    let bytes = u64::try_from(bytes)?;
+    let bytes = u64::try_from(bytes).err2anyhow()?;
     let rounded = round_u64_up_to_host_pages(bytes)?;
-    Ok(usize::try_from(rounded)?)
+    Ok(usize::try_from(rounded).err2anyhow()?)
 }
 
 /// Result of `Memory::atomic_wait32` and `Memory::atomic_wait64`
