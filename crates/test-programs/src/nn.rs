@@ -42,12 +42,8 @@ pub fn classify(graph: Graph, tensor: Vec<u8>) -> Result<Vec<f32>> {
 /// placing the match probability for each class at the index for that class
 /// (the probability of class `N` is stored at `probabilities[N]`).
 pub fn sort_results(probabilities: &[f32]) -> Vec<InferenceResult> {
-    // It is unclear why the MobileNet output indices are "off by one" but the
-    // `.skip(1)` below seems necessary to get results that make sense (e.g. 763
-    // = "revolver" vs 762 = "restaurant").
     let mut results: Vec<InferenceResult> = probabilities
         .iter()
-        .skip(1)
         .enumerate()
         .map(|(c, p)| InferenceResult(c, *p))
         .collect();

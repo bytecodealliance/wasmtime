@@ -689,6 +689,9 @@ jobs:
       matrix:
         feature: ["openvino", "onnx"]
         os: ["ubuntu-latest", "windows-latest"]
+        include:
+          - os: windows-latest
+            feature: winml
     name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: determine
@@ -702,6 +705,15 @@ jobs:
     # Install OpenVINO
     - uses: abrown/install-openvino-action@v8
       if: runner.arch == 'X64'
+
+    # Install WinML for testing wasi-nn WinML backend. WinML is only available
+    # on Windows clients and Windows Server with desktop experience enabled.
+    # GitHub Actions Window Server image doesn't have desktop experience
+    # enabled, so we download the standalone library from ONNX Runtime project.
+    - uses: nuget/setup-nuget@v2
+      if: (matrix.os == 'windows-latest') && (matrix.feature == 'winml')
+    - run: nuget install Microsoft.AI.MachineLearning
+      if: (matrix.os == 'windows-latest') && (matrix.feature == 'winml')
 
     # Install Rust targets.
     - run: rustup target add wasm32-wasi
