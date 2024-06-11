@@ -680,17 +680,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    /// Convert the target pointer-sized integer `val` into the given memory's
+    /// Convert the target pointer-sized integer `val` that is holding a memory
+    /// length (or the `-1` `memory.grow`-failed sentinel) into the memory's
     /// index type.
     ///
     /// This might involve extending or truncating it depending on the memory's
-    /// index type and the target's pointer type. Note that when extending, we
-    /// do an unsigned extend, *except* if `val == -1`, in which case we do a
-    /// sign extend. This edge case makes this helper suitable for use with
-    /// translating the results of a `memory.grow` libcall, for example, where
-    /// `-1` indicates failure but the success value is otherwise unsigned and
-    /// might have the high bit set.
-    fn cast_pointer_to_memory_index(
+    /// index type and the target's pointer type.
+    fn convert_memory_length_to_index_type(
         &self,
         mut pos: FuncCursor<'_>,
         val: ir::Value,
@@ -710,12 +706,30 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         } else {
             // We have a 64-bit memory on a 32-bit host -- this combo doesn't
             // really make a whole lot of sense to do from a user perspective
-            // but that is neither here nor there. We want to unsigned extend
-            // unless `val` is `-1`, as described in the doc comment above.
-            let extended = pos.ins().uextend(desired_type, val);
-            let neg_one = pos.ins().iconst(desired_type, -1);
-            let is_failure = pos.ins().icmp_imm(IntCC::Equal, val, -1);
-            pos.ins().select(is_failure, neg_one, extended)
+            // but that is neither here nor there. We want to logically do an
+            // unsigned extend *except* when we are given the `-1` sentinel,
+            // which we must preserve as `-1` in the wider type.
+            match self.module.memory_plans[index].memory.page_size_log2 {
+                16 => {
+                    // In the case that we have default page sizes, we can
+                    // always sign extend, since valid memory lengths (in pages)
+                    // never have their sign bit set, and so if the sign bit is
+                    // set then this must be the `-1` sentinel, which we want to
+                    // preserve through the extension.
+                    pos.ins().sextend(desired_type, val)
+                }
+                0 => {
+                    // For single-byte pages, we have to explicitly check for
+                    // `-1` and choose whether to do an unsigned extension or
+                    // return a larger `-1` because there are valid memory
+                    // lengths (in pages) that have the sign bit set.
+                    let extended = pos.ins().uextend(desired_type, val);
+                    let neg_one = pos.ins().iconst(desired_type, -1);
+                    let is_failure = pos.ins().icmp_imm(IntCC::Equal, val, -1);
+                    pos.ins().select(is_failure, neg_one, extended)
+                }
+                _ => unreachable!("only page sizes 2**0 and 2**16 are currently valid"),
+            }
         }
     }
 
@@ -2406,7 +2420,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let val = self.cast_memory_index_to_i64(&mut pos, val, index);
         let call_inst = pos.ins().call(memory_grow, &[vmctx, val, memory_index]);
         let result = *pos.func.dfg.inst_results(call_inst).first().unwrap();
-        Ok(self.cast_pointer_to_memory_index(pos, result, index))
+        Ok(self.convert_memory_length_to_index_type(pos, result, index))
     }
 
     fn translate_memory_size(
@@ -2482,7 +2496,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let page_size_log2 = i64::from(self.module.memory_plans[index].memory.page_size_log2);
         let current_length_in_pages = pos.ins().ushr_imm(current_length_in_bytes, page_size_log2);
 
-        Ok(self.cast_pointer_to_memory_index(pos, current_length_in_pages, index))
+        Ok(self.convert_memory_length_to_index_type(pos, current_length_in_pages, index))
     }
 
     fn translate_memory_copy(
