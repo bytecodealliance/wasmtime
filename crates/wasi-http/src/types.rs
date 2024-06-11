@@ -303,15 +303,12 @@ pub async fn default_send_request_handler(
 
         #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
         {
-            use rustls::pki_types::{ServerName, TrustAnchor};
+            use rustls::pki_types::ServerName;
 
-            // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
-            let mut root_cert_store = rustls::RootCertStore::empty();
-            root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| TrustAnchor {
-                name_constraints: ta.name_constraints.to_owned(),
-                subject: ta.subject.to_owned(),
-                subject_public_key_info: ta.subject_public_key_info.to_owned(),
-            }));
+            // derived from https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleclient.rs
+            let root_cert_store = rustls::RootCertStore {
+                roots: webpki_roots::TLS_SERVER_ROOTS.into(),
+            };
             let config = rustls::ClientConfig::builder()
                 .with_root_certificates(root_cert_store)
                 .with_no_client_auth();
