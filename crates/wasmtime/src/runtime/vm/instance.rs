@@ -233,7 +233,7 @@ impl Instance {
     /// pointers to the same `Instance`.
     #[inline]
     pub unsafe fn from_vmctx<R>(vmctx: *mut VMContext, f: impl FnOnce(&mut Instance) -> R) -> R {
-        assert!(!vmctx.is_null());
+        debug_assert!(!vmctx.is_null());
         let ptr = vmctx
             .byte_sub(mem::size_of::<Instance>())
             .cast::<Instance>();
@@ -458,7 +458,7 @@ impl Instance {
     pub fn store(&self) -> *mut dyn Store {
         let ptr =
             unsafe { *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets().vmctx_store()) };
-        assert!(!ptr.is_null());
+        debug_assert!(!ptr.is_null());
         ptr
     }
 
