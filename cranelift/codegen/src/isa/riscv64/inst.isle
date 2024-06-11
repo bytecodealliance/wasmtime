@@ -2424,6 +2424,11 @@
 
 ;; Helpers for sinkable loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V doesen't really have sinkable loads. But the regular load instructions
+;; sign / zero extend their results to 64 bits. So we can pretend they are
+;; an extend instruction with a sinkable load. This allows us to have better
+;; lowerings on these cases.
+
 ;; Extract a sinkable instruction from a value operand.
 (decl sinkable_inst (Inst) Value)
 (extern extractor sinkable_inst sinkable_inst)
