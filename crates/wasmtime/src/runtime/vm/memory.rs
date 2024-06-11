@@ -6,7 +6,8 @@ use crate::prelude::*;
 use crate::runtime::vm::mmap::Mmap;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{
-    MemoryImage, MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
+    host_page_size, round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MemoryImage,
+    MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
 };
 use alloc::sync::Arc;
 use anyhow::Error;
@@ -229,16 +230,15 @@ impl MmapMemory {
         let pre_guard_bytes = usize::try_from(plan.pre_guard_size).unwrap();
 
         // Ensure that our guard regions are multiples of the host page size.
-        let offset_guard_bytes =
-            crate::runtime::vm::round_usize_up_to_host_pages(offset_guard_bytes);
-        let pre_guard_bytes = crate::runtime::vm::round_usize_up_to_host_pages(pre_guard_bytes);
+        let offset_guard_bytes = round_usize_up_to_host_pages(offset_guard_bytes);
+        let pre_guard_bytes = round_usize_up_to_host_pages(pre_guard_bytes);
 
         let (alloc_bytes, extra_to_reserve_on_growth) = match plan.style {
             // Dynamic memories start with the minimum size plus the `reserve`
             // amount specified to grow into.
             MemoryStyle::Dynamic { reserve } => (
-                crate::runtime::vm::round_usize_up_to_host_pages(minimum),
-                crate::runtime::vm::round_usize_up_to_host_pages(usize::try_from(reserve).unwrap()),
+                round_usize_up_to_host_pages(minimum),
+                round_usize_up_to_host_pages(usize::try_from(reserve).unwrap()),
             ),
 
             // Static memories will never move in memory and consequently get
@@ -253,7 +253,7 @@ impl MmapMemory {
                 (bound_bytes, 0)
             }
         };
-        assert_eq!(alloc_bytes % crate::runtime::vm::host_page_size(), 0);
+        assert_eq!(alloc_bytes % host_page_size(), 0);
 
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
@@ -263,7 +263,7 @@ impl MmapMemory {
         let mut mmap = Mmap::accessible_reserved(0, request_bytes)?;
 
         if minimum > 0 {
-            let accessible = crate::runtime::vm::round_usize_up_to_host_pages(minimum);
+            let accessible = round_usize_up_to_host_pages(minimum);
             mmap.make_accessible(pre_guard_bytes, accessible)?;
         }
 
@@ -303,7 +303,7 @@ impl MmapMemory {
     /// is the same region as `self.len` but rounded up to a multiple of the
     /// host page size.
     fn accessible(&self) -> usize {
-        let accessible = crate::runtime::vm::round_usize_up_to_host_pages(self.len);
+        let accessible = round_usize_up_to_host_pages(self.len);
         debug_assert!(accessible <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size);
         accessible
     }
@@ -323,17 +323,11 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
-        assert!(crate::runtime::vm::usize_is_multiple_of_host_page_size(
-            self.offset_guard_size
-        ));
-        assert!(crate::runtime::vm::usize_is_multiple_of_host_page_size(
-            self.pre_guard_size
-        ));
-        assert!(crate::runtime::vm::usize_is_multiple_of_host_page_size(
-            self.mmap.len()
-        ));
+        assert!(usize_is_multiple_of_host_page_size(self.offset_guard_size));
+        assert!(usize_is_multiple_of_host_page_size(self.pre_guard_size));
+        assert!(usize_is_multiple_of_host_page_size(self.mmap.len()));
 
-        let new_accessible = crate::runtime::vm::round_usize_up_to_host_pages(new_size);
+        let new_accessible = round_usize_up_to_host_pages(new_size);
         if new_accessible > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
             // If the new size of this heap exceeds the current size of the
             // allocation we have, then this must be a dynamic heap. Use
@@ -382,7 +376,7 @@ impl RuntimeLinearMemory for MmapMemory {
             assert!(self.maximum.map_or(true, |max| new_size <= max));
             assert!(new_size <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size);
 
-            let new_accessible = crate::runtime::vm::round_usize_up_to_host_pages(new_size);
+            let new_accessible = round_usize_up_to_host_pages(new_size);
             assert!(
                 new_accessible <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size,
             );
