@@ -9,7 +9,7 @@ use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Token};
 use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError, TrappableImports};
-use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
+use wit_parser::{PackageId, Resolve, UnresolvedPackageGroup, WorldId};
 
 pub struct Config {
     opts: Opts,
@@ -170,11 +170,16 @@ impl Parse for Config {
                 path = Some(input.parse::<syn::LitStr>()?.value());
             }
         }
-        let (resolve, pkg, files) = parse_source(&path, &inline, &features)
+        let (resolve, pkgs, files) = parse_source(&path, &inline, &features)
             .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
 
         let world = resolve
-            .select_world(pkg, world.as_deref())
+            .select_world(
+                *pkgs
+                    .get(0)
+                    .ok_or_else(|| Error::new(call_site, "at least one package must be defined"))?,
+                world.as_deref(),
+            )
             .map_err(|e| Error::new(call_site, format!("{e:?}")))?;
         Ok(Config {
             opts,
@@ -190,7 +195,7 @@ fn parse_source(
     path: &Option<String>,
     inline: &Option<String>,
     features: &[String],
-) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
+) -> anyhow::Result<(Resolve, Vec<PackageId>, Vec<PathBuf>)> {
     let mut resolve = Resolve::default();
     resolve.features.extend(features.iter().cloned());
     let mut files = Vec::new();
@@ -209,7 +214,16 @@ fn parse_source(
     };
 
     let inline_pkg = if let Some(inline) = inline {
-        Some(resolve.push(UnresolvedPackage::parse("macro-input".as_ref(), inline)?)?)
+        let UnresolvedPackageGroup {
+            packages,
+            source_map,
+        } = UnresolvedPackageGroup::parse("macro-input".as_ref(), inline)?;
+        Some(
+            packages
+                .into_iter()
+                .map(|p| resolve.push(p, &source_map))
+                .collect::<anyhow::Result<Vec<_>>>()?,
+        )
     } else {
         None
     };
