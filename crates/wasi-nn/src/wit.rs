@@ -21,9 +21,10 @@ use std::{error::Error, fmt, hash::Hash, str::FromStr};
 /// Generate the traits and types from the `wasi-nn` WIT specification.
 mod gen_ {
     wasmtime::component::bindgen!({
-        world: "ml",
-        path: "wit/wasi-nn.wit",
-        trappable_imports: true,
+    world: "ml",
+    path: "wit/wasi-nn.wit",
+    async: true,
+    trappable_imports: true,
     });
 }
 use gen_::wasi::nn as gen; // Shortcut to the module containing the types we need.
@@ -36,10 +37,12 @@ pub mod types {
     pub use gen::tensor::{Tensor, TensorType};
 }
 pub use gen_::Ml as ML;
+use wasmtime::component::__internal::async_trait;
 
+#[async_trait]
 impl gen::graph::Host for WasiNnCtx {
     /// Load an opaque sequence of bytes to use for inference.
-    fn load(
+    async fn load(
         &mut self,
         builders: Vec<gen::graph::GraphBuilder>,
         encoding: gen::graph::GraphEncoding,
@@ -55,11 +58,11 @@ impl gen::graph::Host for WasiNnCtx {
         Ok(Ok(graph_id))
     }
 
-    fn load_by_name(
+    async fn load_by_name(
         &mut self,
         name: String,
     ) -> wasmtime::Result<Result<gen::graph::Graph, gen::errors::Error>> {
-        if let Some(graph) = self.registry.get_mut(&name) {
+        if let Some(graph) = self.registry.get_mut(&name).await? {
             let graph_id = self.graphs.insert(graph.clone().into());
             Ok(Ok(graph_id))
         } else {
@@ -68,18 +71,18 @@ impl gen::graph::Host for WasiNnCtx {
     }
 }
 
+#[async_trait]
 impl gen::inference::Host for WasiNnCtx {
     /// Create an execution instance of a loaded graph.
     ///
     /// TODO: remove completely?
-    fn init_execution_context(
+    async fn init_execution_context(
         &mut self,
         graph_id: gen::graph::Graph,
     ) -> wasmtime::Result<Result<gen::inference::GraphExecutionContext, gen::errors::Error>> {
-        let exec_context = if let Some(graph) = self.graphs.get(graph_id) {
-            graph.init_execution_context()?
-        } else {
-            return Err(UsageError::InvalidGraphHandle.into());
+        let exec_context = match self.graphs.get_mut(graph_id) {
+            Some(graph) => graph.init_execution_context().await?,
+            None => return Err(UsageError::InvalidGraphHandle.into()),
         };
 
         let exec_context_id = self.executions.insert(exec_context);
@@ -87,7 +90,7 @@ impl gen::inference::Host for WasiNnCtx {
     }
 
     /// Define the inputs to use for inference.
-    fn set_input(
+    async fn set_input(
         &mut self,
         exec_context_id: gen::inference::GraphExecutionContext,
         index: u32,
@@ -104,12 +107,12 @@ impl gen::inference::Host for WasiNnCtx {
     /// Compute the inference on the given inputs.
     ///
     /// TODO: refactor to compute(list<tensor>) -> result<list<tensor>, error>
-    fn compute(
+    async fn compute(
         &mut self,
         exec_context_id: gen::inference::GraphExecutionContext,
     ) -> wasmtime::Result<Result<(), gen::errors::Error>> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
-            exec_context.compute()?;
+            exec_context.compute().await?;
             Ok(Ok(()))
         } else {
             Err(UsageError::InvalidExecutionContextHandle.into())
@@ -117,7 +120,7 @@ impl gen::inference::Host for WasiNnCtx {
     }
 
     /// Extract the outputs after inference.
-    fn get_output(
+    async fn get_output(
         &mut self,
         exec_context_id: gen::inference::GraphExecutionContext,
         index: u32,

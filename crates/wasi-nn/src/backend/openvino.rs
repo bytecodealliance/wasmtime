@@ -6,8 +6,10 @@ use super::{
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
-use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::{fs::File, io::Read, path::Path};
+use wiggle::async_trait_crate::async_trait;
+
 
 #[derive(Default)]
 pub struct OpenvinoBackend(Option<openvino::Core>);
@@ -42,7 +44,7 @@ impl BackendInner for OpenvinoBackend {
             .0
             .as_mut()
             .expect("openvino::Core was previously constructed");
-        let mut cnn_network = core.read_network_from_buffer(&xml, &weights)?;
+        let mut cnn_network = core.read_network_from_buffer(xml, weights)?;
 
         // TODO: this is a temporary workaround. We need a more elegant way to
         // specify the layout in the long run. However, without this newer
@@ -86,8 +88,9 @@ struct OpenvinoGraph(
 unsafe impl Send for OpenvinoGraph {}
 unsafe impl Sync for OpenvinoGraph {}
 
+#[async_trait]
 impl BackendGraph for OpenvinoGraph {
-    fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
+    async fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
         let mut network = self.1.lock().unwrap();
         let infer_request = network.create_infer_request()?;
         let box_: Box<dyn BackendExecutionContext> =
@@ -98,6 +101,7 @@ impl BackendGraph for OpenvinoGraph {
 
 struct OpenvinoExecutionContext(Arc<openvino::CNNNetwork>, openvino::InferRequest);
 
+#[async_trait]
 impl BackendExecutionContext for OpenvinoExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
         let input_name = self.0.get_input_name(index as usize)?;
@@ -118,7 +122,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         Ok(())
     }
 
-    fn compute(&mut self) -> Result<(), BackendError> {
+    async fn compute(&mut self) -> Result<(), BackendError> {
         self.1.infer()?;
         Ok(())
     }

@@ -18,6 +18,9 @@ workspace = true
 # These dependencies are necessary for the WITX-generation macros to work:
 anyhow = { workspace = true, features = ['std'] }
 wiggle = { workspace = true, features = ["wasmtime"] }
+wit-bindgen = { workspace = true }
+wit-component = { workspace = true }
+wasmtime-wasi = { workspace = true }
 
 # This dependency is necessary for the WIT-generation macros to work:
 wasmtime = { workspace = true, features = ["component-model", "runtime"] }
@@ -25,6 +28,22 @@ wasmtime = { workspace = true, features = ["component-model", "runtime"] }
 # These dependencies are necessary for the wasi-nn implementation:
 tracing = { workspace = true }
 thiserror = { workspace = true }
+
+hyper = { workspace = true, features = ["full"] }
+http-body-util = { workspace = true }
+hyper-util = { version = "0.1.3", features = ["full"] }
+
+# The `ring` crate, used to implement TLS, does not build on riscv64 or s390x
+[target.'cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))'.dependencies]
+tokio-rustls = { version = "0.24.0" }
+rustls = { version = "0.21.6" }
+webpki-roots = { version = "0.25.2" }
+
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { version = "1.26.0", features = ["rt", "time", "macros", "rt-multi-thread", "net"] }
+byteorder = "1.4.3"
+
 openvino = { version = "0.6.0", features = [
     "runtime-linking",
 ], optional = true }
@@ -51,6 +70,8 @@ wasmtime = { workspace = true, features = ["cranelift"] }
 
 [features]
 default = ["openvino"]
+# kserve does not require any external dependencies
+kserve = []
 # openvino is available on all platforms, it requires openvino installed.
 openvino = ["dep:openvino"]
 # onnx is available on all platforms.
