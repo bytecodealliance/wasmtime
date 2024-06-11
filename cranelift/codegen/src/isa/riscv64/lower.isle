@@ -1115,15 +1115,35 @@
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (uextend val)))
   (zext val))
+
 (rule 1 (lower (has_type $I128 (uextend val)))
   (value_regs (zext val) (imm $I64 0)))
+
+;; When the source of an `uextend` is a load, we can merge both ops
+(rule 2 (lower (has_type (fits_in_64 _) (uextend (sinkable_load inst ty flags addr offset))))
+  (gen_sunk_load inst (amode addr offset) (uextend_load_op ty) flags))
+
+(decl pure uextend_load_op (Type) LoadOP)
+(rule (uextend_load_op $I8) (LoadOP.Lbu))
+(rule (uextend_load_op $I16) (LoadOP.Lhu))
+(rule (uextend_load_op $I32) (LoadOP.Lwu))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (sextend val @ (value_type in_ty))))
   (sext val))
+
 (rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
   (let ((lo XReg (sext val)))
     (value_regs lo (rv_srai lo (imm12_const 63)))))
+
+;; When the source of an `sextend` is a load, we can merge both ops
+(rule 2 (lower (has_type (fits_in_64 _) (sextend (sinkable_load inst ty flags addr offset))))
+  (gen_sunk_load inst (amode addr offset) (sextend_load_op ty) flags))
+
+(decl pure sextend_load_op (Type) LoadOP)
+(rule (sextend_load_op $I8) (LoadOP.Lb))
+(rule (sextend_load_op $I16) (LoadOP.Lh))
+(rule (sextend_load_op $I32) (LoadOP.Lw))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

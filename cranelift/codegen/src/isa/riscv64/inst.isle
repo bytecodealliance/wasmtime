@@ -2422,7 +2422,23 @@
   (gen_stack_slot_amode ss combined_offset))
 
 
+;; Helpers for sinkable loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V doesen't really have sinkable loads. But the regular load instructions
+;; sign / zero extend their results to 64 bits. So we can pretend they are
+;; an extend instruction with a sinkable load. This allows us to have better
+;; lowerings on these cases.
+
+;; Extract a sinkable instruction from a value operand.
+(decl sinkable_inst (Inst) Value)
+(extern extractor sinkable_inst sinkable_inst)
+
+;; Matches a sinkable load.
+(decl sinkable_load (Inst Type MemFlags Value Offset32) Value)
+(extractor (sinkable_load inst ty flags addr offset)
+           (and
+              (load flags addr offset)
+              (sinkable_inst (has_type ty inst))))
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.
 (decl load_op_reg_type (LoadOP) Type)
@@ -2430,14 +2446,24 @@
 (rule 1 (load_op_reg_type (LoadOP.Flw)) $F64)
 (rule 0 (load_op_reg_type _) $I64)
 
-;; helper function to load from memory.
+;; Helper constructor to build a load instruction.
 (decl gen_load (AMode LoadOP MemFlags) Reg)
 (rule (gen_load amode op flags)
   (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
       (_ Unit (emit (MInst.Load dst op flags amode))))
     dst))
 
-;; helper function to store to memory.
+;; Similar to `gen_load` but marks `Inst` as sunk at the current point.
+;;
+;; This is only useful for load op's that perform some additional computation
+;; such as extending the loaded value.
+(decl gen_sunk_load (Inst AMode LoadOP MemFlags) Reg)
+(rule (gen_sunk_load inst amode op flags)
+  (let ((_ Unit (sink_inst inst)))
+        (gen_load amode op flags)))
+
+
+;; Helper constructor to build a store instruction.
 ;;
 ;; This helper contains a special-case for zero constants stored to memory to
 ;; directly store the `zero` register to memory. See #7162 for some discussion
