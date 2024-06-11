@@ -249,6 +249,7 @@ impl MmapMemory {
             MemoryStyle::Static { byte_reservation } => {
                 assert!(byte_reservation >= plan.memory.minimum_byte_size().unwrap());
                 let bound_bytes = usize::try_from(byte_reservation).unwrap();
+                let bound_bytes = round_usize_up_to_host_pages(bound_bytes)?;
                 maximum = Some(bound_bytes.min(maximum.unwrap_or(usize::MAX)));
                 (bound_bytes, 0)
             }
