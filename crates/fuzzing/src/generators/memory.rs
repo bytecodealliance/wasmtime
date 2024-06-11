@@ -118,6 +118,7 @@ pub struct NormalMemoryConfig {
     pub dynamic_memory_guard_size: Option<u64>,
     pub dynamic_memory_reserved_for_growth: Option<u64>,
     pub guard_before_linear_memory: bool,
+    pub cranelift_enable_heap_access_spectre_mitigations: Option<bool>,
     pub memory_init_cow: bool,
 }
 
@@ -132,6 +133,7 @@ impl<'a> Arbitrary<'a> for NormalMemoryConfig {
             dynamic_memory_reserved_for_growth: <Option<u32> as Arbitrary>::arbitrary(u)?
                 .map(Into::into),
             guard_before_linear_memory: u.arbitrary()?,
+            cranelift_enable_heap_access_spectre_mitigations: u.arbitrary()?,
             memory_init_cow: u.arbitrary()?,
         };
 
@@ -156,6 +158,15 @@ impl NormalMemoryConfig {
             )
             .guard_before_linear_memory(self.guard_before_linear_memory)
             .memory_init_cow(self.memory_init_cow);
+
+        if let Some(enable) = self.cranelift_enable_heap_access_spectre_mitigations {
+            unsafe {
+                config.cranelift_flag_set(
+                    "enable_heap_access_spectre_mitigation",
+                    &enable.to_string(),
+                );
+            }
+        }
     }
 }
 

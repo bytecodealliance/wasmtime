@@ -261,6 +261,8 @@ impl Config {
                     dynamic_memory_reserved_for_growth: Some(0),
                     guard_before_linear_memory: false,
                     memory_init_cow: true,
+                    // Doesn't matter, only using virtual memory.
+                    cranelift_enable_heap_access_spectre_mitigations: None,
                 })
             } else {
                 self.wasmtime.memory_config.clone()
