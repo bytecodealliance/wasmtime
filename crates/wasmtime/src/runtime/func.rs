@@ -2000,7 +2000,7 @@ impl<T> Caller<'_, T> {
         // And the return value must not borrow from the caller/store.
         R: 'static,
     {
-        assert!(!caller.is_null());
+        debug_assert!(!caller.is_null());
         crate::runtime::vm::Instance::from_vmctx(caller, |instance| {
             let store = StoreContextMut::from_raw(instance.store());
             let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
