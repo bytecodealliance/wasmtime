@@ -2879,21 +2879,6 @@
 ;; no extension.
 (rule -1 (lower (has_type (ty_int_ref_64 ty) (load flags address offset)))
       (x64_mov (to_amode flags address offset)))
-;; Also, certain scalar loads have a specific `from` width and extension kind
-;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
-;; GPR even if the `to` type is smaller (e.g., 16-bits).
-(rule (lower (has_type (is_gpr_type ty) (uload8 flags address offset)))
-      (x64_movzx (ExtMode.BQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (sload8 flags address offset)))
-      (x64_movsx (ExtMode.BQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (uload16 flags address offset)))
-      (x64_movzx (ExtMode.WQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (sload16 flags address offset)))
-      (x64_movsx (ExtMode.WQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (uload32 flags address offset)))
-      (x64_movzx (ExtMode.LQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (sload32 flags address offset)))
-      (x64_movsx (ExtMode.LQ) (to_amode flags address offset)))
 
 ;; To load to XMM registers, we use the x64-specific instructions for each type.
 ;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.

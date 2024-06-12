@@ -119,9 +119,13 @@ block0(v0: i16):
 
 function %c_lbu(i64) -> i16, i64 {
 block0(v0: i64):
-  v1 = uload8.i16 v0+0
-  v2 = uload8.i64 v0+3
-  return v1, v2
+  v1 = load.i8 v0+0
+  v2 = uextend.i16 v1
+
+  v3 = load.i8 v0+3
+  v4 = uextend.i64 v3
+
+  return v2, v4
 }
 
 ; VCode:
@@ -142,9 +146,13 @@ block0(v0: i64):
 
 function %c_lhu(i64) -> i32, i64 {
 block0(v0: i64):
-  v1 = uload16.i32 v0+0
-  v2 = uload16.i64 v0+2
-  return v1, v2
+  v1 = load.i16 v0+0
+  v2 = uextend.i32 v1
+
+  v3 = load.i16 v0+2
+  v4 = uextend.i64 v3
+
+  return v2, v4
 }
 
 ; VCode:

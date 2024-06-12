@@ -109,8 +109,9 @@ block0(v0: i64, v1: i64):
 
 function %iadd_i64_mem_ext16(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = sload16.i64 v1
-  v3 = iadd.i64 v0, v2
+  v2 = load.i16 v1
+  v4 = sextend.i64 v2
+  v3 = iadd.i64 v0, v4
   return v3
 }
 
@@ -126,8 +127,9 @@ block0(v0: i64, v1: i64):
 
 function %iadd_i64_mem_ext32(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = sload32.i64 v1
-  v3 = iadd.i64 v0, v2
+  v2 = load.i32 v1
+  v4 = sextend.i64 v2
+  v3 = iadd.i64 v0, v4
   return v3
 }
 
@@ -227,8 +229,9 @@ block0(v0: i32, v1: i64):
 
 function %iadd_i32_mem_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
-  v2 = sload16.i32 v1
-  v3 = iadd.i32 v0, v2
+  v2 = load.i16 v1
+  v4 = sextend.i32 v2
+  v3 = iadd.i32 v0, v4
   return v3
 }
 
@@ -244,8 +247,9 @@ block0(v0: i32, v1: i64):
 
 function %iadd_i32_memoff_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
-  v2 = sload16.i32 v1+4096
-  v3 = iadd.i32 v0, v2
+  v2 = load.i16 v1+4096
+  v4 = sextend.i32 v2
+  v3 = iadd.i32 v0, v4
   return v3
 }
 
@@ -469,8 +473,9 @@ block0(v0: i64, v1: i64):
 
 function %isub_i64_mem_ext16(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = sload16.i64 v1
-  v3 = isub.i64 v0, v2
+  v2 = load.i16 v1
+  v4 = sextend.i64 v2
+  v3 = isub.i64 v0, v4
   return v3
 }
 
@@ -486,8 +491,9 @@ block0(v0: i64, v1: i64):
 
 function %isub_i64_mem_ext32(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = sload32.i64 v1
-  v3 = isub.i64 v0, v2
+  v2 = load.i32 v1
+  v4 = sextend.i64 v2
+  v3 = isub.i64 v0, v4
   return v3
 }
 
@@ -587,8 +593,9 @@ block0(v0: i32, v1: i64):
 
 function %isub_i32_mem_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
-  v2 = sload16.i32 v1
-  v3 = isub.i32 v0, v2
+  v2 = load.i16 v1
+  v4 = sextend.i32 v2
+  v3 = isub.i32 v0, v4
   return v3
 }
 
@@ -604,8 +611,9 @@ block0(v0: i32, v1: i64):
 
 function %isub_i32_memoff_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
-  v2 = sload16.i32 v1+4096
-  v3 = isub.i32 v0, v2
+  v2 = load.i16 v1+4096
+  v4 = sextend.i32 v2
+  v3 = isub.i32 v0, v4
   return v3
 }
 
@@ -1057,8 +1065,9 @@ block0(v0: i64, v1: i64):
 
 function %imul_i64_mem_ext16(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = sload16.i64 v1
-  v3 = imul.i64 v0, v2
+  v2 = load.i16 v1
+  v4 = sextend.i64 v2
+  v3 = imul.i64 v0, v4
   return v3
 }
 
@@ -1074,8 +1083,9 @@ block0(v0: i64, v1: i64):
 
 function %imul_i64_mem_ext32(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = sload32.i64 v1
-  v3 = imul.i64 v0, v2
+  v2 = load.i32 v1
+  v4 = sextend.i64 v2
+  v3 = imul.i64 v0, v4
   return v3
 }
 
@@ -1175,8 +1185,9 @@ block0(v0: i32, v1: i64):
 
 function %imul_i32_mem_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
-  v2 = sload16.i32 v1
-  v3 = imul.i32 v0, v2
+  v2 = load.i16 v1
+  v4 = sextend.i32 v2
+  v3 = imul.i32 v0, v4
   return v3
 }
 
@@ -1192,8 +1203,9 @@ block0(v0: i32, v1: i64):
 
 function %imul_i32_memoff_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
-  v2 = sload16.i32 v1+4096
-  v3 = imul.i32 v0, v2
+  v2 = load.i16 v1+4096
+  v4 = sextend.i32 v2
+  v3 = imul.i32 v0, v4
   return v3
 }
 

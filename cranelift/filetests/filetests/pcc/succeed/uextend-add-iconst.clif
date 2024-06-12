@@ -87,8 +87,9 @@ block11:
     v112 ! mem(mt1, 0x0, 0xffffffff) = iadd v111, v110
     v113 ! range(64, 0x5ffe6, 0x5ffe6) = iconst.i64 0x0005_ffe6
     v114 ! mem(mt1, 0x5ffe6, 0x10005ffe5) = iadd v112, v113  ; v113 = 0x0005_ffe6
-    v115 = uload8.i64 little checked heap v114
-    jump block8(v115)
+    v115 = load.i8 little checked heap v114
+    v131 = uextend.i64 v115
+    jump block8(v131)
 
 block9:
     v116 = iconst.i64 0

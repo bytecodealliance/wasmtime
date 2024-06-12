@@ -2212,7 +2212,6 @@
 (rule (value32_zeros_upper32 (bxor _ _)) $true)
 (rule (value32_zeros_upper32 (ishl _ _)) $true)
 (rule (value32_zeros_upper32 (ushr _ _)) $true)
-(rule (value32_zeros_upper32 (uload32 _ _ _)) $true)
 (rule -1 (value32_zeros_upper32 _) $false)
 
 ;;;; Helpers for Working SSE tidbits ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

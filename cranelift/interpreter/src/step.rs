@@ -435,52 +435,20 @@ where
                 })
             })
         }
-        Opcode::Load
-        | Opcode::Uload8
-        | Opcode::Sload8
-        | Opcode::Uload16
-        | Opcode::Sload16
-        | Opcode::Uload32
-        | Opcode::Sload32
-        | Opcode::Uload8x8
+        Opcode::Uload8x8
         | Opcode::Sload8x8
         | Opcode::Uload16x4
         | Opcode::Sload16x4
         | Opcode::Uload32x2
-        | Opcode::Sload32x2 => {
-            let ctrl_ty = inst_context.controlling_type().unwrap();
-            let (load_ty, kind) = match inst.opcode() {
-                Opcode::Load => (ctrl_ty, None),
-                Opcode::Uload8 => (types::I8, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
-                Opcode::Sload8 => (types::I8, Some(ValueConversionKind::SignExtend(ctrl_ty))),
-                Opcode::Uload16 => (types::I16, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
-                Opcode::Sload16 => (types::I16, Some(ValueConversionKind::SignExtend(ctrl_ty))),
-                Opcode::Uload32 => (types::I32, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
-                Opcode::Sload32 => (types::I32, Some(ValueConversionKind::SignExtend(ctrl_ty))),
-                Opcode::Uload8x8
-                | Opcode::Sload8x8
-                | Opcode::Uload16x4
-                | Opcode::Sload16x4
-                | Opcode::Uload32x2
-                | Opcode::Sload32x2 => unimplemented!(),
-                _ => unreachable!(),
-            };
-
+        | Opcode::Sload32x2 => unimplemented!(),
+        Opcode::Load => {
+            let load_ty = inst_context.controlling_type().unwrap();
             let addr_value = calculate_addr(types::I64, imm(), args())?;
             let mem_flags = inst.memflags().expect("instruction to have memory flags");
-            let loaded = assign_or_memtrap(
+            assign_or_memtrap(
                 Address::try_from(addr_value)
                     .and_then(|addr| state.checked_load(addr, load_ty, mem_flags)),
-            );
-
-            match (loaded, kind) {
-                (ControlFlow::Assign(ret), Some(c)) => ControlFlow::Assign(
-                    ret.into_iter()
-                        .map(|loaded| loaded.convert(c.clone()))
-                        .collect::<ValueResult<SmallVec<[DataValue; 1]>>>()?,
-                ),
-                (cf, _) => cf,
-            }
+            )
         }
         Opcode::Store => {
             let val = arg(0);

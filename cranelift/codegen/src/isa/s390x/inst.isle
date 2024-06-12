@@ -1929,31 +1929,58 @@
 ;; Sink a sload16 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_sload16 (Inst) MemArg)
-(rule (sink_sload16 inst @ (sload16 flags addr offset))
+(rule (sink_sload16 (and (sload_inst inst) (sload16 flags addr offset)))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
 ;; Sink a sload32 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_sload32 (Inst) MemArg)
-(rule (sink_sload32 inst @ (sload32 flags addr offset))
+(rule (sink_sload32 (and (sload_inst inst) (sload32 flags addr offset)))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
 ;; Sink a uload16 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_uload16 (Inst) MemArg)
-(rule (sink_uload16 inst @ (uload16 flags addr offset))
+(rule (sink_uload16 (and (uload_inst inst) (uload16 flags addr offset)))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
 ;; Sink a uload32 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_uload32 (Inst) MemArg)
-(rule (sink_uload32 inst @ (uload32 flags addr offset))
+(rule (sink_uload32 (and (uload_inst inst) (uload32 flags addr offset)))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
+;; Extractors for load+extend patterns
+
+(decl sload16 (MemFlags Value Offset32) Inst)
+(extractor (sload16 flags addr offset)
+           (sextend (has_type $I16 (load flags addr offset))))
+
+(decl uload16 (MemFlags Value Offset32) Inst)
+(extractor (uload16 flags addr offset)
+           (uextend (has_type $I16 (load flags addr offset))))
+
+(decl sload32 (MemFlags Value Offset32) Inst)
+(extractor (sload32 flags addr offset)
+           (sextend (has_type $I32 (load flags addr offset))))
+
+(decl uload32 (MemFlags Value Offset32) Inst)
+(extractor (uload32 flags addr offset)
+           (uextend (has_type $I32 (load flags addr offset))))
+
+;; Extracts the load instruction from a `sload`
+(decl sload_inst (Inst) Inst)
+(extractor (sload_inst inst)
+           (sextend (and (def_inst inst) (load _ _ _))))
+
+;; Extracts the load instruction from a `uload`
+(decl uload_inst (Inst) Inst)
+(extractor (uload_inst inst)
+           (uextend (and (def_inst inst) (load _ _ _))))
 
 ;; Helpers for register pairs ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

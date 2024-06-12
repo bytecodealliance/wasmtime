@@ -2032,30 +2032,6 @@
   (lower (resumable_trap code))
   (udf code))
 
-;;;;;  Rules for `uload8`;;;;;;;;;
-(rule (lower (uload8 flags addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lbu) flags))
-
-;;;;;  Rules for `sload8`;;;;;;;;;
-(rule (lower (sload8 flags addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lb) flags))
-
-;;;;;  Rules for `uload16`;;;;;;;;;
-(rule (lower (uload16 flags addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lhu) flags))
-
-;;;;;  Rules for `iload16`;;;;;;;;;
-(rule (lower (sload16 flags addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lh) flags))
-
-;;;;;  Rules for `uload32`;;;;;;;;;
-(rule (lower (uload32 flags addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lwu) flags))
-
-;;;;;  Rules for `sload32`;;;;;;;;;
-(rule (lower (sload32 flags addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lw) flags))
-
 ;;;;;  Rules for `load`;;;;;;;;;
 (rule (lower (has_type ty (load flags addr offset)))
   (gen_load (amode addr offset) (load_op ty) flags))

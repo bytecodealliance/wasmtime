@@ -281,8 +281,9 @@ function %f18(i64, i64, i64) -> i32 {
 block0(v0: i64, v1: i64, v2: i64):
   v3 = iconst.i32 -4098
   v6 = uextend.i64 v3
-  v5 = sload16.i32 v6+0
-  return v5
+  v5 = load.i16 v6+0
+  v7 = sextend.i32 v5
+  return v7
 }
 
 ; VCode:
@@ -303,8 +304,9 @@ function %f19(i64, i64, i64) -> i32 {
 block0(v0: i64, v1: i64, v2: i64):
   v3 = iconst.i32 4098
   v6 = uextend.i64 v3
-  v5 = sload16.i32 v6+0
-  return v5
+  v5 = load.i16 v6+0
+  v7 = sextend.i32 v5
+  return v7
 }
 
 ; VCode:
@@ -325,8 +327,9 @@ function %f20(i64, i64, i64) -> i32 {
 block0(v0: i64, v1: i64, v2: i64):
   v3 = iconst.i32 -4098
   v6 = sextend.i64 v3
-  v5 = sload16.i32 v6+0
-  return v5
+  v5 = load.i16 v6+0
+  v7 = sextend.i32 v5
+  return v7
 }
 
 ; VCode:
@@ -347,8 +350,9 @@ function %f21(i64, i64, i64) -> i32 {
 block0(v0: i64, v1: i64, v2: i64):
   v3 = iconst.i32 4098
   v6 = sextend.i64 v3
-  v5 = sload16.i32 v6+0
-  return v5
+  v5 = load.i16 v6+0
+  v7 = sextend.i32 v5
+  return v7
 }
 
 ; VCode:
