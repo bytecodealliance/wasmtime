@@ -32,6 +32,9 @@ impl Mmap {
     }
 
     pub fn reserve(size: usize) -> Result<Self> {
+        if size > 1 << 32 {
+            bail!("failed to allocate memory");
+        }
         let layout = Layout::from_size_align(size, crate::runtime::vm::host_page_size()).unwrap();
         let ptr = unsafe { alloc::alloc(layout) };
         if ptr.is_null() {
