@@ -6,7 +6,7 @@ use crate::prelude::*;
 use crate::runtime::vm::mmap::Mmap;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{
-    host_page_size, round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MemoryImage,
+    round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MemoryImage,
     MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
 };
 use alloc::sync::Arc;
@@ -254,13 +254,15 @@ impl MmapMemory {
                 (bound_bytes, 0)
             }
         };
-        assert_eq!(alloc_bytes % host_page_size(), 0);
+        assert!(usize_is_multiple_of_host_page_size(alloc_bytes));
 
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
             .and_then(|i| i.checked_add(extra_to_reserve_on_growth))
             .and_then(|i| i.checked_add(offset_guard_bytes))
             .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
+        assert!(usize_is_multiple_of_host_page_size(request_bytes));
+
         let mut mmap = Mmap::accessible_reserved(0, request_bytes)?;
 
         if minimum > 0 {
@@ -341,6 +343,7 @@ impl RuntimeLinearMemory for MmapMemory {
                 .and_then(|s| s.checked_add(self.extra_to_reserve_on_growth))
                 .and_then(|s| s.checked_add(self.offset_guard_size))
                 .ok_or_else(|| format_err!("overflow calculating size of memory allocation"))?;
+            assert!(usize_is_multiple_of_host_page_size(request_bytes));
 
             let mut new_mmap = Mmap::accessible_reserved(0, request_bytes)?;
             new_mmap.make_accessible(self.pre_guard_size, new_accessible)?;

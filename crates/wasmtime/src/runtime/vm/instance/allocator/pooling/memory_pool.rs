@@ -54,12 +54,12 @@ use super::{
     index_allocator::{MemoryInModule, ModuleAffinityIndexAllocator, SlotId},
     MemoryAllocationIndex,
 };
-use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory, MemoryImageSlot, Mmap,
     MpkEnabled, PoolingInstanceAllocatorConfig,
 };
+use crate::{prelude::*, vm::round_usize_up_to_host_pages};
 use anyhow::{anyhow, bail, Context, Result};
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -239,7 +239,7 @@ impl MemoryPool {
             image_slots,
             layout,
             memories_per_instance: usize::try_from(config.limits.max_memories_per_module).unwrap(),
-            keep_resident: config.linear_memory_keep_resident,
+            keep_resident: round_usize_up_to_host_pages(config.linear_memory_keep_resident)?,
             next_available_pkey: AtomicUsize::new(0),
         };
 
@@ -561,30 +561,38 @@ impl SlabConstraints {
         tunables: &Tunables,
         num_pkeys_available: usize,
     ) -> Result<Self> {
-        // `static_memory_bound` is the configured number of Wasm pages for a
+        // `static_memory_reservation` is the configured number of bytes for a
         // static memory slot (see `Config::static_memory_maximum_size`); even
         // if the memory never grows to this size (e.g., it has a lower memory
         // maximum), codegen will assume that this unused memory is mapped
-        // `PROT_NONE`. Typically `static_memory_bound` is 4G which helps elide
-        // most bounds checks. `MemoryPool` must respect this bound, though not
-        // explicitly: if we can achieve the same effect via MPK-protected
-        // stripes, the slot size can be lower than the `static_memory_bound`.
-        let expected_slot_bytes = tunables.static_memory_reservation;
+        // `PROT_NONE`. Typically `static_memory_bound` is 4GiB which helps
+        // elide most bounds checks. `MemoryPool` must respect this bound,
+        // though not explicitly: if we can achieve the same effect via
+        // MPK-protected stripes, the slot size can be lower than the
+        // `static_memory_bound`.
+        let expected_slot_bytes: usize = tunables
+            .static_memory_reservation
+            .try_into()
+            .context("static memory bound is too large")?;
+        let expected_slot_bytes = round_usize_up_to_host_pages(expected_slot_bytes)?;
+
+        let guard_bytes: usize = tunables
+            .static_memory_offset_guard_size
+            .try_into()
+            .context("guard region is too large")?;
+        let guard_bytes = round_usize_up_to_host_pages(guard_bytes)?;
+
+        let num_slots = limits
+            .total_memories
+            .try_into()
+            .context("too many memories")?;
 
         let constraints = SlabConstraints {
             max_memory_bytes: limits.max_memory_size,
-            num_slots: limits
-                .total_memories
-                .try_into()
-                .context("too many memories")?,
-            expected_slot_bytes: expected_slot_bytes
-                .try_into()
-                .context("static memory bound is too large")?,
+            num_slots,
+            expected_slot_bytes,
             num_pkeys_available,
-            guard_bytes: tunables
-                .static_memory_offset_guard_size
-                .try_into()
-                .context("guard region is too large")?,
+            guard_bytes,
             guard_before_slots: tunables.guard_before_linear_memory,
         };
         Ok(constraints)

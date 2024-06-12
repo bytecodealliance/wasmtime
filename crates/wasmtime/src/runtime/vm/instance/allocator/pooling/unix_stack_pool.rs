@@ -5,7 +5,7 @@ use super::{
     round_up_to_pow2,
 };
 use crate::runtime::vm::sys::vm::commit_pages;
-use crate::runtime::vm::{Mmap, PoolingInstanceAllocatorConfig};
+use crate::runtime::vm::{round_usize_up_to_host_pages, Mmap, PoolingInstanceAllocatorConfig};
 use anyhow::{anyhow, bail, Context, Result};
 
 /// Represents a pool of execution stacks (used for the async fiber implementation).
@@ -71,7 +71,9 @@ impl StackPool {
             max_stacks,
             page_size,
             async_stack_zeroing: config.async_stack_zeroing,
-            async_stack_keep_resident: config.async_stack_keep_resident,
+            async_stack_keep_resident: round_usize_up_to_host_pages(
+                config.async_stack_keep_resident,
+            )?,
             index_allocator: SimpleIndexAllocator::new(config.limits.total_stacks),
         })
     }
