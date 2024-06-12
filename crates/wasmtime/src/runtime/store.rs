@@ -403,7 +403,9 @@ pub struct AutoAssertNoGc<'a> {
 impl<'a> AutoAssertNoGc<'a> {
     #[inline]
     pub fn new(store: &'a mut StoreOpaque) -> Self {
-        let entered = if let Some(gc_store) = store.gc_store.as_mut() {
+        let entered = if !cfg!(feature = "gc") {
+            false
+        } else if let Some(gc_store) = store.gc_store.as_mut() {
             gc_store.gc_heap.enter_no_gc_scope();
             true
         } else {
