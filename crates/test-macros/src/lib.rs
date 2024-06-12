@@ -11,6 +11,7 @@
 //!    Ok(())
 //! }
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     braced,
@@ -21,7 +22,7 @@ use syn::{
 /// Test configuration.
 struct TestConfig {
     /// Supported compiler strategies.
-    strategies: Vec<(String, Ident)>,
+    strategies: Vec<Ident>,
 }
 
 impl TestConfig {
@@ -43,7 +44,12 @@ impl TestConfig {
 
 impl Default for TestConfig {
     fn default() -> Self {
-        Self { strategies: vec![] }
+        Self {
+            strategies: vec![
+                Ident::new("Cranelift", Span::call_site()),
+                Ident::new("Winch", Span::call_site()),
+            ],
+        }
     }
 }
 
@@ -115,12 +121,18 @@ pub fn wasmtime_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let config_parser = syn::meta::parser(|meta| {
         if meta.path.is_ident("strategies") {
             meta.parse_nested_meta(|meta| {
-                if meta.path.is_ident("Winch") || meta.path.is_ident("Cranelift") {
-                    let id = meta.path.require_ident()?.clone();
-                    test_config.strategies.push((id.to_string(), id));
-                    Ok(())
+                if meta.path.is_ident("not") {
+                    meta.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("Winch") || meta.path.is_ident("Cranelift") {
+                            let id = meta.path.require_ident()?.clone();
+                            test_config.strategies.retain(|s| *s != id);
+                            Ok(())
+                        } else {
+                            Err(meta.error("Unknown strategy"))
+                        }
+                    })
                 } else {
-                    Err(meta.error("Unknown strategy"))
+                    Err(meta.error("Unknown identifier"))
                 }
             })?;
 
@@ -142,7 +154,8 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     let mut tests = vec![quote! { #func }];
     let attrs = &func.attrs;
 
-    for (strategy_name, ident) in &test_config.strategies {
+    for ident in &test_config.strategies {
+        let strategy_name = ident.to_string();
         // Winch currently only offers support for x64.
         let target = if strategy_name == "Winch" {
             quote! { #[cfg(target_arch = "x86_64")] }
