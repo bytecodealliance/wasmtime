@@ -165,7 +165,7 @@ mod owning {
 
         let linker = Linker::new(&engine);
         let mut store = Store::new(&engine, ());
-        let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
+        let test = Test::instantiate(&mut store, &component, &linker)?;
 
         let value = vec![vec!["a".to_owned(), "b".to_owned()]];
         assert_eq!(value, test.lists().call_foo(&mut store, &value)?);
@@ -238,7 +238,7 @@ mod borrowing_no_duplication {
 
         let linker = Linker::new(&engine);
         let mut store = Store::new(&engine, ());
-        let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
+        let test = Test::instantiate(&mut store, &component, &linker)?;
 
         let value = &[&["a", "b"] as &[_]] as &[_];
         assert_eq!(value, test.lists().call_foo(&mut store, value)?);
@@ -312,7 +312,7 @@ mod borrowing_with_duplication {
 
         let linker = Linker::new(&engine);
         let mut store = Store::new(&engine, ());
-        let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
+        let test = Test::instantiate(&mut store, &component, &linker)?;
 
         let value = &[&["a", "b"] as &[_]] as &[_];
         assert_eq!(value, test.lists().call_foo(&mut store, value)?);

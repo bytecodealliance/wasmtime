@@ -112,7 +112,7 @@ impl Instance {
     /// let func = instance.get_func(&mut store, "f").unwrap();
     ///
     /// // The function can also be looked up by an index via a precomputed index.
-    /// let (_, export) = component.export_index(&engine, None, "f").unwrap();
+    /// let (_, export) = component.export_index(None, "f").unwrap();
     /// let func = instance.get_func(&mut store, &export).unwrap();
     /// # Ok(())
     /// # }
@@ -146,8 +146,8 @@ impl Instance {
     ///
     /// // First look up the exported instance, then use that to lookup the
     /// // exported function.
-    /// let (_, instance_index) = component.export_index(&engine, None, "i").unwrap();
-    /// let (_, func_index) = component.export_index(&engine, Some(&instance_index), "f").unwrap();
+    /// let (_, instance_index) = component.export_index(None, "i").unwrap();
+    /// let (_, func_index) = component.export_index(Some(&instance_index), "f").unwrap();
     ///
     /// // Then use `func_index` at runtime.
     /// let mut store = Store::new(&engine, ());

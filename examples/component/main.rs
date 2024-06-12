@@ -55,7 +55,7 @@ fn main() -> Result<()> {
     );
     let mut linker = Linker::new(&engine);
     host::add_to_linker(&mut linker, |state: &mut MyState| &mut state.host)?;
-    let (convert, _instance) = Convert::instantiate(&mut store, &component, &linker)?;
+    let convert = Convert::instantiate(&mut store, &component, &linker)?;
     let result = convert.call_convert_celsius_to_fahrenheit(&mut store, 23.4)?;
     println!("Converted to: {:?}", result);
     Ok(())

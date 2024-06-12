@@ -420,7 +420,7 @@ impl RunCommand {
 
                 let component = module.unwrap_component();
 
-                let (command, _instance) = wasmtime_wasi::bindings::sync::Command::instantiate(
+                let command = wasmtime_wasi::bindings::sync::Command::instantiate(
                     &mut *store,
                     component,
                     linker,

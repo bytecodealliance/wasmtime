@@ -69,6 +69,9 @@ struct ComponentInner {
     /// shouldn't be an issue overlapping them.
     id: CompiledModuleId,
 
+    /// The engine that this component belongs to.
+    engine: Engine,
+
     /// Component type index
     ty: TypeComponentIndex,
 
@@ -313,7 +316,7 @@ impl Component {
     /// let mut linker = Linker::new(&engine);
     /// linker.root().resource("x", ResourceType::host::<()>(), |_, _| Ok(()))?;
     /// let instance = linker.instantiate(&mut store, &a)?;
-    /// let instance_ty = instance.exports(&mut store).root().resource("x").unwrap();
+    /// let instance_ty = instance.get_resource(&mut store, "x").unwrap();
     ///
     /// // Here `instance_ty` is not the same as either `import` or `export`,
     /// // but it is equal to what we provided as an import.
@@ -345,8 +348,8 @@ impl Component {
     /// let instance1 = linker.instantiate(&mut store, &a)?;
     /// let instance2 = linker.instantiate(&mut store, &a)?;
     ///
-    /// let x1 = instance1.exports(&mut store).root().resource("x").unwrap();
-    /// let x2 = instance2.exports(&mut store).root().resource("x").unwrap();
+    /// let x1 = instance1.get_resource(&mut store, "x").unwrap();
+    /// let x2 = instance2.get_resource(&mut store, "x").unwrap();
     ///
     /// // Despite these two resources being the same export of the same
     /// // component they come from two different instances meaning that their
@@ -421,6 +424,7 @@ impl Component {
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 id: CompiledModuleId::new(),
+                engine: engine.clone(),
                 ty,
                 static_modules,
                 code,
@@ -666,7 +670,7 @@ impl Component {
     /// )?;
     ///
     /// // Perform a lookup of the function "f" before instantiaton.
-    /// let (ty, export) = component.export_index(&engine, None, "f").unwrap();
+    /// let (ty, export) = component.export_index(None, "f").unwrap();
     /// assert!(matches!(ty, ComponentItem::ComponentFunc(_)));
     ///
     /// // After instantiation use `export` to lookup the function in question
@@ -680,7 +684,6 @@ impl Component {
     /// ```
     pub fn export_index(
         &self,
-        engine: &Engine,
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
@@ -695,7 +698,7 @@ impl Component {
             Export::Type(ty) => ty,
         };
         let item = self.with_uninstantiated_instance_type(|instance| {
-            types::ComponentItem::from(engine, &ty, instance)
+            types::ComponentItem::from(&self.inner.engine, &ty, instance)
         });
         Some((
             item,
@@ -729,6 +732,11 @@ impl Component {
 
     pub(crate) fn id(&self) -> CompiledModuleId {
         self.inner.id
+    }
+
+    /// Returns the [`Engine`] that this [`Component`] was compiled by.
+    pub fn engine(&self) -> &Engine {
+        &self.inner.engine
     }
 }
 

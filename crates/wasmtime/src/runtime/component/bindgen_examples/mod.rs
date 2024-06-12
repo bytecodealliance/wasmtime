@@ -120,7 +120,7 @@ macro_rules! bindgen {
 ///             name: "me".to_string(),
 ///         },
 ///     );
-///     let (bindings, _) = HelloWorld::instantiate(&mut store, &component, &linker)?;
+///     let bindings = HelloWorld::instantiate(&mut store, &component, &linker)?;
 ///
 ///     // Here our `greet` function doesn't take any parameters for the component,
 ///     // but in the Wasmtime embedding API the first argument is always a `Store`.
@@ -173,7 +173,7 @@ pub mod _0_hello_world;
 ///         &engine,
 ///         MyState { /* ... */ },
 ///     );
-///     let (bindings, _) = MyWorld::instantiate(&mut store, &component, &linker)?;
+///     let bindings = MyWorld::instantiate(&mut store, &component, &linker)?;
 ///
 ///     // ... NB: this world has no exports just yet so not much can be done
 ///     // with `bindings`.
@@ -231,7 +231,7 @@ pub mod _1_world_imports;
 ///         &engine,
 ///         MyState { /* ... */ },
 ///     );
-///     let (bindings, _) = HelloWorld::instantiate(&mut store, &component, &linker)?;
+///     let bindings = HelloWorld::instantiate(&mut store, &component, &linker)?;
 ///
 ///     // Note that the `demo` method returns a `&exports::Demo::Guest`
 ///     // through which we can run the methods on that interface.
@@ -406,7 +406,7 @@ pub mod _4_imported_resources;
 ///     WithExports::add_to_linker(&mut linker, |state: &mut MyState| state)?;
 ///
 ///     let mut store = Store::new(&engine, MyState);
-///     let (bindings, _) = WithExports::instantiate(&mut store, &component, &linker)?;
+///     let bindings = WithExports::instantiate(&mut store, &component, &linker)?;
 ///
 ///     // top-level functions are exported directly on `WithExports` and are
 ///     // all prefixed with `call_*`.
@@ -467,7 +467,7 @@ pub mod _5_all_world_export_kinds;
 ///     // if you had imports this is where they'd go.
 ///
 ///     let mut store = Store::new(&engine, MyState);
-///     let (bindings, _) = ExportSomeResources::instantiate(&mut store, &component, &linker)?;
+///     let bindings = ExportSomeResources::instantiate(&mut store, &component, &linker)?;
 ///     let guest = bindings.example_exported_resources_logging();
 ///     let logger = guest.logger();
 ///
