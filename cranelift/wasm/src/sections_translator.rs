@@ -10,7 +10,7 @@
 use crate::environ::ModuleEnvironment;
 use crate::wasm_unsupported;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, Memory, MemoryIndex, TableIndex, Tag, TagIndex,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Tag, TagIndex,
     TypeIndex, WasmError, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
@@ -20,19 +20,10 @@ use std::vec::Vec;
 use wasmparser::{
     Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind, ElementSectionReader,
     Export, ExportSectionReader, ExternalKind, FunctionSectionReader, GlobalSectionReader,
-    ImportSectionReader, MemorySectionReader, MemoryType, Operator, TableSectionReader,
-    TagSectionReader, TagType, TypeRef, TypeSectionReader,
+    ImportSectionReader, MemorySectionReader, Operator, TableSectionReader, TagSectionReader,
+    TagType, TypeRef, TypeSectionReader,
 };
 use wasmtime_types::ConstExpr;
-
-fn memory(ty: MemoryType) -> Memory {
-    Memory {
-        minimum: ty.initial,
-        maximum: ty.maximum,
-        shared: ty.shared,
-        memory64: ty.memory64,
-    }
-}
 
 fn tag(e: TagType) -> Tag {
     match e.kind {
@@ -75,7 +66,7 @@ pub fn parse_import_section<'data>(
                 )?;
             }
             TypeRef::Memory(ty) => {
-                environ.declare_memory_import(memory(ty), import.module, import.name)?;
+                environ.declare_memory_import(ty.into(), import.module, import.name)?;
             }
             TypeRef::Tag(e) => {
                 environ.declare_tag_import(tag(e), import.module, import.name)?;
@@ -139,8 +130,7 @@ pub fn parse_memory_section(
     environ.reserve_memories(memories.count())?;
 
     for entry in memories {
-        let memory = memory(entry?);
-        environ.declare_memory(memory)?;
+        environ.declare_memory(entry?.into())?;
     }
 
     Ok(())

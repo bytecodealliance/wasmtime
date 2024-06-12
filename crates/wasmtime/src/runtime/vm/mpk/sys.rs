@@ -9,7 +9,7 @@
 //! [`pkey_mprotect`]: https://man7.org/linux/man-pages/man2/pkey_mprotect.2.html
 //! [`pkeys`]: https://man7.org/linux/man-pages/man7/pkeys.7.html
 
-use crate::runtime::vm::page_size;
+use crate::runtime::vm::host_page_size;
 use anyhow::Result;
 use std::io::Error;
 
@@ -56,7 +56,7 @@ pub fn pkey_free(key: u32) -> Result<()> {
 ///
 /// [docs]: https://man7.org/linux/man-pages/man2/pkey_mprotect.2.html
 pub fn pkey_mprotect(addr: usize, len: usize, prot: u32, key: u32) -> Result<()> {
-    let page_size = page_size();
+    let page_size = host_page_size();
     if addr % page_size != 0 {
         log::warn!(
             "memory must be page-aligned for MPK (addr = {addr:#x}, page size = {page_size}"

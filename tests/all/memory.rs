@@ -357,7 +357,7 @@ fn massive_64_bit_still_limited() -> Result<()> {
 
     let mut store = Store::new(&engine, MyLimiter { hit: false });
     store.limiter(|x| x);
-    let ty = MemoryType::new64(1 << 48, None);
+    let ty = MemoryType::new64(1 << 46, None);
     assert!(Memory::new(&mut store, ty).is_err());
     assert!(store.data().hit);
 
@@ -506,7 +506,24 @@ fn memory64_maximum_minimum() -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
-    assert!(Memory::new(&mut store, MemoryType::new64(1 << 48, None)).is_err());
+    assert!(MemoryTypeBuilder::default()
+        .memory64(true)
+        .min(1 << 48)
+        .build()
+        .is_err());
+
+    let module = Module::new(
+        &engine,
+        format!(r#"(module (import "" "" (memory i64 {})))"#, 1u64 << 48),
+    )?;
+    let mem_ty = module
+        .imports()
+        .next()
+        .unwrap()
+        .ty()
+        .unwrap_memory()
+        .clone();
+    assert!(Memory::new(&mut store, mem_ty).is_err());
 
     let module = Module::new(
         &engine,
@@ -545,7 +562,12 @@ fn shared_memory_basics() -> Result<()> {
     assert!(SharedMemory::new(&engine, MemoryType::new(1, Some(1))).is_err());
     assert!(SharedMemory::new(&engine, MemoryType::new64(1, None)).is_err());
     assert!(SharedMemory::new(&engine, MemoryType::new64(1, Some(1))).is_err());
-    assert!(SharedMemory::new(&engine, MemoryType::shared(1, 0)).is_err());
+    assert!(MemoryTypeBuilder::default()
+        .shared(true)
+        .min(1)
+        .max(Some(0))
+        .build()
+        .is_err());
 
     let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
     assert!(memory.ty().is_shared());
@@ -667,5 +689,60 @@ fn non_page_aligned_static_memory() -> Result<()> {
     let engine = Engine::new(&config)?;
     let ty = MemoryType::new(1, None);
     Memory::new(&mut Store::new(&engine, ()), ty)?;
+    Ok(())
+}
+
+#[test]
+fn new_memory_with_custom_page_size() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let ty = MemoryTypeBuilder::default()
+        .page_size_log2(0)
+        .min(4096)
+        .max(Some(9000))
+        .build()?;
+
+    let mem = Memory::new(&mut store, ty)?;
+    assert_eq!(mem.data_size(&store), 4096);
+    assert_eq!(mem.size(&store), 4096);
+
+    mem.grow(&mut store, 9000 - 4096)?;
+    assert_eq!(mem.data_size(&store), 9000);
+    assert_eq!(mem.size(&store), 9000);
+
+    assert!(mem.grow(&mut store, 1).is_err());
+    assert_eq!(mem.data_size(&store), 9000);
+    assert_eq!(mem.size(&store), 9000);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn get_memory_type_with_custom_page_size_from_wasm() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_custom_page_sizes(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "memory") 1 0xffffffff (pagesize 1))
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let mem_ty = memory.ty(&store);
+
+    assert_eq!(mem_ty.minimum(), 1);
+    assert_eq!(mem_ty.maximum(), Some(0xffffffff));
+    assert_eq!(mem_ty.page_size(), 1);
+    assert_eq!(mem_ty.page_size_log2(), 0);
+
     Ok(())
 }

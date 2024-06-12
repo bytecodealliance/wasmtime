@@ -17,9 +17,12 @@ pub fn check_memory_accesses(input: MemoryAccesses) {
 
     let mut config = input.config.to_wasmtime();
 
-    // Force-enable the memory64 proposal if the heap image wants it.
+    // Force-enable proposals if the heap image needs them.
     if input.image.memory64 {
         config.wasm_memory64(true);
+    }
+    if input.image.page_size_log2.is_some() {
+        config.wasm_custom_page_sizes(true);
     }
 
     let engine = Engine::new(&config).unwrap();
@@ -273,7 +276,7 @@ fn build_wasm(image: &HeapImage, offset: u32) -> Vec<u8> {
             maximum: image.maximum.map(Into::into),
             memory64: image.memory64,
             shared: false,
-            page_size_log2: None,
+            page_size_log2: image.page_size_log2,
         });
         module.section(&memories);
     }

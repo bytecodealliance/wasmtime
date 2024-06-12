@@ -1,8 +1,8 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
-use crate::prelude::*;
 use crate::runtime::vm::sys::mmap;
+use crate::{prelude::*, vm::usize_is_multiple_of_host_page_size};
 use anyhow::{Context, Result};
 use core::ops::Range;
 #[cfg(feature = "std")]
@@ -21,8 +21,7 @@ impl Mmap {
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned
     /// accessible memory.
     pub fn with_at_least(size: usize) -> Result<Self> {
-        let page_size = crate::runtime::vm::page_size();
-        let rounded_size = (size + (page_size - 1)) & !(page_size - 1);
+        let rounded_size = crate::runtime::vm::round_usize_up_to_host_pages(size)?;
         Self::accessible_reserved(rounded_size, rounded_size)
     }
 
@@ -53,10 +52,9 @@ impl Mmap {
     /// This function will panic if `accessible_size` is greater than
     /// `mapping_size` or if either of them are not page-aligned.
     pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
-        let page_size = crate::runtime::vm::page_size();
         assert!(accessible_size <= mapping_size);
-        assert_eq!(mapping_size & (page_size - 1), 0);
-        assert_eq!(accessible_size & (page_size - 1), 0);
+        assert!(usize_is_multiple_of_host_page_size(mapping_size));
+        assert!(usize_is_multiple_of_host_page_size(accessible_size));
 
         if mapping_size == 0 {
             Ok(Mmap {
@@ -96,7 +94,7 @@ impl Mmap {
     /// This function will panic if `start` or `len` is not page aligned or if
     /// either are outside the bounds of this mapping.
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
-        let page_size = crate::runtime::vm::page_size();
+        let page_size = crate::runtime::vm::host_page_size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
         assert!(len <= self.len());
@@ -185,7 +183,7 @@ impl Mmap {
         assert!(range.end <= self.len());
         assert!(range.start <= range.end);
         assert!(
-            range.start % crate::runtime::vm::page_size() == 0,
+            range.start % crate::runtime::vm::host_page_size() == 0,
             "changing of protections isn't page-aligned",
         );
         self.sys
@@ -199,7 +197,7 @@ impl Mmap {
         assert!(range.end <= self.len());
         assert!(range.start <= range.end);
         assert!(
-            range.start % crate::runtime::vm::page_size() == 0,
+            range.start % crate::runtime::vm::host_page_size() == 0,
             "changing of protections isn't page-aligned",
         );
         self.sys

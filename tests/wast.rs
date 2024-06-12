@@ -8,7 +8,7 @@ use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
     Strategy,
 };
-use wasmtime_environ::WASM_PAGE_SIZE;
+use wasmtime_environ::Memory;
 use wasmtime_wast::{SpectestConfig, WastContext};
 
 fn main() {
@@ -194,8 +194,10 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
     let wast = Path::new(wast);
 
     let memory64 = feature_found(wast, "memory64");
-    let multi_memory =
-        feature_found(wast, "multi-memory") || feature_found(wast, "component-model");
+    let custom_page_sizes = feature_found(wast, "custom-page-sizes");
+    let multi_memory = feature_found(wast, "multi-memory")
+        || feature_found(wast, "component-model")
+        || custom_page_sizes;
     let threads = feature_found(wast, "threads");
     let gc = feature_found(wast, "gc");
     let function_references = gc || feature_found(wast, "function-references");
@@ -224,6 +226,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         .wasm_reference_types(reference_types)
         .wasm_relaxed_simd(relaxed_simd)
         .wasm_tail_call(tail_call)
+        .wasm_custom_page_sizes(custom_page_sizes)
         .strategy(strategy);
 
     if is_cranelift {
@@ -263,7 +266,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         // also don't reserve lots of memory after dynamic memories for growth
         // (makes growth slower).
         if use_shared_memory {
-            cfg.static_memory_maximum_size(2 * WASM_PAGE_SIZE as u64);
+            cfg.static_memory_maximum_size(2 * u64::from(Memory::DEFAULT_PAGE_SIZE));
         } else {
             cfg.static_memory_maximum_size(0);
         }

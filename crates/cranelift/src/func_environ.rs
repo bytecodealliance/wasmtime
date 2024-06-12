@@ -20,7 +20,7 @@ use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypesBuilder,
-    PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
+    PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -680,7 +680,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn cast_pointer_to_memory_index(
+    /// Convert the target pointer-sized integer `val` that is holding a memory
+    /// length (or the `-1` `memory.grow`-failed sentinel) into the memory's
+    /// index type.
+    ///
+    /// This might involve extending or truncating it depending on the memory's
+    /// index type and the target's pointer type.
+    fn convert_memory_length_to_index_type(
         &self,
         mut pos: FuncCursor<'_>,
         val: ir::Value,
@@ -698,18 +704,32 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         } else if pointer_type.bits() > desired_type.bits() {
             pos.ins().ireduce(desired_type, val)
         } else {
-            // Note that we `sextend` instead of the probably expected
-            // `uextend`. This function is only used within the contexts of
-            // `memory.size` and `memory.grow` where we're working with units of
-            // pages instead of actual bytes, so we know that the upper bit is
-            // always cleared for "valid values". The one case we care about
-            // sextend would be when the return value of `memory.grow` is `-1`,
-            // in which case we want to copy the sign bit.
-            //
-            // This should only come up on 32-bit hosts running wasm64 modules,
-            // which at some point also makes you question various assumptions
-            // made along the way...
-            pos.ins().sextend(desired_type, val)
+            // We have a 64-bit memory on a 32-bit host -- this combo doesn't
+            // really make a whole lot of sense to do from a user perspective
+            // but that is neither here nor there. We want to logically do an
+            // unsigned extend *except* when we are given the `-1` sentinel,
+            // which we must preserve as `-1` in the wider type.
+            match self.module.memory_plans[index].memory.page_size_log2 {
+                16 => {
+                    // In the case that we have default page sizes, we can
+                    // always sign extend, since valid memory lengths (in pages)
+                    // never have their sign bit set, and so if the sign bit is
+                    // set then this must be the `-1` sentinel, which we want to
+                    // preserve through the extension.
+                    pos.ins().sextend(desired_type, val)
+                }
+                0 => {
+                    // For single-byte pages, we have to explicitly check for
+                    // `-1` and choose whether to do an unsigned extension or
+                    // return a larger `-1` because there are valid memory
+                    // lengths (in pages) that have the sign bit set.
+                    let extended = pos.ins().uextend(desired_type, val);
+                    let neg_one = pos.ins().iconst(desired_type, -1);
+                    let is_failure = pos.ins().icmp_imm(IntCC::Equal, val, -1);
+                    pos.ins().select(is_failure, neg_one, extended)
+                }
+                _ => unreachable!("only page sizes 2**0 and 2**16 are currently valid"),
+            }
         }
     }
 
@@ -2001,21 +2021,21 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let min_size = self.module.memory_plans[index]
             .memory
-            .minimum
-            .checked_mul(u64::from(WASM_PAGE_SIZE))
-            .unwrap_or_else(|| {
+            .minimum_byte_size()
+            .unwrap_or_else(|_| {
                 // The only valid Wasm memory size that won't fit in a 64-bit
                 // integer is the maximum memory64 size (2^64) which is one
                 // larger than `u64::MAX` (2^64 - 1). In this case, just say the
                 // minimum heap size is `u64::MAX`.
                 debug_assert_eq!(self.module.memory_plans[index].memory.minimum, 1 << 48);
+                debug_assert_eq!(self.module.memory_plans[index].memory.page_size(), 1 << 16);
                 u64::MAX
             });
 
         let max_size = self.module.memory_plans[index]
             .memory
-            .maximum
-            .and_then(|max| max.checked_mul(u64::from(WASM_PAGE_SIZE)));
+            .maximum_byte_size()
+            .ok();
 
         let (ptr, base_offset, current_length_offset, ptr_memtype) = {
             let vmctx = self.vmctx(func);
@@ -2068,6 +2088,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 (memory, base_offset, current_length_offset, def_mt)
             }
         };
+
+        let page_size_log2 = self.module.memory_plans[index].memory.page_size_log2;
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
@@ -2233,6 +2255,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             style: heap_style,
             index_type: self.memory_index_type(index),
             memory_type,
+            page_size_log2,
         }))
     }
 
@@ -2397,7 +2420,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let val = self.cast_memory_index_to_i64(&mut pos, val, index);
         let call_inst = pos.ins().call(memory_grow, &[vmctx, val, memory_index]);
         let result = *pos.func.dfg.inst_results(call_inst).first().unwrap();
-        Ok(self.cast_pointer_to_memory_index(pos, result, index))
+        Ok(self.convert_memory_length_to_index_type(pos, result, index))
     }
 
     fn translate_memory_size(
@@ -2469,11 +2492,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             }
         };
-        let current_length_in_pages = pos
-            .ins()
-            .udiv_imm(current_length_in_bytes, i64::from(WASM_PAGE_SIZE));
 
-        Ok(self.cast_pointer_to_memory_index(pos, current_length_in_pages, index))
+        let page_size_log2 = i64::from(self.module.memory_plans[index].memory.page_size_log2);
+        let current_length_in_pages = pos.ins().ushr_imm(current_length_in_bytes, page_size_log2);
+
+        Ok(self.convert_memory_length_to_index_type(pos, current_length_in_pages, index))
     }
 
     fn translate_memory_copy(

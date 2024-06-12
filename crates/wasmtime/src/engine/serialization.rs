@@ -202,6 +202,7 @@ struct WasmFeatures {
     extended_const: bool,
     function_references: bool,
     gc: bool,
+    custom_page_sizes: bool,
 }
 
 impl Metadata<'_> {
@@ -241,7 +242,6 @@ impl Metadata<'_> {
         assert!(!memory_control);
         assert!(!component_model_values);
         assert!(!component_model_nested_names);
-        assert!(!custom_page_sizes);
         assert!(!shared_everything_threads);
 
         Metadata {
@@ -264,6 +264,7 @@ impl Metadata<'_> {
                 extended_const,
                 function_references,
                 gc,
+                custom_page_sizes,
             },
         }
     }
@@ -480,6 +481,7 @@ impl Metadata<'_> {
             extended_const,
             function_references,
             gc,
+            custom_page_sizes,
         } = self.features;
 
         use wasmparser::WasmFeatures as F;
@@ -555,6 +557,11 @@ impl Metadata<'_> {
             relaxed_simd,
             other.contains(F::RELAXED_SIMD),
             "WebAssembly relaxed-simd support",
+        )?;
+        Self::check_bool(
+            custom_page_sizes,
+            other.contains(F::CUSTOM_PAGE_SIZES),
+            "WebAssembly custom-page-sizes support",
         )?;
 
         Ok(())

@@ -238,6 +238,12 @@ pub struct TargetFrontendConfig {
 
     /// The pointer width of the target.
     pub pointer_width: PointerWidth,
+
+    /// The log2 of the target's page size and alignment.
+    ///
+    /// Note that this may be an upper-bound that is larger than necessary for
+    /// some platforms since it may depend on runtime configuration.
+    pub page_size_align_log2: u8,
 }
 
 impl TargetFrontendConfig {
@@ -332,6 +338,12 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Returns the minimum function alignment and the preferred function
     /// alignment, for performance, required by this ISA.
     fn function_alignment(&self) -> FunctionAlignment;
+
+    /// The log2 of the target's page size and alignment.
+    ///
+    /// Note that this may be an upper-bound that is larger than necessary for
+    /// some platforms since it may depend on runtime configuration.
+    fn page_size_align_log2(&self) -> u8;
 
     /// Create a polymorphic TargetIsa from this specific implementation.
     fn wrapped(self) -> OwnedTargetIsa
@@ -433,6 +445,7 @@ impl<'a> dyn TargetIsa + 'a {
         TargetFrontendConfig {
             default_call_conv: self.default_call_conv(),
             pointer_width: self.pointer_width(),
+            page_size_align_log2: self.page_size_align_log2(),
         }
     }
 }

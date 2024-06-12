@@ -431,7 +431,17 @@ impl Memory {
 
     /// Returns the byte length of this memory.
     ///
-    /// The returned value will be a multiple of the wasm page size, 64k.
+    /// WebAssembly memories are made up of a whole number of pages, so the byte
+    /// size returned will always be a multiple of this memory's page size. Note
+    /// that different Wasm memories may have different page sizes. You can get
+    /// a memory's page size via the [`Memory::page_size`] method.
+    ///
+    /// By default the page size is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or
+    /// `65536`) but [the custom-page-sizes proposal] allows a memory to opt
+    /// into a page size of `1`. Future extensions might allow any power of two
+    /// as a page size.
+    ///
+    /// [the custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
     ///
     /// For more information and examples see the documentation on the
     /// [`Memory`] type.
@@ -447,7 +457,19 @@ impl Memory {
         unsafe { (*store[self.0].definition).current_length() }
     }
 
-    /// Returns the size, in WebAssembly pages, of this wasm memory.
+    /// Returns the size, in units of pages, of this Wasm memory.
+    ///
+    /// WebAssembly memories are made up of a whole number of pages, so the byte
+    /// size returned will always be a multiple of this memory's page size. Note
+    /// that different Wasm memories may have different page sizes. You can get
+    /// a memory's page size via the [`Memory::page_size`] method.
+    ///
+    /// By default the page size is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or
+    /// `65536`) but [the custom-page-sizes proposal] allows a memory to opt
+    /// into a page size of `1`. Future extensions might allow any power of two
+    /// as a page size.
+    ///
+    /// [the custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
     ///
     /// # Panics
     ///
@@ -457,7 +479,48 @@ impl Memory {
     }
 
     pub(crate) fn internal_size(&self, store: &StoreOpaque) -> u64 {
-        (self.internal_data_size(store) / wasmtime_environ::WASM_PAGE_SIZE as usize) as u64
+        let byte_size = self.internal_data_size(store);
+        let page_size = usize::try_from(self._page_size(store)).unwrap();
+        u64::try_from(byte_size / page_size).unwrap()
+    }
+
+    /// Returns the size of a page, in bytes, for this memory.
+    ///
+    /// WebAssembly memories are made up of a whole number of pages, so the byte
+    /// size (as returned by [`Memory::data_size`]) will always be a multiple of
+    /// their page size. Different Wasm memories may have different page sizes.
+    ///
+    /// By default this is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or `65536`)
+    /// but [the custom-page-sizes proposal] allows opting into a page size of
+    /// `1`. Future extensions might allow any power of two as a page size.
+    ///
+    /// [the custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
+    pub fn page_size(&self, store: impl AsContext) -> u64 {
+        self._page_size(store.as_context().0)
+    }
+
+    pub(crate) fn _page_size(&self, store: &StoreOpaque) -> u64 {
+        store[self.0].memory.memory.page_size()
+    }
+
+    /// Returns the log2 of this memory's page size, in bytes.
+    ///
+    /// WebAssembly memories are made up of a whole number of pages, so the byte
+    /// size (as returned by [`Memory::data_size`]) will always be a multiple of
+    /// their page size. Different Wasm memories may have different page sizes.
+    ///
+    /// By default the page size is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or
+    /// `65536`) but [the custom-page-sizes proposal] allows opting into a page
+    /// size of `1`. Future extensions might allow any power of two as a page
+    /// size.
+    ///
+    /// [the custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
+    pub fn page_size_log2(&self, store: impl AsContext) -> u8 {
+        self._page_size_log2(store.as_context().0)
+    }
+
+    pub(crate) fn _page_size_log2(&self, store: &StoreOpaque) -> u8 {
+        store[self.0].memory.memory.page_size_log2
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
@@ -469,6 +532,13 @@ impl Memory {
     ///
     /// On success returns the number of pages this memory previously had
     /// before the growth succeeded.
+    ///
+    /// Note that, by default, a WebAssembly memory's page size is 64KiB (aka
+    /// 65536 or 2<sup>16</sup>). The [custom-page-sizes proposal] allows Wasm
+    /// memories to opt into a page size of one byte (and this may be further
+    /// relaxed to any power of two in a future extension).
+    ///
+    /// [custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
     ///
     /// # Errors
     ///
@@ -514,7 +584,8 @@ impl Memory {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
                     *store[self.0].definition = vm;
-                    Ok(u64::try_from(size).unwrap() / u64::from(wasmtime_environ::WASM_PAGE_SIZE))
+                    let page_size = (*mem).page_size();
+                    Ok(u64::try_from(size).unwrap() / page_size)
                 }
                 None => bail!("failed to grow memory by `{}`", delta),
             }
@@ -720,7 +791,11 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// # }
 /// ```
 #[derive(Clone)]
-pub struct SharedMemory(crate::runtime::vm::SharedMemory, Engine);
+pub struct SharedMemory {
+    vm: crate::runtime::vm::SharedMemory,
+    engine: Engine,
+    page_size_log2: u8,
+}
 
 impl SharedMemory {
     /// Construct a [`SharedMemory`] by providing both the `minimum` and
@@ -735,18 +810,38 @@ impl SharedMemory {
 
         let tunables = engine.tunables();
         let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
+        let page_size_log2 = plan.memory.page_size_log2;
         let memory = crate::runtime::vm::SharedMemory::new(plan)?;
-        Ok(Self(memory, engine.clone()))
+
+        Ok(Self {
+            vm: memory,
+            engine: engine.clone(),
+            page_size_log2,
+        })
     }
 
     /// Return the type of the shared memory.
     pub fn ty(&self) -> MemoryType {
-        MemoryType::from_wasmtime_memory(&self.0.ty())
+        MemoryType::from_wasmtime_memory(&self.vm.ty())
     }
 
     /// Returns the size, in WebAssembly pages, of this wasm memory.
     pub fn size(&self) -> u64 {
-        (self.data_size() / wasmtime_environ::WASM_PAGE_SIZE as usize) as u64
+        let byte_size = u64::try_from(self.data_size()).unwrap();
+        let page_size = u64::from(self.page_size());
+        byte_size / page_size
+    }
+
+    /// Returns the size of a page, in bytes, for this memory.
+    ///
+    /// By default this is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or `65536`)
+    /// but [the custom-page-sizes proposal] allows opting into a page size of
+    /// `1`. Future extensions might allow any power of two as a page size.
+    ///
+    /// [the custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
+    pub fn page_size(&self) -> u32 {
+        debug_assert!(self.page_size_log2 == 0 || self.page_size_log2 == 16);
+        1 << self.page_size_log2
     }
 
     /// Returns the byte length of this memory.
@@ -756,7 +851,7 @@ impl SharedMemory {
     /// For more information and examples see the documentation on the
     /// [`Memory`] type.
     pub fn data_size(&self) -> usize {
-        self.0.byte_size()
+        self.vm.byte_size()
     }
 
     /// Return access to the available portion of the shared memory.
@@ -781,7 +876,7 @@ impl SharedMemory {
     /// currently be done unsafely.
     pub fn data(&self) -> &[UnsafeCell<u8>] {
         unsafe {
-            let definition = &*self.0.vmmemory_ptr();
+            let definition = &*self.vm.vmmemory_ptr();
             slice::from_raw_parts(definition.base.cast(), definition.current_length())
         }
     }
@@ -803,11 +898,11 @@ impl SharedMemory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     pub fn grow(&self, delta: u64) -> Result<u64> {
-        match self.0.grow(delta, None)? {
+        match self.vm.grow(delta, None)? {
             Some((old_size, _new_size)) => {
                 // For shared memory, the `VMMemoryDefinition` is updated inside
                 // the locked region.
-                Ok(u64::try_from(old_size).unwrap() / u64::from(wasmtime_environ::WASM_PAGE_SIZE))
+                Ok(u64::try_from(old_size).unwrap() / u64::from(self.page_size()))
             }
             None => bail!("failed to grow memory by `{}`", delta),
         }
@@ -830,7 +925,7 @@ impl SharedMemory {
     /// This function will return an error if `addr` is not within bounds or
     /// not aligned to a 4-byte boundary.
     pub fn atomic_notify(&self, addr: u64, count: u32) -> Result<u32, Trap> {
-        self.0.atomic_notify(addr, count)
+        self.vm.atomic_notify(addr, count)
     }
 
     /// Equivalent of the WebAssembly `memory.atomic.wait32` instruction for
@@ -872,7 +967,7 @@ impl SharedMemory {
         expected: u32,
         timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
-        self.0.atomic_wait32(addr, expected, timeout)
+        self.vm.atomic_wait32(addr, expected, timeout)
     }
 
     /// Equivalent of the WebAssembly `memory.atomic.wait64` instruction for
@@ -890,19 +985,19 @@ impl SharedMemory {
         expected: u64,
         timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
-        self.0.atomic_wait64(addr, expected, timeout)
+        self.vm.atomic_wait64(addr, expected, timeout)
     }
 
     /// Return a reference to the [`Engine`] used to configure the shared
     /// memory.
     pub(crate) fn engine(&self) -> &Engine {
-        &self.1
+        &self.engine
     }
 
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        let export_memory = generate_memory_export(store, &self.ty(), Some(&self.0)).unwrap();
+        let export_memory = generate_memory_export(store, &self.ty(), Some(&self.vm)).unwrap();
         VMMemoryImport {
             from: export_memory.definition,
             vmctx: export_memory.vmctx,
@@ -917,14 +1012,23 @@ impl SharedMemory {
         wasmtime_export: crate::runtime::vm::ExportMemory,
         store: &mut StoreOpaque,
     ) -> Self {
+        #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
         crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
+            let memory_index = handle.module().memory_index(wasmtime_export.index);
+            let page_size = handle.memory_page_size(memory_index);
+            debug_assert!(page_size.is_power_of_two());
+            let page_size_log2 = u8::try_from(page_size.ilog2()).unwrap();
+
             let memory = handle
                 .get_defined_memory(wasmtime_export.index)
                 .as_mut()
                 .unwrap();
             match memory.as_shared_memory() {
-                #[cfg_attr(not(feature = "threads"), allow(unreachable_code))]
-                Some(mem) => Self(mem.clone(), store.engine().clone()),
+                Some(mem) => Self {
+                    vm: mem.clone(),
+                    engine: store.engine().clone(),
+                    page_size_log2,
+                },
                 None => panic!("unable to convert from a shared memory"),
             }
         })

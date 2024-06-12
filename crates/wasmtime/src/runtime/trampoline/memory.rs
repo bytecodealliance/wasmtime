@@ -80,9 +80,14 @@ pub fn create_memory(
 
 struct LinearMemoryProxy {
     mem: Box<dyn LinearMemory>,
+    page_size_log2: u8,
 }
 
 impl RuntimeLinearMemory for LinearMemoryProxy {
+    fn page_size_log2(&self) -> u8 {
+        self.page_size_log2
+    }
+
     fn byte_size(&self) -> usize {
         self.mem.byte_size()
     }
@@ -141,7 +146,12 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
                 reserved_size_in_bytes,
                 usize::try_from(plan.offset_guard_size).unwrap(),
             )
-            .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
+            .map(|mem| {
+                Box::new(LinearMemoryProxy {
+                    mem,
+                    page_size_log2: plan.memory.page_size_log2,
+                }) as Box<dyn RuntimeLinearMemory>
+            })
             .map_err(|e| anyhow!(e))
     }
 }

@@ -152,7 +152,12 @@ impl DecommitQueue {
         for iovec in self.raw.drain(..) {
             unsafe {
                 crate::vm::sys::vm::decommit_pages(iovec.0.iov_base.cast(), iovec.0.iov_len)
-                    .expect("failed to decommit pages");
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "failed to decommit ptr={:#p}, len={:#x}: {e}",
+                            iovec.0.iov_base, iovec.0.iov_len
+                        )
+                    });
             }
         }
     }
