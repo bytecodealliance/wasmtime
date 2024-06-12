@@ -375,7 +375,7 @@ fn massive_64_bit_still_limited() -> Result<()> {
             _max: Option<usize>,
         ) -> Result<bool> {
             self.hit = true;
-            Ok(true)
+            Ok(false)
         }
         fn table_growing(
             &mut self,
