@@ -1973,9 +1973,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "openvino"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24bd3a7ef39968e6a4f1b1206c1c876f9bd50cf739ccbcd69f8539bbac5dcc7a"
+checksum = "03912559b639b3daf7744738bd8cdeb4f3376e2308e299a8b3a427dbcf67e14e"
 dependencies = [
  "openvino-finder",
  "openvino-sys",
@@ -1984,9 +1984,9 @@ dependencies = [
 
 [[package]]
 name = "openvino-finder"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05d234d1394a413ea8adaf0c40806b9ad1946be6310b441f688840654a331973"
+checksum = "1a8bd5f866315374509f6f8db5f81b098cded4f76c3dc33687bf994f25e9ca52"
 dependencies = [
  "cfg-if",
  "log",
@@ -1994,9 +1994,9 @@ dependencies = [
 
 [[package]]
 name = "openvino-sys"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44c98acf37fc84ad9d7da4dc6c18f0f60ad209b43a6f555be01f9003d0a2a43d"
+checksum = "bce71ae0f510b0017dccb049b6c00a7513026b7a2085538da4aa88d93066c629"
 dependencies = [
  "env_logger",
  "libloading",
