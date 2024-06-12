@@ -61,7 +61,7 @@ pub struct Instance {
     /// lazy initialization. This provides access to the underlying
     /// Wasm module entities, the compiled JIT code, metadata about
     /// functions, lazy initialization state, etc.
-    runtime_info: Arc<dyn ModuleRuntimeInfo>,
+    runtime_info: ModuleRuntimeInfo,
 
     /// WebAssembly linear memory data.
     ///

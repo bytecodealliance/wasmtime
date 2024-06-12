@@ -11,11 +11,10 @@ pub(crate) use memory::MemoryCreatorProxy;
 
 use self::memory::create_memory;
 use self::table::create_table;
-use crate::module::BareModuleInfo;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
-    StorePtr, VMFunctionImport,
+    Imports, InstanceAllocationRequest, InstanceAllocator, ModuleRuntimeInfo,
+    OnDemandInstanceAllocator, SharedMemory, StorePtr, VMFunctionImport,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use crate::{MemoryType, TableType};
@@ -40,8 +39,7 @@ fn create_handle(
         // The configured instance allocator should only be used when creating module instances
         // as we don't want host objects to count towards instance limits.
         let module = Arc::new(module);
-        let runtime_info =
-            &BareModuleInfo::maybe_imported_func(module, one_signature).into_traitobj();
+        let runtime_info = &ModuleRuntimeInfo::bare_maybe_imported_func(module, one_signature);
         let allocator = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0);
         let handle = allocator.allocate_module(InstanceAllocationRequest {
             imports,

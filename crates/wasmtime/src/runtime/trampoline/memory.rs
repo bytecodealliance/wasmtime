@@ -1,12 +1,11 @@
 use crate::memory::{LinearMemory, MemoryCreator};
-use crate::module::BareModuleInfo;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator,
-    RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex,
-    VMMemoryDefinition,
+    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, ModuleRuntimeInfo,
+    OnDemandInstanceAllocator, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
+    Table, TableAllocationIndex, VMMemoryDefinition,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
@@ -56,7 +55,7 @@ pub fn create_memory(
     // associated with external objects. The configured instance allocator
     // should only be used when creating module instances as we don't want host
     // objects to count towards instance limits.
-    let runtime_info = &BareModuleInfo::maybe_imported_func(Arc::new(module), None).into_traitobj();
+    let runtime_info = &ModuleRuntimeInfo::bare_maybe_imported_func(Arc::new(module), None);
     let host_state = Box::new(());
     let imports = Imports::default();
     let request = InstanceAllocationRequest {
