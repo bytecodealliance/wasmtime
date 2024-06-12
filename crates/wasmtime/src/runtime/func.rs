@@ -1319,7 +1319,7 @@ impl Func {
                     let _ = VMArrayCallHostFuncContext::from_opaque(f.as_ref().vmctx);
 
                     let sig = self.type_index(store.store_data());
-                    module.runtime_info().wasm_to_array_trampoline(sig).expect(
+                    module.wasm_to_array_trampoline(sig).expect(
                         "if the wasm is importing a function of a given type, it must have the \
                          type's trampoline",
                     )

@@ -6,7 +6,6 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, Store, VMFuncRef, VMGcRef};
-use alloc::sync::Arc;
 use anyhow::{bail, Result};
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
@@ -42,7 +41,7 @@ pub struct InstanceAllocationRequest<'a> {
     /// addresses, precomputed images for lazy memory and table
     /// initialization, and the like. This Arc is cloned and held for
     /// the lifetime of the instance.
-    pub runtime_info: &'a Arc<dyn ModuleRuntimeInfo>,
+    pub runtime_info: &'a ModuleRuntimeInfo,
 
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,

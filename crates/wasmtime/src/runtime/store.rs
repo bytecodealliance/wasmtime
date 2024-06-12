@@ -78,13 +78,14 @@
 
 use crate::instance::InstanceData;
 use crate::linker::Definition;
-use crate::module::{BareModuleInfo, RegisteredModuleId};
+use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     Backtrace, ExportGlobal, GcHeapAllocationIndex, GcRootsList, GcStore,
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits, WasmFault,
+    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleRuntimeInfo,
+    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef, VMGcRef,
+    VMRuntimeLimits, WasmFault,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::RootSet;
@@ -536,7 +537,7 @@ impl<T> Store<T> {
         // is never null.
         inner.default_caller = {
             let module = Arc::new(wasmtime_environ::Module::default());
-            let shim = BareModuleInfo::empty(module).into_traitobj();
+            let shim = ModuleRuntimeInfo::bare(module);
             let allocator = OnDemandInstanceAllocator::default();
             allocator
                 .validate_module(shim.module(), shim.offsets())

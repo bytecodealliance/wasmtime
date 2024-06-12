@@ -247,6 +247,7 @@ pub trait PtrSize {
 }
 
 /// Type representing the size of a pointer for the current compilation host
+#[derive(Clone, Copy)]
 pub struct HostPtr;
 
 impl PtrSize for HostPtr {
