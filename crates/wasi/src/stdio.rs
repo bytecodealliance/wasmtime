@@ -561,8 +561,8 @@ mod test {
 
     #[tokio::test]
     async fn async_stdout_stream_unblocks() {
-        let (mut read, write) = tokio::io::duplex(1024);
-        let stdout = AsyncStdoutStream::new(AsyncWriteStream::new(1024, write));
+        let (mut read, write) = tokio::io::duplex(32);
+        let stdout = AsyncStdoutStream::new(AsyncWriteStream::new(32, write));
 
         let task = tokio::task::spawn(async move {
             let mut stream = stdout.stream();
