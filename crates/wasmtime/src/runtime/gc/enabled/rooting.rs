@@ -108,7 +108,6 @@ use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
-use anyhow::anyhow;
 use core::any;
 use core::marker;
 use core::mem;

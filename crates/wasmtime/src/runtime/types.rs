@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use anyhow::{bail, ensure, Context, Result};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,

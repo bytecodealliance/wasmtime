@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::{GcRootsList, SendSyncPtr};
 use crate::{
     store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
@@ -5,7 +6,6 @@ use crate::{
     AnyRef, AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref,
     RootedGcRefImpl, Val, ValType,
 };
-use anyhow::{bail, Context, Result};
 use core::ptr;
 use core::ptr::NonNull;
 use wasmtime_environ::TypeTrace;

@@ -1,10 +1,10 @@
+use crate::prelude::*;
 use crate::runtime::vm::{TableElement, VMGcRef};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType, Rooted, RootedGcRefImpl,
     ValType, V128,
 };
-use anyhow::{bail, Context, Result};
 use core::ptr;
 
 pub use crate::runtime::vm::ValRaw;

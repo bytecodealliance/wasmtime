@@ -24,7 +24,6 @@
 
 use crate::prelude::*;
 use crate::Engine;
-use anyhow::{Context, Result};
 use std::{
     any::Any,
     borrow::Cow,

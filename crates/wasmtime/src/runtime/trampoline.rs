@@ -19,7 +19,6 @@ use crate::runtime::vm::{
 use crate::store::{InstanceId, StoreOpaque};
 use crate::{MemoryType, TableType};
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::any::Any;
 use wasmtime_environ::{MemoryIndex, Module, TableIndex, VMSharedTypeIndex};
 

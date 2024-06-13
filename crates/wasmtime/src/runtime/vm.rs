@@ -5,7 +5,6 @@
 
 use crate::prelude::*;
 use alloc::sync::Arc;
-use anyhow::{anyhow, Error, Result};
 use core::fmt;
 use core::mem;
 use core::ptr::NonNull;

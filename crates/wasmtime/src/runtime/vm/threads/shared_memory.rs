@@ -3,8 +3,6 @@ use crate::runtime::vm::memory::{validate_atomic_addr, MmapMemory};
 use crate::runtime::vm::threads::parking_spot::{ParkingSpot, Waiter};
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{Memory, RuntimeLinearMemory, Store, WaitResult};
-use anyhow::Error;
-use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};

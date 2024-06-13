@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
-use anyhow::{anyhow, ensure, Context, Result};
 use core::cmp;
 use core::{alloc::Layout, num::NonZeroU32, ops::Bound};
 

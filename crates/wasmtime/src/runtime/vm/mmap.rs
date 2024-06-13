@@ -3,7 +3,6 @@
 
 use crate::runtime::vm::sys::mmap;
 use crate::{prelude::*, vm::usize_is_multiple_of_host_page_size};
-use anyhow::{Context, Result};
 use core::ops::Range;
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path, sync::Arc};

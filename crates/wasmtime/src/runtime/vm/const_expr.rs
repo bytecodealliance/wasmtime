@@ -1,7 +1,7 @@
 //! Evaluating const expressions.
 
+use crate::prelude::*;
 use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
-use anyhow::{anyhow, bail, Result};
 use smallvec::SmallVec;
 use wasmtime_environ::{ConstExpr, FuncIndex, GlobalIndex, Module};
 

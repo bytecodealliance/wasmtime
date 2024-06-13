@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::Result;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 

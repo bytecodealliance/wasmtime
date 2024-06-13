@@ -7,7 +7,6 @@ use crate::{
     AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
     Result, RootSet, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
 };
-use anyhow::Context;
 use core::any::Any;
 use core::mem;
 use core::mem::MaybeUninit;

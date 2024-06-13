@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use anyhow::{anyhow, bail, ensure, Error};
 use core::mem::size_of;
 use object::elf::*;
 use object::endian::{BigEndian, Endian, Endianness, LittleEndian};

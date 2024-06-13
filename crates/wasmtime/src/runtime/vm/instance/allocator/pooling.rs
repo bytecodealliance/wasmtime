@@ -52,7 +52,6 @@ use crate::runtime::vm::{
     mpk::{self, MpkEnabled, ProtectionKey, ProtectionMask},
     CompiledModuleId, Memory, Table,
 };
-use anyhow::{bail, Result};
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::sync::{Mutex, MutexGuard};

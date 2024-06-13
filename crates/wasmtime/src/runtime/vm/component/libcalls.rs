@@ -1,7 +1,7 @@
 //! Implementation of string transcoding required by the component model.
 
+use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
-use anyhow::{anyhow, Result};
 use core::cell::Cell;
 use core::slice;
 use wasmtime_environ::component::TypeResourceTableIndex;

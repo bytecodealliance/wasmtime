@@ -4,7 +4,6 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
 use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
-use anyhow::{bail, Result};
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::ops::Range;

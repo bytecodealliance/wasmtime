@@ -11,7 +11,6 @@ use crate::{
     Engine,
 };
 use alloc::sync::Arc;
-use anyhow::{bail, Result};
 use core::fmt;
 use core::ops::Range;
 use core::ptr::NonNull;

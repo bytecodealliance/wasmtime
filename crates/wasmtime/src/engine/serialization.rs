@@ -23,7 +23,6 @@
 
 use crate::prelude::*;
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
-use anyhow::{anyhow, bail, ensure, Context, Result};
 use core::str::FromStr;
 use object::endian::NativeEndian;
 #[cfg(any(feature = "cranelift", feature = "winch"))]

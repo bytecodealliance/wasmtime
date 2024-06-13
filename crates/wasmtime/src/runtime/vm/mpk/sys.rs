@@ -9,8 +9,8 @@
 //! [`pkey_mprotect`]: https://man7.org/linux/man-pages/man2/pkey_mprotect.2.html
 //! [`pkeys`]: https://man7.org/linux/man-pages/man7/pkeys.7.html
 
+use crate::prelude::*;
 use crate::runtime::vm::host_page_size;
-use anyhow::Result;
 use std::io::Error;
 
 /// Protection mask disallowing reads and writes of pkey-protected memory (see
@@ -74,7 +74,6 @@ pub fn pkey_mprotect(addr: usize, len: usize, prot: u32, key: u32) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
 
     #[ignore = "cannot be run when keys() has already allocated all keys"]
     #[test]

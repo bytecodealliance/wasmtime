@@ -8,7 +8,6 @@ use crate::component::{
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
-use anyhow::{bail, Context, Result};
 use core::future::Future;
 use core::marker;
 use core::pin::Pin;

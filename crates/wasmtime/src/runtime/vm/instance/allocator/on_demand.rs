@@ -8,7 +8,6 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::CompiledModuleId;
 use alloc::sync::Arc;
-use anyhow::Result;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, VMOffsets,
 };

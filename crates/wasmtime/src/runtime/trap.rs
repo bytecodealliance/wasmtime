@@ -3,7 +3,6 @@ use super::coredump::WasmCoreDump;
 use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
-use anyhow::Error;
 use core::fmt;
 use wasmtime_environ::{
     demangle_function_name, demangle_function_name_or_index, EntityRef, FilePos,

@@ -11,7 +11,6 @@ use crate::{
     StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
 use alloc::sync::Arc;
-use anyhow::{bail, Context as _, Error, Result};
 use core::ffi::c_void;
 use core::future::Future;
 use core::mem::{self, MaybeUninit};

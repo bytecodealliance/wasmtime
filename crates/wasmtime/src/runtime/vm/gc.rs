@@ -20,7 +20,6 @@ pub use i31::*;
 
 use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
-use anyhow::{bail, Result};
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
 use wasmtime_environ::StackMap;
