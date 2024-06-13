@@ -49,7 +49,7 @@ pub use linker::*;
 pub use memory::*;
 pub use module::{Module, ModuleExport};
 pub use resources::*;
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", feature = "call-hook"))]
 pub use store::CallHookHandler;
 pub use store::{
     AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, UpdateDeadline,

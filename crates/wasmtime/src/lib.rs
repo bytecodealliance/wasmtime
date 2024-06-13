@@ -254,6 +254,11 @@
 //! * `threads` - Enabled by default, this enables compile-time support for the
 //!   WebAssembly `threads` proposal, notably shared memories.
 //!
+//! * `call-hook` - Enabled by default, this enables support for the
+//!   [`Store::call_hook`] API. This incurs a small overhead on all
+//!   entries/exits from WebAssembly and may want to be disabled by some
+//!   embedders.
+//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!
