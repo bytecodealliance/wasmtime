@@ -581,16 +581,6 @@
 (decl dynamic_lane (u32 u32) Type)
 (extern extractor dynamic_lane dynamic_lane)
 
-;; Match a dynamic-lane integer type, extracting (# bits per lane) from the given
-;; type.
-(decl dynamic_int_lane (u32) Type)
-(extern extractor dynamic_int_lane dynamic_int_lane)
-
-;; Match a dynamic-lane floating point type, extracting (# bits per lane)
-;; from the given type.
-(decl dynamic_fp_lane (u32) Type)
-(extern extractor dynamic_fp_lane dynamic_fp_lane)
-
 ;; An extractor that only matches 64-bit dynamic vector types with integer
 ;; lanes (I8X8XN, I16X4XN, I32X2XN)
 (decl ty_dyn64_int (Type) Type)

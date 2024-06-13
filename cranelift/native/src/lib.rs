@@ -167,7 +167,7 @@ mod tests {
 
             if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
                 assert_eq!(isa.default_call_conv(), CallConv::AppleAarch64);
-            } else if cfg!(any(unix, target_os = "nebulet")) {
+            } else if cfg!(unix) {
                 assert_eq!(isa.default_call_conv(), CallConv::SystemV);
             } else if cfg!(windows) {
                 assert_eq!(isa.default_call_conv(), CallConv::WindowsFastcall);
