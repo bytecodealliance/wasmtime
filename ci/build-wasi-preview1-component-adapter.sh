@@ -20,15 +20,21 @@ $build_adapter --release --no-default-features --features command
 $verify $release
 wasm-tools metadata add --name "wasi_preview1_component_adapter.command.adapter:${VERSION}" $release \
   -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.command.wasm
+cmp -s target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.command.wasm \
+  crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.command.wasm
 
 # Release build, default features (reactor)
 $build_adapter --release
 $verify $release
 wasm-tools metadata add --name "wasi_preview1_component_adapter.reactor.adapter:${VERSION}" $release \
   -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.reactor.wasm
+cmp -s target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.reactor.wasm \
+  crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.reactor.wasm
 
 # Release build, proxy
 $build_adapter --release --no-default-features --features proxy
 $verify $release
 wasm-tools metadata add --name "wasi_preview1_component_adapter.proxy.adapter:${VERSION}" $release \
   -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.proxy.wasm
+cmp -s target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.proxy.wasm \
+  crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.proxy.wasm

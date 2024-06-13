@@ -138,6 +138,7 @@ members = [
   "crates/environ/fuzz",
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
+  "crates/wasi-preview1-component-adapter/provider",
   "crates/wasi-preview1-component-adapter/verify",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
