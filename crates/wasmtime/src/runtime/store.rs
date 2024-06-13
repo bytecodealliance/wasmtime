@@ -90,7 +90,7 @@ use crate::runtime::vm::{
 use crate::trampoline::VMHostGlobalContext;
 use crate::RootSet;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
-use crate::{Global, Instance, Memory, RootScope, Table};
+use crate::{Global, Instance, Memory, RootScope, Table, Uninhabited};
 use alloc::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use core::cell::UnsafeCell;
@@ -234,7 +234,7 @@ enum ResourceLimiterInner<T> {
 }
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", feature = "call-hook"))]
 #[async_trait::async_trait]
 pub trait CallHookHandler<T>: Send {
     /// A callback to run when wasmtime is about to enter a host call, or when about to
@@ -243,9 +243,15 @@ pub trait CallHookHandler<T>: Send {
 }
 
 enum CallHookInner<T> {
+    #[cfg(feature = "call-hook")]
     Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", feature = "call-hook"))]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
+    #[allow(dead_code)]
+    ForceTypeParameterToBeUsed {
+        uninhabited: Uninhabited,
+        _marker: marker::PhantomData<T>,
+    },
 }
 
 /// What to do after returning from a callback when the engine epoch reaches
@@ -751,7 +757,7 @@ impl<T> Store<T> {
     ///
     /// After this function returns a trap, it may be called for subsequent
     /// returns to host or wasm code as the trap propagates to the root call.
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", feature = "call-hook"))]
     pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
         self.inner.call_hook = Some(CallHookInner::Async(Box::new(hook)));
     }
@@ -770,6 +776,7 @@ impl<T> Store<T> {
     ///
     /// After this function returns a trap, it may be called for subsequent returns
     /// to host or wasm code as the trap propagates to the root call.
+    #[cfg(feature = "call-hook")]
     pub fn call_hook(
         &mut self,
         hook: impl FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
@@ -1156,9 +1163,10 @@ impl<T> StoreInner<T> {
 
     fn invoke_call_hook(&mut self, call_hook: &mut CallHookInner<T>, s: CallHook) -> Result<()> {
         match call_hook {
+            #[cfg(feature = "call-hook")]
             CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
 
-            #[cfg(feature = "async")]
+            #[cfg(all(feature = "async", feature = "call-hook"))]
             CallHookInner::Async(handler) => unsafe {
                 self.inner
                     .async_cx()
@@ -1169,6 +1177,11 @@ impl<T> StoreInner<T> {
                             .as_mut(),
                     )?
             },
+
+            CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
+                let _ = s;
+                match *uninhabited {}
+            }
         }
     }
 }
