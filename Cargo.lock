@@ -3647,6 +3647,7 @@ dependencies = [
  "object 0.36.0",
  "postcard",
  "rustc-demangle",
+ "semver",
  "serde",
  "serde_derive",
  "target-lexicon",

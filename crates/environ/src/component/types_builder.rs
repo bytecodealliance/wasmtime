@@ -121,7 +121,7 @@ impl ComponentTypesBuilder {
         for (_, (name, ty)) in component.import_types.iter() {
             component_ty.imports.insert(name.clone(), *ty);
         }
-        for (name, ty) in component.exports.iter() {
+        for (name, ty) in component.exports.raw_iter() {
             component_ty.exports.insert(
                 name.clone(),
                 self.export_type_def(&component.export_items, *ty),

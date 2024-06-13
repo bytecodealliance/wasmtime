@@ -378,21 +378,12 @@ impl ComponentDfg {
         // Next the exports of the instance are handled which will likely end up
         // creating some lowered imports, perhaps some saved modules, etc.
         let mut export_items = PrimaryMap::new();
-        let exports = self
-            .exports
-            .iter()
-            .map(|(name, export)| {
-                Ok((
-                    name.clone(),
-                    linearize.export(
-                        export,
-                        &mut export_items,
-                        wasmtime_types,
-                        wasmparser_types,
-                    )?,
-                ))
-            })
-            .collect::<Result<_>>()?;
+        let mut exports = NameMap::default();
+        for (name, export) in self.exports.iter() {
+            let export =
+                linearize.export(export, &mut export_items, wasmtime_types, wasmparser_types)?;
+            exports.insert(name, &mut (), false, export)?;
+        }
 
         // With all those pieces done the results of the dataflow-based
         // linearization are recorded into the `Component`. The number of
@@ -531,15 +522,15 @@ impl LinearizeDfg<'_> {
             },
             Export::Instance { ty, exports } => info::Export::Instance {
                 ty: *ty,
-                exports: exports
-                    .iter()
-                    .map(|(name, export)| {
-                        Ok((
-                            name.clone(),
-                            self.export(export, items, wasmtime_types, wasmparser_types)?,
-                        ))
-                    })
-                    .collect::<Result<_>>()?,
+                exports: {
+                    let mut map = NameMap::default();
+                    for (name, export) in exports {
+                        let export =
+                            self.export(export, items, wasmtime_types, wasmparser_types)?;
+                        map.insert(name, &mut (), false, export)?;
+                    }
+                    map
+                },
             },
             Export::Type(def) => info::Export::Type(*def),
         };

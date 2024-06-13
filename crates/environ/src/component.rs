@@ -39,10 +39,12 @@ pub const MAX_FLAT_RESULTS: usize = 1;
 
 mod artifacts;
 mod info;
+mod names;
 mod types;
 mod vmcomponent_offsets;
 pub use self::artifacts::*;
 pub use self::info::*;
+pub use self::names::*;
 pub use self::types::*;
 pub use self::vmcomponent_offsets::*;
 

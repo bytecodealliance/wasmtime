@@ -34,6 +34,7 @@ target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
+semver = { workspace = true, optional = true, features = ['serde'] }
 
 [dev-dependencies]
 clap = { workspace = true, features = ['default'] }
@@ -45,7 +46,7 @@ name = "factc"
 required-features = ['component-model', 'compile']
 
 [features]
-component-model = ["dep:wasmtime-component-util"]
+component-model = ["dep:wasmtime-component-util", "dep:semver"]
 demangle = ['std', 'dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
 compile = [

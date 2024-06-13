@@ -107,7 +107,7 @@ pub struct Component {
     pub imports: PrimaryMap<RuntimeImportIndex, (ImportIndex, Vec<String>)>,
 
     /// This component's own root exports from the component itself.
-    pub exports: IndexMap<String, ExportIndex>,
+    pub exports: NameMap<String, ExportIndex>,
 
     /// All exports of this component and exported instances of this component.
     ///
@@ -426,7 +426,7 @@ pub enum Export {
         /// Instance type index, if such is assigned
         ty: TypeComponentInstanceIndex,
         /// Instance export map
-        exports: IndexMap<String, ExportIndex>,
+        exports: NameMap<String, ExportIndex>,
     },
     /// An exported type from a component or instance, currently only
     /// informational.

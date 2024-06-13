@@ -726,7 +726,7 @@ impl Component {
             }
             None => &info.exports,
         };
-        exports.get(name).copied()
+        exports.get(name, &()).copied()
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
