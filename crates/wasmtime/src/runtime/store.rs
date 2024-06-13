@@ -239,11 +239,11 @@ enum ResourceLimiterInner<T> {
 pub trait CallHookHandler<T>: Send {
     /// A callback to run when wasmtime is about to enter a host call, or when about to
     /// exit the hostcall.
-    async fn handle_call_event(&self, t: &mut T, ch: CallHook) -> Result<()>;
+    async fn handle_call_event(&self, t: StoreContextMut<'_, T>, ch: CallHook) -> Result<()>;
 }
 
 enum CallHookInner<T> {
-    Sync(Box<dyn FnMut(&mut T, CallHook) -> Result<()> + Send + Sync>),
+    Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(feature = "async")]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
 }
@@ -772,7 +772,7 @@ impl<T> Store<T> {
     /// to host or wasm code as the trap propagates to the root call.
     pub fn call_hook(
         &mut self,
-        hook: impl FnMut(&mut T, CallHook) -> Result<()> + Send + Sync + 'static,
+        hook: impl FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
     ) {
         self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
@@ -1143,19 +1143,32 @@ impl<T> StoreInner<T> {
             }
         }
 
-        match &mut self.call_hook {
-            Some(CallHookInner::Sync(hook)) => hook(&mut self.data, s),
+        // Temporarily take the configured behavior to avoid mutably borrowing
+        // multiple times.
+        if let Some(mut call_hook) = self.call_hook.take() {
+            let result = self.invoke_call_hook(&mut call_hook, s);
+            self.call_hook = Some(call_hook);
+            result
+        } else {
+            Ok(())
+        }
+    }
+
+    fn invoke_call_hook(&mut self, call_hook: &mut CallHookInner<T>, s: CallHook) -> Result<()> {
+        match call_hook {
+            CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
 
             #[cfg(feature = "async")]
-            Some(CallHookInner::Async(handler)) => unsafe {
-                Ok(self
-                    .inner
+            CallHookInner::Async(handler) => unsafe {
+                self.inner
                     .async_cx()
                     .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
-                    .block_on(handler.handle_call_event(&mut self.data, s).as_mut())??)
+                    .block_on(
+                        handler
+                            .handle_call_event((&mut *self).as_context_mut(), s)
+                            .as_mut(),
+                    )?
             },
-
-            None => Ok(()),
         }
     }
 }
