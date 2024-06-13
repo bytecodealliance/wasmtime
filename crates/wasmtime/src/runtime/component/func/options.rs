@@ -282,9 +282,7 @@ impl<'a, T> LowerContext<'a, T> {
         // For now I figure we can leave in this bounds check and if it becomes
         // an issue we can optimize further later, probably with judicious use
         // of `unsafe`.
-        (&mut self.as_slice_mut()[offset..][..N])
-            .try_into()
-            .unwrap()
+        self.as_slice_mut()[offset..].first_chunk_mut().unwrap()
     }
 
     /// Lowers an `own` resource into the guest, converting the `rep` specified

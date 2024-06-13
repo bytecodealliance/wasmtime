@@ -70,7 +70,7 @@ impl VMArrayCallHostFuncContext {
 
 #[test]
 fn vmarray_call_host_func_context_offsets() {
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use wasmtime_environ::{HostPtr, PtrSize};
     assert_eq!(
         usize::from(HostPtr.vmarray_call_host_func_context_func_ref()),

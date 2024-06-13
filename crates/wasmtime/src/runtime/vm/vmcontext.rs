@@ -77,7 +77,7 @@ unsafe impl Sync for VMFunctionImport {}
 #[cfg(test)]
 mod test_vmfunction_import {
     use super::VMFunctionImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -142,7 +142,7 @@ unsafe impl Sync for VMTableImport {}
 #[cfg(test)]
 mod test_vmtable_import {
     use super::VMTableImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -188,7 +188,7 @@ unsafe impl Sync for VMMemoryImport {}
 #[cfg(test)]
 mod test_vmmemory_import {
     use super::VMMemoryImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -232,7 +232,7 @@ unsafe impl Sync for VMGlobalImport {}
 #[cfg(test)]
 mod test_vmglobal_import {
     use super::VMGlobalImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -295,7 +295,7 @@ impl VMMemoryDefinition {
 #[cfg(test)]
 mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
@@ -339,7 +339,7 @@ pub struct VMTableDefinition {
 #[cfg(test)]
 mod test_vmtable_definition {
     use super::VMTableDefinition;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -671,7 +671,7 @@ unsafe impl Sync for VMFuncRef {}
 #[cfg(test)]
 mod test_vm_func_ref {
     use super::VMFuncRef;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
@@ -836,7 +836,7 @@ impl Default for VMRuntimeLimits {
 #[cfg(test)]
 mod test_vmruntime_limits {
     use super::VMRuntimeLimits;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
@@ -905,7 +905,7 @@ unsafe impl Sync for VMCallIndirectCache {}
 #[cfg(test)]
 mod test_vm_call_indirect_cache {
     use super::VMCallIndirectCache;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
