@@ -97,7 +97,7 @@ impl TestConfig {
         })?;
 
         if self.wasm_features.len() > 2 {
-            return Err(meta.error("Expected at most 7 strategies"));
+            return Err(meta.error("Expected at most 2 off-by-default wasm features"));
         }
 
         if self.wasm_features_unsupported_by_winch {
