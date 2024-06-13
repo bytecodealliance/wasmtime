@@ -863,38 +863,7 @@ where
     'a: 'b,
 {
     live.sort_by_key(|val| dfg.value_type(*val).bytes());
-
-    // TODO: use `slice::chunk_by` when our MSRV is >= 1.77
-    struct ChunkBySize<'a> {
-        dfg: &'a ir::DataFlowGraph,
-        live: &'a [ir::Value],
-    }
-
-    impl<'a> Iterator for ChunkBySize<'a> {
-        type Item = &'a [ir::Value];
-
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.live.is_empty() {
-                return None;
-            }
-
-            let size = self.dfg.value_type(self.live[0]).bytes();
-            let i = self
-                .live
-                .iter()
-                .position(|v| self.dfg.value_type(*v).bytes() != size)
-                .unwrap_or(self.live.len());
-            debug_assert!(i > 0);
-
-            let chunk = &self.live[..i];
-            debug_assert_ne!(chunk.len(), 0);
-            self.live = &self.live[i..];
-
-            Some(chunk)
-        }
-    }
-
-    ChunkBySize { dfg, live }
+    live.chunk_by(|a, b| dfg.value_type(*a).bytes() == dfg.value_type(*b).bytes())
 }
 
 /// Get `log2(sizeof(val))` as a `usize`.
