@@ -30,16 +30,13 @@ jobs:
 
     - run: ./ci/merge-artifacts.sh
 
-    # Deploy the `gh-pages.tar.gz` artifact to the `gh-pages` branch.
-    - run: tar xf gh-pages.tar.gz
-      working-directory: gh-pages
-    - name: Deploy to gh-pages
-      uses: JamesIves/github-pages-deploy-action@v4
+    # also prepare to deploy GH pages on main
+    - if: github.ref == 'refs/heads/main'
+      uses: actions/configure-pages@v5
+    - if: github.ref == 'refs/heads/main'
+      uses: actions/upload-pages-artifact@v3
       with:
-        folder: ./gh-pages/gh-pages
-        single-commit: true
-        clean: true
-      if: github.ref == 'refs/heads/main'
+        path: "./gh-pages/gh-pages"
 
     - run: npm install --production
       working-directory: .github/actions/github-release
@@ -49,3 +46,19 @@ jobs:
         files: "dist/*"
         token: ${{ github.token }}
       continue-on-error: true
+
+  # See https://github.com/actions/deploy-pages
+  deploy:
+    name: Deploy gh-pages artifact
+    if: github.ref == 'refs/heads/main'
+    needs: publish
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
