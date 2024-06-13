@@ -583,27 +583,6 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn dynamic_int_lane(&mut self, ty: Type) -> Option<u32> {
-            if ty.is_dynamic_vector() && crate::machinst::ty_has_int_representation(ty.lane_type())
-            {
-                Some(ty.lane_bits())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
-        fn dynamic_fp_lane(&mut self, ty: Type) -> Option<u32> {
-            if ty.is_dynamic_vector()
-                && crate::machinst::ty_has_float_or_vec_representation(ty.lane_type())
-            {
-                Some(ty.lane_bits())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
         fn ty_dyn64_int(&mut self, ty: Type) -> Option<Type> {
             if ty.is_dynamic_vector() && ty.min_bits() == 64 && ty.lane_type().is_int() {
                 Some(ty)
