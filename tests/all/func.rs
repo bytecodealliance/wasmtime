@@ -977,7 +977,7 @@ fn func_write_nothing() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
 fn return_cross_store_value(config: &mut Config) -> anyhow::Result<()> {
     let _ = env_logger::try_init();
@@ -991,7 +991,6 @@ fn return_cross_store_value(config: &mut Config) -> anyhow::Result<()> {
             )
         "#,
     )?;
-    config.wasm_reference_types(true);
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
 
@@ -1011,10 +1010,8 @@ fn return_cross_store_value(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn pass_cross_store_arg() -> anyhow::Result<()> {
-    let mut config = Config::new();
-    config.wasm_reference_types(true);
+#[wasmtime_test(wasm_features(reference_types))]
+fn pass_cross_store_arg(config: &mut Config) -> anyhow::Result<()> {
     let engine = Engine::new(&config)?;
 
     let mut store1 = Store::new(&engine, ());
@@ -1332,7 +1329,7 @@ fn wrap_multiple_results(config: &mut Config) -> anyhow::Result<()> {
     }
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
 fn trampoline_for_declared_elem(config: &mut Config) -> anyhow::Result<()> {
     let engine = Engine::new(&config)?;
@@ -1461,7 +1458,7 @@ fn typed_funcs_count_params_correctly_in_error_messages(config: &mut Config) -> 
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
 fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     let engine = Engine::new(&config)?;
@@ -1578,10 +1575,9 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(function_references))]
 #[cfg_attr(miri, ignore)]
 fn typed_concrete_param(config: &mut Config) -> anyhow::Result<()> {
-    config.wasm_function_references(true);
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -1652,10 +1648,9 @@ fn typed_concrete_param(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(function_references))]
 #[cfg_attr(miri, ignore)]
 fn typed_concrete_result(config: &mut Config) -> anyhow::Result<()> {
-    config.wasm_function_references(true);
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -1750,7 +1745,7 @@ fn wrap_supertype_result() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(function_references))]
 #[cfg_attr(miri, ignore)]
 fn call_wasm_passing_subtype_func_param(config: &mut Config) -> anyhow::Result<()> {
     config.wasm_function_references(true);
@@ -1829,11 +1824,9 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> anyhow::Result<(
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(gc, function_references))]
 #[cfg_attr(miri, ignore)]
 fn call_wasm_getting_subtype_func_return(config: &mut Config) -> anyhow::Result<()> {
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -1903,7 +1896,7 @@ fn call_wasm_getting_subtype_func_return(config: &mut Config) -> anyhow::Result<
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(simd))]
 #[cfg_attr(miri, ignore)]
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn typed_v128(config: &mut Config) -> anyhow::Result<()> {
@@ -1973,7 +1966,7 @@ fn typed_v128(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(simd))]
 #[cfg_attr(miri, ignore)]
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn typed_v128_imports(config: &mut Config) -> anyhow::Result<()> {
@@ -2082,12 +2075,9 @@ fn typed_v128_imports(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(function_references, gc))]
 #[cfg_attr(miri, ignore)]
 fn wrap_and_typed_i31ref(config: &mut Config) -> Result<()> {
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
-
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -2136,11 +2126,8 @@ fn wrap_and_typed_i31ref(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(function_references, gc))]
 fn call_func_with_funcref_both_typed_and_untyped(config: &mut Config) -> Result<()> {
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
-
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -2152,13 +2139,10 @@ fn call_func_with_funcref_both_typed_and_untyped(config: &mut Config) -> Result<
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(function_references, gc))]
 #[cfg_attr(miri, ignore)]
 fn wasm_to_host_trampolines_and_subtyping(config: &mut Config) -> Result<()> {
     let _ = env_logger::try_init();
-
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
 
     let engine = Engine::new(&config)?;
 
