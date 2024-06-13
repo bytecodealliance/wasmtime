@@ -1,19 +1,39 @@
 //! Wasmtime test macro.
 //!
 //! This macro is a helper to define tests that exercise multiple configuration
-//! combinations for Wasmtime. Currently, only compiler strategies are
-//! supported.
+//! combinations for Wasmtime. Currently compiler strategies and wasm features
+//! are supported.
 //!
 //! Usage
 //!
-//! #[wasmtime_test(strategies(Cranelift, Winch))]
+//! To exclude a compiler strategy:
+//!
+//! ```rust
+//! #[wasmtime_test(strategies(not(Winch)))]
 //! fn my_test(config: &mut Config) -> Result<()> {
 //!    Ok(())
 //! }
+//! ```
+//!
+//! To explicitly indicate that a wasm features is needed
+//! ```
+//! #[wasmtime_test(wasm_features(gc))]
+//! fn my_wasm_gc_test(config: &mut Config) -> Result<()> {
+//!   Ok(())
+//! }
+//! ```
+//!
+//! If the specified wasm feature is disabled by default, the macro will enable
+//! the feature in the configuration passed to the test.
+//!
+//! If the wasm feature is not supported by any of the compiler strategies, no
+//! tests will be generated for such strategy.
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     braced,
+    meta::ParseNestedMeta,
     parse::{Parse, ParseStream},
     parse_macro_input, token, Attribute, Ident, Result, ReturnType, Signature, Visibility,
 };
@@ -21,29 +41,83 @@ use syn::{
 /// Test configuration.
 struct TestConfig {
     /// Supported compiler strategies.
-    strategies: Vec<(String, Ident)>,
+    strategies: Vec<Ident>,
+    /// Known WebAssembly features that will be turned on by default in the
+    /// resulting Config.
+    /// The identifiers in this list are features that are off by default in
+    /// Wasmtime's Config, which will be explicitly turned on for a given test.
+    wasm_features: Vec<Ident>,
+    /// Flag to track if there are Wasm features not supported by Winch.
+    wasm_features_unsupported_by_winch: bool,
 }
 
 impl TestConfig {
-    /// Validate the test configuration.
-    /// Only the number of strategies is validated, as this avoid expansions of
-    /// empty strategies or more strategies than supported.
-    ///
-    /// The supported strategies are validated inline when parsing.
-    fn validate(&self) -> anyhow::Result<()> {
-        if self.strategies.len() > 2 {
-            Err(anyhow::anyhow!("Expected at most 2 strategies"))
-        } else if self.strategies.len() == 0 {
-            Err(anyhow::anyhow!("Expected at least 1 strategy"))
+    fn strategies_from(&mut self, meta: &ParseNestedMeta) -> Result<()> {
+        meta.parse_nested_meta(|meta| {
+            if meta.path.is_ident("not") {
+                meta.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("Winch") || meta.path.is_ident("Cranelift") {
+                        let id = meta.path.require_ident()?.clone();
+                        self.strategies.retain(|s| *s != id);
+                        Ok(())
+                    } else {
+                        Err(meta.error("Unknown strategy"))
+                    }
+                })
+            } else {
+                Err(meta.error("Unknown identifier"))
+            }
+        })?;
+
+        if self.strategies.len() == 0 {
+            Err(meta.error("Expected at least one strategy"))
         } else {
             Ok(())
         }
+    }
+
+    fn wasm_features_from(&mut self, meta: &ParseNestedMeta) -> Result<()> {
+        meta.parse_nested_meta(|meta| {
+            if meta.path.is_ident("gc") || meta.path.is_ident("function_references") {
+                let feature = meta.path.require_ident()?.clone();
+                self.wasm_features.push(feature.clone());
+                self.wasm_features_unsupported_by_winch = true;
+                Ok(())
+            } else if meta.path.is_ident("simd")
+                || meta.path.is_ident("relaxed_simd")
+                || meta.path.is_ident("reference_types")
+                || meta.path.is_ident("tail_call")
+                || meta.path.is_ident("threads")
+            {
+                self.wasm_features_unsupported_by_winch = true;
+                Ok(())
+            } else {
+                Err(meta.error("Unsupported wasm feature"))
+            }
+        })?;
+
+        if self.wasm_features.len() > 2 {
+            return Err(meta.error("Expected at most 7 strategies"));
+        }
+
+        if self.wasm_features_unsupported_by_winch {
+            self.strategies.retain(|s| s.to_string() != "Winch");
+        }
+
+        Ok(())
     }
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
-        Self { strategies: vec![] }
+        Self {
+            strategies: vec![
+                Ident::new("Cranelift", Span::call_site()),
+                Ident::new("Winch", Span::call_site()),
+            ],
+            wasm_features: vec![],
+            wasm_features_unsupported_by_winch: false,
+        }
     }
 }
 
@@ -114,17 +188,9 @@ pub fn wasmtime_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
 
     let config_parser = syn::meta::parser(|meta| {
         if meta.path.is_ident("strategies") {
-            meta.parse_nested_meta(|meta| {
-                if meta.path.is_ident("Winch") || meta.path.is_ident("Cranelift") {
-                    let id = meta.path.require_ident()?.clone();
-                    test_config.strategies.push((id.to_string(), id));
-                    Ok(())
-                } else {
-                    Err(meta.error("Unknown strategy"))
-                }
-            })?;
-
-            test_config.validate().map_err(|e| meta.error(e))
+            test_config.strategies_from(&meta)
+        } else if meta.path.is_ident("wasm_features") {
+            test_config.wasm_features_from(&meta)
         } else {
             Err(meta.error("Unsupported attributes"))
         }
@@ -142,7 +208,8 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     let mut tests = vec![quote! { #func }];
     let attrs = &func.attrs;
 
-    for (strategy_name, ident) in &test_config.strategies {
+    for ident in &test_config.strategies {
+        let strategy_name = ident.to_string();
         // Winch currently only offers support for x64.
         let target = if strategy_name == "Winch" {
             quote! { #[cfg(target_arch = "x86_64")] }
@@ -158,6 +225,14 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             &format!("{}_{}", strategy_name.to_lowercase(), func_name),
             func_name.span(),
         );
+
+        let config_setup = test_config.wasm_features.iter().map(|f| {
+            let method_name = Ident::new(&format!("wasm_{}", f), f.span());
+            quote! {
+                config.#method_name(true);
+            }
+        });
+
         let tok = quote! {
             #[test]
             #target
@@ -165,6 +240,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             fn #test_name() #ret {
                 let mut config = Config::new();
                 config.strategy(Strategy::#ident);
+                #(#config_setup)*
                 #func_name(&mut config)
             }
         };
