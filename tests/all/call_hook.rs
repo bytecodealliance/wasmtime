@@ -10,7 +10,7 @@ use wasmtime::*;
 #[test]
 fn call_wrapped_func() -> Result<(), Error> {
     let mut store = Store::<State>::default();
-    store.call_hook(State::call_hook);
+    store.call_hook(sync_call_hook);
 
     fn verify(state: &State) {
         // Calling this func will switch context into wasm, then back to host:
@@ -120,7 +120,7 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
-    store.call_hook(State::call_hook);
+    store.call_hook(sync_call_hook);
     let f = Func::wrap_async(
         &mut store,
         |caller: Caller<State>, (a, b, c, d): (i32, i64, f32, f64)| {
@@ -175,7 +175,7 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
 fn call_linked_func() -> Result<(), Error> {
     let engine = Engine::default();
     let mut store = Store::new(&engine, State::default());
-    store.call_hook(State::call_hook);
+    store.call_hook(sync_call_hook);
     let mut linker = Linker::new(&engine);
 
     linker.func_wrap(
@@ -243,7 +243,7 @@ async fn call_linked_func_async() -> Result<(), Error> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
-    store.call_hook(State::call_hook);
+    store.call_hook(sync_call_hook);
 
     let f = Func::wrap_async(
         &mut store,
@@ -313,7 +313,7 @@ async fn call_linked_func_async() -> Result<(), Error> {
 #[test]
 fn instantiate() -> Result<(), Error> {
     let mut store = Store::<State>::default();
-    store.call_hook(State::call_hook);
+    store.call_hook(sync_call_hook);
 
     let m = Module::new(store.engine(), "(module)")?;
     Instance::new(&mut store, &m, &[])?;
@@ -334,7 +334,7 @@ async fn instantiate_async() -> Result<(), Error> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
-    store.call_hook(State::call_hook);
+    store.call_hook(sync_call_hook);
 
     let m = Module::new(store.engine(), "(module)")?;
     Instance::new_async(&mut store, &m, &[]).await?;
@@ -355,7 +355,7 @@ fn recursion() -> Result<(), Error> {
 
     let engine = Engine::default();
     let mut store = Store::new(&engine, State::default());
-    store.call_hook(State::call_hook);
+    store.call_hook(sync_call_hook);
     let mut linker = Linker::new(&engine);
 
     linker.func_wrap("host", "f", |mut caller: Caller<State>, n: i32| {
@@ -474,7 +474,7 @@ fn trapping() -> Result<(), Error> {
 
     let run = |action: i32, recur: bool| -> (State, Option<Error>) {
         let mut store = Store::new(&engine, State::default());
-        store.call_hook(State::call_hook);
+        store.call_hook(sync_call_hook);
         let inst = linker
             .instantiate(&mut store, &module)
             .expect("instantiate");
@@ -556,8 +556,12 @@ async fn basic_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(&self, obj: &mut State, ch: CallHook) -> Result<()> {
-            State::call_hook(obj, ch)
+        async fn handle_call_event(
+            &self,
+            ctx: StoreContextMut<'_, State>,
+            ch: CallHook,
+        ) -> Result<()> {
+            sync_call_hook(ctx, ch)
         }
     }
     let mut config = Config::new();
@@ -630,7 +634,12 @@ async fn timeout_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(&self, obj: &mut State, ch: CallHook) -> Result<()> {
+        async fn handle_call_event(
+            &self,
+            mut ctx: StoreContextMut<'_, State>,
+            ch: CallHook,
+        ) -> Result<()> {
+            let obj = ctx.data_mut();
             if obj.calls_into_host > 200 {
                 bail!("timeout");
             }
@@ -706,7 +715,12 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<u32> for Handler {
-        async fn handle_call_event(&self, state: &mut u32, _ch: CallHook) -> Result<()> {
+        async fn handle_call_event(
+            &self,
+            mut ctx: StoreContextMut<'_, u32>,
+            _ch: CallHook,
+        ) -> Result<()> {
+            let state = ctx.data_mut();
             assert_eq!(*state, 0);
             *state += 1;
             let _dec = Decrement(state);
@@ -890,4 +904,8 @@ impl State {
         }
         Ok(())
     }
+}
+
+fn sync_call_hook(mut ctx: StoreContextMut<'_, State>, transition: CallHook) -> Result<()> {
+    ctx.data_mut().call_hook(transition)
 }
