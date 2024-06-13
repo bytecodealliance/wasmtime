@@ -30,7 +30,9 @@ jobs:
 
     - run: ./ci/merge-artifacts.sh
 
-    # also prepare to deploy GH pages on main
+    # Deploy the `gh-pages.tar.gz` artifact to the `gh-pages` branch.
+    - run: tar xf gh-pages.tar.gz
+      working-directory: gh-pages
     - if: github.ref == 'refs/heads/main'
       uses: actions/configure-pages@v5
     - if: github.ref == 'refs/heads/main'
