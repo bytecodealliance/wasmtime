@@ -125,7 +125,6 @@ default = [
   'component-model',
   'threads',
   'std',
-  'call-hook',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -263,6 +262,5 @@ std = [
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
 # logic around all entries/exits from WebAssembly. This has a slight performance
-# cost for all host functions so is provided as a compile-time feature if
-# embedders would like to disable it.
+# cost for all host functions.
 call-hook = []
