@@ -612,10 +612,14 @@ impl CommonOptions {
                     if let Some(limit) = self.opts.pooling_max_memory_size {
                         cfg.max_memory_size(limit);
                     }
-                    if let Some(enable) = self.opts.memory_protection_keys {
-                        if enable {
-                            cfg.memory_protection_keys(wasmtime::MpkEnabled::Enable);
-                        }
+                    match_feature! {
+                        ["memory-protection-keys" : self.opts.memory_protection_keys]
+                        enable => cfg.memory_protection_keys(if enable {
+                            wasmtime::MpkEnabled::Enable
+                        } else {
+                            wasmtime::MpkEnabled::Disable
+                        }),
+                        _ => err,
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
                 }

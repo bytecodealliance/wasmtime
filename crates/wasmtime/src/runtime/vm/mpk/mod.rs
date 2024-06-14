@@ -33,8 +33,7 @@ cfg_if::cfg_if! {
     if #[cfg(all(
         target_arch = "x86_64",
         target_os = "linux",
-        feature = "pooling-allocator",
-        feature = "std",
+        feature = "memory-protection-keys",
         not(miri),
     ))] {
         mod enabled;

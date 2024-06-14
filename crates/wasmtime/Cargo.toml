@@ -264,3 +264,7 @@ std = [
 # logic around all entries/exits from WebAssembly. This has a slight performance
 # cost for all host functions.
 call-hook = []
+
+# Enables support for "memory protection keys" which can be used in conjunction
+# with the pooling allocator on x64 to compact linear memory allocations.
+memory-protection-keys = ["pooling-allocator"]
