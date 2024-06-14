@@ -1705,6 +1705,8 @@ pub unsafe trait WasmRet {
 
     #[doc(hidden)]
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType;
+    #[doc(hidden)]
+    fn may_gc() -> bool;
 
     // Utilities used to convert an instance of this type to a `Result`
     // explicitly, used when wrapping async functions which always bottom-out
@@ -1734,6 +1736,10 @@ where
     ) -> Result<()> {
         debug_assert!(ptr.len() > 0);
         <Self as WasmTy>::store(self, store, ptr.get_unchecked_mut(0))
+    }
+
+    fn may_gc() -> bool {
+        T::may_gc()
     }
 
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
@@ -1768,6 +1774,10 @@ where
         ptr: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
         self.and_then(|val| val.store(store, ptr))
+    }
+
+    fn may_gc() -> bool {
+        T::may_gc()
     }
 
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
@@ -1813,6 +1823,11 @@ macro_rules! impl_wasm_host_results {
                     WasmTy::store($t, _store, val)?;
                 )*
                 Ok(())
+            }
+
+            #[doc(hidden)]
+            fn may_gc() -> bool {
+                $( $t::may_gc() || )* false
             }
 
             fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
@@ -1938,6 +1953,9 @@ pub unsafe trait WasmTyList {
     // valid for this given type.
     #[doc(hidden)]
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, values: &mut [MaybeUninit<ValRaw>]) -> Self;
+
+    #[doc(hidden)]
+    fn may_gc() -> bool;
 }
 
 macro_rules! impl_wasm_ty_list {
@@ -1959,6 +1977,10 @@ macro_rules! impl_wasm_ty_list {
                     _cur += 1;
                     $args::load(_store, ptr)
                 },)*)
+            }
+
+            fn may_gc() -> bool {
+                $( $args::may_gc() || )* false
             }
         }
     });
@@ -2221,7 +2243,11 @@ impl HostContext {
                     break 'ret R::fallible_from_error(trap);
                 }
 
-                let mut store = AutoAssertNoGc::new(caller.store.0);
+                let mut store = if P::may_gc() {
+                    AutoAssertNoGc::new(caller.store.0)
+                } else {
+                    unsafe { AutoAssertNoGc::disabled(caller.store.0) }
+                };
                 let params = P::load(&mut store, args);
                 let _ = &mut store;
                 drop(store);
@@ -2236,7 +2262,11 @@ impl HostContext {
             if !ret.compatible_with_store(caller.store.0) {
                 bail!("host function attempted to return cross-`Store` value to Wasm")
             } else {
-                let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
+                let mut store = if R::may_gc() {
+                    AutoAssertNoGc::new(caller.store.0)
+                } else {
+                    unsafe { AutoAssertNoGc::disabled(caller.store.0) }
+                };
                 let ret = ret.store(&mut store, args)?;
                 Ok(ret)
             }
