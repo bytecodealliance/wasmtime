@@ -648,6 +648,7 @@ fn instance_too_large() -> Result<()> {
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 72.73% - 256 bytes - instance state management
+ * 25.00% - 88 bytes - static vmctx data
 "
     } else {
         "\
