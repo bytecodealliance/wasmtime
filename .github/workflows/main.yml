@@ -298,14 +298,13 @@ jobs:
 
     # Build Rust API documentation.
     #
-    # Enable all features to ensure all optional items are documented.
+    # Enable extra features in crates as well to ensure they're documented
     - run: |
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
-          --exclude wasi-http-tests \
           --exclude cranelift-codegen-meta \
-          --all-features
+          --features call-hook
       env:
         RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items

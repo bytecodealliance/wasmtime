@@ -22,6 +22,7 @@ object = { workspace = true, default-features = false, features = ["archive", "s
 test = false
 crate-type = ["cdylib"]
 name = "wasi_snapshot_preview1"
+doc = false
 
 [features]
 default = ["reactor"]
