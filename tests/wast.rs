@@ -80,7 +80,20 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
         }
         // Wasmtime doesn't implement the table64 extension yet.
         if part == "memory64" {
-            return true;
+            return [
+                "call_indirect.wast",
+                "table_copy.wast",
+                "table_get.wast",
+                "table_set.wast",
+                "table_fill.wast",
+                "table.wast",
+                "table_init.wast",
+                "table_copy_mixed.wast",
+                "table_grow.wast",
+                "table_size.wast",
+            ]
+            .iter()
+            .any(|i| test.ends_with(i));
         }
 
         // TODO(#6530): These tests require tail calls, but s390x doesn't
