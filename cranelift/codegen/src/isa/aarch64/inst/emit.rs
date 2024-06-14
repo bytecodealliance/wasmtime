@@ -3037,7 +3037,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
             &Inst::TrapIf { kind, trap_code } => {
-                let label = sink.defer_trap(trap_code, state.take_stack_map());
+                let label = sink.defer_trap(trap_code);
                 // condbr KIND, LABEL
                 let off = sink.cur_offset();
                 sink.put4(enc_conditional_br(BranchTarget::Label(label), kind));
@@ -3055,9 +3055,6 @@ impl MachInstEmit for Inst {
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
                 sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::Adr { rd, off } => {

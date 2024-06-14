@@ -3317,15 +3317,9 @@ impl Inst {
                 put(sink, &enc_e(0x0001));
             }
             &Inst::Trap { trap_code } => {
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
-                }
                 put_with_trap(sink, &enc_e(0x0000), trap_code);
             }
             &Inst::TrapIf { cond, trap_code } => {
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
-                }
                 // We implement a TrapIf as a conditional branch into the middle
                 // of the branch (BRCL) instruction itself - those middle two bytes
                 // are zero, which matches the trap instruction itself.

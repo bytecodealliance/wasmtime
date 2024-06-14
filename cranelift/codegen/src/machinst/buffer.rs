@@ -1219,12 +1219,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// patched in once the address of the trap is known.
     ///
     /// This will batch all traps into the end of the function.
-    pub fn defer_trap(&mut self, code: TrapCode, stack_map: Option<StackMap>) -> MachLabel {
+    pub fn defer_trap(&mut self, code: TrapCode) -> MachLabel {
         let label = self.get_label();
         self.pending_traps.push(MachLabelTrap {
             label,
             code,
-            stack_map,
             loc: self.cur_srcloc.map(|(_start, loc)| loc),
         });
         label
@@ -1299,13 +1298,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         // Note that traps are placed first since this typically happens at the
         // end of the function and for disassemblers we try to keep all the code
         // contiguously together.
-        for MachLabelTrap {
-            label,
-            code,
-            stack_map,
-            loc,
-        } in mem::take(&mut self.pending_traps)
-        {
+        for MachLabelTrap { label, code, loc } in mem::take(&mut self.pending_traps) {
             // If this trap has source information associated with it then
             // emit this information for the trap instruction going out now too.
             if let Some(loc) = loc {
@@ -1314,10 +1307,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.align_to(I::LabelUse::ALIGN);
             self.bind_label(label, ctrl_plane);
             self.add_trap(code);
-            if let Some(map) = stack_map {
-                let extent = StackMapExtent::UpcomingBytes(I::TRAP_OPCODE.len() as u32);
-                self.add_stack_map(extent, map);
-            }
             self.put_data(I::TRAP_OPCODE);
             if loc.is_some() {
                 self.end_srcloc();
@@ -1760,8 +1749,6 @@ struct MachLabelTrap {
     label: MachLabel,
     /// The code associated with this trap.
     code: TrapCode,
-    /// An optional stack map to associate with this trap.
-    stack_map: Option<StackMap>,
     /// An optional source location to assign for this trap.
     loc: Option<RelSourceLoc>,
 }

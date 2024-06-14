@@ -1895,7 +1895,7 @@ pub(crate) fn emit(
         }
 
         Inst::TrapIf { cc, trap_code } => {
-            let trap_label = sink.defer_trap(*trap_code, state.take_stack_map());
+            let trap_label = sink.defer_trap(*trap_code);
             one_way_jmp(sink, *cc, trap_label);
         }
 
@@ -1904,7 +1904,7 @@ pub(crate) fn emit(
             cc2,
             trap_code,
         } => {
-            let trap_label = sink.defer_trap(*trap_code, state.take_stack_map());
+            let trap_label = sink.defer_trap(*trap_code);
             let else_label = sink.get_label();
 
             // Jump to the end if the first condition isn't true, and then if
@@ -1920,7 +1920,7 @@ pub(crate) fn emit(
             cc2,
             trap_code,
         } => {
-            let trap_label = sink.defer_trap(*trap_code, state.take_stack_map());
+            let trap_label = sink.defer_trap(*trap_code);
 
             // Emit two jumps to the same trap if either condition code is true.
             one_way_jmp(sink, *cc1, trap_label);
@@ -4021,9 +4021,6 @@ pub(crate) fn emit(
 
         Inst::Ud2 { trap_code } => {
             sink.add_trap(*trap_code);
-            if let Some(s) = state.take_stack_map() {
-                sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
-            }
             sink.put_data(Inst::TRAP_OPCODE);
         }
 
