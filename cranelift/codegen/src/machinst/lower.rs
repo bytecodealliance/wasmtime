@@ -485,8 +485,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Pre-analysis: compute `value_ir_uses`. See comment on
     /// `ValueUseState` for a description of what this analysis
     /// computes.
-    fn compute_use_states<'a>(
-        f: &'a Function,
+    fn compute_use_states(
+        f: &Function,
         sret_param: Option<Value>,
     ) -> SecondaryMap<Value, ValueUseState> {
         // We perform the analysis without recursion, so we don't
@@ -803,8 +803,30 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 }
             }
 
+            let start = self.vcode.vcode.num_insts();
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
+
+            // If the instruction had a user stack map, forward it from the CLIF
+            // to the vcode.
+            if let Some(entries) = self.f.dfg.user_stack_map_entries(inst) {
+                let end = self.vcode.vcode.num_insts();
+                debug_assert!(end > start);
+                for i in start..end {
+                    let iix = InsnIndex::new(i);
+                    if self.vcode.vcode[iix].is_safepoint() {
+                        trace!(
+                            "Adding user stack map from clif\n\n\
+                                 {inst:?} `{}`\n\n\
+                             to vcode\n\n\
+                                 {iix:?} `{}`",
+                            self.f.dfg.display_inst(inst),
+                            &self.vcode.vcode[iix].pretty_print_inst(&mut Default::default()),
+                        );
+                        self.vcode.add_user_stack_map(iix, entries);
+                    }
+                }
+            }
 
             // maybe insert random instruction
             if ctrl_plane.get_decision() {
