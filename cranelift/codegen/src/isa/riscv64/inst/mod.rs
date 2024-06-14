@@ -731,10 +731,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            &Inst::Call { .. }
-            | &Inst::CallInd { .. }
-            | &Inst::TrapIf { .. }
-            | &Inst::Udf { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } => true,
             _ => false,
         }
     }
