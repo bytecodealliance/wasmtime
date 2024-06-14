@@ -21,7 +21,7 @@ wasmtime = { workspace = true, features = ["gc"] }
 humantime = { workspace = true }
 
 [features]
-pooling-allocator = []
+pooling-allocator = ["wasmtime/pooling-allocator"]
 component-model = ["wasmtime/component-model"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ["wasmtime/parallel-compilation", "dep:rayon"]
@@ -30,3 +30,4 @@ cranelift = ["wasmtime/cranelift"]
 coredump = ["wasmtime/coredump"]
 gc = ["wasmtime/gc"]
 threads = ["wasmtime/threads"]
+memory-protection-keys = ["wasmtime/memory-protection-keys"]

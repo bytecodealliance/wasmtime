@@ -29,8 +29,6 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
 #[cfg(feature = "pooling-allocator")]
-use crate::runtime::vm::mpk;
-#[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::MpkEnabled;
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
@@ -2821,6 +2819,7 @@ impl PoolingAllocationConfig {
     /// your own risk! MPK uses kernel and CPU features to protect memory
     /// regions; you may observe segmentation faults if anything is
     /// misconfigured.
+    #[cfg(feature = "memory-protection-keys")]
     pub fn memory_protection_keys(&mut self, enable: MpkEnabled) -> &mut Self {
         self.config.memory_protection_keys = enable;
         self
@@ -2838,6 +2837,7 @@ impl PoolingAllocationConfig {
     /// engines will share the same set of allocated keys; this setting will
     /// limit how many keys are allocated initially and thus available to all
     /// other engines.
+    #[cfg(feature = "memory-protection-keys")]
     pub fn max_memory_protection_keys(&mut self, max: usize) -> &mut Self {
         self.config.max_memory_protection_keys = max;
         self
@@ -2849,8 +2849,9 @@ impl PoolingAllocationConfig {
     /// same method that [`MpkEnabled::Auto`] does. See
     /// [`PoolingAllocationConfig::memory_protection_keys`] for more
     /// information.
+    #[cfg(feature = "memory-protection-keys")]
     pub fn are_memory_protection_keys_available() -> bool {
-        mpk::is_supported()
+        crate::runtime::vm::mpk::is_supported()
     }
 
     /// The maximum number of concurrent GC heaps supported (default is `1000`).
