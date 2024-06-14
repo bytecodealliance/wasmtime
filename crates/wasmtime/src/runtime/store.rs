@@ -420,6 +420,29 @@ impl<'a> AutoAssertNoGc<'a> {
 
         AutoAssertNoGc { store, entered }
     }
+
+    /// Creates an `AutoAssertNoGc` value which is forcibly "not entered" and
+    /// disables checks for no GC happening for the duration of this value.
+    ///
+    /// This is used when it is statically otherwise known that a GC doesn't
+    /// happen for the various types involved.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is `unsafe` as it does not provide the same safety
+    /// guarantees as `AutoAssertNoGc::new`. It must be guaranteed by the
+    /// caller that a GC doesn't happen.
+    #[inline]
+    pub unsafe fn disabled(store: &'a mut StoreOpaque) -> Self {
+        if cfg!(debug_assertions) {
+            AutoAssertNoGc::new(store)
+        } else {
+            AutoAssertNoGc {
+                store,
+                entered: false,
+            }
+        }
+    }
 }
 
 impl core::ops::Deref for AutoAssertNoGc<'_> {

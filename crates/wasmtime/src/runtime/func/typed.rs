@@ -315,6 +315,14 @@ pub unsafe trait WasmTy: Send {
     #[doc(hidden)]
     fn valtype() -> ValType;
 
+    #[doc(hidden)]
+    fn may_gc() -> bool {
+        match Self::valtype() {
+            ValType::Ref(_) => true,
+            ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::V128 => false,
+        }
+    }
+
     // Dynamic checks that this value is being used with the correct store
     // context.
     #[doc(hidden)]
