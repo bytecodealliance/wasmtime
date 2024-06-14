@@ -287,7 +287,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.vmctx_runtime_limits()).unwrap();
+        let offset = i32::from(self.offsets.ptr.vmctx_runtime_limits());
         debug_assert!(self.vmruntime_limits_ptr.is_reserved_value());
         self.vmruntime_limits_ptr =
             builder
@@ -580,7 +580,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(builder.func);
         let pointer_type = self.pointer_type();
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.vmctx_epoch_ptr()).unwrap();
+        let offset = i32::try_from(self.offsets.ptr.vmctx_epoch_ptr()).unwrap();
         let epoch_ptr = builder
             .ins()
             .load(pointer_type, ir::MemFlags::trusted(), base, offset);
@@ -1518,7 +1518,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             pointer_type,
             mem_flags,
             base,
-            i32::try_from(self.env.offsets.vmctx_type_ids_array()).unwrap(),
+            i32::from(self.env.offsets.ptr.vmctx_type_ids_array()),
         );
         let sig_index = self.env.module.types[ty_index];
         let offset =
