@@ -2027,11 +2027,6 @@
   (lower (trap code))
   (udf code))
 
-;;;;;  Rules for `resumable_trap`;;;;;;;;;
-(rule
-  (lower (resumable_trap code))
-  (udf code))
-
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))
   (gen_load (amode addr offset) (LoadOP.Lbu) flags))

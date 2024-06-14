@@ -1936,11 +1936,6 @@
 (rule (lower (trap trap_code))
       (side_effect (udf trap_code)))
 
-;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (resumable_trap trap_code))
-      (side_effect (udf trap_code)))
-
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty

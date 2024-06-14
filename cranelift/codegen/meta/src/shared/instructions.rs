@@ -146,40 +146,9 @@ fn define_control_flow(
 
     ig.push(
         Inst::new(
-            "resumable_trap",
-            r#"
-        A resumable trap.
-
-        This instruction allows non-conditional traps to be used as non-terminal instructions.
-        "#,
-            &formats.trap,
-        )
-        .operands_in(vec![Operand::new("code", &imm.trapcode)])
-        .can_trap(),
-    );
-
-    ig.push(
-        Inst::new(
             "trapnz",
             r#"
         Trap when non-zero.
-
-        If ``c`` is zero, execution continues at the following instruction.
-        "#,
-            &formats.cond_trap,
-        )
-        .operands_in(vec![
-            Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
-            Operand::new("code", &imm.trapcode),
-        ])
-        .can_trap(),
-    );
-
-    ig.push(
-        Inst::new(
-            "resumable_trapnz",
-            r#"
-        A resumable trap to be called when the passed condition is non-zero.
 
         If ``c`` is zero, execution continues at the following instruction.
         "#,
