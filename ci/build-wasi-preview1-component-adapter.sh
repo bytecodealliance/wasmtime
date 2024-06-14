@@ -7,34 +7,51 @@ verify="cargo run -p verify-component-adapter --"
 debug="target/wasm32-unknown-unknown/debug/wasi_snapshot_preview1.wasm"
 release="target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm"
 
-# Debug build, default features (reactor)
-$build_adapter
-$verify $debug
+# # Debug build, default features (reactor)
+# $build_adapter
+# $verify $debug
 
-# Debug build, command
-$build_adapter --no-default-features --features command
-$verify $debug
+# # Debug build, command
+# $build_adapter --no-default-features --features command
+# $verify $debug
+
+compare() {
+  input=$1
+  flavor=$2
+  $verify $input
+  name=wasi_snapshot_preview1.$flavor.wasm
+  dst=$(dirname $input)/$name
+  reference=crates/wasi-preview1-component-adapter/provider/artefacts/$name
+  wasm-tools metadata add --name "wasi_preview1_component_adapter.$flavor.adapter:${VERSION}" $input \
+    -o $dst
+  set +x
+  if [ "$BLESS" = "1" ]; then
+    cp $dst $reference
+  elif ! cmp -s $dst $reference; then
+    echo "Reference copy of adapter is not the same as the generated copy of"
+    echo "the adapter"
+    echo ""
+    echo "  reference copy: $reference"
+    echo "      built copy: $dst"
+    echo ""
+    echo "To automatically update the reference copy set \`BLESS=1\` in the"
+    echo "environment"
+    diff -u <(wasm-tools print $dst) <(wasm-tools print $src)
+    exit 1
+  else
+    echo "Reference copy of adapter matches local copy"
+  fi
+  set -x
+}
 
 # Release build, command
 $build_adapter --release --no-default-features --features command
-$verify $release
-wasm-tools metadata add --name "wasi_preview1_component_adapter.command.adapter:${VERSION}" $release \
-  -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.command.wasm
-cmp -s target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.command.wasm \
-  crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.command.wasm
+compare $release command
 
 # Release build, default features (reactor)
 $build_adapter --release
-$verify $release
-wasm-tools metadata add --name "wasi_preview1_component_adapter.reactor.adapter:${VERSION}" $release \
-  -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.reactor.wasm
-cmp -s target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.reactor.wasm \
-  crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.reactor.wasm
+compare $release reactor
 
 # Release build, proxy
 $build_adapter --release --no-default-features --features proxy
-$verify $release
-wasm-tools metadata add --name "wasi_preview1_component_adapter.proxy.adapter:${VERSION}" $release \
-  -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.proxy.wasm
-cmp -s target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.proxy.wasm \
-  crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.proxy.wasm
+compare $release proxy
