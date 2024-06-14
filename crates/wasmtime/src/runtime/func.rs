@@ -2013,7 +2013,7 @@ pub struct Caller<'a, T> {
 }
 
 impl<T> Caller<'_, T> {
-    unsafe fn with<F, R>(caller: *mut VMContext, f: F) -> R
+    unsafe fn with<F, R>(caller: *mut VMContext, create_lifo_scope: bool, f: F) -> R
     where
         // The closure must be valid for any `Caller` it is given; it doesn't
         // get to choose the `Caller`'s lifetime.
@@ -2024,7 +2024,11 @@ impl<T> Caller<'_, T> {
         debug_assert!(!caller.is_null());
         crate::runtime::vm::Instance::from_vmctx(caller, |instance| {
             let store = StoreContextMut::from_raw(instance.store());
-            let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
+            let gc_lifo_scope = if create_lifo_scope {
+                Some(store.0.gc_roots().enter_lifo_scope())
+            } else {
+                None
+            };
 
             let ret = f(Caller {
                 store,
@@ -2033,8 +2037,10 @@ impl<T> Caller<'_, T> {
 
             // Safe to recreate a mutable borrow of the store because `ret`
             // cannot be borrowing from the store.
-            let store = StoreContextMut::<T>::from_raw(instance.store());
-            store.0.exit_gc_lifo_scope(gc_lifo_scope);
+            if let Some(gc_lifo_scope) = gc_lifo_scope {
+                let store = StoreContextMut::<T>::from_raw(instance.store());
+                store.0.exit_gc_lifo_scope(gc_lifo_scope);
+            }
 
             ret
         })
@@ -2275,7 +2281,8 @@ impl HostContext {
         // closure and then run it as part of `Caller::with`.
         let result = crate::runtime::vm::catch_unwind_and_longjmp(move || {
             let caller_vmctx = VMContext::from_opaque(caller_vmctx);
-            Caller::with(caller_vmctx, run)
+            let create_lifo_scope = P::may_gc() || R::may_gc();
+            Caller::with(caller_vmctx, create_lifo_scope, run)
         });
 
         match result {
@@ -2337,7 +2344,8 @@ impl HostFunc {
     ) -> Self {
         assert!(ty.comes_from_same_engine(engine));
         let func = move |caller_vmctx, values: &mut [ValRaw]| {
-            Caller::<T>::with(caller_vmctx, |mut caller| {
+            let create_lifo_scope = true;
+            Caller::<T>::with(caller_vmctx, create_lifo_scope, |mut caller| {
                 caller.store.0.call_hook(CallHook::CallingHost)?;
                 let result = func(caller.sub_caller(), values)?;
                 caller.store.0.call_hook(CallHook::ReturningFromHost)?;
