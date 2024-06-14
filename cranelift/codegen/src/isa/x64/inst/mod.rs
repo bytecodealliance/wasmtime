@@ -2687,10 +2687,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::CallKnown { .. }
-            | Inst::CallUnknown { .. }
-            | Inst::TrapIf { .. }
-            | Inst::Ud2 { .. } => true,
+            Inst::CallKnown { .. } | Inst::CallUnknown { .. } => true,
             _ => false,
         }
     }
