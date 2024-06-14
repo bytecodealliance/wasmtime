@@ -46,7 +46,6 @@ pub enum TrapCode {
     UnreachableCodeReached,
 
     /// Execution has potentially run too long and may be interrupted.
-    /// This trap is resumable.
     Interrupt,
 
     /// A user-defined trap code.

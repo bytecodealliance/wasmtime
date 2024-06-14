@@ -193,14 +193,6 @@ impl Opcode {
     pub fn constraints(self) -> OpcodeConstraints {
         OPCODE_CONSTRAINTS[self as usize - 1]
     }
-
-    /// Returns true if the instruction is a resumable trap.
-    pub fn is_resumable_trap(&self) -> bool {
-        match self {
-            Opcode::ResumableTrap | Opcode::ResumableTrapnz => true,
-            _ => false,
-        }
-    }
 }
 
 // This trait really belongs in cranelift-reader where it is used by the `.clif` file parser, but since

@@ -107,7 +107,6 @@ impl Default for Statistics {
         // Pre-Register all trap codes since we can't modify this hashmap atomically.
         let mut run_result_trap = HashMap::new();
         run_result_trap.insert(CraneliftTrap::Debug, AtomicU64::new(0));
-        run_result_trap.insert(CraneliftTrap::Resumable, AtomicU64::new(0));
         for trapcode in TrapCode::non_user_traps() {
             run_result_trap.insert(CraneliftTrap::User(*trapcode), AtomicU64::new(0));
         }

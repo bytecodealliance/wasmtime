@@ -64,8 +64,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
             match pos.func.dfg.insts[inst] {
                 // control flow
                 InstructionData::CondTrap {
-                    opcode:
-                        opcode @ (ir::Opcode::Trapnz | ir::Opcode::Trapz | ir::Opcode::ResumableTrapnz),
+                    opcode: opcode @ (ir::Opcode::Trapnz | ir::Opcode::Trapz),
                     arg,
                     code,
                 } => {
@@ -283,7 +282,7 @@ fn expand_cond_trap(
     // Parse the instruction.
     let trapz = match opcode {
         ir::Opcode::Trapz => true,
-        ir::Opcode::Trapnz | ir::Opcode::ResumableTrapnz => false,
+        ir::Opcode::Trapnz => false,
         _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst)),
     };
 
@@ -330,10 +329,6 @@ fn expand_cond_trap(
     match opcode {
         ir::Opcode::Trapz | ir::Opcode::Trapnz => {
             pos.ins().trap(code);
-        }
-        ir::Opcode::ResumableTrapnz => {
-            pos.ins().resumable_trap(code);
-            pos.ins().jump(new_block_resume, &[]);
         }
         _ => unreachable!(),
     }
