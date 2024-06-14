@@ -6,7 +6,6 @@ use crate::runtime::vm::GcRuntime;
 use crate::sync::OnceLock;
 use crate::Config;
 use alloc::sync::Arc;
-use anyhow::{Context, Result};
 use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};

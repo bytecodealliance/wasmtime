@@ -4,9 +4,9 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
 };
+use crate::prelude::*;
 use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{round_usize_up_to_host_pages, Mmap, PoolingInstanceAllocatorConfig};
-use anyhow::{anyhow, bail, Context, Result};
 
 /// Represents a pool of execution stacks (used for the async fiber implementation).
 ///
@@ -213,7 +213,6 @@ impl StackPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
     use crate::runtime::vm::InstanceLimits;
 
     #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]

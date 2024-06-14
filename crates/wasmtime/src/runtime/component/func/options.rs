@@ -9,7 +9,6 @@ use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
-use anyhow::{bail, Result};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
 

@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use crate::runtime::vm::{GcHeap, GcStore, I31};
-use anyhow::{Context, Result};
 use core::fmt;
 use core::marker;
 use core::num::NonZeroU32;

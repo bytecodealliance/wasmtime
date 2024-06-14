@@ -60,7 +60,6 @@ use crate::runtime::vm::{
     MpkEnabled, PoolingInstanceAllocatorConfig,
 };
 use crate::{prelude::*, vm::round_usize_up_to_host_pages};
-use anyhow::{anyhow, bail, Context, Result};
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;

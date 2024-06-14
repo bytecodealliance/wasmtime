@@ -1,8 +1,8 @@
 use super::cvt;
+use crate::prelude::*;
 use crate::runtime::vm::sys::capi;
 use crate::runtime::vm::SendSyncPtr;
 use crate::vm::sys::DecommitBehavior;
-use anyhow::Result;
 use core::ptr::{self, NonNull};
 #[cfg(feature = "std")]
 use std::{fs::File, sync::Arc};

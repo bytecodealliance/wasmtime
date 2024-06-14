@@ -6,7 +6,6 @@ use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
 use crate::Module;
 use alloc::sync::Arc;
-use anyhow::{anyhow, bail, Context, Result};
 use core::any::Any;
 use wasmtime_environ::component::{
     ComponentTypes, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex, TypeModule,

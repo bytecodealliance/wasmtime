@@ -14,7 +14,6 @@ use crate::prelude::*;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
 use crate::sync::OnceLock;
-use anyhow::Error;
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use core::ptr;

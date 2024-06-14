@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
-use anyhow::{anyhow, bail, Context, Result};
 use core::mem::ManuallyDrop;
 use core::ops::Range;
 use object::endian::NativeEndian;

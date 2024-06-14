@@ -47,7 +47,6 @@ use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
     GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
 };
-use anyhow::Result;
 use core::ops::{Deref, DerefMut};
 use core::{
     alloc::Layout,

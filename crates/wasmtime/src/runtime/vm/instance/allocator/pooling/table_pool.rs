@@ -2,11 +2,11 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2, TableAllocationIndex,
 };
+use crate::prelude::*;
 use crate::runtime::vm::{
     InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table,
 };
 use crate::{runtime::vm::sys::vm::commit_pages, vm::round_usize_up_to_host_pages};
-use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::ptr::NonNull;
 use wasmtime_environ::{Module, TablePlan};

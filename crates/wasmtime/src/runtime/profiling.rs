@@ -1,9 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
 use crate::{instantiate::CompiledModule, AsContext, Module};
-#[allow(unused_imports)]
-use anyhow::bail;
-use anyhow::Result;
 use fxprof_processed_profile::{
     debugid::DebugId, CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, Profile,
     ReferenceTimestamp, Symbol, SymbolTable, Timestamp,

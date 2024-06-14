@@ -7,7 +7,6 @@ use crate::{
     Instance, Module, StoreContextMut, Val, ValRaw, ValType, WasmTyList,
 };
 use alloc::sync::Arc;
-use anyhow::{bail, Context, Result};
 use core::fmt;
 #[cfg(feature = "async")]
 use core::future::Future;

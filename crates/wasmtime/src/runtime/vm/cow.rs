@@ -5,7 +5,6 @@ use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
 use crate::runtime::vm::{MmapVec, SendSyncPtr};
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::ffi::c_void;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
@@ -744,11 +743,10 @@ impl Drop for MemoryImageSlot {
 
 #[cfg(all(test, target_os = "linux", not(miri)))]
 mod test {
-    use super::{MemoryImage, MemoryImageSlot, MemoryImageSource, MemoryPlan, MemoryStyle};
+    use super::*;
     use crate::runtime::vm::host_page_size;
     use crate::runtime::vm::mmap::Mmap;
     use crate::runtime::vm::sys::vm::decommit_pages;
-    use anyhow::Result;
     use std::sync::Arc;
     use wasmtime_environ::Memory;
 

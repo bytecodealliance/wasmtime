@@ -3,7 +3,7 @@
 
 #![allow(missing_docs)]
 
-use anyhow::Result;
+use crate::prelude::*;
 
 pub fn is_supported() -> bool {
     false

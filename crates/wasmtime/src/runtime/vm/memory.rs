@@ -10,8 +10,6 @@ use crate::runtime::vm::{
     MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
 };
 use alloc::sync::Arc;
-use anyhow::Error;
-use anyhow::{bail, format_err, Result};
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::time::Duration;

@@ -281,7 +281,11 @@
 extern crate std;
 extern crate alloc;
 
-use wasmtime_environ::prelude;
+pub(crate) mod prelude {
+    pub use crate::{Error, Result};
+    pub use anyhow::{anyhow, bail, ensure, format_err, Context};
+    pub use wasmtime_environ::prelude::*;
+}
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
@@ -375,6 +379,7 @@ use sync_nostd as sync;
 ///
 /// This type can be used to interact with `wasmtimes`'s extensive use
 /// of `anyhow::Error` while still not directly depending on `anyhow`.
+///
 /// This type alias is identical to `anyhow::Result`.
 #[doc(no_inline)]
 pub use anyhow::{Error, Result};

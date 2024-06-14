@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
-use anyhow::Result;
 use std::io::{self, BufWriter, Write};
 use std::process;
 use std::{fs::File, sync::Mutex};

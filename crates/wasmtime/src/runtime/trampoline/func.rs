@@ -6,7 +6,6 @@ use crate::runtime::vm::{
 };
 use crate::type_registry::RegisteredType;
 use crate::{FuncType, ValRaw};
-use anyhow::Result;
 use core::ptr;
 
 struct TrampolineState<F> {

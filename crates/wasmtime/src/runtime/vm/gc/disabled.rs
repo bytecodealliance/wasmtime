@@ -7,7 +7,6 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{GcHeap, GcRuntime};
-use anyhow::Result;
 
 pub fn default_gc_runtime() -> impl GcRuntime {
     DisabledCollector

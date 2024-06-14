@@ -54,12 +54,10 @@
 //! }
 //! ```
 
+use crate::prelude::*;
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{Instance, TrapReason, VMGcRef};
-#[cfg(feature = "wmemcheck")]
-use anyhow::bail;
-use anyhow::Result;
 #[cfg(feature = "threads")]
 use core::time::Duration;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};

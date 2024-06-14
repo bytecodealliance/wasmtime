@@ -8,7 +8,7 @@
 //! For more information about this see `./examples/min-platform` as well as
 //! `./docs/examples-minimal.md`.
 
-use anyhow::{bail, Result};
+use crate::prelude::*;
 
 pub mod capi;
 pub mod mmap;

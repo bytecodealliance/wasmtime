@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{RuntimeLinearMemory, Store, VMMemoryDefinition, WaitResult};
-use anyhow::{bail, Result};
 use core::ops::Range;
 use core::time::Duration;
 use wasmtime_environ::{MemoryPlan, Trap};

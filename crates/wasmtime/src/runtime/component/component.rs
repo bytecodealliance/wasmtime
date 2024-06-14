@@ -9,7 +9,6 @@ use crate::{
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::any::Any;
 use core::mem;
 use core::ops::Range;

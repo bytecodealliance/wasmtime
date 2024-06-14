@@ -5,8 +5,8 @@
 //! like becoming executable or becoming readonly or being created from files,
 //! but it's enough to get various tests running relying on memories and such.
 
+use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::{bail, Result};
 use std::alloc::{self, Layout};
 use std::fs::File;
 use std::ops::Range;

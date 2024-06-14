@@ -9,7 +9,6 @@ use crate::runtime::vm::VMFuncRef;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
 use alloc::sync::Arc;
-use anyhow::{anyhow, Context, Result};
 use core::marker;
 use core::ptr::{self, NonNull};
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};

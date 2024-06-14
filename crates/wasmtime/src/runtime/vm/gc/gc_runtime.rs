@@ -4,7 +4,6 @@ use crate::prelude::*;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, SendSyncPtr, VMExternRef, VMGcHeader, VMGcRef,
 };
-use anyhow::Result;
 use core::marker;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};

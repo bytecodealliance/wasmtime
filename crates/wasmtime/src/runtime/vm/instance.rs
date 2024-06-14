@@ -17,7 +17,6 @@ use crate::runtime::vm::{
     SendSyncPtr, Store, VMFunctionBody, VMGcRef, WasmFault,
 };
 use alloc::sync::Arc;
-use anyhow::{Error, Result};
 use core::alloc::Layout;
 use core::any::Any;
 use core::ops::Range;

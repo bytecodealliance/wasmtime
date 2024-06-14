@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use crate::{linker::DefinitionType, Engine, FuncType};
-use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
     EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex,
     WasmCompositeType, WasmFieldType, WasmHeapType, WasmRefType, WasmSubType, WasmValType,

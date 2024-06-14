@@ -9,7 +9,6 @@ use crate::runtime::vm::component::{
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
-use anyhow::{bail, Context, Result};
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;

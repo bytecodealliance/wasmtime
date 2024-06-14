@@ -10,7 +10,6 @@ use crate::runtime::vm::{
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use alloc::sync::Arc;
-use anyhow::{anyhow, Result};
 use core::ops::Range;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,

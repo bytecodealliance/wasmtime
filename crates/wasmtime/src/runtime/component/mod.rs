@@ -655,3 +655,9 @@ pub use wasmtime_component_macro::flags;
 
 #[cfg(any(docsrs, test, doctest))]
 pub mod bindgen_examples;
+
+// NB: needed for the links in the docs above to work in all `cargo doc`
+// configurations and avoid errors.
+#[cfg(not(any(docsrs, test, doctest)))]
+#[doc(hidden)]
+pub mod bindgen_examples {}

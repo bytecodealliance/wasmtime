@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use anyhow::Result;
+use crate::prelude::*;
 
 pub struct UnwindRegistration {}
 

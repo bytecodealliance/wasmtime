@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use anyhow::Error;
 use std::{ops::Range, sync::Arc};
 use wasmtime_fiber::{RuntimeFiberStack, RuntimeFiberStackCreator};
 

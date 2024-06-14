@@ -92,7 +92,6 @@ use crate::RootSet;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory, RootScope, Table, Uninhabited};
 use alloc::sync::Arc;
-use anyhow::{anyhow, bail, Result};
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::future::Future;
