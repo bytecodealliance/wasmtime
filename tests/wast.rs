@@ -78,6 +78,10 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
         if part == "extended-const" {
             return true;
         }
+        // Wasmtime doesn't implement the table64 extension yet.
+        if part == "memory64" {
+            return true;
+        }
 
         // TODO(#6530): These tests require tail calls, but s390x doesn't
         // support them yet.
@@ -175,6 +179,7 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
                 "type-subtyping.wast",
                 "unreached-invalid.wast",
                 "unreached_valid.wast",
+                "i31.wast",
             ]
             .iter()
             .any(|i| test.ends_with(i));
