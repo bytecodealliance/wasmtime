@@ -297,16 +297,15 @@ jobs:
     - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation.
-    # We pass in the `component-model` feature
-    # to match the docs.rs metadata in
-    # crates/wasmtime/Cargo.toml.
+    #
+    # Enable all features to ensure all optional items are documented.
     - run: |
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
           --exclude wasi-http-tests \
           --exclude cranelift-codegen-meta \
-          --features component-model
+          --all-features
       env:
         RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
