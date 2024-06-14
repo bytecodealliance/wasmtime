@@ -7,8 +7,9 @@
 //      magic: u32,
 //      _padding: u32, // (On 64-bit systems)
 //      runtime_limits: *const VMRuntimeLimits,
-//      builtins: *mut VMBuiltinFunctionsArray,
+//      builtin_functions: *mut VMBuiltinFunctionsArray,
 //      callee: *mut VMFunctionBody,
+//      epoch_ptr: *mut AtomicU64,
 //      gc_heap_base: *mut u8,
 //      gc_heap_bound: *mut u8,
 //      gc_heap_data: *mut T, // Collector-specific pointer
@@ -77,16 +78,6 @@ pub struct VMOffsets<P> {
     pub num_call_indirect_caches: u32,
 
     // precalculated offsets of various member fields
-    magic: u32,
-    runtime_limits: u32,
-    builtin_functions: u32,
-    callee: u32,
-    epoch_ptr: u32,
-    gc_heap_base: u32,
-    gc_heap_bound: u32,
-    gc_heap_data: u32,
-    store: u32,
-    type_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
     imported_memories: u32,
@@ -244,6 +235,81 @@ pub trait PtrSize {
     fn size_of_vmcall_indirect_cache(&self) -> u8 {
         2 * self.size()
     }
+
+    /// Return the offset to the `magic` value in this `VMContext`.
+    #[inline]
+    fn vmctx_magic(&self) -> u8 {
+        // This is required by the implementation of `VMContext::instance` and
+        // `VMContext::instance_mut`. If this value changes then those locations
+        // need to be updated.
+        0
+    }
+
+    /// Return the offset to the `VMRuntimeLimits` structure
+    #[inline]
+    fn vmctx_runtime_limits(&self) -> u8 {
+        self.vmctx_magic() + self.size()
+    }
+
+    /// Return the offset to the `VMBuiltinFunctionsArray` structure
+    #[inline]
+    fn vmctx_builtin_functions(&self) -> u8 {
+        self.vmctx_runtime_limits() + self.size()
+    }
+
+    /// Return the offset to the `callee` member in this `VMContext`.
+    #[inline]
+    fn vmctx_callee(&self) -> u8 {
+        self.vmctx_builtin_functions() + self.size()
+    }
+
+    /// Return the offset to the `*const AtomicU64` epoch-counter
+    /// pointer.
+    #[inline]
+    fn vmctx_epoch_ptr(&self) -> u8 {
+        self.vmctx_callee() + self.size()
+    }
+
+    /// Return the offset to the GC heap base in this `VMContext`.
+    #[inline]
+    fn vmctx_gc_heap_base(&self) -> u8 {
+        self.vmctx_epoch_ptr() + self.size()
+    }
+
+    /// Return the offset to the GC heap bound in this `VMContext`.
+    #[inline]
+    fn vmctx_gc_heap_bound(&self) -> u8 {
+        self.vmctx_gc_heap_base() + self.size()
+    }
+
+    /// Return the offset to the `*mut T` collector-specific data.
+    ///
+    /// This is a pointer that different collectors can use however they see
+    /// fit.
+    #[inline]
+    fn vmctx_gc_heap_data(&self) -> u8 {
+        self.vmctx_gc_heap_bound() + self.size()
+    }
+
+    /// The offset of the `*const dyn Store` member.
+    #[inline]
+    fn vmctx_store(&self) -> u8 {
+        self.vmctx_gc_heap_data() + self.size()
+    }
+
+    /// The offset of the `type_ids` array pointer.
+    #[inline]
+    fn vmctx_type_ids_array(&self) -> u8 {
+        self.vmctx_store() + 2 * self.size()
+    }
+
+    /// The end of statically known offsets in `VMContext`.
+    ///
+    /// Data after this is dynamically sized.
+    #[inline]
+    fn vmctx_dynamic_data_start(&self) -> u8 {
+        self.vmctx_type_ids_array() + self.size()
+    }
 }
 
 /// Type representing the size of a pointer for the current compilation host
@@ -366,8 +432,11 @@ impl<P: PtrSize> VMOffsets<P> {
                     let $name = last - $name;
                     last = tmp;
                 )*
-                assert_eq!(last, 0);
-                IntoIterator::into_iter([$(($desc, $name),)*])
+                assert_ne!(last, 0);
+                IntoIterator::into_iter([
+                    $(($desc, $name),)*
+                    ("static vmctx data", last),
+                ])
             }};
         }
 
@@ -382,16 +451,6 @@ impl<P: PtrSize> VMOffsets<P> {
             imported_memories: "imported memories",
             imported_tables: "imported tables",
             imported_functions: "imported functions",
-            type_ids: "module types",
-            store: "jit store state",
-            gc_heap_data: "GC implementation-specific data",
-            gc_heap_bound: "GC heap bound",
-            gc_heap_base: "GC heap base",
-            epoch_ptr: "jit current epoch state",
-            callee: "callee function pointer",
-            builtin_functions: "jit builtin functions state",
-            runtime_limits: "jit runtime limits state",
-            magic: "magic value",
         }
     }
 }
@@ -410,16 +469,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_globals: fields.num_defined_globals,
             num_escaped_funcs: fields.num_escaped_funcs,
             num_call_indirect_caches: fields.num_call_indirect_caches,
-            magic: 0,
-            runtime_limits: 0,
-            builtin_functions: 0,
-            callee: 0,
-            epoch_ptr: 0,
-            gc_heap_base: 0,
-            gc_heap_bound: 0,
-            gc_heap_data: 0,
-            store: 0,
-            type_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
             imported_memories: 0,
@@ -447,7 +496,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             count.checked_mul(u32::from(size)).unwrap()
         }
 
-        let mut next_field_offset = 0;
+        let mut next_field_offset = u32::from(ret.ptr.vmctx_dynamic_data_start());
 
         macro_rules! fields {
             (size($field:ident) = $size:expr, $($rest:tt)*) => {
@@ -463,17 +512,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         fields! {
-            size(magic) = 4u32,
-            align(u32::from(ret.ptr.size())),
-            size(runtime_limits) = ret.ptr.size(),
-            size(builtin_functions) = ret.ptr.size(),
-            size(callee) = ret.ptr.size(),
-            size(epoch_ptr) = ret.ptr.size(),
-            size(gc_heap_base) = ret.ptr.size(),
-            size(gc_heap_bound) = ret.ptr.size(),
-            size(gc_heap_data) = ret.ptr.size(),
-            size(store) = ret.ptr.size() * 2,
-            size(type_ids) = ret.ptr.size(),
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
             size(imported_tables)
@@ -502,11 +540,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         ret.size = next_field_offset;
-
-        // This is required by the implementation of `VMContext::instance` and
-        // `VMContext::instance_mut`. If this value changes then those locations
-        // need to be updated.
-        assert_eq!(ret.magic, 0);
 
         return ret;
     }
@@ -640,63 +673,6 @@ impl<P: PtrSize> VMOffsets<P> {
 
 /// Offsets for `VMContext`.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset to the `magic` value in this `VMContext`.
-    #[inline]
-    pub fn vmctx_magic(&self) -> u32 {
-        self.magic
-    }
-
-    /// Return the offset to the `VMRuntimeLimits` structure
-    #[inline]
-    pub fn vmctx_runtime_limits(&self) -> u32 {
-        self.runtime_limits
-    }
-
-    /// Return the offset to the `callee` member in this `VMContext`.
-    pub fn vmctx_callee(&self) -> u32 {
-        self.callee
-    }
-
-    /// Return the offset to the `*const AtomicU64` epoch-counter
-    /// pointer.
-    #[inline]
-    pub fn vmctx_epoch_ptr(&self) -> u32 {
-        self.epoch_ptr
-    }
-
-    /// Return the offset to the GC heap base in this `VMContext`.
-    #[inline]
-    pub fn vmctx_gc_heap_base(&self) -> u32 {
-        self.gc_heap_base
-    }
-
-    /// Return the offset to the GC heap bound in this `VMContext`.
-    #[inline]
-    pub fn vmctx_gc_heap_bound(&self) -> u32 {
-        self.gc_heap_bound
-    }
-
-    /// Return the offset to the `*mut T` collector-specific data.
-    ///
-    /// This is a pointer that different collectors can use however they see
-    /// fit.
-    #[inline]
-    pub fn vmctx_gc_heap_data(&self) -> u32 {
-        self.gc_heap_data
-    }
-
-    /// The offset of the `*const dyn Store` member.
-    #[inline]
-    pub fn vmctx_store(&self) -> u32 {
-        self.store
-    }
-
-    /// The offset of the `type_ids` array pointer.
-    #[inline]
-    pub fn vmctx_type_ids_array(&self) -> u32 {
-        self.type_ids
-    }
-
     /// The offset of the `tables` array.
     #[inline]
     pub fn vmctx_imported_functions_begin(&self) -> u32 {
@@ -749,12 +725,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_func_refs_begin(&self) -> u32 {
         self.defined_func_refs
-    }
-
-    /// The offset of the builtin functions array.
-    #[inline]
-    pub fn vmctx_builtin_functions(&self) -> u32 {
-        self.builtin_functions
     }
 
     /// The offset of the `call_indirect_caches` array.

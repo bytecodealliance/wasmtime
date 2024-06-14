@@ -328,13 +328,13 @@ where
             .as_u32()
             .checked_mul(sig_index_bytes.into())
             .unwrap();
-        let signatures_base_offset = self.env.vmoffsets.vmctx_type_ids_array();
+        let signatures_base_offset = self.env.vmoffsets.ptr.vmctx_type_ids_array();
         let scratch = <M::ABI as ABI>::scratch_reg();
         let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
 
         // Load the signatures address into the scratch register.
         self.masm.load(
-            self.masm.address_at_vmctx(signatures_base_offset),
+            self.masm.address_at_vmctx(signatures_base_offset.into()),
             scratch,
             ptr_size,
         );

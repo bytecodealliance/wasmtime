@@ -5,7 +5,7 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     TargetEnvironment, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
-use wasmtime_environ::{I31_DISCRIMINANT, NON_NULL_NON_I31_MASK};
+use wasmtime_environ::{PtrSize, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK};
 
 /// Get the default GC compiler.
 pub fn gc_compiler(_func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
@@ -97,11 +97,11 @@ impl FuncEnvironment<'_> {
         let vmctx = self.vmctx(builder.func);
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
 
-        let base_offset = self.offsets.vmctx_gc_heap_base();
-        let base_offset = i32::try_from(base_offset).unwrap();
+        let base_offset = self.offsets.ptr.vmctx_gc_heap_base();
+        let base_offset = i32::from(base_offset);
 
-        let bound_offset = self.offsets.vmctx_gc_heap_bound();
-        let bound_offset = i32::try_from(bound_offset).unwrap();
+        let bound_offset = self.offsets.ptr.vmctx_gc_heap_bound();
+        let bound_offset = i32::from(bound_offset);
 
         let base = builder.ins().load(ptr_ty, flags, vmctx, base_offset);
         let bound = builder.ins().load(ptr_ty, flags, vmctx, bound_offset);
@@ -289,7 +289,7 @@ impl DrcCompiler {
             ptr_ty,
             ir::MemFlags::trusted(),
             vmctx,
-            i32::try_from(func_env.offsets.vmctx_gc_heap_data()).unwrap(),
+            i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         );
         let next = builder.ins().load(
             ptr_ty,

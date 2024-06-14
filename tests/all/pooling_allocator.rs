@@ -655,7 +655,7 @@ instance allocation for this module requires 256 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 62.50% - 160 bytes - instance state management
- * 6.25% - 16 bytes - jit store state
+ * 34.38% - 88 bytes - static vmctx data
 "
     };
     match Module::new(&engine, "(module)") {

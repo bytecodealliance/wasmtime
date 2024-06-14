@@ -841,16 +841,6 @@ mod test_vmruntime_limits {
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
-    fn vmctx_runtime_limits_offset() {
-        let module = Module::new();
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
-        assert_eq!(
-            offsets.vmctx_runtime_limits(),
-            u32::from(offsets.ptr.vmcontext_runtime_limits())
-        );
-    }
-
-    #[test]
     fn field_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
