@@ -36,7 +36,7 @@ compare() {
     echo ""
     echo "To automatically update the reference copy set \`BLESS=1\` in the"
     echo "environment"
-    diff -u <(wasm-tools print $dst) <(wasm-tools print $src)
+    diff -u <(wasm-tools print $reference) <(wasm-tools print $dst)
     exit 1
   else
     echo "Reference copy of adapter matches local copy"
