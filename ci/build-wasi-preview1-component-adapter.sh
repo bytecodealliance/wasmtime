@@ -17,11 +17,20 @@ $verify $debug
 
 # The adapter's version is the hash of the last commit that touched the adapter
 # source files
-VERSION=$(git log -1 --pretty="format:%H" -- $( \
+# If in check mode, we always ignore the current commit, as an adapter updated in
+# the last commit cannot already mention the current commit
+# If in bless mode, we allow looking at the current commit
+CURRENT_COMMIT=$(git log --max-count=1 --pretty="format:%H")
+ADAPTER_SOURCE_FILES=$( \
   git ls-files -- \
     'crates/wasi-preview1-component-adapter/**' \
     ':!:crates/wasi-preview1-component-adapter/provider/**' \
-))
+)
+VERSION=$(
+  git log --max-count=2 --pretty="format:%H" -- ${ADAPTER_SOURCE_FILES} | \
+  grep -v "^${BLESS:-$CURRENT_COMMIT}$" - | \
+  head -n 1 \
+)
 
 compare() {
   input=$1
