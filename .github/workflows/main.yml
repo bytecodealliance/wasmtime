@@ -802,8 +802,6 @@ jobs:
         echo `pwd`/wasm-tools-1.0.27-x86_64-linux >> $GITHUB_PATH
 
     - run: ./ci/build-wasi-preview1-component-adapter.sh
-      env:
-        VERSION: ${{ github.sha }}
 
     - uses: actions/upload-artifact@v4
       with:

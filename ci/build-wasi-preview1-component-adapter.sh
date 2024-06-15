@@ -7,13 +7,21 @@ verify="cargo run -p verify-component-adapter --"
 debug="target/wasm32-unknown-unknown/debug/wasi_snapshot_preview1.wasm"
 release="target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm"
 
-# # Debug build, default features (reactor)
-# $build_adapter
-# $verify $debug
+# Debug build, default features (reactor)
+$build_adapter
+$verify $debug
 
-# # Debug build, command
-# $build_adapter --no-default-features --features command
-# $verify $debug
+# Debug build, command
+$build_adapter --no-default-features --features command
+$verify $debug
+
+# The adapter's version is the hash of the last commit that touched the adapter
+# source files
+VERSION=$(git log -1 --pretty="format:%H" -- $( \
+  git ls-files -- \
+    'crates/wasi-preview1-component-adapter/**' \
+    ':!:crates/wasi-preview1-component-adapter/provider/**' \
+))
 
 compare() {
   input=$1
