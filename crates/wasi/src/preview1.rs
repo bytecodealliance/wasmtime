@@ -605,6 +605,103 @@ impl WasiP1Ctx {
         let fd = st.get_dir_fd(fd)?;
         Ok(fd)
     }
+
+    /// Shared implementation of `fd_write` and `fd_pwrite`.
+    async fn fd_write_impl(
+        &mut self,
+        memory: &mut GuestMemory<'_>,
+        fd: types::Fd,
+        ciovs: types::CiovecArray,
+        write: FdWrite,
+    ) -> Result<types::Size, types::Error> {
+        let t = self.transact()?;
+        let desc = t.get_descriptor(fd)?;
+        match desc {
+            Descriptor::File(File {
+                fd,
+                append,
+                position,
+                // NB: files always use blocking writes regardless of what
+                // they're configured to use since OSes don't have nonblocking
+                // reads/writes anyway. This behavior originated in the first
+                // implementation of WASIp1 where flags were propagated to the
+                // OS and the OS ignored the nonblocking flag for files
+                // generally.
+                blocking_mode: _,
+            }) => {
+                let fd = fd.borrowed();
+                let position = position.clone();
+                let pos = position.load(Ordering::Relaxed);
+                let append = *append;
+                drop(t);
+                let f = self.table().get(&fd)?.file()?;
+                let buf = first_non_empty_ciovec(memory, ciovs)?;
+
+                let do_write = move |f: &cap_std::fs::File, buf: &[u8]| match (append, write) {
+                    // Note that this is implementing Linux semantics of
+                    // `pwrite` where the offset is ignored if the file was
+                    // opened in append mode.
+                    (true, _) => f.append(&buf),
+                    (false, FdWrite::At(pos)) => f.write_at(&buf, pos),
+                    (false, FdWrite::AtCur) => f.write_at(&buf, pos),
+                };
+
+                let nwritten = match f.as_blocking_file() {
+                    // If we can block then skip the copy out of wasm memory and
+                    // write directly to `f`.
+                    Some(f) => do_write(f, &memory.as_cow(buf)?),
+                    // ... otherwise copy out of wasm memory and use
+                    // `spawn_blocking` to do this write in a thread that can
+                    // block.
+                    None => {
+                        let buf = memory.to_vec(buf)?;
+                        f.spawn_blocking(move |f| do_write(f, &buf)).await
+                    }
+                };
+
+                let nwritten = nwritten.map_err(|e| StreamError::LastOperationFailed(e.into()))?;
+
+                // If this was a write at the current position then update the
+                // current position with the result, otherwise the current
+                // position is left unmodified.
+                if let FdWrite::AtCur = write {
+                    if append {
+                        let len = self.as_wasi_impl().stat(fd).await?;
+                        position.store(len.size, Ordering::Relaxed);
+                    } else {
+                        let pos = pos
+                            .checked_add(nwritten as u64)
+                            .ok_or(types::Errno::Overflow)?;
+                        position.store(pos, Ordering::Relaxed);
+                    }
+                }
+                Ok(nwritten.try_into()?)
+            }
+            Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
+                match write {
+                    // Reject calls to `fd_pwrite` on stdio descriptors...
+                    FdWrite::At(_) => return Err(types::Errno::Spipe.into()),
+                    // ... but allow calls to `fd_write`
+                    FdWrite::AtCur => {}
+                }
+                let stream = stream.borrowed();
+                drop(t);
+                let buf = first_non_empty_ciovec(memory, ciovs)?;
+                let n = BlockingMode::Blocking
+                    .write(memory, &mut self.as_wasi_impl(), stream, buf)
+                    .await?
+                    .try_into()?;
+                Ok(n)
+            }
+            _ => Err(types::Errno::Badf.into()),
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+enum FdWrite {
+    At(u64),
+    AtCur,
 }
 
 /// Adds asynchronous versions of all WASIp1 functions to the
@@ -1734,74 +1831,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
         ciovs: types::CiovecArray,
     ) -> Result<types::Size, types::Error> {
-        let t = self.transact()?;
-        let desc = t.get_descriptor(fd)?;
-        match desc {
-            Descriptor::File(File {
-                fd,
-                append,
-                position,
-                // NB: files always use blocking writes regardless of what
-                // they're configured to use since OSes don't have nonblocking
-                // reads/writes anyway. This behavior originated in the first
-                // implementation of WASIp1 where flags were propagated to the
-                // OS and the OS ignored the nonblocking flag for files
-                // generally.
-                blocking_mode: _,
-            }) => {
-                let fd = fd.borrowed();
-                let position = position.clone();
-                let pos = position.load(Ordering::Relaxed);
-                let append = *append;
-                drop(t);
-                let f = self.table().get(&fd)?.file()?;
-                let buf = first_non_empty_ciovec(memory, ciovs)?;
-
-                let write = move |f: &cap_std::fs::File, buf: &[u8]| {
-                    if append {
-                        f.append(&buf)
-                    } else {
-                        f.write_at(&buf, pos)
-                    }
-                };
-
-                let nwritten = match f.as_blocking_file() {
-                    // If we can block then skip the copy out of wasm memory and
-                    // write directly to `f`.
-                    Some(f) => write(f, &memory.as_cow(buf)?),
-                    // ... otherwise copy out of wasm memory and use
-                    // `spawn_blocking` to do this write in a thread that can
-                    // block.
-                    None => {
-                        let buf = memory.to_vec(buf)?;
-                        f.spawn_blocking(move |f| write(f, &buf)).await
-                    }
-                };
-
-                let nwritten = nwritten.map_err(|e| StreamError::LastOperationFailed(e.into()))?;
-                if append {
-                    let len = self.as_wasi_impl().stat(fd).await?;
-                    position.store(len.size, Ordering::Relaxed);
-                } else {
-                    let pos = pos
-                        .checked_add(nwritten as u64)
-                        .ok_or(types::Errno::Overflow)?;
-                    position.store(pos, Ordering::Relaxed);
-                }
-                Ok(nwritten.try_into()?)
-            }
-            Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
-                let stream = stream.borrowed();
-                drop(t);
-                let buf = first_non_empty_ciovec(memory, ciovs)?;
-                let n = BlockingMode::Blocking
-                    .write(memory, &mut self.as_wasi_impl(), stream, buf)
-                    .await?
-                    .try_into()?;
-                Ok(n)
-            }
-            _ => Err(types::Errno::Badf.into()),
-        }
+        self.fd_write_impl(memory, fd, ciovs, FdWrite::AtCur).await
     }
 
     /// Write to a file descriptor, without using and updating the file descriptor's offset.
@@ -1814,38 +1844,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         ciovs: types::CiovecArray,
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
-        let t = self.transact()?;
-        let desc = t.get_descriptor(fd)?;
-        let n = match desc {
-            Descriptor::File(File {
-                fd, blocking_mode, ..
-            }) => {
-                let fd = fd.borrowed();
-                let blocking_mode = *blocking_mode;
-                drop(t);
-                let buf = first_non_empty_ciovec(memory, ciovs)?;
-                let stream = self
-                    .as_wasi_impl()
-                    .write_via_stream(fd, offset)
-                    .map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `write-via-stream`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
-                let result = blocking_mode
-                    .write(memory, &mut self.as_wasi_impl(), stream.borrowed(), buf)
-                    .await;
-                streams::HostOutputStream::drop(&mut self.as_wasi_impl(), stream)
-                    .map_err(|e| types::Error::trap(e))?;
-                result?
-            }
-            Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
-                // NOTE: legacy implementation returns SPIPE here
-                return Err(types::Errno::Spipe.into());
-            }
-            _ => return Err(types::Errno::Badf.into()),
-        };
-        Ok(n.try_into()?)
+        self.fd_write_impl(memory, fd, ciovs, FdWrite::At(offset))
+            .await
     }
 
     /// Return a description of the given preopened file descriptor.

@@ -1179,8 +1179,19 @@ pub unsafe extern "C" fn fd_pwrite(
         State::with(|state| {
             let ds = state.descriptors();
             let file = ds.get_seekable_file(fd)?;
-            let bytes = file.fd.write(slice::from_raw_parts(ptr, len), offset)?;
-            *nwritten = bytes as usize;
+            let bytes = slice::from_raw_parts(ptr, len);
+            let bytes = if file.append {
+                match file.fd.append_via_stream()?.blocking_write_and_flush(bytes) {
+                    Ok(()) => bytes.len(),
+                    Err(streams::StreamError::Closed) => 0,
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        return Err(stream_error_to_errno(e))
+                    }
+                }
+            } else {
+                file.fd.write(bytes, offset)? as usize
+            };
+            *nwritten = bytes;
             Ok(())
         })
     }
