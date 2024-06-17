@@ -48,6 +48,7 @@ use core::mem;
 pub struct CompoundBitSet {
     elems: Vec<ScalarBitSet<usize>>,
     len: usize,
+    max: Option<usize>,
 }
 
 impl core::fmt::Debug for CompoundBitSet {
@@ -83,6 +84,7 @@ impl CompoundBitSet {
         CompoundBitSet {
             elems: vec![],
             len: 0,
+            max: None,
         }
     }
 
@@ -108,6 +110,7 @@ impl CompoundBitSet {
         CompoundBitSet {
             elems: Vec::with_capacity(elems_cap),
             len: 0,
+            max: None,
         }
     }
 
@@ -300,6 +303,7 @@ impl CompoundBitSet {
         let (word, bit) = Self::word_and_bit(i);
         let is_new = self.elems[word].insert(bit);
         self.len += is_new as usize;
+        self.max = self.max.map(|max| core::cmp::max(max, i)).or(Some(i));
         is_new
     }
 
@@ -330,10 +334,50 @@ impl CompoundBitSet {
             let sub = &mut self.elems[word];
             let was_present = sub.remove(bit);
             self.len -= was_present as usize;
+            if was_present && self.max == Some(i) {
+                self.update_max(word);
+            }
             was_present
         } else {
             false
         }
+    }
+
+    /// Update the `self.max` field, based on the old word index of `self.max`.
+    fn update_max(&mut self, word_of_old_max: usize) {
+        self.max = self.elems[0..word_of_old_max + 1]
+            .iter()
+            .enumerate()
+            .rev()
+            .filter_map(|(word, sub)| {
+                let bit = sub.max()?;
+                Some(Self::elem(word, bit))
+            })
+            .next();
+    }
+
+    /// Get the largest value in this set, or `None` if this set is empty.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cranelift_bitset::CompoundBitSet;
+    ///
+    /// let mut bitset = CompoundBitSet::new();
+    ///
+    /// // Returns `None` if the bitset is empty.
+    /// assert!(bitset.max().is_none());
+    ///
+    /// bitset.insert(123);
+    /// bitset.insert(987);
+    /// bitset.insert(999);
+    ///
+    /// // Otherwise, it returns the largest value in the set.
+    /// assert_eq!(bitset.max(), Some(999));
+    /// ```
+    #[inline]
+    pub fn max(&self) -> Option<usize> {
+        self.max
     }
 
     /// Removes and returns the largest value in this set.
@@ -362,25 +406,9 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn pop(&mut self) -> Option<usize> {
-        loop {
-            if self.elems.is_empty() {
-                return None;
-            }
-
-            let word = self.elems.len() - 1;
-
-            let last = self.elems.last_mut()?;
-            if last.is_empty() {
-                self.elems.pop();
-                continue;
-            }
-
-            let bit = last.pop()?;
-            if last.is_empty() {
-                self.elems.pop();
-            }
-            return Some(Self::elem(word, bit));
-        }
+        let max = self.max?;
+        self.remove(max);
+        Some(max)
     }
 
     /// Remove all elements from this bitset.
@@ -404,6 +432,7 @@ impl CompoundBitSet {
     pub fn clear(&mut self) {
         self.elems.clear();
         self.len = 0;
+        self.max = None;
     }
 
     /// Iterate over the elements in this bitset.
