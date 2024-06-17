@@ -16,7 +16,7 @@
 mod check;
 mod exec;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use libtest_mimic::{Arguments, Trial};
 use std::{borrow::Cow, env};
 use test_programs_artifacts::*;
@@ -152,7 +152,7 @@ fn nn_image_classification_onnx() -> Result<()> {
 
 #[cfg(not(feature = "onnx"))]
 fn nn_image_classification_onnx() -> Result<()> {
-    bail!("this test requires the `onnx` feature")
+    anyhow::bail!("this test requires the `onnx` feature")
 }
 
 #[cfg(all(feature = "winml", target_os = "windows"))]
@@ -165,7 +165,7 @@ fn nn_image_classification_winml() -> Result<()> {
 
 #[cfg(not(all(feature = "winml", target_os = "windows")))]
 fn nn_image_classification_winml() -> Result<()> {
-    bail!("this test requires the `winml` feature and only runs on windows")
+    anyhow::bail!("this test requires the `winml` feature and only runs on windows")
 }
 
 /// Helper for keeping track of what tests should do when pre-test checks fail.
