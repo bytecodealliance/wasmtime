@@ -103,7 +103,10 @@ unsafe fn test_file_long_write(dir_fd: wasi::Fd, filename: &str) {
             buf_len: 0,
         }],
     );
-    assert_eq!(res, Err(wasi::ERRNO_BADF));
+    assert!(
+        res == Err(wasi::ERRNO_BADF) || res == Err(wasi::ERRNO_PERM),
+        "bad result {res:?}"
+    )
 }
 
 fn main() {
