@@ -105,13 +105,9 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
-        // Divide `capacity` by `BITS_PER_WORD`, rounding up rather than down.
-        let elems_cap = (capacity + BITS_PER_WORD - 1) / BITS_PER_WORD;
-        CompoundBitSet {
-            elems: Vec::with_capacity(elems_cap),
-            len: 0,
-            max: None,
-        }
+        let mut bitset = Self::new();
+        bitset.reserve(capacity);
+        bitset
     }
 
     /// Get the number of elements in this bitset.
