@@ -597,6 +597,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-bitset"
+version = "0.110.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "cranelift-codegen"
 version = "0.110.0"
 dependencies = [
