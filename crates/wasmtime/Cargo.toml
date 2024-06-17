@@ -150,6 +150,7 @@ profiling = [
   "rustix/thread",
   "dep:serde_json",
   "std",
+  "call-hook",
 ]
 
 # Enables parallel compilation of WebAssembly code.
