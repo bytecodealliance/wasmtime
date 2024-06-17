@@ -1047,8 +1047,8 @@ pub unsafe extern "C" fn fd_pread(
     nread: *mut Size,
 ) -> Errno {
     cfg_filesystem_available! {
-        // Advance to the first non-empty buffer.
-        while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+        // Skip leading non-empty buffers.
+        while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
             iovs_ptr = iovs_ptr.add(1);
             iovs_len -= 1;
         }
@@ -1162,8 +1162,8 @@ pub unsafe extern "C" fn fd_pwrite(
     nwritten: *mut Size,
 ) -> Errno {
     cfg_filesystem_available! {
-        // Advance to the first non-empty buffer.
-        while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+        // Skip leading non-empty buffers.
+        while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
             iovs_ptr = iovs_ptr.add(1);
             iovs_len -= 1;
         }
@@ -1194,8 +1194,8 @@ pub unsafe extern "C" fn fd_read(
     mut iovs_len: usize,
     nread: *mut Size,
 ) -> Errno {
-    // Advance to the first non-empty buffer.
-    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+    // Skip leading non-empty buffers.
+    while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
         iovs_ptr = iovs_ptr.add(1);
         iovs_len -= 1;
     }
@@ -1243,9 +1243,6 @@ pub unsafe extern "C" fn fd_read(
                 if let StreamType::File(file) = &streams.type_ {
                     file.position
                         .set(file.position.get() + data.len() as filesystem::Filesize);
-                    if len == 0 {
-                        return Err(ERRNO_INTR);
-                    }
                 }
 
                 let len = data.len();
@@ -1618,8 +1615,8 @@ pub unsafe extern "C" fn fd_write(
         return ERRNO_IO;
     }
 
-    // Advance to the first non-empty buffer.
-    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+    // Skip leading empty buffers.
+    while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
         iovs_ptr = iovs_ptr.add(1);
         iovs_len -= 1;
     }
@@ -2506,11 +2503,12 @@ impl BlockingMode {
         match self {
             BlockingMode::Blocking => {
                 let total = bytes.len();
-                while !bytes.is_empty() {
+                loop {
                     let len = bytes.len().min(4096);
                     let (chunk, rest) = bytes.split_at(len);
                     bytes = rest;
                     match output_stream.blocking_write_and_flush(chunk) {
+                        Ok(()) if bytes.is_empty() => break,
                         Ok(()) => {}
                         Err(streams::StreamError::Closed) => return Err(ERRNO_IO),
                         Err(streams::StreamError::LastOperationFailed(e)) => {
@@ -2531,9 +2529,6 @@ impl BlockingMode {
                 };
 
                 let len = bytes.len().min(permit as usize);
-                if len == 0 {
-                    return Ok(0);
-                }
 
                 match output_stream.write(&bytes[..len]) {
                     Ok(_) => {}
