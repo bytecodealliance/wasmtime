@@ -130,7 +130,7 @@ async fn preview1_file_allocate() {
 }
 // see sync.rs for notes about ignores here
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(target_os = "macos", ignore)]
+#[cfg_attr(not(target_os = "linux"), ignore)]
 async fn preview1_file_pread_pwrite() {
     run(PREVIEW1_FILE_PREAD_PWRITE, true).await.unwrap()
 }
