@@ -1501,6 +1501,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let mut fs_rights_base = types::Rights::all();
         if let types::Filetype::Directory = fs_filetype {
             fs_rights_base &= !types::Rights::FD_SEEK;
+            fs_rights_base &= !types::Rights::FD_FILESTAT_SET_SIZE;
         }
         if !flags.contains(filesystem::DescriptorFlags::READ) {
             fs_rights_base &= !types::Rights::FD_READ;
@@ -2742,7 +2743,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
         flags: types::Fdflags,
     ) -> Result<types::Fd, types::Error> {
-        todo!("preview1 sock_accept is not implemented")
+        tracing::warn!("preview1 sock_accept is not implemented");
+        self.transact()?.get_descriptor(fd)?;
+        Err(types::Errno::Notsock.into())
     }
 
     #[allow(unused_variables)]
@@ -2754,7 +2757,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         ri_data: types::IovecArray,
         ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), types::Error> {
-        todo!("preview1 sock_recv is not implemented")
+        tracing::warn!("preview1 sock_recv is not implemented");
+        self.transact()?.get_descriptor(fd)?;
+        Err(types::Errno::Notsock.into())
     }
 
     #[allow(unused_variables)]
@@ -2766,7 +2771,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         si_data: types::CiovecArray,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, types::Error> {
-        todo!("preview1 sock_send is not implemented")
+        tracing::warn!("preview1 sock_send is not implemented");
+        self.transact()?.get_descriptor(fd)?;
+        Err(types::Errno::Notsock.into())
     }
 
     #[allow(unused_variables)]
@@ -2777,7 +2784,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
         how: types::Sdflags,
     ) -> Result<(), types::Error> {
-        todo!("preview1 sock_shutdown is not implemented")
+        tracing::warn!("preview1 sock_shutdown is not implemented");
+        self.transact()?.get_descriptor(fd)?;
+        Err(types::Errno::Notsock.into())
     }
 }
 
