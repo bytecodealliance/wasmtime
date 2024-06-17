@@ -106,6 +106,10 @@ impl StackMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec::Vec;
+
+    type Num = u32;
+    const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 
     #[test]
     fn stack_maps() {
@@ -120,22 +124,18 @@ mod tests {
         }
 
         let mut vec = vec.to_vec();
-        assert_eq!(
-            vec![ScalarBitSet::<Num>(2164261024)],
-            StackMap::from_slice(&vec).bitset
-        );
+        let stack_map = StackMap::from_slice(&vec);
+        for idx in 0..32 {
+            assert_eq!(stack_map.get_bit(idx), set_true_idx.contains(&idx));
+        }
 
         vec.push(false);
         vec.push(true);
         let res = StackMap::from_slice(&vec);
-        assert_eq!(
-            vec![ScalarBitSet::<Num>(2164261024), ScalarBitSet::<Num>(2)],
-            res.bitset
-        );
-
-        assert!(res.get_bit(5));
-        assert!(res.get_bit(31));
+        for idx in 0..32 {
+            assert_eq!(stack_map.get_bit(idx), set_true_idx.contains(&idx));
+        }
+        assert!(!res.get_bit(32));
         assert!(res.get_bit(33));
-        assert!(!res.get_bit(1));
     }
 }
