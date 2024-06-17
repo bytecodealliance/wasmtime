@@ -167,19 +167,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         module_translations,
         None, // TODO: Support dwarf packages for components.
     )?;
-    let (types, ty) = types.finish(
-        &component.component.export_items,
-        component
-            .component
-            .import_types
-            .iter()
-            .map(|(_, (name, ty))| (name.clone(), *ty)),
-        component
-            .component
-            .exports
-            .iter()
-            .map(|(name, ty)| (name.clone(), *ty)),
-    );
+    let (types, ty) = types.finish(&component.component);
 
     let info = CompiledComponentInfo {
         component: component.component,

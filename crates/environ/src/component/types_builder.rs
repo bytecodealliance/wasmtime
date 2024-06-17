@@ -116,20 +116,16 @@ impl ComponentTypesBuilder {
     /// Finishes this list of component types and returns the finished
     /// structure and the [`TypeComponentIndex`] corresponding to top-level component
     /// with `imports` and `exports` specified.
-    pub fn finish(
-        mut self,
-        export_items: &PrimaryMap<ExportIndex, Export>,
-        imports: impl IntoIterator<Item = (String, TypeDef)>,
-        exports: impl IntoIterator<Item = (String, ExportIndex)>,
-    ) -> (ComponentTypes, TypeComponentIndex) {
+    pub fn finish(mut self, component: &Component) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
-        for (name, ty) in imports {
-            component_ty.imports.insert(name, ty);
+        for (_, (name, ty)) in component.import_types.iter() {
+            component_ty.imports.insert(name.clone(), *ty);
         }
-        for (name, ty) in exports {
-            component_ty
-                .exports
-                .insert(name, self.export_type_def(export_items, ty));
+        for (name, ty) in component.exports.iter() {
+            component_ty.exports.insert(
+                name.clone(),
+                self.export_type_def(&component.export_items, *ty),
+            );
         }
         let ty = self.component_types.components.push(component_ty);
 
