@@ -793,8 +793,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
 
     - name: Install wasm-tools
       run: |

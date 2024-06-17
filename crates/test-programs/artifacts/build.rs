@@ -13,18 +13,6 @@ fn main() {
 fn build_and_generate_tests() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    let reactor_adapter = build_adapter(&out_dir, "reactor", &[]);
-    let command_adapter = build_adapter(
-        &out_dir,
-        "command",
-        &["--no-default-features", "--features=command"],
-    );
-    let proxy_adapter = build_adapter(
-        &out_dir,
-        "proxy",
-        &["--no-default-features", "--features=proxy"],
-    );
-
     println!("cargo:rerun-if-changed=../src");
 
     // Build the test programs:
@@ -94,9 +82,13 @@ fn build_and_generate_tests() {
             continue;
         }
         let adapter = match target.as_str() {
-            "reactor" => &reactor_adapter,
-            s if s.starts_with("api_proxy") => &proxy_adapter,
-            _ => &command_adapter,
+            "reactor" => {
+                wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_REACTOR_ADAPTER
+            }
+            s if s.starts_with("api_proxy") => {
+                wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_PROXY_ADAPTER
+            }
+            _ => wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_COMMAND_ADAPTER,
         };
         let path = compile_component(&wasm, adapter);
         generated_code += &format!("pub const {camel}_COMPONENT: &'static str = {path:?};\n");
@@ -116,37 +108,6 @@ fn build_and_generate_tests() {
     std::fs::write(out_dir.join("gen.rs"), generated_code).unwrap();
 }
 
-// Build the WASI Preview 1 adapter, and get the binary:
-fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
-    println!("cargo:rerun-if-changed=../../wasi-preview1-component-adapter");
-    let mut cmd = cargo();
-    cmd.arg("build")
-        .arg("--release")
-        .arg("--package=wasi-preview1-component-adapter")
-        .arg("--target=wasm32-unknown-unknown")
-        .env("CARGO_TARGET_DIR", out_dir)
-        .env("RUSTFLAGS", rustflags())
-        .env_remove("CARGO_ENCODED_RUSTFLAGS");
-    for f in features {
-        cmd.arg(f);
-    }
-    eprintln!("running: {cmd:?}");
-    let status = cmd.status().unwrap();
-    assert!(status.success());
-
-    let adapter = out_dir.join(format!("wasi_snapshot_preview1.{name}.wasm"));
-    std::fs::copy(
-        out_dir
-            .join("wasm32-unknown-unknown")
-            .join("release")
-            .join("wasi_snapshot_preview1.wasm"),
-        &adapter,
-    )
-    .unwrap();
-    println!("wasi {name} adapter: {:?}", &adapter);
-    fs::read(&adapter).unwrap()
-}
-
 fn rustflags() -> &'static str {
     match option_env!("RUSTFLAGS") {
         // If we're in CI which is denying warnings then deny warnings to code
@@ -164,7 +125,10 @@ fn compile_component(wasm: &Path, adapter: &[u8]) -> PathBuf {
         .module(module.as_slice())
         .unwrap()
         .validate(true)
-        .adapter("wasi_snapshot_preview1", adapter)
+        .adapter(
+            wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_ADAPTER_NAME,
+            adapter,
+        )
         .unwrap()
         .encode()
         .expect("module can be translated to a component");

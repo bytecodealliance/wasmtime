@@ -7,10 +7,17 @@
 //! These three modules bridge the wasip1 ABI to the wasip2 ABI of the component
 //! model.
 //!
-//! They can be given to the [`wit_component::ComponentEncoder::adapter`] method
-//! to translate a module from the historical WASM ABI to the canonical ABI.
+//! They can be given to the [`wit_component::ComponentEncoder::adapter`]
+//! method, using the [`WASI_SNAPSHOT_PREVIEW1_ADAPTER_NAME`], to translate a
+//! module from the historical WASM ABI to the canonical ABI.
 //!
 //! [`wit_component::ComponentEncoder::adapter`]: https://docs.rs/wit-component/latest/wit_component/struct.ComponentEncoder.html#method.adapter
+
+/// The name of the adapters in this crate, which may be provided to
+/// [`wit_component::ComponentEncoder::adapter`].
+///
+/// [`wit_component::ComponentEncoder::adapter`]: https://docs.rs/wit-component/latest/wit_component/struct.ComponentEncoder.html#method.adapter
+pub const WASI_SNAPSHOT_PREVIEW1_ADAPTER_NAME: &str = "wasi_snapshot_preview1";
 
 /// The "reactor" adapter provides the default adaptation from preview1 to
 /// preview2.
