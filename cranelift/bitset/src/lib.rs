@@ -8,7 +8,7 @@
 //!    single integer, but which internally has heap allocations.
 
 #![deny(missing_docs)]
-// #![no_std]
+#![no_std]
 
 extern crate alloc;
 
