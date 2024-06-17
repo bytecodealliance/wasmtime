@@ -657,6 +657,7 @@ dependencies = [
 name = "cranelift-entity"
 version = "0.110.0"
 dependencies = [
+ "cranelift-bitset",
  "serde",
  "serde_derive",
 ]
