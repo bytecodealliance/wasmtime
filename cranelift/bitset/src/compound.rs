@@ -257,13 +257,10 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn reserve(&mut self, n: usize) {
-        if n < self.capacity() {
-            return;
+        let (word, _bit) = Self::word_and_bit(n);
+        if word >= self.elems.len() {
+            self.elems.resize_with(word + 1, ScalarBitSet::new);
         }
-
-        // Divide `n` by `BITS_PER_WORD` rounding up, rather than down.
-        let elem_len = n + (BITS_PER_WORD - 1) / BITS_PER_WORD;
-        self.elems.resize_with(elem_len, ScalarBitSet::new);
     }
 
     /// Insert `i` into this bitset.
@@ -296,10 +293,7 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn insert(&mut self, i: usize) -> bool {
-        if i >= self.capacity() {
-            self.reserve(i + 1);
-        }
-
+        self.reserve(i + 1);
         let (word, bit) = Self::word_and_bit(i);
         let is_new = self.elems[word].insert(bit);
         self.len += is_new as usize;
