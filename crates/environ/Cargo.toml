@@ -21,6 +21,7 @@ anyhow = { workspace = true }
 postcard = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true }
+cranelift-bitset = { workspace = true, features = ['enable-serde'] }
 wasmtime-types = { workspace = true }
 wasmparser = { workspace = true, features = ['validate', 'serde'] }
 indexmap = { workspace = true, features = ["serde"] }

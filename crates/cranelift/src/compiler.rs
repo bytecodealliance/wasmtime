@@ -815,7 +815,7 @@ impl FunctionCompiler<'_> {
         let isa = &*self.compiler.isa;
         let (_, _code_buf) =
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
-        let compiled_code = context.compiled_code().unwrap();
+        let mut compiled_code = context.take_compiled_code().unwrap();
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
@@ -875,7 +875,8 @@ impl FunctionCompiler<'_> {
             }
         }
 
-        let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
+        let stack_maps =
+            mach_stack_maps_to_stack_maps(compiled_code.buffer.take_stack_maps().into_iter());
         compiled_function
             .set_sized_stack_slots(std::mem::take(&mut context.func.sized_stack_slots));
         self.compiler.contexts.lock().unwrap().push(self.cx);
@@ -890,21 +891,21 @@ impl FunctionCompiler<'_> {
     }
 }
 
-fn mach_stack_maps_to_stack_maps(mach_stack_maps: &[MachStackMap]) -> Vec<StackMapInformation> {
+fn mach_stack_maps_to_stack_maps(
+    mach_stack_maps: impl ExactSizeIterator<Item = MachStackMap>,
+) -> Vec<StackMapInformation> {
     // This is converting from Cranelift's representation of a stack map to
     // Wasmtime's representation. They happen to align today but that may
     // not always be true in the future.
-    let mut stack_maps = Vec::new();
-    for &MachStackMap {
+    let mut stack_maps = Vec::with_capacity(mach_stack_maps.len());
+    for MachStackMap {
         offset_end,
-        ref stack_map,
+        stack_map,
         ..
     } in mach_stack_maps
     {
-        let stack_map = wasmtime_environ::StackMap::new(
-            stack_map.mapped_words(),
-            stack_map.as_slice().iter().map(|a| a.0),
-        );
+        let mapped_words = stack_map.mapped_words();
+        let stack_map = wasmtime_environ::StackMap::new(mapped_words, stack_map.into_bitset());
         stack_maps.push(StackMapInformation {
             code_offset: offset_end,
             stack_map,

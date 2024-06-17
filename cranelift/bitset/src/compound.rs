@@ -40,6 +40,11 @@ use core::mem;
 /// let elems: Vec<_> = bitset.iter().collect();
 /// assert_eq!(elems, [444, 555]);
 /// ```
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct CompoundBitSet {
     elems: Vec<ScalarBitSet<usize>>,
     len: usize,
