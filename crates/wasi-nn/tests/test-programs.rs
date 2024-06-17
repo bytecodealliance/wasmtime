@@ -160,7 +160,7 @@ fn nn_image_classification_winml() -> Result<()> {
     check::winml::is_available()?;
     check::onnx::are_artifacts_available()?;
     let backend = Backend::from(backend::winml::WinMLBackend::default());
-    exec::run(NN_IMAGE_CLASSIFICATION_WINML, backend, true)
+    exec::run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false)
 }
 
 #[cfg(not(all(feature = "winml", target_os = "windows")))]
