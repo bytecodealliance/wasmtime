@@ -176,6 +176,42 @@ unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
     wasi::path_unlink_file(dir_fd, path).expect("removing a file");
 }
 
+unsafe fn test_file_pwrite_and_append(dir_fd: wasi::Fd) {
+    let path = "file3";
+    let file_fd = wasi::path_open(
+        dir_fd,
+        0,
+        path,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        wasi::FDFLAGS_APPEND,
+    )
+    .expect("opening a file");
+
+    // Inherit linux semantics for `pwrite` where if the file is opened in
+    // append mode then the offset to `pwrite` is ignored.
+    let buf = [0];
+    let ciovec = wasi::Ciovec {
+        buf: buf.as_ptr(),
+        buf_len: buf.len(),
+    };
+    let n = wasi::fd_pwrite(file_fd, &[ciovec], 50).expect("writing bytes at offset 50");
+    assert_eq!(n, 1);
+
+    let stat = wasi::fd_filestat_get(file_fd).unwrap();
+    assert_eq!(stat.size, 1);
+
+    let n = wasi::fd_pwrite(file_fd, &[ciovec], 0).expect("writing bytes at offset 50");
+    assert_eq!(n, 1);
+
+    let stat = wasi::fd_filestat_get(file_fd).unwrap();
+    assert_eq!(stat.size, 2);
+
+    wasi::fd_close(file_fd).expect("closing a file");
+    wasi::path_unlink_file(dir_fd, path).expect("removing a file");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -199,5 +235,6 @@ fn main() {
     unsafe {
         test_file_pread_pwrite(dir_fd);
         test_file_pwrite_and_file_pos(dir_fd);
+        test_file_pwrite_and_append(dir_fd);
     }
 }

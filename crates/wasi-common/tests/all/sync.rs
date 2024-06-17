@@ -120,7 +120,12 @@ fn preview1_fd_readdir() {
 fn preview1_file_allocate() {
     run(PREVIEW1_FILE_ALLOCATE, true).unwrap()
 }
+// This test is outside of linux because the behavior of `pwrite`, which this
+// test bottoms out into, differs across platforms. The wasi-common crate
+// doesn't have the infrastructure in place to manually track the append-mode
+// flag easily, but `wasmtime-wasi` has the "correct" behavior here.
 #[test_log::test]
+#[cfg_attr(not(target_os = "linux"), ignore)]
 fn preview1_file_pread_pwrite() {
     run(PREVIEW1_FILE_PREAD_PWRITE, true).unwrap()
 }
