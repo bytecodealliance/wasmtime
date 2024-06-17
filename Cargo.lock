@@ -3877,6 +3877,7 @@ version = "23.0.0"
 dependencies = [
  "anyhow",
  "cap-std",
+ "libtest-mimic",
  "openvino",
  "ort",
  "test-programs-artifacts",
