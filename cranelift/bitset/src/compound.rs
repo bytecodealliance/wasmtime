@@ -254,6 +254,10 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn reserve(&mut self, n: usize) {
+        if n < self.capacity() {
+            return;
+        }
+
         // Divide `n` by `BITS_PER_WORD` rounding up, rather than down.
         let elem_len = n + (BITS_PER_WORD - 1) / BITS_PER_WORD;
         self.elems.resize_with(elem_len, ScalarBitSet::new);
