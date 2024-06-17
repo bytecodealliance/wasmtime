@@ -18,7 +18,7 @@ mod exec;
 
 use anyhow::{bail, Result};
 use libtest_mimic::{Arguments, Trial};
-use std::env;
+use std::{borrow::Cow, env};
 use test_programs_artifacts::*;
 use wasmtime_wasi_nn::{backend, Backend};
 
@@ -44,18 +44,18 @@ fn main() -> Result<()> {
     let arguments = Arguments::from_args();
     let mut trials = Vec::new();
     for program in programs {
-        // Either ignore the test if it cannot run or pre-emptively fail it.
-        let (run_test, check_failure) = check_test_program(program);
-        let should_ignore = check_failure.is_some() && !error_on_failed_check;
+        // Either ignore the test if it cannot run (i.e., downgrade `Fail` to
+        // `Ignore`) or pre-emptively fail it if `error_on_failed_check` is set.
+        let (run_test, mut check) = check_test_program(program);
+        if !error_on_failed_check {
+            check = check.downgrade_failure(); // Downgrade `Fail` to `Ignore`.
+        }
+        let should_ignore = check.is_ignore();
         if arguments.nocapture && should_ignore {
-            println!("> ignoring {program}: {}", check_failure.as_ref().unwrap());
+            println!("> ignoring {program}: {}", check.reason());
         }
         let trial = Trial::test(program, move || {
-            if error_on_failed_check && check_failure.is_some() {
-                return Err(format!("failed {program} check: {}", check_failure.unwrap()).into());
-            } else {
-                run_test().map_err(|e| format!("{:?}", e).into())
-            }
+            run_test().map_err(|e| format!("{:?}", e).into())
         })
         .with_ignored_flag(should_ignore);
         trials.push(trial);
@@ -67,105 +67,133 @@ fn main() -> Result<()> {
 
 /// Return the test program to run and a check that must pass for the test to
 /// run.
-fn check_test_program(name: &str) -> (fn() -> Result<()>, Option<String>) {
+fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
+    use IgnoreCheck::*;
     match name {
         "nn_image_classification" => (
             nn_image_classification,
             if !cfg!(target_arch = "x86_64") {
-                Some("requires x86_64".into())
+                Fail("requires x86_64".into())
             } else if !cfg!(target_os = "linux") && !cfg!(target_os = "windows") {
-                Some("requires linux or windows".into())
+                Fail("requires linux or windows".into())
             } else if let Err(e) = check::openvino::is_installed() {
-                Some(e.to_string())
-            } else if let Err(e) = check::openvino::are_artifacts_available() {
-                Some(e.to_string())
+                Fail(e.to_string().into())
             } else {
-                None
+                Run
             },
         ),
         "nn_image_classification_named" => (
             nn_image_classification_named,
             if !cfg!(target_arch = "x86_64") {
-                Some("requires x86_64".into())
+                Fail("requires x86_64".into())
             } else if !cfg!(target_os = "linux") && !cfg!(target_os = "windows") {
-                Some("requires linux or windows or macos".into())
+                Fail("requires linux or windows or macos".into())
             } else if let Err(e) = check::openvino::is_installed() {
-                Some(e.to_string())
-            } else if let Err(e) = check::openvino::are_artifacts_available() {
-                Some(e.to_string())
+                Fail(e.to_string().into())
             } else {
-                None
+                Run
             },
         ),
         "nn_image_classification_onnx" => (
             nn_image_classification_onnx,
             #[cfg(feature = "onnx")]
-            if !cfg!(target_arch = "x86_64") || !cfg!(target_arch = "aarch64") {
-                Some("requires x86_64 or aarch64".into())
+            if !cfg!(target_arch = "x86_64") && !cfg!(target_arch = "aarch64") {
+                Fail("requires x86_64 or aarch64".into())
             } else if !cfg!(target_os = "linux")
                 && !cfg!(target_os = "windows")
                 && !cfg!(target_os = "macos")
             {
-                Some("requires linux, windows, or macos".into())
-            } else if let Err(e) = check::onnx::is_available() {
-                Some(e.to_string())
-            } else if let Err(e) = check::onnx::are_artifacts_available() {
-                Some(e.to_string())
+                Fail("requires linux, windows, or macos".into())
             } else {
-                None
+                Run
             },
             #[cfg(not(feature = "onnx"))]
-            Some("requires the `onnx` feature".into()),
+            Ignore("requires the `onnx` feature".into()),
         ),
         "nn_image_classification_winml" => (
             nn_image_classification_winml,
             #[cfg(all(feature = "winml", target_os = "windows"))]
             if !cfg!(target_arch = "x86_64") {
-                Some("requires x86_64".into())
+                Fail("requires x86_64".into())
             } else if cfg!(target_os = "windows") {
-                Some("requires windows".into())
+                Fail("requires windows".into())
             } else if let Err(e) = check::winml::is_available() {
-                Some(e.to_string())
-            } else if let Err(e) = check::onnx::are_artifacts_available() {
-                Some(e.to_string())
+                Fail(e.to_string().into())
             } else {
-                None
+                Run
             },
             #[cfg(not(all(feature = "winml", target_os = "windows")))]
-            Some("requires the `winml` feature on windows".into()),
+            Ignore("requires the `winml` feature on windows".into()),
         ),
         _ => panic!("unknown test program: {} (add to this `match`)", name),
     }
 }
 
 fn nn_image_classification() -> Result<()> {
+    check::openvino::is_installed()?;
+    check::openvino::are_artifacts_available()?;
     let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
     exec::run(NN_IMAGE_CLASSIFICATION, backend, false)
 }
 
 fn nn_image_classification_named() -> Result<()> {
+    check::openvino::is_installed()?;
+    check::openvino::are_artifacts_available()?;
     let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
     exec::run(NN_IMAGE_CLASSIFICATION_NAMED, backend, true)
 }
 
-fn nn_image_classification_winml() -> Result<()> {
-    #[cfg(all(feature = "winml", target_os = "windows"))]
-    {
-        let backend = Backend::from(backend::winml::WinMLBackend::default());
-        exec::run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false).unwrap()
-    }
+#[cfg(feature = "onnx")]
+fn nn_image_classification_onnx() -> Result<()> {
+    check::onnx::are_artifacts_available()?;
+    let backend = Backend::from(backend::onnxruntime::OnnxBackend::default());
+    exec::run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false)
+}
 
-    #[cfg(not(all(feature = "winml", target_os = "windows")))]
+#[cfg(not(feature = "onnx"))]
+fn nn_image_classification_onnx() -> Result<()> {
+    bail!("this test requires the `onnx` feature")
+}
+
+#[cfg(all(feature = "winml", target_os = "windows"))]
+fn nn_image_classification_winml() -> Result<()> {
+    check::winml::is_available()?;
+    check::onnx::are_artifacts_available()?;
+    let backend = Backend::from(backend::winml::WinMLBackend::default());
+    exec::run(NN_IMAGE_CLASSIFICATION_WINML, backend, false)
+}
+
+#[cfg(not(all(feature = "winml", target_os = "windows")))]
+fn nn_image_classification_winml() -> Result<()> {
     bail!("this test requires the `winml` feature and only runs on windows")
 }
 
-fn nn_image_classification_onnx() -> Result<()> {
-    #[cfg(feature = "onnx")]
-    {
-        let backend = Backend::from(backend::onnxruntime::OnnxBackend::default());
-        exec::run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false).unwrap()
+/// Helper for keeping track of what tests should do when pre-test checks fail.
+#[derive(Clone)]
+enum IgnoreCheck {
+    Run,
+    Ignore(Cow<'static, str>),
+    Fail(Cow<'static, str>),
+}
+
+impl IgnoreCheck {
+    fn reason(&self) -> &str {
+        match self {
+            IgnoreCheck::Run => panic!("cannot get reason for `Run`"),
+            IgnoreCheck::Ignore(reason) => reason,
+            IgnoreCheck::Fail(reason) => reason,
+        }
     }
 
-    #[cfg(not(feature = "onnx"))]
-    bail!("this test requires the `onnx` feature")
+    fn downgrade_failure(self) -> Self {
+        if let IgnoreCheck::Fail(reason) = self {
+            IgnoreCheck::Ignore(reason)
+        } else {
+            self
+        }
+    }
+
+    fn is_ignore(&self) -> bool {
+        matches!(self, IgnoreCheck::Ignore(_))
+    }
 }
