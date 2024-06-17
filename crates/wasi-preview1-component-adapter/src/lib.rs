@@ -823,6 +823,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                             let mut fs_rights_base = !0;
                             if !flags.contains(filesystem::DescriptorFlags::READ) {
                                 fs_rights_base &= !RIGHTS_FD_READ;
+                                fs_rights_base &= !RIGHTS_FD_READDIR;
                             }
                             if !flags.contains(filesystem::DescriptorFlags::WRITE) {
                                 fs_rights_base &= !RIGHTS_FD_WRITE;

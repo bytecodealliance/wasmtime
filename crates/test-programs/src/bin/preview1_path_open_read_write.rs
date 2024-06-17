@@ -53,6 +53,10 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
         "writeonly does not have read right"
     );
     assert!(
+        stat.fs_rights_base & wasi::RIGHTS_FD_READDIR == 0,
+        "writeonly does not have readdir right"
+    );
+    assert!(
         stat.fs_rights_base & wasi::RIGHTS_FD_WRITE == wasi::RIGHTS_FD_WRITE,
         "writeonly has write right"
     );

@@ -1405,6 +1405,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         }
         if !flags.contains(filesystem::DescriptorFlags::READ) {
             fs_rights_base &= !types::Rights::FD_READ;
+            fs_rights_base &= !types::Rights::FD_READDIR;
         }
         if !flags.contains(filesystem::DescriptorFlags::WRITE) {
             fs_rights_base &= !types::Rights::FD_WRITE;
