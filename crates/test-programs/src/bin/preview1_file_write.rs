@@ -80,6 +80,33 @@ unsafe fn test_file_long_write(dir_fd: wasi::Fd, filename: &str) {
     assert_eq!(buffer, &content[end_cursor..], "contents of end read chunk");
 
     wasi::fd_close(file_fd).expect("closing the file");
+
+    // Open a file for writing
+    let filename = "test-zero-write-fails.txt";
+    let file_fd = wasi::path_open(
+        dir_fd,
+        0,
+        filename,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("creating a file for writing");
+    wasi::fd_close(file_fd).expect("closing the file");
+    let file_fd = wasi::path_open(dir_fd, 0, filename, 0, wasi::RIGHTS_FD_READ, 0, 0)
+        .expect("opening a file for writing");
+    let res = wasi::fd_write(
+        file_fd,
+        &[wasi::Ciovec {
+            buf: 3 as *const u8,
+            buf_len: 0,
+        }],
+    );
+    assert!(
+        res == Err(wasi::ERRNO_BADF) || res == Err(wasi::ERRNO_PERM),
+        "bad result {res:?}"
+    )
 }
 
 fn main() {

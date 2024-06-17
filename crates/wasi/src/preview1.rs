@@ -1047,34 +1047,36 @@ fn read_string<'a>(memory: &'a GuestMemory<'_>, ptr: GuestPtr<str>) -> Result<St
     Ok(memory.as_cow_str(ptr)?.into_owned())
 }
 
-// Find first non-empty buffer.
+// Returns the first non-empty buffer in `ciovs` or a single empty buffer if
+// they're all empty.
 fn first_non_empty_ciovec(
     memory: &GuestMemory<'_>,
     ciovs: types::CiovecArray,
-) -> Result<Option<GuestPtr<[u8]>>> {
+) -> Result<GuestPtr<[u8]>> {
     for iov in ciovs.iter() {
         let iov = memory.read(iov?)?;
         if iov.buf_len == 0 {
             continue;
         }
-        return Ok(Some(iov.buf.as_array(iov.buf_len)));
+        return Ok(iov.buf.as_array(iov.buf_len));
     }
-    Ok(None)
+    Ok(GuestPtr::new((0, 0)))
 }
 
-// Find first non-empty buffer.
+// Returns the first non-empty buffer in `iovs` or a single empty buffer if
+// they're all empty.
 fn first_non_empty_iovec(
     memory: &GuestMemory<'_>,
     iovs: types::IovecArray,
-) -> Result<Option<GuestPtr<[u8]>>> {
+) -> Result<GuestPtr<[u8]>> {
     for iov in iovs.iter() {
         let iov = memory.read(iov?)?;
         if iov.buf_len == 0 {
             continue;
         }
-        return Ok(Some(iov.buf.as_array(iov.buf_len)));
+        return Ok(iov.buf.as_array(iov.buf_len));
     }
-    Ok(None)
+    Ok(GuestPtr::new((0, 0)))
 }
 
 #[async_trait::async_trait]
@@ -1612,9 +1614,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 drop(t);
                 let pos = position.load(Ordering::Relaxed);
                 let file = self.table().get(&fd)?.file()?;
-                let Some(iov) = first_non_empty_iovec(memory, iovs)? else {
-                    return Ok(0);
-                };
+                let iov = first_non_empty_iovec(memory, iovs)?;
                 let bytes_read = match (file.as_blocking_file(), memory.as_slice_mut(iov)?) {
                     // Try to read directly into wasm memory where possible
                     // when the current thread can block and additionally wasm
@@ -1653,9 +1653,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             Descriptor::Stdin { stream, .. } => {
                 let stream = stream.borrowed();
                 drop(t);
-                let Some(buf) = first_non_empty_iovec(memory, iovs)? else {
-                    return Ok(0);
-                };
+                let buf = first_non_empty_iovec(memory, iovs)?;
                 let read = BlockingMode::Blocking
                     .read(&mut self.as_wasi_impl(), stream, buf.len().try_into()?)
                     .await?;
@@ -1690,9 +1688,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 drop(t);
-                let Some(buf) = first_non_empty_iovec(memory, iovs)? else {
-                    return Ok(0);
-                };
+                let buf = first_non_empty_iovec(memory, iovs)?;
 
                 let stream = self
                     .as_wasi_impl()
@@ -1758,9 +1754,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let append = *append;
                 drop(t);
                 let f = self.table().get(&fd)?.file()?;
-                let Some(buf) = first_non_empty_ciovec(memory, ciovs)? else {
-                    return Ok(0);
-                };
+                let buf = first_non_empty_ciovec(memory, ciovs)?;
 
                 let write = move |f: &cap_std::fs::File, buf: &[u8]| {
                     if append {
@@ -1798,9 +1792,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
                 let stream = stream.borrowed();
                 drop(t);
-                let Some(buf) = first_non_empty_ciovec(memory, ciovs)? else {
-                    return Ok(0);
-                };
+                let buf = first_non_empty_ciovec(memory, ciovs)?;
                 let n = BlockingMode::Blocking
                     .write(memory, &mut self.as_wasi_impl(), stream, buf)
                     .await?
@@ -1830,9 +1822,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 drop(t);
-                let Some(buf) = first_non_empty_ciovec(memory, ciovs)? else {
-                    return Ok(0);
-                };
+                let buf = first_non_empty_ciovec(memory, ciovs)?;
                 let stream = self
                     .as_wasi_impl()
                     .write_via_stream(fd, offset)

@@ -335,32 +335,34 @@ impl HostOutputStream for FileOutputStream {
             }
         }
 
-        if buf.is_empty() {
-            return Ok(());
-        }
-
         let m = self.mode;
         let result = self.file._spawn_blocking(move |f| {
             match m {
                 FileOutputMode::Position(mut p) => {
                     let mut total = 0;
                     let mut buf = buf;
-                    while !buf.is_empty() {
+                    loop {
                         let nwritten = f.write_at(buf.as_ref(), p)?;
                         // afterwards buf contains [nwritten, len):
                         let _ = buf.split_to(nwritten);
                         p += nwritten as u64;
                         total += nwritten;
+                        if buf.is_empty() {
+                            break;
+                        }
                     }
                     Ok(total)
                 }
                 FileOutputMode::Append => {
                     let mut total = 0;
                     let mut buf = buf;
-                    while !buf.is_empty() {
+                    loop {
                         let nwritten = f.append(buf.as_ref())?;
                         let _ = buf.split_to(nwritten);
                         total += nwritten;
+                        if buf.is_empty() {
+                            break;
+                        }
                     }
                     Ok(total)
                 }

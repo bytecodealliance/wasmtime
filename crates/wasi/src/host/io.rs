@@ -75,11 +75,14 @@ where
         }
 
         let mut bytes = bytes::Bytes::from(bytes);
-        while !bytes.is_empty() {
+        loop {
             let permit = s.write_ready().await?;
             let len = bytes.len().min(permit);
             let chunk = bytes.split_to(len);
             s.write(chunk)?;
+            if bytes.is_empty() {
+                break;
+            }
         }
 
         s.flush()?;
