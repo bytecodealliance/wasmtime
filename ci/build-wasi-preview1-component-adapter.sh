@@ -7,19 +7,22 @@ verify="cargo run -p verify-component-adapter --"
 debug="target/wasm32-unknown-unknown/debug/wasi_snapshot_preview1.wasm"
 release="target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm"
 
-RUST_TOOLCHAIN=$( \
+# The rust version that the adapter is built with is the crate's MSRV
+RUST_VERSION=$( \
   grep '^rust-version\s*=' crates/wasi-preview1-component-adapter/Cargo.toml | \
   sed 's/rust-version.*=.*\"\(.*\)\"/\1/' \
 )
 
 # The adapter's version is the adapter crate's version
 VERSION=$( \
-  grep '^version\s*=' Cargo.toml | \
+  grep '^version\s*=' crates/wasi-preview1-component-adapter/Cargo.toml | \
   sed 's/version.*=.*\"\(.*\)\"/\1/' \
 )
 
-rustup toolchain install $RUST_TOOLCHAIN --profile minimal
-rustup target add wasm32-wasi wasm32-unknown-unknown --toolchain $RUST_TOOLCHAIN
+rustup toolchain install $RUST_VERSION --profile minimal
+rustup target add wasm32-wasi wasm32-unknown-unknown --toolchain $RUST_VERSION
+
+export RUSTUP_TOOLCHAIN=$RUST_VERSION
 
 cargo --version
 

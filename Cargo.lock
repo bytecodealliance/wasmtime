@@ -3181,7 +3181,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-preview1-component-adapter"
-version = "23.0.0"
+version = "23.0.0+wasi-0.2.0"
 dependencies = [
  "bitflags 2.4.1",
  "byte-array-literals",

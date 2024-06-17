@@ -1,6 +1,6 @@
 [package]
 name = "wasi-preview1-component-adapter"
-version.workspace = true
+version = "23.0.0+wasi-0.2.0"
 rust-version = "1.77.0"
 authors.workspace = true
 edition.workspace = true
