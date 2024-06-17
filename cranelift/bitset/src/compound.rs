@@ -293,9 +293,10 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn insert(&mut self, i: usize) -> bool {
-        if i >= self.len {
+        if i >= self.capacity() {
             self.reserve(i + 1);
         }
+
         let (word, bit) = Self::word_and_bit(i);
         let is_new = self.elems[word].insert(bit);
         self.len += is_new as usize;
