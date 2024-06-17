@@ -12,6 +12,7 @@ use std::{
     env,
     path::{Path, PathBuf},
     process::Command,
+    sync::Mutex,
 };
 
 #[cfg(any(feature = "onnx", feature = "winml"))]
@@ -20,6 +21,11 @@ pub mod onnx;
 pub mod openvino;
 #[cfg(all(feature = "winml", target_os = "windows"))]
 pub mod winml;
+
+/// Protect `are_artifacts_available` from concurrent access; when running tests
+/// in parallel, we want to avoid two threads attempting to create the same
+/// directory or download the same file.
+pub static DOWNLOAD_LOCK: Mutex<()> = Mutex::new(());
 
 /// Return the directory in which the test artifacts are stored.
 pub fn artifacts_dir() -> PathBuf {

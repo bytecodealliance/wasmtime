@@ -1,14 +1,9 @@
 #![allow(unused)]
 
-use super::{artifacts_dir, download};
+use super::{artifacts_dir, download, DOWNLOAD_LOCK};
 use anyhow::{Context, Result};
 use std::sync::Mutex;
 use std::{env, fs};
-
-/// Protect `are_artifacts_available` from concurrent access; when running tests
-/// in parallel, we want to avoid two threads attempting to create the same
-/// directory or download the same file.
-static DOWNLOAD_LOCK: Mutex<()> = Mutex::new(());
 
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
