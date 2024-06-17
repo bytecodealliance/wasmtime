@@ -95,7 +95,7 @@ unsafe fn test_file_long_write(dir_fd: wasi::Fd, filename: &str) {
     .expect("creating a file for writing");
     wasi::fd_close(file_fd).expect("closing the file");
     let file_fd = wasi::path_open(dir_fd, 0, filename, 0, wasi::RIGHTS_FD_READ, 0, 0)
-        .expect("creating a file for writing");
+        .expect("opening a file for writing");
     let res = wasi::fd_write(
         file_fd,
         &[wasi::Ciovec {
