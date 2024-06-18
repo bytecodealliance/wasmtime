@@ -350,7 +350,11 @@ where
 
 impl InstanceExportLookup for str {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        component.env_component().exports.get(self, &()).copied()
+        component
+            .env_component()
+            .exports
+            .get(self, &NameMapNoIntern)
+            .copied()
     }
 }
 

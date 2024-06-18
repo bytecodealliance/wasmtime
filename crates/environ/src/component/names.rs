@@ -27,8 +27,7 @@ pub struct NameMap<K: Clone + Hash + Eq + Ord, V> {
     /// "semver compatible alternate name" to a name present in `definitions`
     /// and the semver version it was registered at.
     ///
-    /// The `usize` entries here map to intern'd keys, so an example map could
-    /// be:
+    /// An example map would be:
     ///
     /// ```text
     /// {
@@ -159,7 +158,7 @@ pub trait NameMapIntern {
     /// The key that this interning context generates.
     type Key;
 
-    /// Inserts `s` into `self` and returns the intern'd key `Self`.
+    /// Inserts `s` into `self` and returns the intern'd key `Self::Key`.
     fn intern(&mut self, s: &str) -> Self::Key;
 
     /// Looks up `s` in `self` returning `Some` if it was found or `None` if
@@ -167,7 +166,11 @@ pub trait NameMapIntern {
     fn lookup(&self, s: &str) -> Option<Self::Key>;
 }
 
-impl NameMapIntern for () {
+/// For use with [`NameMap`] when no interning should happen and instead string
+/// keys are copied as-is.
+pub struct NameMapNoIntern;
+
+impl NameMapIntern for NameMapNoIntern {
     type Key = String;
 
     fn intern(&mut self, s: &str) -> String {

@@ -382,7 +382,7 @@ impl ComponentDfg {
         for (name, export) in self.exports.iter() {
             let export =
                 linearize.export(export, &mut export_items, wasmtime_types, wasmparser_types)?;
-            exports.insert(name, &mut (), false, export)?;
+            exports.insert(name, &mut NameMapNoIntern, false, export)?;
         }
 
         // With all those pieces done the results of the dataflow-based
@@ -527,7 +527,7 @@ impl LinearizeDfg<'_> {
                     for (name, export) in exports {
                         let export =
                             self.export(export, items, wasmtime_types, wasmparser_types)?;
-                        map.insert(name, &mut (), false, export)?;
+                        map.insert(name, &mut NameMapNoIntern, false, export)?;
                     }
                     map
                 },
