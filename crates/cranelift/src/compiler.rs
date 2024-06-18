@@ -10,8 +10,8 @@ use cranelift_codegen::isa::{
     OwnedTargetIsa, TargetIsa,
 };
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::Context;
-use cranelift_codegen::{CompiledCode, MachStackMap};
+use cranelift_codegen::write::{decorate_function, FuncWriter, PlainWriter};
+use cranelift_codegen::{CompiledCode, Context, MachStackMap};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{DefinedFuncIndex, FuncTranslator, WasmFuncType, WasmValType};
@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, FlagValue, FunctionBodyData,
-    FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PtrSize, RelocationTarget,
+    FunctionLoc, LineContext, ModuleTranslation, ModuleTypesBuilder, PtrSize, RelocationTarget,
     StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets,
     WasmFunctionInfo,
 };
@@ -221,14 +221,21 @@ impl wasmtime_environ::Compiler for Compiler {
         )?;
 
         if let Some(path) = &self.clif_dir {
-            use std::io::Write;
-
             let mut path = path.to_path_buf();
             path.push(format!("wasm_func_{}", func_index.as_u32()));
             path.set_extension("clif");
 
-            let mut output = std::fs::File::create(path).unwrap();
-            write!(output, "{}", context.func.display()).unwrap();
+            let mut contents = String::new();
+            decorate_function(
+                &mut LineNumberWriter {
+                    context: LineContext::new(&translation.debuginfo),
+                    base: PlainWriter,
+                },
+                &mut contents,
+                &context.func,
+            )
+            .unwrap();
+            std::fs::write(path, contents).unwrap();
         }
 
         let (info, func) = compiler.finish_with_info(Some((&body, &self.tunables)))?;
@@ -887,6 +894,40 @@ impl FunctionCompiler<'_> {
             },
             compiled_function,
         ))
+    }
+}
+
+struct LineNumberWriter<'a> {
+    context: LineContext<'a>,
+    base: PlainWriter,
+}
+
+impl FuncWriter for LineNumberWriter<'_> {
+    fn write_block_header(
+        &mut self,
+        w: &mut dyn std::fmt::Write,
+        func: &ir::Function,
+        block: ir::Block,
+        indent: usize,
+    ) -> core::fmt::Result {
+        self.base.write_block_header(w, func, block, indent)
+    }
+
+    fn write_instruction(
+        &mut self,
+        w: &mut dyn std::fmt::Write,
+        func: &ir::Function,
+        aliases: &cranelift_entity::SecondaryMap<Value, Vec<Value>>,
+        inst: ir::Inst,
+        indent: usize,
+    ) -> core::fmt::Result {
+        let srcloc = func.srcloc(inst);
+        if !srcloc.is_default() {
+            if let Some(line) = self.context.lookup(srcloc.bits().into()) {
+                writeln!(w, ";; {line}")?;
+            }
+        }
+        self.base.write_instruction(w, func, aliases, inst, indent)
     }
 }
 

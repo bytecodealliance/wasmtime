@@ -10,6 +10,10 @@ use crate::{
     WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use anyhow::{bail, Result};
+use core::cmp::Ordering;
+use core::mem::replace;
+use core::num::NonZeroU64;
+use core::ops::Range;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
 use std::borrow::Cow;
@@ -124,6 +128,8 @@ pub struct FunctionBodyData<'a> {
 #[allow(missing_docs)]
 pub struct DebugInfoData<'a> {
     pub dwarf: Dwarf<'a>,
+    line_units: Vec<LineUnit<'a>>,
+    line_sequences: Vec<LineSequence<'a>>,
     pub name_section: NameSection<'a>,
     pub wasm_file: WasmFileInfo,
     pub debug_loc: gimli::DebugLoc<Reader<'a>>,
@@ -138,6 +144,17 @@ pub struct DebugInfoData<'a> {
 pub type Dwarf<'input> = gimli::Dwarf<Reader<'input>>;
 
 type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
+
+#[derive(Debug)]
+struct LineUnit<'input> {
+    pub line_program: gimli::CompleteLineProgram<Reader<'input>, usize>,
+}
+
+#[derive(Debug)]
+struct LineSequence<'input> {
+    pub sequence: gimli::LineSequence<Reader<'input>>,
+    pub unit: usize,
+}
 
 #[derive(Debug, Default)]
 #[allow(missing_docs)]
@@ -161,6 +178,160 @@ pub struct WasmFileInfo {
 pub struct FunctionMetadata {
     pub params: Box<[WasmValType]>,
     pub locals: Box<[(u32, WasmValType)]>,
+}
+
+/// A cache for quickly looking up DWARF file/line information given a source
+/// location. In general, `addr2line`-style tools need to do linear searches
+/// through the `.debug_lines` section to find a given address. However, if
+/// you need to look up many addresses and they're usually in roughly ascending
+/// order, then this structure can remember what you last looked up and scan
+/// forward from there.
+pub struct LineContext<'a> {
+    /// Reference to all the DWARF info we've extracted.
+    debuginfo: &'a DebugInfoData<'a>,
+    /// Address of the last row we looked up in the line program. Subsequent
+    /// queries in this range would produce identical file/line information so
+    /// we discard them to avoid clutter.
+    current: u64,
+    /// Range of addresses remaining in the last sequence we looked up. A
+    /// sequence contains some number of rows for addresses in ascending order,
+    /// and each row provides a filename, line number, and column number that
+    /// produced the instructions starting at the given address.
+    sequence: Range<u64>,
+    /// The next filename to use after `current`.
+    next_file: u64,
+    /// The next line number to use after `current`.
+    next_line: Option<NonZeroU64>,
+    /// The next column number to use after `current`.
+    next_column: gimli::ColumnType,
+    /// The remaining rows in the current sequence, or `None` if we haven't
+    /// looked up any sequence yet.
+    upcoming: Option<
+        gimli::LineRows<Reader<'a>, &'a gimli::CompleteLineProgram<Reader<'a>, usize>, usize>,
+    >,
+}
+
+impl<'a> LineContext<'a> {
+    /// Construct a new line-number cache that can look up addresses in the
+    /// given debug info.
+    pub fn new(debuginfo: &'a DebugInfoData<'a>) -> Self {
+        LineContext {
+            debuginfo,
+            current: 0,
+            sequence: 0..0,
+            next_file: 0,
+            next_line: None,
+            next_column: gimli::ColumnType::LeftEdge,
+            upcoming: None,
+        }
+    }
+
+    /// Reset the cache so that the next call to `lookup` will return something
+    /// even if it's the same result as the last call to `lookup`.
+    pub fn reset(&mut self) {
+        self.current = 0;
+        self.sequence = 0..0;
+        self.upcoming = None;
+    }
+
+    /// Given a WebAssembly bytecode source location, try to construct a string
+    /// describing the file and line in the original source code which produced
+    /// that instruction. Returns `None` if the address has the same file and
+    /// line number as the last time that `lookup` was called.
+    pub fn lookup(&mut self, address: u64) -> Option<String> {
+        // Wasmtime uses addresses relative to the start of the file, but DWARF
+        // for WebAssembly uses addresses relative to the start of the code
+        // section.
+        let address = address - self.debuginfo.wasm_file.code_section_offset;
+
+        // Skip this address if it's going to map to the same row as the last
+        // lookup.
+        if (self.current..self.sequence.start).contains(&address) {
+            return None;
+        }
+
+        // If we're still in the same sequence as the last lookup, we can skip
+        // the binary search to find the right sequence.
+        if !self.sequence.contains(&address) {
+            // Find a sequence whose range contains this address. Sequence
+            // ranges include their start address and exclude their end address.
+            // We previously sorted the `debuginfo.line_sequences` array and it
+            // should be true that there are no overlapping ranges.
+            let sequence_idx = match self.debuginfo.line_sequences.binary_search_by(|v| {
+                if address < v.sequence.start {
+                    Ordering::Greater
+                } else if v.sequence.end <= address {
+                    Ordering::Less
+                } else {
+                    Ordering::Equal
+                }
+            }) {
+                Ok(i) => i,
+                // If we don't find any matching range, check whether we're
+                // following some previous successful `lookup` call; if so,
+                // report that we're no longer in that range and we don't know
+                // where we are any more.
+                Err(_) => {
+                    return self.upcoming.is_some().then(|| {
+                        self.reset();
+                        "<unknown location>".to_string()
+                    })
+                }
+            };
+
+            let sequence = &self.debuginfo.line_sequences[sequence_idx];
+            let unit = &self.debuginfo.line_units[sequence.unit];
+            self.upcoming = Some(unit.line_program.resume_from(&sequence.sequence));
+            self.sequence = sequence.sequence.start..sequence.sequence.end;
+            debug_assert!(
+                self.sequence.contains(&address),
+                "{:?} should contain {}",
+                self.sequence,
+                address
+            );
+        }
+
+        // Either we just set `self.upcoming` to `Some` above, or we're still in
+        // the same sequence as a previous call which must have set it.
+        let rows = self.upcoming.as_mut().unwrap();
+
+        // Walk the line program forward until we've gone past the new address,
+        // then take the last row we saw before that. The invariant for this
+        // loop is that self.next_{file,line,column} correspond to the row
+        // for the address in self.sequence.start, except on entry to the
+        // first iteration after we've started a new sequence, when those
+        // fields are all garbage. In that case, self.sequence.start equals
+        // next_row.address() so the loop is guaranteed to run a second time.
+        let mut file = 0;
+        let mut line = None;
+        let mut column = gimli::ColumnType::LeftEdge;
+        while address >= self.sequence.start {
+            let (_header, next_row) = rows.next_row().unwrap().unwrap();
+            self.current = replace(&mut self.sequence.start, next_row.address());
+            file = replace(&mut self.next_file, next_row.file_index());
+            line = replace(&mut self.next_line, next_row.line());
+            column = replace(&mut self.next_column, next_row.column());
+        }
+
+        let line = line.map_or(0, NonZeroU64::get);
+        let column = match column {
+            gimli::ColumnType::LeftEdge => 0,
+            gimli::ColumnType::Column(c) => c.get(),
+        };
+
+        if let Some(file) = rows.header().file(file) {
+            let mut path = PathBuf::new();
+            if let Some(gimli::AttributeValue::String(dir)) = file.directory(rows.header()) {
+                path.push(dir.to_string_lossy().as_ref());
+            }
+            if let gimli::AttributeValue::String(file) = file.path_name() {
+                path.push(file.to_string_lossy().as_ref());
+            }
+            Some(format!("{}:{line}:{column}", path.display()))
+        } else {
+            Some(format!("<unknown>:{line}:{column}"))
+        }
+    }
 }
 
 impl<'a, 'data> ModuleEnvironment<'a, 'data> {
@@ -197,7 +368,58 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             self.translate_payload(payload?)?;
         }
 
+        if self.tunables.parse_wasm_debuginfo {
+            self.extract_line_program()?;
+        }
+
         Ok(self.result)
+    }
+
+    fn extract_line_program(&mut self) -> Result<()> {
+        // Line programs are grouped by compilation unit, and then may be split
+        // into sequences. In principle we could determine which compilation
+        // unit an address falls into and only search the line program in that
+        // unit, but DWARF producers don't always get those ranges correct, so
+        // we use the boundaries of the sequences themselves instead and look
+        // them up ignoring unit boundaries. However there is some per-unit data
+        // we need to hang on to in order to interpret each sequence, and that
+        // data is pretty large, so we indirect to it in a separate `line_units`
+        // vector.
+        let dwarf = &self.result.debuginfo.dwarf;
+        let mut line_units = Vec::new();
+        let mut all_sequences = Vec::new();
+        let mut iter = dwarf.units();
+        while let Some(header) = iter.next()? {
+            let unit = dwarf.unit(header)?;
+            if let Some(program) = unit.line_program.clone() {
+                let (line_program, sequences) = program.sequences()?;
+                let unit = line_units.len();
+                line_units.push(LineUnit { line_program });
+                all_sequences.extend(
+                    sequences
+                        .into_iter()
+                        // FIXME: make gimli stop returning nonsense sequences
+                        .filter(|sequence| sequence.start != 0)
+                        .map(|sequence| LineSequence { sequence, unit }),
+                );
+            }
+        }
+
+        // Within each sequence DWARF specifies that the instruction
+        // addresses are in ascending order, but there are no guarantees
+        // across different sequences, which could even be interleaved
+        // across different compilation units. We sort the sequences so
+        // we can look them up easily as needed.
+        all_sequences.sort_unstable_by_key(|v| v.sequence.start);
+
+        // We expect that no sequence overlaps with any other.
+        debug_assert!(all_sequences
+            .windows(2)
+            .all(|w| w[0].sequence.end <= w[1].sequence.start));
+
+        self.result.debuginfo.line_units = line_units;
+        self.result.debuginfo.line_sequences = all_sequences;
+        Ok(())
     }
 
     fn translate_payload(&mut self, payload: Payload<'data>) -> Result<()> {
