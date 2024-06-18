@@ -2487,11 +2487,7 @@ impl<'a> Parser<'a> {
                         self.match_uimm32("expected a u32 offset")?.into()
                     }
                     _ => {
-                        self.match_token(Token::Plus, "expected `+ <offset>`")
-                            .map_err(|e| {
-                                dbg!(self.lookahead);
-                                e
-                            })?;
+                        self.match_token(Token::Plus, "expected `+ <offset>`")?;
                         self.match_uimm32("expected a u32 offset")?.into()
                     }
                 };
