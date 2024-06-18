@@ -225,7 +225,7 @@ fn alternate_lookup_key(name: &str) -> Option<(&str, Version)> {
 
 #[cfg(test)]
 mod tests {
-    use super::NameMap;
+    use super::{NameMap, NameMapNoIntern};
 
     #[test]
     fn alternate_lookup_key() {
@@ -253,22 +253,23 @@ mod tests {
     #[test]
     fn name_map_smoke() {
         let mut map = NameMap::default();
+        let mut intern = NameMapNoIntern;
 
-        map.insert("a", &mut (), false, 0).unwrap();
-        map.insert("b", &mut (), false, 1).unwrap();
+        map.insert("a", &mut intern, false, 0).unwrap();
+        map.insert("b", &mut intern, false, 1).unwrap();
 
-        assert!(map.insert("a", &mut (), false, 0).is_err());
-        assert!(map.insert("a", &mut (), true, 0).is_ok());
+        assert!(map.insert("a", &mut intern, false, 0).is_err());
+        assert!(map.insert("a", &mut intern, true, 0).is_ok());
 
-        assert_eq!(map.get("a", &()), Some(&0));
-        assert_eq!(map.get("b", &()), Some(&1));
-        assert_eq!(map.get("c", &()), None);
+        assert_eq!(map.get("a", &intern), Some(&0));
+        assert_eq!(map.get("b", &intern), Some(&1));
+        assert_eq!(map.get("c", &intern), None);
 
-        map.insert("a:b/c@1.0.0", &mut (), false, 2).unwrap();
-        map.insert("a:b/c@1.0.1", &mut (), false, 3).unwrap();
-        assert_eq!(map.get("a:b/c@1.0.0", &()), Some(&2));
-        assert_eq!(map.get("a:b/c@1.0.1", &()), Some(&3));
-        assert_eq!(map.get("a:b/c@1.0.2", &()), Some(&3));
-        assert_eq!(map.get("a:b/c@1.1.0", &()), Some(&3));
+        map.insert("a:b/c@1.0.0", &mut intern, false, 2).unwrap();
+        map.insert("a:b/c@1.0.1", &mut intern, false, 3).unwrap();
+        assert_eq!(map.get("a:b/c@1.0.0", &intern), Some(&2));
+        assert_eq!(map.get("a:b/c@1.0.1", &intern), Some(&3));
+        assert_eq!(map.get("a:b/c@1.0.2", &intern), Some(&3));
+        assert_eq!(map.get("a:b/c@1.1.0", &intern), Some(&3));
     }
 }
