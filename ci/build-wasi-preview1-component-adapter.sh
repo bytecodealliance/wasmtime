@@ -13,12 +13,18 @@ RUST_VERSION=$( \
   sed 's/rust-version.*=.*\"\(.*\)\"/\1/' \
 )
 
-rustup toolchain install $RUST_VERSION --profile minimal
-rustup target add wasm32-wasi wasm32-unknown-unknown --toolchain $RUST_VERSION
-
-export RUSTUP_TOOLCHAIN=$RUST_VERSION
-
-cargo --version
+if [[ $(rustc --version | grep $RUST_VERSION | wc -c) -eq 0 ]]; then
+  set +x
+  echo "The adapter is being built with a different Rust version than its"
+  echo "MSRV"
+  echo ""
+  echo "  current rust version: $(rustc --version)"
+  echo "                  MSRV: $RUST_VERSION"
+  echo ""
+  echo "Please rerun this script with Rust version $RUST_VERSION, or update"
+  echo "the adapter's MSRV in its Cargo.toml file"
+  exit 1
+fi
 
 # Debug build, default features (reactor)
 $build_adapter
