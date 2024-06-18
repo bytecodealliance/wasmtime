@@ -21,7 +21,7 @@ use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType}
 ///
 /// This type represents an instantiated [`Component`](super::Component).
 /// Instances have exports which can be accessed through functions such as
-/// [`Instance::get_func`] or [`Instance::exports`]. Instances are owned by a
+/// [`Instance::get_func`] or [`Instance::get_export`]. Instances are owned by a
 /// [`Store`](crate::Store) and all methods require a handle to the store.
 ///
 /// Component instances are created through
