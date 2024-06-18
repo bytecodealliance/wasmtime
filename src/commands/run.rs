@@ -282,30 +282,36 @@ impl RunCommand {
         path: &str,
         interval: std::time::Duration,
     ) -> Box<dyn FnOnce(&mut Store<Host>)> {
-        use wasmtime::{AsContextMut, GuestProfiler, UpdateDeadline};
+        use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
         store.data_mut().guest_profiler =
             Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
 
-        fn sample(mut store: impl AsContextMut<Data = Host>) {
-            let mut profiler = store
-                .as_context_mut()
-                .data_mut()
-                .guest_profiler
-                .take()
-                .unwrap();
-            Arc::get_mut(&mut profiler)
-                .expect("profiling doesn't support threads yet")
-                .sample(&store, std::time::Duration::ZERO);
-            store.as_context_mut().data_mut().guest_profiler = Some(profiler);
+        fn sample(
+            mut store: StoreContextMut<Host>,
+            f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
+        ) {
+            let mut profiler = store.data_mut().guest_profiler.take().unwrap();
+            f(
+                Arc::get_mut(&mut profiler).expect("profiling doesn't support threads yet"),
+                store.as_context(),
+            );
+            store.data_mut().guest_profiler = Some(profiler);
         }
+
+        store.call_hook(|store, kind| {
+            sample(store, |profiler, store| profiler.call_hook(store, kind));
+            Ok(())
+        });
 
         if let Some(timeout) = self.run.common.wasm.timeout {
             let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
             assert!(timeout > 0);
-            store.epoch_deadline_callback(move |mut store| {
-                sample(&mut store);
+            store.epoch_deadline_callback(move |store| {
+                sample(store, |profiler, store| {
+                    profiler.sample(store, std::time::Duration::ZERO)
+                });
                 timeout -= 1;
                 if timeout == 0 {
                     bail!("timeout exceeded");
@@ -313,8 +319,10 @@ impl RunCommand {
                 Ok(UpdateDeadline::Continue(1))
             });
         } else {
-            store.epoch_deadline_callback(move |mut store| {
-                sample(&mut store);
+            store.epoch_deadline_callback(move |store| {
+                sample(store, |profiler, store| {
+                    profiler.sample(store, std::time::Duration::ZERO)
+                });
                 Ok(UpdateDeadline::Continue(1))
             });
         }
