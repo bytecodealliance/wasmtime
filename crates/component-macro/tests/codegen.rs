@@ -649,3 +649,50 @@ mod with_and_mixing_async {
         });
     }
 }
+
+mod trappable_error_type_and_versions {
+    struct MyError;
+
+    mod package_no_version_path_no_version {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline;
+                interface i {
+                    enum e { a, b, c }
+                }
+                world foo {}
+            ",
+            trappable_error_type: {
+                "my:inline/i/e" => super::MyError,
+            },
+        });
+    }
+    mod package_version_path_no_version {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline@1.0.0;
+                interface i {
+                    enum e { a, b, c }
+                }
+                world foo {}
+            ",
+            trappable_error_type: {
+                "my:inline/i/e" => super::MyError,
+            },
+        });
+    }
+    mod package_version_path_version {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline@1.0.0;
+                interface i {
+                    enum e { a, b, c }
+                }
+                world foo {}
+            ",
+            trappable_error_type: {
+                "my:inline/i@1.0.0/e" => super::MyError,
+            },
+        });
+    }
+}

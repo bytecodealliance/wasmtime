@@ -1,6 +1,6 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
-use anyhow::{bail, Context};
+use anyhow::bail;
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -332,14 +332,51 @@ impl Wasmtime {
 
     fn generate(&mut self, resolve: &Resolve, id: WorldId) -> anyhow::Result<String> {
         self.types.analyze(resolve, id);
-        for (i, te) in self.opts.trappable_error_type.iter().enumerate() {
-            let id = resolve_type_in_package(resolve, &te.wit_path)
-                .context(format!("resolving {:?}", te))
-                .unwrap();
-            let name = format!("_TrappableError{i}");
-            uwriteln!(self.src, "type {name} = {};", te.rust_type_name);
-            let prev = self.trappable_errors.insert(id, name);
-            assert!(prev.is_none());
+
+        // Resolve the `trappable_error_type` configuration values to `TypeId`
+        // values. This is done by iterating over each `trappable_error_type`
+        // and then locating the interface that it corresponds to as well as the
+        // type within that interface.
+        //
+        // Note that `LookupItem::InterfaceNoPop` is used here as the full
+        // hierarchical behavior of `lookup_keys` isn't used as the interface
+        // must be named here.
+        'outer: for (i, te) in self.opts.trappable_error_type.iter().enumerate() {
+            let error_name = format!("_TrappableError{i}");
+            for (id, iface) in resolve.interfaces.iter() {
+                for (key, projection) in lookup_keys(
+                    resolve,
+                    &WorldKey::Interface(id),
+                    LookupItem::InterfaceNoPop,
+                ) {
+                    assert!(projection.is_empty());
+
+                    // If `wit_path` looks like `{key}/{type_name}` where
+                    // `type_name` is a type within `iface` then we've found a
+                    // match. Otherwise continue to the next lookup key if there
+                    // is one, and failing that continue to the next interface.
+                    let suffix = match te.wit_path.strip_prefix(&key) {
+                        Some(s) => s,
+                        None => continue,
+                    };
+                    let suffix = match suffix.strip_prefix('/') {
+                        Some(s) => s,
+                        None => continue,
+                    };
+                    if let Some(id) = iface.types.get(suffix) {
+                        uwriteln!(self.src, "type {error_name} = {};", te.rust_type_name);
+                        let prev = self.trappable_errors.insert(*id, error_name);
+                        assert!(prev.is_none());
+                        continue 'outer;
+                    }
+                }
+            }
+
+            bail!(
+                "failed to locate a WIT error type corresponding to the \
+                   `trappable_error_type` name `{}` provided",
+                te.wit_path
+            )
         }
 
         // Convert all entries in `with` as relative to the root of where the
@@ -918,141 +955,21 @@ pub fn new(
         key: &WorldKey,
         item: Option<&str>,
     ) -> Option<String> {
-        struct Name<'a> {
-            prefix: Prefix,
-            item: Option<&'a str>,
-        }
-
-        #[derive(Copy, Clone)]
-        enum Prefix {
-            Namespace(PackageId),
-            UnversionedPackage(PackageId),
-            VersionedPackage(PackageId),
-            UnversionedInterface(InterfaceId),
-            VersionedInterface(InterfaceId),
-        }
-
-        let prefix = match key {
-            WorldKey::Interface(id) => Prefix::VersionedInterface(*id),
-
-            // Non-interface-keyed names don't get the lookup logic below,
-            // they're relatively uncommon so only lookup the precise key here.
-            WorldKey::Name(key) => {
-                let to_lookup = match item {
-                    Some(item) => format!("{key}/{item}"),
-                    None => key.to_string(),
-                };
-                let result = self.opts.with.get(&to_lookup).cloned();
-                if result.is_some() {
-                    self.used_with_opts.insert(to_lookup.clone());
-                }
-                return result;
-            }
+        let item = match item {
+            Some(item) => LookupItem::Name(item),
+            None => LookupItem::None,
         };
 
-        // Here names are iteratively attempted as `key` + `item` is "walked to
-        // its root" and each attempt is consulted in `self.opts.with`. This
-        // loop will start at the leaf, the most specific path, and then walk to
-        // the root, popping items, trying to find a result.
-        //
-        // Each time a name is "popped" the projection from the next path is
-        // pushed onto `projection`. This means that if we actually find a match
-        // then `projection` is a collection of namespaces that results in the
-        // final replacement name.
-        let mut name = Name { prefix, item };
-        let mut projection = Vec::new();
-        loop {
-            let lookup = name.lookup_key(resolve);
+        for (lookup, mut projection) in lookup_keys(resolve, key, item) {
             if let Some(renamed) = self.opts.with.get(&lookup) {
                 projection.push(renamed.clone());
                 projection.reverse();
                 self.used_with_opts.insert(lookup);
                 return Some(projection.join("::"));
             }
-            if !name.pop(resolve, &mut projection) {
-                return None;
-            }
         }
 
-        impl<'a> Name<'a> {
-            fn lookup_key(&self, resolve: &Resolve) -> String {
-                let mut s = self.prefix.lookup_key(resolve);
-                if let Some(item) = self.item {
-                    s.push_str("/");
-                    s.push_str(item);
-                }
-                s
-            }
-
-            fn pop(&mut self, resolve: &'a Resolve, projection: &mut Vec<String>) -> bool {
-                match (self.item, self.prefix) {
-                    // If this is a versioned resource name, try the unversioned
-                    // resource name next.
-                    (Some(_), Prefix::VersionedInterface(id)) => {
-                        self.prefix = Prefix::UnversionedInterface(id);
-                        true
-                    }
-                    // If this is an unversioned resource name then time to
-                    // ignore the resource itself and move on to the next most
-                    // specific item, versioned interface names.
-                    (Some(item), Prefix::UnversionedInterface(id)) => {
-                        self.prefix = Prefix::VersionedInterface(id);
-                        self.item = None;
-                        projection.push(item.to_upper_camel_case());
-                        true
-                    }
-                    (Some(_), _) => unreachable!(),
-                    (None, _) => self.prefix.pop(resolve, projection),
-                }
-            }
-        }
-
-        impl Prefix {
-            fn lookup_key(&self, resolve: &Resolve) -> String {
-                match *self {
-                    Prefix::Namespace(id) => resolve.packages[id].name.namespace.clone(),
-                    Prefix::UnversionedPackage(id) => {
-                        let mut name = resolve.packages[id].name.clone();
-                        name.version = None;
-                        name.to_string()
-                    }
-                    Prefix::VersionedPackage(id) => resolve.packages[id].name.to_string(),
-                    Prefix::UnversionedInterface(id) => {
-                        let id = resolve.id_of(id).unwrap();
-                        match id.find('@') {
-                            Some(i) => id[..i].to_string(),
-                            None => id,
-                        }
-                    }
-                    Prefix::VersionedInterface(id) => resolve.id_of(id).unwrap(),
-                }
-            }
-
-            fn pop(&mut self, resolve: &Resolve, projection: &mut Vec<String>) -> bool {
-                *self = match *self {
-                    // try the unversioned interface next
-                    Prefix::VersionedInterface(id) => Prefix::UnversionedInterface(id),
-                    // try this interface's versioned package next
-                    Prefix::UnversionedInterface(id) => {
-                        let iface = &resolve.interfaces[id];
-                        let name = iface.name.as_ref().unwrap();
-                        projection.push(to_rust_ident(name));
-                        Prefix::VersionedPackage(iface.package.unwrap())
-                    }
-                    // try the unversioned package next
-                    Prefix::VersionedPackage(id) => Prefix::UnversionedPackage(id),
-                    // try this package's namespace next
-                    Prefix::UnversionedPackage(id) => {
-                        let name = &resolve.packages[id].name;
-                        projection.push(to_rust_ident(&name.name));
-                        Prefix::Namespace(id)
-                    }
-                    // nothing left to try any more
-                    Prefix::Namespace(_) => return false,
-                };
-                true
-            }
-        }
+        None
     }
 
     fn wasmtime_path(&self) -> String {
@@ -1060,6 +977,159 @@ pub fn new(
             .wasmtime_crate
             .clone()
             .unwrap_or("wasmtime".to_string())
+    }
+}
+
+enum LookupItem<'a> {
+    None,
+    Name(&'a str),
+    InterfaceNoPop,
+}
+
+fn lookup_keys(
+    resolve: &Resolve,
+    key: &WorldKey,
+    item: LookupItem<'_>,
+) -> Vec<(String, Vec<String>)> {
+    struct Name<'a> {
+        prefix: Prefix,
+        item: Option<&'a str>,
+    }
+
+    #[derive(Copy, Clone)]
+    enum Prefix {
+        Namespace(PackageId),
+        UnversionedPackage(PackageId),
+        VersionedPackage(PackageId),
+        UnversionedInterface(InterfaceId),
+        VersionedInterface(InterfaceId),
+    }
+
+    let prefix = match key {
+        WorldKey::Interface(id) => Prefix::VersionedInterface(*id),
+
+        // Non-interface-keyed names don't get the lookup logic below,
+        // they're relatively uncommon so only lookup the precise key here.
+        WorldKey::Name(key) => {
+            let to_lookup = match item {
+                LookupItem::Name(item) => format!("{key}/{item}"),
+                LookupItem::None | LookupItem::InterfaceNoPop => key.to_string(),
+            };
+            return vec![(to_lookup, Vec::new())];
+        }
+    };
+
+    // Here names are iteratively attempted as `key` + `item` is "walked to
+    // its root" and each attempt is consulted in `self.opts.with`. This
+    // loop will start at the leaf, the most specific path, and then walk to
+    // the root, popping items, trying to find a result.
+    //
+    // Each time a name is "popped" the projection from the next path is
+    // pushed onto `projection`. This means that if we actually find a match
+    // then `projection` is a collection of namespaces that results in the
+    // final replacement name.
+    let (interface_required, item) = match item {
+        LookupItem::None => (false, None),
+        LookupItem::Name(s) => (false, Some(s)),
+        LookupItem::InterfaceNoPop => (true, None),
+    };
+    let mut name = Name { prefix, item };
+    let mut projection = Vec::new();
+    let mut ret = Vec::new();
+    loop {
+        let lookup = name.lookup_key(resolve);
+        ret.push((lookup, projection.clone()));
+        if !name.pop(resolve, &mut projection) {
+            break;
+        }
+        if interface_required {
+            match name.prefix {
+                Prefix::VersionedInterface(_) | Prefix::UnversionedInterface(_) => {}
+                _ => break,
+            }
+        }
+    }
+
+    return ret;
+
+    impl<'a> Name<'a> {
+        fn lookup_key(&self, resolve: &Resolve) -> String {
+            let mut s = self.prefix.lookup_key(resolve);
+            if let Some(item) = self.item {
+                s.push_str("/");
+                s.push_str(item);
+            }
+            s
+        }
+
+        fn pop(&mut self, resolve: &'a Resolve, projection: &mut Vec<String>) -> bool {
+            match (self.item, self.prefix) {
+                // If this is a versioned resource name, try the unversioned
+                // resource name next.
+                (Some(_), Prefix::VersionedInterface(id)) => {
+                    self.prefix = Prefix::UnversionedInterface(id);
+                    true
+                }
+                // If this is an unversioned resource name then time to
+                // ignore the resource itself and move on to the next most
+                // specific item, versioned interface names.
+                (Some(item), Prefix::UnversionedInterface(id)) => {
+                    self.prefix = Prefix::VersionedInterface(id);
+                    self.item = None;
+                    projection.push(item.to_upper_camel_case());
+                    true
+                }
+                (Some(_), _) => unreachable!(),
+                (None, _) => self.prefix.pop(resolve, projection),
+            }
+        }
+    }
+
+    impl Prefix {
+        fn lookup_key(&self, resolve: &Resolve) -> String {
+            match *self {
+                Prefix::Namespace(id) => resolve.packages[id].name.namespace.clone(),
+                Prefix::UnversionedPackage(id) => {
+                    let mut name = resolve.packages[id].name.clone();
+                    name.version = None;
+                    name.to_string()
+                }
+                Prefix::VersionedPackage(id) => resolve.packages[id].name.to_string(),
+                Prefix::UnversionedInterface(id) => {
+                    let id = resolve.id_of(id).unwrap();
+                    match id.find('@') {
+                        Some(i) => id[..i].to_string(),
+                        None => id,
+                    }
+                }
+                Prefix::VersionedInterface(id) => resolve.id_of(id).unwrap(),
+            }
+        }
+
+        fn pop(&mut self, resolve: &Resolve, projection: &mut Vec<String>) -> bool {
+            *self = match *self {
+                // try the unversioned interface next
+                Prefix::VersionedInterface(id) => Prefix::UnversionedInterface(id),
+                // try this interface's versioned package next
+                Prefix::UnversionedInterface(id) => {
+                    let iface = &resolve.interfaces[id];
+                    let name = iface.name.as_ref().unwrap();
+                    projection.push(to_rust_ident(name));
+                    Prefix::VersionedPackage(iface.package.unwrap())
+                }
+                // try the unversioned package next
+                Prefix::VersionedPackage(id) => Prefix::UnversionedPackage(id),
+                // try this package's namespace next
+                Prefix::UnversionedPackage(id) => {
+                    let name = &resolve.packages[id].name;
+                    projection.push(to_rust_ident(&name.name));
+                    Prefix::Namespace(id)
+                }
+                // nothing left to try any more
+                Prefix::Namespace(_) => return false,
+            };
+            true
+        }
     }
 }
 
@@ -1259,77 +1329,6 @@ impl Wasmtime {
             uwriteln!(self.src, "Ok(())\n}}");
         }
     }
-}
-
-fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<TypeId> {
-    // Build a map, `packages_to_omit_version`, where that package can be
-    // uniquely identified by its name/namespace combo and as such version
-    // information is not required.
-    let mut packages_with_same_name = HashMap::new();
-    for (id, pkg) in resolve.packages.iter() {
-        packages_with_same_name
-            .entry(PackageName {
-                version: None,
-                ..pkg.name.clone()
-            })
-            .or_insert(Vec::new())
-            .push(id)
-    }
-    let packages_to_omit_version = packages_with_same_name
-        .iter()
-        .filter_map(
-            |(_name, list)| {
-                if list.len() == 1 {
-                    Some(list)
-                } else {
-                    None
-                }
-            },
-        )
-        .flat_map(|l| l)
-        .collect::<HashSet<_>>();
-
-    let mut found_interface = false;
-
-    // Look for an interface whose assigned prefix starts `wit_path`. Not
-    // exactly the most efficient thing ever but is sufficient for now.
-    for (id, interface) in resolve.interfaces.iter() {
-        found_interface = true;
-
-        let iface_name = match &interface.name {
-            Some(name) => name,
-            None => continue,
-        };
-        let pkgid = interface.package.unwrap();
-        let pkgname = &resolve.packages[pkgid].name;
-        let prefix = if packages_to_omit_version.contains(&pkgid) {
-            let mut name = pkgname.clone();
-            name.version = None;
-            format!("{name}/{iface_name}")
-        } else {
-            resolve.id_of(id).unwrap()
-        };
-        let wit_path = match wit_path.strip_prefix(&prefix) {
-            Some(rest) => rest,
-            None => continue,
-        };
-
-        let wit_path = match wit_path.strip_prefix('/') {
-            Some(rest) => rest,
-            None => continue,
-        };
-
-        match interface.types.get(wit_path).copied() {
-            Some(type_id) => return Ok(type_id),
-            None => continue,
-        }
-    }
-
-    if found_interface {
-        bail!("no types found to match `{wit_path}` in interface");
-    }
-
-    bail!("no package/interface found to match `{wit_path}`")
 }
 
 struct InterfaceGenerator<'a> {
