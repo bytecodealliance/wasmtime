@@ -1,5 +1,5 @@
 use crate::component::func::HostFunc;
-use crate::component::linker::{Definition, NameMap, Strings};
+use crate::component::linker::{Definition, Strings};
 use crate::component::ResourceType;
 use crate::prelude::*;
 use crate::runtime::vm::component::ComponentInstance;
@@ -8,8 +8,8 @@ use crate::Module;
 use alloc::sync::Arc;
 use core::any::Any;
 use wasmtime_environ::component::{
-    ComponentTypes, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex, TypeModule,
-    TypeResourceTableIndex,
+    ComponentTypes, NameMap, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex,
+    TypeModule, TypeResourceTableIndex,
 };
 use wasmtime_environ::PrimaryMap;
 
@@ -145,7 +145,7 @@ impl TypeChecker<'_> {
     fn instance(
         &mut self,
         expected: &TypeComponentInstance,
-        actual: Option<&NameMap>,
+        actual: Option<&NameMap<usize, Definition>>,
     ) -> Result<()> {
         // Like modules, every export in the expected type must be present in
         // the actual type. It's ok, though, to have extra exports in the actual
