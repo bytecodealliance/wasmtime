@@ -73,6 +73,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cli-flags",
     "wasmtime-explorer",
     "wasmtime-cli",
+    // wasi component adapter
+    "wasi-preview1-component-adapter-provider",
 ];
 
 // Anything **not** mentioned in this array is required to have an `=a.b.c`
@@ -109,6 +111,8 @@ const PUBLIC_CRATES: &[&str] = &[
     // This is a dependency of cranelift crates and as a result can't break in
     // patch releases as well
     "wasmtime-types",
+    // wasi component adapter
+    "wasi-preview1-component-adapter-provider",
 ];
 
 const C_HEADER_PATH: &str = "./crates/c-api/include/wasmtime.h";

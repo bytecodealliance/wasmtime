@@ -793,8 +793,16 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
+    
+    - name: Install Rust version
+      run: |
+        RUST_VERSION=$( \
+          grep '^rust-version\s*=' crates/wasi-preview1-component-adapter/Cargo.toml | \
+          sed 's/rust-version.*=.*\"\(.*\)\"/\1/' \
+        )
+        rustup toolchain install $RUST_VERSION --profile minimal
+        rustup target add wasm32-wasi wasm32-unknown-unknown --toolchain $RUST_VERSION
+        echo RUSTUP_TOOLCHAIN=$RUST_VERSION >> "$GITHUB_ENV"
 
     - name: Install wasm-tools
       run: |
@@ -802,8 +810,6 @@ jobs:
         echo `pwd`/wasm-tools-1.0.27-x86_64-linux >> $GITHUB_PATH
 
     - run: ./ci/build-wasi-preview1-component-adapter.sh
-      env:
-        VERSION: ${{ github.sha }}
 
     - uses: actions/upload-artifact@v4
       with:
