@@ -106,7 +106,7 @@ impl CompoundBitSet {
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         let mut bitset = Self::new();
-        bitset.reserve(capacity);
+        bitset.ensure_capacity(capacity);
         bitset
     }
 
@@ -224,12 +224,12 @@ impl CompoundBitSet {
         }
     }
 
-    /// Reserve space in this bitset for the values `0..n`, growing the backing
-    /// storage if necessary.
+    /// Ensure there is space in this bitset for the values `0..n`, growing the
+    /// backing storage if necessary.
     ///
-    /// After calling `bitset.reserve(n)`, inserting any element `i` where `i <
-    /// n` is guaranteed to succeed without growing the bitset's backing
-    /// storage.
+    /// After calling `bitset.ensure_capacity(n)`, inserting any element `i`
+    /// where `i < n` is guaranteed to succeed without growing the bitset's
+    /// backing storage.
     ///
     /// # Example
     ///
@@ -240,7 +240,7 @@ impl CompoundBitSet {
     /// // maximum value inserted. Make sure that our bitset has capacity for
     /// // these elements once up front, to avoid growing the backing storage
     /// // multiple times incrementally.
-    /// bitset.reserve(1001);
+    /// bitset.ensure_capacity(1001);
     ///
     /// for i in 0..=1000 {
     ///     if i % 2 == 0 {
@@ -252,7 +252,7 @@ impl CompoundBitSet {
     /// }
     /// ```
     #[inline]
-    pub fn reserve(&mut self, n: usize) {
+    pub fn ensure_capacity(&mut self, n: usize) {
         let (word, _bit) = Self::word_and_bit(n);
         if word >= self.elems.len() {
             self.elems.resize_with(word + 1, ScalarBitSet::new);
@@ -289,7 +289,7 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn insert(&mut self, i: usize) -> bool {
-        self.reserve(i + 1);
+        self.ensure_capacity(i + 1);
         let (word, bit) = Self::word_and_bit(i);
         let is_new = self.elems[word].insert(bit);
         self.len += is_new as usize;
