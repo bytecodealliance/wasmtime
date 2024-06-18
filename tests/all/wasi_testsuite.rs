@@ -45,6 +45,9 @@ fn wasi_testsuite() -> Result<()> {
         "renumber.wasm",
         // Works with FDFLAGS_SYNC which isn't supported
         "path_filestat.wasm",
+        // this test asserts semantics of pwrite which don't match Linux so
+        // ignore the test for now.
+        "pwrite-with-append.wasm",
     ];
     run_all(
         "tests/wasi_testsuite/wasi-common",
