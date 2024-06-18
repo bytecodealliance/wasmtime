@@ -538,7 +538,7 @@ where
         }
 
         if oflags.contains(OpenFlags::TRUNCATE) {
-            opts.truncate(true);
+            opts.truncate(true).write(true);
         }
         if flags.contains(DescriptorFlags::READ) {
             opts.read(true);
