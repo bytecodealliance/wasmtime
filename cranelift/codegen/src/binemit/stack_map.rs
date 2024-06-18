@@ -1,8 +1,4 @@
-use crate::bitset::BitSet;
-use alloc::vec::Vec;
-
-type Num = u32;
-const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
+use cranelift_bitset::CompoundBitSet;
 
 /// Stack maps record which words in a stack frame contain live GC references at
 /// a given instruction pointer.
@@ -72,43 +68,33 @@ const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
     derive(serde_derive::Deserialize, serde_derive::Serialize)
 )]
 pub struct StackMap {
-    bitmap: Vec<BitSet<Num>>,
+    bitset: CompoundBitSet,
     mapped_words: u32,
 }
 
 impl StackMap {
-    /// Create a vec of Bitsets from a slice of bools.
-    pub fn from_slice(vec: &[bool]) -> Self {
-        let len = vec.len();
-        let num_word = len / NUM_BITS + (len % NUM_BITS != 0) as usize;
-        let mut bitmap = Vec::with_capacity(num_word);
-
-        for segment in vec.chunks(NUM_BITS) {
-            let mut curr_word = 0;
-            for (i, set) in segment.iter().enumerate() {
-                if *set {
-                    curr_word |= 1 << i;
-                }
+    /// Create a stack map from a slice of booleans.
+    pub fn from_slice(bools: &[bool]) -> Self {
+        let mut bitset = CompoundBitSet::with_capacity(bools.len());
+        for (i, b) in bools.iter().enumerate() {
+            if *b {
+                bitset.insert(i);
             }
-            bitmap.push(BitSet(curr_word));
         }
         Self {
-            mapped_words: len as u32,
-            bitmap,
+            mapped_words: u32::try_from(bools.len()).unwrap(),
+            bitset,
         }
     }
 
     /// Returns a specified bit.
     pub fn get_bit(&self, bit_index: usize) -> bool {
-        assert!(bit_index < NUM_BITS * self.bitmap.len());
-        let word_index = bit_index / NUM_BITS;
-        let word_offset = bit_index % NUM_BITS;
-        self.bitmap[word_index].contains(word_offset as u32)
+        self.bitset.contains(bit_index)
     }
 
     /// Returns the raw bitmap that represents this stack map.
-    pub fn as_slice(&self) -> &[BitSet<u32>] {
-        &self.bitmap
+    pub fn into_bitset(self) -> CompoundBitSet {
+        self.bitset
     }
 
     /// Returns the number of words represented by this stack map.
@@ -120,11 +106,15 @@ impl StackMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec::Vec;
+
+    type Num = u32;
+    const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 
     #[test]
     fn stack_maps() {
         let vec: Vec<bool> = Vec::new();
-        assert!(StackMap::from_slice(&vec).bitmap.is_empty());
+        assert!(StackMap::from_slice(&vec).bitset.is_empty());
 
         let mut vec: [bool; NUM_BITS] = Default::default();
         let set_true_idx = [5, 7, 24, 31];
@@ -134,22 +124,18 @@ mod tests {
         }
 
         let mut vec = vec.to_vec();
-        assert_eq!(
-            vec![BitSet::<Num>(2164261024)],
-            StackMap::from_slice(&vec).bitmap
-        );
+        let stack_map = StackMap::from_slice(&vec);
+        for idx in 0..32 {
+            assert_eq!(stack_map.get_bit(idx), set_true_idx.contains(&idx));
+        }
 
         vec.push(false);
         vec.push(true);
         let res = StackMap::from_slice(&vec);
-        assert_eq!(
-            vec![BitSet::<Num>(2164261024), BitSet::<Num>(2)],
-            res.bitmap
-        );
-
-        assert!(res.get_bit(5));
-        assert!(res.get_bit(31));
+        for idx in 0..32 {
+            assert_eq!(stack_map.get_bit(idx), set_true_idx.contains(&idx));
+        }
+        assert!(!res.get_bit(32));
         assert!(res.get_bit(33));
-        assert!(!res.get_bit(1));
     }
 }

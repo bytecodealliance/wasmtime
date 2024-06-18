@@ -96,6 +96,12 @@ impl Context {
         self.compiled_code.as_ref()
     }
 
+    /// Returns the compilation result for this function, available after any `compile` function
+    /// has been called.
+    pub fn take_compiled_code(&mut self) -> Option<CompiledCode> {
+        self.compiled_code.take()
+    }
+
     /// Set the flag to request a disassembly when compiling with a
     /// `MachBackend` backend.
     pub fn set_disasm(&mut self, val: bool) {

@@ -1722,6 +1722,11 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         &self.stack_maps[..]
     }
 
+    /// Take this buffer's stack map metadata.
+    pub fn take_stack_maps(&mut self) -> SmallVec<[MachStackMap; 8]> {
+        mem::take(&mut self.stack_maps)
+    }
+
     /// Get the list of call sites for this code.
     pub fn call_sites(&self) -> &[MachCallSite] {
         &self.call_sites[..]

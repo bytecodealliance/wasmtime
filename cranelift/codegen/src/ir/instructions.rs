@@ -15,7 +15,7 @@ use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
-use crate::bitset::BitSet;
+use crate::bitset::ScalarBitSet;
 use crate::entity;
 use crate::ir::{
     self,
@@ -619,8 +619,8 @@ impl OpcodeConstraints {
     }
 }
 
-type BitSet8 = BitSet<u8>;
-type BitSet16 = BitSet<u16>;
+type BitSet8 = ScalarBitSet<u8>;
+type BitSet16 = ScalarBitSet<u16>;
 
 /// A value type set describes the permitted set of types for a type variable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -642,7 +642,7 @@ impl ValueTypeSet {
     ///
     /// Note that the base type set does not have to be included in the type set proper.
     fn is_base_type(self, scalar: Type) -> bool {
-        let l2b = scalar.log2_lane_bits();
+        let l2b = u8::try_from(scalar.log2_lane_bits()).unwrap();
         if scalar.is_int() {
             self.ints.contains(l2b)
         } else if scalar.is_float() {
@@ -657,10 +657,10 @@ impl ValueTypeSet {
     /// Does `typ` belong to this set?
     pub fn contains(self, typ: Type) -> bool {
         if typ.is_dynamic_vector() {
-            let l2l = typ.log2_min_lane_count();
+            let l2l = u8::try_from(typ.log2_min_lane_count()).unwrap();
             self.dynamic_lanes.contains(l2l) && self.is_base_type(typ.lane_type())
         } else {
-            let l2l = typ.log2_lane_count();
+            let l2l = u8::try_from(typ.log2_lane_count()).unwrap();
             self.lanes.contains(l2l) && self.is_base_type(typ.lane_type())
         }
     }
@@ -786,7 +786,7 @@ impl OperandConstraint {
                 let mut tys = ValueTypeSet::default();
 
                 // We're testing scalar values, only.
-                tys.lanes = BitSet::from_range(0, 1);
+                tys.lanes = ScalarBitSet::from_range(0, 1);
 
                 if ctrl_type.is_int() {
                     // The upper bound in from_range is exclusive, and we want to exclude the
@@ -806,7 +806,7 @@ impl OperandConstraint {
                 let mut tys = ValueTypeSet::default();
 
                 // We're testing scalar values, only.
-                tys.lanes = BitSet::from_range(0, 1);
+                tys.lanes = ScalarBitSet::from_range(0, 1);
 
                 if ctrl_type.is_int() {
                     let lower_bound = ctrl_type_bits as u8 + 1;
@@ -815,7 +815,7 @@ impl OperandConstraint {
                     // lower bound would overflow as 2^8 doesn't fit in a u8, but this would
                     // already describe the empty set so instead we leave `ints` in its default
                     // empty state.
-                    if lower_bound < BitSet8::bits() as u8 {
+                    if lower_bound < BitSet8::capacity() {
                         // The interval should include all types wider than `ctrl_type`, so we use
                         // `2^8` as the upper bound, and add one to the bits of `ctrl_type` to define
                         // the interval `(ctrl_type, I128]`.
