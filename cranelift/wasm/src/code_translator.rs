@@ -577,13 +577,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.reachable = false;
         }
         Operator::Return => {
-            let return_count = {
-                let frame = &mut state.control_stack[0];
-                frame.num_return_values()
-            };
+            let return_count = state.control_stack[0].num_return_values();
             {
                 let return_args = state.peekn_mut(return_count);
-                environ.handle_before_return(&return_args, builder);
+                environ.handle_before_return(return_args, builder);
                 bitcast_wasm_returns(environ, return_args, builder);
                 builder.ins().return_(return_args);
             }

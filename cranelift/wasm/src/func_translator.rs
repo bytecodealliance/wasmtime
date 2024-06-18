@@ -264,7 +264,6 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
         translate_operator(validator, &op, builder, state, environ)?;
         environ.after_translate_operator(&op, builder, state)?;
     }
-    environ.after_translate_function(builder, state)?;
     let pos = reader.original_position();
     validator.finish(pos)?;
 
