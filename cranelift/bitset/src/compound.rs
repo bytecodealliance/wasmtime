@@ -1,8 +1,8 @@
 //! Compound bit sets.
 
 use crate::scalar::{self, ScalarBitSet};
-use alloc::{vec, vec::Vec};
-use core::mem;
+use alloc::boxed::Box;
+use core::{cmp, iter, mem};
 
 /// A large bit set backed by dynamically-sized storage.
 ///
@@ -40,28 +40,20 @@ use core::mem;
 /// let elems: Vec<_> = bitset.iter().collect();
 /// assert_eq!(elems, [444, 555]);
 /// ```
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 #[cfg_attr(
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub struct CompoundBitSet {
-    elems: Vec<ScalarBitSet<usize>>,
-    len: usize,
-    max: Option<usize>,
+    elems: Box<[ScalarBitSet<usize>]>,
+    max: Option<u32>,
 }
 
 impl core::fmt::Debug for CompoundBitSet {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "CompoundBitSet ")?;
         f.debug_set().entries(self.iter()).finish()
-    }
-}
-
-impl Default for CompoundBitSet {
-    #[inline]
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -81,11 +73,7 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn new() -> Self {
-        CompoundBitSet {
-            elems: vec![],
-            len: 0,
-            max: None,
-        }
+        CompoundBitSet::default()
     }
 
     /// Construct a new, empty bit set with space reserved to store any element
@@ -129,7 +117,7 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        self.len
+        self.elems.iter().map(|sub| usize::from(sub.len())).sum()
     }
 
     /// Get `n + 1` where `n` is the largest value that can be stored inside
@@ -156,7 +144,7 @@ impl CompoundBitSet {
     /// assert!(bitset.capacity() >= 999);
     ///```
     pub fn capacity(&self) -> usize {
-        self.elems.capacity() * BITS_PER_WORD
+        self.elems.len() * BITS_PER_WORD
     }
 
     /// Is this bitset empty?
@@ -176,7 +164,7 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.len() == 0
     }
 
     /// Convert an element `i` into the `word` that can be used to index into
@@ -255,7 +243,23 @@ impl CompoundBitSet {
     pub fn ensure_capacity(&mut self, n: usize) {
         let (word, _bit) = Self::word_and_bit(n);
         if word >= self.elems.len() {
-            self.elems.resize_with(word + 1, ScalarBitSet::new);
+            assert!(word < usize::try_from(isize::MAX).unwrap());
+
+            let delta = word - self.elems.len();
+            let to_grow = delta + 1;
+
+            // Amortize the cost of growing.
+            let to_grow = cmp::max(to_grow, self.elems.len() * 2);
+            // Don't make ridiculously small allocations.
+            let to_grow = cmp::max(to_grow, 4);
+
+            let new_elems = self
+                .elems
+                .iter()
+                .copied()
+                .chain(iter::repeat(ScalarBitSet::new()).take(to_grow))
+                .collect::<Box<[_]>>();
+            self.elems = new_elems;
         }
     }
 
@@ -290,10 +294,13 @@ impl CompoundBitSet {
     #[inline]
     pub fn insert(&mut self, i: usize) -> bool {
         self.ensure_capacity(i + 1);
+
         let (word, bit) = Self::word_and_bit(i);
         let is_new = self.elems[word].insert(bit);
-        self.len += is_new as usize;
-        self.max = self.max.map(|max| core::cmp::max(max, i)).or(Some(i));
+
+        let i = u32::try_from(i).unwrap();
+        self.max = self.max.map(|max| cmp::max(max, i)).or(Some(i));
+
         is_new
     }
 
@@ -323,8 +330,7 @@ impl CompoundBitSet {
         if word < self.elems.len() {
             let sub = &mut self.elems[word];
             let was_present = sub.remove(bit);
-            self.len -= was_present as usize;
-            if was_present && self.max == Some(i) {
+            if was_present && self.max() == Some(i) {
                 self.update_max(word);
             }
             was_present
@@ -341,7 +347,7 @@ impl CompoundBitSet {
             .rev()
             .filter_map(|(word, sub)| {
                 let bit = sub.max()?;
-                Some(Self::elem(word, bit))
+                Some(u32::try_from(Self::elem(word, bit)).unwrap())
             })
             .next();
     }
@@ -367,7 +373,7 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn max(&self) -> Option<usize> {
-        self.max
+        self.max.map(|m| usize::try_from(m).unwrap())
     }
 
     /// Removes and returns the largest value in this set.
@@ -396,7 +402,7 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn pop(&mut self) -> Option<usize> {
-        let max = self.max?;
+        let max = self.max()?;
         self.remove(max);
         Some(max)
     }
@@ -420,8 +426,15 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn clear(&mut self) {
-        self.elems.clear();
-        self.len = 0;
+        let max = match self.max() {
+            Some(max) => max,
+            None => return,
+        };
+        let (word, _bit) = Self::word_and_bit(max);
+        debug_assert!(self.elems[word + 1..].iter().all(|sub| sub.is_empty()));
+        for sub in &mut self.elems[..=word] {
+            *sub = ScalarBitSet::new();
+        }
         self.max = None;
     }
 
