@@ -644,19 +644,19 @@ fn instance_too_large() -> Result<()> {
     let engine = Engine::new(&config)?;
     let expected = if cfg!(feature = "wmemcheck") {
         "\
-        instance allocation for this module requires 352 bytes which exceeds the \
+        instance allocation for this module requires 336 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 72.73% - 256 bytes - instance state management
- * 25.00% - 88 bytes - static vmctx data
+ * 71.43% - 240 bytes - instance state management
+ * 26.19% - 88 bytes - static vmctx data
 "
     } else {
         "\
-instance allocation for this module requires 256 bytes which exceeds the \
+        instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 62.50% - 160 bytes - instance state management
- * 34.38% - 88 bytes - static vmctx data
+ * 60.00% - 144 bytes - instance state management
+ * 36.67% - 88 bytes - static vmctx data
 "
     };
     match Module::new(&engine, "(module)") {
@@ -672,19 +672,19 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 
     let expected = if cfg!(feature = "wmemcheck") {
         "\
-instance allocation for this module requires 1952 bytes which exceeds the \
+instance allocation for this module requires 1936 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 13.11% - 256 bytes - instance state management
- * 81.97% - 1600 bytes - defined globals
+ * 12.40% - 240 bytes - instance state management
+ * 82.64% - 1600 bytes - defined globals
 "
     } else {
         "\
-instance allocation for this module requires 1856 bytes which exceeds the \
+instance allocation for this module requires 1840 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 8.62% - 160 bytes - instance state management
- * 86.21% - 1600 bytes - defined globals
+ * 7.83% - 144 bytes - instance state management
+ * 86.96% - 1600 bytes - defined globals
 "
     };
     match Module::new(&engine, &lots_of_globals) {
