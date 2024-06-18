@@ -1,8 +1,11 @@
 use crate::component::matching::InstanceType;
 use crate::component::types;
+use crate::component::InstanceExportLookup;
 use crate::prelude::*;
 use crate::runtime::vm::component::ComponentRuntimeInfo;
-use crate::runtime::vm::{VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction};
+use crate::runtime::vm::{
+    CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction,
+};
 use crate::{
     code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
     ResourcesRequired,
@@ -16,8 +19,9 @@ use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::path::Path;
 use wasmtime_environ::component::{
-    AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, GlobalInitializer,
-    InstantiateModule, StaticModuleIndex, TrampolineIndex, TypeComponentIndex, VMComponentOffsets,
+    AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, Export, ExportIndex,
+    GlobalInitializer, InstantiateModule, StaticModuleIndex, TrampolineIndex, TypeComponentIndex,
+    TypeDef, VMComponentOffsets,
 };
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
@@ -58,6 +62,15 @@ pub struct Component {
 }
 
 struct ComponentInner {
+    /// Unique id for this component within this process.
+    ///
+    /// Note that this is repurposing ids for modules intentionally as there
+    /// shouldn't be an issue overlapping them.
+    id: CompiledModuleId,
+
+    /// The engine that this component belongs to.
+    engine: Engine,
+
     /// Component type index
     ty: TypeComponentIndex,
 
@@ -302,7 +315,7 @@ impl Component {
     /// let mut linker = Linker::new(&engine);
     /// linker.root().resource("x", ResourceType::host::<()>(), |_, _| Ok(()))?;
     /// let instance = linker.instantiate(&mut store, &a)?;
-    /// let instance_ty = instance.exports(&mut store).root().resource("x").unwrap();
+    /// let instance_ty = instance.get_resource(&mut store, "x").unwrap();
     ///
     /// // Here `instance_ty` is not the same as either `import` or `export`,
     /// // but it is equal to what we provided as an import.
@@ -334,8 +347,8 @@ impl Component {
     /// let instance1 = linker.instantiate(&mut store, &a)?;
     /// let instance2 = linker.instantiate(&mut store, &a)?;
     ///
-    /// let x1 = instance1.exports(&mut store).root().resource("x").unwrap();
-    /// let x2 = instance2.exports(&mut store).root().resource("x").unwrap();
+    /// let x1 = instance1.get_resource(&mut store, "x").unwrap();
+    /// let x2 = instance2.get_resource(&mut store, "x").unwrap();
     ///
     /// // Despite these two resources being the same export of the same
     /// // component they come from two different instances meaning that their
@@ -345,14 +358,15 @@ impl Component {
     /// # }
     /// ```
     pub fn component_type(&self) -> types::Component {
+        self.with_uninstantiated_instance_type(|ty| types::Component::from(self.inner.ty, ty))
+    }
+
+    fn with_uninstantiated_instance_type<R>(&self, f: impl FnOnce(&InstanceType<'_>) -> R) -> R {
         let resources = Arc::new(PrimaryMap::new());
-        types::Component::from(
-            self.inner.ty,
-            &InstanceType {
-                types: self.types(),
-                resources: &resources,
-            },
-        )
+        f(&InstanceType {
+            types: self.types(),
+            resources: &resources,
+        })
     }
 
     /// Final assembly step for a component from its in-memory representation.
@@ -408,6 +422,8 @@ impl Component {
 
         Ok(Component {
             inner: Arc::new(ComponentInner {
+                id: CompiledModuleId::new(),
+                engine: engine.clone(),
                 ty,
                 static_modules,
                 code,
@@ -601,6 +617,146 @@ impl Component {
     /// [`Module::image_range`](crate::Module::image_range).
     pub fn image_range(&self) -> Range<*const u8> {
         self.inner.code.code_memory().mmap().image_range()
+    }
+
+    /// Looks up a specific export of this component by `name` optionally nested
+    /// within the `instance` provided.
+    ///
+    /// This method is primarily used to acquire a [`ComponentExportIndex`]
+    /// which can be used with [`Instance`](crate::component::Instance) when
+    /// looking up exports. Export lookup with [`ComponentExportIndex`] can
+    /// skip string lookups at runtime and instead use a more efficient
+    /// index-based lookup.
+    ///
+    /// This method takes a few arguments:
+    ///
+    /// * `engine` - the engine that was used to compile this component.
+    /// * `instance` - an optional "parent instance" for the export being looked
+    ///   up. If this is `None` then the export is looked up on the root of the
+    ///   component itself, and otherwise the export is looked up on the
+    ///   `instance` specified. Note that `instance` must have come from a
+    ///   previous invocation of this method.
+    /// * `name` - the name of the export that's being looked up.
+    ///
+    /// If the export is located then two values are returned: a
+    /// [`types::ComponentItem`] which enables introspection about the type of
+    /// the export and a [`ComponentExportIndex`]. The index returned notably
+    /// implements the [`InstanceExportLookup`] trait which enables using it
+    /// with [`Instance::get_func`](crate::component::Instance::get_func) for
+    /// example.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wasmtime::{Engine, Store};
+    /// use wasmtime::component::{Component, Linker};
+    /// use wasmtime::component::types::ComponentItem;
+    ///
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let engine = Engine::default();
+    /// let component = Component::new(
+    ///     &engine,
+    ///     r#"
+    ///         (component
+    ///             (core module $m
+    ///                 (func (export "f"))
+    ///             )
+    ///             (core instance $i (instantiate $m))
+    ///             (func (export "f")
+    ///                 (canon lift (core func $i "f")))
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// // Perform a lookup of the function "f" before instantiaton.
+    /// let (ty, export) = component.export_index(None, "f").unwrap();
+    /// assert!(matches!(ty, ComponentItem::ComponentFunc(_)));
+    ///
+    /// // After instantiation use `export` to lookup the function in question
+    /// // which notably does not do a string lookup at runtime.
+    /// let mut store = Store::new(&engine, ());
+    /// let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    /// let func = instance.get_typed_func::<(), ()>(&mut store, &export)?;
+    /// // ...
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn export_index(
+        &self,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
+        let info = self.env_component();
+        let index = self.lookup_export_index(instance, name)?;
+        let ty = match info.export_items[index] {
+            Export::Instance { ty, .. } => TypeDef::ComponentInstance(ty),
+            Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(ty),
+            Export::ModuleStatic { ty, .. } | Export::ModuleImport { ty, .. } => {
+                TypeDef::Module(ty)
+            }
+            Export::Type(ty) => ty,
+        };
+        let item = self.with_uninstantiated_instance_type(|instance| {
+            types::ComponentItem::from(&self.inner.engine, &ty, instance)
+        });
+        Some((
+            item,
+            ComponentExportIndex {
+                id: self.inner.id,
+                index,
+            },
+        ))
+    }
+
+    pub(crate) fn lookup_export_index(
+        &self,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<ExportIndex> {
+        let info = self.env_component();
+        let exports = match instance {
+            Some(idx) => {
+                if idx.id != self.inner.id {
+                    return None;
+                }
+                match &info.export_items[idx.index] {
+                    Export::Instance { exports, .. } => exports,
+                    _ => return None,
+                }
+            }
+            None => &info.exports,
+        };
+        exports.get(name).copied()
+    }
+
+    pub(crate) fn id(&self) -> CompiledModuleId {
+        self.inner.id
+    }
+
+    /// Returns the [`Engine`] that this [`Component`] was compiled by.
+    pub fn engine(&self) -> &Engine {
+        &self.inner.engine
+    }
+}
+
+/// A value which represents a known export of a component.
+///
+/// This is the return value of [`Component::export_index`] and implements the
+/// [`InstanceExportLookup`] trait to work with lookups like
+/// [`Instance::get_func`](crate::component::Instance::get_func).
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct ComponentExportIndex {
+    pub(crate) id: CompiledModuleId,
+    pub(crate) index: ExportIndex,
+}
+
+impl InstanceExportLookup for ComponentExportIndex {
+    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+        if component.inner.id == self.id {
+            Some(self.index)
+        } else {
+            None
+        }
     }
 }
 

@@ -83,9 +83,16 @@ struct ImportFunction {
 
 #[derive(Default)]
 struct Exports {
-    fields: BTreeMap<String, (String, String)>,
+    fields: BTreeMap<String, ExportField>,
     modules: Vec<(String, InterfaceName)>,
     funcs: Vec<String>,
+}
+
+struct ExportField {
+    ty: String,
+    ty_pre: String,
+    getter: String,
+    getter_pre: String,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -455,18 +462,26 @@ impl Wasmtime {
     fn export(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
         let wt = self.wasmtime_path();
         let mut gen = InterfaceGenerator::new(self, resolve);
-        let (field, ty, getter) = match item {
+        let field;
+        let ty;
+        let ty_pre;
+        let getter;
+        let getter_pre;
+        match item {
             WorldItem::Function(func) => {
                 gen.define_rust_guest_export(resolve, None, func);
                 let body = mem::take(&mut gen.src).into();
-                let (_name, getter) = gen.extract_typed_function(func);
+                getter = gen.extract_typed_function(func).1;
                 assert!(gen.src.is_empty());
                 self.exports.funcs.push(body);
-                (
-                    func_field_name(resolve, func),
-                    format!("{wt}::component::Func"),
-                    getter,
-                )
+                ty_pre = format!("{wt}::component::ComponentExportIndex");
+                field = func_field_name(resolve, func);
+                ty = format!("{wt}::component::Func");
+                getter_pre = format!(
+                    "_component.export_index(None, \"{}\")
+                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?.1",
+                    func.name
+                );
             }
             WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface { id, .. } => {
@@ -490,13 +505,63 @@ impl Wasmtime {
                 }
                 uwriteln!(gen.src, "}}");
 
-                uwriteln!(gen.src, "impl {struct_name} {{");
+                uwriteln!(gen.src, "pub struct {struct_name}Pre {{");
+                for (_, func) in iface.functions.iter() {
+                    uwriteln!(
+                        gen.src,
+                        "{}: {wt}::component::ComponentExportIndex,",
+                        func_field_name(resolve, func)
+                    );
+                }
+                uwriteln!(gen.src, "}}");
+
+                uwriteln!(gen.src, "impl {struct_name}Pre {{");
+                let instance_name = resolve.name_world_key(name);
                 uwrite!(
                     gen.src,
                     "
-                        pub fn new(
-                            __exports: &mut {wt}::component::ExportInstance<'_, '_>,
+pub fn new(
+    component: &{wt}::component::Component,
+) -> {wt}::Result<{struct_name}Pre> {{
+    let _component = component;
+    let (_, instance) = component.export_index(None, \"{instance_name}\")
+        .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
+    let _lookup = |name: &str| {{
+        _component.export_index(Some(&instance), name)
+            .map(|p| p.1)
+            .ok_or_else(|| {{
+                anyhow::anyhow!(
+                    \"instance export `{instance_name}` does \\
+                      not have export `{{name}}`\"
+                )
+            }})
+    }};
+                    "
+                );
+                let mut fields = Vec::new();
+                for (_, func) in iface.functions.iter() {
+                    let name = func_field_name(resolve, func);
+                    uwriteln!(gen.src, "let {name} = _lookup(\"{}\")?;", func.name);
+                    fields.push(name);
+                }
+                uwriteln!(gen.src, "Ok({struct_name}Pre {{");
+                for name in fields {
+                    uwriteln!(gen.src, "{name},");
+                }
+                uwriteln!(gen.src, "}})");
+                uwriteln!(gen.src, "}}");
+
+                uwrite!(
+                    gen.src,
+                    "
+                        pub fn load(
+                            &self,
+                            mut store: impl {wt}::AsContextMut,
+                            instance: &{wt}::component::Instance,
                         ) -> {wt}::Result<{struct_name}> {{
+                            let mut store = store.as_context_mut();
+                            let _ = &mut store;
+                            let _instance = instance;
                     "
                 );
                 let mut fields = Vec::new();
@@ -510,8 +575,10 @@ impl Wasmtime {
                     uwriteln!(gen.src, "{name},");
                 }
                 uwriteln!(gen.src, "}})");
-                uwriteln!(gen.src, "}}");
+                uwriteln!(gen.src, "}}"); // end `fn new`
+                uwriteln!(gen.src, "}}"); // end `impl {struct_name}Pre`
 
+                uwriteln!(gen.src, "impl {struct_name} {{");
                 let mut resource_methods = IndexMap::new();
 
                 for (_, func) in iface.functions.iter() {
@@ -575,7 +642,6 @@ impl Wasmtime {
                     .modules
                     .push((module, self.interface_names[id].clone()));
 
-                let name = resolve.name_world_key(name);
                 let (path, method_name) = match pkgname {
                     Some(pkgname) => (
                         format!(
@@ -591,15 +657,8 @@ impl Wasmtime {
                     ),
                     None => (format!("exports::{snake}::{struct_name}"), snake.clone()),
                 };
-                let getter = format!(
-                    "\
-                        {path}::new(
-                            &mut __exports.instance(\"{name}\")
-                                .ok_or_else(|| anyhow::anyhow!(\"exported instance `{name}` not present\"))?
-                        )?\
-                    "
-                );
-                let field = format!("interface{}", self.exports.fields.len());
+                field = format!("interface{}", self.exports.fields.len());
+                getter = format!("self.{field}.load(&mut store, &_instance)?");
                 self.exports.funcs.push(format!(
                     "
                         pub fn {method_name}(&self) -> &{path} {{
@@ -607,19 +666,63 @@ impl Wasmtime {
                         }}
                     ",
                 ));
-                (field, path, getter)
+                ty_pre = format!("{path}Pre");
+                ty = path;
+                getter_pre = format!("{ty_pre}::new(_component)?");
             }
-        };
-        let prev = self.exports.fields.insert(field, (ty, getter));
+        }
+        let prev = self.exports.fields.insert(
+            field,
+            ExportField {
+                ty,
+                ty_pre,
+                getter,
+                getter_pre,
+            },
+        );
         assert!(prev.is_none());
     }
 
     fn build_world_struct(&mut self, resolve: &Resolve, world: WorldId) {
         let wt = self.wasmtime_path();
-        let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
-        uwriteln!(self.src, "pub struct {camel} {{");
-        for (name, (ty, _)) in self.exports.fields.iter() {
-            uwriteln!(self.src, "{name}: {ty},");
+        let world_name = &resolve.worlds[world].name;
+        let camel = to_rust_upper_camel_case(&world_name);
+        let (async_, async__, where_clause, await_) = if self.opts.async_.maybe_async() {
+            ("async", "_async", "where _T: Send", ".await")
+        } else {
+            ("", "", "", "")
+        };
+        uwriteln!(
+            self.src,
+            "
+            /// Auto-generated bindings for a pre-instantiated version of a
+            /// copmonent which implements the world `{world_name}`.
+            ///
+            /// This structure is created through [`{camel}Pre::new`] which
+            /// takes a [`InstancePre`]({wt}::component::InstancePre) that
+            /// has been created through a [`Linker`]({wt}::component::Linker).
+            pub struct {camel}Pre<T> {{"
+        );
+        uwriteln!(self.src, "instance_pre: {wt}::component::InstancePre<T>,");
+        for (name, field) in self.exports.fields.iter() {
+            uwriteln!(self.src, "{name}: {},", field.ty_pre);
+        }
+        self.src.push_str("}\n");
+
+        uwriteln!(
+            self.src,
+            "
+                /// Auto-generated bindings for an instance a component which
+                /// implements the world `{world_name}`.
+                ///
+                /// This structure is created through either
+                /// [`{camel}::instantiate{async__}`] or by first creating
+                /// a [`{camel}Pre`] followed by using
+                /// [`{camel}Pre::instantiate{async__}`].
+                pub struct {camel} {{"
+        );
+        for (name, field) in self.exports.fields.iter() {
+            uwriteln!(self.src, "{name}: {},", field.ty);
         }
         self.src.push_str("}\n");
 
@@ -634,59 +737,53 @@ impl Wasmtime {
             "
         );
 
-        uwriteln!(self.src, "impl {camel} {{");
-        self.world_add_to_linker(resolve, world);
+        uwriteln!(
+            self.src,
+            "impl<_T> {camel}Pre<_T> {{
+                /// Creates a new copy of `{camel}Pre` bindings which can then
+                /// be used to instantiate into a particular store.
+                ///
+                /// This method may fail if the compoennt behind `instance_pre`
+                /// does not have the required exports.
+                pub fn new(
+                    instance_pre: {wt}::component::InstancePre<_T>,
+                ) -> {wt}::Result<Self> {{
+                    let _component = instance_pre.component();
+            ",
+        );
+        for (name, field) in self.exports.fields.iter() {
+            uwriteln!(self.src, "let {name} = {};", field.getter_pre);
+        }
+        uwriteln!(self.src, "Ok({camel}Pre {{");
+        uwriteln!(self.src, "instance_pre,");
+        for (name, _) in self.exports.fields.iter() {
+            uwriteln!(self.src, "{name},");
+        }
+        uwriteln!(self.src, "}})");
+        uwriteln!(self.src, "}}"); // close `fn new`
 
-        let (async_, async__, send, await_) = if self.opts.async_.maybe_async() {
-            ("async", "_async", ":Send", ".await")
-        } else {
-            ("", "", "", "")
-        };
         uwriteln!(
             self.src,
             "
-                /// Instantiates the provided `module` using the specified
-                /// parameters, wrapping up the result in a structure that
-                /// translates between wasm and the host.
-                pub {async_} fn instantiate{async__}<T {send}>(
-                    mut store: impl {wt}::AsContextMut<Data = T>,
-                    component: &{wt}::component::Component,
-                    linker: &{wt}::component::Linker<T>,
-                ) -> {wt}::Result<(Self, {wt}::component::Instance)> {{
-                    let instance = linker.instantiate{async__}(&mut store, component){await_}?;
-                    Ok((Self::new(store, &instance)?, instance))
-                }}
-
-                /// Instantiates a pre-instantiated module using the specified
-                /// parameters, wrapping up the result in a structure that
-                /// translates between wasm and the host.
-                pub {async_} fn instantiate_pre<T {send}>(
-                    mut store: impl {wt}::AsContextMut<Data = T>,
-                    instance_pre: &{wt}::component::InstancePre<T>,
-                ) -> {wt}::Result<(Self, {wt}::component::Instance)> {{
-                    let instance = instance_pre.instantiate{async__}(&mut store){await_}?;
-                    Ok((Self::new(store, &instance)?, instance))
-                }}
-
-                /// Low-level creation wrapper for wrapping up the exports
-                /// of the `instance` provided in this structure of wasm
-                /// exports.
+                /// Instantiates a new instance of [`{camel}`] within the
+                /// `store` provided.
                 ///
-                /// This function will extract exports from the `instance`
-                /// defined within `store` and wrap them all up in the
-                /// returned structure which can be used to interact with
-                /// the wasm module.
-                pub fn new(
-                    mut store: impl {wt}::AsContextMut,
-                    instance: &{wt}::component::Instance,
-                ) -> {wt}::Result<Self> {{
+                /// This function will use `self` as the pre-instantiated
+                /// instance to perform instantiation. Afterwards the preloaded
+                /// indices in `self` are used to lookup all exports on the
+                /// resulting instance.
+                pub {async_} fn instantiate{async__}(
+                    &self,
+                    mut store: impl {wt}::AsContextMut<Data = _T>,
+                ) -> {wt}::Result<{camel}>
+                    {where_clause}
+                {{
                     let mut store = store.as_context_mut();
-                    let mut exports = instance.exports(&mut store);
-                    let mut __exports = exports.root();
+                    let _instance = self.instance_pre.instantiate{async__}(&mut store){await_}?;
             ",
         );
-        for (name, (_, get)) in self.exports.fields.iter() {
-            uwriteln!(self.src, "let {name} = {get};");
+        for (name, field) in self.exports.fields.iter() {
+            uwriteln!(self.src, "let {name} = {};", field.getter);
         }
         uwriteln!(self.src, "Ok({camel} {{");
         for (name, _) in self.exports.fields.iter() {
@@ -694,6 +791,27 @@ impl Wasmtime {
         }
         uwriteln!(self.src, "}})");
         uwriteln!(self.src, "}}"); // close `fn new`
+
+        uwriteln!(self.src, "}}");
+
+        uwriteln!(
+            self.src,
+            "impl {camel} {{
+                /// Convenience wrapper around [`{camel}Pre::new`] and
+                /// [`{camel}Pre::instantiate{async__}`].
+                pub {async_} fn instantiate{async__}<_T>(
+                    mut store: impl {wt}::AsContextMut<Data = _T>,
+                    component: &{wt}::component::Component,
+                    linker: &{wt}::component::Linker<_T>,
+                ) -> {wt}::Result<{camel}>
+                    {where_clause}
+                {{
+                    let pre = linker.instantiate_pre(component)?;
+                    {camel}Pre::new(pre)?.instantiate{async__}(store){await_}
+                }}
+            ",
+        );
+        self.world_add_to_linker(resolve, world);
 
         for func in self.exports.funcs.iter() {
             self.src.push_str(func);
@@ -2354,7 +2472,7 @@ impl<'a> InterfaceGenerator<'a> {
     fn extract_typed_function(&mut self, func: &Function) -> (String, String) {
         let prev = mem::take(&mut self.src);
         let snake = func_field_name(self.resolve, func);
-        uwrite!(self.src, "*__exports.typed_func::<(");
+        uwrite!(self.src, "*_instance.get_typed_func::<(");
         for (_, ty) in func.params.iter() {
             self.print_ty(ty, TypeMode::AllBorrowed("'_"));
             self.push_str(", ");
@@ -2364,9 +2482,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.print_ty(ty, TypeMode::Owned);
             self.push_str(", ");
         }
-        self.src.push_str(")>(\"");
-        self.src.push_str(&func.name);
-        self.src.push_str("\")?.func()");
+        uwriteln!(self.src, ")>(&mut store, &self.{snake})?.func()");
 
         let ret = (snake, mem::take(&mut self.src).to_string());
         self.src = prev;

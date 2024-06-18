@@ -1,3 +1,21 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `foo`.
+///
+/// This structure is created through [`FooPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct FooPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+    interface0: exports::my::dep0_1_0::a::GuestPre,
+    interface1: exports::my::dep0_2_0::a::GuestPre,
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `foo`.
+///
+/// This structure is created through either
+/// [`Foo::instantiate_async`] or by first creating
+/// a [`FooPre`] followed by using
+/// [`FooPre::instantiate_async`].
 pub struct Foo {
     interface0: exports::my::dep0_1_0::a::Guest,
     interface1: exports::my::dep0_2_0::a::Guest,
@@ -5,7 +23,59 @@ pub struct Foo {
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> FooPre<_T> {
+        /// Creates a new copy of `FooPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            let interface0 = exports::my::dep0_1_0::a::GuestPre::new(_component)?;
+            let interface1 = exports::my::dep0_2_0::a::GuestPre::new(_component)?;
+            Ok(FooPre {
+                instance_pre,
+                interface0,
+                interface1,
+            })
+        }
+        /// Instantiates a new instance of [`Foo`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub async fn instantiate_async(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<Foo>
+        where
+            _T: Send,
+        {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate_async(&mut store).await?;
+            let interface0 = self.interface0.load(&mut store, &_instance)?;
+            let interface1 = self.interface1.load(&mut store, &_instance)?;
+            Ok(Foo { interface0, interface1 })
+        }
+    }
     impl Foo {
+        /// Convenience wrapper around [`FooPre::new`] and
+        /// [`FooPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Foo>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            FooPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -17,58 +87,6 @@ const _: () = {
             my::dep0_1_0::a::add_to_linker(linker, get)?;
             my::dep0_2_0::a::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub async fn instantiate_async<T: Send>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate_async(&mut store, component).await?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub async fn instantiate_pre<T: Send>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate_async(&mut store).await?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            let interface0 = exports::my::dep0_1_0::a::Guest::new(
-                &mut __exports
-                    .instance("my:dep/a@0.1.0")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("exported instance `my:dep/a@0.1.0` not present")
-                    })?,
-            )?;
-            let interface1 = exports::my::dep0_2_0::a::Guest::new(
-                &mut __exports
-                    .instance("my:dep/a@0.2.0")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("exported instance `my:dep/a@0.2.0` not present")
-                    })?,
-            )?;
-            Ok(Foo { interface0, interface1 })
         }
         pub fn my_dep0_1_0_a(&self) -> &exports::my::dep0_1_0::a::Guest {
             &self.interface0
@@ -204,13 +222,50 @@ pub mod exports {
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }
-                impl Guest {
+                pub struct GuestPre {
+                    x: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "my:dep/a@0.1.0")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `my:dep/a@0.1.0`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `my:dep/a@0.1.0` does \
+                not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let x = _lookup("x")?;
+                        Ok(GuestPre { x })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let x = *__exports.typed_func::<(), ()>("x")?.func();
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let x = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.x)?
+                            .func();
                         Ok(Guest { x })
                     }
+                }
+                impl Guest {
                     pub async fn call_x<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -239,13 +294,50 @@ pub mod exports {
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }
-                impl Guest {
+                pub struct GuestPre {
+                    x: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "my:dep/a@0.2.0")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `my:dep/a@0.2.0`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `my:dep/a@0.2.0` does \
+                not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let x = _lookup("x")?;
+                        Ok(GuestPre { x })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let x = *__exports.typed_func::<(), ()>("x")?.func();
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let x = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.x)?
+                            .func();
                         Ok(Guest { x })
                     }
+                }
+                impl Guest {
                     pub async fn call_x<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,

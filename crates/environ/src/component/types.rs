@@ -197,6 +197,9 @@ indices! {
     /// component and is stored in the final compilation artifact. This does not
     /// have a direct corresponance to any wasm definition.
     pub struct TrampolineIndex(u32);
+
+    /// An index into `Component::export_items` at the end of compilation.
+    pub struct ExportIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the

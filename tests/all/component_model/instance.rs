@@ -34,24 +34,21 @@ fn instance_exports() -> Result<()> {
         .module("m", &Module::new(&engine, "(module)")?)?;
     let instance = linker.instantiate(&mut store, &component)?;
 
-    let mut exports = instance.exports(&mut store);
-    assert!(exports.instance("not an instance").is_none());
-    let mut i = exports.instance("r").unwrap();
-    assert!(i.func("x").is_none());
-    drop(i);
-    exports.root().instance("i").unwrap();
-    let mut i2 = exports.instance("r2").unwrap();
-    assert!(i2.func("m").is_none());
-    assert!(i2.module("m").is_some());
-    drop(i2);
+    assert!(instance
+        .get_export(&mut store, None, "not an instance")
+        .is_none());
+    let i = instance.get_export(&mut store, None, "r").unwrap();
+    assert!(instance.get_export(&mut store, Some(&i), "x").is_none());
+    instance.get_export(&mut store, None, "i").unwrap();
+    let i2 = instance.get_export(&mut store, None, "r2").unwrap();
+    let m = instance.get_export(&mut store, Some(&i2), "m").unwrap();
+    assert!(instance.get_func(&mut store, &m).is_none());
+    assert!(instance.get_module(&mut store, &m).is_some());
 
-    exports
-        .instance("i")
-        .unwrap()
-        .instance("i")
-        .unwrap()
-        .module("m")
-        .unwrap();
+    let i = instance.get_export(&mut store, None, "i").unwrap();
+    let i = instance.get_export(&mut store, Some(&i), "i").unwrap();
+    let m = instance.get_export(&mut store, Some(&i), "m").unwrap();
+    instance.get_module(&mut store, &m).unwrap();
 
     Ok(())
 }

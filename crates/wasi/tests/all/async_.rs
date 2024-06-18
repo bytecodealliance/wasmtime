@@ -19,7 +19,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         }
     })?;
     let component = Component::from_file(&engine, path)?;
-    let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
     command
         .wasi_cli_run()
         .call_run(&mut store)

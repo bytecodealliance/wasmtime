@@ -219,6 +219,10 @@ fn functions_in_instances() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
+    let (_, instance_index) = component.export_index(None, "test:test/foo").unwrap();
+    let (_, func_index) = component
+        .export_index(Some(&instance_index), "call")
+        .unwrap();
     let mut store = Store::new(&engine, None);
     assert!(store.data().is_none());
 
@@ -235,11 +239,7 @@ fn functions_in_instances() -> Result<()> {
         },
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
-    let func = instance
-        .exports(&mut store)
-        .instance("test:test/foo")
-        .unwrap()
-        .typed_func::<(), ()>("call")?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, &func_index)?;
     func.call(&mut store, ())?;
     assert_eq!(store.data().as_ref().unwrap(), "hello world");
 
@@ -260,12 +260,7 @@ fn functions_in_instances() -> Result<()> {
         },
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
-    let func = instance
-        .exports(&mut store)
-        .instance("test:test/foo")
-        .unwrap()
-        .func("call")
-        .unwrap();
+    let func = instance.get_func(&mut store, func_index).unwrap();
     func.call(&mut store, &[], &mut [])?;
     assert_eq!(store.data().as_ref().unwrap(), "hello world");
 

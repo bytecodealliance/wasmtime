@@ -162,7 +162,7 @@ async fn run_wasi_http(
 
     let mut linker = Linker::new(&engine);
     wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
-    let (proxy, _) =
+    let proxy =
         wasmtime_wasi_http::proxy::Proxy::instantiate_async(&mut store, &component, &linker)
             .await?;
 

@@ -9,10 +9,11 @@ use std::{
         Arc,
     },
 };
-use wasmtime::component::{InstancePre, Linker};
+use wasmtime::component::Linker;
 use wasmtime::{Config, Engine, Memory, MemoryType, Store, StoreLimits};
 use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::io::TokioIo;
+use wasmtime_wasi_http::proxy::ProxyPre;
 use wasmtime_wasi_http::{
     bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
     WasiHttpCtx, WasiHttpView,
@@ -280,6 +281,7 @@ impl ServeCommand {
         };
 
         let instance = linker.instantiate_pre(&component)?;
+        let instance = ProxyPre::new(instance)?;
 
         let socket = match &self.addr {
             SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
@@ -373,7 +375,7 @@ impl Drop for EpochThread {
 struct ProxyHandlerInner {
     cmd: ServeCommand,
     engine: Engine,
-    instance_pre: InstancePre<Host>,
+    instance_pre: ProxyPre<Host>,
     next_id: AtomicU64,
 }
 
@@ -387,7 +389,7 @@ impl ProxyHandlerInner {
 struct ProxyHandler(Arc<ProxyHandlerInner>);
 
 impl ProxyHandler {
-    fn new(cmd: ServeCommand, engine: Engine, instance_pre: InstancePre<Host>) -> Self {
+    fn new(cmd: ServeCommand, engine: Engine, instance_pre: ProxyPre<Host>) -> Self {
         Self(Arc::new(ProxyHandlerInner {
             cmd,
             engine,
@@ -452,9 +454,7 @@ async fn handle_request(
         let req = store.data_mut().new_incoming_request(req)?;
         let out = store.data_mut().new_response_outparam(sender)?;
 
-        let (proxy, _inst) =
-            wasmtime_wasi_http::proxy::Proxy::instantiate_pre(&mut store, &inner.instance_pre)
-                .await?;
+        let proxy = inner.instance_pre.instantiate_async(&mut store).await?;
 
         if let Err(e) = proxy
             .wasi_http_incoming_handler()

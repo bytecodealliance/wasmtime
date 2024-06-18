@@ -13,7 +13,7 @@ fn run(path: &str, server: &Server) -> Result<()> {
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
     wasmtime_wasi_http::proxy::sync::add_only_http_to_linker(&mut linker)?;
-    let (command, _instance) = Command::instantiate(&mut store, &component, &linker)?;
+    let command = Command::instantiate(&mut store, &component, &linker)?;
     let result = command.wasi_cli_run().call_run(&mut store)?;
     result.map_err(|()| anyhow::anyhow!("run returned an error"))
 }

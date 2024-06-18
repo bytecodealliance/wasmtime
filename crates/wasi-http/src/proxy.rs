@@ -22,7 +22,7 @@ mod bindings {
 pub use bindings::exports;
 
 /// Bindings to the `wasi:http/proxy` world.
-pub use bindings::Proxy;
+pub use bindings::{Proxy, ProxyPre};
 
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
 ///
@@ -147,7 +147,7 @@ pub mod sync {
     pub use bindings::exports;
 
     /// Bindings to the `wasi:http/proxy` world.
-    pub use bindings::Proxy;
+    pub use bindings::{Proxy, ProxyPre};
 
     /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
     ///
