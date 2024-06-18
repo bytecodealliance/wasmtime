@@ -13,12 +13,6 @@ RUST_VERSION=$( \
   sed 's/rust-version.*=.*\"\(.*\)\"/\1/' \
 )
 
-# The adapter's version is the adapter crate's version
-VERSION=$( \
-  grep '^version\s*=' crates/wasi-preview1-component-adapter/Cargo.toml | \
-  sed 's/version.*=.*\"\(.*\)\"/\1/' \
-)
-
 rustup toolchain install $RUST_VERSION --profile minimal
 rustup target add wasm32-wasi wasm32-unknown-unknown --toolchain $RUST_VERSION
 
@@ -41,7 +35,7 @@ compare() {
   name=wasi_snapshot_preview1.$flavor.wasm
   dst=$(dirname $input)/$name
   reference=crates/wasi-preview1-component-adapter/provider/artefacts/$name
-  wasm-tools metadata add --name "wasi_preview1_component_adapter.$flavor.adapter:${VERSION}" $input \
+  wasm-tools metadata add --name "wasi_preview1_component_adapter.$flavor.adapter" $input \
     -o $dst
   set +x
   if [ "$BLESS" = "1" ]; then
