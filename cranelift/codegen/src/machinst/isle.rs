@@ -235,6 +235,10 @@ macro_rules! isle_lower_prelude_methods {
             Some((constant << shift_amt) >> shift_amt)
         }
 
+        fn i32_from_iconst(&mut self, val: Value) -> Option<i32> {
+            self.i64_from_iconst(val)?.try_into().ok()
+        }
+
         fn zero_value(&mut self, value: Value) -> Option<Value> {
             let insn = self.def_inst(value);
             if insn.is_some() {
@@ -566,11 +570,6 @@ macro_rules! isle_lower_prelude_methods {
             }
 
             Some(value)
-        }
-
-        #[inline]
-        fn simm32(&mut self, x: Imm64) -> Option<i32> {
-            i64::from(x).try_into().ok()
         }
 
         #[inline]

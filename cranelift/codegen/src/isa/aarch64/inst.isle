@@ -3120,10 +3120,10 @@
 (decl amode (Type Value i32) AMode)
 (rule 0 (amode ty val offset)
         (amode_no_more_iconst ty val offset))
-(rule 1 (amode ty (iadd x (iconst (simm32 y))) offset)
+(rule 1 (amode ty (iadd x (i32_from_iconst y)) offset)
         (if-let new_offset (s32_add_fallible y offset))
         (amode_no_more_iconst ty x new_offset))
-(rule 2 (amode ty (iadd (iconst (simm32 x)) y) offset)
+(rule 2 (amode ty (iadd (i32_from_iconst x) y) offset)
         (if-let new_offset (s32_add_fallible x offset))
         (amode_no_more_iconst ty y new_offset))
 
