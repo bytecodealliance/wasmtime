@@ -4269,10 +4269,9 @@
       ;; TODO use Inst::gen_constant() instead.
       (x64_xmm_load_const ty (const_to_vconst const)))
 
-;; Special case for a zero-vector: don't load, xor instead.
-(rule 1 (lower (has_type ty (vconst (u128_from_constant 0))))
-    (let ((dst Xmm (xmm_uninit_value)))
-      (x64_pxor dst dst)))
+;; Special cases for known constant patterns to skip a 16-byte load.
+(rule 1 (lower (has_type ty (vconst (u128_from_constant 0)))) (xmm_zero ty))
+(rule 1 (lower (has_type ty (vconst (u128_from_constant -1)))) (vector_all_ones))
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
