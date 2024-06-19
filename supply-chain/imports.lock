@@ -1662,6 +1662,13 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
+[[publisher.termcolor]]
+version = "1.4.1"
+when = "2024-01-10"
+user-id = 189
+user-login = "BurntSushi"
+user-name = "Andrew Gallant"
+
 [[publisher.thiserror]]
 version = "1.0.43"
 when = "2023-07-07"
@@ -1831,6 +1838,12 @@ when = "2024-05-29"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-encoder]]
+version = "0.211.1"
+when = "2024-06-19"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasm-metadata]]
 version = "0.201.0"
 when = "2024-02-27"
@@ -1885,6 +1898,12 @@ when = "2024-05-29"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-metadata]]
+version = "0.211.1"
+when = "2024-06-19"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasm-mutate]]
 version = "0.201.0"
 when = "2024-02-27"
@@ -2011,6 +2030,12 @@ when = "2024-05-29"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmparser]]
+version = "0.211.1"
+when = "2024-06-19"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmprinter]]
 version = "0.201.0"
 when = "2024-02-27"
@@ -2062,6 +2087,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmprinter]]
 version = "0.209.1"
 when = "2024-05-29"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmprinter]]
+version = "0.211.1"
+when = "2024-06-19"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -2671,6 +2702,12 @@ when = "2024-05-29"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wast]]
+version = "211.0.1"
+when = "2024-06-19"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wat]]
 version = "1.201.0"
 when = "2024-02-27"
@@ -2722,6 +2759,12 @@ user-login = "wasmtime-publish"
 [[publisher.wat]]
 version = "1.209.1"
 when = "2024-05-29"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wat]]
+version = "1.211.1"
+when = "2024-06-19"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3157,6 +3200,12 @@ when = "2024-05-29"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-component]]
+version = "0.211.1"
+when = "2024-06-19"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-parser]]
 version = "0.201.0"
 when = "2024-02-27"
@@ -3208,6 +3257,12 @@ user-login = "wasmtime-publish"
 [[publisher.wit-parser]]
 version = "0.209.1"
 when = "2024-05-29"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-parser]]
+version = "0.211.1"
+when = "2024-06-19"
 user-id = 73222
 user-login = "wasmtime-publish"
 
