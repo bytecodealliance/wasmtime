@@ -2139,34 +2139,22 @@ impl Default for Config {
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut f = f.debug_struct("Config");
-        f.field("debug_info", &self.tunables.generate_native_debuginfo)
-            .field(
-                "wasm_threads",
-                &self.features.contains(WasmFeatures::THREADS),
-            )
-            .field(
-                "wasm_reference_types",
-                &self.features.contains(WasmFeatures::REFERENCE_TYPES),
-            )
-            .field(
-                "wasm_function_references",
-                &self.features.contains(WasmFeatures::FUNCTION_REFERENCES),
-            )
-            .field("wasm_gc", &self.features.contains(WasmFeatures::GC))
-            .field(
-                "wasm_bulk_memory",
-                &self.features.contains(WasmFeatures::BULK_MEMORY),
-            )
-            .field("wasm_simd", &self.features.contains(WasmFeatures::SIMD))
-            .field(
-                "wasm_relaxed_simd",
-                &self.features.contains(WasmFeatures::RELAXED_SIMD),
-            )
-            .field(
-                "wasm_multi_value",
-                &self.features.contains(WasmFeatures::MULTI_VALUE),
-            )
-            .field("parallel_compilation", &self.parallel_compilation);
+        f.field("debug_info", &self.tunables.generate_native_debuginfo);
+
+        // Not every flag in WasmFeatures can be enabled as part of creating
+        // a Config. This impl gives a complete picture of all WasmFeatures
+        // enabled, and doesn't require maintence by hand (which has become out
+        // of date in the past), at the cost of possible confusion for why
+        // a flag in this set doesn't have a Config setter.
+        use bitflags::Flags;
+        for flag in WasmFeatures::FLAGS.iter() {
+            f.field(
+                &format!("wasm_{}", flag.name().to_lowercase()),
+                &self.features.contains(*flag.value()),
+            );
+        }
+
+        f.field("parallel_compilation", &self.parallel_compilation);
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             f.field("compiler_config", &self.compiler_config);

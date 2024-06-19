@@ -3392,6 +3392,7 @@ dependencies = [
  "addr2line",
  "anyhow",
  "async-trait",
+ "bitflags 2.4.1",
  "bumpalo",
  "cc",
  "cfg-if",
