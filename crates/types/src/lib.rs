@@ -1736,7 +1736,7 @@ pub trait TypeConvert {
     fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmHeapType {
         match ty {
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
-            wasmparser::HeapType::Abstract { ty, shared: _ } => match ty {
+            wasmparser::HeapType::Abstract { ty, shared: false } => match ty {
                 wasmparser::AbstractHeapType::Extern => WasmHeapType::Extern,
                 wasmparser::AbstractHeapType::NoExtern => WasmHeapType::NoExtern,
                 wasmparser::AbstractHeapType::Func => WasmHeapType::Func,
@@ -1752,6 +1752,7 @@ pub trait TypeConvert {
                     unimplemented!("unsupported heap type {ty:?}");
                 }
             },
+            _ => unimplemented!("unsupported heap type {ty:?}"),
         }
     }
 

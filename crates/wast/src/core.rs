@@ -16,11 +16,11 @@ pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
         V128(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes()).into()),
         RefNull(HeapType::Abstract {
             ty: AbstractHeapType::Extern,
-            ..
+            shared: false,
         }) => Val::ExternRef(None),
         RefNull(HeapType::Abstract {
             ty: AbstractHeapType::Func,
-            ..
+            shared: false,
         }) => Val::FuncRef(None),
         RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x)?)),
         other => bail!("couldn't convert {:?} to a runtime value", other),
@@ -78,7 +78,7 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
             Val::ExternRef(Some(x)),
             WastRetCore::RefNull(Some(HeapType::Abstract {
                 ty: AbstractHeapType::Extern,
-                ..
+                shared: false,
             })),
         ) => {
             let x = x
