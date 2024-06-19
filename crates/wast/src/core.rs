@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use std::fmt::{Display, LowerHex};
 use wasmtime::{ExternRef, Store, Val};
-use wast::core::{HeapType, NanPattern, V128Pattern, WastArgCore, WastRetCore};
+use wast::core::{AbstractHeapType, HeapType, NanPattern, V128Pattern, WastArgCore, WastRetCore};
 use wast::token::{F32, F64};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
@@ -14,8 +14,14 @@ pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
         F32(x) => Val::F32(x.bits),
         F64(x) => Val::F64(x.bits),
         V128(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes()).into()),
-        RefNull(HeapType::Extern) => Val::ExternRef(None),
-        RefNull(HeapType::Func) => Val::FuncRef(None),
+        RefNull(HeapType::Abstract {
+            ty: AbstractHeapType::Extern,
+            ..
+        }) => Val::ExternRef(None),
+        RefNull(HeapType::Abstract {
+            ty: AbstractHeapType::Func,
+            ..
+        }) => Val::FuncRef(None),
         RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x)?)),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
@@ -68,7 +74,13 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
         (Val::ExternRef(None), WastRetCore::RefExtern(Some(_))) => {
             bail!("expected non-null reference, found null")
         }
-        (Val::ExternRef(Some(x)), WastRetCore::RefNull(Some(HeapType::Extern))) => {
+        (
+            Val::ExternRef(Some(x)),
+            WastRetCore::RefNull(Some(HeapType::Abstract {
+                ty: AbstractHeapType::Extern,
+                ..
+            })),
+        ) => {
             let x = x
                 .data(store)?
                 .downcast_ref::<u32>()

@@ -639,7 +639,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::CallIndirect {
             type_index,
             table_index,
-            table_byte: _,
         } => {
             // `type_index` is the index of the function's signature and
             // `table_index` is the index of the table to search the function
@@ -750,7 +749,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * Memory management is handled by environment. It is usually translated into calls to
          * special functions.
          ************************************************************************************/
-        Operator::MemoryGrow { mem, mem_byte: _ } => {
+        Operator::MemoryGrow { mem } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
             let heap_index = MemoryIndex::from_u32(*mem);
@@ -759,7 +758,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.before_memory_grow(builder, val, heap_index);
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
-        Operator::MemorySize { mem, mem_byte: _ } => {
+        Operator::MemorySize { mem } => {
             let heap_index = MemoryIndex::from_u32(*mem);
             let heap = state.get_heap(builder.func, *mem, environ)?;
             state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);

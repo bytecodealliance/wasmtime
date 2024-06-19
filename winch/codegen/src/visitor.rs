@@ -1357,7 +1357,7 @@ where
         FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
     }
 
-    fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
+    fn visit_call_indirect(&mut self, type_index: u32, table_index: u32) {
         // Spill now because `emit_lazy_init_funcref` and the `FnCall::emit`
         // invocations will both trigger spills since they both call functions.
         // However, the machine instructions for the spill emitted by
@@ -1603,12 +1603,12 @@ where
         )
     }
 
-    fn visit_memory_size(&mut self, mem: u32, _: u8) {
+    fn visit_memory_size(&mut self, mem: u32) {
         let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
         self.emit_compute_memory_size(&heap);
     }
 
-    fn visit_memory_grow(&mut self, mem: u32, _: u8) {
+    fn visit_memory_grow(&mut self, mem: u32) {
         debug_assert!(self.context.stack.len() >= 1);
         // The stack at this point contains: [ delta ]
         // The desired state is
