@@ -97,7 +97,7 @@ impl TableOps {
                     mutable: true,
                     shared: false,
                 },
-                &ConstExpr::ref_null(wasm_encoder::HeapType::Extern),
+                &ConstExpr::ref_null(wasm_encoder::HeapType::EXTERN),
             );
         }
 
@@ -263,7 +263,7 @@ impl TableOp {
                 func.instruction(&Instruction::Drop);
             }
             Self::Null => {
-                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Extern));
+                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
         }
     }
