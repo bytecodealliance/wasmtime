@@ -47,14 +47,14 @@ pub enum EmitVState {
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
-    stack_map: Option<StackMap>,
+    pub(crate) stack_map: Option<StackMap>,
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
-    ctrl_plane: ControlPlane,
+    pub(crate) ctrl_plane: ControlPlane,
     /// Vector State
     /// Controls the current state of the vector unit at the emission point.
-    vstate: EmitVState,
-    frame_layout: FrameLayout,
+    pub(crate) vstate: EmitVState,
+    pub(crate) frame_layout: FrameLayout,
 }
 
 impl EmitState {

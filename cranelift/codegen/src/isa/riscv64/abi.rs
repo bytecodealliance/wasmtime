@@ -855,7 +855,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
     align_to(clobbered_size, 16)
 }
 
-const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
+pub(crate) const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
     .with(px_reg(1))
     .with(px_reg(5))
     .with(px_reg(6))
