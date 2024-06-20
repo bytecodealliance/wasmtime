@@ -2465,19 +2465,24 @@
 
 ;; These rules should probably be handled in `gen_bitcast`, but it's convenient to have that return
 ;; a single register, instead of a `ValueRegs`
-(rule 2 (lower (has_type $I128 (bitcast _ v @ (value_type (ty_vec_fits_in_register _)))))
+(rule 3 (lower (has_type $I128 (bitcast _ v @ (value_type (ty_vec_fits_in_register _)))))
     (value_regs
       (gen_extractlane $I64X2 v 0)
       (gen_extractlane $I64X2 v 1)))
 
 ;; Move the high half into a vector register, and then use vslide1up to move it up and
 ;; insert the lower half in one instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register _) (bitcast _ v @ (value_type $I128))))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _) (bitcast _ v @ (value_type $I128))))
     (let ((lo XReg (value_regs_get v 0))
           (hi XReg (value_regs_get v 1))
           (vstate VState (vstate_from_type $I64X2))
           (vec VReg (rv_vmv_sx hi vstate)))
       (rv_vslide1up_vx vec vec lo (unmasked) vstate)))
+
+;; `gen_bitcast` below only works with single register values, so handle I128
+;; specially here.
+(rule 1 (lower (has_type $I128 (bitcast _ v @ (value_type $I128))))
+   v)
 
 (rule 0 (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
    (gen_bitcast v in_ty out_ty))
