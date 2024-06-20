@@ -1,0 +1,12 @@
+test cat
+
+function %cold() cold {
+    sig0 = () cold
+    sig1 = () -> i8 cold
+block1:
+    return
+}
+
+; sameln: function %cold() cold {
+; nextln:     sig0 = () cold
+; nextln:     sig1 = () -> i8 cold
