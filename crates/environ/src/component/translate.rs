@@ -273,12 +273,14 @@ impl<'a, 'data> Translator<'a, 'data> {
         types: &'a mut ComponentTypesBuilder,
         scope_vec: &'data ScopeVec<u8>,
     ) -> Self {
+        let mut parser = Parser::new(0);
+        parser.set_features(*validator.features());
         Self {
             result: Translation::default(),
             tunables,
             validator,
             types: PreInliningComponentTypes::new(types),
-            parser: Parser::new(0),
+            parser,
             lexical_scopes: Vec::new(),
             static_components: Default::default(),
             static_modules: Default::default(),
