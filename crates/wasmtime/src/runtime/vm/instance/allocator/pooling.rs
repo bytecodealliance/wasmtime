@@ -166,7 +166,7 @@ impl Default for InstanceLimits {
             // have 10k+ elements.
             table_elements: 20_000,
             max_memories_per_module: 1,
-            max_memory_size: 10 * (1 << 20), // 10 MiB
+            max_memory_size: 1 << 32, // 4G,
             #[cfg(feature = "gc")]
             total_gc_heaps: 1000,
         }

@@ -2771,7 +2771,9 @@ impl PoolingAllocationConfig {
 
     /// The maximum byte size that any WebAssembly linear memory may grow to.
     ///
-    /// This option defaults to 10 MiB.
+    /// This option defaults to 4 GiB meaning that for 32-bit linear memories
+    /// there is no restrictions. 64-bit linear memories will not be allowed to
+    /// grow beyond 4 GiB by default.
     ///
     /// If a memory's minimum size is greater than this value, the module will
     /// fail to instantiate.
@@ -2781,11 +2783,15 @@ impl PoolingAllocationConfig {
     /// instruction.
     ///
     /// This value is used to control the maximum accessible space for each
-    /// linear memory of a core instance.
+    /// linear memory of a core instance. This can be thought of as a simple
+    /// mechanism like [`Store::limiter`](crate::Store::limiter) to limit memory
+    /// at runtime. This value can also affect striping/coloring behavior when
+    /// used in conjunction with
+    /// [`memory_protection_keys`](PoolingAllocationConfig::memory_protection_keys).
     ///
-    /// The reservation size of each linear memory is controlled by the
-    /// `static_memory_maximum_size` setting and this value cannot exceed the
-    /// configured static memory maximum size.
+    /// The virtual memory reservation size of each linear memory is controlled
+    /// by the [`Config::static_memory_maximum_size`] setting and this method's
+    /// configuration cannot exceed [`Config::static_memory_maximum_size`].
     pub fn max_memory_size(&mut self, bytes: usize) -> &mut Self {
         self.config.limits.max_memory_size = bytes;
         self
@@ -2801,6 +2807,11 @@ impl PoolingAllocationConfig {
     /// "coloring" memory regions with different memory keys and setting which
     /// regions are accessible each time executions switches from host to guest
     /// (or vice versa).
+    ///
+    /// Leveraging MPK requires configuring a smaller-than-default
+    /// [`max_memory_size`](PoolingAllocationConfig::max_memory_size) to enable
+    /// this coloring/striping behavior. For example embeddings might want to
+    /// reduce the default 4G allowance to 128M.
     ///
     /// MPK is only available on Linux (called `pku` there) and recent x86
     /// systems; we check for MPK support at runtime by examining the `CPUID`
