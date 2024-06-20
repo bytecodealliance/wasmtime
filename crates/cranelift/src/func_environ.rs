@@ -510,7 +510,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
         builder.declare_var(self.epoch_deadline_var, ir::types::I64);
-        self.epoch_load_deadline_into_var(builder);
+        // Let epoch_check_full load the current deadline and call def_var
+
         builder.declare_var(self.epoch_ptr_var, self.pointer_type());
         let epoch_ptr = self.epoch_ptr(builder);
         builder.def_var(self.epoch_ptr_var, epoch_ptr);
@@ -532,7 +533,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // sufficient. Then, combined with checks at every backedge
         // (loop) the longest runtime between checks is bounded by the
         // straightline length of any function body.
-        self.epoch_check(builder);
+        let continuation_block = builder.create_block();
+        let cur_epoch_value = self.epoch_load_current(builder);
+        self.epoch_check_full(builder, cur_epoch_value, continuation_block);
     }
 
     #[cfg(feature = "wmemcheck")]
@@ -597,33 +600,30 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         )
     }
 
-    fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let deadline =
-            builder.ins().load(
-                ir::types::I64,
-                ir::MemFlags::trusted(),
-                self.vmruntime_limits_ptr,
-                ir::immediates::Offset32::new(
-                    self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
-                ),
-            );
-        builder.def_var(self.epoch_deadline_var, deadline);
+    fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let continuation_block = builder.create_block();
+
+        // Load new epoch and check against the cached deadline.
+        let cur_epoch_value = self.epoch_load_current(builder);
+        self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
+
+        // At this point we've noticed that the epoch has exceeded our
+        // cached deadline. However the real deadline may have been
+        // updated (within another yield) during some function that we
+        // called in the meantime, so reload the cache and check again.
+        self.epoch_check_full(builder, cur_epoch_value, continuation_block);
     }
 
-    fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
+    fn epoch_check_cached(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        cur_epoch_value: ir::Value,
+        continuation_block: ir::Block,
+    ) {
         let new_epoch_block = builder.create_block();
-        let new_epoch_doublecheck_block = builder.create_block();
-        let continuation_block = builder.create_block();
         builder.set_cold_block(new_epoch_block);
-        builder.set_cold_block(new_epoch_doublecheck_block);
 
         let epoch_deadline = builder.use_var(self.epoch_deadline_var);
-        // Load new epoch and check against cached deadline. The
-        // deadline may be out of date if it was updated (within
-        // another yield) during some function that we called; this is
-        // fine, as we'll reload it and check again before yielding in
-        // the cold path.
-        let cur_epoch_value = self.epoch_load_current(builder);
         let cmp = builder.ins().icmp(
             IntCC::UnsignedGreaterThanOrEqual,
             cur_epoch_value,
@@ -634,31 +634,30 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .brif(cmp, new_epoch_block, &[], continuation_block, &[]);
         builder.seal_block(new_epoch_block);
 
-        // In the "new epoch block", we've noticed that the epoch has
-        // exceeded our cached deadline. However the real deadline may
-        // have been moved in the meantime. We keep the cached value
-        // in a register to speed the checks in the common case
-        // (between epoch ticks) but we want to do a precise check
-        // here, on the cold path, by reloading the latest value
-        // first.
         builder.switch_to_block(new_epoch_block);
-        self.epoch_load_deadline_into_var(builder);
-        let fresh_epoch_deadline = builder.use_var(self.epoch_deadline_var);
-        let fresh_cmp = builder.ins().icmp(
-            IntCC::UnsignedGreaterThanOrEqual,
-            cur_epoch_value,
-            fresh_epoch_deadline,
-        );
-        builder.ins().brif(
-            fresh_cmp,
-            new_epoch_doublecheck_block,
-            &[],
-            continuation_block,
-            &[],
-        );
-        builder.seal_block(new_epoch_doublecheck_block);
+    }
 
-        builder.switch_to_block(new_epoch_doublecheck_block);
+    fn epoch_check_full(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        cur_epoch_value: ir::Value,
+        continuation_block: ir::Block,
+    ) {
+        // We keep the deadline cached in a register to speed the checks
+        // in the common case (between epoch ticks) but we want to do a
+        // precise check here by reloading the cache first.
+        let deadline =
+            builder.ins().load(
+                ir::types::I64,
+                ir::MemFlags::trusted(),
+                self.vmruntime_limits_ptr,
+                ir::immediates::Offset32::new(
+                    self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
+                ),
+            );
+        builder.def_var(self.epoch_deadline_var, deadline);
+        self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
+
         let new_epoch = self.builtin_functions.new_epoch(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
         // new_epoch() returns the new deadline, so we don't have to
