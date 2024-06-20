@@ -2393,10 +2393,10 @@
 ;;
 ;; We can't recurse into `amode` again since that could cause stack overflows.
 ;; See: https://github.com/bytecodealliance/wasmtime/pull/6968
-(rule 1 (amode (iadd addr (iconst (simm32 y))) offset)
+(rule 1 (amode (iadd addr (i32_from_iconst y)) offset)
   (if-let new_offset (s32_add_fallible y offset))
   (amode_inner addr new_offset))
-(rule 2 (amode (iadd (iconst (simm32 x)) addr) offset)
+(rule 2 (amode (iadd (i32_from_iconst x) addr) offset)
   (if-let new_offset (s32_add_fallible x offset))
   (amode_inner addr new_offset))
 

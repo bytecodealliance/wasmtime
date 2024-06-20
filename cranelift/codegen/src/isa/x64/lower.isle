@@ -979,9 +979,9 @@
          (x64_imul ty y x))
 
 ;; lift out constants to use 3-operand form
-(rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (iconst (simm32 y)))))
+(rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (i32_from_iconst y))))
          (x64_imul_imm ty x y))
-(rule -2 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (iconst (simm32 x)) y)))
+(rule -2 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (i32_from_iconst x) y)))
          (x64_imul_imm ty y x))
 
 ;; `i128`.
@@ -2970,9 +2970,10 @@
        (x64_movrm $I32 (to_amode flags address offset) value)))
 
 ;; IMM stores
-(rule 2 (lower (store flags (has_type (fits_in_64 ty) (iconst (simm32 value))) address offset))
+(rule 4 (lower (store flags value @ (value_type (fits_in_64 ty)) address offset))
+      (if-let (i32_from_iconst imm) value)
       (side_effect
-       (x64_movimm_m ty (to_amode flags address offset) value)))
+       (x64_movimm_m ty (to_amode flags address offset) imm)))
 
 ;; F32 stores of values in XMM registers.
 (rule 1 (lower (store flags
