@@ -14,6 +14,5 @@ wasmtime = { workspace = true, features = ['incremental-cache', 'cranelift', 'co
 
 [build-dependencies]
 heck = { workspace = true }
-wasi-preview1-component-adapter-provider = { workspace = true }
 wit-component = { workspace = true }
 cargo_metadata = "0.18.1"
