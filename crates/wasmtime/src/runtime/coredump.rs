@@ -181,10 +181,7 @@ impl WasmCoreDump {
 
                         HeapType::Func => wasm_encoder::ValType::FUNCREF,
 
-                        HeapType::Any => wasm_encoder::ValType::Ref(wasm_encoder::RefType {
-                            nullable: true,
-                            heap_type: wasm_encoder::HeapType::Any,
-                        }),
+                        HeapType::Any => wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF),
 
                         ty => unreachable!("not a top type: {ty:?}"),
                     },
@@ -200,13 +197,13 @@ impl WasmCoreDump {
                     }
                     Val::V128(x) => wasm_encoder::ConstExpr::v128_const(x.as_u128() as i128),
                     Val::FuncRef(_) => {
-                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Func)
+                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::FUNC)
                     }
                     Val::ExternRef(_) => {
-                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Extern)
+                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::EXTERN)
                     }
                     Val::AnyRef(_) => {
-                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Any)
+                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::ANY)
                     }
                 };
                 globals.global(

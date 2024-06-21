@@ -66,9 +66,10 @@ struct AnnotatedWatChunk {
 }
 
 fn annotate_wat(wasm: &[u8]) -> Result<AnnotatedWat> {
-    let mut printer = wasmprinter::Printer::new();
+    let printer = wasmprinter::Config::new();
+    let mut storage = String::new();
     let chunks = printer
-        .offsets_and_lines(wasm)?
+        .offsets_and_lines(wasm, &mut storage)?
         .map(|(offset, wat)| AnnotatedWatChunk {
             wasm_offset: offset.map(|o| WasmOffset(u32::try_from(o).unwrap())),
             wat: wat.to_string(),

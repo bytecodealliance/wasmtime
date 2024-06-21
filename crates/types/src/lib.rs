@@ -1735,21 +1735,24 @@ pub trait TypeConvert {
     /// Converts a wasmparser heap type to a wasmtime type
     fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmHeapType {
         match ty {
-            wasmparser::HeapType::Extern => WasmHeapType::Extern,
-            wasmparser::HeapType::NoExtern => WasmHeapType::NoExtern,
-            wasmparser::HeapType::Func => WasmHeapType::Func,
-            wasmparser::HeapType::NoFunc => WasmHeapType::NoFunc,
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
-            wasmparser::HeapType::Any => WasmHeapType::Any,
-            wasmparser::HeapType::Eq => WasmHeapType::Eq,
-            wasmparser::HeapType::I31 => WasmHeapType::I31,
-            wasmparser::HeapType::Array => WasmHeapType::Array,
-            wasmparser::HeapType::Struct => WasmHeapType::Struct,
-            wasmparser::HeapType::None => WasmHeapType::None,
+            wasmparser::HeapType::Abstract { ty, shared: false } => match ty {
+                wasmparser::AbstractHeapType::Extern => WasmHeapType::Extern,
+                wasmparser::AbstractHeapType::NoExtern => WasmHeapType::NoExtern,
+                wasmparser::AbstractHeapType::Func => WasmHeapType::Func,
+                wasmparser::AbstractHeapType::NoFunc => WasmHeapType::NoFunc,
+                wasmparser::AbstractHeapType::Any => WasmHeapType::Any,
+                wasmparser::AbstractHeapType::Eq => WasmHeapType::Eq,
+                wasmparser::AbstractHeapType::I31 => WasmHeapType::I31,
+                wasmparser::AbstractHeapType::Array => WasmHeapType::Array,
+                wasmparser::AbstractHeapType::Struct => WasmHeapType::Struct,
+                wasmparser::AbstractHeapType::None => WasmHeapType::None,
 
-            wasmparser::HeapType::Exn | wasmparser::HeapType::NoExn => {
-                unimplemented!("unsupported heap type {ty:?}");
-            }
+                wasmparser::AbstractHeapType::Exn | wasmparser::AbstractHeapType::NoExn => {
+                    unimplemented!("unsupported heap type {ty:?}");
+                }
+            },
+            _ => unimplemented!("unsupported heap type {ty:?}"),
         }
     }
 

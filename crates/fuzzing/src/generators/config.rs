@@ -48,8 +48,8 @@ impl Config {
         // Allow a memory to be generated, but don't let it get too large.
         // Additionally require the maximum size to guarantee that the growth
         // behavior is consistent across engines.
-        config.max_memory32_pages = 10;
-        config.max_memory64_pages = 10;
+        config.max_memory32_bytes = 10 << 16;
+        config.max_memory64_bytes = 10 << 16;
         config.memory_max_size_required = true;
 
         // If tables are generated make sure they don't get too large to avoid
@@ -428,14 +428,18 @@ impl<'a> Arbitrary<'a> for Config {
 
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
-            let min_pages = cfg.max_memory32_pages.min(cfg.max_memory64_pages);
-            let mut min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            let min_bytes = cfg
+                .max_memory32_bytes
+                // memory64_bytes is a u128, but since we are taking the min
+                // we can truncate it down to a u64.
+                .min(cfg.max_memory64_bytes.try_into().unwrap_or(u64::MAX));
+            let mut min = min_bytes.min(pooling.max_memory_size as u64);
             if let MemoryConfig::Normal(cfg) = &config.wasmtime.memory_config {
                 min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
             }
             pooling.max_memory_size = min as usize;
-            cfg.max_memory32_pages = min >> 16;
-            cfg.max_memory64_pages = min >> 16;
+            cfg.max_memory32_bytes = min;
+            cfg.max_memory64_bytes = min as u128;
 
             // If traps are disallowed then memories must have at least one page
             // of memory so if we still are only allowing 0 pages of memory then
@@ -443,8 +447,8 @@ impl<'a> Arbitrary<'a> for Config {
             if cfg.disallow_traps {
                 if pooling.max_memory_size < (1 << 16) {
                     pooling.max_memory_size = 1 << 16;
-                    cfg.max_memory32_pages = 1;
-                    cfg.max_memory64_pages = 1;
+                    cfg.max_memory32_bytes = 1 << 16;
+                    cfg.max_memory64_bytes = 1 << 16;
                     if let MemoryConfig::Normal(cfg) = &mut config.wasmtime.memory_config {
                         match &mut cfg.static_memory_maximum_size {
                             Some(size) => *size = (*size).max(pooling.max_memory_size as u64),

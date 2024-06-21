@@ -9,7 +9,7 @@ use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Token};
 use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError, TrappableImports};
-use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
+use wit_parser::{PackageId, Resolve, UnresolvedPackageGroup, WorldId};
 
 pub struct Config {
     opts: Opts,
@@ -170,11 +170,11 @@ impl Parse for Config {
                 path = Some(input.parse::<syn::LitStr>()?.value());
             }
         }
-        let (resolve, pkg, files) = parse_source(&path, &inline, &features)
+        let (resolve, pkgs, files) = parse_source(&path, &inline, &features)
             .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
 
         let world = resolve
-            .select_world(pkg, world.as_deref())
+            .select_world(&pkgs, world.as_deref())
             .map_err(|e| Error::new(call_site, format!("{e:?}")))?;
         Ok(Config {
             opts,
@@ -190,7 +190,7 @@ fn parse_source(
     path: &Option<String>,
     inline: &Option<String>,
     features: &[String],
-) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
+) -> anyhow::Result<(Resolve, Vec<PackageId>, Vec<PathBuf>)> {
     let mut resolve = Resolve::default();
     resolve.features.extend(features.iter().cloned());
     let mut files = Vec::new();
@@ -208,17 +208,17 @@ fn parse_source(
         None
     };
 
-    let inline_pkg = if let Some(inline) = inline {
-        Some(resolve.push(UnresolvedPackage::parse("macro-input".as_ref(), inline)?)?)
+    let inline_pkgs = if let Some(inline) = inline {
+        Some(resolve.push_group(UnresolvedPackageGroup::parse("macro-input", inline)?)?)
     } else {
         None
     };
 
-    let pkg = inline_pkg
+    let pkgs = inline_pkgs
         .or(path_pkg)
         .map_or_else(|| parse(&mut resolve, &root.join("wit")), Ok)?;
 
-    Ok((resolve, pkg, files))
+    Ok((resolve, pkgs, files))
 }
 
 mod kw {
