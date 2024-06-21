@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -ex
 
+# These flags reduce binary size by a combined 4.6k
+export CARGO_PROFILE_RELEASE_LTO=fat
+export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="$RUSTFLAGS -Ctarget-feature=+bulk-memory"
+
 build_adapter="cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown"
 verify="cargo run -p verify-component-adapter --"
 
