@@ -2772,7 +2772,6 @@ version = "0.0.0"
 dependencies = [
  "cargo_metadata",
  "heck 0.4.0",
- "wasi-preview1-component-adapter-provider",
  "wasmtime",
  "wit-component",
 ]
@@ -3200,10 +3199,6 @@ dependencies = [
  "wasm-encoder",
  "wit-bindgen-rust-macro",
 ]
-
-[[package]]
-name = "wasi-preview1-component-adapter-provider"
-version = "23.0.0"
 
 [[package]]
 name = "wasm-bindgen"

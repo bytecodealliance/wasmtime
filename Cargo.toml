@@ -138,7 +138,6 @@ members = [
   "crates/environ/fuzz",
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
-  "crates/wasi-preview1-component-adapter/provider",
   "crates/wasi-preview1-component-adapter/verify",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
@@ -205,7 +204,6 @@ wiggle = { path = "crates/wiggle", version = "=23.0.0", default-features = false
 wiggle-macro = { path = "crates/wiggle/macro", version = "=23.0.0" }
 wiggle-generate = { path = "crates/wiggle/generate", version = "=23.0.0" }
 wasi-common = { path = "crates/wasi-common", version = "=23.0.0", default-features = false }
-wasi-preview1-component-adapter-provider = { path = "crates/wasi-preview1-component-adapter/provider", version = "23.0.0", default-features = false }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=23.0.0" }
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=23.0.0" }

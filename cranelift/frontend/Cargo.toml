@@ -22,6 +22,7 @@ smallvec = { workspace = true }
 
 [dev-dependencies]
 similar = { workspace = true }
+cranelift-codegen = { workspace = true, features = ['x86'] }
 
 [features]
 default = ["std"]
