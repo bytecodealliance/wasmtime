@@ -14,22 +14,22 @@ default-run = "wasmtime"
 rust-version.workspace = true
 
 [package.metadata.binstall]
-pkg-url = "{repo}/releases/download/v{version}/{name}-v{version}-{target-arch}-{target-family}{archive-suffix}"
-bin-dir = "{name}-{version}-{target-arch}-{target-family}/{bin}{binary-ext}"
+pkg-url = "{repo}/releases/download/v{version}/wasmtime-v{version}-{target-arch}-{target-family}{archive-suffix}"
+bin-dir = "wasmtime-{version}-{target-arch}-{target-family}/{bin}{binary-ext}"
 pkg-fmt = "txz"
 [package.metadata.binstall.overrides.x86_64-apple-darwin]
-pkg-url = "{repo}/releases/download/v{version}/{name}-v{version}-{target-arch}-macos{archive-suffix}"
-bin-dir = "{name}-v{version}-{target-arch}-macos/{bin}{binary-ext}"
+pkg-url = "{repo}/releases/download/v{version}/wasmtime-v{version}-{target-arch}-macos{archive-suffix}"
+bin-dir = "wasmtime-v{version}-{target-arch}-macos/{bin}{binary-ext}"
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
-pkg-url = "{repo}/releases/download/v{version}/{name}-v{version}-{target-arch}-macos{archive-suffix}"
-bin-dir = "{name}-v{version}-{target-arch}-macos/{bin}{binary-ext}"
+pkg-url = "{repo}/releases/download/v{version}/wasmtime-v{version}-{target-arch}-macos{archive-suffix}"
+bin-dir = "wasmtime-v{version}-{target-arch}-macos/{bin}{binary-ext}"
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
 [package.metadata.binstall.overrides.x86_64-pc-windows-gnu]
 pkg-fmt = "zip"
 [package.metadata.binstall.overrides.x86_64-unknown-linux-musl]
-pkg-url = "{repo}/releases/download/v{version}/{name}-v{version}-{target-arch}-musl{archive-suffix}"
-bin-dir = "{name}-v{version}-{target-arch}-musl/{bin}{binary-ext}"
+pkg-url = "{repo}/releases/download/v{version}/wasmtime-v{version}-{target-arch}-musl{archive-suffix}"
+bin-dir = "wasmtime-v{version}-{target-arch}-musl/{bin}{binary-ext}"
 
 [lints]
 workspace = true
