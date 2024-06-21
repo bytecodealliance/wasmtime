@@ -794,8 +794,8 @@ impl OperandConstraint {
                     tys.ints = BitSet8::from_range(3, ctrl_type_bits as u8);
                 } else if ctrl_type.is_float() {
                     // The upper bound in from_range is exclusive, and we want to exclude the
-                    // control type to construct the interval of [F32, ctrl_type).
-                    tys.floats = BitSet8::from_range(5, ctrl_type_bits as u8);
+                    // control type to construct the interval of [F16, ctrl_type).
+                    tys.floats = BitSet8::from_range(4, ctrl_type_bits as u8);
                 } else {
                     panic!("The Narrower constraint only operates on floats or ints");
                 }
@@ -822,10 +822,11 @@ impl OperandConstraint {
                         tys.ints = BitSet8::from_range(lower_bound, 8);
                     }
                 } else if ctrl_type.is_float() {
-                    // The interval should include all float types wider than `ctrl_type`, so we
-                    // use `2^7` as the upper bound, and add one to the bits of `ctrl_type` to
-                    // define the interval `(ctrl_type, F64]`.
-                    tys.floats = BitSet8::from_range(ctrl_type_bits as u8 + 1, 7);
+                    // Same as above but for `tys.floats`, as the largest float type is F128.
+                    let lower_bound = ctrl_type_bits as u8 + 1;
+                    if lower_bound < BitSet8::capacity() {
+                        tys.floats = BitSet8::from_range(lower_bound, 8);
+                    }
                 } else {
                     panic!("The Wider constraint only operates on floats or ints");
                 }
@@ -964,7 +965,9 @@ mod tests {
         assert!(vts.contains(I64));
         assert!(vts.contains(I32X4));
         assert!(vts.contains(I32X4XN));
+        assert!(!vts.contains(F16));
         assert!(!vts.contains(F32));
+        assert!(!vts.contains(F128));
         assert!(vts.contains(R32));
         assert!(vts.contains(R64));
         assert_eq!(vts.example().to_string(), "i32");

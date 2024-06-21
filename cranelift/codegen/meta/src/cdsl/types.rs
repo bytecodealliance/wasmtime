@@ -136,6 +136,12 @@ impl LaneType {
     /// Return a string containing the documentation comment for this lane type.
     pub fn doc(self) -> String {
         match self {
+            LaneType::Float(shared_types::Float::F16) => String::from(
+                "A 16-bit floating point type represented in the IEEE 754-2008
+                *binary16* interchange format. This corresponds to the :c:type:`_Float16`
+                type in most C implementations.
+                WARNING: f16 support is a work-in-progress and is incomplete",
+            ),
             LaneType::Float(shared_types::Float::F32) => String::from(
                 "A 32-bit floating point type represented in the IEEE 754-2008
                 *binary32* interchange format. This corresponds to the :c:type:`float`
@@ -145,6 +151,12 @@ impl LaneType {
                 "A 64-bit floating point type represented in the IEEE 754-2008
                 *binary64* interchange format. This corresponds to the :c:type:`double`
                 type in most C implementations.",
+            ),
+            LaneType::Float(shared_types::Float::F128) => String::from(
+                "A 128-bit floating point type represented in the IEEE 754-2008
+                *binary128* interchange format. This corresponds to the :c:type:`_Float128`
+                type in most C implementations.
+                WARNING: f128 support is a work-in-progress and is incomplete",
             ),
             LaneType::Int(_) if self.lane_bits() < 32 => format!(
                 "An integer type with {} bits.
@@ -168,13 +180,15 @@ impl LaneType {
     pub fn number(self) -> u16 {
         constants::LANE_BASE
             + match self {
-                LaneType::Int(shared_types::Int::I8) => 6,
-                LaneType::Int(shared_types::Int::I16) => 7,
-                LaneType::Int(shared_types::Int::I32) => 8,
-                LaneType::Int(shared_types::Int::I64) => 9,
-                LaneType::Int(shared_types::Int::I128) => 10,
-                LaneType::Float(shared_types::Float::F32) => 11,
-                LaneType::Float(shared_types::Float::F64) => 12,
+                LaneType::Int(shared_types::Int::I8) => 4,
+                LaneType::Int(shared_types::Int::I16) => 5,
+                LaneType::Int(shared_types::Int::I32) => 6,
+                LaneType::Int(shared_types::Int::I64) => 7,
+                LaneType::Int(shared_types::Int::I128) => 8,
+                LaneType::Float(shared_types::Float::F16) => 9,
+                LaneType::Float(shared_types::Float::F32) => 10,
+                LaneType::Float(shared_types::Float::F64) => 11,
+                LaneType::Float(shared_types::Float::F128) => 12,
             }
     }
 
@@ -191,8 +205,10 @@ impl LaneType {
 
     pub fn float_from_bits(num_bits: u16) -> LaneType {
         LaneType::Float(match num_bits {
+            16 => shared_types::Float::F16,
             32 => shared_types::Float::F32,
             64 => shared_types::Float::F64,
+            128 => shared_types::Float::F128,
             _ => unreachable!("unexpected num bits for float"),
         })
     }

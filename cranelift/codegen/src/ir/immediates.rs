@@ -468,6 +468,21 @@ impl FromStr for Offset32 {
     }
 }
 
+/// An IEEE binary16 immediate floating point value, represented as a u16
+/// containing the bit pattern.
+///
+/// We specifically avoid using a f16 here since some architectures may silently alter floats.
+/// See: <https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646>
+///
+/// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
+/// [PartialOrd] respects IEEE754 semantics.
+///
+/// All bit patterns are allowed.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[repr(C)]
+pub struct Ieee16(u16);
+
 /// An IEEE binary32 immediate floating point value, represented as a u32
 /// containing the bit pattern.
 ///
@@ -498,6 +513,21 @@ pub struct Ieee32(u32);
 #[repr(C)]
 pub struct Ieee64(u64);
 
+/// An IEEE binary128 immediate floating point value, represented as a u128
+/// containing the bit pattern.
+///
+/// We specifically avoid using a f128 here since some architectures may silently alter floats.
+/// See: <https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646>
+///
+/// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
+/// [PartialOrd] respects IEEE754 semantics.
+///
+/// All bit patterns are allowed.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[repr(C)]
+pub struct Ieee128(u128);
+
 /// Format a floating point number in a way that is reasonably human-readable, and that can be
 /// converted back to binary without any rounding issues. The hexadecimal formatting of normal and
 /// subnormal numbers is compatible with C99 and the `printf "%a"` format specifier. The NaN and Inf
@@ -508,13 +538,13 @@ pub struct Ieee64(u64);
 /// w - exponent field width in bits
 /// t - trailing significand field width in bits
 ///
-fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
+fn format_float(bits: u128, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
     debug_assert!(w > 0 && w <= 16, "Invalid exponent range");
-    debug_assert!(1 + w + t <= 64, "Too large IEEE format for u64");
+    debug_assert!(1 + w + t <= 128, "Too large IEEE format for u128");
     debug_assert!((t + w + 1).is_power_of_two(), "Unexpected IEEE format size");
 
-    let max_e_bits = (1u64 << w) - 1;
-    let t_bits = bits & ((1u64 << t) - 1); // Trailing significand.
+    let max_e_bits = (1u128 << w) - 1;
+    let t_bits = bits & ((1u128 << t) - 1); // Trailing significand.
     let e_bits = (bits >> t) & max_e_bits; // Biased exponent.
     let sign_bit = (bits >> (w + t)) & 1;
 
@@ -583,13 +613,13 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
 /// w - exponent field width in bits
 /// t - trailing significand field width in bits
 ///
-fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
+fn parse_float(s: &str, w: u8, t: u8) -> Result<u128, &'static str> {
     debug_assert!(w > 0 && w <= 16, "Invalid exponent range");
-    debug_assert!(1 + w + t <= 64, "Too large IEEE format for u64");
+    debug_assert!(1 + w + t <= 128, "Too large IEEE format for u128");
     debug_assert!((t + w + 1).is_power_of_two(), "Unexpected IEEE format size");
 
     let (sign_bit, s2) = if s.starts_with('-') {
-        (1u64 << (t + w), &s[1..])
+        (1u128 << (t + w), &s[1..])
     } else if s.starts_with('+') {
         (0, &s[1..])
     } else {
@@ -597,8 +627,8 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
     };
 
     if !s2.starts_with("0x") {
-        let max_e_bits = ((1u64 << w) - 1) << t;
-        let quiet_bit = 1u64 << (t - 1);
+        let max_e_bits = ((1u128 << w) - 1) << t;
+        let quiet_bit = 1u128 << (t - 1);
 
         // The only decimal encoding allowed is 0.
         if s2 == "0.0" {
@@ -615,7 +645,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         }
         if s2.starts_with("NaN:0x") {
             // Quiet NaN with payload.
-            return match u64::from_str_radix(&s2[6..], 16) {
+            return match u128::from_str_radix(&s2[6..], 16) {
                 Ok(payload) if payload < quiet_bit => {
                     Ok(sign_bit | max_e_bits | quiet_bit | payload)
                 }
@@ -624,7 +654,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         }
         if s2.starts_with("sNaN:0x") {
             // Signaling NaN with payload.
-            return match u64::from_str_radix(&s2[7..], 16) {
+            return match u128::from_str_radix(&s2[7..], 16) {
                 Ok(payload) if 0 < payload && payload < quiet_bit => {
                     Ok(sign_bit | max_e_bits | payload)
                 }
@@ -638,7 +668,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
 
     let mut digits = 0u8;
     let mut digits_before_period: Option<u8> = None;
-    let mut significand = 0u64;
+    let mut significand = 0u128;
     let mut exponent = 0i32;
 
     for (idx, ch) in s3.char_indices() {
@@ -665,10 +695,10 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
             _ => match ch.to_digit(16) {
                 Some(digit) => {
                     digits += 1;
-                    if digits > 16 {
+                    if digits > 32 {
                         return Err("Too many digits");
                     }
-                    significand = (significand << 4) | u64::from(digit);
+                    significand = (significand << 4) | u128::from(digit);
                 }
                 None => return Err("Invalid character"),
             },
@@ -691,10 +721,10 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
     };
 
     // Normalize the significand and exponent.
-    let significant_bits = (64 - significand.leading_zeros()) as u8;
+    let significant_bits = (128 - significand.leading_zeros()) as u8;
     if significant_bits > t + 1 {
         let adjust = significant_bits - (t + 1);
-        if significand & ((1u64 << adjust) - 1) != 0 {
+        if significand & ((1u128 << adjust) - 1) != 0 {
             return Err("Too many significant bits");
         }
         // Adjust significand down.
@@ -718,13 +748,13 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         Err("Magnitude too large")
     } else if exponent > 0 {
         // This is a normal number.
-        let e_bits = (exponent as u64) << t;
+        let e_bits = (exponent as u128) << t;
         Ok(sign_bit | e_bits | t_bits)
     } else if 1 - exponent <= i32::from(t) {
         // This is a subnormal number: e = 0, t = significand bits.
         // Renormalize significand for exponent = 1.
         let adjust = 1 - exponent;
-        if significand & ((1u64 << adjust) - 1) != 0 {
+        if significand & ((1u128 << adjust) - 1) != 0 {
             Err("Subnormal underflow")
         } else {
             significand >>= adjust;
@@ -732,6 +762,84 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         }
     } else {
         Err("Magnitude too small")
+    }
+}
+
+impl Ieee16 {
+    const SIGNIFICAND_BITS: u8 = 10;
+    const EXPONENT_BITS: u8 = 5;
+
+    /// Create a new `Ieee16` containing the bits of `x`.
+    pub fn with_bits(x: u16) -> Self {
+        Self(x)
+    }
+
+    /// Get the bitwise representation.
+    pub fn bits(self) -> u16 {
+        self.0
+    }
+
+    /// Returns true if self is positive or negative zero
+    pub fn is_zero(&self) -> bool {
+        self.partial_cmp(&Self::with_bits(0)) == Some(Ordering::Equal)
+    }
+}
+
+impl PartialOrd for Ieee16 {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        // FIXME(#8312): Use Rust `f16` comparisons once `f16` support is stabalised.
+        let significand_mask = u16::MAX >> (Self::EXPONENT_BITS + 1);
+        let sign_mask = 1 << (Self::EXPONENT_BITS + Self::SIGNIFICAND_BITS);
+        let exponent_mask = !sign_mask & !significand_mask;
+
+        let lhs_abs = self.bits() & !sign_mask;
+        let rhs_abs = rhs.bits() & !sign_mask;
+        if (lhs_abs & exponent_mask == exponent_mask && lhs_abs & significand_mask != 0)
+            && (rhs_abs & exponent_mask == exponent_mask && rhs_abs & significand_mask != 0)
+        {
+            // One of the floats is a NaN.
+            return None;
+        }
+        if lhs_abs == 0 && rhs_abs == 0 {
+            // Zeros are always equal regardless of sign.
+            return Some(Ordering::Equal);
+        }
+        let lhs_positive = self.bits() & sign_mask == 0;
+        let rhs_positive = rhs.bits() & sign_mask == 0;
+        if lhs_positive != rhs_positive {
+            // Different signs: negative < positive
+            return lhs_positive.partial_cmp(&rhs_positive);
+        }
+        // Finite or infinity will order correctly with an integer comparison of the bits.
+        if lhs_positive {
+            lhs_abs.partial_cmp(&rhs_abs)
+        } else {
+            // Reverse the comparison when both floats are negative.
+            rhs_abs.partial_cmp(&lhs_abs)
+        }
+    }
+}
+
+impl Display for Ieee16 {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let bits: u16 = self.0;
+        format_float(
+            u128::from(bits),
+            Self::EXPONENT_BITS,
+            Self::SIGNIFICAND_BITS,
+            f,
+        )
+    }
+}
+
+impl FromStr for Ieee16 {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match parse_float(s, Self::EXPONENT_BITS, Self::SIGNIFICAND_BITS) {
+            Ok(b) => Ok(Self(b as u16)),
+            Err(s) => Err(s),
+        }
     }
 }
 
@@ -853,7 +961,7 @@ impl PartialOrd for Ieee32 {
 impl Display for Ieee32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let bits: u32 = self.0;
-        format_float(u64::from(bits), 8, 23, f)
+        format_float(u128::from(bits), 8, 23, f)
     }
 }
 
@@ -1071,7 +1179,7 @@ impl PartialOrd for Ieee64 {
 impl Display for Ieee64 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let bits: u64 = self.0;
-        format_float(bits, 11, 52, f)
+        format_float(u128::from(bits), 11, 52, f)
     }
 }
 
@@ -1080,7 +1188,7 @@ impl FromStr for Ieee64 {
 
     fn from_str(s: &str) -> Result<Self, &'static str> {
         match parse_float(s, 11, 52) {
-            Ok(b) => Ok(Self(b)),
+            Ok(b) => Ok(Self(b as u64)),
             Err(s) => Err(s),
         }
     }
@@ -1173,6 +1281,79 @@ impl Not for Ieee64 {
 
     fn not(self) -> Self::Output {
         Self::with_bits(!self.bits())
+    }
+}
+
+impl Ieee128 {
+    const SIGNIFICAND_BITS: u8 = 112;
+    const EXPONENT_BITS: u8 = 15;
+
+    /// Create a new `Ieee128` containing the bits of `x`.
+    pub fn with_bits(x: u128) -> Self {
+        Self(x)
+    }
+
+    /// Get the bitwise representation.
+    pub fn bits(self) -> u128 {
+        self.0
+    }
+
+    /// Returns true if self is positive or negative zero
+    pub fn is_zero(&self) -> bool {
+        self.partial_cmp(&Self::with_bits(0)) == Some(Ordering::Equal)
+    }
+}
+
+impl PartialOrd for Ieee128 {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        // FIXME(#8312): Use Rust `f128` comparisons once `f128` support is stabalised.
+        let significand_mask = u128::MAX >> (Self::EXPONENT_BITS + 1);
+        let sign_mask = 1 << (Self::EXPONENT_BITS + Self::SIGNIFICAND_BITS);
+        let exponent_mask = !sign_mask & !significand_mask;
+
+        let lhs_abs = self.bits() & !sign_mask;
+        let rhs_abs = rhs.bits() & !sign_mask;
+        if (lhs_abs & exponent_mask == exponent_mask && lhs_abs & significand_mask != 0)
+            && (rhs_abs & exponent_mask == exponent_mask && rhs_abs & significand_mask != 0)
+        {
+            // One of the floats is a NaN.
+            return None;
+        }
+        if lhs_abs == 0 && rhs_abs == 0 {
+            // Zeros are always equal regardless of sign.
+            return Some(Ordering::Equal);
+        }
+        let lhs_positive = self.bits() & sign_mask == 0;
+        let rhs_positive = rhs.bits() & sign_mask == 0;
+        if lhs_positive != rhs_positive {
+            // Different signs: negative < positive
+            return lhs_positive.partial_cmp(&rhs_positive);
+        }
+        // Finite or infinity will order correctly with an integer comparison of the bits.
+        if lhs_positive {
+            lhs_abs.partial_cmp(&rhs_abs)
+        } else {
+            // Reverse the comparison when both floats are negative.
+            rhs_abs.partial_cmp(&lhs_abs)
+        }
+    }
+}
+
+impl Display for Ieee128 {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let bits: u128 = self.0;
+        format_float(bits, Self::EXPONENT_BITS, Self::SIGNIFICAND_BITS, f)
+    }
+}
+
+impl FromStr for Ieee128 {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match parse_float(s, Self::EXPONENT_BITS, Self::SIGNIFICAND_BITS) {
+            Ok(b) => Ok(Self(b)),
+            Err(s) => Err(s),
+        }
     }
 }
 
@@ -1343,6 +1524,134 @@ mod tests {
     }
 
     #[test]
+    fn format_ieee16() {
+        assert_eq!(Ieee16::with_bits(0).to_string(), "0.0"); // 0.0
+        assert_eq!(Ieee16::with_bits(0x8000).to_string(), "-0.0"); // -0.0
+        assert_eq!(Ieee16::with_bits(0x3c00).to_string(), "0x1.000p0"); // 1.0
+        assert_eq!(Ieee16::with_bits(0x3e00).to_string(), "0x1.800p0"); // 1.5
+        assert_eq!(Ieee16::with_bits(0x3800).to_string(), "0x1.000p-1"); // 0.5
+        assert_eq!(
+            Ieee16::with_bits(0x1400).to_string(), // `f16::EPSILON`
+            "0x1.000p-10"
+        );
+        assert_eq!(
+            Ieee16::with_bits(0xfbff).to_string(), // `f16::MIN`
+            "-0x1.ffcp15"
+        );
+        assert_eq!(
+            Ieee16::with_bits(0x7bff).to_string(), // `f16::MAX`
+            "0x1.ffcp15"
+        );
+        // Smallest positive normal number.
+        assert_eq!(
+            Ieee16::with_bits(0x0400).to_string(), // `f16::MIN_POSITIVE`
+            "0x1.000p-14"
+        );
+        // Subnormals.
+        assert_eq!(
+            Ieee16::with_bits(0x0200).to_string(), // `f16::MIN_POSITIVE / 2.0`
+            "0x0.800p-14"
+        );
+        assert_eq!(
+            Ieee16::with_bits(0x0001).to_string(), // `f16::MIN_POSITIVE * f16::EPSILON`
+            "0x0.004p-14"
+        );
+        assert_eq!(
+            Ieee16::with_bits(0x7c00).to_string(), // `f16::INFINITY`
+            "+Inf"
+        );
+        assert_eq!(
+            Ieee16::with_bits(0xfc00).to_string(), // `f16::NEG_INFINITY`
+            "-Inf"
+        );
+        assert_eq!(
+            Ieee16::with_bits(0x7e00).to_string(), // `f16::NAN`
+            "+NaN"
+        );
+        assert_eq!(
+            Ieee16::with_bits(0xfe00).to_string(), // `-f16::NAN`
+            "-NaN"
+        );
+        // Construct some qNaNs with payloads.
+        assert_eq!(Ieee16(0x7e01).to_string(), "+NaN:0x1");
+        assert_eq!(Ieee16(0x7f01).to_string(), "+NaN:0x101");
+        // Signaling NaNs.
+        assert_eq!(Ieee16(0x7c01).to_string(), "+sNaN:0x1");
+        assert_eq!(Ieee16(0x7d01).to_string(), "+sNaN:0x101");
+    }
+
+    #[test]
+    fn parse_ieee16() {
+        parse_ok::<Ieee16>("0.0", "0.0");
+        parse_ok::<Ieee16>("+0.0", "0.0");
+        parse_ok::<Ieee16>("-0.0", "-0.0");
+        parse_ok::<Ieee16>("0x0", "0.0");
+        parse_ok::<Ieee16>("0x0.0", "0.0");
+        parse_ok::<Ieee16>("0x.0", "0.0");
+        parse_ok::<Ieee16>("0x0.", "0.0");
+        parse_ok::<Ieee16>("0x1", "0x1.000p0");
+        parse_ok::<Ieee16>("+0x1", "0x1.000p0");
+        parse_ok::<Ieee16>("-0x1", "-0x1.000p0");
+        parse_ok::<Ieee16>("0x10", "0x1.000p4");
+        parse_ok::<Ieee16>("0x10.0", "0x1.000p4");
+        parse_err::<Ieee16>("0.", "Float must be hexadecimal");
+        parse_err::<Ieee16>(".0", "Float must be hexadecimal");
+        parse_err::<Ieee16>("0", "Float must be hexadecimal");
+        parse_err::<Ieee16>("-0", "Float must be hexadecimal");
+        parse_err::<Ieee16>(".", "Float must be hexadecimal");
+        parse_err::<Ieee16>("", "Float must be hexadecimal");
+        parse_err::<Ieee16>("-", "Float must be hexadecimal");
+        parse_err::<Ieee16>("0x", "No digits");
+        parse_err::<Ieee16>("0x..", "Multiple radix points");
+
+        // Check significant bits.
+        parse_ok::<Ieee16>("0x0.ffe", "0x1.ffcp-1");
+        parse_ok::<Ieee16>("0x1.ffc", "0x1.ffcp0");
+        parse_ok::<Ieee16>("0x3.ff8", "0x1.ffcp1");
+        parse_ok::<Ieee16>("0x7.ff", "0x1.ffcp2");
+        parse_ok::<Ieee16>("0xf.fe", "0x1.ffcp3");
+        parse_err::<Ieee16>("0x1.ffe", "Too many significant bits");
+        parse_err::<Ieee16>("0x1.ffc00000000000000000000000000000", "Too many digits");
+
+        // Exponents.
+        parse_ok::<Ieee16>("0x1p3", "0x1.000p3");
+        parse_ok::<Ieee16>("0x1p-3", "0x1.000p-3");
+        parse_ok::<Ieee16>("0x1.0p3", "0x1.000p3");
+        parse_ok::<Ieee16>("0x2.0p3", "0x1.000p4");
+        parse_ok::<Ieee16>("0x1.0p15", "0x1.000p15");
+        parse_ok::<Ieee16>("0x1.0p-14", "0x1.000p-14");
+        parse_ok::<Ieee16>("0x0.1p-10", "0x1.000p-14");
+        parse_err::<Ieee16>("0x2.0p15", "Magnitude too large");
+
+        // Subnormals.
+        parse_ok::<Ieee16>("0x1.0p-15", "0x0.800p-14");
+        parse_ok::<Ieee16>("0x1.0p-24", "0x0.004p-14");
+        parse_ok::<Ieee16>("0x0.004p-14", "0x0.004p-14");
+        parse_err::<Ieee16>("0x0.102p-14", "Subnormal underflow");
+        parse_err::<Ieee16>("0x1.8p-24", "Subnormal underflow");
+        parse_err::<Ieee16>("0x1.0p-25", "Magnitude too small");
+
+        // NaNs and Infs.
+        parse_ok::<Ieee16>("Inf", "+Inf");
+        parse_ok::<Ieee16>("+Inf", "+Inf");
+        parse_ok::<Ieee16>("-Inf", "-Inf");
+        parse_ok::<Ieee16>("NaN", "+NaN");
+        parse_ok::<Ieee16>("+NaN", "+NaN");
+        parse_ok::<Ieee16>("-NaN", "-NaN");
+        parse_ok::<Ieee16>("NaN:0x0", "+NaN");
+        parse_err::<Ieee16>("NaN:", "Float must be hexadecimal");
+        parse_err::<Ieee16>("NaN:0", "Float must be hexadecimal");
+        parse_err::<Ieee16>("NaN:0x", "Invalid NaN payload");
+        parse_ok::<Ieee16>("NaN:0x001", "+NaN:0x1");
+        parse_ok::<Ieee16>("NaN:0x101", "+NaN:0x101");
+        parse_err::<Ieee16>("NaN:0x301", "Invalid NaN payload");
+        parse_ok::<Ieee16>("sNaN:0x1", "+sNaN:0x1");
+        parse_err::<Ieee16>("sNaN:0x0", "Invalid sNaN payload");
+        parse_ok::<Ieee16>("sNaN:0x101", "+sNaN:0x101");
+        parse_err::<Ieee16>("sNaN:0x301", "Invalid sNaN payload");
+    }
+
+    #[test]
     fn format_ieee32() {
         assert_eq!(Ieee32::with_float(0.0).to_string(), "0.0");
         assert_eq!(Ieee32::with_float(-0.0).to_string(), "-0.0");
@@ -1412,7 +1721,7 @@ mod tests {
         parse_ok::<Ieee32>("0x7.fffff8", "0x1.fffffep2");
         parse_ok::<Ieee32>("0xf.fffff0", "0x1.fffffep3");
         parse_err::<Ieee32>("0x1.ffffff", "Too many significant bits");
-        parse_err::<Ieee32>("0x1.fffffe0000000000", "Too many digits");
+        parse_err::<Ieee32>("0x1.fffffe00000000000000000000000000", "Too many digits");
 
         // Exponents.
         parse_ok::<Ieee32>("0x1p3", "0x1.000000p3");
@@ -1552,7 +1861,7 @@ mod tests {
         parse_ok::<Ieee64>("0x7.ffffffffffffc", "0x1.fffffffffffffp2");
         parse_ok::<Ieee64>("0xf.ffffffffffff8", "0x1.fffffffffffffp3");
         parse_err::<Ieee64>("0x3.fffffffffffff", "Too many significant bits");
-        parse_err::<Ieee64>("0x001.fffffe00000000", "Too many digits");
+        parse_err::<Ieee64>("0x001.fffffe000000000000000000000000", "Too many digits");
 
         // Exponents.
         parse_ok::<Ieee64>("0x1p3", "0x1.0000000000000p3");
@@ -1608,5 +1917,189 @@ mod tests {
                 mem::transmute(Ieee64::fcvt_to_sint_negative_overflow(*n))
             });
         }
+    }
+
+    #[test]
+    fn format_ieee128() {
+        assert_eq!(
+            Ieee128::with_bits(0x00000000000000000000000000000000).to_string(), // 0.0
+            "0.0"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x80000000000000000000000000000000).to_string(), // -0.0
+            "-0.0"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x3fff0000000000000000000000000000).to_string(), // 1.0
+            "0x1.0000000000000000000000000000p0"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x3fff8000000000000000000000000000).to_string(), // 1.5
+            "0x1.8000000000000000000000000000p0"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x3ffe0000000000000000000000000000).to_string(), // 0.5
+            "0x1.0000000000000000000000000000p-1"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x3f8f0000000000000000000000000000).to_string(), // `f128::EPSILON`
+            "0x1.0000000000000000000000000000p-112"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0xfffeffffffffffffffffffffffffffff).to_string(), // `f128::MIN`
+            "-0x1.ffffffffffffffffffffffffffffp16383"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x7ffeffffffffffffffffffffffffffff).to_string(), // `f128::MAX`
+            "0x1.ffffffffffffffffffffffffffffp16383"
+        );
+        // Smallest positive normal number.
+        assert_eq!(
+            Ieee128::with_bits(0x00010000000000000000000000000000).to_string(), // `f128::MIN_POSITIVE`
+            "0x1.0000000000000000000000000000p-16382"
+        );
+        // Subnormals.
+        assert_eq!(
+            Ieee128::with_bits(0x00008000000000000000000000000000).to_string(), // `f128::MIN_POSITIVE / 2.0`
+            "0x0.8000000000000000000000000000p-16382"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x00000000000000000000000000000001).to_string(), // `f128::MIN_POSITIVE * f128::EPSILON`
+            "0x0.0000000000000000000000000001p-16382"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x7fff0000000000000000000000000000).to_string(), // `f128::INFINITY`
+            "+Inf"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0xffff0000000000000000000000000000).to_string(), // `f128::NEG_INFINITY`
+            "-Inf"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0x7fff8000000000000000000000000000).to_string(), // `f128::NAN`
+            "+NaN"
+        );
+        assert_eq!(
+            Ieee128::with_bits(0xffff8000000000000000000000000000).to_string(), // `-f128::NAN`
+            "-NaN"
+        );
+        // Construct some qNaNs with payloads.
+        assert_eq!(
+            Ieee128(0x7fff8000000000000000000000000001).to_string(),
+            "+NaN:0x1"
+        );
+        assert_eq!(
+            Ieee128(0x7fffc000000000000000000000000001).to_string(),
+            "+NaN:0x4000000000000000000000000001"
+        );
+        // Signaling NaNs.
+        assert_eq!(
+            Ieee128(0x7fff0000000000000000000000000001).to_string(),
+            "+sNaN:0x1"
+        );
+        assert_eq!(
+            Ieee128(0x7fff4000000000000000000000000001).to_string(),
+            "+sNaN:0x4000000000000000000000000001"
+        );
+    }
+
+    #[test]
+    fn parse_ieee128() {
+        parse_ok::<Ieee128>("0.0", "0.0");
+        parse_ok::<Ieee128>("-0.0", "-0.0");
+        parse_ok::<Ieee128>("0x0", "0.0");
+        parse_ok::<Ieee128>("0x0.0", "0.0");
+        parse_ok::<Ieee128>("0x.0", "0.0");
+        parse_ok::<Ieee128>("0x0.", "0.0");
+        parse_ok::<Ieee128>("0x1", "0x1.0000000000000000000000000000p0");
+        parse_ok::<Ieee128>("-0x1", "-0x1.0000000000000000000000000000p0");
+        parse_ok::<Ieee128>("0x10", "0x1.0000000000000000000000000000p4");
+        parse_ok::<Ieee128>("0x10.0", "0x1.0000000000000000000000000000p4");
+        parse_err::<Ieee128>("0.", "Float must be hexadecimal");
+        parse_err::<Ieee128>(".0", "Float must be hexadecimal");
+        parse_err::<Ieee128>("0", "Float must be hexadecimal");
+        parse_err::<Ieee128>("-0", "Float must be hexadecimal");
+        parse_err::<Ieee128>(".", "Float must be hexadecimal");
+        parse_err::<Ieee128>("", "Float must be hexadecimal");
+        parse_err::<Ieee128>("-", "Float must be hexadecimal");
+        parse_err::<Ieee128>("0x", "No digits");
+        parse_err::<Ieee128>("0x..", "Multiple radix points");
+
+        // Check significant bits.
+        parse_ok::<Ieee128>(
+            "0x0.ffffffffffffffffffffffffffff8",
+            "0x1.ffffffffffffffffffffffffffffp-1",
+        );
+        parse_ok::<Ieee128>(
+            "0x1.ffffffffffffffffffffffffffff",
+            "0x1.ffffffffffffffffffffffffffffp0",
+        );
+        parse_ok::<Ieee128>(
+            "0x3.fffffffffffffffffffffffffffe",
+            "0x1.ffffffffffffffffffffffffffffp1",
+        );
+        parse_ok::<Ieee128>(
+            "0x7.fffffffffffffffffffffffffffc",
+            "0x1.ffffffffffffffffffffffffffffp2",
+        );
+        parse_ok::<Ieee128>(
+            "0xf.fffffffffffffffffffffffffff8",
+            "0x1.ffffffffffffffffffffffffffffp3",
+        );
+        parse_err::<Ieee128>(
+            "0x3.ffffffffffffffffffffffffffff",
+            "Too many significant bits",
+        );
+        parse_err::<Ieee128>("0x001.fffffe000000000000000000000000", "Too many digits");
+
+        // Exponents.
+        parse_ok::<Ieee128>("0x1p3", "0x1.0000000000000000000000000000p3");
+        parse_ok::<Ieee128>("0x1p-3", "0x1.0000000000000000000000000000p-3");
+        parse_ok::<Ieee128>("0x1.0p3", "0x1.0000000000000000000000000000p3");
+        parse_ok::<Ieee128>("0x2.0p3", "0x1.0000000000000000000000000000p4");
+        parse_ok::<Ieee128>("0x1.0p16383", "0x1.0000000000000000000000000000p16383");
+        parse_ok::<Ieee128>("0x1.0p-16382", "0x1.0000000000000000000000000000p-16382");
+        parse_ok::<Ieee128>("0x0.1p-16378", "0x1.0000000000000000000000000000p-16382");
+        parse_err::<Ieee128>("0x2.0p16383", "Magnitude too large");
+
+        // Subnormals.
+        parse_ok::<Ieee128>("0x1.0p-16383", "0x0.8000000000000000000000000000p-16382");
+        parse_ok::<Ieee128>("0x1.0p-16494", "0x0.0000000000000000000000000001p-16382");
+        parse_ok::<Ieee128>(
+            "0x0.0000000000000000000000000001p-16382",
+            "0x0.0000000000000000000000000001p-16382",
+        );
+        parse_err::<Ieee128>(
+            "0x0.10000000000000000000000000008p-16382",
+            "Subnormal underflow",
+        );
+        parse_err::<Ieee128>("0x1.8p-16494", "Subnormal underflow");
+        parse_err::<Ieee128>("0x1.0p-16495", "Magnitude too small");
+
+        // NaNs and Infs.
+        parse_ok::<Ieee128>("Inf", "+Inf");
+        parse_ok::<Ieee128>("-Inf", "-Inf");
+        parse_ok::<Ieee128>("NaN", "+NaN");
+        parse_ok::<Ieee128>("-NaN", "-NaN");
+        parse_ok::<Ieee128>("NaN:0x0", "+NaN");
+        parse_err::<Ieee128>("NaN:", "Float must be hexadecimal");
+        parse_err::<Ieee128>("NaN:0", "Float must be hexadecimal");
+        parse_err::<Ieee128>("NaN:0x", "Invalid NaN payload");
+        parse_ok::<Ieee128>("NaN:0x000001", "+NaN:0x1");
+        parse_ok::<Ieee128>(
+            "NaN:0x4000000000000000000000000001",
+            "+NaN:0x4000000000000000000000000001",
+        );
+        parse_err::<Ieee128>("NaN:0x8000000000000000000000000001", "Invalid NaN payload");
+        parse_ok::<Ieee128>("sNaN:0x1", "+sNaN:0x1");
+        parse_err::<Ieee128>("sNaN:0x0", "Invalid sNaN payload");
+        parse_ok::<Ieee128>(
+            "sNaN:0x4000000000000000000000000001",
+            "+sNaN:0x4000000000000000000000000001",
+        );
+        parse_err::<Ieee128>(
+            "sNaN:0x8000000000000000000000000001",
+            "Invalid sNaN payload",
+        );
     }
 }
