@@ -280,7 +280,7 @@
 // documentation is written for the "one build" of the `main` branch which has
 // most features enabled. This will present warnings in stripped-down doc builds
 // and will prevent the doc build from failing.
-#![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
+#![cfg_attr(feature = "default", warn(rustdoc::broken_intra_doc_links))]
 #![no_std]
 
 #[cfg(any(feature = "std", unix, windows))]

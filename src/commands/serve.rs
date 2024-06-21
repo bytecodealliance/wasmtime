@@ -12,12 +12,9 @@ use std::{
 use wasmtime::component::Linker;
 use wasmtime::{Config, Engine, Memory, MemoryType, Store, StoreLimits};
 use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
-use wasmtime_wasi_http::proxy::ProxyPre;
-use wasmtime_wasi_http::{
-    bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
-    WasiHttpCtx, WasiHttpView,
-};
+use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -213,14 +210,14 @@ impl ServeCommand {
         // those in the `proxy` world. If `-Scli` is present then add all
         // `command` APIs and then additionally add in the required HTTP APIs.
         //
-        // If `-Scli` isn't passed then use the `proxy::add_to_linker`
+        // If `-Scli` isn't passed then use the `add_to_linker_async`
         // bindings which adds just those interfaces that the proxy interface
         // uses.
         if cli == Some(true) {
             wasmtime_wasi::add_to_linker_async(linker)?;
-            wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
+            wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
         } else {
-            wasmtime_wasi_http::proxy::add_to_linker(linker)?;
+            wasmtime_wasi_http::add_to_linker_async(linker)?;
         }
 
         if self.run.common.wasi.nn == Some(true) {
@@ -405,43 +402,10 @@ async fn handle_request(
     ProxyHandler(inner): ProxyHandler,
     req: Request,
 ) -> Result<hyper::Response<HyperOutgoingBody>> {
-    use http_body_util::BodyExt;
-
     let (sender, receiver) = tokio::sync::oneshot::channel();
 
     let task = tokio::task::spawn(async move {
         let req_id = inner.next_req_id();
-        let (mut parts, body) = req.into_parts();
-
-        parts.uri = {
-            let uri_parts = parts.uri.into_parts();
-
-            let scheme = uri_parts.scheme.unwrap_or(http::uri::Scheme::HTTP);
-
-            let host = if let Some(val) = parts.headers.get(hyper::header::HOST) {
-                std::str::from_utf8(val.as_bytes())
-                    .map_err(|_| http_types::ErrorCode::HttpRequestUriInvalid)?
-            } else {
-                uri_parts
-                    .authority
-                    .as_ref()
-                    .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?
-                    .host()
-            };
-
-            let path_with_query = uri_parts
-                .path_and_query
-                .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?;
-
-            hyper::Uri::builder()
-                .scheme(scheme)
-                .authority(host)
-                .path_and_query(path_with_query)
-                .build()
-                .map_err(|_| http_types::ErrorCode::HttpRequestUriInvalid)?
-        };
-
-        let req = hyper::Request::from_parts(parts, body.map_err(hyper_response_error).boxed());
 
         log::info!(
             "Request {req_id} handling {} to {}",
