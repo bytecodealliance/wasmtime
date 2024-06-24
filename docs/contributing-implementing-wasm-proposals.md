@@ -130,7 +130,7 @@ The [cap-std](https://github.com/bytecodealliance/cap-std) repository contains
 crates which implement the capability-based version of the Rust standard library
 and extensions to that functionality. Once the functionality has been added to
 the relevant crates of that repository, they can be added into wasmtime by
-including them in the preview2 directory of the [wasi crate](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi). 
+including them in the preview2 directory of the [wasi crate](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi).
 
 Currently, WebAssembly modules which rely on preview2 ABI cannot be directly
 executed by the wasmtime command. The following steps allow for testing such
@@ -139,11 +139,11 @@ changes.
 1. Build wasmtime with the changes `cargo build --release`
 
 2. Create a simple Webassembly module to test the new component functionality by
-compiling your test code to the `wasm32-wasi` build target.
+compiling your test code to the `wasm32-wasip1` build target.
 
 3. Build the [wasi-preview1-component-adapter](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi-preview1-component-adapter)
 as a command adapter. `cargo build -p wasi-preview1-component-adapter --target
-wasm32-wasi --release --features command --no-default-features`
+wasm32-wasip1 --release --features command --no-default-features`
 
 4. Use [wasm-tools](https://github.com/bytecodealliance/wasm-tools) to convert
 the test module to a component. `wasm-tools component new --adapt

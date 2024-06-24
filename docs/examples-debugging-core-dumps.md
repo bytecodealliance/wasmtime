@@ -35,7 +35,7 @@ fn baz(x: u32) {
 We can compile it to Wasm with the following command:
 
 ```shell-session
-$ rustc --target wasm32-wasi -o ./trap.wasm ./trap.rs
+$ rustc --target wasm32-wasip1 -o ./trap.wasm ./trap.rs
 ```
 
 Next, we can run it in Wasmtime and capture a core dump when it traps:

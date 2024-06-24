@@ -8,13 +8,13 @@ can't build it!
 
 ## Installing `wasm32` Targets
 
-To compile the tests, you'll need the `wasm32-wasi` and
+To compile the tests, you'll need the `wasm32-wasip1` and
 `wasm32-unknown-unknown` targets installed, which, assuming you're using
 [rustup.rs](https://rustup.rs) to manage your Rust versions, can be done as
 follows:
 
 ```shell
-rustup target add wasm32-wasi wasm32-unknown-unknown
+rustup target add wasm32-wasip1 wasm32-unknown-unknown
 ```
 
 ## Running All Tests

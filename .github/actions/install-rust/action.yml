@@ -59,4 +59,4 @@ runs:
 
     - name: Install the WASI target
       shell: bash
-      run: rustup target add wasm32-wasi wasm32-unknown-unknown
+      run: rustup target add wasm32-wasip1 wasm32-unknown-unknown

@@ -54,7 +54,7 @@ impl Environment {
         config.consume_fuel(true);
 
         let engine = Engine::new(&config)?;
-        let module = Module::from_file(&engine, "target/wasm32-wasi/debug/tokio-wasi.wasm")?;
+        let module = Module::from_file(&engine, "target/wasm32-wasip1/debug/tokio-wasi.wasm")?;
 
         // A `Linker` is shared in the environment amongst all stores, and this
         // linker is used to instantiate the `module` above. This example only

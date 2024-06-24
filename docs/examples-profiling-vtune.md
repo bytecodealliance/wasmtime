@@ -92,7 +92,7 @@ fn fib(n: u32) -> u32 {
 We compile the example to Wasm:
 
 ```sh
-$ rustc --target wasm32-wasi fib.rs -C opt-level=z -C lto=yes
+$ rustc --target wasm32-wasip1 fib.rs -C opt-level=z -C lto=yes
 ```
 
 Then we execute the Wasmtime runtime (built with the `vtune` feature and
@@ -101,7 +101,7 @@ application, `vtune`, which must already be installed and available on the
 path. To collect hot spot profiling information, we execute:
 
 ```sh
-$ rustc --target wasm32-wasi fib.rs -C opt-level=z -C lto=yes
+$ rustc --target wasm32-wasip1 fib.rs -C opt-level=z -C lto=yes
 $ vtune -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --profile=vtune fib.wasm
 fib(45) = 1134903170
 amplxe: Collection stopped.

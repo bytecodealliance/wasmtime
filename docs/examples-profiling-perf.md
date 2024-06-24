@@ -162,7 +162,7 @@ fn fib(n: u32) -> u32 {
 To collect perf information for this wasm module we'll execute:
 
 ```sh
-$ rustc --target wasm32-wasi fib.rs -O
+$ rustc --target wasm32-wasip1 fib.rs -O
 $ perf record -k mono wasmtime --profile=jitdump fib.wasm
 fib(42) = 267914296
 [ perf record: Woken up 1 times to write data ]

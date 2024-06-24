@@ -45,7 +45,7 @@ $ cat foo.rs
 fn main() {
     println!("Hello, world!");
 }
-$ rustc foo.rs --target wasm32-wasi
+$ rustc foo.rs --target wasm32-wasip1
 $ wasm-tools print foo.wasm | grep '(import'
   (import "wasi_snapshot_preview1" "fd_write" (func ...
   (import "wasi_snapshot_preview1" "environ_get" (func ...
