@@ -182,7 +182,6 @@ async fn run_wasi_http(
 
     let resp = match receiver.await {
         Ok(Ok(resp)) => {
-            use http_body_util::BodyExt;
             let (parts, body) = resp.into_parts();
             let collected = BodyExt::collect(body).await?;
             Some(Ok(hyper::Response::from_parts(parts, collected)))
