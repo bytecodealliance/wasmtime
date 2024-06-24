@@ -241,7 +241,7 @@ fn parse_u64(s: &str) -> Result<u64, &'static str> {
     } else {
         // Decimal number, possibly negative.
         for ch in s.chars() {
-            match ch.to_digit(16) {
+            match ch.to_digit(10) {
                 Some(digit) => {
                     digits += 1;
                     match value.checked_mul(10) {
@@ -1270,6 +1270,8 @@ mod tests {
         parse_err::<Imm64>(" 0", "Invalid character in decimal number");
         parse_err::<Imm64>("--", "Invalid character in decimal number");
         parse_err::<Imm64>("-0x-", "Invalid character in hexadecimal number");
+        parse_err::<Imm64>("abc", "Invalid character in decimal number");
+        parse_err::<Imm64>("-abc", "Invalid character in decimal number");
 
         // Hex count overflow.
         parse_err::<Imm64>("0x0_0000_0000_0000_0000", "Too many hexadecimal digits");
@@ -1310,6 +1312,8 @@ mod tests {
         parse_err::<Uimm64>("-0x-", "Invalid character in hexadecimal number");
         parse_err::<Uimm64>("-0", "Invalid character in decimal number");
         parse_err::<Uimm64>("-1", "Invalid character in decimal number");
+        parse_err::<Uimm64>("abc", "Invalid character in decimal number");
+        parse_err::<Uimm64>("-abc", "Invalid character in decimal number");
 
         // Hex count overflow.
         parse_err::<Uimm64>("0x0_0000_0000_0000_0000", "Too many hexadecimal digits");
