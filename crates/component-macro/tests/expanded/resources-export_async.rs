@@ -11,6 +11,17 @@ pub struct WPre<T> {
     interface2: exports::foo::foo::export_using_export1::GuestPre,
     interface3: exports::foo::foo::export_using_export2::GuestPre,
 }
+impl<T> Clone for WPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+            interface1: self.interface1.clone(),
+            interface2: self.interface2.clone(),
+            interface3: self.interface3.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `w`.
 ///
@@ -83,6 +94,12 @@ const _: () = {
                 interface2,
                 interface3,
             })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl W {
@@ -218,6 +235,7 @@ pub mod exports {
                     static_a_static_a: wasmtime::component::Func,
                     method_a_method_a: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     constructor_a_constructor: wasmtime::component::ComponentExportIndex,
                     static_a_static_a: wasmtime::component::ComponentExportIndex,
@@ -368,6 +386,7 @@ pub mod exports {
                     static_a_static_a: wasmtime::component::Func,
                     method_a_method_a: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     constructor_a_constructor: wasmtime::component::ComponentExportIndex,
                     static_a_static_a: wasmtime::component::ComponentExportIndex,
@@ -523,6 +542,7 @@ pub mod exports {
                 pub struct Guest {
                     constructor_a_constructor: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     constructor_a_constructor: wasmtime::component::ComponentExportIndex,
                 }
@@ -610,6 +630,7 @@ pub mod exports {
                 pub struct Guest {
                     constructor_b_constructor: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     constructor_b_constructor: wasmtime::component::ComponentExportIndex,
                 }

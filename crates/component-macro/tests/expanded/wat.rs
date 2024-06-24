@@ -8,6 +8,14 @@ pub struct ExamplePre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
     interface0: exports::same::name::this_name_is_duplicated::GuestPre,
 }
+impl<T> Clone for ExamplePre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `example`.
 ///
@@ -55,6 +63,12 @@ const _: () = {
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(Example { interface0 })
         }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
     }
     impl Example {
         /// Convenience wrapper around [`ExamplePre::new`] and
@@ -86,6 +100,7 @@ pub mod exports {
                     funcs: &'a Guest,
                 }
                 pub struct Guest {}
+                #[derive(Clone)]
                 pub struct GuestPre {}
                 impl GuestPre {
                     pub fn new(

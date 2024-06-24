@@ -9,6 +9,15 @@ pub struct FooPre<T> {
     interface0: exports::my::dep0_1_0::a::GuestPre,
     interface1: exports::my::dep0_2_0::a::GuestPre,
 }
+impl<T> Clone for FooPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+            interface1: self.interface1.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `foo`.
 ///
@@ -57,6 +66,12 @@ const _: () = {
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             let interface1 = self.interface1.load(&mut store, &_instance)?;
             Ok(Foo { interface0, interface1 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl Foo {
@@ -203,6 +218,7 @@ pub mod exports {
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     x: wasmtime::component::ComponentExportIndex,
                 }
@@ -272,6 +288,7 @@ pub mod exports {
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     x: wasmtime::component::ComponentExportIndex,
                 }

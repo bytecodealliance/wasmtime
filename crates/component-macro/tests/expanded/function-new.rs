@@ -8,6 +8,14 @@ pub struct FooPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
     new: wasmtime::component::ComponentExportIndex,
 }
+impl<T> Clone for FooPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            new: self.new.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `foo`.
 ///
@@ -52,6 +60,12 @@ const _: () = {
             let _instance = self.instance_pre.instantiate(&mut store)?;
             let new = *_instance.get_typed_func::<(), ()>(&mut store, &self.new)?.func();
             Ok(Foo { new })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl Foo {

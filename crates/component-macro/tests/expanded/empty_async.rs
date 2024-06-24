@@ -7,6 +7,13 @@
 pub struct EmptyPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
 }
+impl<T> Clone for EmptyPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `empty`.
 ///
@@ -47,6 +54,12 @@ const _: () = {
             let mut store = store.as_context_mut();
             let _instance = self.instance_pre.instantiate_async(&mut store).await?;
             Ok(Empty {})
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl Empty {

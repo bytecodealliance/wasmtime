@@ -8,6 +8,14 @@ pub struct MyWorldPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
     interface0: exports::foo::foo::variants::GuestPre,
 }
+impl<T> Clone for MyWorldPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `my-world`.
 ///
@@ -52,6 +60,12 @@ const _: () = {
             let _instance = self.instance_pre.instantiate(&mut store)?;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(MyWorld { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl MyWorld {
@@ -1193,6 +1207,7 @@ pub mod exports {
                     return_named_option: wasmtime::component::Func,
                     return_named_result: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     e1_arg: wasmtime::component::ComponentExportIndex,
                     e1_result: wasmtime::component::ComponentExportIndex,
