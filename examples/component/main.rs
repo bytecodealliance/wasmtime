@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     let engine = Engine::new(Config::new().wasm_component_model(true))?;
 
     // NOTE: The wasm32-unknown-unknown target is used here for simplicity, real world use cases
-    // should probably use the wasm32-wasi target, and enable wasi preview2 within the component
+    // should probably use the wasm32-wasip1 target, and enable wasi preview2 within the component
     // model.
     let component = convert_to_component("target/wasm32-unknown-unknown/debug/guest.wasm")?;
 

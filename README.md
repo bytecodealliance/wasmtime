@@ -54,8 +54,8 @@ fn main() {
 and compile/run it with:
 
 ```sh
-$ rustup target add wasm32-wasi
-$ rustc hello.rs --target wasm32-wasi
+$ rustup target add wasm32-wasip1
+$ rustc hello.rs --target wasm32-wasip1
 $ wasmtime hello.wasm
 Hello, world!
 ```
