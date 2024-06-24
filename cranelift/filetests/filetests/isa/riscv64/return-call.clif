@@ -693,11 +693,8 @@ block2:
 ;   addi s8, zero, 0x7d
 ;   addi s7, zero, 0x82
 ;   addi s6, zero, 0x87
-;   bnez a0, 8
-;   j 0xc
-;   auipc t6, 0
-;   jalr zero, t6, 0xb4
-; block2: ; offset 0xd8
+;   bnez a0, 0xb0
+; block2: ; offset 0xcc
 ;   addi a0, zero, 0x8c
 ;   sd a2, 0x90(sp)
 ;   sd a1, 0x98(sp)
@@ -741,7 +738,7 @@ block2:
 ;   ld s0, 0x80(sp)
 ;   addi sp, sp, 0x90
 ;   jr t0
-; block3: ; offset 0x184
+; block3: ; offset 0x178
 ;   ld a0, 0x10(sp)
 ;   sd a2, 0xa0(sp)
 ;   sd a1, 0xa8(sp)
