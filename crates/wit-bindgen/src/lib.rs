@@ -542,6 +542,7 @@ impl Wasmtime {
                 }
                 uwriteln!(gen.src, "}}");
 
+                uwriteln!(gen.src, "#[derive(Clone)]");
                 uwriteln!(gen.src, "pub struct {struct_name}Pre {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
@@ -746,6 +747,16 @@ pub fn new(
         }
         self.src.push_str("}\n");
 
+        uwriteln!(self.src, "impl<T> Clone for {camel}Pre<T> {{");
+        uwriteln!(self.src, "fn clone(&self) -> Self {{");
+        uwriteln!(self.src, "Self {{ instance_pre: self.instance_pre.clone(),");
+        for (name, _field) in self.exports.fields.iter() {
+            uwriteln!(self.src, "{name}: self.{name}.clone(),");
+        }
+        uwriteln!(self.src, "}}"); // `Self ...
+        uwriteln!(self.src, "}}"); // `fn clone`
+        uwriteln!(self.src, "}}"); // `impl Clone`
+
         uwriteln!(
             self.src,
             "
@@ -828,6 +839,18 @@ pub fn new(
         }
         uwriteln!(self.src, "}})");
         uwriteln!(self.src, "}}"); // close `fn new`
+        uwriteln!(
+            self.src,
+            "
+                pub fn engine(&self) -> &{wt}::Engine {{
+                    self.instance_pre.engine()
+                }}
+
+                pub fn instance_pre(&self) -> &{wt}::component::InstancePre<_T> {{
+                    &self.instance_pre
+                }}
+            ",
+        );
 
         uwriteln!(self.src, "}}");
 

@@ -8,6 +8,14 @@ pub struct TheListsPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
     interface0: exports::foo::foo::lists::GuestPre,
 }
+impl<T> Clone for TheListsPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `the-lists`.
 ///
@@ -52,6 +60,12 @@ const _: () = {
             let _instance = self.instance_pre.instantiate(&mut store)?;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(TheLists { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl TheLists {
@@ -1103,6 +1117,7 @@ pub mod exports {
                     variant_list: wasmtime::component::Func,
                     load_store_everything: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     list_u8_param: wasmtime::component::ComponentExportIndex,
                     list_u16_param: wasmtime::component::ComponentExportIndex,

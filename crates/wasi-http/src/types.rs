@@ -8,7 +8,9 @@ use crate::{
     error::dns_error,
     hyper_request_error,
 };
+use bytes::Bytes;
 use http_body_util::BodyExt;
+use hyper::body::Body;
 use hyper::header::HeaderName;
 use std::any::Any;
 use std::time::Duration;
@@ -30,6 +32,45 @@ impl WasiHttpCtx {
 }
 
 /// A trait which provides internal WASI HTTP state.
+///
+/// # Example
+///
+/// ```
+/// use wasmtime::component::ResourceTable;
+/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+///
+/// struct MyState {
+///     ctx: WasiCtx,
+///     http_ctx: WasiHttpCtx,
+///     table: ResourceTable,
+/// }
+///
+/// impl WasiHttpView for MyState {
+///     fn ctx(&mut self) -> &mut WasiHttpCtx { &mut self.http_ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
+///
+/// impl WasiView for MyState {
+///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
+///
+/// impl MyState {
+///     fn new() -> MyState {
+///         let mut wasi = WasiCtxBuilder::new();
+///         wasi.arg("./foo.wasm");
+///         wasi.arg("--help");
+///         wasi.env("FOO", "bar");
+///
+///         MyState {
+///             ctx: wasi.build(),
+///             table: ResourceTable::new(),
+///             http_ctx: WasiHttpCtx::new(),
+///         }
+///     }
+/// }
+/// ```
 pub trait WasiHttpView: Send {
     /// Returns a mutable reference to the WASI HTTP context.
     fn ctx(&mut self) -> &mut WasiHttpCtx;
@@ -38,14 +79,16 @@ pub trait WasiHttpView: Send {
     fn table(&mut self) -> &mut ResourceTable;
 
     /// Create a new incoming request resource.
-    fn new_incoming_request(
+    fn new_incoming_request<B>(
         &mut self,
-        req: hyper::Request<HyperIncomingBody>,
+        req: hyper::Request<B>,
     ) -> wasmtime::Result<Resource<HostIncomingRequest>>
     where
+        B: Body<Data = Bytes, Error = hyper::Error> + Send + Sync + 'static,
         Self: Sized,
     {
         let (parts, body) = req.into_parts();
+        let body = body.map_err(crate::hyper_response_error).boxed();
         let body = HostIncomingBody::new(
             body,
             // TODO: this needs to be plumbed through
@@ -151,9 +194,9 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for Box<T> {
 /// themselves (or `add_to_linker_get_host`).
 ///
 /// This type is automatically used when using
-/// [`wasmtime_wasi_http::proxy::add_to_linker`](crate::proxy::add_to_linker)
+/// [`add_to_linker_async`](crate::add_to_linker_async)
 /// or
-/// [`wasmtime_wasi_http::proxy::sync::add_to_linker`](crate::proxy::sync::add_to_linker)
+/// [`add_to_linker_sync`](crate::add_to_linker_sync)
 /// and doesn't need to be manually configured.
 #[repr(transparent)]
 pub struct WasiHttpImpl<T>(pub T);

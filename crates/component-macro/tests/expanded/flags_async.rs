@@ -8,6 +8,14 @@ pub struct TheFlagsPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
     interface0: exports::foo::foo::flegs::GuestPre,
 }
+impl<T> Clone for TheFlagsPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `the-flags`.
 ///
@@ -55,6 +63,12 @@ const _: () = {
             let _instance = self.instance_pre.instantiate_async(&mut store).await?;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(TheFlags { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl TheFlags {
@@ -518,6 +532,7 @@ pub mod exports {
                     roundtrip_flag32: wasmtime::component::Func,
                     roundtrip_flag64: wasmtime::component::Func,
                 }
+                #[derive(Clone)]
                 pub struct GuestPre {
                     roundtrip_flag1: wasmtime::component::ComponentExportIndex,
                     roundtrip_flag2: wasmtime::component::ComponentExportIndex,

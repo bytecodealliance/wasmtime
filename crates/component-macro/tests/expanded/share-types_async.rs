@@ -8,6 +8,14 @@ pub struct HttpInterfacePre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
     interface0: exports::http_handler::GuestPre,
 }
+impl<T> Clone for HttpInterfacePre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `http-interface`.
 ///
@@ -55,6 +63,12 @@ const _: () = {
             let _instance = self.instance_pre.instantiate_async(&mut store).await?;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(HttpInterface { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
         }
     }
     impl HttpInterface {
@@ -254,6 +268,7 @@ pub mod exports {
         pub struct Guest {
             handle_request: wasmtime::component::Func,
         }
+        #[derive(Clone)]
         pub struct GuestPre {
             handle_request: wasmtime::component::ComponentExportIndex,
         }

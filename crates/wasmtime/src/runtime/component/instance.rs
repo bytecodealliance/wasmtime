@@ -9,7 +9,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
 use crate::store::{StoreOpaque, Stored};
-use crate::{AsContextMut, Module, StoreContextMut};
+use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::ptr::{self, NonNull};
@@ -786,6 +786,11 @@ impl<T> InstancePre<T> {
     /// Returns the underlying component that will be instantiated.
     pub fn component(&self) -> &Component {
         &self.component
+    }
+
+    /// Returns the underlying engine.
+    pub fn engine(&self) -> &Engine {
+        self.component.engine()
     }
 
     /// Performs the instantiation process into the store specified.

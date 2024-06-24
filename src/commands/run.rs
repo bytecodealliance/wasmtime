@@ -701,7 +701,7 @@ impl RunCommand {
                         bail!("Cannot enable wasi-http for core wasm modules");
                     }
                     CliLinker::Component(linker) => {
-                        wasmtime_wasi_http::proxy::sync::add_only_http_to_linker(linker)?;
+                        wasmtime_wasi_http::add_only_http_to_linker_sync(linker)?;
                     }
                 }
 

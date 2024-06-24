@@ -2,7 +2,7 @@ use crate::http_server::Server;
 use anyhow::{anyhow, Context, Result};
 use futures::{channel::oneshot, future, stream, FutureExt};
 use http_body::Frame;
-use http_body_util::{combinators::BoxBody, Collected, Empty, StreamBody};
+use http_body_util::{combinators::BoxBody, BodyExt, Collected, Empty, StreamBody};
 use hyper::{body::Bytes, server::conn::http1, service::service_fn, Method, StatusCode};
 use sha2::{Digest, Sha256};
 use std::{collections::HashMap, iter, net::Ipv4Addr, str, sync::Arc};
@@ -14,7 +14,7 @@ use wasmtime::{
 use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
-    body::{HyperIncomingBody, HyperOutgoingBody},
+    body::HyperOutgoingBody,
     io::TokioIo,
     types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
     HttpResult, WasiHttpCtx, WasiHttpView,
@@ -128,7 +128,7 @@ mod sync;
 
 async fn run_wasi_http(
     component_filename: &str,
-    req: hyper::Request<HyperIncomingBody>,
+    req: hyper::Request<BoxBody<Bytes, hyper::Error>>,
     send_request: Option<RequestSender>,
     rejected_authority: Option<String>,
 ) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
@@ -161,9 +161,9 @@ async fn run_wasi_http(
     let mut store = Store::new(&engine, ctx);
 
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::add_to_linker_async(&mut linker)?;
     let proxy =
-        wasmtime_wasi_http::proxy::Proxy::instantiate_async(&mut store, &component, &linker)
+        wasmtime_wasi_http::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
             .await?;
 
     let req = store.data_mut().new_incoming_request(req)?;
@@ -182,7 +182,6 @@ async fn run_wasi_http(
 
     let resp = match receiver.await {
         Ok(Ok(resp)) => {
-            use http_body_util::BodyExt;
             let (parts, body) = resp.into_parts();
             let collected = BodyExt::collect(body).await?;
             Some(Ok(hyper::Response::from_parts(parts, collected)))
@@ -277,7 +276,10 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                   }| {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponse {
-                        resp,
+                        resp: resp.map(|body| {
+                            body.map_err(wasmtime_wasi_http::hyper_response_error)
+                                .boxed()
+                        }),
                         worker: None,
                         between_bytes_timeout,
                     })
@@ -498,7 +500,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
 
     let request = request.body(BoxBody::new(StreamBody::new(stream::iter(
         body.chunks(16 * 1024)
-            .map(|chunk| Ok::<_, ErrorCode>(Frame::data(Bytes::copy_from_slice(chunk))))
+            .map(|chunk| Ok::<_, hyper::Error>(Frame::data(Bytes::copy_from_slice(chunk))))
             .collect::<Vec<_>>(),
     ))))?;
 
@@ -554,13 +556,13 @@ async fn wasi_http_without_port() -> Result<()> {
 mod body {
     use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
     use hyper::body::Bytes;
-    use wasmtime_wasi_http::body::HyperIncomingBody;
+    use hyper::Error;
 
-    pub fn full(bytes: Bytes) -> HyperIncomingBody {
+    pub fn full(bytes: Bytes) -> BoxBody<Bytes, Error> {
         BoxBody::new(Full::new(bytes).map_err(|_| unreachable!()))
     }
 
-    pub fn empty() -> HyperIncomingBody {
+    pub fn empty() -> BoxBody<Bytes, Error> {
         BoxBody::new(Empty::new().map_err(|_| unreachable!()))
     }
 }
