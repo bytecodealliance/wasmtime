@@ -2190,10 +2190,10 @@ fn riscv64_worst_case_instruction_size() {
             .map(|op| Inst::AtomicRmwLoop {
                 op: *op,
                 offset: a0(),
-                dst: writable_a0(),
+                dst: writable_a1(),
                 ty: I16,
-                p: a0(),
-                x: a0(),
+                p: a1(),
+                x: a2(),
                 t0: writable_a0(),
             }),
     );
