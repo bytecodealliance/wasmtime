@@ -1,0 +1,489 @@
+;; Compile test case
+
+test compile
+set bb_padding_log2_minus_one=4
+set enable_alias_analysis=false
+set enable_llvm_abi_extensions=true
+set machine_code_cfg_info=true
+set enable_jump_tables=false
+set enable_heap_access_spectre_mitigation=false
+target riscv64 has_zcd has_zbkb has_zbc has_zbs has_zicond has_zvl32b has_zvl64b has_zvl128b has_zvl1024b has_zvl2048b has_zvl4096b has_zvl8192b has_zvl16384b has_zvl32768b
+
+function u1:0() tail {
+    ss0 = explicit_slot 50, align = 512
+    ss1 = explicit_slot 47, align = 4
+    ss2 = explicit_slot 34, align = 32
+    ss3 = explicit_slot 103, align = 1024
+    ss4 = explicit_slot 110, align = 512
+    ss5 = explicit_slot 126, align = 512
+    sig0 = (f32, f64, f64, f32, i8 uext, i128, i8 uext, i32, i16 sext, i64, i64 sext, i128, i8 sext, i8, i64, i64 sext) -> i16 sext, i64 sext, f64, i32 sext, f64, i8 sext, i64 sext, f32 cold
+    sig1 = () system_v
+    sig2 = (i128, i16 sext, i128 sext, i32 sext, i16, i64 uext, f32, i8 sext, f32, i8, i64, i64, i64, i64 uext, f64) -> f64, i8 uext, f32, i128, i64 uext, i8, i16 sext, i64 sext tail
+    sig3 = () -> i8 sext, f32, i128, i32, f32, i128 uext, i8, i8 uext, f64, i8 sext, f32 system_v
+    sig4 = (i8, i16, i64 sext, i64 sext, i128 uext, i8, i32, f64, i32, f32, i128 uext, i8, i8 uext, f64, f64) -> i8 uext system_v
+    sig5 = (i8 sext, i64 uext, i16 sext, i64 sext, i128 uext, i128 sext, f32, i16 uext, i64 sext, i32 sext, i64, i64 uext, f64, f64, i16 sext) -> f32 tail
+    sig6 = (i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i8 uext, i16 uext, i16, i64 sext, i64 sext, i128 uext, i8 sext, f32) tail
+    sig7 = (f32) -> f32 system_v
+    sig8 = (f64) -> f64 system_v
+    sig9 = (f32) -> f32 system_v
+    sig10 = (f64) -> f64 system_v
+    sig11 = (f32) -> f32 system_v
+    sig12 = (f64) -> f64 system_v
+    sig13 = (f32) -> f32 system_v
+    sig14 = (f64) -> f64 system_v
+    sig15 = (f32, f32, f32) -> f32 system_v
+    sig16 = (f64, f64, f64) -> f64 system_v
+    fn0 = colocated u2:0 sig0
+    fn1 = colocated u2:1 sig1
+    fn2 = colocated u2:2 sig2
+    fn3 = colocated u2:3 sig3
+    fn4 = colocated u2:4 sig4
+    fn5 = colocated u2:5 sig5
+    fn6 = colocated u2:6 sig6
+    fn7 = %CeilF32 sig7
+    fn8 = %CeilF64 sig8
+    fn9 = %FloorF32 sig9
+    fn10 = %FloorF64 sig10
+    fn11 = colocated %TruncF32 sig11
+    fn12 = %TruncF64 sig12
+    fn13 = colocated %NearestF32 sig13
+    fn14 = %NearestF64 sig14
+    fn15 = %FmaF32 sig15
+    fn16 = %FmaF64 sig16
+
+block0:
+    v0 = iconst.i64 0xef31_de2a_2352_79ff
+    v161 -> v0
+    v1 = iconst.i64 0x2231_ffd1_ff29_ff26
+    v2 = f64const 0x1.8ff2320672823p-225
+    v3 = iconst.i16 0xffef
+    v163 -> v3
+    v4 = iconst.i64 0xddde_2a23_52f9_ffff
+    v5 = iconst.i64 0xc8c8_c8c8_c8c8_c8c8
+    v6 = iconst.i64 0xc8c8_c8c8_c8c8_c8c8
+    v7 = iconcat v6, v5  ; v6 = 0xc8c8_c8c8_c8c8_c8c8, v5 = 0xc8c8_c8c8_c8c8_c8c8
+    v164 -> v7
+    v8 = iconst.i64 0xc8c8_c8c8_c8c8_c8c8
+    v9 = iconst.i64 0xc8c8_c8c8_c8c8_c8c8
+    v10 = iconcat v9, v8  ; v9 = 0xc8c8_c8c8_c8c8_c8c8, v8 = 0xc8c8_c8c8_c8c8_c8c8
+    v11 = iconst.i64 0xcbcb_cbcb_cbc8_c8c8
+    v12 = iconst.i64 0xc8c8_c8c8_c8c8_c8c8
+    v13 = iconcat v12, v11  ; v12 = 0xc8c8_c8c8_c8c8_c8c8, v11 = 0xcbcb_cbcb_cbc8_c8c8
+    v14 = iconst.i8 203
+    v162 -> v14
+    v15 = f32const -0x1.979796p24
+    v165 -> v15
+    v16 = iconst.i64 0x0031_2222_2a2f
+    v17 = iconst.i64 0xcbcb_2adc_9e98_d7d4
+    v18 = iconcat v17, v16  ; v17 = 0xcbcb_2adc_9e98_d7d4, v16 = 0x0031_2222_2a2f
+    v19 = iconst.i8 0
+    v20 = iconst.i16 0
+    v21 = iconst.i32 0
+    v22 = iconst.i64 0
+    v23 = uextend.i128 v22  ; v22 = 0
+    v24 = stack_addr.i64 ss2
+    store notrap table v23, v24
+    v25 = stack_addr.i64 ss2+16
+    store notrap table v23, v25
+    v26 = stack_addr.i64 ss2+32
+    store notrap table v20, v26  ; v20 = 0
+    v27 = stack_addr.i64 ss1
+    store notrap table v23, v27
+    v28 = stack_addr.i64 ss1+16
+    store notrap table v23, v28
+    v29 = stack_addr.i64 ss1+32
+    store notrap table v22, v29  ; v22 = 0
+    v30 = stack_addr.i64 ss1+40
+    store notrap table v21, v30  ; v21 = 0
+    v31 = stack_addr.i64 ss1+44
+    store notrap table v20, v31  ; v20 = 0
+    v32 = stack_addr.i64 ss1+46
+    store notrap table v19, v32  ; v19 = 0
+    v33 = stack_addr.i64 ss0
+    store notrap table v23, v33
+    v34 = stack_addr.i64 ss0+16
+    store notrap table v23, v34
+    v35 = stack_addr.i64 ss0+32
+    store notrap table v23, v35
+    v36 = stack_addr.i64 ss0+48
+    store notrap table v20, v36  ; v20 = 0
+    v37 = stack_addr.i64 ss3
+    store notrap vmctx v23, v37
+    v38 = stack_addr.i64 ss3+16
+    store notrap vmctx v23, v38
+    v39 = stack_addr.i64 ss3+32
+    store notrap vmctx v23, v39
+    v40 = stack_addr.i64 ss3+48
+    store notrap vmctx v23, v40
+    v41 = stack_addr.i64 ss3+64
+    store notrap vmctx v23, v41
+    v42 = stack_addr.i64 ss3+80
+    store notrap vmctx v23, v42
+    v43 = stack_addr.i64 ss3+96
+    store notrap vmctx v21, v43  ; v21 = 0
+    v44 = stack_addr.i64 ss3+100
+    store notrap vmctx v20, v44  ; v20 = 0
+    v45 = stack_addr.i64 ss3+102
+    store notrap vmctx v19, v45  ; v19 = 0
+    v46 = stack_addr.i64 ss4
+    store notrap heap v23, v46
+    v47 = stack_addr.i64 ss4+16
+    store notrap heap v23, v47
+    v48 = stack_addr.i64 ss4+32
+    store notrap heap v23, v48
+    v49 = stack_addr.i64 ss4+48
+    store notrap heap v23, v49
+    v50 = stack_addr.i64 ss4+64
+    store notrap heap v23, v50
+    v51 = stack_addr.i64 ss4+80
+    store notrap heap v23, v51
+    v52 = stack_addr.i64 ss4+96
+    store notrap heap v22, v52  ; v22 = 0
+    v53 = stack_addr.i64 ss4+104
+    store notrap heap v21, v53  ; v21 = 0
+    v54 = stack_addr.i64 ss4+108
+    store notrap heap v20, v54  ; v20 = 0
+    v55 = stack_addr.i64 ss5
+    store notrap vmctx v23, v55
+    v56 = stack_addr.i64 ss5+16
+    store notrap vmctx v23, v56
+    v57 = stack_addr.i64 ss5+32
+    store notrap vmctx v23, v57
+    v58 = stack_addr.i64 ss5+48
+    store notrap vmctx v23, v58
+    v59 = stack_addr.i64 ss5+64
+    store notrap vmctx v23, v59
+    v60 = stack_addr.i64 ss5+80
+    store notrap vmctx v23, v60
+    v61 = stack_addr.i64 ss5+96
+    store notrap vmctx v23, v61
+    v62 = stack_addr.i64 ss5+112
+    store notrap vmctx v22, v62  ; v22 = 0
+    v63 = stack_addr.i64 ss5+120
+    store notrap vmctx v21, v63  ; v21 = 0
+    v64 = stack_addr.i64 ss5+124
+    store notrap vmctx v20, v64  ; v20 = 0
+    v65 = icmp_imm uge v3, 0x504d  ; v3 = 0xffef
+    brif v65, block3, block2
+
+block3:
+    v66 = icmp_imm.i16 uge v3, 0xd5d7  ; v3 = 0xffef
+    brif v66, block5, block4
+
+block5:
+    v67 = icmp_imm.i16 uge v3, 0xf6ff  ; v3 = 0xffef
+    brif v67, block7, block6
+
+block7:
+    v68 = icmp_imm.i16 uge v3, 0xff22  ; v3 = 0xffef
+    brif v68, block9, block8
+
+block9:
+    v69 = icmp_imm.i16 eq v3, 0xffdd  ; v3 = 0xffef
+    brif v69, block1, block10
+
+block10:
+    v70 = icmp_imm.i16 uge v3, 0xff79  ; v3 = 0xffef
+    brif v70, block12, block11
+
+block12:
+    v71 = iadd_imm.i16 v3, 0xffff_ffff_ffff_0087  ; v3 = 0xffef
+    v72 = uextend.i32 v71
+    br_table v72, block1, [block1, block1, block1, block1, block1, block1]
+
+block11:
+    v73 = icmp_imm.i16 uge v3, 0xff22  ; v3 = 0xffef
+    brif v73, block13, block1
+
+block13:
+    v74 = iadd_imm.i16 v3, 0xffff_ffff_ffff_00de  ; v3 = 0xffef
+    v75 = uextend.i32 v74
+    br_table v75, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block8:
+    v76 = icmp_imm.i16 eq v3, 0xf951  ; v3 = 0xffef
+    brif v76, block1, block14
+
+block14:
+    v77 = icmp_imm.i16 uge v3, 0xf6ff  ; v3 = 0xffef
+    brif v77, block15, block1
+
+block15:
+    v78 = iadd_imm.i16 v3, 0xffff_ffff_ffff_0901  ; v3 = 0xffef
+    v79 = uextend.i32 v78
+    br_table v79, block1, [block1, block1, block1, block1, block1, block1, block1]
+
+block6:
+    v80 = icmp_imm.i16 uge v3, 0xef2a  ; v3 = 0xffef
+    brif v80, block17, block16
+
+block17:
+    v81 = icmp_imm.i16 eq v3, 0xf426  ; v3 = 0xffef
+    brif v81, block1, block18
+
+block18:
+    v82 = icmp_imm.i16 uge v3, 0xefff  ; v3 = 0xffef
+    brif v82, block20, block19
+
+block20:
+    v83 = iadd_imm.i16 v3, 0xffff_ffff_ffff_1001  ; v3 = 0xffef
+    v84 = uextend.i32 v83
+    br_table v84, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block19:
+    v85 = icmp_imm.i16 uge v3, 0xef2a  ; v3 = 0xffef
+    brif v85, block21, block1
+
+block21:
+    v86 = iadd_imm.i16 v3, 0xffff_ffff_ffff_10d6  ; v3 = 0xffef
+    v87 = uextend.i32 v86
+    br_table v87, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block16:
+    v88 = icmp_imm.i16 eq v3, 0xdc2a  ; v3 = 0xffef
+    brif v88, block1, block22
+
+block22:
+    v89 = icmp_imm.i16 uge v3, 0xd5d7  ; v3 = 0xffef
+    brif v89, block23, block1
+
+block23:
+    v90 = iadd_imm.i16 v3, 0xffff_ffff_ffff_2a29  ; v3 = 0xffef
+    v91 = uextend.i32 v90
+    br_table v91, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block4:
+    v92 = icmp_imm.i16 uge v3, 0x7363  ; v3 = 0xffef
+    brif v92, block25, block24
+
+block25:
+    v93 = icmp_imm.i16 uge v3, 0x9f22  ; v3 = 0xffef
+    brif v93, block27, block26
+
+block27:
+    v94 = icmp_imm.i16 uge v3, 0xbf41  ; v3 = 0xffef
+    brif v94, block29, block28
+
+block29:
+    v95 = iadd_imm.i16 v3, 0xffff_ffff_ffff_40bf  ; v3 = 0xffef
+    v96 = uextend.i32 v95
+    br_table v96, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block28:
+    v97 = icmp_imm.i16 eq v3, 0xae73  ; v3 = 0xffef
+    brif v97, block1, block30
+
+block30:
+    v98 = icmp_imm.i16 eq v3, 0x9f22  ; v3 = 0xffef
+    brif v98, block1, block1
+
+block26:
+    v99 = icmp_imm.i16 uge v3, 0x9301  ; v3 = 0xffef
+    brif v99, block32, block31
+
+block32:
+    v100 = iadd_imm.i16 v3, 0xffff_ffff_ffff_6cff  ; v3 = 0xffef
+    v101 = uextend.i32 v100
+    br_table v101, block1, [block1, block1, block1, block1, block1, block1, block1]
+
+block31:
+    v102 = icmp_imm.i16 uge v3, 0x7363  ; v3 = 0xffef
+    brif v102, block33, block1
+
+block33:
+    v103 = iadd_imm.i16 v3, 0xffff_ffff_ffff_8c9d  ; v3 = 0xffef
+    v104 = uextend.i32 v103
+    br_table v104, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block24:
+    v105 = icmp_imm.i16 uge v3, 0x5230  ; v3 = 0xffef
+    brif v105, block35, block34
+
+block35:
+    v106 = icmp_imm.i16 eq v3, 0x6720  ; v3 = 0xffef
+    brif v106, block1, block36
+
+block36:
+    v107 = icmp_imm.i16 eq v3, 0x56cc  ; v3 = 0xffef
+    brif v107, block1, block37
+
+block37:
+    v108 = icmp_imm.i16 eq v3, 0x5230  ; v3 = 0xffef
+    brif v108, block1, block1
+
+block34:
+    v109 = icmp_imm.i16 uge v3, 0x5123  ; v3 = 0xffef
+    brif v109, block39, block38
+
+block39:
+    v110 = iadd_imm.i16 v3, 0xffff_ffff_ffff_aedd  ; v3 = 0xffef
+    v111 = uextend.i32 v110
+    br_table v111, block1, [block1, block1, block1, block1, block1, block1, block1]
+
+block38:
+    v112 = icmp_imm.i16 uge v3, 0x504d  ; v3 = 0xffef
+    brif v112, block40, block1
+
+block40:
+    v113 = iadd_imm.i16 v3, 0xffff_ffff_ffff_afb3  ; v3 = 0xffef
+    v114 = uextend.i32 v113
+    br_table v114, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block2:
+    v115 = icmp_imm.i16 uge v3, 9983  ; v3 = 0xffef
+    brif v115, block42, block41
+
+block42:
+    v116 = icmp_imm.i16 uge v3, 0x2ade  ; v3 = 0xffef
+    brif v116, block44, block43
+
+block44:
+    v117 = icmp_imm.i16 uge v3, 0x2f2a  ; v3 = 0xffef
+    brif v117, block46, block45
+
+block46:
+    v118 = icmp_imm.i16 eq v3, 0x4118  ; v3 = 0xffef
+    brif v118, block1, block47
+
+block47:
+    v119 = icmp_imm.i16 eq v3, 0x3320  ; v3 = 0xffef
+    brif v119, block1, block48
+
+block48:
+    v120 = icmp_imm.i16 uge v3, 0x2f2a  ; v3 = 0xffef
+    brif v120, block49, block1
+
+block49:
+    v121 = iadd_imm.i16 v3, 0xffff_ffff_ffff_d0d6  ; v3 = 0xffef
+    v122 = uextend.i32 v121
+    br_table v122, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block45:
+    v123 = icmp_imm.i16 eq v3, 0x2f22  ; v3 = 0xffef
+    brif v123, block1, block50
+
+block50:
+    v124 = icmp_imm.i16 uge v3, 0x2ade  ; v3 = 0xffef
+    brif v124, block51, block1
+
+block51:
+    v125 = iadd_imm.i16 v3, 0xffff_ffff_ffff_d522  ; v3 = 0xffef
+    v126 = uextend.i32 v125
+    br_table v126, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block43:
+    v127 = icmp_imm.i16 uge v3, 0x2a38  ; v3 = 0xffef
+    brif v127, block53, block52
+
+block53:
+    v128 = icmp_imm.i16 eq v3, 0x2ab2  ; v3 = 0xffef
+    brif v128, block1, block54
+
+block54:
+    v129 = icmp_imm.i16 uge v3, 0x2a67  ; v3 = 0xffef
+    brif v129, block56, block55
+
+block56:
+    v130 = iadd_imm.i16 v3, 0xffff_ffff_ffff_d599  ; v3 = 0xffef
+    v131 = uextend.i32 v130
+    br_table v131, block1, [block1, block1, block1, block1, block1, block1]
+
+block55:
+    v132 = icmp_imm.i16 eq v3, 0x2a38  ; v3 = 0xffef
+    brif v132, block1, block1
+
+block52:
+    v133 = icmp_imm.i16 eq v3, 0x2a20  ; v3 = 0xffef
+    brif v133, block1, block57
+
+block57:
+    v134 = icmp_imm.i16 eq v3, 9983  ; v3 = 0xffef
+    brif v134, block1, block1
+
+block41:
+    v135 = icmp_imm.i16 uge v3, 341  ; v3 = 0xffef
+    brif v135, block59, block58
+
+block59:
+    v136 = icmp_imm.i16 uge v3, 6493  ; v3 = 0xffef
+    brif v136, block61, block60
+
+block61:
+    v137 = icmp_imm.i16 uge v3, 8738  ; v3 = 0xffef
+    brif v137, block63, block62
+
+block63:
+    v138 = iadd_imm.i16 v3, -8738  ; v3 = 0xffef
+    v139 = uextend.i32 v138
+    br_table v139, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block62:
+    v140 = icmp_imm.i16 uge v3, 8241  ; v3 = 0xffef
+    brif v140, block65, block64
+
+block65:
+    v141 = iadd_imm.i16 v3, -8241  ; v3 = 0xffef
+    v142 = uextend.i32 v141
+    br_table v142, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block64:
+    v143 = icmp_imm.i16 eq v3, 6493  ; v3 = 0xffef
+    brif v143, block1, block1
+
+block60:
+    v144 = icmp_imm.i16 uge v3, 512  ; v3 = 0xffef
+    brif v144, block67, block66
+
+block67:
+    v145 = iadd_imm.i16 v3, -512  ; v3 = 0xffef
+    v146 = uextend.i32 v145
+    br_table v146, block1, [block1, block1, block1]
+
+block66:
+    v147 = icmp_imm.i16 uge v3, 341  ; v3 = 0xffef
+    brif v147, block68, block1
+
+block68:
+    v148 = iadd_imm.i16 v3, -341  ; v3 = 0xffef
+    v149 = uextend.i32 v148
+    br_table v149, block1, [block1, block1]
+
+block58:
+    v150 = icmp_imm.i16 uge v3, 148  ; v3 = 0xffef
+    brif v150, block70, block69
+
+block70:
+    v151 = icmp_imm.i16 uge v3, 212  ; v3 = 0xffef
+    brif v151, block72, block71
+
+block72:
+    v152 = iadd_imm.i16 v3, -212  ; v3 = 0xffef
+    v153 = uextend.i32 v152
+    br_table v153, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block71:
+    v154 = icmp_imm.i16 uge v3, 148  ; v3 = 0xffef
+    brif v154, block73, block1
+
+block73:
+    v155 = iadd_imm.i16 v3, -148  ; v3 = 0xffef
+    v156 = uextend.i32 v155
+    br_table v156, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
+
+block69:
+    v157 = icmp_imm.i16 uge v3, 128  ; v3 = 0xffef
+    brif v157, block75, block74
+
+block75:
+    v158 = iadd_imm.i16 v3, -128  ; v3 = 0xffef
+    v159 = uextend.i32 v158
+    br_table v159, block1, [block1, block1]
+
+block74:
+    v160 = uextend.i32 v3  ; v3 = 0xffef
+    br_table v160, block1, [block1, block1]
+
+block1 cold:
+    v166 = func_addr.i64 fn6
+    return_call_indirect sig6, v166(v161, v161, v161, v161, v161, v161, v161, v162, v163, v163, v161, v161, v164, v162, v165)  ; v161 = 0xef31_de2a_2352_79ff, v161 = 0xef31_de2a_2352_79ff, v161 = 0xef31_de2a_2352_79ff, v161 = 0xef31_de2a_2352_79ff, v161 = 0xef31_de2a_2352_79ff, v161 = 0xef31_de2a_2352_79ff, v161 = 0xef31_de2a_2352_79ff, v162 = 203, v163 = 0xffef, v163 = 0xffef, v161 = 0xef31_de2a_2352_79ff, v161 = 0xef31_de2a_2352_79ff, v162 = 203, v165 = -0x1.979796p24
+}

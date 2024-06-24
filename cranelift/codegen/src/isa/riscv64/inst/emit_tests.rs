@@ -2222,6 +2222,12 @@ fn riscv64_worst_case_instruction_size() {
             frame_layout: FrameLayout {
                 tail_args_size: 64,
                 setup_area_size: 8192,
+                clobber_size: DEFAULT_CLOBBERS
+                    .into_iter()
+                    .filter(|r| r.class() != RegClass::Vector)
+                    .map(|_| 8)
+                    .sum(),
+                fixed_frame_storage_size: 1 << 16,
                 clobbered_callee_saves: DEFAULT_CLOBBERS
                     .into_iter()
                     .filter(|r| r.class() != RegClass::Vector)
