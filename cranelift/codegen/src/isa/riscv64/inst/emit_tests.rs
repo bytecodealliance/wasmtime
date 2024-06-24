@@ -1,6 +1,6 @@
 #[allow(unused)]
 use crate::ir::LibCall;
-use crate::isa::riscv64::{abi::DEFAULT_CLOBBERS, inst::*};
+use crate::isa::riscv64::inst::*;
 use std::borrow::Cow;
 
 fn fa7() -> Reg {
@@ -2190,47 +2190,21 @@ fn riscv64_worst_case_instruction_size() {
             .map(|op| Inst::AtomicRmwLoop {
                 op: *op,
                 offset: a0(),
-                dst: writable_a0(),
+                dst: writable_a1(),
                 ty: I16,
-                p: a0(),
-                x: a0(),
+                p: a1(),
+                x: a2(),
                 t0: writable_a0(),
             }),
     );
 
-    candidates.push(Inst::ReturnCallInd {
-        callee: a0(),
-        info: Box::new(ReturnCallInfo {
-            opcode: Opcode::ReturnCallIndirect,
-            new_stack_arg_size: 64,
-            uses: DEFAULT_CLOBBERS
-                .into_iter()
-                .map(|reg| CallArgPair {
-                    vreg: reg.into(),
-                    preg: reg.into(),
-                })
-                .collect(),
-        }),
-    });
+    // Return Call Indirect and BrTable are the largest instructions possible. However they
+    // emit their own island, so we don't account them here.
 
     let mut max: (u32, MInst) = (0, Inst::Nop0);
     for i in candidates {
         let mut buffer = MachBuffer::new();
-        let mut emit_state = EmitState {
-            // This frame layout is important to ensure that the ReturnCallIndirect
-            // instruction in this test, becomes as large as practically possible.
-            frame_layout: FrameLayout {
-                tail_args_size: 64,
-                setup_area_size: 8192,
-                clobbered_callee_saves: DEFAULT_CLOBBERS
-                    .into_iter()
-                    .filter(|r| r.class() != RegClass::Vector)
-                    .map(|r| Writable::from_reg(r.into()))
-                    .collect(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
+        let mut emit_state = Default::default();
         i.emit(&mut buffer, &emit_info, &mut emit_state);
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let length = buffer.data().len() as u32;
