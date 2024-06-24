@@ -513,9 +513,21 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (ty_scalar_float ty) (fma x y z)))
-       (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+(type IsFneg (enum (Result (negate u64) (value Value))))
 
+(decl pure is_fneg (Value) IsFneg)
+(rule 1 (is_fneg (fneg x)) (IsFneg.Result 1 x))
+(rule 0 (is_fneg x) (IsFneg.Result 0 x))
+
+(decl fmadd_series (Type u64 Value Value Value) InstOutput)
+(rule 0 (fmadd_series (ty_scalar_float ty) 0 x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+(rule 0 (fmadd_series (ty_scalar_float ty) 1 x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
+
+(rule (lower (has_type (ty_scalar_float ty) (fma x_src y_src z)))
+  (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
+  (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
+  (fmadd_series ty (u64_xor neg_x neg_y) x y z))
+       
 ;; Delegate vector-based lowerings to helpers below
 (rule 1 (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
         (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))

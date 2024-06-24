@@ -1860,6 +1860,7 @@ impl MachInstEmit for Inst {
             } => {
                 let top17 = match fpu_op {
                     FPUOp3::MAdd => 0b000_11111_00_0_00000_0,
+                    FPUOp3::MSub => 0b000_11111_00_0_00000_1,
                 };
                 let top17 = top17 | size.ftype() << 7;
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));

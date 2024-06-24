@@ -1331,7 +1331,10 @@
 ;; A floating-point unit (FPU) operation with three args.
 (type FPUOp3
   (enum
+    ;; Multiply-add
     (MAdd)
+    ;; Multiply-sub
+    (MSub)
 ))
 
 ;; A conversion from an FP to an integer value.
