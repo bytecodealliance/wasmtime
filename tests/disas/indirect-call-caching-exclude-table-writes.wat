@@ -76,35 +76,36 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0063                               v4 = iconst.i32 10
-;; @0063                               v5 = icmp uge v2, v4  ; v4 = 10
-;; @0063                               v6 = uextend.i64 v2
-;; @0063                               v7 = global_value.i64 gv4
-;; @0063                               v8 = ishl_imm v6, 3
-;; @0063                               v9 = iadd v7, v8
-;; @0063                               v10 = iconst.i64 0
-;; @0063                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @0063                               v12 = load.i64 table_oob aligned table v11
-;; @0063                               v13 = band_imm v12, -2
-;; @0063                               brif v12, block3(v13), block2
+;; @0063                               v4 = global_value.i64 gv3
+;; @0063                               v5 = iconst.i32 10
+;; @0063                               v6 = icmp uge v2, v5  ; v5 = 10
+;; @0063                               v7 = uextend.i64 v2
+;; @0063                               v8 = global_value.i64 gv4
+;; @0063                               v9 = ishl_imm v7, 3
+;; @0063                               v10 = iadd v8, v9
+;; @0063                               v11 = iconst.i64 0
+;; @0063                               v12 = select_spectre_guard v6, v11, v10  ; v11 = 0
+;; @0063                               v13 = load.i64 table_oob aligned table v12
+;; @0063                               v14 = band_imm v13, -2
+;; @0063                               brif v13, block3(v14), block2
 ;;
 ;;                                 block2 cold:
-;; @0063                               v15 = iconst.i32 0
-;; @0063                               v16 = global_value.i64 gv3
-;; @0063                               v17 = call fn0(v16, v15, v2)  ; v15 = 0
-;; @0063                               jump block3(v17)
+;; @0063                               v16 = iconst.i32 0
+;; @0063                               v17 = global_value.i64 gv3
+;; @0063                               v18 = call fn0(v17, v16, v2)  ; v16 = 0
+;; @0063                               jump block3(v18)
 ;;
-;;                                 block3(v14: i64):
-;; @0063                               v18 = global_value.i64 gv3
-;; @0063                               v19 = load.i64 notrap aligned readonly v18+80
-;; @0063                               v20 = load.i32 notrap aligned readonly v19
-;; @0063                               v21 = load.i32 icall_null aligned readonly v14+16
-;; @0063                               v22 = icmp eq v21, v20
-;; @0063                               trapz v22, bad_sig
-;; @0063                               v23 = load.i64 notrap aligned readonly v14+8
-;; @0063                               v24 = load.i64 notrap aligned readonly v14+24
-;; @0063                               v25 = call_indirect sig0, v23(v24, v0)
-;; @0066                               jump block1(v25)
+;;                                 block3(v15: i64):
+;; @0063                               v19 = global_value.i64 gv3
+;; @0063                               v20 = load.i64 notrap aligned readonly v19+80
+;; @0063                               v21 = load.i32 notrap aligned readonly v20
+;; @0063                               v22 = load.i32 icall_null aligned readonly v15+16
+;; @0063                               v23 = icmp eq v22, v21
+;; @0063                               trapz v23, bad_sig
+;; @0063                               v24 = load.i64 notrap aligned readonly v15+8
+;; @0063                               v25 = load.i64 notrap aligned readonly v15+24
+;; @0063                               v26 = call_indirect sig0, v24(v25, v0)
+;; @0066                               jump block1(v26)
 ;;
 ;;                                 block1(v3: i32):
 ;; @0066                               return v3

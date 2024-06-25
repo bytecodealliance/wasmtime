@@ -5,9 +5,9 @@ use crate::module::{
 use crate::prelude::*;
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
-    InitMemory, MemoryIndex, ModuleTypesBuilder, PrimaryMap, StaticMemoryInitializer, TableIndex,
-    TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType,
-    WasmResult, WasmValType, WasmparserTypeConverter,
+    InitMemory, MemoryIndex, ModuleTypesBuilder, PrimaryMap, StaticMemoryInitializer,
+    TableCallCacheStyle, TableIndex, TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned,
+    WasmError, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::packed_option::ReservedValue;
@@ -22,7 +22,10 @@ use wasmparser::{
     FuncToValidate, FunctionBody, KnownCustom, NameSectionReader, Naming, Operator, Parser,
     Payload, TypeRef, Validator, ValidatorResources,
 };
-use wasmtime_types::{ConstExpr, ConstOp, ModuleInternedTypeIndex, SizeOverflow, WasmHeapTopType};
+use wasmtime_types::{
+    CallIndirectCacheSlotIndex, ConstExpr, ConstOp, ModuleInternedTypeIndex, SizeOverflow,
+    WasmHeapTopType,
+};
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'a, 'data> {
@@ -116,8 +119,6 @@ pub struct FunctionBodyData<'a> {
     pub body: FunctionBody<'a>,
     /// Validator for the function body
     pub validator: FuncToValidate<ValidatorResources>,
-    /// The start index for call-indirects in this body.
-    pub call_indirect_start: usize,
 }
 
 #[derive(Debug, Default)]
@@ -196,6 +197,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         for payload in parser.parse_all(data) {
             self.translate_payload(payload?)?;
         }
+
+        self.decide_table_cache_strategies();
 
         Ok(self.result)
     }
@@ -547,8 +550,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
 
-                let call_indirect_start = self.result.module.num_call_indirect_caches;
-
                 if self.tunables.generate_native_debuginfo {
                     let sig_index = self.result.module.functions[func_index].signature;
                     let sig = self.types[sig_index].unwrap_func();
@@ -568,11 +569,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         });
                 }
                 self.prescan_code_section(&body)?;
-                self.result.function_body_inputs.push(FunctionBodyData {
-                    validator,
-                    body,
-                    call_indirect_start,
-                });
+                self.result
+                    .function_body_inputs
+                    .push(FunctionBodyData { validator, body });
                 self.result.code_index += 1;
             }
 
@@ -692,14 +691,9 @@ and for re-adding support for interface types you can see this issue:
     ///   "immutable", i.e., there are opcodes that could update its
     ///   entries. If this is the case then the optimization isn't
     ///   applicable. We can check this by simply scanning all functions
-    ///   for the relevant opcodes.
-    ///
-    ///   We also need to know how many `call_indirect` opcodes are in
-    ///   the whole module so that we know how large a `vmctx` struct
-    ///   to reserve and what its layout will be; and the starting
-    ///   index in this count for each function, so we can generate
-    ///   its code (with accesses to its own `call_indirect` callsite
-    ///   caches) in parallel.
+    ///   for the relevant opcodes. We also need to know if any
+    ///   `call_indirect` opcodes actually use this table; otherwise,
+    ///   it doesn't need a cache.
     fn prescan_code_section(&mut self, body: &FunctionBody<'_>) -> Result<()> {
         if self.tunables.cache_call_indirects {
             for op in body.get_operators_reader()? {
@@ -725,33 +719,10 @@ and for re-adding support for interface types you can see this issue:
                             self.flag_written_table(table);
                         }
                     }
-                    // Count the `call_indirect` sites so we can
-                    // assign them unique slots.
-                    //
-                    // We record the value of this counter as a
-                    // start-index as we start to scan each function,
-                    // and that function's compilation (which is
-                    // normally a separate parallel task) counts on
-                    // its own from that start index.
-                    Operator::CallIndirect { .. } => {
-                        self.result.module.num_call_indirect_caches += 1;
-
-                        // Cap the `num_call_indirect_caches` counter
-                        // at `max_call_indirect_cache_slots` so that
-                        // we don't allocate more than that amount of
-                        // space in the VMContext struct.
-                        //
-                        // Note that we also separately check against
-                        // this limit when emitting code for each
-                        // individual slot because we may cross the
-                        // limit in the middle of a function; also
-                        // once we hit the limit, the start-index for
-                        // each subsequent function will be saturated
-                        // at the limit.
-                        self.result.module.num_call_indirect_caches = core::cmp::min(
-                            self.result.module.num_call_indirect_caches,
-                            self.tunables.max_call_indirect_cache_slots,
-                        );
+                    // Check whether a table has any associated
+                    // `call_indirect` callsites.
+                    Operator::CallIndirect { table_index, .. } => {
+                        self.flag_called_table(TableIndex::from_u32(table_index));
                     }
 
                     _ => {}
@@ -759,6 +730,30 @@ and for re-adding support for interface types you can see this issue:
             }
         }
         Ok(())
+    }
+
+    /// Called after scanning the module to choose call-target caching
+    /// strategies for tables and allocate cache-slot index space.
+    fn decide_table_cache_strategies(&mut self) {
+        if self.tunables.cache_call_indirects {
+            let mut total_slots = 0;
+            for table in self.result.module.table_plans.values_mut() {
+                // We can cache calls through the table if it is not
+                // written to, its zeroth slot is null (because we
+                // initialize cache slots to all-zero so a zero tag must
+                // correspond to a null pointer). We choose to cache if we
+                // can cache and if a `call_indirect` actually needs a
+                // cache.
+                if !table.written && !table.non_null_zero && table.called {
+                    let start = CallIndirectCacheSlotIndex::from_u32(total_slots);
+                    let size_log2 = self.tunables.call_indirect_cache_size_log2;
+                    table.call_cache = TableCallCacheStyle::DirectMapped { start, size_log2 };
+                    total_slots += 1 << size_log2;
+                }
+            }
+            self.result.module.num_indirect_call_cache_slots =
+                usize::try_from(total_slots).unwrap();
+        }
     }
 
     fn register_custom_section(&mut self, section: &CustomSectionReader<'data>) {
@@ -892,6 +887,10 @@ and for re-adding support for interface types you can see this issue:
 
     fn flag_table_possibly_non_null_zero_element(&mut self, table: TableIndex) {
         self.result.module.table_plans[table].non_null_zero = true;
+    }
+
+    fn flag_called_table(&mut self, table: TableIndex) {
+        self.result.module.table_plans[table].called = true;
     }
 
     /// Parses the Name section of the wasm module.

@@ -1146,11 +1146,15 @@ entity_impl!(TagIndex);
 pub struct StaticModuleIndex(u32);
 entity_impl!(StaticModuleIndex);
 
-/// Index of a `call_indirect` instruction in a module, used for
-/// caching that callsite's target in the VMContext.
+/// Index of a `call_indirect` cache slot in an instance's storage for
+/// all table caches.
+///
+/// Caches are allocated for tables that support caching (i.e., meet
+/// certain conditions), and each table's cache occupies a certain
+/// range of this index space.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct CallIndirectSiteIndex(u32);
-entity_impl!(CallIndirectSiteIndex);
+pub struct CallIndirectCacheSlotIndex(u32);
+entity_impl!(CallIndirectCacheSlotIndex);
 
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]

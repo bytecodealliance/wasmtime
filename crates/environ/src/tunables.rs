@@ -70,9 +70,9 @@ pub struct Tunables {
     /// site.
     pub cache_call_indirects: bool,
 
-    /// The maximum number of call-indirect cache slots that we will
-    /// allocate for one instance.
-    pub max_call_indirect_cache_slots: usize,
+    /// The number call-indirect cache slots that we will allocate for
+    /// one funcref table for one instance, as a log2 value.
+    pub call_indirect_cache_size_log2: usize,
 }
 
 impl Tunables {
@@ -126,7 +126,7 @@ impl Tunables {
             tail_callable: false,
             winch_callable: false,
             cache_call_indirects: false,
-            max_call_indirect_cache_slots: 50_000,
+            call_indirect_cache_size_log2: 10,
         }
     }
 

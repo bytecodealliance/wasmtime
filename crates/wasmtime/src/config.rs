@@ -152,7 +152,7 @@ struct ConfigTunables {
     relaxed_simd_deterministic: Option<bool>,
     tail_callable: Option<bool>,
     cache_call_indirects: Option<bool>,
-    max_call_indirect_cache_slots: Option<usize>,
+    call_indirect_cache_size_log2: Option<usize>,
 }
 
 /// User-provided configuration for the compiler.
@@ -988,15 +988,16 @@ impl Config {
 
     /// Configures whether we enable the "indirect call cache" optimization.
     ///
-    /// This feature adds, for each `call_indirect` instruction in a
-    /// Wasm module (i.e., a function-pointer call in guest code), a
-    /// one-entry cache that speeds up the translation from a table
-    /// index to the actual machine code. By default, the VM's
-    /// implementation of this translation requires several
-    /// indirections and checks (table bounds-check, function
-    /// signature-check, table lazy-initialization logic). The intent
-    /// of this feature is to speed up indirect calls substantially
-    /// when they are repeated frequently in hot code.
+    /// This feature adds a cache for the translation from function
+    /// index to raw code pointer for each table used by at least one
+    /// `call_indirect` instruction.
+    ///
+    /// By default, the VM's implementation of this translation
+    /// requires several indirections and checks (table bounds-check,
+    /// function signature-check, table lazy-initialization
+    /// logic). The intent of this feature is to speed up indirect
+    /// calls substantially when they are repeated frequently in hot
+    /// code.
     ///
     /// While it accelerates repeated calls, this feature has the
     /// potential to slow down instantiation slightly, because it adds
@@ -1005,6 +1006,13 @@ impl Config {
     /// initialized. In practice, we have not seen
     /// measurable/statistically-significant impact from this, though.
     ///
+    /// The cache is a "direct-mapped" cache: it is indexed by the
+    /// function index itself, modulo the size, and entries are also
+    /// tagged by that index. Hence the size is constant (configurable
+    /// by the user) and does not grow with the module size; also, all
+    /// callsites (using a given table) benefit from cache warmup by
+    /// other callsites.
+    ///
     /// Until we have further experience with this feature, it will
     /// remain off: it is `false` by default.
     pub fn cache_call_indirects(&mut self, enable: bool) -> &mut Self {
@@ -1012,28 +1020,28 @@ impl Config {
         self
     }
 
-    /// Configures the "indirect call cache" maximum capacity.
+    /// Configures the "indirect call cache" size, per table that it
+    /// accelerates.
     ///
     /// If the [`Config::cache_call_indirects`] configuration option
-    /// is enabled, the engine allocates "cache slots" directly in its
-    /// per-instance state struct for each `call_indirect` in the
-    /// module's code. We place a limit on this count in order to
-    /// avoid inflating the state too much with very large modules. If
-    /// a module exceeds the limit, the first `max` indirect
-    /// call-sites will still have a one-entry cache, but any indirect
-    /// call-sites beyond the limit (in linear order in the module's
-    /// code section) do not participate in the caching, as if the
-    /// option were turned off.
+    /// is enabled, the engine allocates this many "cache slots"
+    /// directly in its per-instance state struct for each table used
+    /// by least one `call_indirect` in the module's code.
     ///
-    /// There is also an internal hard cap to this limit:
-    /// configurations with `max` beyond `50_000` will effectively cap
-    /// the limit at `50_000`. This is so that instance state does not
-    /// become unreasonably large.
+    /// Because the cache is direct-mapped and indexed by the raw
+    /// lookup index modulo this size, the size must be a power of
+    /// two. Hence, this size is specified as a log2 value.
     ///
-    /// This is `50_000` by default.
-    pub fn max_call_indirect_cache_slots(&mut self, max: usize) -> &mut Self {
-        const HARD_CAP: usize = 50_000; // See doc-comment above.
-        self.tunables.max_call_indirect_cache_slots = Some(core::cmp::min(max, HARD_CAP));
+    /// The size occupied in the per-instance state is currently 12
+    /// bytes per cache slot on 64-bit hosts (one `usize` and one
+    /// `u32`).
+    ///
+    /// This is `10` by default: i.e., 1024 (1K) cache slots, or 12KiB
+    /// of memory per funcref table per instance on a 64-bit host. It
+    /// is hard-capped at `16`, i.e., 64K slots or 768KiB of memory.
+    pub fn call_indirect_cache_size_log2(&mut self, size_log2: usize) -> &mut Self {
+        const HARD_CAP: usize = 16;
+        self.tunables.call_indirect_cache_size_log2 = Some(core::cmp::min(size_log2, HARD_CAP));
         self
     }
 
@@ -1850,7 +1858,7 @@ impl Config {
             relaxed_simd_deterministic
             tail_callable
             cache_call_indirects
-            max_call_indirect_cache_slots
+            call_indirect_cache_size_log2
         }
 
         // If we're going to compile with winch, we must use the winch calling convention.

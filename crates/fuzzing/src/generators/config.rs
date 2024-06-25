@@ -182,7 +182,7 @@ impl Config {
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
             .generate_address_map(self.wasmtime.generate_address_map)
             .cache_call_indirects(self.wasmtime.cache_call_indirects)
-            .max_call_indirect_cache_slots(self.wasmtime.max_call_indirect_cache_slots);
+            .call_indirect_cache_size_log2(self.wasmtime.call_indirect_cache_size_log2);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -505,6 +505,8 @@ pub struct WasmtimeConfig {
     cache_call_indirects: bool,
     /// The maximum number of call-indirect cache slots.
     max_call_indirect_cache_slots: usize,
+    /// The call-indirect cache size, as a log2 value.
+    call_indirect_cache_size_log2: usize,
     table_lazy_init: bool,
 
     /// Whether or not fuzzing should enable PCC.

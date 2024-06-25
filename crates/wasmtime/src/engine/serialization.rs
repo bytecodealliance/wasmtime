@@ -361,7 +361,7 @@ impl Metadata<'_> {
             tail_callable,
             winch_callable,
             cache_call_indirects,
-            max_call_indirect_cache_slots,
+            call_indirect_cache_size_log2,
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
@@ -435,9 +435,9 @@ impl Metadata<'_> {
             "caching of call-indirect targets",
         )?;
         Self::check_int(
-            max_call_indirect_cache_slots,
-            other.max_call_indirect_cache_slots,
-            "maximum slot count for caching of call-indirect targets",
+            call_indirect_cache_size_log2,
+            other.call_indirect_cache_size_log2,
+            "cache size for caching of call-indirect targets",
         )?;
 
         Ok(())

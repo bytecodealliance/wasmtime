@@ -344,6 +344,12 @@ pub struct TablePlan {
     pub written: bool,
     /// Whether this table may have a non-null zero element.
     pub non_null_zero: bool,
+    /// Whether this table is used by any `call_indirect` instruction.
+    pub called: bool,
+    /// Whether this table has an associated direct-mapped
+    /// call-indirect cache; and if so, the base index and the cache
+    /// size in the instance-global cache slot index space.
+    pub call_cache: TableCallCacheStyle,
 }
 
 impl TablePlan {
@@ -355,6 +361,8 @@ impl TablePlan {
             style,
             written: false,
             non_null_zero: false,
+            called: false,
+            call_cache: TableCallCacheStyle::None,
         }
     }
 }
@@ -432,6 +440,26 @@ impl TableSegmentElements {
     }
 }
 
+/// Details of the associated cache for call-indirects through this
+/// table, if any.
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
+pub enum TableCallCacheStyle {
+    /// No caching.
+    None,
+    /// A "direct-mapped cache": the slot that caches the raw code
+    /// pointer associated with any given index is computed as the
+    /// index modulo the number of cache slots, plus the base index,
+    /// in the instance's cache-slot index space.
+    DirectMapped {
+        /// The start of the cache slots in the instance's index
+        /// space.
+        start: CallIndirectCacheSlotIndex,
+        /// The size of the cache. This is stored as a log2 value
+        /// because the cache slot count must be a power of two.
+        size_log2: usize,
+    },
+}
+
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -485,8 +513,8 @@ pub struct Module {
     /// an `func_ref` index (and is the maximum func_ref index).
     pub num_escaped_funcs: usize,
 
-    /// Number of call-indirect caches.
-    pub num_call_indirect_caches: usize,
+    /// Total number of indirect-call cache slots required.
+    pub num_indirect_call_cache_slots: usize,
 
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, FunctionType>,

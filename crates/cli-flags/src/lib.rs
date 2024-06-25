@@ -119,13 +119,17 @@ wasmtime_option_group! {
         /// Whether to enable call-indirect caching.
         pub cache_call_indirects: Option<bool>,
 
-        /// The maximum call-indirect cache slot count.
+        /// The call-indirect cache size, as a log2 value, per table
+        /// with call-indirect instructions.
         ///
-        /// One slot is allocated per indirect callsite; if the module
-        /// has more indirect callsites than this limit, then the
-        /// first callsites in linear order in the code section, up to
-        /// the limit, will receive a cache slot.
-        pub max_call_indirect_cache_slots: Option<usize>,
+        /// The cache is a direct-mapped cache indexed by the called
+        /// function index, modulo this size. Hence the size is a
+        /// constant: it does not depend on the number of callsites.
+        ///
+        /// The cache size must be a power of two for efficient
+        /// modulo-by-masking; hence, the size is specified here as a
+        /// log2 value.
+        pub call_indirect_cache_size_log2: Option<usize>,
     }
 
     enum Optimize {
@@ -579,8 +583,8 @@ impl CommonOptions {
         if let Some(enable) = self.opts.cache_call_indirects {
             config.cache_call_indirects(enable);
         }
-        if let Some(max) = self.opts.max_call_indirect_cache_slots {
-            config.max_call_indirect_cache_slots(max);
+        if let Some(bits) = self.opts.call_indirect_cache_size_log2 {
+            config.call_indirect_cache_size_log2(bits);
         }
 
         match_feature! {
