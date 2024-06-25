@@ -1,9 +1,9 @@
 //! Implements a `wasi-nn` [`BackendInner`] using OpenVINO.
 
 use super::{
-    read, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner,
+    read, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id,
 };
-use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
+use crate::wit::{self, ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
 use std::path::Path;
@@ -99,12 +99,15 @@ impl BackendGraph for OpenvinoGraph {
 struct OpenvinoExecutionContext(Arc<openvino::CNNNetwork>, openvino::InferRequest);
 
 impl BackendExecutionContext for OpenvinoExecutionContext {
-    fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
-        let input_name = self.0.get_input_name(index as usize)?;
+    fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError> {
+        let input_name = match id {
+            Id::Index(i) => self.0.get_input_name(i as usize)?,
+            Id::Name(name) => name,
+        };
 
         // Construct the blob structure. TODO: there must be some good way to
         // discover the layout here; `desc` should not have to default to NHWC.
-        let precision = map_tensor_type_to_precision(tensor.tensor_type);
+        let precision = map_tensor_type_to_precision(tensor.ty);
         let dimensions = tensor
             .dimensions
             .iter()
@@ -123,17 +126,20 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         Ok(())
     }
 
-    fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError> {
-        let output_name = self.0.get_output_name(index as usize)?;
+    fn get_output(&mut self, id: Id) -> Result<Tensor, BackendError> {
+        let output_name = match id {
+            Id::Index(i) => self.0.get_output_name(i as usize)?,
+            Id::Name(name) => name,
+        };
+        let dimensions = vec![]; // TODO: get actual shape
+        let ty = wit::TensorType::Fp32; // TODO: get actual type.
         let blob = self.1.get_blob(&output_name)?;
-        let blob_size = blob.byte_len()?;
-        if blob_size > destination.len() {
-            return Err(BackendError::NotEnoughMemory(blob_size));
-        }
-
-        // Copy the tensor data into the destination buffer.
-        destination[..blob_size].copy_from_slice(blob.buffer()?);
-        Ok(blob_size as u32)
+        let data = blob.buffer()?.to_vec();
+        Ok(Tensor {
+            dimensions,
+            ty,
+            data,
+        })
     }
 }
 

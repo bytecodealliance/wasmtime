@@ -43,16 +43,18 @@ interface tensor {
     /// memory--e.g., using row-major ordering--and could perhaps be improved.
     type tensor-data = list<u8>;
 
-    record tensor {
+    resource tensor {
+        constructor(dimensions: tensor-dimensions, ty: tensor-type, data: tensor-data);
+
         // Describe the size of the tensor (e.g., 2x2x2x2 -> [2, 2, 2, 2]). To represent a tensor
         // containing a single value, use `[1]` for the tensor dimensions.
-        dimensions: tensor-dimensions,
+        dimensions: func() -> tensor-dimensions;
 
         // Describe the type of element in the tensor (e.g., `f32`).
-        tensor-type: tensor-type,
+        ty: func() -> tensor-type;
 
-        // Contains the tensor data.
-        data: tensor-data,
+        // Return the tensor data.
+        data: func() -> tensor-data;
     }
 }
 
@@ -61,11 +63,12 @@ interface tensor {
 interface graph {
     use errors.{error};
     use tensor.{tensor};
+    use inference.{graph-execution-context};
 
     /// An execution graph for performing inference (i.e., a model).
-    ///
-    /// TODO: replace with `resource` (https://github.com/WebAssembly/wasi-nn/issues/47).
-    type graph = u32;
+    resource graph {
+        init-execution-context: func() -> result<graph-execution-context, error>;
+    }
 
     /// Describes the encoding of the graph. This allows the API to be implemented by various
     /// backends that encode (i.e., serialize) their graph IR with different formats.
@@ -75,6 +78,7 @@ interface graph {
         tensorflow,
         pytorch,
         tensorflowlite,
+        ggml,
         autodetect,
     }
 
@@ -107,27 +111,25 @@ interface graph {
 interface inference {
     use errors.{error};
     use tensor.{tensor, tensor-data};
-    use graph.{graph};
 
     /// Bind a `graph` to the input and output tensors for an inference.
     ///
-    /// TODO: this is no longer necessary in WIT (https://github.com/WebAssembly/wasi-nn/issues/43)
-    type graph-execution-context = u32;
+    /// TODO: this may no longer be necessary in WIT
+    /// (https://github.com/WebAssembly/wasi-nn/issues/43)
+    resource graph-execution-context {
+        /// Define the inputs to use for inference.
+        set-input: func(name: string, tensor: tensor) -> result<_, error>;
 
-    /// Create an execution instance of a loaded graph.
-    init-execution-context: func(graph: graph) -> result<graph-execution-context, error>;
+        /// Compute the inference on the given inputs.
+        ///
+        /// Note the expected sequence of calls: `set-input`, `compute`, `get-output`. TODO: this
+        /// expectation could be removed as a part of
+        /// https://github.com/WebAssembly/wasi-nn/issues/43.
+        compute: func() -> result<_, error>;
 
-    /// Define the inputs to use for inference.
-    set-input: func(ctx: graph-execution-context, index: u32, tensor: tensor) -> result<_, error>;
-
-    /// Compute the inference on the given inputs.
-    ///
-    /// Note the expected sequence of calls: `set-input`, `compute`, `get-output`. TODO: this
-    /// expectation could be removed as a part of https://github.com/WebAssembly/wasi-nn/issues/43.
-    compute: func(ctx: graph-execution-context) -> result<_, error>;
-
-    /// Extract the outputs after inference.
-    get-output: func(ctx: graph-execution-context, index: u32) -> result<tensor-data, error>;
+        /// Extract the outputs after inference.
+        get-output: func(name: string) -> result<tensor, error>;
+    }
 }
 
 /// TODO: create function-specific errors (https://github.com/WebAssembly/wasi-nn/issues/42)
@@ -137,7 +139,8 @@ interface errors {
         invalid-argument,
         // Invalid encoding.
         invalid-encoding,
-        busy,
+        // The operation timed out.
+        timeout,
         // Runtime Error.
         runtime-error,
         // Unsupported operation.
