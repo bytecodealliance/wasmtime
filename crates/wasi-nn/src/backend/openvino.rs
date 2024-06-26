@@ -34,9 +34,8 @@ impl BackendInner for OpenvinoBackend {
         let xml = builders[0];
         let weights = builders[1];
 
-        //Construct new tensor with data.
-        let dims: [i64; 2] = [1, weights.len() as i64];
-        let shape = Shape::new(&dims)?;
+        // Construct a new tensor for the model weights.
+        let shape = Shape::new(&[1, weights.len() as i64])?;
         let mut weights_tensor = OvTensor::new(ElementType::U8, &shape)?;
         let buffer = weights_tensor.get_raw_data_mut()?;
         buffer.copy_from_slice(&weights);
