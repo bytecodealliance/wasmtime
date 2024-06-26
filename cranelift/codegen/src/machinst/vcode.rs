@@ -1057,11 +1057,11 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
-        // debug_assert!(
-        //     self.user_stack_maps.is_empty(),
-        //     "any stack maps should have been consumed by instruction emission, still have: {:#?}",
-        //     self.user_stack_maps,
-        // );
+        debug_assert!(
+            self.user_stack_maps.is_empty(),
+            "any stack maps should have been consumed by instruction emission, still have: {:#?}",
+            self.user_stack_maps,
+        );
 
         // Do any optimizations on branches at tail of buffer, as if we had
         // bound one last label.
