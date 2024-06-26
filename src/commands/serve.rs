@@ -134,15 +134,15 @@ impl ServeCommand {
 
         builder.env("REQUEST_ID", req_id.to_string());
 
-        builder.stdout(LogStream {
-            prefix: format!("stdout [{req_id}] :: "),
-            output: Output::Stdout,
-        });
+        builder.stdout(LogStream::new(
+            format!("stdout [{req_id}] :: "),
+            Output::Stdout,
+        ));
 
-        builder.stderr(LogStream {
-            prefix: format!("stderr [{req_id}] :: "),
-            output: Output::Stderr,
-        });
+        builder.stderr(LogStream::new(
+            format!("stderr [{req_id}] :: "),
+            Output::Stderr,
+        ));
 
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
@@ -474,6 +474,17 @@ impl Output {
 struct LogStream {
     prefix: String,
     output: Output,
+    needs_prefix_on_next_write: bool,
+}
+
+impl LogStream {
+    fn new(prefix: String, output: Output) -> LogStream {
+        LogStream {
+            prefix,
+            output,
+            needs_prefix_on_next_write: true,
+        }
+    }
 }
 
 impl wasmtime_wasi::StdoutStream for LogStream {
@@ -493,19 +504,34 @@ impl wasmtime_wasi::StdoutStream for LogStream {
 
 impl wasmtime_wasi::HostOutputStream for LogStream {
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
-        let mut msg = Vec::new();
+        let mut bytes = &bytes[..];
 
-        for line in bytes.split(|c| *c == b'\n') {
-            if !line.is_empty() {
-                msg.extend_from_slice(&self.prefix.as_bytes());
-                msg.extend_from_slice(line);
-                msg.push(b'\n');
+        while !bytes.is_empty() {
+            if self.needs_prefix_on_next_write {
+                self.output
+                    .write_all(self.prefix.as_bytes())
+                    .map_err(StreamError::LastOperationFailed)?;
+                self.needs_prefix_on_next_write = false;
+            }
+            match bytes.iter().position(|b| *b == b'\n') {
+                Some(i) => {
+                    let (a, b) = bytes.split_at(i + 1);
+                    bytes = b;
+                    self.output
+                        .write_all(a)
+                        .map_err(StreamError::LastOperationFailed)?;
+                    self.needs_prefix_on_next_write = true;
+                }
+                None => {
+                    self.output
+                        .write_all(bytes)
+                        .map_err(StreamError::LastOperationFailed)?;
+                    break;
+                }
             }
         }
 
-        self.output
-            .write_all(&msg)
-            .map_err(StreamError::LastOperationFailed)
+        Ok(())
     }
 
     fn flush(&mut self) -> StreamResult<()> {
