@@ -23,3 +23,16 @@ jobs:
         ./publish publish
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    - run: |
+        # Download the published versions of the adapters
+        wget https://github.com/bytecodealliance/wasmtime/releases/download/${{github.event.release.tag_name}}/wasi_snapshot_preview1.command.wasm -O crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.command.wasm
+        wget https://github.com/bytecodealliance/wasmtime/releases/download/${{github.event.release.tag_name}}/wasi_snapshot_preview1.reactor.wasm -O crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.reactor.wasm
+        wget https://github.com/bytecodealliance/wasmtime/releases/download/${{github.event.release.tag_name}}/wasi_snapshot_preview1.proxy.wasm -O crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.proxy.wasm
+
+        # Materialise the adapter provider crate inside the workspace
+        cp crates/wasi-preview1-component-adapter/provider/Cargo.toml.in crates/wasi-preview1-component-adapter/provider/Cargo.toml
+        sed -i '/"crates\/wasi-preview1-component-adapter",/a\ \ "crates\/wasi-preview1-component-adapter\/provider",' Cargo.toml
+
+        cargo publish -p wasi-preview1-component-adapter-provider --allow-dirty
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
