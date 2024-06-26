@@ -37,11 +37,9 @@ impl BackendInner for OpenvinoBackend {
         //Construct new tensor with data.
         let dims: [i64; 2] = [1, weights.len() as i64];
         let shape = Shape::new(&dims)?;
-        let mut weights_tensor = OvTensor::new(ElementType::F32, &shape)?;
-        let buffer = weights_tensor.buffer_mut()?;
-        for (index, bytes) in weights.iter().enumerate() {
-            buffer[index] = *bytes;
-        }
+        let mut weights_tensor = OvTensor::new(ElementType::U8, &shape)?;
+        let buffer = weights_tensor.get_raw_data_mut()?;
+        buffer.copy_from_slice(&weights);
 
         // Construct OpenVINO graph structures: `model` contains the graph
         // structure, `compiled_model` can perform inference.
@@ -107,10 +105,8 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
             .collect::<Vec<_>>();
         let shape = Shape::new(&dimensions)?;
         let mut new_tensor = OvTensor::new(precision, &shape)?;
-        let buffer = new_tensor.buffer_mut()?;
-        for (index, bytes) in tensor.data.iter().enumerate() {
-            buffer[index] = *bytes;
-        }
+        let buffer = new_tensor.get_raw_data_mut()?;
+        buffer.copy_from_slice(&tensor.data);
 
         // Assign the tensor to the request.
         self.0
