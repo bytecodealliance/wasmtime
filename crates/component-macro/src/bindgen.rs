@@ -197,7 +197,14 @@ fn parse_source(
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
     let mut parse = |resolve: &mut Resolve, path: &Path| -> anyhow::Result<_> {
-        let (pkg, sources) = resolve.push_path(path)?;
+        // Try to normalize the path to make the error message more understandable when
+        // the path is not correct. Fallback to the original path if normalization fails
+        // (probably return an error somewhere else).
+        let normalized_path = match std::fs::canonicalize(path) {
+            Ok(p) => p,
+            Err(_) => path.to_path_buf(),
+        };
+        let (pkg, sources) = resolve.push_path(normalized_path)?;
         files.extend(sources);
         Ok(pkg)
     };
