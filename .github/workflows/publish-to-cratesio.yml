@@ -17,22 +17,30 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
+    - run: |
+        sha=${{ github.sha }}
+        # Remember to update this logic in publish-artifacts.yml as well
+        echo ARTIFACT_RUN_ID=$(
+          gh api -H 'Accept: application/vnd.github+json' \
+              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?exclude_pull_requests=true \
+              | jq '.workflow_runs' \
+              | jq "map(select(.head_commit.id == \"$sha\"))[0].id" \
+        ) >> "$GITHUB_ENV"
     - run: rustup update stable && rustup default stable
     - run: |
         rustc scripts/publish.rs
         ./publish publish
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-    - run: |
-        # Download the published versions of the adapters
-        wget https://github.com/bytecodealliance/wasmtime/releases/download/${{github.event.release.tag_name}}/wasi_snapshot_preview1.command.wasm -O crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.command.wasm
-        wget https://github.com/bytecodealliance/wasmtime/releases/download/${{github.event.release.tag_name}}/wasi_snapshot_preview1.reactor.wasm -O crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.reactor.wasm
-        wget https://github.com/bytecodealliance/wasmtime/releases/download/${{github.event.release.tag_name}}/wasi_snapshot_preview1.proxy.wasm -O crates/wasi-preview1-component-adapter/provider/artefacts/wasi_snapshot_preview1.proxy.wasm
-
-        # Materialise the adapter provider crate inside the workspace
-        cp crates/wasi-preview1-component-adapter/provider/Cargo.toml.in crates/wasi-preview1-component-adapter/provider/Cargo.toml
-        sed -i '/"crates\/wasi-preview1-component-adapter",/a\ \ "crates\/wasi-preview1-component-adapter\/provider",' Cargo.toml
-
-        cargo publish -p wasi-preview1-component-adapter-provider --allow-dirty
+    
+    # Manifest and publish the wasi-preview1-component-adapter-provider
+    - uses: actions/download-artifact@v4
+      with:
+        name: bins-wasi-preview1-component-adapter
+        path: crates/wasi-preview1-component-adapter/provider/artefacts
+        github-token: ${{ github.token }}
+        run-id: ${ARTIFACT_RUN_ID}
+    - run: ./ci/build-wasi-preview1-component-adapter-provider.sh
+    - run: cargo publish -p wasi-preview1-component-adapter-provider --allow-dirty
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

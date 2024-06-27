@@ -16,6 +16,7 @@ jobs:
     - uses: actions/checkout@v4
     - run: |
         sha=${{ github.sha }}
+        # Remember to update this logic in publish-to-cratesio.yml as well
         run_id=$(
           gh api -H 'Accept: application/vnd.github+json' \
               /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?exclude_pull_requests=true \
