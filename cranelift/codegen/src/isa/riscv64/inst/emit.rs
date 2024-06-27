@@ -1146,14 +1146,15 @@ impl Inst {
                 if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
                 }
-                if let Some(s) = user_stack_map {
-                    let offset = sink.cur_offset() + 8;
-                    sink.push_user_stack_map(state, offset, s);
-                }
 
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
+
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset();
+                    sink.push_user_stack_map(state, offset, s);
+                }
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {

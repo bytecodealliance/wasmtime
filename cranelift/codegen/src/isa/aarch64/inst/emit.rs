@@ -2938,12 +2938,12 @@ impl MachInstEmit for Inst {
                 if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                if let Some(s) = user_stack_map {
-                    let offset = sink.cur_offset() + 4;
-                    sink.push_user_stack_map(state, offset, s);
-                }
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset();
+                    sink.push_user_stack_map(state, offset, s);
+                }
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
@@ -2961,12 +2961,12 @@ impl MachInstEmit for Inst {
                 if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                if let Some(s) = user_stack_map {
-                    let offset = sink.cur_offset() + 4;
-                    sink.push_user_stack_map(state, offset, s);
-                }
                 let rn = info.rn;
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset();
+                    sink.push_user_stack_map(state, offset, s);
+                }
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }

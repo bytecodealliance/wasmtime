@@ -14,9 +14,9 @@ use crate::ir::{
     Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
-    writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, InsnIndex, LoweredBlock,
-    MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants,
-    VCodeInst, ValueRegs, Writable,
+    writable_value_regs, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, Callee, InsnIndex,
+    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
+    VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::settings::Flags;
 use crate::{trace, CodegenResult};
@@ -812,6 +812,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if let Some(entries) = self.f.dfg.user_stack_map_entries(inst) {
                 let end = self.vcode.vcode.num_insts();
                 debug_assert!(end > start);
+                debug_assert_eq!(
+                    (start..end)
+                        .filter(|i| self.vcode.vcode[InsnIndex::new(*i)].is_safepoint())
+                        .count(),
+                    1
+                );
                 for i in start..end {
                     let iix = InsnIndex::new(i);
                     if self.vcode.vcode[iix].is_safepoint() {
@@ -823,7 +829,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             self.f.dfg.display_inst(inst),
                             &self.vcode.vcode[iix].pretty_print_inst(&mut Default::default()),
                         );
-                        self.vcode.add_user_stack_map(iix, entries);
+                        self.vcode
+                            .add_user_stack_map(BackwardsInsnIndex::new(iix.index()), entries);
+                        break;
                     }
                 }
             }

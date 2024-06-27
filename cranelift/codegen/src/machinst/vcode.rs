@@ -40,6 +40,39 @@ use std::fmt;
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;
 
+/// Extension trait for `InsnIndex` to allow conversion to a
+/// `BackwardsInsnIndex`.
+trait ToBackwardsInsnIndex {
+    fn to_backwards_insn_index(&self, num_insts: usize) -> BackwardsInsnIndex;
+}
+
+impl ToBackwardsInsnIndex for InsnIndex {
+    fn to_backwards_insn_index(&self, num_insts: usize) -> BackwardsInsnIndex {
+        BackwardsInsnIndex::new(num_insts - self.index() - 1)
+    }
+}
+
+/// An index referring to an instruction in the VCode when it is backwards,
+/// during VCode construction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(::serde::Serialize, ::serde::Deserialize)
+)]
+pub struct BackwardsInsnIndex(InsnIndex);
+
+impl BackwardsInsnIndex {
+    pub fn new(i: usize) -> Self {
+        BackwardsInsnIndex(InsnIndex::new(i))
+    }
+
+    /// Convert this backwards instruction index to a regular, forwards
+    /// instruction index.
+    pub fn to_insn_index(&self, num_insts: usize) -> InsnIndex {
+        InsnIndex::new(self.0.index() - num_insts - 1)
+    }
+}
+
 /// Index referring to a basic block in VCode.
 pub type BlockIndex = regalloc2::Block;
 
@@ -73,7 +106,7 @@ pub struct VCode<I: VCodeInst> {
     /// This is a sparse side table that only has entries for instructions that
     /// are safepoints, and only for a subset of those that have an associated
     /// user stack map.
-    user_stack_maps: FxHashMap<InsnIndex, ir::UserStackMap>,
+    user_stack_maps: FxHashMap<BackwardsInsnIndex, ir::UserStackMap>,
 
     /// Operands: pre-regalloc references to virtual registers with
     /// constraints, in one flattened array. This allows the regalloc
@@ -575,7 +608,11 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Add a user stack map for the associated instruction.
-    pub fn add_user_stack_map(&mut self, inst: InsnIndex, entries: &[ir::UserStackMapEntry]) {
+    pub fn add_user_stack_map(
+        &mut self,
+        inst: BackwardsInsnIndex,
+        entries: &[ir::UserStackMapEntry],
+    ) {
         let stack_map = ir::UserStackMap::new(entries, self.vcode.abi.sized_stackslot_offsets());
         let old_entry = self.vcode.user_stack_maps.insert(inst, stack_map);
         debug_assert!(old_entry.is_none());
@@ -921,7 +958,7 @@ impl<I: VCodeInst> VCode<I> {
                                 // due to borrowck issues because parts of
                                 // `self` are borrowed mutably elsewhere in this
                                 // function.
-                                let index = InsnIndex::new(self.num_insts() - iix.index() - 1);
+                                let index = iix.to_backwards_insn_index(self.num_insts());
                                 let user_stack_map = self.user_stack_maps.remove(&index);
                                 let user_stack_map_disasm =
                                     user_stack_map.as_ref().map(|m| format!("  ; {m:?}"));
@@ -1276,7 +1313,7 @@ impl<I: VCodeInst> VCode<I> {
 
     /// Get the user stack map associated with the given forward instruction index.
     pub fn get_user_stack_map(&self, inst: InsnIndex) -> Option<&ir::UserStackMap> {
-        let index = InsnIndex::new(self.num_insts() - inst.index() - 1);
+        let index = inst.to_backwards_insn_index(self.num_insts());
         self.user_stack_maps.get(&index)
     }
 }
