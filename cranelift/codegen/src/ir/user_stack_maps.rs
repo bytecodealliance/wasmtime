@@ -29,13 +29,19 @@
 //! contrast to the old system and its `r64` values).
 
 use crate::ir;
+use cranelift_bitset::CompoundBitSet;
+use cranelift_entity::PrimaryMap;
 use smallvec::SmallVec;
 
 pub(crate) type UserStackMapEntryVec = SmallVec<[UserStackMapEntry; 4]>;
 
-/// A stack map entry describes a GC-managed value and its location at a
-/// particular instruction.
-#[derive(Clone, PartialEq, Hash)]
+/// A stack map entry describes a single GC-managed value and its location on
+/// the stack.
+///
+/// A stack map entry is associated with a particular instruction, and that
+/// instruction must be a safepoint. The GC-managed value must be stored in the
+/// described location across this entry's instruction.
+#[derive(Clone, Debug, PartialEq, Hash)]
 #[cfg_attr(
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
@@ -49,4 +55,47 @@ pub struct UserStackMapEntry {
 
     /// The offset within the stack slot where this entry's value can be found.
     pub offset: u32,
+}
+
+/// A compiled stack map, describing the location of many GC-managed values.
+///
+/// A stack map is associated with a particular instruction, and that
+/// instruction is a safepoint.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Deserialize, serde_derive::Serialize)
+)]
+pub struct UserStackMap {
+    by_type: SmallVec<[(ir::Type, CompoundBitSet); 1]>,
+}
+
+impl UserStackMap {
+    /// Coalesce the given entries into a new `UserStackMap`.
+    pub fn new(
+        entries: &[UserStackMapEntry],
+        stack_slot_offsets: &PrimaryMap<ir::StackSlot, u32>,
+    ) -> Self {
+        let mut by_type = SmallVec::<[(ir::Type, CompoundBitSet); 1]>::default();
+
+        for entry in entries {
+            let offset = stack_slot_offsets[entry.slot] + entry.offset;
+            let offset = usize::try_from(offset).unwrap();
+
+            // Don't bother trying to avoid an `O(n)` search here: `n` is
+            // basically always one in practice; even if it isn't, there aren't
+            // that many different CLIF types.
+            let index = by_type
+                .iter()
+                .position(|(ty, _)| *ty == entry.ty)
+                .unwrap_or_else(|| {
+                    by_type.push((entry.ty, CompoundBitSet::with_capacity(offset + 1)));
+                    by_type.len() - 1
+                });
+
+            by_type[index].1.insert(offset);
+        }
+
+        UserStackMap { by_type }
+    }
 }

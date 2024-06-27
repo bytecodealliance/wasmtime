@@ -1,0 +1,250 @@
+test compile precise-output
+set unwind_info=false
+set enable_probestack=false
+target riscv64
+
+function %foo() system_v {
+    ss0 = explicit_slot 12, align = 4
+    sig0 = (i32) system_v
+    fn0 = colocated u0:0 sig0
+
+block0:
+    v0 = iconst.i32 0
+    v1 = iconst.i32 1
+    v2 = iconst.i32 2
+    v3 = iconst.i32 3
+
+    stack_store v0, ss0
+    stack_store v1, ss0+4
+    stack_store v2, ss0+8
+    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4, i32 @ ss0+8]
+
+    stack_store v1, ss0
+    stack_store v2, ss0+4
+    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4]
+
+    stack_store v2, ss0
+    call fn0(v1), stack_map=[i32 @ ss0+0]
+
+    call fn0(v2)
+
+    return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-48
+;   sd s1,40(sp)
+;   sd s2,32(sp)
+;   sd s3,24(sp)
+; block0:
+;   li a0,0
+;   mv s3,a0
+;   li a0,1
+;   li a2,2
+;   sw zero,0(slot)
+;   sw a0,4(slot)
+;   mv s1,a0
+;   sw a2,8(slot)
+;   mv s2,a2
+;   mv a0,s3
+;   call userextname0
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})] }
+;   mv a0,s1
+;   sw a0,0(slot)
+;   mv a0,s2
+;   sw a0,4(slot)
+;   mv s2,a0
+;   mv a0,s3
+;   call userextname0
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})] }
+;   mv a0,s2
+;   sw a0,0(slot)
+;   mv a0,s1
+;   call userextname0
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})] }
+;   mv a0,s2
+;   call userextname0
+;   ld s1,40(sp)
+;   ld s2,32(sp)
+;   ld s3,24(sp)
+;   addi sp,sp,48
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x30
+;   sd s1, 0x28(sp)
+;   sd s2, 0x20(sp)
+;   sd s3, 0x18(sp)
+; block1: ; offset 0x20
+;   mv a0, zero
+;   mv s3, a0
+;   addi a0, zero, 1
+;   addi a2, zero, 2
+;   sw zero, 0(sp)
+;   sw a0, 4(sp)
+;   mv s1, a0
+;   sw a2, 8(sp)
+;   mv s2, a2
+;   mv a0, s3
+;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
+;   jalr ra
+;   mv a0, s1
+;   sw a0, 0(sp)
+;   mv a0, s2
+;   sw a0, 4(sp)
+;   mv s2, a0
+;   mv a0, s3
+;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
+;   jalr ra
+;   mv a0, s2
+;   sw a0, 0(sp)
+;   mv a0, s1
+;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
+;   jalr ra
+;   mv a0, s2
+;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
+;   jalr ra
+;   ld s1, 0x28(sp)
+;   ld s2, 0x20(sp)
+;   ld s3, 0x18(sp)
+;   addi sp, sp, 0x30
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %different_types(i8, i16, i32, i64, f32, f64) -> i8, i16, i32, i64, f32, f64 {
+    ss0 = explicit_slot 1
+    ss1 = explicit_slot 2, align = 2
+    ss2 = explicit_slot 8, align = 4
+    ss3 = explicit_slot 16, align = 8
+    ss4 = explicit_slot 48, align = 16
+    sig0 = () system_v
+    fn0 = colocated u0:0 sig0
+
+block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
+    stack_store v0, ss0
+    stack_store v1, ss1
+    stack_store v2, ss2
+    stack_store v4, ss2+4
+    stack_store v3, ss3
+    stack_store v5, ss3+8
+    call fn0(), stack_map=[i8 @ ss0+0, i16 @ ss1+0, i32 @ ss2+0, f32 @ ss2+4, i64 @ ss3+0, f64 @ ss3+8]
+    return v0, v1, v2, v3, v4, v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-160
+;   sd s1,152(sp)
+;   sd s2,144(sp)
+;   sd s6,136(sp)
+;   sd s8,128(sp)
+;   sd s10,120(sp)
+;   fsd fs0,112(sp)
+;   fsd fs2,104(sp)
+; block0:
+;   mv s10,a4
+;   sb a0,0(slot)
+;   mv s8,a0
+;   sh a1,8(slot)
+;   mv s6,a1
+;   sw a2,16(slot)
+;   mv s2,a2
+;   fsw fa0,20(slot)
+;   fmv.d fs2,fa0
+;   sd a3,24(slot)
+;   mv s1,a3
+;   fsd fa1,32(slot)
+;   fmv.d fs0,fa1
+;   call userextname0
+;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})] }
+;   mv a2,s2
+;   mv a4,s10
+;   sw a2,0(a4)
+;   mv a3,s1
+;   sd a3,8(a4)
+;   mv a0,s8
+;   mv a1,s6
+;   fmv.d fa0,fs2
+;   fmv.d fa1,fs0
+;   ld s1,152(sp)
+;   ld s2,144(sp)
+;   ld s6,136(sp)
+;   ld s8,128(sp)
+;   ld s10,120(sp)
+;   fld fs0,112(sp)
+;   fld fs2,104(sp)
+;   addi sp,sp,160
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0xa0
+;   sd s1, 0x98(sp)
+;   sd s2, 0x90(sp)
+;   sd s6, 0x88(sp)
+;   sd s8, 0x80(sp)
+;   sd s10, 0x78(sp)
+;   fsd fs0, 0x70(sp)
+;   fsd fs2, 0x68(sp)
+; block1: ; offset 0x30
+;   mv s10, a4
+;   sb a0, 0(sp)
+;   mv s8, a0
+;   sh a1, 8(sp)
+;   mv s6, a1
+;   sw a2, 0x10(sp)
+;   mv s2, a2
+;   fsw fa0, 0x14(sp)
+;   fmv.d fs2, fa0
+;   sd a3, 0x18(sp)
+;   mv s1, a3
+;   fsd fa1, 0x20(sp)
+;   fmv.d fs0, fa1
+;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
+;   jalr ra
+;   mv a2, s2
+;   mv a4, s10
+;   sw a2, 0(a4)
+;   mv a3, s1
+;   sd a3, 8(a4)
+;   mv a0, s8
+;   mv a1, s6
+;   fmv.d fa0, fs2
+;   fmv.d fa1, fs0
+;   ld s1, 0x98(sp)
+;   ld s2, 0x90(sp)
+;   ld s6, 0x88(sp)
+;   ld s8, 0x80(sp)
+;   ld s10, 0x78(sp)
+;   fld fs0, 0x70(sp)
+;   fld fs2, 0x68(sp)
+;   addi sp, sp, 0xa0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

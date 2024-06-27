@@ -1599,9 +1599,15 @@ pub(crate) fn emit(
             opcode,
             info: call_info,
         } => {
-            if let Some(s) = state.take_stack_map() {
+            let (stack_map, user_stack_map) = state.take_stack_map();
+            if let Some(s) = stack_map {
                 sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
             }
+            if let Some(s) = user_stack_map {
+                let offset = sink.cur_offset() + 5;
+                sink.push_user_stack_map(state, offset, s);
+            }
+
             sink.put1(0xE8);
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
@@ -1696,9 +1702,16 @@ pub(crate) fn emit(
                     );
                 }
             }
-            if let Some(s) = state.take_stack_map() {
+
+            let (stack_map, user_stack_map) = state.take_stack_map();
+            if let Some(s) = stack_map {
                 sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
             }
+            if let Some(s) = user_stack_map {
+                let offset = sink.cur_offset();
+                sink.push_user_stack_map(state, offset, s);
+            }
+
             if opcode.is_call() {
                 sink.add_call_site(*opcode);
             }

@@ -59,8 +59,10 @@
 //!
 //! ```plain
 //!   (high address)
-//!
-//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | caller frames             |
+//!                              |          ...              |
+//!                              +===========================+
 //!                              |          ...              |
 //!                              | stack args                |
 //! Canonical Frame Address -->  | (accessed via FP)         |
@@ -68,24 +70,24 @@
 //! SP at function entry ----->  | return address            |
 //!                              +---------------------------+
 //! FP after prologue -------->  | FP (pushed by prologue)   |
-//!                              +---------------------------+
-//!                              |          ...              |
-//!                              | clobbered callee-saves    |
-//! unwind-frame base -------->  | (pushed by prologue)      |
-//!                              +---------------------------+
-//!                              |          ...              |
-//!                              | spill slots               |
-//!                              | (accessed via SP)         |
-//!                              |          ...              |
-//!                              | stack slots               |
-//!                              | (accessed via SP)         |
-//!                              | (alloc'd by prologue)     |
-//!                              +---------------------------+
-//!                              | [alignment as needed]     |
-//!                              |          ...              |
-//!                              | args for largest call     |
-//! SP ----------------------->  | (alloc'd by prologue)     |
-//!                              +---------------------------+
+//!                              +---------------------------+   -----
+//!                              |          ...              |     |
+//!                              | clobbered callee-saves    |     |
+//! unwind-frame base -------->  | (pushed by prologue)      |     |
+//!                              +---------------------------+     |
+//!                              |          ...              |     |
+//!                              | spill slots               |     |
+//!                              | (accessed via SP)         |   active
+//!                              |          ...              |    size
+//!                              | stack slots               |     |
+//!                              | (accessed via SP)         |     |
+//!                              | (alloc'd by prologue)     |     |
+//!                              +---------------------------+     |
+//!                              | [alignment as needed]     |     |
+//!                              |          ...              |     |
+//!                              | args for largest call     |     |
+//! SP ----------------------->  | (alloc'd by prologue)     |     |
+//!                              +===========================+   -----
 //!
 //!   (low address)
 //! ```
@@ -1011,6 +1013,12 @@ impl FrameLayout {
         );
         debug_assert!(floats.iter().all(|r| r.to_reg().class() == RegClass::Float));
         (ints, floats)
+    }
+
+    /// The size of FP to SP while the frame is active (not during prologue
+    /// setup or epilogue tear down).
+    pub fn active_size(&self) -> u32 {
+        self.outgoing_args_size + self.fixed_frame_storage_size + self.clobber_size
     }
 }
 

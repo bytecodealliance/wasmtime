@@ -1,7 +1,7 @@
 //! S390x ISA: binary code emission.
 
 use crate::binemit::StackMap;
-use crate::ir::{MemFlags, TrapCode};
+use crate::ir::{self, MemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use cranelift_control::ControlPlane;
@@ -1306,11 +1306,19 @@ fn put_with_trap(sink: &mut MachBuffer<Inst>, enc: &[u8], trap_code: TrapCode) {
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
     pub(crate) initial_sp_offset: i64,
-    /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
+
+    /// Safepoint stack map for upcoming instruction, as provided to
+    /// `pre_safepoint()`.
     stack_map: Option<StackMap>,
+
+    /// The user stack map for the upcoming instruction, as provided to
+    /// `pre_safepoint()`.
+    user_stack_map: Option<ir::UserStackMap>,
+
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
+
     frame_layout: FrameLayout,
 }
 
@@ -1319,13 +1327,19 @@ impl MachInstEmitState<Inst> for EmitState {
         EmitState {
             initial_sp_offset: abi.frame_size() as i64,
             stack_map: None,
+            user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(&mut self, stack_map: StackMap) {
-        self.stack_map = Some(stack_map);
+    fn pre_safepoint(
+        &mut self,
+        stack_map: Option<StackMap>,
+        user_stack_map: Option<ir::UserStackMap>,
+    ) {
+        self.stack_map = stack_map;
+        self.user_stack_map = user_stack_map;
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -1342,8 +1356,8 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl EmitState {
-    fn take_stack_map(&mut self) -> Option<StackMap> {
-        self.stack_map.take()
+    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
+        (self.stack_map.take(), self.user_stack_map.take())
     }
 
     fn clear_post_insn(&mut self) {
@@ -3243,9 +3257,15 @@ impl Inst {
                     _ => unreachable!(),
                 }
 
-                if let Some(s) = state.take_stack_map() {
+                let (stack_map, user_stack_map) = state.take_stack_map();
+                if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
                 }
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset() + 6;
+                    sink.push_user_stack_map(state, offset, s);
+                }
+
                 put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
@@ -3255,10 +3275,16 @@ impl Inst {
                 debug_assert_eq!(link.to_reg(), gpr(14));
                 let rn = info.rn;
 
-                let opcode = 0x0d; // BASR
-                if let Some(s) = state.take_stack_map() {
+                let (stack_map, user_stack_map) = state.take_stack_map();
+                if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
                 }
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset() + 2;
+                    sink.push_user_stack_map(state, offset, s);
+                }
+
+                let opcode = 0x0d; // BASR
                 put(sink, &enc_rr(opcode, link.to_reg(), rn));
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);

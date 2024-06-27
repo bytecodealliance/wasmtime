@@ -46,20 +46,28 @@ pub enum EmitVState {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
+    /// Safepoint stack map for upcoming instruction, as provided to
+    /// `pre_safepoint()`.
     stack_map: Option<StackMap>,
+
+    /// The user stack map for the upcoming instruction, as provided to
+    /// `pre_safepoint()`.
+    user_stack_map: Option<ir::UserStackMap>,
+
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
+
     /// Vector State
     /// Controls the current state of the vector unit at the emission point.
     vstate: EmitVState,
+
     frame_layout: FrameLayout,
 }
 
 impl EmitState {
-    fn take_stack_map(&mut self) -> Option<StackMap> {
-        self.stack_map.take()
+    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
+        (self.stack_map.take(), self.user_stack_map.take())
     }
 }
 
@@ -70,14 +78,20 @@ impl MachInstEmitState<Inst> for EmitState {
     ) -> Self {
         EmitState {
             stack_map: None,
+            user_stack_map: None,
             ctrl_plane,
             vstate: EmitVState::Unknown,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(&mut self, stack_map: StackMap) {
-        self.stack_map = Some(stack_map);
+    fn pre_safepoint(
+        &mut self,
+        stack_map: Option<StackMap>,
+        user_stack_map: Option<ir::UserStackMap>,
+    ) {
+        self.stack_map = stack_map;
+        self.user_stack_map = user_stack_map;
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -1134,12 +1148,20 @@ impl Inst {
                     sink.add_call_site(info.opcode);
                 }
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
-                if let Some(s) = state.take_stack_map() {
+
+                let (stack_map, user_stack_map) = state.take_stack_map();
+                if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
                 }
+
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
+
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset();
+                    sink.push_user_stack_map(state, offset, s);
+                }
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {
@@ -1158,8 +1180,13 @@ impl Inst {
                 }
                 .emit(sink, emit_info, state);
 
-                if let Some(s) = state.take_stack_map() {
+                let (stack_map, user_stack_map) = state.take_stack_map();
+                if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
+                }
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset();
+                    sink.push_user_stack_map(state, offset, s);
                 }
 
                 if info.opcode.is_call() {

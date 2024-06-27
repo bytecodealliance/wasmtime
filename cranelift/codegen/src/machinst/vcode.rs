@@ -40,6 +40,33 @@ use std::fmt;
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;
 
+/// Extension trait for `InsnIndex` to allow conversion to a
+/// `BackwardsInsnIndex`.
+trait ToBackwardsInsnIndex {
+    fn to_backwards_insn_index(&self, num_insts: usize) -> BackwardsInsnIndex;
+}
+
+impl ToBackwardsInsnIndex for InsnIndex {
+    fn to_backwards_insn_index(&self, num_insts: usize) -> BackwardsInsnIndex {
+        BackwardsInsnIndex::new(num_insts - self.index() - 1)
+    }
+}
+
+/// An index referring to an instruction in the VCode when it is backwards,
+/// during VCode construction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(::serde::Serialize, ::serde::Deserialize)
+)]
+pub struct BackwardsInsnIndex(InsnIndex);
+
+impl BackwardsInsnIndex {
+    pub fn new(i: usize) -> Self {
+        BackwardsInsnIndex(InsnIndex::new(i))
+    }
+}
+
 /// Index referring to a basic block in VCode.
 pub type BlockIndex = regalloc2::Block;
 
@@ -66,6 +93,14 @@ pub struct VCode<I: VCodeInst> {
 
     /// Lowered machine instructions in order corresponding to the original IR.
     insts: Vec<I>,
+
+    /// A map from backwards instruction index to the user stack map for that
+    /// instruction.
+    ///
+    /// This is a sparse side table that only has entries for instructions that
+    /// are safepoints, and only for a subset of those that have an associated
+    /// user stack map.
+    user_stack_maps: FxHashMap<BackwardsInsnIndex, ir::UserStackMap>,
 
     /// Operands: pre-regalloc references to virtual registers with
     /// constraints, in one flattened array. This allows the regalloc
@@ -251,7 +286,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
         direction: VCodeBuildDirection,
-    ) -> VCodeBuilder<I> {
+    ) -> Self {
         let vcode = VCode::new(sigs, abi, emit_info, block_order, constants);
 
         VCodeBuilder {
@@ -565,6 +600,17 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
         self.vcode
     }
+
+    /// Add a user stack map for the associated instruction.
+    pub fn add_user_stack_map(
+        &mut self,
+        inst: BackwardsInsnIndex,
+        entries: &[ir::UserStackMapEntry],
+    ) {
+        let stack_map = ir::UserStackMap::new(entries, self.vcode.abi.sized_stackslot_offsets());
+        let old_entry = self.vcode.user_stack_maps.insert(inst, stack_map);
+        debug_assert!(old_entry.is_none());
+    }
 }
 
 /// Is this type a reference type?
@@ -582,12 +628,13 @@ impl<I: VCodeInst> VCode<I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
-    ) -> VCode<I> {
+    ) -> Self {
         let n_blocks = block_order.lowered_order().len();
         VCode {
             sigs,
             vreg_types: vec![],
             insts: Vec::with_capacity(10 * n_blocks),
+            user_stack_maps: FxHashMap::default(),
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Ranges::with_capacity(10 * n_blocks),
             clobbers: FxHashMap::default(),
@@ -864,7 +911,7 @@ impl<I: VCodeInst> VCode<I> {
 
                         // If this is a safepoint, compute a stack map
                         // and pass it to the emit state.
-                        if self.insts[iix.index()].is_safepoint() {
+                        let stack_map_disasm = if self.insts[iix.index()].is_safepoint() {
                             let mut safepoint_slots: SmallVec<[SpillSlot; 8]> = smallvec![];
                             // Find the contiguous range of
                             // (progpoint, allocation) safepoint slot
@@ -888,13 +935,36 @@ impl<I: VCodeInst> VCode<I> {
                                 let slot = alloc.as_stack().unwrap();
                                 safepoint_slots.push(slot);
                             }
-                            if !safepoint_slots.is_empty() {
-                                let stack_map = self
-                                    .abi
-                                    .spillslots_to_stack_map(&safepoint_slots[..], &state);
-                                state.pre_safepoint(stack_map);
-                            }
-                        }
+
+                            let stack_map = if safepoint_slots.is_empty() {
+                                None
+                            } else {
+                                Some(
+                                    self.abi
+                                        .spillslots_to_stack_map(&safepoint_slots[..], &state),
+                                )
+                            };
+
+                            let (user_stack_map, user_stack_map_disasm) = {
+                                // The `user_stack_maps` is keyed by reverse
+                                // instruction index, so we must flip the
+                                // index. We can't put this into a helper method
+                                // due to borrowck issues because parts of
+                                // `self` are borrowed mutably elsewhere in this
+                                // function.
+                                let index = iix.to_backwards_insn_index(self.num_insts());
+                                let user_stack_map = self.user_stack_maps.remove(&index);
+                                let user_stack_map_disasm =
+                                    user_stack_map.as_ref().map(|m| format!("  ; {m:?}"));
+                                (user_stack_map, user_stack_map_disasm)
+                            };
+
+                            state.pre_safepoint(stack_map, user_stack_map);
+
+                            user_stack_map_disasm
+                        } else {
+                            None
+                        };
 
                         // If the instruction we are about to emit is
                         // a return, place an epilogue at this point
@@ -932,6 +1002,10 @@ impl<I: VCodeInst> VCode<I> {
                                 &mut buffer,
                                 &mut state,
                             );
+                            if let Some(stack_map_disasm) = stack_map_disasm {
+                                disasm.push_str(&stack_map_disasm);
+                                disasm.push('\n');
+                            }
                         }
                     }
 
@@ -1013,6 +1087,12 @@ impl<I: VCodeInst> VCode<I> {
                 }
             }
         }
+
+        debug_assert!(
+            self.user_stack_maps.is_empty(),
+            "any stack maps should have been consumed by instruction emission, still have: {:#?}",
+            self.user_stack_maps,
+        );
 
         // Do any optimizations on branches at tail of buffer, as if we had
         // bound one last label.
@@ -1224,6 +1304,12 @@ impl<I: VCodeInst> VCode<I> {
             .map(|o| o.vreg())
             .any(|vreg| self.facts[vreg.vreg()].is_some())
     }
+
+    /// Get the user stack map associated with the given forward instruction index.
+    pub fn get_user_stack_map(&self, inst: InsnIndex) -> Option<&ir::UserStackMap> {
+        let index = inst.to_backwards_insn_index(self.num_insts());
+        self.user_stack_maps.get(&index)
+    }
 }
 
 impl<I: VCodeInst> std::ops::Index<InsnIndex> for VCode<I> {
@@ -1384,6 +1470,9 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
                             }
                         }
                     }
+                }
+                if let Some(user_stack_map) = self.get_user_stack_map(InsnIndex::new(inst)) {
+                    writeln!(f, "    {user_stack_map:?}")?;
                 }
             }
         }
