@@ -1105,6 +1105,7 @@ jobs:
       - determine
       - miri
       - build-preview1-component-adapter
+      - build-preview1-component-adapter-provider
       - build-wasmtime-target-wasm32
       - test-min-platform-example
       - check_js
