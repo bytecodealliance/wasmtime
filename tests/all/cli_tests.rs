@@ -1507,7 +1507,7 @@ mod test_programs {
         }
 
         /// Completes this server gracefully by printing the output on failure.
-        fn finish(mut self) -> Result<String> {
+        fn finish(mut self) -> Result<(String, String)> {
             let mut child = self.child.take().unwrap();
 
             // If the child process has already exited then collect the output
@@ -1525,7 +1525,10 @@ mod test_programs {
                 bail!("child failed {output:?}");
             }
 
-            Ok(String::from_utf8_lossy(&output.stderr).into_owned())
+            Ok((
+                String::from_utf8_lossy(&output.stdout).into_owned(),
+                String::from_utf8_lossy(&output.stderr).into_owned(),
+            ))
         }
 
         /// Send a request to this server and wait for the response.
@@ -1660,7 +1663,7 @@ mod test_programs {
             )
             .await;
         assert!(result.is_err());
-        let stderr = server.finish()?;
+        let (_, stderr) = server.finish()?;
         assert!(
             stderr.contains("maximum concurrent memory limit of 0 reached"),
             "bad stderr: {stderr}",
@@ -1763,6 +1766,51 @@ mod test_programs {
                 .arg(format!("--addr={addr}"))
                 .arg(wasm),
         )?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_with_print() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        for _ in 0..2 {
+            let resp = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await?;
+            assert!(resp.status().is_success());
+        }
+
+        let (out, err) = server.finish()?;
+        assert_eq!(
+            out,
+            "\
+stdout [0] :: this is half a print to stdout
+stdout [0] :: \n\
+stdout [0] :: after empty
+stdout [1] :: this is half a print to stdout
+stdout [1] :: \n\
+stdout [1] :: after empty
+"
+        );
+        assert_eq!(
+            err,
+            "\
+stderr [0] :: this is half a print to stderr
+stderr [0] :: \n\
+stderr [0] :: after empty
+stderr [1] :: this is half a print to stderr
+stderr [1] :: \n\
+stderr [1] :: after empty
+"
+        );
 
         Ok(())
     }
