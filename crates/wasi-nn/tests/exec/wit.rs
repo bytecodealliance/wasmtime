@@ -6,6 +6,7 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::bindings::sync::Command;
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{wit::WasiNnCtx, Backend, InMemoryRegistry};
 
 /// Run a wasi-nn test program. This is modeled after
@@ -15,7 +16,9 @@ pub fn run(path: &str, backend: Backend, preload_model: bool) -> Result<()> {
     let path = Path::new(path);
     let engine = Engine::new(&Config::new())?;
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi_nn::wit::add_to_linker(&mut linker)?;
+    wasmtime_wasi_nn::wit::add_to_linker(&mut linker, |c: &mut Ctx| {
+        WasiNnView::new(&mut c.table, &mut c.wasi_nn)
+    })?;
     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
     let module = Component::from_file(&engine, path)?;
     let mut store = Store::new(&engine, Ctx::new(&artifacts_dir(), preload_model, backend)?);
@@ -62,16 +65,6 @@ impl Ctx {
 impl wasmtime_wasi::WasiView for Ctx {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-}
-
-impl wasmtime_wasi_nn::wit::WasiNnView for Ctx {
-    fn ctx(&mut self) -> &mut WasiNnCtx {
-        &mut self.wasi_nn
     }
 
     fn table(&mut self) -> &mut ResourceTable {

@@ -18,7 +18,7 @@ use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::WasiView;
 
 #[cfg(feature = "wasi-nn")]
-use wasmtime_wasi_nn::wit::WasiNnCtx;
+use wasmtime_wasi_nn::wit::WasiNnView;
 
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
@@ -639,7 +639,17 @@ impl RunCommand {
                     }
                     #[cfg(feature = "component-model")]
                     CliLinker::Component(linker) => {
-                        wasmtime_wasi_nn::wit::add_to_linker(linker)?;
+                        wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
+                            let preview2_ctx =
+                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
+                            let preview2_ctx = Arc::get_mut(preview2_ctx)
+                                .expect("wasmtime_wasi is not compatible with threads")
+                                .get_mut()
+                                .unwrap();
+                            let nn_ctx = Arc::get_mut(h.wasi_nn_wit.as_mut().unwrap())
+                                .expect("wasi-nn is not implemented with multi-threading support");
+                            WasiNnView::new(preview2_ctx.table(), nn_ctx)
+                        })?;
                         store.data_mut().wasi_nn_wit = Some(Arc::new(
                             wasmtime_wasi_nn::wit::WasiNnCtx::new(backends, registry),
                         ));
@@ -825,18 +835,6 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     }
 
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        self.preview2_ctx().table()
-    }
-}
-
-#[cfg(feature = "wasi-nn")]
-impl wasmtime_wasi_nn::wit::WasiNnView for Host {
-    fn ctx(&mut self) -> &mut WasiNnCtx {
-        let ctx = self.wasi_nn_wit.as_mut().unwrap();
-        Arc::get_mut(ctx).expect("wasmtime_wasi_nn is not compatible with threads")
-    }
-
-    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
         self.preview2_ctx().table()
     }
 }
