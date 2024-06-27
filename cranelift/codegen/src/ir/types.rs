@@ -14,7 +14,7 @@ use target_lexicon::{PointerWidth, Triple};
 ///
 /// Basic integer types: `I8`, `I16`, `I32`, `I64`, and `I128`. These types are sign-agnostic.
 ///
-/// Basic floating point types: `F32` and `F64`. IEEE single and double precision.
+/// Basic floating point types: `F16`, `F32`, `F64`, and `F128`. IEEE half, single, double, and quadruple precision.
 ///
 /// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float type.
 ///
@@ -56,10 +56,10 @@ impl Type {
     pub fn log2_lane_bits(self) -> u32 {
         match self.lane_type() {
             I8 => 3,
-            I16 => 4,
+            I16 | F16 => 4,
             I32 | F32 | R32 => 5,
             I64 | F64 | R64 => 6,
-            I128 => 7,
+            I128 | F128 => 7,
             _ => 0,
         }
     }
@@ -68,10 +68,10 @@ impl Type {
     pub fn lane_bits(self) -> u32 {
         match self.lane_type() {
             I8 => 8,
-            I16 => 16,
+            I16 | F16 => 16,
             I32 | F32 | R32 => 32,
             I64 | F64 | R64 => 64,
-            I128 => 128,
+            I128 | F128 => 128,
             _ => 0,
         }
     }
@@ -136,11 +136,11 @@ impl Type {
         // Replace the low 4 bits with the boolean version, preserve the high 4 bits.
         self.replace_lanes(match self.lane_type() {
             I8 => I8,
-            I16 => I16,
+            I16 | F16 => I16,
             I32 | F32 => I32,
             I64 | F64 => I64,
             R32 | R64 => panic!("Reference types are not truthy"),
-            I128 => I128,
+            I128 | F128 => I128,
             _ => I8,
         })
     }
@@ -161,10 +161,10 @@ impl Type {
     pub fn as_int(self) -> Self {
         self.replace_lanes(match self.lane_type() {
             I8 => I8,
-            I16 => I16,
+            I16 | F16 => I16,
             I32 | F32 | R32 => I32,
             I64 | F64 | R64 => I64,
-            I128 => I128,
+            I128 | F128 => I128,
             _ => unimplemented!(),
         })
     }
@@ -177,7 +177,9 @@ impl Type {
             I32 => I16,
             I64 => I32,
             I128 => I64,
+            F32 => F16,
             F64 => F32,
+            F128 => F64,
             _ => return None,
         }))
     }
@@ -190,7 +192,9 @@ impl Type {
             I16 => I32,
             I32 => I64,
             I64 => I128,
+            F16 => F32,
             F32 => F64,
+            F64 => F128,
             _ => return None,
         }))
     }
@@ -235,7 +239,7 @@ impl Type {
     /// Is this a scalar floating point type?
     pub fn is_float(self) -> bool {
         match self {
-            F32 | F64 => true,
+            F16 | F32 | F64 | F128 => true,
             _ => false,
         }
     }
@@ -486,7 +490,9 @@ mod tests {
         assert_eq!(I64, I64.lane_type());
         assert_eq!(I128, I128.lane_type());
         assert_eq!(F32, F32.lane_type());
+        assert_eq!(F16, F16.lane_type());
         assert_eq!(F64, F64.lane_type());
+        assert_eq!(F128, F128.lane_type());
         assert_eq!(I32, I32X4.lane_type());
         assert_eq!(F64, F64X2.lane_type());
         assert_eq!(R32, R32.lane_type());
@@ -498,8 +504,10 @@ mod tests {
         assert_eq!(I32.lane_bits(), 32);
         assert_eq!(I64.lane_bits(), 64);
         assert_eq!(I128.lane_bits(), 128);
+        assert_eq!(F16.lane_bits(), 16);
         assert_eq!(F32.lane_bits(), 32);
         assert_eq!(F64.lane_bits(), 64);
+        assert_eq!(F128.lane_bits(), 128);
         assert_eq!(R32.lane_bits(), 32);
         assert_eq!(R64.lane_bits(), 64);
     }
@@ -514,8 +522,10 @@ mod tests {
         assert_eq!(I32X4.half_width(), Some(I16X4));
         assert_eq!(I64.half_width(), Some(I32));
         assert_eq!(I128.half_width(), Some(I64));
-        assert_eq!(F32.half_width(), None);
+        assert_eq!(F16.half_width(), None);
+        assert_eq!(F32.half_width(), Some(F16));
         assert_eq!(F64.half_width(), Some(F32));
+        assert_eq!(F128.half_width(), Some(F64));
 
         assert_eq!(INVALID.double_width(), None);
         assert_eq!(I8.double_width(), Some(I16));
@@ -524,8 +534,10 @@ mod tests {
         assert_eq!(I32X4.double_width(), Some(I64X4));
         assert_eq!(I64.double_width(), Some(I128));
         assert_eq!(I128.double_width(), None);
+        assert_eq!(F16.double_width(), Some(F32));
         assert_eq!(F32.double_width(), Some(F64));
-        assert_eq!(F64.double_width(), None);
+        assert_eq!(F64.double_width(), Some(F128));
+        assert_eq!(F128.double_width(), None);
     }
 
     #[test]
@@ -558,14 +570,18 @@ mod tests {
         // Conversions to and from vectors.
         assert_eq!(I8.by(16).unwrap().vector_to_dynamic(), Some(I8X16XN));
         assert_eq!(I16.by(8).unwrap().vector_to_dynamic(), Some(I16X8XN));
+        assert_eq!(F16.by(8).unwrap().vector_to_dynamic(), Some(F16X8XN));
         assert_eq!(I32.by(4).unwrap().vector_to_dynamic(), Some(I32X4XN));
         assert_eq!(F32.by(4).unwrap().vector_to_dynamic(), Some(F32X4XN));
         assert_eq!(F64.by(2).unwrap().vector_to_dynamic(), Some(F64X2XN));
         assert_eq!(I128.by(2).unwrap().vector_to_dynamic(), Some(I128X2XN));
+        assert_eq!(F128.by(2).unwrap().vector_to_dynamic(), Some(F128X2XN));
 
         assert_eq!(I128X2XN.dynamic_to_vector(), Some(I128X2));
+        assert_eq!(F16X4XN.dynamic_to_vector(), Some(F16X4));
         assert_eq!(F32X4XN.dynamic_to_vector(), Some(F32X4));
         assert_eq!(F64X4XN.dynamic_to_vector(), Some(F64X4));
+        assert_eq!(F128X4XN.dynamic_to_vector(), Some(F128X4));
         assert_eq!(I32X2XN.dynamic_to_vector(), Some(I32X2));
         assert_eq!(I32X8XN.dynamic_to_vector(), Some(I32X8));
         assert_eq!(I16X16XN.dynamic_to_vector(), Some(I16X16));

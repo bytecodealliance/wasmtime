@@ -9,7 +9,7 @@ use crate::cdsl::types::{LaneType, ReferenceType, ValueType};
 
 const MAX_LANES: u16 = 256;
 const MAX_BITS: u16 = 128;
-const MAX_FLOAT_BITS: u16 = 64;
+const MAX_FLOAT_BITS: u16 = 128;
 
 /// Type variables can be used in place of concrete types when defining
 /// instructions. This makes the instructions *polymorphic*.
@@ -159,7 +159,7 @@ impl TypeVar {
                     "can't halve all integer types"
                 );
                 assert!(
-                    ts.floats.is_empty() || *ts.floats.iter().min().unwrap() > 32,
+                    ts.floats.is_empty() || *ts.floats.iter().min().unwrap() > 16,
                     "can't halve all float types"
                 );
             }
@@ -179,7 +179,7 @@ impl TypeVar {
                     "can't halve all integer types"
                 );
                 assert!(
-                    ts.floats.is_empty() || *ts.floats.iter().min().unwrap() > 32,
+                    ts.floats.is_empty() || *ts.floats.iter().min().unwrap() > 16,
                     "can't halve all float types"
                 );
                 assert!(
@@ -464,7 +464,7 @@ impl TypeSet {
     fn half_width(&self) -> TypeSet {
         let mut copy = self.clone();
         copy.ints = NumSet::from_iter(self.ints.iter().filter(|&&x| x > 8).map(|&x| x / 2));
-        copy.floats = NumSet::from_iter(self.floats.iter().filter(|&&x| x > 32).map(|&x| x / 2));
+        copy.floats = NumSet::from_iter(self.floats.iter().filter(|&&x| x > 16).map(|&x| x / 2));
         copy
     }
 
@@ -643,7 +643,7 @@ impl TypeSetBuilder {
             range_to_set(self.simd_lanes.to_range(min_lanes..MAX_LANES, Some(1))),
             range_to_set(self.dynamic_simd_lanes.to_range(2..MAX_LANES, None)),
             range_to_set(self.ints.to_range(8..MAX_BITS, None)),
-            range_to_set(self.floats.to_range(32..64, None)),
+            range_to_set(self.floats.to_range(16..MAX_FLOAT_BITS, None)),
             range_to_set(self.refs.to_range(32..64, None)),
         )
     }
@@ -711,7 +711,7 @@ fn test_typevar_builder() {
 
     let type_set = TypeSetBuilder::new().floats(Interval::All).build();
     assert_eq!(type_set.lanes, num_set![1]);
-    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert!(type_set.ints.is_empty());
 
     let type_set = TypeSetBuilder::new()
@@ -720,7 +720,7 @@ fn test_typevar_builder() {
         .includes_scalars(false)
         .build();
     assert_eq!(type_set.lanes, num_set![2, 4, 8, 16, 32, 64, 128, 256]);
-    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert!(type_set.ints.is_empty());
 
     let type_set = TypeSetBuilder::new()
@@ -729,7 +729,7 @@ fn test_typevar_builder() {
         .includes_scalars(true)
         .build();
     assert_eq!(type_set.lanes, num_set![1, 2, 4, 8, 16, 32, 64, 128, 256]);
-    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert!(type_set.ints.is_empty());
 
     let type_set = TypeSetBuilder::new()
@@ -738,7 +738,7 @@ fn test_typevar_builder() {
         .includes_scalars(false)
         .build();
     assert_eq!(type_set.lanes, num_set![2, 4, 8, 16, 32, 64, 128, 256]);
-    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert!(type_set.dynamic_lanes.is_empty());
     assert!(type_set.ints.is_empty());
 
@@ -753,7 +753,7 @@ fn test_typevar_builder() {
         num_set![2, 4, 8, 16, 32, 64, 128, 256]
     );
     assert_eq!(type_set.ints, num_set![8, 16, 32, 64, 128]);
-    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert_eq!(type_set.lanes, num_set![1]);
 
     let type_set = TypeSetBuilder::new()
@@ -765,7 +765,7 @@ fn test_typevar_builder() {
         type_set.dynamic_lanes,
         num_set![2, 4, 8, 16, 32, 64, 128, 256]
     );
-    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert_eq!(type_set.lanes, num_set![1]);
     assert!(type_set.ints.is_empty());
 
@@ -871,12 +871,12 @@ fn test_forward_images() {
         TypeSetBuilder::new().ints(8..16).build()
     );
     assert_eq!(
-        TypeSetBuilder::new().floats(32..32).build().half_width(),
+        TypeSetBuilder::new().floats(16..16).build().half_width(),
         empty_set
     );
     assert_eq!(
-        TypeSetBuilder::new().floats(32..64).build().half_width(),
-        TypeSetBuilder::new().floats(32..32).build()
+        TypeSetBuilder::new().floats(32..128).build().half_width(),
+        TypeSetBuilder::new().floats(16..64).build()
     );
 
     // Double width.
@@ -893,8 +893,8 @@ fn test_forward_images() {
         TypeSetBuilder::new().floats(64..64).build()
     );
     assert_eq!(
-        TypeSetBuilder::new().floats(32..64).build().double_width(),
-        TypeSetBuilder::new().floats(64..64).build()
+        TypeSetBuilder::new().floats(16..64).build().double_width(),
+        TypeSetBuilder::new().floats(32..128).build()
     );
 }
 

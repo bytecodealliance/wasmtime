@@ -10,7 +10,9 @@ use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
+use cranelift_codegen::ir::immediates::{
+    Ieee128, Ieee16, Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64,
+};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
 use cranelift_codegen::ir::types;
@@ -855,6 +857,18 @@ impl<'a> Parser<'a> {
         Ok(Imm64::new(0))
     }
 
+    // Match and consume an Ieee16 immediate.
+    fn match_ieee16(&mut self, err_msg: &str) -> ParseResult<Ieee16> {
+        if let Some(Token::Float(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like a float.
+            // Parse it as an Ieee16 to check for the right number of digits and other issues.
+            text.parse().map_err(|e| self.error(e))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     // Match and consume an Ieee32 immediate.
     fn match_ieee32(&mut self, err_msg: &str) -> ParseResult<Ieee32> {
         if let Some(Token::Float(text)) = self.token() {
@@ -873,6 +887,18 @@ impl<'a> Parser<'a> {
             self.consume();
             // Lexer just gives us raw text that looks like a float.
             // Parse it as an Ieee64 to check for the right number of digits and other issues.
+            text.parse().map_err(|e| self.error(e))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume an Ieee128 immediate.
+    fn match_ieee128(&mut self, err_msg: &str) -> ParseResult<Ieee128> {
+        if let Some(Token::Float(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like a float.
+            // Parse it as an Ieee128 to check for the right number of digits and other issues.
             text.parse().map_err(|e| self.error(e))
         } else {
             err!(self.loc, err_msg)
@@ -2793,8 +2819,10 @@ impl<'a> Parser<'a> {
             I32 => DataValue::from(self.match_imm32("expected an i32")?),
             I64 => DataValue::from(Into::<i64>::into(self.match_imm64("expected an i64")?)),
             I128 => DataValue::from(self.match_imm128("expected an i128")?),
+            F16 => DataValue::from(self.match_ieee16("expected an f16")?),
             F32 => DataValue::from(self.match_ieee32("expected an f32")?),
             F64 => DataValue::from(self.match_ieee64("expected an f64")?),
+            F128 => DataValue::from(self.match_ieee128("expected an f128")?),
             _ if (ty.is_vector() || ty.is_dynamic_vector()) => {
                 let as_vec = self.match_uimm128(ty)?.into_vec();
                 if as_vec.len() == 16 {
@@ -3254,12 +3282,13 @@ mod tests {
         assert_eq!(sig.returns.len(), 0);
         assert_eq!(sig.call_conv, CallConv::SystemV);
 
-        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 system_v")
-            .parse_signature()
-            .unwrap();
+        let sig2 =
+            Parser::new("(i8 uext, f16, f32, f64, f128, i32 sret) -> i32 sext, f64 system_v")
+                .parse_signature()
+                .unwrap();
         assert_eq!(
             sig2.to_string(),
-            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 system_v"
+            "(i8 uext, f16, f32, f64, f128, i32 sret) -> i32 sext, f64 system_v"
         );
         assert_eq!(sig2.call_conv, CallConv::SystemV);
 
@@ -3865,8 +3894,13 @@ mod tests {
             "1512366032949150931280199141537564007"
         );
         assert_eq!(parse("1234567", I128).to_string(), "1234567");
+        assert_eq!(parse("0x16.1", F16).to_string(), "0x1.610p4");
         assert_eq!(parse("0x32.32", F32).to_string(), "0x1.919000p5");
         assert_eq!(parse("0x64.64", F64).to_string(), "0x1.9190000000000p6");
+        assert_eq!(
+            parse("0x128.128", F128).to_string(),
+            "0x1.2812800000000000000000000000p8"
+        );
         assert_eq!(
             parse("[0 1 2 3]", I32X4).to_string(),
             "0x00000003000000020000000100000000"

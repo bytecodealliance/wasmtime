@@ -369,8 +369,10 @@ impl<'a> Lexer<'a> {
             "i32" => types::I32,
             "i64" => types::I64,
             "i128" => types::I128,
+            "f16" => types::F16,
             "f32" => types::F32,
             "f64" => types::F64,
+            "f128" => types::F128,
             "r32" => types::R32,
             "r64" => types::R64,
             _ => return None,
@@ -626,7 +628,7 @@ mod tests {
     fn lex_identifiers() {
         let mut lex = Lexer::new(
             "v0 v00 vx01 block1234567890 block5234567890 v1x vx1 vxvx4 \
-             function0 function i8 i32x4 f32x5",
+             function0 function i8 i32x4 f32x5 f16 f128",
         );
         assert_eq!(
             lex.next(),
@@ -647,6 +649,8 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Type(types::I8), 1));
         assert_eq!(lex.next(), token(Token::Type(types::I32X4), 1));
         assert_eq!(lex.next(), token(Token::Identifier("f32x5"), 1));
+        assert_eq!(lex.next(), token(Token::Type(types::F16), 1));
+        assert_eq!(lex.next(), token(Token::Type(types::F128), 1));
         assert_eq!(lex.next(), None);
     }
 

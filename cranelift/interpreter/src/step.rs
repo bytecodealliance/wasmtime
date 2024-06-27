@@ -1419,7 +1419,7 @@ pub(crate) fn extractlanes(
 
     let iterations = match lane_type {
         types::I8 => 1,
-        types::I16 => 2,
+        types::I16 | types::F16 => 2,
         types::I32 | types::F32 => 4,
         types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
@@ -1458,7 +1458,7 @@ fn vectorizelanes_all(x: &[DataValue], vector_type: types::Type) -> ValueResult<
     let lane_type = vector_type.lane_type();
     let iterations = match lane_type {
         types::I8 => 1,
-        types::I16 => 2,
+        types::I16 | types::F16 => 2,
         types::I32 | types::F32 => 4,
         types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
