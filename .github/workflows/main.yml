@@ -794,9 +794,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: |
-        rustup target add wasm32-wasi wasm32-unknown-unknown
-        rustup component add rustfmt clippy
+    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
 
     - name: Install wasm-tools
       run: |
@@ -812,6 +810,33 @@ jobs:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
 
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+  
+  build-preview1-component-adapter-provider:
+    name: Build wasi-preview1-component-adapter-provider
+    needs: build-preview1-component-adapter
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: rustup component add rustfmt clippy
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: bins-wasi-preview1-component-adapter
+        path: crates/wasi-preview1-component-adapter/provider/artefacts
+    
+    - run: ./ci/build-wasi-preview1-component-adapter-provider.sh
+      env:
+        CHECK: 1
+    
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
