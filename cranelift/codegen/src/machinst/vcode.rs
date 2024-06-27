@@ -65,12 +65,6 @@ impl BackwardsInsnIndex {
     pub fn new(i: usize) -> Self {
         BackwardsInsnIndex(InsnIndex::new(i))
     }
-
-    /// Convert this backwards instruction index to a regular, forwards
-    /// instruction index.
-    pub fn to_insn_index(&self, num_insts: usize) -> InsnIndex {
-        InsnIndex::new(self.0.index() - num_insts - 1)
-    }
 }
 
 /// Index referring to a basic block in VCode.
