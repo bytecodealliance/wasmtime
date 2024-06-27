@@ -12,5 +12,6 @@ use crate::Graph;
 pub use in_memory::InMemoryRegistry;
 
 pub trait GraphRegistry: Send + Sync {
+    fn get(&self, name: &str) -> Option<&Graph>;
     fn get_mut(&mut self, name: &str) -> Option<&mut Graph>;
 }

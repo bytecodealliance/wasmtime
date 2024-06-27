@@ -2,7 +2,7 @@
 
 use super::{Graph, GraphRegistry};
 use crate::backend::BackendFromDir;
-use crate::wit::types::ExecutionTarget;
+use crate::wit::ExecutionTarget;
 use anyhow::{anyhow, bail};
 use std::{collections::HashMap, path::Path};
 
@@ -37,6 +37,9 @@ impl InMemoryRegistry {
 }
 
 impl GraphRegistry for InMemoryRegistry {
+    fn get(&self, name: &str) -> Option<&Graph> {
+        self.0.get(name)
+    }
     fn get_mut(&mut self, name: &str) -> Option<&mut Graph> {
         self.0.get_mut(name)
     }

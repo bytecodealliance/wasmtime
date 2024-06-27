@@ -23,6 +23,8 @@ use test_programs_artifacts::*;
 use wasmtime_wasi_nn::{backend, Backend};
 
 fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
     if cfg!(miri) {
         return Ok(());
     }
@@ -45,7 +47,7 @@ fn main() -> Result<()> {
     let mut trials = Vec::new();
     for program in programs {
         // Either ignore the test if it cannot run (i.e., downgrade `Fail` to
-        // `Ignore`) or pre-emptively fail it if `error_on_failed_check` is set.
+        // `Ignore`) or preemptively fail it if `error_on_failed_check` is set.
         let (run_test, mut check) = check_test_program(program);
         if !error_on_failed_check {
             check = check.downgrade_failure(); // Downgrade `Fail` to `Ignore`.
@@ -68,103 +70,122 @@ fn main() -> Result<()> {
 /// Return the test program to run and a check that must pass for the test to
 /// run.
 fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
-    use IgnoreCheck::*;
     match name {
-        "nn_image_classification" => (
-            nn_image_classification,
-            if !cfg!(target_arch = "x86_64") {
-                Fail("requires x86_64".into())
-            } else if !cfg!(target_os = "linux") && !cfg!(target_os = "windows") {
-                Fail("requires linux or windows".into())
-            } else if let Err(e) = check::openvino::is_installed() {
-                Fail(e.to_string().into())
-            } else {
-                Run
-            },
+        // Legacy WITX-based tests:
+        "nn_witx_image_classification_openvino" => (
+            nn_witx_image_classification_openvino,
+            IgnoreCheck::for_openvino(),
         ),
-        "nn_image_classification_named" => (
-            nn_image_classification_named,
-            if !cfg!(target_arch = "x86_64") {
-                Fail("requires x86_64".into())
-            } else if !cfg!(target_os = "linux") && !cfg!(target_os = "windows") {
-                Fail("requires linux or windows or macos".into())
-            } else if let Err(e) = check::openvino::is_installed() {
-                Fail(e.to_string().into())
-            } else {
-                Run
-            },
+        "nn_witx_image_classification_openvino_named" => (
+            nn_witx_image_classification_openvino_named,
+            IgnoreCheck::for_openvino(),
         ),
-        "nn_image_classification_onnx" => (
-            nn_image_classification_onnx,
-            #[cfg(feature = "onnx")]
-            if !cfg!(target_arch = "x86_64") && !cfg!(target_arch = "aarch64") {
-                Fail("requires x86_64 or aarch64".into())
-            } else if !cfg!(target_os = "linux")
-                && !cfg!(target_os = "windows")
-                && !cfg!(target_os = "macos")
-            {
-                Fail("requires linux, windows, or macos".into())
-            } else {
-                Run
-            },
-            #[cfg(not(feature = "onnx"))]
-            Ignore("requires the `onnx` feature".into()),
+        "nn_witx_image_classification_onnx" => {
+            (nn_witx_image_classification_onnx, IgnoreCheck::for_onnx())
+        }
+        "nn_witx_image_classification_winml_named" => (
+            nn_witx_image_classification_winml_named,
+            IgnoreCheck::for_winml(),
         ),
-        "nn_image_classification_winml" => (
-            nn_image_classification_winml,
-            #[cfg(all(feature = "winml", target_os = "windows"))]
-            if !cfg!(target_arch = "x86_64") {
-                Fail("requires x86_64".into())
-            } else if cfg!(target_os = "windows") {
-                Fail("requires windows".into())
-            } else if let Err(e) = check::winml::is_available() {
-                Fail(e.to_string().into())
-            } else {
-                Run
-            },
-            #[cfg(not(all(feature = "winml", target_os = "windows")))]
-            Ignore("requires the `winml` feature on windows".into()),
+        // WIT-based tests:
+        "nn_wit_image_classification_openvino" => (
+            nn_wit_image_classification_openvino,
+            IgnoreCheck::for_openvino(),
+        ),
+        "nn_wit_image_classification_openvino_named" => (
+            nn_wit_image_classification_openvino_named,
+            IgnoreCheck::for_openvino(),
+        ),
+        "nn_wit_image_classification_onnx" => {
+            (nn_wit_image_classification_onnx, IgnoreCheck::for_onnx())
+        }
+        "nn_wit_image_classification_winml_named" => (
+            nn_wit_image_classification_winml_named,
+            IgnoreCheck::for_winml(),
         ),
         _ => panic!("unknown test program: {} (add to this `match`)", name),
     }
 }
 
-fn nn_image_classification() -> Result<()> {
+fn nn_witx_image_classification_openvino() -> Result<()> {
     check::openvino::is_installed()?;
     check::openvino::are_artifacts_available()?;
     let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
-    exec::run(NN_IMAGE_CLASSIFICATION, backend, false)
+    exec::witx::run(NN_WITX_IMAGE_CLASSIFICATION_OPENVINO, backend, false)
 }
 
-fn nn_image_classification_named() -> Result<()> {
+fn nn_witx_image_classification_openvino_named() -> Result<()> {
     check::openvino::is_installed()?;
     check::openvino::are_artifacts_available()?;
     let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
-    exec::run(NN_IMAGE_CLASSIFICATION_NAMED, backend, true)
+    exec::witx::run(NN_WITX_IMAGE_CLASSIFICATION_OPENVINO_NAMED, backend, true)
 }
 
 #[cfg(feature = "onnx")]
-fn nn_image_classification_onnx() -> Result<()> {
+fn nn_witx_image_classification_onnx() -> Result<()> {
     check::onnx::are_artifacts_available()?;
-    let backend = Backend::from(backend::onnxruntime::OnnxBackend::default());
-    exec::run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false)
+    let backend = Backend::from(backend::onnx::OnnxBackend::default());
+    exec::witx::run(NN_WITX_IMAGE_CLASSIFICATION_ONNX, backend, false)
 }
-
 #[cfg(not(feature = "onnx"))]
-fn nn_image_classification_onnx() -> Result<()> {
+fn nn_witx_image_classification_onnx() -> Result<()> {
     anyhow::bail!("this test requires the `onnx` feature")
 }
 
 #[cfg(all(feature = "winml", target_os = "windows"))]
-fn nn_image_classification_winml() -> Result<()> {
+fn nn_witx_image_classification_winml_named() -> Result<()> {
     check::winml::is_available()?;
     check::onnx::are_artifacts_available()?;
     let backend = Backend::from(backend::winml::WinMLBackend::default());
-    exec::run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false)
+    exec::witx::run(NN_WITX_IMAGE_CLASSIFICATION_ONNX, backend, false)
+}
+#[cfg(not(all(feature = "winml", target_os = "windows")))]
+fn nn_witx_image_classification_winml_named() -> Result<()> {
+    anyhow::bail!("this test requires the `winml` feature and only runs on windows")
 }
 
+fn nn_wit_image_classification_openvino() -> Result<()> {
+    check::openvino::is_installed()?;
+    check::openvino::are_artifacts_available()?;
+    let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
+    exec::wit::run(
+        NN_WIT_IMAGE_CLASSIFICATION_OPENVINO_COMPONENT,
+        backend,
+        false,
+    )
+}
+
+fn nn_wit_image_classification_openvino_named() -> Result<()> {
+    check::openvino::is_installed()?;
+    check::openvino::are_artifacts_available()?;
+    let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
+    exec::wit::run(
+        NN_WIT_IMAGE_CLASSIFICATION_OPENVINO_NAMED_COMPONENT,
+        backend,
+        true,
+    )
+}
+
+#[cfg(feature = "onnx")]
+fn nn_wit_image_classification_onnx() -> Result<()> {
+    check::onnx::are_artifacts_available()?;
+    let backend = Backend::from(backend::onnx::OnnxBackend::default());
+    exec::wit::run(NN_WIT_IMAGE_CLASSIFICATION_ONNX_COMPONENT, backend, false)
+}
+#[cfg(not(feature = "onnx"))]
+fn nn_wit_image_classification_onnx() -> Result<()> {
+    anyhow::bail!("this test requires the `onnx` feature")
+}
+
+#[cfg(all(feature = "winml", target_os = "windows"))]
+fn nn_wit_image_classification_winml_named() -> Result<()> {
+    check::winml::is_available()?;
+    check::onnx::are_artifacts_available()?;
+    let backend = Backend::from(backend::winml::WinMLBackend::default());
+    exec::wit::run(NN_WIT_IMAGE_CLASSIFICATION_ONNX_COMPONENT, backend, false)
+}
 #[cfg(not(all(feature = "winml", target_os = "windows")))]
-fn nn_image_classification_winml() -> Result<()> {
+fn nn_wit_image_classification_winml_named() -> Result<()> {
     anyhow::bail!("this test requires the `winml` feature and only runs on windows")
 }
 
@@ -195,5 +216,54 @@ impl IgnoreCheck {
 
     fn is_ignore(&self) -> bool {
         matches!(self, IgnoreCheck::Ignore(_))
+    }
+}
+
+/// Some pre-test checks for various backends.
+impl IgnoreCheck {
+    fn for_openvino() -> IgnoreCheck {
+        use IgnoreCheck::*;
+        if !cfg!(target_arch = "x86_64") {
+            Fail("requires x86_64".into())
+        } else if !cfg!(target_os = "linux") && !cfg!(target_os = "windows") {
+            Fail("requires linux or windows or macos".into())
+        } else if let Err(e) = check::openvino::is_installed() {
+            Fail(e.to_string().into())
+        } else {
+            Run
+        }
+    }
+
+    fn for_onnx() -> Self {
+        use IgnoreCheck::*;
+        #[cfg(feature = "onnx")]
+        if !cfg!(target_arch = "x86_64") && !cfg!(target_arch = "aarch64") {
+            Fail("requires x86_64 or aarch64".into())
+        } else if !cfg!(target_os = "linux")
+            && !cfg!(target_os = "windows")
+            && !cfg!(target_os = "macos")
+        {
+            Fail("requires linux, windows, or macos".into())
+        } else {
+            Run
+        }
+        #[cfg(not(feature = "onnx"))]
+        Ignore("requires the `onnx` feature".into())
+    }
+
+    fn for_winml() -> IgnoreCheck {
+        use IgnoreCheck::*;
+        #[cfg(all(feature = "winml", target_os = "windows"))]
+        if !cfg!(target_arch = "x86_64") {
+            Fail("requires x86_64".into())
+        } else if !cfg!(target_os = "windows") {
+            Fail("requires windows".into())
+        } else if let Err(e) = check::winml::is_available() {
+            Fail(e.to_string().into())
+        } else {
+            Run
+        }
+        #[cfg(not(all(feature = "winml", target_os = "windows")))]
+        Ignore("requires the `winml` feature on windows".into())
     }
 }

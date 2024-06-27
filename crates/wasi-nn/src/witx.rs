@@ -13,10 +13,82 @@
 //!
 //! [`types`]: crate::wit::types
 
-use crate::ctx::{UsageError, WasiNnCtx, WasiNnError, WasiNnResult as Result};
-use wiggle::{GuestMemory, GuestPtr};
+use crate::backend::BackendError;
+use crate::backend::Id;
+use crate::wit::GraphEncoding;
+use crate::{Backend, ExecutionContext, Graph, Registry};
+use std::collections::HashMap;
+use std::hash::Hash;
+use thiserror::Error;
+use wiggle::{GuestError, GuestMemory, GuestPtr};
 
 pub use gen::wasi_ephemeral_nn::add_to_linker;
+
+pub(crate) type WasiNnResult<T> = std::result::Result<T, WasiNnError>;
+type Result<T> = WasiNnResult<T>;
+type GraphId = u32;
+type GraphExecutionContextId = u32;
+
+/// Capture the state necessary for calling into the backend ML libraries.
+pub struct WasiNnCtx {
+    pub(crate) backends: HashMap<GraphEncoding, Backend>,
+    pub(crate) registry: Registry,
+    pub(crate) graphs: Table<GraphId, Graph>,
+    pub(crate) executions: Table<GraphExecutionContextId, ExecutionContext>,
+}
+
+impl WasiNnCtx {
+    /// Make a new context from the default state.
+    pub fn new(backends: impl IntoIterator<Item = Backend>, registry: Registry) -> Self {
+        let backends = backends.into_iter().map(|b| (b.encoding(), b)).collect();
+        Self {
+            backends,
+            registry,
+            graphs: Table::default(),
+            executions: Table::default(),
+        }
+    }
+}
+
+/// Record handle entries in a table.
+pub struct Table<K, V> {
+    entries: HashMap<K, V>,
+    next_key: u32,
+}
+
+impl<K, V> Default for Table<K, V> {
+    fn default() -> Self {
+        Self {
+            entries: HashMap::new(),
+            next_key: 0,
+        }
+    }
+}
+
+impl<K, V> Table<K, V>
+where
+    K: Eq + Hash + From<u32> + Copy,
+{
+    pub fn insert(&mut self, value: V) -> K {
+        let key = self.use_next_key();
+        self.entries.insert(key, value);
+        key
+    }
+
+    pub fn get(&self, key: K) -> Option<&V> {
+        self.entries.get(&key)
+    }
+
+    pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
+        self.entries.get_mut(&key)
+    }
+
+    fn use_next_key(&mut self) -> K {
+        let current = self.next_key;
+        self.next_key += 1;
+        K::from(current)
+    }
+}
 
 /// Generate the traits and types from the `wasi-nn` WITX specification.
 mod gen {
@@ -42,9 +114,10 @@ mod gen {
         ) -> anyhow::Result<types::NnErrno> {
             tracing::debug!("host error: {:?}", e);
             match e {
-                WasiNnError::BackendError(_) => unimplemented!(),
-                WasiNnError::GuestError(_) => unimplemented!(),
-                WasiNnError::UsageError(_) => unimplemented!(),
+                WasiNnError::BackendError(_) => Ok(types::NnErrno::RuntimeError),
+                WasiNnError::GuestError(_) => unimplemented!("guest error conversion"),
+                WasiNnError::UsageError(_) => Ok(types::NnErrno::UnsupportedOperation),
+                WasiNnError::NotEnoughMemory(_) => Ok(types::NnErrno::TooLarge),
             }
         }
     }
@@ -119,10 +192,10 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
             let tensor = crate::wit::types::Tensor {
                 dimensions: memory.to_vec(tensor.dimensions)?,
-                tensor_type: tensor.type_.into(),
+                ty: tensor.type_.into(),
                 data: memory.to_vec(tensor.data)?,
             };
-            Ok(exec_context.set_input(index, &tensor)?)
+            Ok(exec_context.set_input(Id::Index(index), &tensor)?)
         } else {
             Err(UsageError::InvalidGraphHandle.into())
         }
@@ -149,13 +222,19 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         out_buffer_max_size: u32,
     ) -> Result<u32> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
-            let mut destination = memory
+            let tensor = exec_context.get_output(Id::Index(index))?;
+            let destination = memory
                 .as_slice_mut(out_buffer.as_array(out_buffer_max_size))?
                 .expect(
                     "cannot use with shared memories; \
                      see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
                 );
-            Ok(exec_context.get_output(index, &mut destination)?)
+            if tensor.data.len() > destination.len() {
+                Err(WasiNnError::NotEnoughMemory(tensor.data.len()))
+            } else {
+                destination[..tensor.data.len()].copy_from_slice(&tensor.data);
+                Ok(tensor.data.len() as u32)
+            }
         } else {
             Err(UsageError::InvalidGraphHandle.into())
         }
@@ -198,4 +277,29 @@ impl From<gen::types::TensorType> for crate::wit::types::TensorType {
             gen::types::TensorType::F64 => crate::wit::types::TensorType::Fp64,
         }
     }
+}
+
+/// Possible errors while interacting with [WasiNnCtx].
+#[derive(Debug, Error)]
+pub enum WasiNnError {
+    #[error("backend error")]
+    BackendError(#[from] BackendError),
+    #[error("guest error")]
+    GuestError(#[from] GuestError),
+    #[error("usage error")]
+    UsageError(#[from] UsageError),
+    #[error("not enough memory: requested {0} bytes")]
+    NotEnoughMemory(usize),
+}
+
+#[derive(Debug, Error)]
+pub enum UsageError {
+    #[error("Only OpenVINO's IR is currently supported, passed encoding: {0:?}")]
+    InvalidEncoding(GraphEncoding),
+    #[error("Invalid graph handle; has it been loaded?")]
+    InvalidGraphHandle,
+    #[error("Invalid execution context handle; has it been initialized?")]
+    InvalidExecutionContextHandle,
+    #[error("No graph found with name: {0}")]
+    NotFound(String),
 }

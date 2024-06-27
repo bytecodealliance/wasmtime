@@ -17,7 +17,7 @@ use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
 #[cfg(feature = "wasi-nn")]
-use wasmtime_wasi_nn::WasiNnCtx;
+use wasmtime_wasi_nn::wit::WasiNnCtx;
 
 struct Host {
     table: wasmtime::component::ResourceTable,
@@ -75,15 +75,8 @@ impl ServeCommand {
     pub fn execute(mut self) -> Result<()> {
         self.run.common.init_logging()?;
 
-        // We force cli errors before starting to listen for connections so then we don't
-        // accidentally delay them to the first request.
-        if self.run.common.wasi.nn == Some(true) {
-            #[cfg(not(feature = "wasi-nn"))]
-            {
-                bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
-            }
-        }
-
+        // We force cli errors before starting to listen for connections so then
+        // we don't accidentally delay them to the first request.
         if let Some(Profile::Guest { .. }) = &self.run.profile {
             bail!("Cannot use the guest profiler with components");
         }
@@ -99,8 +92,8 @@ impl ServeCommand {
             bail!("wasi-threads does not support components yet")
         }
 
-        // The serve command requires both wasi-http and the component model, so we enable those by
-        // default here.
+        // The serve command requires both wasi-http and the component model, so
+        // we enable those by default here.
         if self.run.common.wasi.http.replace(true) == Some(false) {
             bail!("wasi-http is required for the serve command, and must not be disabled");
         }
@@ -227,7 +220,10 @@ impl ServeCommand {
             }
             #[cfg(feature = "wasi-nn")]
             {
-                wasmtime_wasi_nn::wit::ML::add_to_linker(linker, |host| host.nn.as_mut().unwrap())?;
+                wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
+                    let ctx = h.nn.as_mut().unwrap();
+                    wasmtime_wasi_nn::wit::WasiNnView::new(&mut h.table, ctx)
+                })?;
             }
         }
 

@@ -90,7 +90,10 @@ fn build_and_generate_tests() {
         }
 
         // Generate a component from each test.
-        if kind == "nn" || target == "dwarf_imported_memory" || target == "dwarf_shared_memory" {
+        if target == "dwarf_imported_memory"
+            || target == "dwarf_shared_memory"
+            || target.starts_with("nn_witx")
+        {
             continue;
         }
         let adapter = match target.as_str() {

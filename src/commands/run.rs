@@ -18,7 +18,7 @@ use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::WasiView;
 
 #[cfg(feature = "wasi-nn")]
-use wasmtime_wasi_nn::WasiNnCtx;
+use wasmtime_wasi_nn::wit::WasiNnView;
 
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
@@ -624,40 +624,37 @@ impl RunCommand {
             {
                 bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
             }
-            #[cfg(feature = "wasi-nn")]
+            #[cfg(all(feature = "wasi-nn", feature = "component-model"))]
             {
+                let (backends, registry) = self.collect_preloaded_nn_graphs()?;
                 match linker {
                     CliLinker::Core(linker) => {
                         wasmtime_wasi_nn::witx::add_to_linker(linker, |host| {
-                            // This WASI proposal is currently not protected against
-                            // concurrent access--i.e., when wasi-threads is actively
-                            // spawning new threads, we cannot (yet) safely allow access and
-                            // fail if more than one thread has `Arc`-references to the
-                            // context. Once this proposal is updated (as wasi-common has
-                            // been) to allow concurrent access, this `Arc::get_mut`
-                            // limitation can be removed.
-                            Arc::get_mut(host.wasi_nn.as_mut().unwrap())
+                            Arc::get_mut(host.wasi_nn_witx.as_mut().unwrap())
                                 .expect("wasi-nn is not implemented with multi-threading support")
                         })?;
+                        store.data_mut().wasi_nn_witx = Some(Arc::new(
+                            wasmtime_wasi_nn::witx::WasiNnCtx::new(backends, registry),
+                        ));
                     }
                     #[cfg(feature = "component-model")]
                     CliLinker::Component(linker) => {
-                        wasmtime_wasi_nn::wit::ML::add_to_linker(linker, |host| {
-                            Arc::get_mut(host.wasi_nn.as_mut().unwrap())
-                                .expect("wasi-nn is not implemented with multi-threading support")
+                        wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
+                            let preview2_ctx =
+                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
+                            let preview2_ctx = Arc::get_mut(preview2_ctx)
+                                .expect("wasmtime_wasi is not compatible with threads")
+                                .get_mut()
+                                .unwrap();
+                            let nn_ctx = Arc::get_mut(h.wasi_nn_wit.as_mut().unwrap())
+                                .expect("wasi-nn is not implemented with multi-threading support");
+                            WasiNnView::new(preview2_ctx.table(), nn_ctx)
                         })?;
+                        store.data_mut().wasi_nn_wit = Some(Arc::new(
+                            wasmtime_wasi_nn::wit::WasiNnCtx::new(backends, registry),
+                        ));
                     }
                 }
-                let graphs = self
-                    .run
-                    .common
-                    .wasi
-                    .nn_graph
-                    .iter()
-                    .map(|g| (g.format.clone(), g.dir.clone()))
-                    .collect::<Vec<_>>();
-                let (backends, registry) = wasmtime_wasi_nn::preload(&graphs)?;
-                store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new(backends, registry)));
             }
         }
 
@@ -767,6 +764,21 @@ impl RunCommand {
         store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
         Ok(())
     }
+
+    #[cfg(feature = "wasi-nn")]
+    fn collect_preloaded_nn_graphs(
+        &self,
+    ) -> Result<(Vec<wasmtime_wasi_nn::Backend>, wasmtime_wasi_nn::Registry)> {
+        let graphs = self
+            .run
+            .common
+            .wasi
+            .nn_graph
+            .iter()
+            .map(|g| (g.format.clone(), g.dir.clone()))
+            .collect::<Vec<_>>();
+        wasmtime_wasi_nn::preload(&graphs)
+    }
 }
 
 #[derive(Default, Clone)]
@@ -779,7 +791,10 @@ struct Host {
     preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::preview1::WasiP1Ctx>>>,
 
     #[cfg(feature = "wasi-nn")]
-    wasi_nn: Option<Arc<WasiNnCtx>>,
+    wasi_nn_wit: Option<Arc<wasmtime_wasi_nn::wit::WasiNnCtx>>,
+    #[cfg(feature = "wasi-nn")]
+    wasi_nn_witx: Option<Arc<wasmtime_wasi_nn::witx::WasiNnCtx>>,
+
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
     #[cfg(feature = "wasi-http")]
