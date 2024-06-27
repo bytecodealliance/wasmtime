@@ -1146,12 +1146,6 @@ entity_impl!(TagIndex);
 pub struct StaticModuleIndex(u32);
 entity_impl!(StaticModuleIndex);
 
-/// Index of a `call_indirect` instruction in a module, used for
-/// caching that callsite's target in the VMContext.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct CallIndirectSiteIndex(u32);
-entity_impl!(CallIndirectSiteIndex);
-
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub enum EntityIndex {

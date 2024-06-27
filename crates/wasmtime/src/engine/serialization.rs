@@ -360,8 +360,6 @@ impl Metadata<'_> {
             relaxed_simd_deterministic,
             tail_callable,
             winch_callable,
-            cache_call_indirects,
-            max_call_indirect_cache_slots,
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
@@ -428,16 +426,6 @@ impl Metadata<'_> {
             winch_callable,
             other.winch_callable,
             "Winch calling convention",
-        )?;
-        Self::check_bool(
-            cache_call_indirects,
-            other.cache_call_indirects,
-            "caching of call-indirect targets",
-        )?;
-        Self::check_int(
-            max_call_indirect_cache_slots,
-            other.max_call_indirect_cache_slots,
-            "maximum slot count for caching of call-indirect targets",
         )?;
 
         Ok(())
