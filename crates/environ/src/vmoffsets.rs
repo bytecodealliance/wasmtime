@@ -24,7 +24,8 @@
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
-//      call_indirect_cache_tags: [u32; module.num_call_indirect_cache_slots],
+//      call_indirect_cache_index_tags: [u32; module.num_call_indirect_cache_slots],
+//      call_indirect_cache_sig_tags: [u32; module.num_call_indirect_cache_slots],
 //      call_indirect_cache_values: [usize; module.num_call_indirect_cache_slots],
 // }
 
@@ -89,7 +90,8 @@ pub struct VMOffsets<P> {
     owned_memories: u32,
     defined_globals: u32,
     defined_func_refs: u32,
-    call_indirect_cache_tags: u32,
+    call_indirect_cache_index_tags: u32,
+    call_indirect_cache_sig_tags: u32,
     call_indirect_cache_values: u32,
     size: u32,
 }
@@ -428,7 +430,8 @@ impl<P: PtrSize> VMOffsets<P> {
         }
 
         calculate_sizes! {
-            call_indirect_cache_tags: "call_indirect cache tags",
+            call_indirect_cache_index_tags: "call_indirect cache tags: called indices",
+            call_indirect_cache_sig_tags: "call_indirect cache tags: signature IDs",
             call_indirect_cache_values: "call_indirect cache values",
             defined_func_refs: "module functions",
             defined_globals: "defined globals",
@@ -466,7 +469,8 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             owned_memories: 0,
             defined_globals: 0,
             defined_func_refs: 0,
-            call_indirect_cache_tags: 0,
+            call_indirect_cache_index_tags: 0,
+            call_indirect_cache_sig_tags: 0,
             call_indirect_cache_values: 0,
             size: 0,
         };
@@ -522,7 +526,11 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vm_func_ref(),
             ),
-            size(call_indirect_cache_tags) = cmul(
+            size(call_indirect_cache_index_tags) = cmul(
+                ret.num_call_indirect_cache_slots,
+                core::mem::size_of::<u32>() as u8,
+            ),
+            size(call_indirect_cache_sig_tags) = cmul(
                 ret.num_call_indirect_cache_slots,
                 core::mem::size_of::<u32>() as u8,
             ),
@@ -720,10 +728,16 @@ impl<P: PtrSize> VMOffsets<P> {
         self.defined_func_refs
     }
 
-    /// The offset of the `call_indirect_caches` tag array.
+    /// The offset of the `call_indirect_caches` index tag array.
     #[inline]
-    pub fn vmctx_call_indirect_cache_tags_begin(&self) -> u32 {
-        self.call_indirect_cache_tags
+    pub fn vmctx_call_indirect_cache_index_tags_begin(&self) -> u32 {
+        self.call_indirect_cache_index_tags
+    }
+
+    /// The offset of the `call_indirect_caches` signature tag array.
+    #[inline]
+    pub fn vmctx_call_indirect_cache_sig_tags_begin(&self) -> u32 {
+        self.call_indirect_cache_sig_tags
     }
 
     /// The offset of the `call_indirect_caches` value array.

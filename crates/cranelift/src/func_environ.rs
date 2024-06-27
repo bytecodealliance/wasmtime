@@ -1135,14 +1135,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
     }
 
-    /// Get the address of the call-indirect cache tag and value slots
-    /// given a called table index.
+    /// Get the address of the call-indirect cache index tag,
+    /// signature tag, and value slots given a called table index.
     pub fn call_indirect_cache_slot_tag_value_addr(
         &mut self,
         table_cache: &TableCallCacheStyle,
         vmctx: ir::Value,
         index: ir::Value,
-    ) -> Option<(ir::Value, ir::Value)> {
+    ) -> Option<(ir::Value, ir::Value, ir::Value)> {
         match table_cache {
             TableCallCacheStyle::None => None,
             TableCallCacheStyle::DirectMapped { start, size_log2 } => {
@@ -1157,75 +1157,70 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     .iadd_imm(masked_index, i64::from(start.as_u32()));
 
                 // Compute addresses:
-                //   `p_tag = vmctx + tags_begin + sizeof(u32) * slot`
-                //   `p_value = vmctx + values_begin + sizeof(usize) * slot`
-                let tags_vmctx_offset = self.env.offsets.vmctx_call_indirect_cache_tags_begin();
+                //   `index_tags_array = vmctx + index_tags_vmctx_offset`
+                //   `sig_tags_array = vmctx + sig_tags_vmctx_offset`
+                //   `values_array = vmctx + values_vmctx_offset`
+                let index_tags_vmctx_offset = self
+                    .env
+                    .offsets
+                    .vmctx_call_indirect_cache_index_tags_begin();
+                let sig_tags_vmctx_offset =
+                    self.env.offsets.vmctx_call_indirect_cache_sig_tags_begin();
                 let values_vmctx_offset = self.env.offsets.vmctx_call_indirect_cache_values_begin();
-                let tags_array = self
+                let index_tags_array = self
                     .builder
                     .ins()
-                    .iadd_imm(vmctx, i64::from(tags_vmctx_offset));
+                    .iadd_imm(vmctx, i64::from(index_tags_vmctx_offset));
+                let sig_tags_array = self
+                    .builder
+                    .ins()
+                    .iadd_imm(vmctx, i64::from(sig_tags_vmctx_offset));
                 let values_array = self
                     .builder
                     .ins()
                     .iadd_imm(vmctx, i64::from(values_vmctx_offset));
-                let tags_array_offset = self.builder.ins().imul_imm(
+
+                // Compute offsets into arrays:
+                //  `tags_array_offset = sizeof(u32) * slot`
+                //  `values_array_offset = ptr_size * slot`
+                let tags_array_offset = self.builder.ins().ishl_imm(
                     offset_index,
-                    i64::try_from(std::mem::size_of::<u32>()).unwrap(),
+                    i64::try_from(std::mem::size_of::<u32>().ilog2()).unwrap(),
                 );
-                let values_array_offset = self.builder.ins().imul_imm(
+                let values_array_offset = self.builder.ins().ishl_imm(
                     offset_index,
-                    i64::try_from(std::mem::size_of::<usize>()).unwrap(),
+                    i64::try_from(std::mem::size_of::<usize>().ilog2()).unwrap(),
                 );
                 Some((
-                    self.builder.ins().iadd(tags_array, tags_array_offset),
+                    self.builder.ins().iadd(index_tags_array, tags_array_offset),
+                    self.builder.ins().iadd(sig_tags_array, tags_array_offset),
                     self.builder.ins().iadd(values_array, values_array_offset),
                 ))
             }
         }
     }
 
-    /// Load the cached index and code pointer for an indirect call.
-    ///
-    /// Generates IR like:
-    ///
-    /// ```ignore
-    /// v1 = load.i64 tag_ptr ;; cached index (cache key)
-    /// v2 = load.i64 value_ptr ;; cached raw code pointer (cache value)
-    /// ```
-    ///
-    /// and returns `(index, code_ptr)` (e.g. from above, `(v1, v2)`).
-    fn load_cached_indirect_index_and_code_ptr(
-        &mut self,
-        tag_addr: ir::Value,
-        value_addr: ir::Value,
-    ) -> (ir::Value, ir::Value) {
-        let cached_index =
-            self.builder
-                .ins()
-                .load(I32, MemFlags::trusted(), tag_addr, Offset32::from(0));
-        let cached_code_ptr = self.builder.ins().load(
-            self.env.pointer_type(),
-            MemFlags::trusted(),
-            value_addr,
-            Offset32::from(0),
-        );
-
-        (cached_index, cached_code_ptr)
-    }
-
     /// Update the indirect-call cache: store a new index and raw code
     /// pointer in the slot for a given callsite.
     fn store_cached_indirect_index_and_code_ptr(
         &mut self,
-        tag_addr: ir::Value,
+        index_tag_addr: ir::Value,
+        sig_tag_addr: ir::Value,
         value_addr: ir::Value,
         index: ir::Value,
+        sig: u32,
         code_ptr: ir::Value,
     ) {
+        self.builder.ins().store(
+            MemFlags::trusted(),
+            index,
+            index_tag_addr,
+            Offset32::from(0),
+        );
+        let sig = self.builder.ins().iconst(I32, i64::from(sig));
         self.builder
             .ins()
-            .store(MemFlags::trusted(), index, tag_addr, Offset32::from(0));
+            .store(MemFlags::trusted(), sig, sig_tag_addr, Offset32::from(0));
         self.builder
             .ins()
             .store(MemFlags::trusted(), code_ptr, value_addr, Offset32::from(0));
@@ -1250,14 +1245,25 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // If we are performing call-indirect caching with this table, check the cache.
         let call_cache = &self.env.module.table_plans[table_index].call_cache;
 
-        let (code_ptr, callee_vmctx) = if let Some((tag_addr, value_addr)) =
+        let (code_ptr, callee_vmctx) = if let Some((index_tag_addr, sig_tag_addr, value_addr)) =
             self.call_indirect_cache_slot_tag_value_addr(call_cache, vmctx, callee)
         {
             // Create the following CFG and generate code with the following outline:
             //
-            //   (load cached index and code pointer)
-            //   hit = icmp eq (cached index), (callee)
-            //   brif hit, call_block((cached code ptr), vmctx), miss_block
+            //   (compute addresses of cached index, signature ID and code pointer)
+            //   cached_index = load.i32 (address of cached index)
+            //   hit_idx = icmp eq cached_index, (callee)
+            //   brif hit_idx, check_sig, miss_block
+            //
+            // check_sig:
+            //   cached_sig = load.i32 (address of cached sig)
+            //   cached_code_ptr = load.i64 (address of cached code ptr)
+            //   hit_sig = icmp eq cached_sig, (sig ID constant)
+            //   brif hit_sig, check_null
+            //
+            // check_null:
+            //   not_null = icmp_imm ne cached_code_ptr, 0
+            //   brif not_null, call_block(cached_code_ptr, vmctx), miss_block
             //
             // miss_block:
             //   (compute actual code pointer, with checks)
@@ -1273,25 +1279,72 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
             // Create two-level conditionals with CFG.
             let current_block = self.builder.current_block().unwrap();
+            let check_sig_block = self.builder.create_block();
+            let not_null_block = self.builder.create_block();
             let miss_block = self.builder.create_block();
             let call_block = self.builder.create_block();
             let update_block = self.builder.create_block();
 
-            self.builder.insert_block_after(miss_block, current_block);
+            self.builder
+                .insert_block_after(check_sig_block, current_block);
+            self.builder
+                .insert_block_after(not_null_block, check_sig_block);
+            self.builder.insert_block_after(miss_block, not_null_block);
             self.builder.insert_block_after(update_block, miss_block);
             self.builder.insert_block_after(call_block, update_block);
             self.builder.set_cold_block(miss_block);
             self.builder.set_cold_block(update_block);
 
             // Load cached values, check for hit, branch to
-            // call block or miss block.
+            // sig-check block or miss block.
 
-            let (cached_index, cached_code_ptr) =
-                self.load_cached_indirect_index_and_code_ptr(tag_addr, value_addr);
-            let hit = self.builder.ins().icmp(IntCC::Equal, cached_index, callee);
+            let cached_index = self.builder.ins().load(
+                I32,
+                MemFlags::trusted(),
+                index_tag_addr,
+                Offset32::from(0),
+            );
+            let index_hit = self.builder.ins().icmp(IntCC::Equal, cached_index, callee);
             self.builder
                 .ins()
-                .brif(hit, call_block, &[cached_code_ptr, vmctx], miss_block, &[]);
+                .brif(index_hit, check_sig_block, &[], miss_block, &[]);
+
+            // Sig-check block: load signature tag and cache value. Branch to null-check block if match, miss block otherwise.
+            self.builder.seal_block(check_sig_block);
+            self.builder.switch_to_block(check_sig_block);
+
+            let cached_sig =
+                self.builder
+                    .ins()
+                    .load(I32, MemFlags::trusted(), sig_tag_addr, Offset32::from(0));
+            let cached_value = self.builder.ins().load(
+                self.env.pointer_type(),
+                MemFlags::trusted(),
+                value_addr,
+                Offset32::from(0),
+            );
+            let sig_hit =
+                self.builder
+                    .ins()
+                    .icmp_imm(IntCC::Equal, cached_sig, i64::from(sig_ref.as_u32()));
+            self.builder
+                .ins()
+                .brif(sig_hit, not_null_block, &[], miss_block, &[]);
+
+            // Null-check blcok: branch to call block if cached code ptr not null, miss block otherwise.
+            self.builder.seal_block(not_null_block);
+            self.builder.switch_to_block(not_null_block);
+            let not_null = self
+                .builder
+                .ins()
+                .icmp_imm(IntCC::NotEqual, cached_value, 0);
+            self.builder.ins().brif(
+                not_null,
+                call_block,
+                &[cached_value, vmctx],
+                miss_block,
+                &[],
+            );
 
             // Miss block: compute actual callee code pointer and
             // vmctx, and update cache if same-instance.
@@ -1317,7 +1370,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 self.builder.switch_to_block(update_block);
 
                 self.store_cached_indirect_index_and_code_ptr(
-                    tag_addr, value_addr, callee, code_ptr,
+                    index_tag_addr,
+                    sig_tag_addr,
+                    value_addr,
+                    callee,
+                    sig_ref.as_u32(),
+                    code_ptr,
                 );
                 self.builder
                     .ins()
