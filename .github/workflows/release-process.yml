@@ -20,8 +20,8 @@ on:
     # “At 00:00 on day-of-month 5.”
     #
     # https://crontab.guru/#0_0_5_*_*
-    - cron: '0 0 5 * *'
-    - cron: '0 0 20 * *'
+    - cron: '7 20 27 * *'
+    - cron: '7 35 27 * *'
 
   # Allow manually triggering this request via the button at
   # https://github.com/bytecodealliance/wasmtime/actions/workflows/release-process.yml
