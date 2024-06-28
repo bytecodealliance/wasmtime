@@ -831,6 +831,16 @@ fn try_resolve_aliases(context: &mut CrashCheckContext, func: &mut Function) {
     }
 }
 
+/// Remove sourcelocs if the function still crashes after they are removed, to make the reduced clif IR easier to read.
+fn try_remove_srclocs(context: &mut CrashCheckContext, func: &mut Function) {
+    let mut func_with_removed_sourcelocs = func.clone();
+    func_with_removed_sourcelocs.srclocs.clear();
+    if let CheckResult::Crash(_) = context.check_for_crash(&func_with_removed_sourcelocs) {
+        *func = func_with_removed_sourcelocs;
+    }
+
+}
+
 fn reduce(isa: &dyn TargetIsa, mut func: Function, verbose: bool) -> Result<(Function, String)> {
     let mut context = CrashCheckContext::new(isa);
 
@@ -839,8 +849,7 @@ fn reduce(isa: &dyn TargetIsa, mut func: Function, verbose: bool) -> Result<(Fun
     }
 
     try_resolve_aliases(&mut context, &mut func);
-    // Remove SourceLocs to make reduced clif IR easier to read
-    func.srclocs.clear();
+    try_remove_srclocs(&mut context, &mut func);
 
     let progress_bar = ProgressBar::with_draw_target(0, ProgressDrawTarget::stdout());
     progress_bar.set_style(
