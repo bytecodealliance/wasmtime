@@ -28,7 +28,7 @@ jobs:
     - uses: ./.github/actions/fetch-run-id
     - uses: ./.github/actions/build-adapter-provider
       with:
-        run-id: ${COMMIT_COMMIT_RUN_ID}
+        run-id: ${COMMIT_RUN_ID}
     - run: cargo publish -p wasi-preview1-component-adapter-provider --allow-dirty
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
