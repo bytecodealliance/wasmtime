@@ -527,7 +527,7 @@
   (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
   (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
   (fmadd_series ty (u64_xor neg_x neg_y) x y z))
-       
+
 ;; Delegate vector-based lowerings to helpers below
 (rule 1 (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
         (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
