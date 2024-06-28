@@ -1711,6 +1711,11 @@ where
                 self.masm,
                 |ctx, masm| ctx.pop_to_reg(masm, None),
             );
+            // Explicitly save any live registers and locals before setting up
+            // the branch state.
+            // In some cases, calculating the `top` value above, will result in
+            // a spill, thus the following one will result in a no-op.
+            self.context.spill(self.masm);
             frame.top_abi_results::<M, _>(
                 &mut self.context,
                 self.masm,
