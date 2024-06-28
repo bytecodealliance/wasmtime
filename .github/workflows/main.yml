@@ -826,16 +826,9 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup component add rustfmt clippy
-
-    - uses: actions/download-artifact@v4
+    - uses: ./.github/actions/build-adapter-provider
       with:
-        name: bins-wasi-preview1-component-adapter
-        path: crates/wasi-preview1-component-adapter/provider/artefacts
-    
-    - run: ./ci/build-wasi-preview1-component-adapter-provider.sh
-      env:
-        CHECK: 1
+        run-id: ${{ github.run_id }}
     
 
     # common logic to cancel the entire run if this job fails
