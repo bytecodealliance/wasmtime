@@ -16,7 +16,9 @@ runs:
         github-token: ${{ github.token }}
         run-id: ${{ inputs.run-id }}
 
-    - run: rustup component add rustfmt clippy
+    - name: Install required Rust components
+      shell: bash
+      run: rustup component add rustfmt clippy
 
     - name: Build and checl the adapter provider
       shell: bash
