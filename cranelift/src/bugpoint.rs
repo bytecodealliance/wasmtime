@@ -838,7 +838,6 @@ fn try_remove_srclocs(context: &mut CrashCheckContext, func: &mut Function) {
     if let CheckResult::Crash(_) = context.check_for_crash(&func_with_removed_sourcelocs) {
         *func = func_with_removed_sourcelocs;
     }
-
 }
 
 fn reduce(isa: &dyn TargetIsa, mut func: Function, verbose: bool) -> Result<(Function, String)> {
