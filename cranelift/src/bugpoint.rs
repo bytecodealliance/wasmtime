@@ -839,6 +839,8 @@ fn reduce(isa: &dyn TargetIsa, mut func: Function, verbose: bool) -> Result<(Fun
     }
 
     try_resolve_aliases(&mut context, &mut func);
+    // Remove SourceLocs to make reduced clif IR easier to read
+    func.srclocs.clear();
 
     let progress_bar = ProgressBar::with_draw_target(0, ProgressDrawTarget::stdout());
     progress_bar.set_style(
