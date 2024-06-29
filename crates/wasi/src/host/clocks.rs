@@ -109,7 +109,10 @@ impl Subscribe for Deadline {
     }
 }
 
-impl<T: WasiView> timezone::Host for T {
+impl<T> timezone::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn display(&mut self, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
         let duration = std::time::Duration::new(when.seconds, when.nanoseconds);
         Ok(self.ctx().timezone.display(duration))

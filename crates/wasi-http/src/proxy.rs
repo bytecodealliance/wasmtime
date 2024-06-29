@@ -15,6 +15,7 @@ mod bindings {
             "wasi:http": crate::bindings::http,
             "wasi": wasmtime_wasi::bindings,
         },
+        features: ["clocks-timezone"],
     });
 }
 
@@ -140,6 +141,7 @@ pub mod sync {
                 "wasi": wasmtime_wasi::bindings, // everything else
             },
             require_store_data_send: true,
+            features: ["clocks-timezone"],
         });
     }
 

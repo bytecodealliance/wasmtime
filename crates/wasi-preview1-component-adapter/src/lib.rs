@@ -62,6 +62,7 @@ pub mod bindings {
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
         skip: ["run", "get-environment", "poll"],
+        features: ["clocks-timezone"],
     });
 
     #[cfg(feature = "reactor")]
@@ -78,6 +79,7 @@ pub mod bindings {
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
         skip: ["get-environment", "poll"],
+        features: ["clocks-timezone"],
     });
 
     #[cfg(feature = "proxy")]
@@ -99,6 +101,7 @@ pub mod bindings {
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         skip: ["poll"],
+        features: ["clocks-timezone"],
     });
 
     pub mod wit_bindgen_rt_shim {

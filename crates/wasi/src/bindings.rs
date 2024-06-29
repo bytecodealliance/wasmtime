@@ -1,5 +1,3 @@
-// Generate traits for synchronous bindings.
-//
 // Note that this is only done for interfaces which can block, or those which
 // have some functions in `only_imports` below for being async.
 pub mod sync {
@@ -40,6 +38,7 @@ pub mod sync {
                 "wasi:sockets/udp/udp-socket": super::super::sockets::udp::UdpSocket,
             },
             require_store_data_send: true,
+            features: ["clocks-timezone"],
         });
     }
     pub use self::generated::exports;
@@ -209,6 +208,7 @@ mod async_io {
             "wasi:cli/terminal-input/terminal-input": crate::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": crate::stdio::TerminalOutput,
         },
+        features: ["clocks-timezone"],
     });
 }
 

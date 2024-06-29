@@ -78,6 +78,7 @@ pub mod bindings {
         trappable_error_type: {
             "wasi:http/types/error-code" => crate::HttpError,
         },
+        features: ["clocks-timezone"],
     });
 
     pub use wasi::http;
