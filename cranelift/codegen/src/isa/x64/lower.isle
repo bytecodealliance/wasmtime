@@ -2870,7 +2870,7 @@
 
 ;; fmsub and fnmsub
 (decl fmsub (Type Value Value Value) Xmm)
-;;(decl fnmsub (Type Value Value Value) Xmm)
+(decl fnmsub (Type Value Value Value) Xmm)
 
 ;; Base case, will sink a load of `z` automatically.
 (rule (fmsub ty x y z) (x64_vfmsub213 ty x y z))
@@ -2878,12 +2878,21 @@
 ;; Allow sinking loads with one of the two values being multiplied in addition
 ;; to the value being subtracted. Note that both x and y can be sunk here due to
 ;; multiplication being commutative.
-;;(rule 1 (fmsub ty (sinkable_load x) y z) (x64_vfmsub132 ty y z x))
-;;(rule 2 (fmsub ty x (sinkable_load y) z) (x64_vfmsub132 ty x z y))
+(rule 1 (fmsub ty (sinkable_load x) y z) (x64_vfmsub132 ty y z x))
+(rule 2 (fmsub ty x (sinkable_load y) z) (x64_vfmsub132 ty x z y))
+
+;; If one of the values being multiplied is negated then use a `vfnmsub*`
+;; instruction instead
+(rule 3 (fmsub ty (fneg x) y z) (fnmsub ty x y z))
+(rule 4 (fmsub ty x (fneg y) z) (fnmsub ty x y z))
+
+(rule (fnmsub ty x y z) (x64_vfnmsub213 ty x y z))
+(rule 1 (fnmsub ty (sinkable_load x) y z) (x64_vfnmsub132 ty y z x))
+(rule 2 (fnmsub ty x (sinkable_load y) z) (x64_vfnmsub132 ty x z y))
 
 ;; Like `fmsub` if one argument is negated switch which one is being codegen'd
-;;(rule 3 (fnmsub ty (fneg x) y z) (fmsub ty x y z))
-;;(rule 4 (fnmsub ty x (fneg y) z) (fmsub ty x y z))
+(rule 3 (fnmsub ty (fneg x) y z) (fmsub ty x y z))
+(rule 4 (fnmsub ty x (fneg y) z) (fmsub ty x y z))
 
 
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
