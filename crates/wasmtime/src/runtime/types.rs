@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use anyhow::{bail, ensure, Result};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
@@ -2346,6 +2345,169 @@ impl TableType {
 
 // Memory Types
 
+/// A builder for [`MemoryType`][crate::MemoryType]s.
+///
+/// A new builder can be constructed via its `Default` implementation.
+///
+/// When you're done configuring, get the underlying
+/// [`MemoryType`][crate::MemoryType] by calling the
+/// [`build`][crate::MemoryTypeBuilder::build] method.
+///
+/// # Example
+///
+/// ```
+/// # fn foo() -> wasmtime::Result<()> {
+/// use wasmtime::MemoryTypeBuilder;
+///
+/// let memory_type = MemoryTypeBuilder::default()
+///     // Set the minimum size, in pages.
+///     .min(4096)
+///     // Set the maximum size, in pages.
+///     .max(Some(4096))
+///     // Set the page size to 1 byte (aka 2**0).
+///     .page_size_log2(0)
+///     // Get the underlying memory type.
+///     .build()?;
+/// #   Ok(())
+/// # }
+/// ```
+pub struct MemoryTypeBuilder {
+    ty: Memory,
+}
+
+impl Default for MemoryTypeBuilder {
+    fn default() -> Self {
+        MemoryTypeBuilder {
+            ty: Memory {
+                minimum: 0,
+                maximum: None,
+                shared: false,
+                memory64: false,
+                page_size_log2: Memory::DEFAULT_PAGE_SIZE_LOG2,
+            },
+        }
+    }
+}
+
+impl MemoryTypeBuilder {
+    fn validate(&self) -> Result<()> {
+        if self.ty.maximum.map_or(false, |max| max < self.ty.minimum) {
+            bail!("maximum page size cannot be smaller than the minimum page size");
+        }
+
+        match self.ty.page_size_log2 {
+            0 | Memory::DEFAULT_PAGE_SIZE_LOG2 => {}
+            x => bail!(
+                "page size must be 2**16 or 2**0, but was given 2**{x}; note \
+                 that future Wasm extensions might allow any power of two page \
+                 size, but only 2**16 and 2**0 are currently valid",
+            ),
+        }
+
+        if self.ty.shared && self.ty.maximum.is_none() {
+            bail!("shared memories must have a maximum size");
+        }
+
+        let absolute_max = self.ty.max_size_based_on_index_type();
+        let min = self
+            .ty
+            .minimum_byte_size()
+            .err2anyhow()
+            .context("memory's minimum byte size must fit in a u64")?;
+        if min > absolute_max {
+            bail!("minimum size is too large for this memory type's index type");
+        }
+        if self
+            .ty
+            .maximum_byte_size()
+            .map_or(false, |max| max > absolute_max)
+        {
+            bail!("maximum size is too large for this memory type's index type");
+        }
+
+        Ok(())
+    }
+
+    /// Set the minimum size, in units of pages, for the memory type being
+    /// built.
+    ///
+    /// The default minimum is `0`.
+    pub fn min(&mut self, minimum: u64) -> &mut Self {
+        self.ty.minimum = minimum;
+        self
+    }
+
+    /// Set the maximum size, in units of pages, for the memory type being
+    /// built.
+    ///
+    /// The default maximum is `None`.
+    pub fn max(&mut self, maximum: Option<u64>) -> &mut Self {
+        self.ty.maximum = maximum;
+        self
+    }
+
+    /// Set whether this is a 64-bit memory or not.
+    ///
+    /// If a memory is not a 64-bit memory, then it is a 32-bit memory.
+    ///
+    /// The default is `false`, aka 32-bit memories.
+    ///
+    /// Note that 64-bit memories are part of [the memory64
+    /// proposal](https://github.com/WebAssembly/memory64) for WebAssembly which
+    /// is not fully standardized yet.
+    pub fn memory64(&mut self, memory64: bool) -> &mut Self {
+        self.ty.memory64 = memory64;
+        self
+    }
+
+    /// Set the sharedness for the memory type being built.
+    ///
+    /// The default is `false`, aka unshared.
+    ///
+    /// Note that shared memories are part of [the threads
+    /// proposal](https://github.com/WebAssembly/threads) for WebAssembly which
+    /// is not fully standardized yet.
+    pub fn shared(&mut self, shared: bool) -> &mut Self {
+        self.ty.shared = shared;
+        self
+    }
+
+    /// Set the log base 2 of the page size, in bytes, for the memory type being
+    /// built.
+    ///
+    /// The default value is `16`, which results in the default Wasm page size
+    /// of 64KiB (aka 2<sup>16</sup> or 65536).
+    ///
+    /// Other than `16`, the only valid value is `0`, which results in a page
+    /// size of one byte (aka 2<sup>0</sup>). Single-byte page sizes can be used
+    /// to get fine-grained control over a Wasm memory's resource consumption
+    /// and run Wasm in embedded environments with less than 64KiB of RAM, for
+    /// example.
+    ///
+    /// Future extensions to the core WebAssembly language might relax these
+    /// constraints and introduce more valid page sizes, such as any power of
+    /// two between 1 and 65536 inclusive.
+    ///
+    /// Note that non-default page sizes are part of [the custom-page-sizes
+    /// proposal](https://github.com/WebAssembly/custom-page-sizes) for
+    /// WebAssembly which is not fully standardized yet.
+    pub fn page_size_log2(&mut self, page_size_log2: u8) -> &mut Self {
+        self.ty.page_size_log2 = page_size_log2;
+        self
+    }
+
+    /// Get the underlying memory type that this builder has been building.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configured memory type is invalid, for example
+    /// if the maximum size is smaller than the minimum size.
+    pub fn build(&self) -> Result<MemoryType> {
+        self.validate()?;
+        Ok(MemoryType { ty: self.ty })
+    }
+}
+
 /// A descriptor for a WebAssembly memory type.
 ///
 /// Memories are described in units of pages (64KB) and represent contiguous
@@ -2359,55 +2521,74 @@ impl MemoryType {
     /// Creates a new descriptor for a 32-bit WebAssembly memory given the
     /// specified limits of the memory.
     ///
-    /// The `minimum` and `maximum`  values here are specified in units of
-    /// WebAssembly pages, which are 64k.
+    /// The `minimum` and `maximum` values here are specified in units of
+    /// WebAssembly pages, which are 64KiB by default. Use
+    /// [`MemoryTypeBuilder`][crate::MemoryTypeBuilder] if you want a
+    /// non-default page size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the minimum is greater than the maximum or if the minimum or
+    /// maximum number of pages can result in a byte size that is not
+    /// addressable with a 32-bit integer.
     pub fn new(minimum: u32, maximum: Option<u32>) -> MemoryType {
-        MemoryType {
-            ty: Memory {
-                memory64: false,
-                shared: false,
-                minimum: minimum.into(),
-                maximum: maximum.map(|i| i.into()),
-            },
-        }
+        MemoryTypeBuilder::default()
+            .min(minimum.into())
+            .max(maximum.map(Into::into))
+            .build()
+            .unwrap()
     }
 
     /// Creates a new descriptor for a 64-bit WebAssembly memory given the
     /// specified limits of the memory.
     ///
-    /// The `minimum` and `maximum`  values here are specified in units of
-    /// WebAssembly pages, which are 64k.
+    /// The `minimum` and `maximum` values here are specified in units of
+    /// WebAssembly pages, which are 64KiB by default. Use
+    /// [`MemoryTypeBuilder`][crate::MemoryTypeBuilder] if you want a
+    /// non-default page size.
     ///
-    /// Note that 64-bit memories are part of the memory64 proposal for
-    /// WebAssembly which is not standardized yet.
+    /// Note that 64-bit memories are part of [the memory64
+    /// proposal](https://github.com/WebAssembly/memory64) for WebAssembly which
+    /// is not fully standardized yet.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the minimum is greater than the maximum or if the minimum or
+    /// maximum number of pages can result in a byte size that is not
+    /// addressable with a 64-bit integer.
     pub fn new64(minimum: u64, maximum: Option<u64>) -> MemoryType {
-        MemoryType {
-            ty: Memory {
-                memory64: true,
-                shared: false,
-                minimum,
-                maximum,
-            },
-        }
+        MemoryTypeBuilder::default()
+            .memory64(true)
+            .min(minimum)
+            .max(maximum)
+            .build()
+            .unwrap()
     }
 
     /// Creates a new descriptor for shared WebAssembly memory given the
     /// specified limits of the memory.
     ///
-    /// The `minimum` and `maximum`  values here are specified in units of
-    /// WebAssembly pages, which are 64k.
+    /// The `minimum` and `maximum` values here are specified in units of
+    /// WebAssembly pages, which are 64KiB by default. Use
+    /// [`MemoryTypeBuilder`][crate::MemoryTypeBuilder] if you want a
+    /// non-default page size.
     ///
-    /// Note that shared memories are part of the threads proposal for
-    /// WebAssembly which is not standardized yet.
+    /// Note that shared memories are part of [the threads
+    /// proposal](https://github.com/WebAssembly/threads) for WebAssembly which
+    /// is not fully standardized yet.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the minimum is greater than the maximum or if the minimum or
+    /// maximum number of pages can result in a byte size that is not
+    /// addressable with a 32-bit integer.
     pub fn shared(minimum: u32, maximum: u32) -> MemoryType {
-        MemoryType {
-            ty: Memory {
-                memory64: false,
-                shared: true,
-                minimum: minimum.into(),
-                maximum: Some(maximum.into()),
-            },
-        }
+        MemoryTypeBuilder::default()
+            .shared(true)
+            .min(minimum.into())
+            .max(Some(maximum.into()))
+            .build()
+            .unwrap()
     }
 
     /// Returns whether this is a 64-bit memory or not.
@@ -2443,6 +2624,16 @@ impl MemoryType {
     /// for 32-bit memories.
     pub fn maximum(&self) -> Option<u64> {
         self.ty.maximum
+    }
+
+    /// This memory's page size, in bytes.
+    pub fn page_size(&self) -> u64 {
+        self.ty.page_size()
+    }
+
+    /// The log2 of this memory's page size, in bytes.
+    pub fn page_size_log2(&self) -> u8 {
+        self.ty.page_size_log2
     }
 
     pub(crate) fn from_wasmtime_memory(memory: &Memory) -> MemoryType {

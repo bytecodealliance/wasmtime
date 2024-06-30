@@ -2,19 +2,21 @@ use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Token};
 use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError, TrappableImports};
-use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
+use wit_parser::{PackageId, Resolve, UnresolvedPackageGroup, WorldId};
 
 pub struct Config {
     opts: Opts,
     resolve: Resolve,
     world: WorldId,
     files: Vec<PathBuf>,
+    include_generated_code_from_file: bool,
 }
 
 pub fn expand(input: &Config) -> Result<TokenStream> {
@@ -38,7 +40,7 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
     // place a formatted version of the expanded code into a file. This file
     // will then show up in rustc error messages for any codegen issues and can
     // be inspected manually.
-    if std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
+    if input.include_generated_code_from_file || std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
         static INVOCATION: AtomicUsize = AtomicUsize::new(0);
         let root = Path::new(env!("DEBUG_OUTPUT_DIR"));
         let world_name = &input.resolve.worlds[input.world].name;
@@ -80,6 +82,8 @@ impl Parse for Config {
         let mut inline = None;
         let mut path = None;
         let mut async_configured = false;
+        let mut features = Vec::new();
+        let mut include_generated_code_from_file = false;
 
         if input.peek(token::Brace) {
             let content;
@@ -150,6 +154,14 @@ impl Parse for Config {
                     }
                     Opt::Stringify(val) => opts.stringify = val,
                     Opt::SkipMutForwardingImpls(val) => opts.skip_mut_forwarding_impls = val,
+                    Opt::Features(f) => {
+                        features.extend(f.into_iter().map(|f| f.value()));
+                    }
+                    Opt::RequireStoreDataSend(val) => opts.require_store_data_send = val,
+                    Opt::WasmtimeCrate(f) => {
+                        opts.wasmtime_crate = Some(f.into_token_stream().to_string())
+                    }
+                    Opt::IncludeGeneratedCodeFromFile(i) => include_generated_code_from_file = i,
                 }
             }
         } else {
@@ -158,17 +170,18 @@ impl Parse for Config {
                 path = Some(input.parse::<syn::LitStr>()?.value());
             }
         }
-        let (resolve, pkg, files) = parse_source(&path, &inline)
+        let (resolve, pkgs, files) = parse_source(&path, &inline, &features)
             .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
 
         let world = resolve
-            .select_world(pkg, world.as_deref())
+            .select_world(&pkgs, world.as_deref())
             .map_err(|e| Error::new(call_site, format!("{e:?}")))?;
         Ok(Config {
             opts,
             resolve,
             world,
             files,
+            include_generated_code_from_file,
         })
     }
 }
@@ -176,13 +189,22 @@ impl Parse for Config {
 fn parse_source(
     path: &Option<String>,
     inline: &Option<String>,
-) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
+    features: &[String],
+) -> anyhow::Result<(Resolve, Vec<PackageId>, Vec<PathBuf>)> {
     let mut resolve = Resolve::default();
+    resolve.features.extend(features.iter().cloned());
     let mut files = Vec::new();
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
     let mut parse = |resolve: &mut Resolve, path: &Path| -> anyhow::Result<_> {
-        let (pkg, sources) = resolve.push_path(path)?;
+        // Try to normalize the path to make the error message more understandable when
+        // the path is not correct. Fallback to the original path if normalization fails
+        // (probably return an error somewhere else).
+        let normalized_path = match std::fs::canonicalize(path) {
+            Ok(p) => p,
+            Err(_) => path.to_path_buf(),
+        };
+        let (pkg, sources) = resolve.push_path(normalized_path)?;
         files.extend(sources);
         Ok(pkg)
     };
@@ -193,17 +215,17 @@ fn parse_source(
         None
     };
 
-    let inline_pkg = if let Some(inline) = inline {
-        Some(resolve.push(UnresolvedPackage::parse("macro-input".as_ref(), inline)?)?)
+    let inline_pkgs = if let Some(inline) = inline {
+        Some(resolve.push_group(UnresolvedPackageGroup::parse("macro-input", inline)?)?)
     } else {
         None
     };
 
-    let pkg = inline_pkg
+    let pkgs = inline_pkgs
         .or(path_pkg)
         .map_or_else(|| parse(&mut resolve, &root.join("wit")), Ok)?;
 
-    Ok((resolve, pkg, files))
+    Ok((resolve, pkgs, files))
 }
 
 mod kw {
@@ -221,6 +243,10 @@ mod kw {
     syn::custom_keyword!(additional_derives);
     syn::custom_keyword!(stringify);
     syn::custom_keyword!(skip_mut_forwarding_impls);
+    syn::custom_keyword!(features);
+    syn::custom_keyword!(require_store_data_send);
+    syn::custom_keyword!(wasmtime_crate);
+    syn::custom_keyword!(include_generated_code_from_file);
 }
 
 enum Opt {
@@ -237,6 +263,10 @@ enum Opt {
     AdditionalDerives(Vec<syn::Path>),
     Stringify(bool),
     SkipMutForwardingImpls(bool),
+    Features(Vec<syn::LitStr>),
+    RequireStoreDataSend(bool),
+    WasmtimeCrate(syn::Path),
+    IncludeGeneratedCodeFromFile(bool),
 }
 
 impl Parse for Opt {
@@ -385,6 +415,29 @@ impl Parse for Opt {
             input.parse::<kw::skip_mut_forwarding_impls>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::SkipMutForwardingImpls(
+                input.parse::<syn::LitBool>()?.value,
+            ))
+        } else if l.peek(kw::features) {
+            input.parse::<kw::features>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            syn::bracketed!(contents in input);
+            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
+            Ok(Opt::Features(list.into_iter().collect()))
+        } else if l.peek(kw::require_store_data_send) {
+            input.parse::<kw::require_store_data_send>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::RequireStoreDataSend(
+                input.parse::<syn::LitBool>()?.value,
+            ))
+        } else if l.peek(kw::wasmtime_crate) {
+            input.parse::<kw::wasmtime_crate>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::WasmtimeCrate(input.parse()?))
+        } else if l.peek(kw::include_generated_code_from_file) {
+            input.parse::<kw::include_generated_code_from_file>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::IncludeGeneratedCodeFromFile(
                 input.parse::<syn::LitBool>()?.value,
             ))
         } else {

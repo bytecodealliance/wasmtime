@@ -2135,7 +2135,7 @@ fn riscv64_worst_case_instruction_size() {
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
 
-    //there are all candidates potential generate a lot of bytes.
+    // These are all candidate instructions with potential to generate a lot of bytes.
     let mut candidates: Vec<MInst> = vec![];
 
     candidates.push(Inst::Popcnt {
@@ -2190,18 +2190,22 @@ fn riscv64_worst_case_instruction_size() {
             .map(|op| Inst::AtomicRmwLoop {
                 op: *op,
                 offset: a0(),
-                dst: writable_a0(),
+                dst: writable_a1(),
                 ty: I16,
-                p: a0(),
-                x: a0(),
+                p: a1(),
+                x: a2(),
                 t0: writable_a0(),
             }),
     );
 
+    // Return Call Indirect and BrTable are the largest instructions possible. However they
+    // emit their own island, so we don't account them here.
+
     let mut max: (u32, MInst) = (0, Inst::Nop0);
     for i in candidates {
         let mut buffer = MachBuffer::new();
-        i.emit(&mut buffer, &emit_info, &mut Default::default());
+        let mut emit_state = Default::default();
+        i.emit(&mut buffer, &emit_info, &mut emit_state);
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let length = buffer.data().len() as u32;
         if length > max.0 {

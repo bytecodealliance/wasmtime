@@ -300,6 +300,13 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn zero_reg(&mut self) -> XReg {
         XReg::new(zero_reg()).unwrap()
     }
+    fn is_non_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg != self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
+    }
     fn is_zero_reg(&mut self, reg: XReg) -> Option<()> {
         if reg == self.zero_reg() {
             Some(())
@@ -399,6 +406,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
+    fn has_zicond(&mut self) -> bool {
+        self.backend.isa_flags.has_zicond()
+    }
+
     fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64) -> AMode {
         AMode::RegOffset(base, offset)
     }
@@ -439,6 +450,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             _ => None,
         }
     }
+
+    fn sinkable_inst(&mut self, val: Value) -> Option<Inst> {
+        self.is_sinkable_inst(val)
+    }
+
     fn load_op(&mut self, ty: Type) -> LoadOP {
         LoadOP::from_type(ty)
     }

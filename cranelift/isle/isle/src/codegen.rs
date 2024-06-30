@@ -639,8 +639,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     )?;
                     write!(ctx.out, "{}", &ctx.indent)?;
                     match ret_kind {
-                        ReturnKind::Plain => write!(ctx.out, "return ")?,
-                        ReturnKind::Option => write!(ctx.out, "return Some(")?,
+                        ReturnKind::Plain | ReturnKind::Option => write!(ctx.out, "return ")?,
                         ReturnKind::Iterator => write!(ctx.out, "returns.extend(Some(")?,
                     }
                     self.emit_expr(ctx, result)?;
@@ -648,8 +647,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                         write!(ctx.out, ".clone()")?;
                     }
                     match ret_kind {
-                        ReturnKind::Plain => writeln!(ctx.out, ";")?,
-                        ReturnKind::Option => writeln!(ctx.out, ");")?,
+                        ReturnKind::Plain | ReturnKind::Option => writeln!(ctx.out, ";")?,
                         ReturnKind::Iterator => {
                             writeln!(ctx.out, "));")?;
                             writeln!(
@@ -753,6 +751,11 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                 Ok(())
             }
 
+            &Binding::MakeSome { inner } => {
+                write!(ctx.out, "Some(")?;
+                self.emit_expr(ctx, inner)?;
+                write!(ctx.out, ")")
+            }
             &Binding::MatchSome { source } => {
                 self.emit_expr(ctx, source)?;
                 write!(ctx.out, "?")

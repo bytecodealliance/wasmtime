@@ -1,7 +1,7 @@
 #![cfg_attr(not(asan), allow(dead_code))]
 
+use crate::prelude::*;
 use crate::{runtime::vm::PoolingInstanceAllocatorConfig, PoolConcurrencyLimitError};
-use anyhow::{bail, Result};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A generic implementation of a stack pool.

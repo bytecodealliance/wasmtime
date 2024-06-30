@@ -1,4 +1,4 @@
-use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
+use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
 use crate::DEBUG_ASSERT_TRAP_CODE;
 use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
@@ -12,11 +12,9 @@ use cranelift_codegen::isa::{
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachStackMap};
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{
-    DefinedFuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, WasmFuncType, WasmValType,
-};
+use cranelift_wasm::{DefinedFuncIndex, FuncTranslator, WasmFuncType, WasmValType};
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
 use std::any::Any;
@@ -29,7 +27,8 @@ use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, FlagValue, FunctionBodyData,
     FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PtrSize, RelocationTarget,
-    StackMapInformation, TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
+    StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets,
+    WasmFunctionInfo,
 };
 
 #[cfg(feature = "component-model")]
@@ -148,14 +147,8 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(
-            isa,
-            translation,
-            types,
-            &self.tunables,
-            self.wmemcheck,
-            input.call_indirect_start,
-        );
+        let mut func_env =
+            FuncEnvironment::new(isa, translation, types, &self.tunables, self.wmemcheck);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -194,9 +187,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .create_global_value(ir::GlobalValueData::VMContext);
         let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
-            offset: i32::try_from(func_env.offsets.vmctx_runtime_limits())
-                .unwrap()
-                .into(),
+            offset: i32::from(func_env.offsets.ptr.vmctx_runtime_limits()).into(),
             global_type: isa.pointer_type(),
             flags: MemFlags::trusted().with_readonly(),
         });
@@ -209,11 +200,7 @@ impl wasmtime_environ::Compiler for Compiler {
             flags: MemFlags::trusted(),
         });
         context.func.stack_limit = Some(stack_limit);
-        let FunctionBodyData {
-            validator,
-            body,
-            call_indirect_start: _,
-        } = input;
+        let FunctionBodyData { validator, body } = input;
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
         compiler.cx.func_translator.translate_body(
@@ -283,12 +270,12 @@ impl wasmtime_environ::Compiler for Compiler {
         // what we are assuming with our offsets below.
         debug_assert_vmctx_kind(isa, &mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
         let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
-        let vm_runtime_limits_offset = offsets.vmctx_runtime_limits();
+        let vm_runtime_limits_offset = offsets.ptr.vmctx_runtime_limits();
         save_last_wasm_entry_sp(
             &mut builder,
             pointer_type,
             &offsets.ptr,
-            vm_runtime_limits_offset,
+            vm_runtime_limits_offset.into(),
             vmctx,
         );
 
@@ -440,59 +427,33 @@ impl wasmtime_environ::Compiler for Compiler {
         self
     }
 
-    fn append_dwarf(
+    fn append_dwarf<'a>(
         &self,
         obj: &mut Object<'_>,
-        translation: &ModuleTranslation<'_>,
-        funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
-        dwarf_package_bytes: Option<&[u8]>,
-        tunables: &Tunables,
+        translations: &'a PrimaryMap<StaticModuleIndex, ModuleTranslation<'a>>,
+        get_func: &'a dyn Fn(
+            StaticModuleIndex,
+            DefinedFuncIndex,
+        ) -> (SymbolId, &'a (dyn Any + Send)),
+        dwarf_package_bytes: Option<&'a [u8]>,
+        tunables: &'a Tunables,
     ) -> Result<()> {
-        let ofs = VMOffsets::new(
-            self.isa
-                .triple()
-                .architecture
-                .pointer_width()
-                .unwrap()
-                .bytes(),
-            &translation.module,
-        );
-
-        let memory_offset = if ofs.num_imported_memories > 0 {
-            ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
-        } else if ofs.num_defined_memories > 0 {
-            // The addition of shared memory makes the following assumption,
-            // "owned memory index = 0", possibly false. If the first memory
-            // is a shared memory, the base pointer will not be stored in
-            // the `owned_memories` array. The following code should
-            // eventually be fixed to not only handle shared memories but
-            // also multiple memories.
-            assert_eq!(
-                ofs.num_defined_memories, ofs.num_owned_memories,
-                "the memory base pointer may be incorrect due to sharing memory"
-            );
-            ModuleMemoryOffset::Defined(
-                ofs.vmctx_vmmemory_definition_base(OwnedMemoryIndex::new(0)),
+        let get_func = move |m, f| {
+            let (sym, any) = get_func(m, f);
+            (
+                sym,
+                any.downcast_ref::<CompiledFunction>().unwrap().metadata(),
             )
-        } else {
-            ModuleMemoryOffset::None
         };
-        let functions_info = funcs
-            .iter()
-            .map(|(_, (_, func))| {
-                let f = func.downcast_ref::<CompiledFunction>().unwrap();
-                f.metadata()
-            })
-            .collect();
-        let dwarf_sections = crate::debug::emit_dwarf(
+        let mut compilation = crate::debug::Compilation::new(
             &*self.isa,
-            &translation.debuginfo,
-            &functions_info,
-            &memory_offset,
+            translations,
+            &get_func,
             dwarf_package_bytes,
             tunables,
-        )
-        .with_context(|| "failed to emit DWARF debug information")?;
+        );
+        let dwarf_sections = crate::debug::emit_dwarf(&*self.isa, &mut compilation)
+            .with_context(|| "failed to emit DWARF debug information")?;
 
         let (debug_bodies, debug_relocs): (Vec<_>, Vec<_>) = dwarf_sections
             .iter()
@@ -511,7 +472,7 @@ impl wasmtime_environ::Compiler for Compiler {
             let section_id = *dwarf_sections_ids.get(name).unwrap();
             for reloc in relocs {
                 let target_symbol = match reloc.target {
-                    DwarfSectionRelocTarget::Func(index) => funcs[DefinedFuncIndex::new(index)].0,
+                    DwarfSectionRelocTarget::Func(id) => compilation.symbol_id(id),
                     DwarfSectionRelocTarget::Section(name) => {
                         obj.section_symbol(dwarf_sections_ids[name])
                     }
@@ -844,7 +805,7 @@ impl FunctionCompiler<'_> {
         let isa = &*self.compiler.isa;
         let (_, _code_buf) =
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
-        let compiled_code = context.compiled_code().unwrap();
+        let mut compiled_code = context.take_compiled_code().unwrap();
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
@@ -904,7 +865,8 @@ impl FunctionCompiler<'_> {
             }
         }
 
-        let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
+        let stack_maps =
+            mach_stack_maps_to_stack_maps(compiled_code.buffer.take_stack_maps().into_iter());
         compiled_function
             .set_sized_stack_slots(std::mem::take(&mut context.func.sized_stack_slots));
         self.compiler.contexts.lock().unwrap().push(self.cx);
@@ -919,21 +881,21 @@ impl FunctionCompiler<'_> {
     }
 }
 
-fn mach_stack_maps_to_stack_maps(mach_stack_maps: &[MachStackMap]) -> Vec<StackMapInformation> {
+fn mach_stack_maps_to_stack_maps(
+    mach_stack_maps: impl ExactSizeIterator<Item = MachStackMap>,
+) -> Vec<StackMapInformation> {
     // This is converting from Cranelift's representation of a stack map to
     // Wasmtime's representation. They happen to align today but that may
     // not always be true in the future.
-    let mut stack_maps = Vec::new();
-    for &MachStackMap {
+    let mut stack_maps = Vec::with_capacity(mach_stack_maps.len());
+    for MachStackMap {
         offset_end,
-        ref stack_map,
+        stack_map,
         ..
     } in mach_stack_maps
     {
-        let stack_map = wasmtime_environ::StackMap::new(
-            stack_map.mapped_words(),
-            stack_map.as_slice().iter().map(|a| a.0),
-        );
+        let mapped_words = stack_map.mapped_words();
+        let stack_map = wasmtime_environ::StackMap::new(mapped_words, stack_map.into_bitset());
         stack_maps.push(StackMapInformation {
             code_offset: offset_end,
             stack_map,

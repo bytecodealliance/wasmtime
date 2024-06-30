@@ -111,6 +111,11 @@ pub enum Binding {
         /// get the field names.
         field: TupleIndex,
     },
+    /// The result of constructing an Option::Some variant.
+    MakeSome {
+        /// Contained expression.
+        inner: BindingId,
+    },
     /// Pattern-match one of the previous bindings against `Option::Some` and produce a new binding
     /// from its contents. There must be a corresponding [Constraint::Some] for each `source` that
     /// appears in a `MatchSome` binding. (This currently only happens with external extractors.)
@@ -250,6 +255,7 @@ impl Binding {
             Binding::Iterator { source } => std::slice::from_ref(source),
             Binding::MakeVariant { fields, .. } => &fields[..],
             Binding::MatchVariant { source, .. } => std::slice::from_ref(source),
+            Binding::MakeSome { inner } => std::slice::from_ref(inner),
             Binding::MatchSome { source } => std::slice::from_ref(source),
             Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
         }
@@ -384,6 +390,11 @@ impl RuleSetBuilder {
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
+        if termenv.terms[rule.root_term.index()].is_partial() {
+            self.current_rule.result = self.dedup_binding(Binding::MakeSome {
+                inner: self.current_rule.result,
+            });
+        }
         self.normalize_equivalence_classes();
         let rule = std::mem::take(&mut self.current_rule);
 

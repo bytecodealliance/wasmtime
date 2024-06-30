@@ -14,7 +14,6 @@ use crate::prelude::*;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
 use crate::sync::OnceLock;
-use anyhow::Error;
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use core::ptr;
@@ -227,7 +226,7 @@ pub(crate) enum TrapTest {
 /// returning them as a `Result`.
 ///
 /// Highly unsafe since `closure` won't have any dtors run.
-pub unsafe fn catch_traps<'a, F>(
+pub unsafe fn catch_traps<F>(
     signal_handler: Option<*const SignalHandler<'static>>,
     capture_backtrace: bool,
     capture_coredump: bool,

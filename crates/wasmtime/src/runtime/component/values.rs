@@ -2,7 +2,6 @@ use crate::component::func::{desc, Lift, LiftContext, Lower, LowerContext};
 use crate::component::ResourceAny;
 use crate::prelude::*;
 use crate::ValRaw;
-use anyhow::{anyhow, bail, Result};
 use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};

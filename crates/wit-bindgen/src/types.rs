@@ -57,7 +57,7 @@ impl Types {
         {
             match item {
                 WorldItem::Function(f) => self.type_info_func(resolve, f, import),
-                WorldItem::Interface(id) => {
+                WorldItem::Interface { id, .. } => {
                     let iface = &resolve.interfaces[*id];
 
                     for (_, t) in iface.types.iter() {

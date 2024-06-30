@@ -23,7 +23,6 @@
 
 use crate::prelude::*;
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
-use anyhow::{anyhow, bail, ensure, Context, Result};
 use core::str::FromStr;
 use object::endian::NativeEndian;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -202,6 +201,7 @@ struct WasmFeatures {
     extended_const: bool,
     function_references: bool,
     gc: bool,
+    custom_page_sizes: bool,
 }
 
 impl Metadata<'_> {
@@ -241,7 +241,6 @@ impl Metadata<'_> {
         assert!(!memory_control);
         assert!(!component_model_values);
         assert!(!component_model_nested_names);
-        assert!(!custom_page_sizes);
         assert!(!shared_everything_threads);
 
         Metadata {
@@ -264,6 +263,7 @@ impl Metadata<'_> {
                 extended_const,
                 function_references,
                 gc,
+                custom_page_sizes,
             },
         }
     }
@@ -360,8 +360,6 @@ impl Metadata<'_> {
             relaxed_simd_deterministic,
             tail_callable,
             winch_callable,
-            cache_call_indirects,
-            max_call_indirect_cache_slots,
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
@@ -429,16 +427,6 @@ impl Metadata<'_> {
             other.winch_callable,
             "Winch calling convention",
         )?;
-        Self::check_bool(
-            cache_call_indirects,
-            other.cache_call_indirects,
-            "caching of call-indirect targets",
-        )?;
-        Self::check_int(
-            max_call_indirect_cache_slots,
-            other.max_call_indirect_cache_slots,
-            "maximum slot count for caching of call-indirect targets",
-        )?;
 
         Ok(())
     }
@@ -480,6 +468,7 @@ impl Metadata<'_> {
             extended_const,
             function_references,
             gc,
+            custom_page_sizes,
         } = self.features;
 
         use wasmparser::WasmFeatures as F;
@@ -555,6 +544,11 @@ impl Metadata<'_> {
             relaxed_simd,
             other.contains(F::RELAXED_SIMD),
             "WebAssembly relaxed-simd support",
+        )?;
+        Self::check_bool(
+            custom_page_sizes,
+            other.contains(F::CUSTOM_PAGE_SIZES),
+            "WebAssembly custom-page-sizes support",
         )?;
 
         Ok(())

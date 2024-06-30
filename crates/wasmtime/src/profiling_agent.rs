@@ -1,6 +1,4 @@
 use crate::prelude::*;
-#[allow(unused)]
-use anyhow::{bail, Result};
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "profiling", target_os = "linux"))] {

@@ -400,19 +400,17 @@ block0(v0: i128, v1: i8):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi t0, zero, 0x40
 ;   srl a3, a1, a4
 ;   andi a4, a2, 0x7f
-;   bltu a4, t0, 0x10
 ;   mv a0, a3
 ;   mv a1, zero
-;   j 0xc
+;   bgeu a4, t0, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -444,19 +442,17 @@ block0(v0: i128, v1: i16):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi t0, zero, 0x40
 ;   srl a3, a1, a4
 ;   andi a4, a2, 0x7f
-;   bltu a4, t0, 0x10
 ;   mv a0, a3
 ;   mv a1, zero
-;   j 0xc
+;   bgeu a4, t0, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -488,19 +484,17 @@ block0(v0: i128, v1: i32):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi t0, zero, 0x40
 ;   srl a3, a1, a4
 ;   andi a4, a2, 0x7f
-;   bltu a4, t0, 0x10
 ;   mv a0, a3
 ;   mv a1, zero
-;   j 0xc
+;   bgeu a4, t0, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -532,19 +526,17 @@ block0(v0: i128, v1: i64):
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a4
 ;   sll a5, a1, a3
-;   bnez a4, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a4, 8
 ;   mv a3, a5
 ;   srl a5, a0, a4
 ;   or a5, a3, a5
 ;   addi t0, zero, 0x40
 ;   srl a3, a1, a4
 ;   andi a4, a2, 0x7f
-;   bltu a4, t0, 0x10
 ;   mv a0, a3
 ;   mv a1, zero
-;   j 0xc
+;   bgeu a4, t0, 0xc
 ;   mv a0, a5
 ;   mv a1, a3
 ;   ret
@@ -601,10 +593,9 @@ block0(v0: i128, v1: i128):
 ;   addi a3, zero, 0x40
 ;   srl a4, a1, a5
 ;   andi a5, a2, 0x7f
-;   bltu a5, a3, 0x10
 ;   mv a0, a4
 ;   mv a1, zero
-;   j 0xc
+;   bgeu a5, a3, 0xc
 ;   mv a0, s11
 ;   mv a1, a4
 ;   ld s11, 8(sp)

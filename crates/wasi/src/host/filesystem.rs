@@ -7,13 +7,16 @@ use crate::bindings::io::streams::{InputStream, OutputStream};
 use crate::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
 };
-use crate::{DirPerms, FilePerms, FsError, FsResult, WasiView};
+use crate::{DirPerms, FilePerms, FsError, FsResult, WasiImpl, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
 
 mod sync;
 
-impl preopens::Host for dyn WasiView + '_ {
+impl<T> preopens::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn get_directories(
         &mut self,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
@@ -30,7 +33,10 @@ impl preopens::Host for dyn WasiView + '_ {
 }
 
 #[async_trait::async_trait]
-impl types::Host for dyn WasiView + '_ {
+impl<T> types::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
@@ -52,7 +58,10 @@ impl types::Host for dyn WasiView + '_ {
 }
 
 #[async_trait::async_trait]
-impl HostDescriptor for dyn WasiView + '_ {
+impl<T> HostDescriptor for WasiImpl<T>
+where
+    T: WasiView,
+{
     async fn advise(
         &mut self,
         fd: Resource<types::Descriptor>,
@@ -529,7 +538,7 @@ impl HostDescriptor for dyn WasiView + '_ {
         }
 
         if oflags.contains(OpenFlags::TRUNCATE) {
-            opts.truncate(true);
+            opts.truncate(true).write(true);
         }
         if flags.contains(DescriptorFlags::READ) {
             opts.read(true);
@@ -846,7 +855,10 @@ impl HostDescriptor for dyn WasiView + '_ {
 }
 
 #[async_trait::async_trait]
-impl HostDirectoryEntryStream for dyn WasiView + '_ {
+impl<T> HostDirectoryEntryStream for WasiImpl<T>
+where
+    T: WasiView,
+{
     async fn read_directory_entry(
         &mut self,
         stream: Resource<types::DirectoryEntryStream>,

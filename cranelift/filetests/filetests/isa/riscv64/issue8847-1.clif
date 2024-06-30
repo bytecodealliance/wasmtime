@@ -1,0 +1,57 @@
+;; Compile test case
+
+test compile
+target riscv64
+
+function u1:0() tail {
+    ss0 = explicit_slot 50, align = 512
+    ss1 = explicit_slot 47, align = 4
+    ss2 = explicit_slot 34, align = 32
+    ss3 = explicit_slot 103, align = 1024
+    ss4 = explicit_slot 110, align = 512
+    ss5 = explicit_slot 126, align = 512
+    sig0 = (i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i8 uext, i16 uext, i16, i64 sext, i64 sext, i128 uext, i8 sext, f32) tail
+
+block0:
+    v0 = iconst.i64 0xef31_de2a_2352_79ff
+    v3 = iconst.i16 0xffef
+    v164 = iconst.i64 0
+    v7 = uextend.i128 v164  ; v164 = 0
+    v14 = iconst.i8 203
+    v15 = f32const -0x1.979796p24
+    v112 = iconst.i8 0
+    v134 = iconst.i8 0
+    v147 = iconst.i8 0
+    v154 = iconst.i8 0
+    v156 = iconst.i32 0
+    v157 = iconst.i32 0
+    v163 = iconst.i64 0
+    brif v112, block40, block39  ; v112 = 0
+
+block40:
+    trap user0
+
+block39:
+    brif.i8 v134, block58, block57  ; v134 = 0
+
+block58:
+    trap user0
+
+block57:
+    brif.i8 v147, block68, block67  ; v147 = 0
+
+block68:
+    trap user0
+
+block67:
+    brif.i8 v154, block73, block72  ; v154 = 0
+
+block73:
+    br_table v156, block1, [block1, block1]  ; v156 = 0
+
+block72:
+    br_table v157, block1, [block1, block1]  ; v157 = 0
+
+block1 cold:
+    return_call_indirect.i64 sig0, v163(v0, v0, v0, v0, v0, v0, v0, v14, v3, v3, v0, v0, v7, v14, v15)  ; v163 = 0, v0 = 0xef31_de2a_2352_79ff, v0 = 0xef31_de2a_2352_79ff, v0 = 0xef31_de2a_2352_79ff, v0 = 0xef31_de2a_2352_79ff, v0 = 0xef31_de2a_2352_79ff, v0 = 0xef31_de2a_2352_79ff, v0 = 0xef31_de2a_2352_79ff, v14 = 203, v3 = 0xffef, v3 = 0xffef, v0 = 0xef31_de2a_2352_79ff, v0 = 0xef31_de2a_2352_79ff, v14 = 203, v15 = -0x1.979796p24
+}

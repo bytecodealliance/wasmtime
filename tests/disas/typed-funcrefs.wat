@@ -113,7 +113,7 @@
         local.get $sum)
 )
 
-;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast {
+;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -126,14 +126,14 @@
 ;; @0039                               return v2
 ;; }
 ;;
-;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast {
+;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly gv3+88
 ;;     sig0 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
-;;     sig1 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast
+;;     sig1 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u1:9 sig0
 ;;     stack_limit = gv2
 ;;
@@ -180,13 +180,13 @@
 ;; @0066                               return v51
 ;; }
 ;;
-;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast {
+;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly gv3+88
-;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast
+;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     fn0 = colocated u1:9 sig1
 ;;     stack_limit = gv2
@@ -234,12 +234,12 @@
 ;; @0091                               return v51
 ;; }
 ;;
-;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast {
+;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast
+;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):

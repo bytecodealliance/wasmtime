@@ -553,6 +553,10 @@
   (Pack)
   (Packw)
   (Packh)
+
+  ;; ZiCond: Integer Conditional Operations
+  (CzeroEqz)
+  (CzeroNez)
 ))
 
 
@@ -1046,6 +1050,9 @@
 
 (decl pure has_zbs () bool)
 (extern constructor has_zbs has_zbs)
+
+(decl pure has_zicond () bool)
+(extern constructor has_zicond has_zicond)
 
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1783,6 +1790,26 @@
 (rule (rv_packw rs1 rs2)
   (alu_rrr (AluOPRRR.Packw) rs1 rs2))
 
+;; `ZiCond` Extension Instructions
+
+;; Helper for emitting the `czero.eqz` ("Conditional zero, if condition is equal to zero") instruction.
+;; RS1 is the data source
+;; RS2 is the condition
+;;
+;; rd = (rs2 == 0) ? 0 : rs1
+(decl rv_czero_eqz (XReg XReg) XReg)
+(rule (rv_czero_eqz rs1 rs2)
+  (alu_rrr (AluOPRRR.CzeroEqz) rs1 rs2))
+
+;; Helper for emitting the `czero.nez` ("Conditional zero, if condition is nonzero") instruction.
+;; RS1 is the data source
+;; RS2 is the condition
+;;
+;; rd = (rs2 != 0) ? 0 : rs1
+(decl rv_czero_nez (XReg XReg) XReg)
+(rule (rv_czero_nez rs1 rs2)
+  (alu_rrr (AluOPRRR.CzeroNez) rs1 rs2))
+
 
 ;; `Zicsr` Extension Instructions
 
@@ -1835,6 +1862,11 @@
 ;; TODO: Loading the zero reg directly causes a bunch of regalloc errors, we should look into it.
 ;; TODO: Load floats using `fld` instead of `ld`
 (decl imm (Type u64) Reg)
+
+;; Special-case 0.0 for floats to use the `(zero_reg)` directly.
+;; See #7162 for why this doesn't fall out of the rules below.
+(rule 8 (imm $F32 0) (gen_bitcast (zero_reg) $I32 $F32))
+(rule 8 (imm $F64 0) (gen_bitcast (zero_reg) $I64 $F64))
 
 ;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
 (rule 7 (imm (ty_scalar_float ty) imm)
@@ -2361,10 +2393,10 @@
 ;;
 ;; We can't recurse into `amode` again since that could cause stack overflows.
 ;; See: https://github.com/bytecodealliance/wasmtime/pull/6968
-(rule 1 (amode (iadd addr (iconst (simm32 y))) offset)
+(rule 1 (amode (iadd addr (i32_from_iconst y)) offset)
   (if-let new_offset (s32_add_fallible y offset))
   (amode_inner addr new_offset))
-(rule 2 (amode (iadd (iconst (simm32 x)) addr) offset)
+(rule 2 (amode (iadd (i32_from_iconst x) addr) offset)
   (if-let new_offset (s32_add_fallible x offset))
   (amode_inner addr new_offset))
 
@@ -2390,7 +2422,23 @@
   (gen_stack_slot_amode ss combined_offset))
 
 
+;; Helpers for sinkable loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V doesen't really have sinkable loads. But the regular load instructions
+;; sign / zero extend their results to 64 bits. So we can pretend they are
+;; an extend instruction with a sinkable load. This allows us to have better
+;; lowerings on these cases.
+
+;; Extract a sinkable instruction from a value operand.
+(decl sinkable_inst (Inst) Value)
+(extern extractor sinkable_inst sinkable_inst)
+
+;; Matches a sinkable load.
+(decl sinkable_load (Inst Type MemFlags Value Offset32) Value)
+(extractor (sinkable_load inst ty flags addr offset)
+           (and
+              (load flags addr offset)
+              (sinkable_inst (has_type ty inst))))
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.
 (decl load_op_reg_type (LoadOP) Type)
@@ -2398,16 +2446,41 @@
 (rule 1 (load_op_reg_type (LoadOP.Flw)) $F64)
 (rule 0 (load_op_reg_type _) $I64)
 
-;; helper function to load from memory.
+;; Helper constructor to build a load instruction.
 (decl gen_load (AMode LoadOP MemFlags) Reg)
 (rule (gen_load amode op flags)
   (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
       (_ Unit (emit (MInst.Load dst op flags amode))))
     dst))
 
-;; helper function to store to memory.
-(decl gen_store (AMode StoreOP MemFlags Reg) InstOutput)
-(rule (gen_store amode op flags src)
+;; Similar to `gen_load` but marks `Inst` as sunk at the current point.
+;;
+;; This is only useful for load op's that perform some additional computation
+;; such as extending the loaded value.
+(decl gen_sunk_load (Inst AMode LoadOP MemFlags) Reg)
+(rule (gen_sunk_load inst amode op flags)
+  (let ((_ Unit (sink_inst inst)))
+        (gen_load amode op flags)))
+
+
+;; Helper constructor to build a store instruction.
+;;
+;; This helper contains a special-case for zero constants stored to memory to
+;; directly store the `zero` register to memory. See #7162 for some discussion
+;; on why this doesn't just fall out.
+(decl gen_store (AMode MemFlags Value) InstOutput)
+(rule 1 (gen_store amode flags val @ (value_type ty))
+  (if-let (u64_from_iconst 0) val)
+  (rv_store amode (store_op ty) flags (zero_reg)))
+(rule 0 (gen_store amode flags val @ (value_type ty))
+  (rv_store amode (store_op ty) flags val))
+
+;; Emit a raw instruction to store a register into memory.
+;;
+;; Note that the `src` operand must have the correct type for the `op`
+;; specified.
+(decl rv_store (AMode StoreOP MemFlags Reg) InstOutput)
+(rule (rv_store amode op flags src)
   (side_effect (SideEffectNoResult.Inst (MInst.Store amode op flags src))))
 
 
@@ -2560,25 +2633,67 @@
 
 (decl gen_select_xreg (IntegerCompare XReg XReg) XReg)
 
-(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedLessThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_minu x y))
 
-(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedLessThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_min x y))
 
-(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedGreaterThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_maxu x y))
 
-(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+(rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedGreaterThan) (intcc_without_eq cc))
   (if-let $true (has_zbb))
   (rv_max x y))
+
+;; Rotate Zero Reg to the right. This allows us to write fewer rules
+;; below when matching the zero register
+;;
+;; Additionally prevent this rule from recursing infinitely by only
+;; matching when one of the inputs is the zero register, but not both.
+
+(rule 5 (gen_select_xreg (int_compare_decompose cc a @ (zero_reg) b @ (non_zero_reg)) x y)
+  (if-let $true (has_zicond))
+  (gen_select_xreg (int_compare (intcc_swap_args cc) b a) x y))
+
+(rule 4 (gen_select_xreg c @ (int_compare_decompose cc a b) x @ (zero_reg) y @ (non_zero_reg))
+  (if-let $true (has_zicond))
+  (gen_select_xreg (int_compare (intcc_complement cc) a b) y x))
+
+(rule 3 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x (zero_reg))
+  (if-let $true (has_zicond))
+  (rv_czero_nez x c))
+
+(rule 3 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x (zero_reg))
+  (if-let $true (has_zicond))
+  (rv_czero_eqz x c))
+
+(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x y)
+  (if-let $true (has_zicond))
+  (rv_or
+    (rv_czero_nez x c)
+    (rv_czero_eqz y c)))
+
+(rule 2 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x y)
+  (if-let $true (has_zicond))
+  (rv_or
+    (rv_czero_eqz x c)
+    (rv_czero_nez y c)))
+
+;; It is still beneficial to emit the full compare instruction, and then the 3 instruction
+;; select using zicond, so do that here as a last resort.
+(rule 1 (gen_select_xreg compare x y)
+  (if-let $true (has_zicond))
+  (gen_select_xreg (cmp_nez (lower_int_compare compare)) x y))
+
+;; In the base case we emit a conditional branch and a few moves.
 
 (rule 0 (gen_select_xreg c x y)
   (let
@@ -2815,6 +2930,10 @@
 ;; Generates a bitcast instruction.
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
+(rule 5 (gen_bitcast r (ty_scalar_float src_ty) (ty_vec_fits_in_register _)) (rv_vfmv_sf r src_ty))
+(rule 4 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_vec_fits_in_register _)) (rv_vmv_sx r src_ty))
+(rule 3 (gen_bitcast r (ty_vec_fits_in_register _) (ty_scalar_float dst_ty)) (rv_vfmv_fs r dst_ty))
+(rule 2 (gen_bitcast r (ty_vec_fits_in_register _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
 (rule 1 (gen_bitcast r $F32 $I32) (rv_fmvxw r))
 (rule 1 (gen_bitcast r $F64 $I64) (rv_fmvxd r))
 (rule 1 (gen_bitcast r $I32 $F32) (rv_fmvwx r))
@@ -2951,6 +3070,10 @@
 
 (decl sp_reg () PReg)
 (extern constructor sp_reg sp_reg)
+
+;; Extractor that matches all registers, except the zero register
+(decl non_zero_reg () XReg)
+(extern extractor non_zero_reg is_non_zero_reg)
 
 ;; Helper for creating the zero register.
 (decl zero_reg () XReg)

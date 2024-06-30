@@ -1,6 +1,7 @@
 /// Execute the wiggle guest conversion code to exercise it
 mod convert_just_errno {
     use anyhow::Result;
+    use wiggle::GuestMemory;
     use wiggle_test::{impl_errno, HostMemory, WasiCtx};
 
     /// The `errors` argument to the wiggle gives us a hook to map a rich error
@@ -43,7 +44,7 @@ mod convert_just_errno {
     }
 
     impl<'a> one_error_conversion::OneErrorConversion for WasiCtx<'a> {
-        fn foo(&mut self, strike: u32) -> Result<(), types::ErrnoT> {
+        fn foo(&mut self, _memory: &mut GuestMemory<'_>, strike: u32) -> Result<(), types::ErrnoT> {
             // We use the argument to this function to exercise all of the
             // possible error cases we could hit here
             match strike {
@@ -57,11 +58,12 @@ mod convert_just_errno {
     #[test]
     fn one_error_conversion_test() {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
         // Exercise each of the branches in `foo`.
         // Start with the success case:
-        let r0 = one_error_conversion::foo(&mut ctx, &host_memory, 0).unwrap();
+        let r0 = one_error_conversion::foo(&mut ctx, &mut memory, 0).unwrap();
         assert_eq!(
             r0,
             types::Errno::Ok as i32,
@@ -70,7 +72,7 @@ mod convert_just_errno {
         assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
 
         // First error case:
-        let r1 = one_error_conversion::foo(&mut ctx, &host_memory, 1).unwrap();
+        let r1 = one_error_conversion::foo(&mut ctx, &mut memory, 1).unwrap();
         assert_eq!(
             r1,
             types::Errno::PicketLine as i32,
@@ -78,7 +80,7 @@ mod convert_just_errno {
         );
 
         // Second error case:
-        let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2).unwrap();
+        let r2 = one_error_conversion::foo(&mut ctx, &mut memory, 2).unwrap();
         assert_eq!(
             r2,
             types::Errno::InvalidArg as i32,
@@ -92,6 +94,7 @@ mod convert_just_errno {
 mod convert_multiple_error_types {
     pub use super::convert_just_errno::RichError;
     use anyhow::Result;
+    use wiggle::GuestMemory;
     use wiggle_test::{impl_errno, WasiCtx};
 
     /// Test that we can map multiple types of errors.
@@ -143,13 +146,13 @@ mod convert_multiple_error_types {
 
     // And here's the witx module trait impl, bodies elided
     impl<'a> two_error_conversions::TwoErrorConversions for WasiCtx<'a> {
-        fn foo(&mut self, _: u32) -> Result<(), RichError> {
+        fn foo(&mut self, _: &mut GuestMemory<'_>, _: u32) -> Result<(), RichError> {
             unimplemented!()
         }
-        fn bar(&mut self, _: u32) -> Result<(), AnotherRichError> {
+        fn bar(&mut self, _: &mut GuestMemory<'_>, _: u32) -> Result<(), AnotherRichError> {
             unimplemented!()
         }
-        fn baz(&mut self, _: u32) -> anyhow::Error {
+        fn baz(&mut self, _: &mut GuestMemory<'_>, _: u32) -> anyhow::Error {
             unimplemented!()
         }
     }

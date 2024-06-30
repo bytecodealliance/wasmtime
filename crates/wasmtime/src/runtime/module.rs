@@ -1,8 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::{
-    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
-    VMWasmCallFunction,
-};
+use crate::runtime::vm::{CompiledModuleId, MmapVec, ModuleMemoryImages, VMWasmCallFunction};
 use crate::sync::OnceLock;
 use crate::{
     code::CodeObject,
@@ -14,17 +11,15 @@ use crate::{
     Engine,
 };
 use alloc::sync::Arc;
-use anyhow::{bail, Result};
 use core::fmt;
-use core::mem;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::path::Path;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
-    ObjectKind, TypeTrace, VMOffsets, VMSharedTypeIndex,
+    CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind, TypeTrace, VMOffsets,
+    VMSharedTypeIndex,
 };
 mod registry;
 
@@ -478,12 +473,8 @@ impl Module {
         info: CompiledModuleInfo,
         serializable: bool,
     ) -> Result<Self> {
-        let module = CompiledModule::from_artifacts(
-            code.code_memory().clone(),
-            info,
-            engine.profiler(),
-            engine.unique_id_allocator(),
-        )?;
+        let module =
+            CompiledModule::from_artifacts(code.code_memory().clone(), info, engine.profiler())?;
 
         // Validate the module can be used with the current instance allocator.
         let offsets = VMOffsets::new(HostPtr, module.module());
@@ -588,11 +579,11 @@ impl Module {
         &self.inner.module
     }
 
-    fn code_object(&self) -> &Arc<CodeObject> {
+    pub(crate) fn code_object(&self) -> &Arc<CodeObject> {
         &self.inner.code
     }
 
-    pub(crate) fn env_module(&self) -> &wasmtime_environ::Module {
+    pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
         self.compiled_module().module()
     }
 
@@ -908,14 +899,6 @@ impl Module {
         }
     }
 
-    /// Returns the `ModuleInner` cast as `ModuleRuntimeInfo` for use
-    /// by the runtime.
-    pub(crate) fn runtime_info(&self) -> Arc<dyn crate::runtime::vm::ModuleRuntimeInfo> {
-        // N.B.: this needs to return a clone because we cannot
-        // statically cast the &Arc<ModuleInner> to &Arc<dyn Trait...>.
-        self.inner.clone()
-    }
-
     pub(crate) fn module_info(&self) -> &dyn crate::runtime::vm::ModuleInfo {
         &*self.inner
     }
@@ -956,7 +939,7 @@ impl Module {
     /// as a performance optimization if required but is otherwise handled
     /// automatically.
     pub fn initialize_copy_on_write_image(&self) -> Result<()> {
-        self.inner.memory_images()?;
+        self.memory_images()?;
         Ok(())
     }
 
@@ -1017,29 +1000,85 @@ impl Module {
         self.code_object().code_memory().text()
     }
 
-    /// Get the locations of functions in this module's `.text` section.
+    /// Get information about functions in this module's `.text` section: their
+    /// index, name, and offset+length.
     ///
-    /// Each function's location is a (`.text` section offset, length) pair.
-    pub fn function_locations<'a>(&'a self) -> impl ExactSizeIterator<Item = (usize, usize)> + 'a {
-        self.compiled_module().finished_functions().map(|(f, _)| {
-            let loc = self.compiled_module().func_loc(f);
-            (loc.start as usize, loc.length as usize)
+    /// Results are yielded in a ModuleFunction struct.
+    pub fn functions<'a>(&'a self) -> impl ExactSizeIterator<Item = ModuleFunction> + 'a {
+        let module = self.compiled_module();
+        module.finished_functions().map(|(idx, _)| {
+            let loc = module.func_loc(idx);
+            let idx = module.module().func_index(idx);
+            ModuleFunction {
+                index: idx,
+                name: module.func_name(idx).map(|n| n.to_string()),
+                offset: loc.start as usize,
+                len: loc.length as usize,
+            }
         })
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
         self.inner.module.unique_id()
     }
-}
 
-impl ModuleInner {
-    fn memory_images(&self) -> Result<Option<&ModuleMemoryImages>> {
+    pub(crate) fn offsets(&self) -> &VMOffsets<HostPtr> {
+        &self.inner.offsets
+    }
+
+    /// Return the address, in memory, of the trampoline that allows Wasm to
+    /// call a array function of the given signature.
+    pub(crate) fn wasm_to_array_trampoline(
+        &self,
+        signature: VMSharedTypeIndex,
+    ) -> Option<NonNull<VMWasmCallFunction>> {
+        log::trace!("Looking up trampoline for {signature:?}");
+        let trampoline_shared_ty = self.inner.engine.signatures().trampoline_type(signature);
+        let trampoline_module_ty = self
+            .inner
+            .code
+            .signatures()
+            .trampoline_type(trampoline_shared_ty)?;
+        debug_assert!(self
+            .inner
+            .engine
+            .signatures()
+            .borrow(
+                self.inner
+                    .code
+                    .signatures()
+                    .shared_type(trampoline_module_ty)
+                    .unwrap()
+            )
+            .unwrap()
+            .unwrap_func()
+            .is_trampoline_type());
+
+        let ptr = self
+            .compiled_module()
+            .wasm_to_array_trampoline(trampoline_module_ty)
+            .as_ptr()
+            .cast::<VMWasmCallFunction>()
+            .cast_mut();
+        Some(NonNull::new(ptr).unwrap())
+    }
+
+    pub(crate) fn memory_images(&self) -> Result<Option<&ModuleMemoryImages>> {
         let images = self
+            .inner
             .memory_images
-            .get_or_try_init(|| memory_images(&self.engine, &self.module))?
+            .get_or_try_init(|| memory_images(&self.inner.engine, &self.inner.module))?
             .as_ref();
         Ok(images)
     }
+}
+
+/// Describes a function for a given module.
+pub struct ModuleFunction {
+    pub index: wasmtime_environ::FuncIndex,
+    pub name: Option<String>,
+    pub offset: usize,
+    pub len: usize,
 }
 
 impl Drop for ModuleInner {
@@ -1070,90 +1109,6 @@ fn _assert_send_sync() {
     _assert::<Module>();
 }
 
-impl crate::runtime::vm::ModuleRuntimeInfo for ModuleInner {
-    fn module(&self) -> &Arc<wasmtime_environ::Module> {
-        self.module.module()
-    }
-
-    fn engine_type_index(
-        &self,
-        module_index: wasmtime_environ::ModuleInternedTypeIndex,
-    ) -> VMSharedTypeIndex {
-        self.code
-            .signatures()
-            .shared_type(module_index)
-            .expect("bad module-level interned type index")
-    }
-
-    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
-        let ptr = self
-            .module
-            .finished_function(index)
-            .as_ptr()
-            .cast::<VMWasmCallFunction>()
-            .cast_mut();
-        NonNull::new(ptr).unwrap()
-    }
-
-    fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction> {
-        let ptr = self.module.array_to_wasm_trampoline(index)?.as_ptr();
-        Some(unsafe { mem::transmute::<*const u8, VMArrayCallFunction>(ptr) })
-    }
-
-    fn wasm_to_array_trampoline(
-        &self,
-        signature: VMSharedTypeIndex,
-    ) -> Option<NonNull<VMWasmCallFunction>> {
-        log::trace!("Looking up trampoline for {signature:?}");
-        let trampoline_shared_ty = self.engine.signatures().trampoline_type(signature);
-        let trampoline_module_ty = self
-            .code
-            .signatures()
-            .trampoline_type(trampoline_shared_ty)?;
-        debug_assert!(self
-            .engine
-            .signatures()
-            .borrow(
-                self.code
-                    .signatures()
-                    .shared_type(trampoline_module_ty)
-                    .unwrap()
-            )
-            .unwrap()
-            .unwrap_func()
-            .is_trampoline_type());
-
-        let ptr = self
-            .module
-            .wasm_to_array_trampoline(trampoline_module_ty)
-            .as_ptr()
-            .cast::<VMWasmCallFunction>()
-            .cast_mut();
-        Some(NonNull::new(ptr).unwrap())
-    }
-
-    fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
-        let images = self.memory_images()?;
-        Ok(images.and_then(|images| images.get_memory_image(memory)))
-    }
-
-    fn unique_id(&self) -> Option<CompiledModuleId> {
-        Some(self.module.unique_id())
-    }
-
-    fn wasm_data(&self) -> &[u8] {
-        self.module.code_memory().wasm_data()
-    }
-
-    fn type_ids(&self) -> &[VMSharedTypeIndex] {
-        self.code.signatures().as_module_map().values().as_slice()
-    }
-
-    fn offsets(&self) -> &VMOffsets<HostPtr> {
-        &self.offsets
-    }
-}
-
 impl crate::runtime::vm::ModuleInfo for ModuleInner {
     fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
         let text_offset = pc - self.module.text().as_ptr() as usize;
@@ -1177,88 +1132,6 @@ impl crate::runtime::vm::ModuleInfo for ModuleInner {
         };
 
         Some(&info.stack_maps[index].stack_map)
-    }
-}
-
-/// A barebones implementation of ModuleRuntimeInfo that is useful for
-/// cases where a purpose-built environ::Module is used and a full
-/// CompiledModule does not exist (for example, for tests or for the
-/// default-callee instance).
-pub(crate) struct BareModuleInfo {
-    module: Arc<wasmtime_environ::Module>,
-    one_signature: Option<VMSharedTypeIndex>,
-    offsets: VMOffsets<HostPtr>,
-}
-
-impl BareModuleInfo {
-    pub(crate) fn empty(module: Arc<wasmtime_environ::Module>) -> Self {
-        BareModuleInfo::maybe_imported_func(module, None)
-    }
-
-    pub(crate) fn maybe_imported_func(
-        module: Arc<wasmtime_environ::Module>,
-        one_signature: Option<VMSharedTypeIndex>,
-    ) -> Self {
-        BareModuleInfo {
-            offsets: VMOffsets::new(HostPtr, &module),
-            module,
-            one_signature,
-        }
-    }
-
-    pub(crate) fn into_traitobj(self) -> Arc<dyn crate::runtime::vm::ModuleRuntimeInfo> {
-        Arc::new(self)
-    }
-}
-
-impl crate::runtime::vm::ModuleRuntimeInfo for BareModuleInfo {
-    fn module(&self) -> &Arc<wasmtime_environ::Module> {
-        &self.module
-    }
-
-    fn engine_type_index(
-        &self,
-        _module_index: wasmtime_environ::ModuleInternedTypeIndex,
-    ) -> VMSharedTypeIndex {
-        unreachable!()
-    }
-
-    fn function(&self, _index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
-        unreachable!()
-    }
-
-    fn array_to_wasm_trampoline(&self, _index: DefinedFuncIndex) -> Option<VMArrayCallFunction> {
-        unreachable!()
-    }
-
-    fn wasm_to_array_trampoline(
-        &self,
-        _signature: VMSharedTypeIndex,
-    ) -> Option<NonNull<VMWasmCallFunction>> {
-        unreachable!()
-    }
-
-    fn memory_image(&self, _memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
-        Ok(None)
-    }
-
-    fn unique_id(&self) -> Option<CompiledModuleId> {
-        None
-    }
-
-    fn wasm_data(&self) -> &[u8] {
-        &[]
-    }
-
-    fn type_ids(&self) -> &[VMSharedTypeIndex] {
-        match &self.one_signature {
-            Some(id) => core::slice::from_ref(id),
-            None => &[],
-        }
-    }
-
-    fn offsets(&self) -> &VMOffsets<HostPtr> {
-        &self.offsets
     }
 }
 

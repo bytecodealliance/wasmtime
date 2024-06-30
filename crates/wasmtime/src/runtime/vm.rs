@@ -3,9 +3,10 @@
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
 
+use crate::prelude::*;
 use alloc::sync::Arc;
-use anyhow::{Error, Result};
 use core::fmt;
+use core::mem;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use wasmtime_environ::{
@@ -74,7 +75,7 @@ pub use crate::runtime::vm::vmcontext::{
 pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;
-pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
+pub use module_id::CompiledModuleId;
 
 mod cow;
 pub use crate::runtime::vm::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
@@ -182,54 +183,153 @@ pub unsafe trait Store {
 /// the bottom of the dependence DAG though, we don't know or care about
 /// that; we just need some implementor of this trait for each
 /// allocation request.
-pub trait ModuleRuntimeInfo: Send + Sync + 'static {
+#[derive(Clone)]
+pub enum ModuleRuntimeInfo {
+    Module(crate::Module),
+    Bare(Box<BareModuleInfo>),
+}
+
+/// A barebones implementation of ModuleRuntimeInfo that is useful for
+/// cases where a purpose-built environ::Module is used and a full
+/// CompiledModule does not exist (for example, for tests or for the
+/// default-callee instance).
+#[derive(Clone)]
+pub struct BareModuleInfo {
+    module: Arc<wasmtime_environ::Module>,
+    one_signature: Option<VMSharedTypeIndex>,
+    offsets: VMOffsets<HostPtr>,
+}
+
+impl ModuleRuntimeInfo {
+    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
+        ModuleRuntimeInfo::bare_maybe_imported_func(module, None)
+    }
+
+    pub(crate) fn bare_maybe_imported_func(
+        module: Arc<wasmtime_environ::Module>,
+        one_signature: Option<VMSharedTypeIndex>,
+    ) -> Self {
+        ModuleRuntimeInfo::Bare(Box::new(BareModuleInfo {
+            offsets: VMOffsets::new(HostPtr, &module),
+            module,
+            one_signature,
+        }))
+    }
+
     /// The underlying Module.
-    fn module(&self) -> &Arc<wasmtime_environ::Module>;
+    pub(crate) fn module(&self) -> &Arc<wasmtime_environ::Module> {
+        match self {
+            ModuleRuntimeInfo::Module(m) => m.env_module(),
+            ModuleRuntimeInfo::Bare(b) => &b.module,
+        }
+    }
 
     /// Translate a module-level interned type index into an engine-level
     /// interned type index.
-    fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex;
+    fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
+        match self {
+            ModuleRuntimeInfo::Module(m) => m
+                .code_object()
+                .signatures()
+                .shared_type(module_index)
+                .expect("bad module-level interned type index"),
+            ModuleRuntimeInfo::Bare(_) => unreachable!(),
+        }
+    }
 
     /// Returns the address, in memory, that the function `index` resides at.
-    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction>;
+    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
+        let module = match self {
+            ModuleRuntimeInfo::Module(m) => m,
+            ModuleRuntimeInfo::Bare(_) => unreachable!(),
+        };
+        let ptr = module
+            .compiled_module()
+            .finished_function(index)
+            .as_ptr()
+            .cast::<VMWasmCallFunction>()
+            .cast_mut();
+        NonNull::new(ptr).unwrap()
+    }
 
     /// Returns the address, in memory, of the trampoline that allows the given
     /// defined Wasm function to be called by the array calling convention.
     ///
     /// Returns `None` for Wasm functions which do not escape, and therefore are
     /// not callable from outside the Wasm module itself.
-    fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction>;
-
-    /// Return the address, in memory, of the trampoline that allows Wasm to
-    /// call a array function of the given signature.
-    fn wasm_to_array_trampoline(
-        &self,
-        signature: VMSharedTypeIndex,
-    ) -> Option<NonNull<VMWasmCallFunction>>;
+    fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction> {
+        let m = match self {
+            ModuleRuntimeInfo::Module(m) => m,
+            ModuleRuntimeInfo::Bare(_) => unreachable!(),
+        };
+        let ptr = m
+            .compiled_module()
+            .array_to_wasm_trampoline(index)?
+            .as_ptr();
+        Some(unsafe { mem::transmute::<*const u8, VMArrayCallFunction>(ptr) })
+    }
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
-    fn memory_image(&self, memory: DefinedMemoryIndex)
-        -> anyhow::Result<Option<&Arc<MemoryImage>>>;
+    fn memory_image(
+        &self,
+        memory: DefinedMemoryIndex,
+    ) -> anyhow::Result<Option<&Arc<MemoryImage>>> {
+        match self {
+            ModuleRuntimeInfo::Module(m) => {
+                let images = m.memory_images()?;
+                Ok(images.and_then(|images| images.get_memory_image(memory)))
+            }
+            ModuleRuntimeInfo::Bare(_) => Ok(None),
+        }
+    }
 
     /// A unique ID for this particular module. This can be used to
     /// allow for fastpaths to optimize a "re-instantiate the same
     /// module again" case.
-    fn unique_id(&self) -> Option<CompiledModuleId>;
+    fn unique_id(&self) -> Option<CompiledModuleId> {
+        match self {
+            ModuleRuntimeInfo::Module(m) => Some(m.id()),
+            ModuleRuntimeInfo::Bare(_) => None,
+        }
+    }
 
     /// A slice pointing to all data that is referenced by this instance.
-    fn wasm_data(&self) -> &[u8];
+    fn wasm_data(&self) -> &[u8] {
+        match self {
+            ModuleRuntimeInfo::Module(m) => m.compiled_module().code_memory().wasm_data(),
+            ModuleRuntimeInfo::Bare(_) => &[],
+        }
+    }
 
     /// Returns an array, indexed by `ModuleInternedTypeIndex` of all
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
-    fn type_ids(&self) -> &[VMSharedTypeIndex];
+    fn type_ids(&self) -> &[VMSharedTypeIndex] {
+        match self {
+            ModuleRuntimeInfo::Module(m) => m
+                .code_object()
+                .signatures()
+                .as_module_map()
+                .values()
+                .as_slice(),
+            ModuleRuntimeInfo::Bare(b) => match &b.one_signature {
+                Some(s) => core::slice::from_ref(s),
+                None => &[],
+            },
+        }
+    }
 
     /// Offset information for the current host.
-    fn offsets(&self) -> &VMOffsets<HostPtr>;
+    pub(crate) fn offsets(&self) -> &VMOffsets<HostPtr> {
+        match self {
+            ModuleRuntimeInfo::Module(m) => m.offsets(),
+            ModuleRuntimeInfo::Bare(b) => &b.offsets,
+        }
+    }
 }
 
 /// Returns the host OS page size, in bytes.
-pub fn page_size() -> usize {
+pub fn host_page_size() -> usize {
     static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
 
     return match PAGE_SIZE.load(Ordering::Relaxed) {
@@ -241,6 +341,32 @@ pub fn page_size() -> usize {
         }
         n => n,
     };
+}
+
+/// Is `bytes` a multiple of the host page size?
+pub fn usize_is_multiple_of_host_page_size(bytes: usize) -> bool {
+    bytes % host_page_size() == 0
+}
+
+/// Round the given byte size up to a multiple of the host OS page size.
+///
+/// Returns an error if rounding up overflows.
+pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
+    let page_size = u64::try_from(crate::runtime::vm::host_page_size()).err2anyhow()?;
+    debug_assert!(page_size.is_power_of_two());
+    bytes
+        .checked_add(page_size - 1)
+        .ok_or_else(|| anyhow!(
+            "{bytes} is too large to be rounded up to a multiple of the host page size of {page_size}"
+        ))
+        .map(|val| val & !(page_size - 1))
+}
+
+/// Same as `round_u64_up_to_host_pages` but for `usize`s.
+pub fn round_usize_up_to_host_pages(bytes: usize) -> Result<usize> {
+    let bytes = u64::try_from(bytes).err2anyhow()?;
+    let rounded = round_u64_up_to_host_pages(bytes)?;
+    Ok(usize::try_from(rounded).err2anyhow()?)
 }
 
 /// Result of `Memory::atomic_wait32` and `Memory::atomic_wait64`

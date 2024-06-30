@@ -6,7 +6,6 @@ use crate::runtime::vm::GcRuntime;
 use crate::sync::OnceLock;
 use crate::Config;
 use alloc::sync::Arc;
-use anyhow::{Context, Result};
 use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
@@ -61,8 +60,6 @@ struct EngineInner {
     signatures: TypeRegistry,
     #[cfg(feature = "runtime")]
     epoch: AtomicU64,
-    #[cfg(feature = "runtime")]
-    unique_id_allocator: crate::runtime::vm::CompiledModuleIdAllocator,
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
@@ -129,8 +126,6 @@ impl Engine {
                 signatures: TypeRegistry::new(),
                 #[cfg(feature = "runtime")]
                 epoch: AtomicU64::new(0),
-                #[cfg(feature = "runtime")]
-                unique_id_allocator: crate::runtime::vm::CompiledModuleIdAllocator::new(),
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compatible_with_native_host: OnceLock::new(),
                 config,
@@ -637,10 +632,6 @@ impl Engine {
     /// memory.
     pub fn increment_epoch(&self) {
         self.inner.epoch.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub(crate) fn unique_id_allocator(&self) -> &crate::runtime::vm::CompiledModuleIdAllocator {
-        &self.inner.unique_id_allocator
     }
 
     /// Returns a [`std::hash::Hash`] that can be used to check precompiled WebAssembly compatibility.

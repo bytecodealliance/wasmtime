@@ -77,7 +77,7 @@ unsafe impl Sync for VMFunctionImport {}
 #[cfg(test)]
 mod test_vmfunction_import {
     use super::VMFunctionImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -142,7 +142,7 @@ unsafe impl Sync for VMTableImport {}
 #[cfg(test)]
 mod test_vmtable_import {
     use super::VMTableImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -188,7 +188,7 @@ unsafe impl Sync for VMMemoryImport {}
 #[cfg(test)]
 mod test_vmmemory_import {
     use super::VMMemoryImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -232,7 +232,7 @@ unsafe impl Sync for VMGlobalImport {}
 #[cfg(test)]
 mod test_vmglobal_import {
     use super::VMGlobalImport;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -269,13 +269,14 @@ pub struct VMMemoryDefinition {
 }
 
 impl VMMemoryDefinition {
-    /// Return the current length of the [`VMMemoryDefinition`] by performing a
-    /// relaxed load; do not use this function for situations in which a precise
-    /// length is needed. Owned memories (i.e., non-shared) will always return a
-    /// precise result (since no concurrent modification is possible) but shared
-    /// memories may see an imprecise value--a `current_length` potentially
-    /// smaller than what some other thread observes. Since Wasm memory only
-    /// grows, this under-estimation may be acceptable in certain cases.
+    /// Return the current length (in bytes) of the [`VMMemoryDefinition`] by
+    /// performing a relaxed load; do not use this function for situations in
+    /// which a precise length is needed. Owned memories (i.e., non-shared) will
+    /// always return a precise result (since no concurrent modification is
+    /// possible) but shared memories may see an imprecise value--a
+    /// `current_length` potentially smaller than what some other thread
+    /// observes. Since Wasm memory only grows, this under-estimation may be
+    /// acceptable in certain cases.
     pub fn current_length(&self) -> usize {
         self.current_length.load(Ordering::Relaxed)
     }
@@ -294,7 +295,7 @@ impl VMMemoryDefinition {
 #[cfg(test)]
 mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
@@ -338,7 +339,7 @@ pub struct VMTableDefinition {
 #[cfg(test)]
 mod test_vmtable_definition {
     use super::VMTableDefinition;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -670,7 +671,7 @@ unsafe impl Sync for VMFuncRef {}
 #[cfg(test)]
 mod test_vm_func_ref {
     use super::VMFuncRef;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
@@ -835,19 +836,9 @@ impl Default for VMRuntimeLimits {
 #[cfg(test)]
 mod test_vmruntime_limits {
     use super::VMRuntimeLimits;
-    use memoffset::offset_of;
+    use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
-
-    #[test]
-    fn vmctx_runtime_limits_offset() {
-        let module = Module::new();
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
-        assert_eq!(
-            offsets.vmctx_runtime_limits(),
-            u32::from(offsets.ptr.vmcontext_runtime_limits())
-        );
-    }
 
     #[test]
     fn field_offsets() {
@@ -876,53 +867,6 @@ mod test_vmruntime_limits {
         assert_eq!(
             offset_of!(VMRuntimeLimits, last_wasm_entry_sp),
             usize::from(offsets.ptr.vmruntime_limits_last_wasm_entry_sp())
-        );
-    }
-}
-
-/// One call-indirect cache entry.
-///
-/// It consists of the last observed function-pointer index, and the
-/// direct code pointer (with the same vmctx, i.e., in the same
-/// instance) to call if this index matches.
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // not actually used in Rust runtime code; only in generated code.
-#[repr(C)]
-pub struct VMCallIndirectCache {
-    /// Function pointer for this funcref if being called via the Wasm
-    /// calling convention.
-    pub wasm_call: NonNull<VMWasmCallFunction>,
-
-    /// Table index corresponding to the above function pointer.
-    pub index: usize,
-    // If more elements are added here, remember to add offset_of tests below!
-}
-
-unsafe impl Send for VMCallIndirectCache {}
-unsafe impl Sync for VMCallIndirectCache {}
-
-#[cfg(test)]
-mod test_vm_call_indirect_cache {
-    use super::VMCallIndirectCache;
-    use memoffset::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{Module, PtrSize, VMOffsets};
-
-    #[test]
-    fn check_vm_call_indirect_cache_offsets() {
-        let module = Module::new();
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
-        assert_eq!(
-            size_of::<VMCallIndirectCache>(),
-            usize::from(offsets.ptr.size_of_vmcall_indirect_cache())
-        );
-        assert_eq!(
-            offset_of!(VMCallIndirectCache, wasm_call),
-            usize::from(offsets.ptr.vmcall_indirect_cache_wasm_call())
-        );
-        assert_eq!(
-            offset_of!(VMCallIndirectCache, index),
-            usize::from(offsets.ptr.vmcall_indirect_cache_index())
         );
     }
 }

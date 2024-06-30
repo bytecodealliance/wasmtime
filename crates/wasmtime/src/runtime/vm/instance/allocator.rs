@@ -6,13 +6,11 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, Store, VMFuncRef, VMGcRef};
-use alloc::sync::Arc;
-use anyhow::{bail, Result};
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, Trap,
-    VMOffsets, WasmHeapTopType, WASM_PAGE_SIZE,
+    MemoryInitializer, MemoryPlan, Module, PrimaryMap, SizeOverflow, TableInitialValue, TablePlan,
+    Trap, VMOffsets, WasmHeapTopType,
 };
 
 #[cfg(feature = "gc")]
@@ -42,7 +40,7 @@ pub struct InstanceAllocationRequest<'a> {
     /// addresses, precomputed images for lazy memory and table
     /// initialization, and the like. This Arc is cloned and held for
     /// the lifetime of the instance.
-    pub runtime_info: &'a Arc<dyn ModuleRuntimeInfo>,
+    pub runtime_info: &'a ModuleRuntimeInfo,
 
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
@@ -691,8 +689,13 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
     }
 
     impl InitMemory for InitMemoryAtInstantiation<'_> {
-        fn memory_size_in_pages(&mut self, memory: wasmtime_environ::MemoryIndex) -> u64 {
-            (self.instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE)
+        fn memory_size_in_bytes(
+            &mut self,
+            memory: wasmtime_environ::MemoryIndex,
+        ) -> Result<u64, SizeOverflow> {
+            let len = self.instance.get_memory(memory).current_length();
+            let len = u64::try_from(len).unwrap();
+            Ok(len)
         }
 
         fn eval_offset(

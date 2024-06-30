@@ -34,14 +34,18 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     cmd.args(args);
 
     let output = cmd.output().expect("success");
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
     if !output.status.success() {
         bail!(
-            "failed to execute {:?}: {}",
-            cmd,
-            String::from_utf8_lossy(&output.stderr),
+            "failed to execute {cmd:?}:\n\
+            --- stderr ---\n\
+            {stderr}\n\
+            --- stdout ---\n\
+            {stdout}",
         );
     }
-    Ok(String::from_utf8(output.stdout)?)
+    Ok(stdout)
 }
 
 fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
@@ -166,7 +170,7 @@ check: Breakpoint 1: no locations (pending)
 check: stop reason = breakpoint 1.1
 check: frame #0
 sameln: norm(n=(__ptr =
-check: = 27
+check: 27
 check: resuming
 "#,
     )?;
@@ -294,4 +298,124 @@ check: exited with status = 0
 "#,
     )?;
     Ok(())
+}
+
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+mod test_programs {
+    use super::{check_lldb_output, lldb_with_script};
+    use anyhow::Result;
+    use test_programs_artifacts::*;
+
+    macro_rules! assert_test_exists {
+        ($name:ident) => {
+            #[allow(unused_imports)]
+            use self::$name as _;
+        };
+    }
+    foreach_dwarf!(assert_test_exists);
+
+    fn test_dwarf_simple(wasm: &str, extra_args: &[&str]) -> Result<()> {
+        println!("testing {wasm:?}");
+        let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Ddebug-info"];
+        args.extend(extra_args);
+        args.push(wasm);
+        let output = lldb_with_script(
+            &args,
+            r#"
+breakpoint set --file dwarf_simple.rs --line 3
+breakpoint set --file dwarf_simple.rs --line 5
+r
+fr v
+c
+fr v
+c"#,
+        )?;
+
+        check_lldb_output(
+            &output,
+            r#"
+check: Breakpoint 1: no locations (pending)
+check: Unable to resolve breakpoint to any actual locations.
+check: 1 location added to breakpoint 1
+check: stop reason = breakpoint 1.1
+check: dwarf_simple.rs:3
+check: a = 100
+check: dwarf_simple.rs:5
+check: a = 110
+check: b = 117
+check: resuming
+check: exited with status = 0
+"#,
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn dwarf_simple() -> Result<()> {
+        for wasm in [DWARF_SIMPLE, DWARF_SIMPLE_COMPONENT] {
+            test_dwarf_simple(wasm, &[])?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn dwarf_imported_memory() -> Result<()> {
+        test_dwarf_simple(
+            DWARF_IMPORTED_MEMORY,
+            &["--preload=env=./tests/all/debug/satisfy_memory_import.wat"],
+        )
+    }
+
+    #[test]
+    #[ignore]
+    fn dwarf_shared_memory() -> Result<()> {
+        test_dwarf_simple(DWARF_SHARED_MEMORY, &[])
+    }
+
+    #[test]
+    #[ignore]
+    fn dwarf_multiple_codegen_units() -> Result<()> {
+        for wasm in [
+            DWARF_MULTIPLE_CODEGEN_UNITS,
+            DWARF_MULTIPLE_CODEGEN_UNITS_COMPONENT,
+        ] {
+            println!("testing {wasm:?}");
+            let output = lldb_with_script(
+                &["-Ccache=n", "-Oopt-level=0", "-Ddebug-info", wasm],
+                r#"
+breakpoint set --file dwarf_multiple_codegen_units.rs --line 3
+breakpoint set --file dwarf_multiple_codegen_units.rs --line 10
+r
+fr v
+c
+fr v
+breakpoint delete 2
+finish
+c"#,
+            )?;
+
+            check_lldb_output(
+                &output,
+                r#"
+check: Breakpoint 1: no locations (pending)
+check: Breakpoint 2: no locations (pending)
+check: stop reason = breakpoint 1.1
+check: foo::bar(a)
+check: a = 3
+check: sum += i
+check: x = 3
+check: sum = 0
+check: 1 breakpoints deleted
+check: Return value: $(=.*) 3
+check: exited with status = 0
+"#,
+            )?;
+        }
+        Ok(())
+    }
 }

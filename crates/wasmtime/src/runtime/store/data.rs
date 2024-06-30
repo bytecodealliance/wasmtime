@@ -209,7 +209,7 @@ pub struct StoreId(NonZeroU64);
 impl StoreId {
     /// Allocates a new unique identifier for a store that has never before been
     /// used in this process.
-    fn allocate() -> StoreId {
+    pub fn allocate() -> StoreId {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
         // Only allow 2^63 stores at which point we start panicking to prevent

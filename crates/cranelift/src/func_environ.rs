@@ -7,19 +7,20 @@ use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    CallIndirectSiteIndex, EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex,
-    GlobalVariable, Heap, HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize,
-    TargetEnvironment, TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
+    EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
+    HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
+    TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
 };
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypesBuilder,
-    PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
+    PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -118,7 +119,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// VMRuntimeLimits` for this function's vmctx argument. This pointer is stored
     /// in the vmctx itself, but never changes for the lifetime of the function,
     /// so if we load it up front we can continue to use it throughout.
-    vmruntime_limits_ptr: cranelift_frontend::Variable,
+    vmruntime_limits_ptr: ir::Value,
 
     /// A cached epoch deadline value, when performing epoch-based
     /// interruption. Loaded from `VMRuntimeLimits` and reloaded after
@@ -137,9 +138,6 @@ pub struct FuncEnvironment<'module_environment> {
 
     #[cfg(feature = "wmemcheck")]
     wmemcheck: bool,
-
-    /// The current call-indirect-cache index.
-    pub call_indirect_index: usize,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -149,7 +147,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         types: &'module_environment ModuleTypesBuilder,
         tunables: &'module_environment Tunables,
         wmemcheck: bool,
-        call_indirect_start: usize,
     ) -> Self {
         let builtin_functions = BuiltinFunctions::new(isa);
 
@@ -171,13 +168,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             fuel_var: Variable::new(0),
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
-            vmruntime_limits_ptr: Variable::new(0),
+            vmruntime_limits_ptr: ir::Value::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
-
-            call_indirect_index: call_indirect_start,
 
             #[cfg(feature = "wmemcheck")]
             wmemcheck,
@@ -284,14 +279,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // function. This is possible since we know that the pointer never
         // changes for the lifetime of the function.
         let pointer_type = self.pointer_type();
-        builder.declare_var(self.vmruntime_limits_ptr, pointer_type);
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.vmctx_runtime_limits()).unwrap();
-        let interrupt_ptr = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-        builder.def_var(self.vmruntime_limits_ptr, interrupt_ptr);
+        let offset = i32::from(self.offsets.ptr.vmctx_runtime_limits());
+        debug_assert!(self.vmruntime_limits_ptr.is_reserved_value());
+        self.vmruntime_limits_ptr =
+            builder
+                .ins()
+                .load(pointer_type, ir::MemFlags::trusted(), base, offset);
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -438,7 +433,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Loads the fuel consumption value from `VMRuntimeLimits` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
+        let (addr, offset) = self.fuel_addr_offset();
         let fuel = builder
             .ins()
             .load(ir::types::I64, ir::MemFlags::trusted(), addr, offset);
@@ -448,7 +443,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Stores the fuel consumption value from `self.fuel_var` into
     /// `VMRuntimeLimits`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
+        let (addr, offset) = self.fuel_addr_offset();
         let fuel_consumed = builder.use_var(self.fuel_var);
         builder
             .ins()
@@ -457,12 +452,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Returns the `(address, offset)` of the fuel consumption within
     /// `VMRuntimeLimits`, used to perform loads/stores later.
-    fn fuel_addr_offset(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-    ) -> (ir::Value, ir::immediates::Offset32) {
+    fn fuel_addr_offset(&mut self) -> (ir::Value, ir::immediates::Offset32) {
+        debug_assert!(!self.vmruntime_limits_ptr.is_reserved_value());
         (
-            builder.use_var(self.vmruntime_limits_ptr),
+            self.vmruntime_limits_ptr,
             i32::from(self.offsets.ptr.vmruntime_limits_fuel_consumed()).into(),
         )
     }
@@ -511,7 +504,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
         builder.declare_var(self.epoch_deadline_var, ir::types::I64);
-        self.epoch_load_deadline_into_var(builder);
+        // Let epoch_check_full load the current deadline and call def_var
+
         builder.declare_var(self.epoch_ptr_var, self.pointer_type());
         let epoch_ptr = self.epoch_ptr(builder);
         builder.def_var(self.epoch_ptr_var, epoch_ptr);
@@ -533,7 +527,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // sufficient. Then, combined with checks at every backedge
         // (loop) the longest runtime between checks is bounded by the
         // straightline length of any function body.
-        self.epoch_check(builder);
+        let continuation_block = builder.create_block();
+        let cur_epoch_value = self.epoch_load_current(builder);
+        self.epoch_check_full(builder, cur_epoch_value, continuation_block);
     }
 
     #[cfg(feature = "wmemcheck")]
@@ -581,7 +577,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(builder.func);
         let pointer_type = self.pointer_type();
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.vmctx_epoch_ptr()).unwrap();
+        let offset = i32::try_from(self.offsets.ptr.vmctx_epoch_ptr()).unwrap();
         let epoch_ptr = builder
             .ins()
             .load(pointer_type, ir::MemFlags::trusted(), base, offset);
@@ -598,34 +594,30 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         )
     }
 
-    fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let interrupts = builder.use_var(self.vmruntime_limits_ptr);
-        let deadline =
-            builder.ins().load(
-                ir::types::I64,
-                ir::MemFlags::trusted(),
-                interrupts,
-                ir::immediates::Offset32::new(
-                    self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
-                ),
-            );
-        builder.def_var(self.epoch_deadline_var, deadline);
+    fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let continuation_block = builder.create_block();
+
+        // Load new epoch and check against the cached deadline.
+        let cur_epoch_value = self.epoch_load_current(builder);
+        self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
+
+        // At this point we've noticed that the epoch has exceeded our
+        // cached deadline. However the real deadline may have been
+        // updated (within another yield) during some function that we
+        // called in the meantime, so reload the cache and check again.
+        self.epoch_check_full(builder, cur_epoch_value, continuation_block);
     }
 
-    fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
+    fn epoch_check_cached(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        cur_epoch_value: ir::Value,
+        continuation_block: ir::Block,
+    ) {
         let new_epoch_block = builder.create_block();
-        let new_epoch_doublecheck_block = builder.create_block();
-        let continuation_block = builder.create_block();
         builder.set_cold_block(new_epoch_block);
-        builder.set_cold_block(new_epoch_doublecheck_block);
 
         let epoch_deadline = builder.use_var(self.epoch_deadline_var);
-        // Load new epoch and check against cached deadline. The
-        // deadline may be out of date if it was updated (within
-        // another yield) during some function that we called; this is
-        // fine, as we'll reload it and check again before yielding in
-        // the cold path.
-        let cur_epoch_value = self.epoch_load_current(builder);
         let cmp = builder.ins().icmp(
             IntCC::UnsignedGreaterThanOrEqual,
             cur_epoch_value,
@@ -636,31 +628,30 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .brif(cmp, new_epoch_block, &[], continuation_block, &[]);
         builder.seal_block(new_epoch_block);
 
-        // In the "new epoch block", we've noticed that the epoch has
-        // exceeded our cached deadline. However the real deadline may
-        // have been moved in the meantime. We keep the cached value
-        // in a register to speed the checks in the common case
-        // (between epoch ticks) but we want to do a precise check
-        // here, on the cold path, by reloading the latest value
-        // first.
         builder.switch_to_block(new_epoch_block);
-        self.epoch_load_deadline_into_var(builder);
-        let fresh_epoch_deadline = builder.use_var(self.epoch_deadline_var);
-        let fresh_cmp = builder.ins().icmp(
-            IntCC::UnsignedGreaterThanOrEqual,
-            cur_epoch_value,
-            fresh_epoch_deadline,
-        );
-        builder.ins().brif(
-            fresh_cmp,
-            new_epoch_doublecheck_block,
-            &[],
-            continuation_block,
-            &[],
-        );
-        builder.seal_block(new_epoch_doublecheck_block);
+    }
 
-        builder.switch_to_block(new_epoch_doublecheck_block);
+    fn epoch_check_full(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        cur_epoch_value: ir::Value,
+        continuation_block: ir::Block,
+    ) {
+        // We keep the deadline cached in a register to speed the checks
+        // in the common case (between epoch ticks) but we want to do a
+        // precise check here by reloading the cache first.
+        let deadline =
+            builder.ins().load(
+                ir::types::I64,
+                ir::MemFlags::trusted(),
+                self.vmruntime_limits_ptr,
+                ir::immediates::Offset32::new(
+                    self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
+                ),
+            );
+        builder.def_var(self.epoch_deadline_var, deadline);
+        self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
+
         let new_epoch = self.builtin_functions.new_epoch(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
         // new_epoch() returns the new deadline, so we don't have to
@@ -682,7 +673,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn cast_pointer_to_memory_index(
+    /// Convert the target pointer-sized integer `val` that is holding a memory
+    /// length (or the `-1` `memory.grow`-failed sentinel) into the memory's
+    /// index type.
+    ///
+    /// This might involve extending or truncating it depending on the memory's
+    /// index type and the target's pointer type.
+    fn convert_memory_length_to_index_type(
         &self,
         mut pos: FuncCursor<'_>,
         val: ir::Value,
@@ -700,18 +697,32 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         } else if pointer_type.bits() > desired_type.bits() {
             pos.ins().ireduce(desired_type, val)
         } else {
-            // Note that we `sextend` instead of the probably expected
-            // `uextend`. This function is only used within the contexts of
-            // `memory.size` and `memory.grow` where we're working with units of
-            // pages instead of actual bytes, so we know that the upper bit is
-            // always cleared for "valid values". The one case we care about
-            // sextend would be when the return value of `memory.grow` is `-1`,
-            // in which case we want to copy the sign bit.
-            //
-            // This should only come up on 32-bit hosts running wasm64 modules,
-            // which at some point also makes you question various assumptions
-            // made along the way...
-            pos.ins().sextend(desired_type, val)
+            // We have a 64-bit memory on a 32-bit host -- this combo doesn't
+            // really make a whole lot of sense to do from a user perspective
+            // but that is neither here nor there. We want to logically do an
+            // unsigned extend *except* when we are given the `-1` sentinel,
+            // which we must preserve as `-1` in the wider type.
+            match self.module.memory_plans[index].memory.page_size_log2 {
+                16 => {
+                    // In the case that we have default page sizes, we can
+                    // always sign extend, since valid memory lengths (in pages)
+                    // never have their sign bit set, and so if the sign bit is
+                    // set then this must be the `-1` sentinel, which we want to
+                    // preserve through the extension.
+                    pos.ins().sextend(desired_type, val)
+                }
+                0 => {
+                    // For single-byte pages, we have to explicitly check for
+                    // `-1` and choose whether to do an unsigned extension or
+                    // return a larger `-1` because there are valid memory
+                    // lengths (in pages) that have the sign bit set.
+                    let extended = pos.ins().uextend(desired_type, val);
+                    let neg_one = pos.ins().iconst(desired_type, -1);
+                    let is_failure = pos.ins().icmp_imm(IntCC::Equal, val, -1);
+                    pos.ins().select(is_failure, neg_one, extended)
+                }
+                _ => unreachable!("only page sizes 2**0 and 2**16 are currently valid"),
+            }
         }
     }
 
@@ -1013,37 +1024,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             _ => unreachable!(),
         }
     }
-
-    /// Allocate the next CallIndirectSiteIndex for indirect-target
-    /// caching purposes, if slots remain below the slot-count limit.
-    fn alloc_call_indirect_index(&mut self) -> Option<CallIndirectSiteIndex> {
-        // We need to check to see if we have reached the cache-slot
-        // limit.
-        //
-        // There are two kinds of limit behavior:
-        //
-        // 1. Our function's start-index is below the limit, but we
-        //    hit the limit in the middle of the function. We will
-        //    allocate slots up to the limit, then stop exactly when we
-        //    hit it.
-        //
-        // 2. Our function is beyond the limit-count of
-        //    `call_indirect`s. The counting prescan in
-        //    `ModuleEnvironment` that assigns start indices will
-        //    saturate at the limit, and this function's start index
-        //    will be exactly the limit, so we get zero slots and exit
-        //    immediately at every call to this function.
-        if self.call_indirect_index >= self.tunables.max_call_indirect_cache_slots {
-            return None;
-        }
-
-        let idx = CallIndirectSiteIndex::from_u32(
-            u32::try_from(self.call_indirect_index)
-                .expect("More than 2^32 callsites; should be limited by impl limits"),
-        );
-        self.call_indirect_index += 1;
-        Some(idx)
-    }
 }
 
 struct Call<'a, 'func, 'module_env> {
@@ -1155,68 +1135,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
     }
 
-    /// Get the address of the call-indirect cache slot for a given callsite.
-    pub fn call_indirect_cache_slot_addr(
-        &mut self,
-        call_site: CallIndirectSiteIndex,
-        vmctx: ir::Value,
-    ) -> ir::Value {
-        let offset = self.env.offsets.vmctx_call_indirect_cache(call_site);
-        self.builder.ins().iadd_imm(vmctx, i64::from(offset))
-    }
-
-    /// Load the cached index and code pointer for an indirect call.
-    ///
-    /// Generates IR like:
-    ///
-    /// ```ignore
-    /// v1 = load.i64 cache_ptr+0 ;; cached index (cache key)
-    /// v2 = load.i64 cache_ptr+8 ;; cached raw code pointer (cache value)
-    /// ```
-    ///
-    /// and returns `(index, code_ptr)` (e.g. from above, `(v1, v2)`).
-    fn load_cached_indirect_index_and_code_ptr(
-        &mut self,
-        cache_ptr: ir::Value,
-    ) -> (ir::Value, ir::Value) {
-        let cached_index = self.builder.ins().load(
-            I32,
-            MemFlags::trusted(),
-            cache_ptr,
-            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
-        );
-        let cached_code_ptr = self.builder.ins().load(
-            self.env.pointer_type(),
-            MemFlags::trusted(),
-            cache_ptr,
-            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
-        );
-
-        (cached_index, cached_code_ptr)
-    }
-
-    /// Update the indirect-call cache: store a new index and raw code
-    /// pointer in the slot for a given callsite.
-    fn store_cached_indirect_index_and_code_ptr(
-        &mut self,
-        cache_ptr: ir::Value,
-        index: ir::Value,
-        code_ptr: ir::Value,
-    ) {
-        self.builder.ins().store(
-            MemFlags::trusted(),
-            index,
-            cache_ptr,
-            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
-        );
-        self.builder.ins().store(
-            MemFlags::trusted(),
-            code_ptr,
-            cache_ptr,
-            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
-        );
-    }
-
     /// Do an indirect call through the given funcref table.
     pub fn indirect_call(
         mut self,
@@ -1226,126 +1144,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<Option<ir::Inst>> {
-        // If we are performing call-indirect caching with this table, check the cache.
-        let caching = if self.env.tunables.cache_call_indirects {
-            let plan = &self.env.module.table_plans[table_index];
-            // We can do the indirect call caching optimization only
-            // if table elements will not change (no opcodes exist
-            // that could write the table, and table not exported),
-            // and if we can use the zero-index as a sentinenl for "no
-            // cache entry" (initial zeroed vmctx state).
-            !plan.written && !plan.non_null_zero
-        } else {
-            false
-        };
-
-        // Allocate a call-indirect cache slot if caching is
-        // enabled. Note that this still may be `None` if we run out
-        // of slots.
-        let call_site = if caching {
-            self.env.alloc_call_indirect_index()
-        } else {
-            None
-        };
-
-        let (code_ptr, callee_vmctx) = if let Some(call_site) = call_site {
-            // Get a local copy of `vmctx`.
-            let vmctx = self.env.vmctx(self.builder.func);
-            let vmctx = self
-                .builder
-                .ins()
-                .global_value(self.env.pointer_type(), vmctx);
-
-            // Get the address of the cache slot in the VMContext
-            // struct.
-            let slot = self.call_indirect_cache_slot_addr(call_site, vmctx);
-
-            // Create the following CFG and generate code with the following outline:
-            //
-            //   (load cached index and code pointer)
-            //   hit = icmp eq (cached index), (callee)
-            //   brif hit, call_block((cached code ptr), vmctx), miss_block
-            //
-            // miss_block:
-            //   (compute actual code pointer, with checks)
-            //   same_instance = icmp eq (callee vmctx), (vmctx)
-            //   brif same_instance update_block, call_block((actual code ptr), (callee vmctx))
-            //
-            // update_block:
-            //   (store actual index and actual code pointer)
-            //   jump call_block((actual code ptr), (callee vmctx))
-            //
-            // call_block(code_ptr, callee_vmctx):
-            //   (unchecked call-indirect sequence)
-
-            // Create two-level conditionals with CFG.
-            let current_block = self.builder.current_block().unwrap();
-            let miss_block = self.builder.create_block();
-            let call_block = self.builder.create_block();
-            let update_block = self.builder.create_block();
-
-            self.builder.insert_block_after(miss_block, current_block);
-            self.builder.insert_block_after(update_block, miss_block);
-            self.builder.insert_block_after(call_block, update_block);
-            self.builder.set_cold_block(miss_block);
-            self.builder.set_cold_block(update_block);
-
-            // Load cached values, check for hit, branch to
-            // call block or miss block.
-
-            let (cached_index, cached_code_ptr) =
-                self.load_cached_indirect_index_and_code_ptr(slot);
-            let hit = self.builder.ins().icmp(IntCC::Equal, cached_index, callee);
-            self.builder
-                .ins()
-                .brif(hit, call_block, &[cached_code_ptr, vmctx], miss_block, &[]);
-
-            // Miss block: compute actual callee code pointer and
-            // vmctx, and update cache if same-instance.
-
-            self.builder.seal_block(miss_block);
-            self.builder.switch_to_block(miss_block);
-
-            if let Some((code_ptr, callee_vmctx)) =
-                self.check_and_load_code_and_callee_vmctx(table_index, ty_index, callee, true)?
-            {
-                // If callee vmctx is equal to ours, update the cache.
-                let same_instance = self.builder.ins().icmp(IntCC::Equal, callee_vmctx, vmctx);
-
-                self.builder.ins().brif(
-                    same_instance,
-                    update_block,
-                    &[],
-                    call_block,
-                    &[code_ptr, callee_vmctx],
-                );
-
-                self.builder.seal_block(update_block);
-                self.builder.switch_to_block(update_block);
-
-                self.store_cached_indirect_index_and_code_ptr(slot, callee, code_ptr);
-                self.builder
-                    .ins()
-                    .jump(call_block, &[code_ptr, callee_vmctx]);
-            }
-
-            // Call block: do the call.
-
-            self.builder.seal_block(call_block);
-            self.builder.switch_to_block(call_block);
-
-            let code_ptr = self
-                .builder
-                .append_block_param(call_block, self.env.pointer_type());
-            let callee_vmctx = self
-                .builder
-                .append_block_param(call_block, self.env.pointer_type());
-            (code_ptr, callee_vmctx)
-        } else {
-            match self.check_and_load_code_and_callee_vmctx(table_index, ty_index, callee, false)? {
-                Some(pair) => pair,
-                None => return Ok(None),
-            }
+        let (code_ptr, callee_vmctx) = match self.check_and_load_code_and_callee_vmctx(
+            table_index,
+            ty_index,
+            callee,
+            false,
+        )? {
+            Some(pair) => pair,
+            None => return Ok(None),
         };
 
         self.unchecked_call_impl(sig_ref, code_ptr, callee_vmctx, call_args)
@@ -1500,7 +1306,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             pointer_type,
             mem_flags,
             base,
-            i32::try_from(self.env.offsets.vmctx_type_ids_array()).unwrap(),
+            i32::from(self.env.offsets.ptr.vmctx_type_ids_array()),
         );
         let sig_index = self.env.module.types[ty_index];
         let offset =
@@ -1688,10 +1494,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn after_locals(&mut self, num_locals: usize) {
-        self.vmruntime_limits_ptr = Variable::new(num_locals);
-        self.fuel_var = Variable::new(num_locals + 1);
-        self.epoch_deadline_var = Variable::new(num_locals + 2);
-        self.epoch_ptr_var = Variable::new(num_locals + 3);
+        self.fuel_var = Variable::new(num_locals);
+        self.epoch_deadline_var = Variable::new(num_locals + 1);
+        self.epoch_ptr_var = Variable::new(num_locals + 2);
     }
 
     fn translate_table_grow(
@@ -2004,21 +1809,21 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let min_size = self.module.memory_plans[index]
             .memory
-            .minimum
-            .checked_mul(u64::from(WASM_PAGE_SIZE))
-            .unwrap_or_else(|| {
+            .minimum_byte_size()
+            .unwrap_or_else(|_| {
                 // The only valid Wasm memory size that won't fit in a 64-bit
                 // integer is the maximum memory64 size (2^64) which is one
                 // larger than `u64::MAX` (2^64 - 1). In this case, just say the
                 // minimum heap size is `u64::MAX`.
                 debug_assert_eq!(self.module.memory_plans[index].memory.minimum, 1 << 48);
+                debug_assert_eq!(self.module.memory_plans[index].memory.page_size(), 1 << 16);
                 u64::MAX
             });
 
         let max_size = self.module.memory_plans[index]
             .memory
-            .maximum
-            .and_then(|max| max.checked_mul(u64::from(WASM_PAGE_SIZE)));
+            .maximum_byte_size()
+            .ok();
 
         let (ptr, base_offset, current_length_offset, ptr_memtype) = {
             let vmctx = self.vmctx(func);
@@ -2071,6 +1876,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 (memory, base_offset, current_length_offset, def_mt)
             }
         };
+
+        let page_size_log2 = self.module.memory_plans[index].memory.page_size_log2;
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
@@ -2236,6 +2043,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             style: heap_style,
             index_type: self.memory_index_type(index),
             memory_type,
+            page_size_log2,
         }))
     }
 
@@ -2400,7 +2208,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let val = self.cast_memory_index_to_i64(&mut pos, val, index);
         let call_inst = pos.ins().call(memory_grow, &[vmctx, val, memory_index]);
         let result = *pos.func.dfg.inst_results(call_inst).first().unwrap();
-        Ok(self.cast_pointer_to_memory_index(pos, result, index))
+        Ok(self.convert_memory_length_to_index_type(pos, result, index))
     }
 
     fn translate_memory_size(
@@ -2472,11 +2280,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             }
         };
-        let current_length_in_pages = pos
-            .ins()
-            .udiv_imm(current_length_in_bytes, i64::from(WASM_PAGE_SIZE));
 
-        Ok(self.cast_pointer_to_memory_index(pos, current_length_in_pages, index))
+        let page_size_log2 = i64::from(self.module.memory_plans[index].memory.page_size_log2);
+        let current_length_in_pages = pos.ins().ushr_imm(current_length_in_bytes, page_size_log2);
+
+        Ok(self.convert_memory_length_to_index_type(pos, current_length_in_pages, index))
     }
 
     fn translate_memory_copy(

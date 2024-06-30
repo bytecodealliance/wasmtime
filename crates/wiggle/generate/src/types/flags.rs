@@ -65,7 +65,7 @@ pub(super) fn define_flags(
             }
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident {
+        impl wiggle::GuestType for #ident {
             #[inline]
             fn guest_size() -> u32 {
                 #repr::guest_size()
@@ -76,16 +76,16 @@ pub(super) fn define_flags(
                 #repr::guest_align()
             }
 
-            fn read(location: &wiggle::GuestPtr<#ident>) -> Result<#ident, wiggle::GuestError> {
+            fn read(mem: &wiggle::GuestMemory, location: wiggle::GuestPtr<#ident>) -> Result<#ident, wiggle::GuestError> {
                 use std::convert::TryFrom;
-                let reprval = #repr::read(&location.cast())?;
+                let reprval = #repr::read(mem, location.cast())?;
                 let value = #ident::try_from(reprval)?;
                 Ok(value)
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, #ident>, val: Self) -> Result<(), wiggle::GuestError> {
+            fn write(mem: &mut wiggle::GuestMemory, location: wiggle::GuestPtr<#ident>, val: Self) -> Result<(), wiggle::GuestError> {
                 let val: #repr = #repr::from(val);
-                #repr::write(&location.cast(), val)
+                #repr::write(mem, location.cast(), val)
             }
         }
     }

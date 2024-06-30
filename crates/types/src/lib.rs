@@ -12,6 +12,8 @@ pub use wasmparser;
 #[doc(hidden)]
 pub use alloc::format as __format;
 
+pub mod prelude;
+
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
@@ -1144,12 +1146,6 @@ entity_impl!(TagIndex);
 pub struct StaticModuleIndex(u32);
 entity_impl!(StaticModuleIndex);
 
-/// Index of a `call_indirect` instruction in a module, used for
-/// caching that callsite's target in the VMContext.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct CallIndirectSiteIndex(u32);
-entity_impl!(CallIndirectSiteIndex);
-
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub enum EntityIndex {
@@ -1487,25 +1483,27 @@ pub struct Memory {
     pub shared: bool,
     /// Whether or not this is a 64-bit memory
     pub memory64: bool,
+    /// The log2 of this memory's page size, in bytes.
+    ///
+    /// By default the page size is 64KiB (0x10000; 2**16; 1<<16; 65536) but the
+    /// custom-page-sizes proposal allows opting into a page size of `1`.
+    pub page_size_log2: u8,
 }
-
-/// WebAssembly page sizes are defined to be 64KiB.
-pub const WASM_PAGE_SIZE: u32 = 0x10000;
 
 /// Maximum size, in bytes, of 32-bit memories (4G)
 pub const WASM32_MAX_SIZE: u64 = 1 << 32;
 
-/// Maximum size, in bytes, of 64-bit memories.
-///
-/// Note that the true maximum size of a 64-bit linear memory, in bytes, cannot
-/// be represented in a `u64`. That would require a u65 to store `1<<64`.
-/// Despite that no system can actually allocate a full 64-bit linear memory so
-/// this is instead emulated as "what if the kernel fit in a single wasm page
-/// of linear memory". Shouldn't ever actually be possible but it provides a
-/// number to serve as an effective maximum.
-pub const WASM64_MAX_SIZE: u64 = 0u64.wrapping_sub(0x10000);
-
 impl Memory {
+    /// WebAssembly page sizes are 64KiB by default.
+    pub const DEFAULT_PAGE_SIZE: u32 = 0x10000;
+
+    /// WebAssembly page sizes are 64KiB (or `2**16`) by default.
+    pub const DEFAULT_PAGE_SIZE_LOG2: u8 = {
+        let log2 = 16;
+        assert!(1 << log2 == Memory::DEFAULT_PAGE_SIZE);
+        log2
+    };
+
     /// Returns the minimum size, in bytes, that this memory must be.
     ///
     /// # Errors
@@ -1515,7 +1513,7 @@ impl Memory {
     /// it's deferred to the caller to how to deal with that.
     pub fn minimum_byte_size(&self) -> Result<u64, SizeOverflow> {
         self.minimum
-            .checked_mul(u64::from(WASM_PAGE_SIZE))
+            .checked_mul(self.page_size())
             .ok_or(SizeOverflow)
     }
 
@@ -1535,14 +1533,22 @@ impl Memory {
     /// it's deferred to the caller to how to deal with that.
     pub fn maximum_byte_size(&self) -> Result<u64, SizeOverflow> {
         match self.maximum {
-            Some(max) => max
-                .checked_mul(u64::from(WASM_PAGE_SIZE))
-                .ok_or(SizeOverflow),
+            Some(max) => max.checked_mul(self.page_size()).ok_or(SizeOverflow),
             None => {
                 let min = self.minimum_byte_size()?;
                 Ok(min.max(self.max_size_based_on_index_type()))
             }
         }
+    }
+
+    /// Get the size of this memory's pages, in bytes.
+    pub fn page_size(&self) -> u64 {
+        debug_assert!(
+            self.page_size_log2 == 16 || self.page_size_log2 == 0,
+            "invalid page_size_log2: {}; must be 16 or 0",
+            self.page_size_log2
+        );
+        1 << self.page_size_log2
     }
 
     /// Returns the maximum size memory is allowed to be only based on the
@@ -1551,7 +1557,14 @@ impl Memory {
     /// For example 32-bit linear memories return `1<<32` from this method.
     pub fn max_size_based_on_index_type(&self) -> u64 {
         if self.memory64 {
-            WASM64_MAX_SIZE
+            // Note that the true maximum size of a 64-bit linear memory, in
+            // bytes, cannot be represented in a `u64`. That would require a u65
+            // to store `1<<64`. Despite that no system can actually allocate a
+            // full 64-bit linear memory so this is instead emulated as "what if
+            // the kernel fit in a single Wasm page of linear memory". Shouldn't
+            // ever actually be possible but it provides a number to serve as an
+            // effective maximum.
+            0_u64.wrapping_sub(self.page_size())
         } else {
             WASM32_MAX_SIZE
         }
@@ -1572,11 +1585,18 @@ impl std::error::Error for SizeOverflow {}
 
 impl From<wasmparser::MemoryType> for Memory {
     fn from(ty: wasmparser::MemoryType) -> Memory {
+        let page_size_log2 = u8::try_from(ty.page_size_log2.unwrap_or(16)).unwrap();
+        debug_assert!(
+            page_size_log2 == 16 || page_size_log2 == 0,
+            "invalid page_size_log2: {}; must be 16 or 0",
+            page_size_log2
+        );
         Memory {
             minimum: ty.initial,
             maximum: ty.maximum,
             shared: ty.shared,
             memory64: ty.memory64,
+            page_size_log2,
         }
     }
 }
@@ -1709,21 +1729,24 @@ pub trait TypeConvert {
     /// Converts a wasmparser heap type to a wasmtime type
     fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmHeapType {
         match ty {
-            wasmparser::HeapType::Extern => WasmHeapType::Extern,
-            wasmparser::HeapType::NoExtern => WasmHeapType::NoExtern,
-            wasmparser::HeapType::Func => WasmHeapType::Func,
-            wasmparser::HeapType::NoFunc => WasmHeapType::NoFunc,
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
-            wasmparser::HeapType::Any => WasmHeapType::Any,
-            wasmparser::HeapType::Eq => WasmHeapType::Eq,
-            wasmparser::HeapType::I31 => WasmHeapType::I31,
-            wasmparser::HeapType::Array => WasmHeapType::Array,
-            wasmparser::HeapType::Struct => WasmHeapType::Struct,
-            wasmparser::HeapType::None => WasmHeapType::None,
+            wasmparser::HeapType::Abstract { ty, shared: false } => match ty {
+                wasmparser::AbstractHeapType::Extern => WasmHeapType::Extern,
+                wasmparser::AbstractHeapType::NoExtern => WasmHeapType::NoExtern,
+                wasmparser::AbstractHeapType::Func => WasmHeapType::Func,
+                wasmparser::AbstractHeapType::NoFunc => WasmHeapType::NoFunc,
+                wasmparser::AbstractHeapType::Any => WasmHeapType::Any,
+                wasmparser::AbstractHeapType::Eq => WasmHeapType::Eq,
+                wasmparser::AbstractHeapType::I31 => WasmHeapType::I31,
+                wasmparser::AbstractHeapType::Array => WasmHeapType::Array,
+                wasmparser::AbstractHeapType::Struct => WasmHeapType::Struct,
+                wasmparser::AbstractHeapType::None => WasmHeapType::None,
 
-            wasmparser::HeapType::Exn | wasmparser::HeapType::NoExn => {
-                unimplemented!("unsupported heap type {ty:?}");
-            }
+                wasmparser::AbstractHeapType::Exn | wasmparser::AbstractHeapType::NoExn => {
+                    unimplemented!("unsupported heap type {ty:?}");
+                }
+            },
+            _ => unimplemented!("unsupported heap type {ty:?}"),
         }
     }
 

@@ -1,6 +1,6 @@
 use wasmtime::*;
 
-const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
+const WASM_PAGE_SIZE: usize = wasmtime_environ::Memory::DEFAULT_PAGE_SIZE as usize;
 
 #[test]
 #[cfg_attr(miri, ignore)]

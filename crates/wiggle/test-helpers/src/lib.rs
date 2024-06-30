@@ -1,7 +1,6 @@
 use proptest::prelude::*;
-use std::cell::UnsafeCell;
 use std::marker;
-use wiggle::{borrow::BorrowChecker, BorrowHandle, GuestMemory, Region};
+use wiggle::GuestMemory;
 
 #[derive(Debug, Clone)]
 pub struct MemAreas(Vec<MemArea>);
@@ -44,7 +43,7 @@ impl Into<Vec<MemArea>> for MemAreas {
 
 #[repr(align(4096))]
 struct HostBuffer {
-    cell: UnsafeCell<[u8; 4096]>,
+    cell: [u8; 4096],
 }
 
 unsafe impl Send for HostBuffer {}
@@ -52,16 +51,20 @@ unsafe impl Sync for HostBuffer {}
 
 pub struct HostMemory {
     buffer: HostBuffer,
-    bc: BorrowChecker,
 }
 impl HostMemory {
     pub fn new() -> Self {
         HostMemory {
-            buffer: HostBuffer {
-                cell: UnsafeCell::new([0; 4096]),
-            },
-            bc: BorrowChecker::new(),
+            buffer: HostBuffer { cell: [0; 4096] },
         }
+    }
+
+    pub fn guest_memory(&mut self) -> GuestMemory<'_> {
+        GuestMemory::Unshared(&mut self.buffer.cell)
+    }
+
+    pub fn base(&self) -> *const u8 {
+        self.buffer.cell.as_ptr()
     }
 
     pub fn mem_area_strat(align: u32) -> BoxedStrategy<MemArea> {
@@ -113,31 +116,6 @@ impl HostMemory {
             .prop_filter("available memory for allocation", |a| !a.is_empty())
             .prop_flat_map(|a| prop::sample::select(a))
             .boxed()
-    }
-}
-
-unsafe impl GuestMemory for HostMemory {
-    fn base(&self) -> &[UnsafeCell<u8>] {
-        let ptr = self.buffer.cell.get();
-        unsafe { std::slice::from_raw_parts(ptr.cast(), (*ptr).len()) }
-    }
-    fn can_read(&self, r: Region) -> bool {
-        self.bc.can_read(r)
-    }
-    fn can_write(&self, r: Region) -> bool {
-        self.bc.can_write(r)
-    }
-    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.mut_borrow(r)
-    }
-    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.shared_borrow(r)
-    }
-    fn shared_unborrow(&self, h: BorrowHandle) {
-        self.bc.shared_unborrow(h)
-    }
-    fn mut_unborrow(&self, h: BorrowHandle) {
-        self.bc.mut_unborrow(h)
     }
 }
 
@@ -213,9 +191,9 @@ mod test {
     #[test]
     fn hostmemory_is_aligned() {
         let h = HostMemory::new();
-        assert_eq!(h.base().as_ptr() as usize % 4096, 0);
+        assert_eq!(h.base() as usize % 4096, 0);
         let h = Box::new(h);
-        assert_eq!(h.base().as_ptr() as usize % 4096, 0);
+        assert_eq!(h.base() as usize % 4096, 0);
     }
 
     #[test]

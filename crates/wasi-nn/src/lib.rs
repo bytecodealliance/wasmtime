@@ -1,14 +1,33 @@
-mod ctx;
-mod registry;
-
 pub mod backend;
-pub use ctx::{preload, WasiNnCtx};
-pub use registry::{GraphRegistry, InMemoryRegistry};
-pub mod testing;
+mod registry;
 pub mod wit;
 pub mod witx;
 
+use anyhow::anyhow;
+use core::fmt;
+pub use registry::{GraphRegistry, InMemoryRegistry};
+use std::path::Path;
 use std::sync::Arc;
+
+/// Construct an in-memory registry from the available backends and a list of
+/// `(<backend name>, <graph directory>)`. This assumes graphs can be loaded
+/// from a local directory, which is a safe assumption currently for the current
+/// model types.
+pub fn preload(preload_graphs: &[(String, String)]) -> anyhow::Result<(Vec<Backend>, Registry)> {
+    let mut backends = backend::list();
+    let mut registry = InMemoryRegistry::new();
+    for (kind, path) in preload_graphs {
+        let kind_ = kind.parse()?;
+        let backend = backends
+            .iter_mut()
+            .find(|b| b.encoding() == kind_)
+            .ok_or(anyhow!("unsupported backend: {}", kind))?
+            .as_dir_loadable()
+            .ok_or(anyhow!("{} does not support directory loading", kind))?;
+        registry.load(backend, Path::new(path))?;
+    }
+    Ok((backends, Registry::from(registry)))
+}
 
 /// A machine learning backend.
 pub struct Backend(Box<dyn backend::BackendInner>);
@@ -41,6 +60,27 @@ impl std::ops::Deref for Graph {
     type Target = dyn backend::BackendGraph;
     fn deref(&self) -> &Self::Target {
         self.0.as_ref()
+    }
+}
+
+/// A host-side tensor.
+///
+/// Eventually, this may be defined in each backend as they gain the ability to
+/// hold tensors on various devices (TODO:
+/// https://github.com/WebAssembly/wasi-nn/pull/70).
+#[derive(Clone)]
+pub struct Tensor {
+    dimensions: Vec<u32>,
+    ty: wit::TensorType,
+    data: Vec<u8>,
+}
+impl fmt::Debug for Tensor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Tensor")
+            .field("dimensions", &self.dimensions)
+            .field("ty", &self.ty)
+            .field("data (bytes)", &self.data.len())
+            .finish()
     }
 }
 

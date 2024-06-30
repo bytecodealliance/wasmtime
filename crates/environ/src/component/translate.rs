@@ -12,7 +12,8 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
 use wasmparser::types::{
-    AliasableResourceId, ComponentEntityType, ComponentFuncTypeId, ComponentInstanceTypeId, Types,
+    AliasableResourceId, ComponentCoreModuleTypeId, ComponentEntityType, ComponentFuncTypeId,
+    ComponentInstanceTypeId, Types,
 };
 use wasmparser::{Chunk, ComponentImportName, Encoding, Parser, Payload, Validator};
 use wasmtime_types::ModuleInternedTypeIndex;
@@ -190,7 +191,7 @@ enum LocalInitializer<'data> {
     ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),
 
     // core wasm modules
-    ModuleStatic(StaticModuleIndex),
+    ModuleStatic(StaticModuleIndex, ComponentCoreModuleTypeId),
 
     // core wasm module instances
     ModuleInstantiate(ModuleIndex, HashMap<&'data str, ModuleInstanceIndex>),
@@ -272,12 +273,14 @@ impl<'a, 'data> Translator<'a, 'data> {
         types: &'a mut ComponentTypesBuilder,
         scope_vec: &'data ScopeVec<u8>,
     ) -> Self {
+        let mut parser = Parser::new(0);
+        parser.set_features(*validator.features());
         Self {
             result: Translation::default(),
             tunables,
             validator,
             types: PreInliningComponentTypes::new(types),
-            parser: Parser::new(0),
+            parser,
             lexical_scopes: Vec::new(),
             static_components: Default::default(),
             static_modules: Default::default(),
@@ -356,7 +359,9 @@ impl<'a, 'data> Translator<'a, 'data> {
             &self.static_components,
         )?;
         self.partition_adapter_modules(&mut component);
-        Ok((component.finish(), self.static_modules))
+        let translation =
+            component.finish(self.types.types_mut_for_inlining(), self.result.types_ref())?;
+        Ok((translation, self.static_modules))
     }
 
     fn translate_payload(
@@ -535,6 +540,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 parser,
                 unchecked_range,
             } => {
+                let index = self.validator.types(0).unwrap().module_count();
                 self.validator.module_section(&unchecked_range)?;
                 let translation = ModuleEnvironment::new(
                     self.tunables,
@@ -556,9 +562,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                         })?,
                 )?;
                 let static_idx = self.static_modules.push(translation);
+                let types = self.validator.types(0).unwrap();
+                let ty = types.module_at(index);
                 self.result
                     .initializers
-                    .push(LocalInitializer::ModuleStatic(static_idx));
+                    .push(LocalInitializer::ModuleStatic(static_idx, ty));
                 return Ok(Action::Skip(unchecked_range.end - unchecked_range.start));
             }
 

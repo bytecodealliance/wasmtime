@@ -48,8 +48,8 @@ impl Config {
         // Allow a memory to be generated, but don't let it get too large.
         // Additionally require the maximum size to guarantee that the growth
         // behavior is consistent across engines.
-        config.max_memory32_pages = 10;
-        config.max_memory64_pages = 10;
+        config.max_memory32_bytes = 10 << 16;
+        config.max_memory64_bytes = 10 << 16;
         config.memory_max_size_required = true;
 
         // If tables are generated make sure they don't get too large to avoid
@@ -166,13 +166,13 @@ impl Config {
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
             .wasm_tail_call(self.module_config.config.tail_call_enabled)
+            .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
             .wasm_threads(self.module_config.config.threads_enabled)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
-            .memory_init_cow(self.wasmtime.memory_init_cow)
             .memory_guaranteed_dense_image_size(std::cmp::min(
                 // Clamp this at 16MiB so we don't get huge in-memory
                 // images during fuzzing.
@@ -180,9 +180,7 @@ impl Config {
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map)
-            .cache_call_indirects(self.wasmtime.cache_call_indirects)
-            .max_call_indirect_cache_slots(self.wasmtime.max_call_indirect_cache_slots);
+            .generate_address_map(self.wasmtime.generate_address_map);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -259,7 +257,11 @@ impl Config {
                     static_memory_maximum_size: Some(4 << 30), // 4 GiB
                     static_memory_guard_size: Some(2 << 30),   // 2 GiB
                     dynamic_memory_guard_size: Some(0),
+                    dynamic_memory_reserved_for_growth: Some(0),
                     guard_before_linear_memory: false,
+                    memory_init_cow: true,
+                    // Doesn't matter, only using virtual memory.
+                    cranelift_enable_heap_access_spectre_mitigations: None,
                 })
             } else {
                 self.wasmtime.memory_config.clone()
@@ -267,19 +269,16 @@ impl Config {
 
             match &memory_config {
                 MemoryConfig::Normal(memory_config) => {
-                    cfg.static_memory_maximum_size(
-                        memory_config.static_memory_maximum_size.unwrap_or(0),
-                    )
-                    .static_memory_guard_size(memory_config.static_memory_guard_size.unwrap_or(0))
-                    .dynamic_memory_guard_size(memory_config.dynamic_memory_guard_size.unwrap_or(0))
-                    .guard_before_linear_memory(memory_config.guard_before_linear_memory);
+                    memory_config.apply_to(&mut cfg);
                 }
                 MemoryConfig::CustomUnaligned => {
                     cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
                         .static_memory_maximum_size(0)
                         .dynamic_memory_guard_size(0)
+                        .dynamic_memory_reserved_for_growth(0)
                         .static_memory_guard_size(0)
-                        .guard_before_linear_memory(false);
+                        .guard_before_linear_memory(false)
+                        .memory_init_cow(false);
                 }
             }
         }
@@ -427,14 +426,18 @@ impl<'a> Arbitrary<'a> for Config {
 
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
-            let min_pages = cfg.max_memory32_pages.min(cfg.max_memory64_pages);
-            let mut min = (min_pages << 16).min(pooling.max_memory_size as u64);
+            let min_bytes = cfg
+                .max_memory32_bytes
+                // memory64_bytes is a u128, but since we are taking the min
+                // we can truncate it down to a u64.
+                .min(cfg.max_memory64_bytes.try_into().unwrap_or(u64::MAX));
+            let mut min = min_bytes.min(pooling.max_memory_size as u64);
             if let MemoryConfig::Normal(cfg) = &config.wasmtime.memory_config {
                 min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
             }
             pooling.max_memory_size = min as usize;
-            cfg.max_memory32_pages = min >> 16;
-            cfg.max_memory64_pages = min >> 16;
+            cfg.max_memory32_bytes = min;
+            cfg.max_memory64_bytes = min as u128;
 
             // If traps are disallowed then memories must have at least one page
             // of memory so if we still are only allowing 0 pages of memory then
@@ -442,8 +445,8 @@ impl<'a> Arbitrary<'a> for Config {
             if cfg.disallow_traps {
                 if pooling.max_memory_size < (1 << 16) {
                     pooling.max_memory_size = 1 << 16;
-                    cfg.max_memory32_pages = 1;
-                    cfg.max_memory64_pages = 1;
+                    cfg.max_memory32_bytes = 1 << 16;
+                    cfg.max_memory64_bytes = 1 << 16;
                     if let MemoryConfig::Normal(cfg) = &mut config.wasmtime.memory_config {
                         match &mut cfg.static_memory_maximum_size {
                             Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
@@ -496,10 +499,6 @@ pub struct WasmtimeConfig {
     native_unwind_info: bool,
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
-    /// Whether we enable indirect-call caching.
-    cache_call_indirects: bool,
-    /// The maximum number of call-indirect cache slots.
-    max_call_indirect_cache_slots: usize,
     table_lazy_init: bool,
 
     /// Whether or not fuzzing should enable PCC.

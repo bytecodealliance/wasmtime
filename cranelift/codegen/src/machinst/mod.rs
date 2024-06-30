@@ -45,8 +45,9 @@
 //! ```
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
-use crate::ir::function::FunctionParameters;
-use crate::ir::{DynamicStackSlot, RelSourceLoc, StackSlot, Type};
+use crate::ir::{
+    self, function::FunctionParameters, DynamicStackSlot, RelSourceLoc, StackSlot, Type,
+};
 use crate::isa::FunctionAlignment;
 use crate::result::CodegenResult;
 use crate::settings;
@@ -284,10 +285,13 @@ pub enum MachTerminator {
 pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
     type State: MachInstEmitState<Self>;
+
     /// Constant information used in `emit` invocations.
     type Info;
+
     /// Emit the instruction.
     fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
+
     /// Pretty-print the instruction.
     fn pretty_print_inst(&self, state: &mut Self::State) -> String;
 }
@@ -297,20 +301,29 @@ pub trait MachInstEmit: MachInst {
 pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Create a new emission state given the ABI object.
     fn new(abi: &Callee<I::ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self;
+
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
-    fn pre_safepoint(&mut self, _stack_map: StackMap) {}
+    fn pre_safepoint(
+        &mut self,
+        stack_map: Option<StackMap>,
+        user_stack_map: Option<ir::UserStackMap>,
+    );
+
     /// The emission state holds ownership of a control plane, so it doesn't
     /// have to be passed around explicitly too much. `ctrl_plane_mut` may
     /// be used if temporary access to the control plane is needed by some
     /// other function that doesn't have access to the emission state.
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane;
+
     /// Used to continue using a control plane after the emission state is
     /// not needed anymore.
     fn take_ctrl_plane(self) -> ControlPlane;
+
     /// A hook that triggers when first emitting a new block.
     /// It is guaranteed to be called before any instructions are emitted.
     fn on_new_block(&mut self) {}
+
     /// The [`FrameLayout`] for the function currently being compiled.
     fn frame_layout(&self) -> &FrameLayout;
 }

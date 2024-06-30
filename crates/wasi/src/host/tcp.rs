@@ -7,15 +7,19 @@ use crate::{
     },
     network::SocketAddressFamily,
 };
-use crate::{Pollable, SocketResult, WasiView};
+use crate::{Pollable, SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
 
-impl tcp::Host for dyn WasiView + '_ {}
+impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 
-impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
-    fn start_bind(
+#[async_trait::async_trait]
+impl<T> crate::host::tcp::tcp::HostTcpSocket for WasiImpl<T>
+where
+    T: WasiView,
+{
+    async fn start_bind(
         &mut self,
         this: Resource<tcp::TcpSocket>,
         network: Resource<Network>,
@@ -27,7 +31,9 @@ impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
         let local_address: SocketAddr = local_address.into();
 
         // Ensure that we're allowed to connect to this address.
-        network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
+        network
+            .check_socket_addr(local_address, SocketAddrUse::TcpBind)
+            .await?;
 
         // Bind to the address.
         table.get_mut(&this)?.start_bind(local_address)?;
@@ -42,7 +48,7 @@ impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
         socket.finish_bind()
     }
 
-    fn start_connect(
+    async fn start_connect(
         &mut self,
         this: Resource<tcp::TcpSocket>,
         network: Resource<Network>,
@@ -54,7 +60,9 @@ impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
         let remote_address: SocketAddr = remote_address.into();
 
         // Ensure that we're allowed to connect to this address.
-        network.check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)?;
+        network
+            .check_socket_addr(remote_address, SocketAddrUse::TcpConnect)
+            .await?;
 
         // Start connection
         table.get_mut(&this)?.start_connect(remote_address)?;
@@ -302,5 +310,238 @@ impl crate::host::tcp::tcp::HostTcpSocket for dyn WasiView + '_ {
         drop(dropped);
 
         Ok(())
+    }
+}
+
+pub mod sync {
+    use wasmtime::component::Resource;
+
+    use crate::{
+        bindings::{
+            sockets::{
+                network::Network,
+                tcp::{self as async_tcp, HostTcpSocket as AsyncHostTcpSocket},
+            },
+            sync::sockets::tcp::{
+                self, Duration, HostTcpSocket, InputStream, IpAddressFamily, IpSocketAddress,
+                OutputStream, Pollable, ShutdownType, TcpSocket,
+            },
+        },
+        runtime::in_tokio,
+        SocketError, WasiImpl, WasiView,
+    };
+
+    impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
+
+    impl<T> HostTcpSocket for WasiImpl<T>
+    where
+        T: WasiView,
+    {
+        fn start_bind(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            network: Resource<Network>,
+            local_address: IpSocketAddress,
+        ) -> Result<(), SocketError> {
+            in_tokio(async {
+                AsyncHostTcpSocket::start_bind(self, self_, network, local_address).await
+            })
+        }
+
+        fn finish_bind(&mut self, self_: Resource<TcpSocket>) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::finish_bind(self, self_)
+        }
+
+        fn start_connect(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            network: Resource<Network>,
+            remote_address: IpSocketAddress,
+        ) -> Result<(), SocketError> {
+            in_tokio(async {
+                AsyncHostTcpSocket::start_connect(self, self_, network, remote_address).await
+            })
+        }
+
+        fn finish_connect(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> Result<(Resource<InputStream>, Resource<OutputStream>), SocketError> {
+            AsyncHostTcpSocket::finish_connect(self, self_)
+        }
+
+        fn start_listen(&mut self, self_: Resource<TcpSocket>) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::start_listen(self, self_)
+        }
+
+        fn finish_listen(&mut self, self_: Resource<TcpSocket>) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::finish_listen(self, self_)
+        }
+
+        fn accept(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> Result<
+            (
+                Resource<TcpSocket>,
+                Resource<InputStream>,
+                Resource<OutputStream>,
+            ),
+            SocketError,
+        > {
+            AsyncHostTcpSocket::accept(self, self_)
+        }
+
+        fn local_address(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> Result<IpSocketAddress, SocketError> {
+            AsyncHostTcpSocket::local_address(self, self_)
+        }
+
+        fn remote_address(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> Result<IpSocketAddress, SocketError> {
+            AsyncHostTcpSocket::remote_address(self, self_)
+        }
+
+        fn is_listening(&mut self, self_: Resource<TcpSocket>) -> wasmtime::Result<bool> {
+            AsyncHostTcpSocket::is_listening(self, self_)
+        }
+
+        fn address_family(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> wasmtime::Result<IpAddressFamily> {
+            AsyncHostTcpSocket::address_family(self, self_)
+        }
+
+        fn set_listen_backlog_size(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: u64,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_listen_backlog_size(self, self_, value)
+        }
+
+        fn keep_alive_enabled(&mut self, self_: Resource<TcpSocket>) -> Result<bool, SocketError> {
+            AsyncHostTcpSocket::keep_alive_enabled(self, self_)
+        }
+
+        fn set_keep_alive_enabled(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: bool,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_keep_alive_enabled(self, self_, value)
+        }
+
+        fn keep_alive_idle_time(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> Result<Duration, SocketError> {
+            AsyncHostTcpSocket::keep_alive_idle_time(self, self_)
+        }
+
+        fn set_keep_alive_idle_time(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: Duration,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_keep_alive_idle_time(self, self_, value)
+        }
+
+        fn keep_alive_interval(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> Result<Duration, SocketError> {
+            AsyncHostTcpSocket::keep_alive_interval(self, self_)
+        }
+
+        fn set_keep_alive_interval(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: Duration,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_keep_alive_interval(self, self_, value)
+        }
+
+        fn keep_alive_count(&mut self, self_: Resource<TcpSocket>) -> Result<u32, SocketError> {
+            AsyncHostTcpSocket::keep_alive_count(self, self_)
+        }
+
+        fn set_keep_alive_count(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: u32,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_keep_alive_count(self, self_, value)
+        }
+
+        fn hop_limit(&mut self, self_: Resource<TcpSocket>) -> Result<u8, SocketError> {
+            AsyncHostTcpSocket::hop_limit(self, self_)
+        }
+
+        fn set_hop_limit(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: u8,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_hop_limit(self, self_, value)
+        }
+
+        fn receive_buffer_size(&mut self, self_: Resource<TcpSocket>) -> Result<u64, SocketError> {
+            AsyncHostTcpSocket::receive_buffer_size(self, self_)
+        }
+
+        fn set_receive_buffer_size(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: u64,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_receive_buffer_size(self, self_, value)
+        }
+
+        fn send_buffer_size(&mut self, self_: Resource<TcpSocket>) -> Result<u64, SocketError> {
+            AsyncHostTcpSocket::send_buffer_size(self, self_)
+        }
+
+        fn set_send_buffer_size(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            value: u64,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::set_send_buffer_size(self, self_, value)
+        }
+
+        fn subscribe(
+            &mut self,
+            self_: Resource<TcpSocket>,
+        ) -> wasmtime::Result<Resource<Pollable>> {
+            AsyncHostTcpSocket::subscribe(self, self_)
+        }
+
+        fn shutdown(
+            &mut self,
+            self_: Resource<TcpSocket>,
+            shutdown_type: ShutdownType,
+        ) -> Result<(), SocketError> {
+            AsyncHostTcpSocket::shutdown(self, self_, shutdown_type.into())
+        }
+
+        fn drop(&mut self, rep: Resource<TcpSocket>) -> wasmtime::Result<()> {
+            AsyncHostTcpSocket::drop(self, rep)
+        }
+    }
+
+    impl From<ShutdownType> for async_tcp::ShutdownType {
+        fn from(other: ShutdownType) -> Self {
+            match other {
+                ShutdownType::Receive => async_tcp::ShutdownType::Receive,
+                ShutdownType::Send => async_tcp::ShutdownType::Send,
+                ShutdownType::Both => async_tcp::ShutdownType::Both,
+            }
+        }
     }
 }

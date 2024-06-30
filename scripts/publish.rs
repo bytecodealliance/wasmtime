@@ -18,6 +18,7 @@ use std::time::Duration;
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
     // cranelift
+    "cranelift-bitset",
     "cranelift-isle",
     "cranelift-entity",
     "wasmtime-types",
@@ -91,6 +92,7 @@ const PUBLIC_CRATES: &[&str] = &[
     // have breaking API changes in patch releases
     "cranelift-entity",
     "cranelift-bforest",
+    "cranelift-bitset",
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
     "cranelift-egraph",

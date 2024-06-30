@@ -5,8 +5,8 @@
 //! like becoming executable or becoming readonly or being created from files,
 //! but it's enough to get various tests running relying on memories and such.
 
+use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::{bail, Result};
 use std::alloc::{self, Layout};
 use std::fs::File;
 use std::ops::Range;
@@ -32,7 +32,10 @@ impl Mmap {
     }
 
     pub fn reserve(size: usize) -> Result<Self> {
-        let layout = Layout::from_size_align(size, crate::runtime::vm::page_size()).unwrap();
+        if size > 1 << 32 {
+            bail!("failed to allocate memory");
+        }
+        let layout = Layout::from_size_align(size, crate::runtime::vm::host_page_size()).unwrap();
         let ptr = unsafe { alloc::alloc(layout) };
         if ptr.is_null() {
             bail!("failed to allocate memory");
@@ -88,7 +91,7 @@ impl Drop for Mmap {
         }
         unsafe {
             let layout =
-                Layout::from_size_align(self.len(), crate::runtime::vm::page_size()).unwrap();
+                Layout::from_size_align(self.len(), crate::runtime::vm::host_page_size()).unwrap();
             alloc::dealloc(self.as_mut_ptr(), layout);
         }
     }

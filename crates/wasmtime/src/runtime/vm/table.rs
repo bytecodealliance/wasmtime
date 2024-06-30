@@ -7,7 +7,6 @@
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::runtime::vm::{GcStore, SendSyncPtr, Store, VMGcRef};
-use anyhow::{bail, ensure, format_err, Error, Result};
 use core::cmp;
 use core::ops::Range;
 use core::ptr::{self, NonNull};

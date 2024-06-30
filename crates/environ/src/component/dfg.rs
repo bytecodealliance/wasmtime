@@ -30,10 +30,12 @@
 use crate::component::*;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, PrimaryMap, WasmValType};
+use anyhow::Result;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
+use wasmparser::types::ComponentCoreModuleTypeId;
 use wasmtime_types::ModuleInternedTypeIndex;
 
 #[derive(Default)]
@@ -185,13 +187,16 @@ pub enum Export {
         func: CoreDef,
         options: CanonicalOptions,
     },
-    ModuleStatic(StaticModuleIndex),
+    ModuleStatic {
+        ty: ComponentCoreModuleTypeId,
+        index: StaticModuleIndex,
+    },
     ModuleImport {
         ty: TypeModuleIndex,
         import: RuntimeImportIndex,
     },
     Instance {
-        ty: Option<TypeComponentInstanceIndex>,
+        ty: TypeComponentInstanceIndex,
         exports: IndexMap<String, Export>,
     },
     Type(TypeDef),
@@ -345,7 +350,11 @@ impl<K: EntityRef, V> Default for Intern<K, V> {
 impl ComponentDfg {
     /// Consumes the intermediate `ComponentDfg` to produce a final `Component`
     /// with a linear innitializer list.
-    pub fn finish(self) -> ComponentTranslation {
+    pub fn finish(
+        self,
+        wasmtime_types: &mut ComponentTypesBuilder,
+        wasmparser_types: wasmparser::types::TypesRef<'_>,
+    ) -> Result<ComponentTranslation> {
         let mut linearize = LinearizeDfg {
             dfg: &self,
             initializers: Vec::new(),
@@ -368,20 +377,23 @@ impl ComponentDfg {
 
         // Next the exports of the instance are handled which will likely end up
         // creating some lowered imports, perhaps some saved modules, etc.
-        let exports = self
-            .exports
-            .iter()
-            .map(|(name, export)| (name.clone(), linearize.export(export)))
-            .collect();
+        let mut export_items = PrimaryMap::new();
+        let mut exports = NameMap::default();
+        for (name, export) in self.exports.iter() {
+            let export =
+                linearize.export(export, &mut export_items, wasmtime_types, wasmparser_types)?;
+            exports.insert(name, &mut NameMapNoIntern, false, export)?;
+        }
 
         // With all those pieces done the results of the dataflow-based
         // linearization are recorded into the `Component`. The number of
         // runtime values used for each index space is used from the `linearize`
         // result.
-        ComponentTranslation {
+        Ok(ComponentTranslation {
             trampolines: linearize.trampoline_defs,
             component: Component {
                 exports,
+                export_items,
                 initializers: linearize.initializers,
                 trampolines: linearize.trampolines,
                 num_lowerings: linearize.num_lowerings,
@@ -402,7 +414,7 @@ impl ComponentDfg {
                     .map(|(_, r)| r.instance)
                     .collect(),
             },
-        }
+        })
     }
 
     /// Converts the provided defined index into a normal index, adding in the
@@ -483,8 +495,14 @@ impl LinearizeDfg<'_> {
             }));
     }
 
-    fn export(&mut self, export: &Export) -> info::Export {
-        match export {
+    fn export(
+        &mut self,
+        export: &Export,
+        items: &mut PrimaryMap<ExportIndex, info::Export>,
+        wasmtime_types: &mut ComponentTypesBuilder,
+        wasmparser_types: wasmparser::types::TypesRef<'_>,
+    ) -> Result<ExportIndex> {
+        let item = match export {
             Export::LiftedFunction { ty, func, options } => {
                 let func = self.core_def(func);
                 let options = self.options(options);
@@ -494,20 +512,29 @@ impl LinearizeDfg<'_> {
                     options,
                 }
             }
-            Export::ModuleStatic(i) => info::Export::ModuleStatic(*i),
+            Export::ModuleStatic { ty, index } => info::Export::ModuleStatic {
+                ty: wasmtime_types.convert_module(wasmparser_types, *ty)?,
+                index: *index,
+            },
             Export::ModuleImport { ty, import } => info::Export::ModuleImport {
                 ty: *ty,
                 import: *import,
             },
             Export::Instance { ty, exports } => info::Export::Instance {
                 ty: *ty,
-                exports: exports
-                    .iter()
-                    .map(|(name, export)| (name.clone(), self.export(export)))
-                    .collect(),
+                exports: {
+                    let mut map = NameMap::default();
+                    for (name, export) in exports {
+                        let export =
+                            self.export(export, items, wasmtime_types, wasmparser_types)?;
+                        map.insert(name, &mut NameMapNoIntern, false, export)?;
+                    }
+                    map
+                },
             },
             Export::Type(def) => info::Export::Type(*def),
-        }
+        };
+        Ok(items.push(item))
     }
 
     fn options(&mut self, options: &CanonicalOptions) -> info::CanonicalOptions {

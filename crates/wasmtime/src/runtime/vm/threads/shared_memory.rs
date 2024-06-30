@@ -3,8 +3,6 @@ use crate::runtime::vm::memory::{validate_atomic_addr, MmapMemory};
 use crate::runtime::vm::threads::parking_spot::{ParkingSpot, Waiter};
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{Memory, RuntimeLinearMemory, Store, WaitResult};
-use anyhow::Error;
-use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -191,6 +189,10 @@ unsafe impl Sync for LongTermVMMemoryDefinition {}
 
 /// Proxy all calls through the [`RwLock`].
 impl RuntimeLinearMemory for SharedMemory {
+    fn page_size_log2(&self) -> u8 {
+        self.0.memory.read().unwrap().page_size_log2()
+    }
+
     fn byte_size(&self) -> usize {
         self.0.memory.read().unwrap().byte_size()
     }

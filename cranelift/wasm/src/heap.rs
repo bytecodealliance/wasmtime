@@ -90,6 +90,9 @@ pub struct HeapData {
 
     /// The memory type for the pointed-to memory, if using proof-carrying code.
     pub memory_type: Option<MemoryType>,
+
+    /// The log2 of this memory's page size.
+    pub page_size_log2: u8,
 }
 
 /// Style of heap including style-specific information.

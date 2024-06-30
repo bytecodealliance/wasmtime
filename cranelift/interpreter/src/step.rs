@@ -353,10 +353,8 @@ where
         }
         Opcode::Trap => ControlFlow::Trap(CraneliftTrap::User(trap_code())),
         Opcode::Debugtrap => ControlFlow::Trap(CraneliftTrap::Debug),
-        Opcode::ResumableTrap => ControlFlow::Trap(CraneliftTrap::Resumable),
         Opcode::Trapz => trap_when(!arg(0).into_bool()?, CraneliftTrap::User(trap_code())),
         Opcode::Trapnz => trap_when(arg(0).into_bool()?, CraneliftTrap::User(trap_code())),
-        Opcode::ResumableTrapnz => trap_when(arg(0).into_bool()?, CraneliftTrap::Resumable),
         Opcode::Return => ControlFlow::Return(args()),
         Opcode::Call | Opcode::ReturnCall => {
             let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
@@ -1330,8 +1328,6 @@ pub enum CraneliftTrap {
     User(TrapCode),
     #[error("user debug")]
     Debug,
-    #[error("resumable")]
-    Resumable,
 }
 
 /// Compare two values using the given integer condition `code`.
@@ -1423,7 +1419,7 @@ pub(crate) fn extractlanes(
 
     let iterations = match lane_type {
         types::I8 => 1,
-        types::I16 => 2,
+        types::I16 | types::F16 => 2,
         types::I32 | types::F32 => 4,
         types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
@@ -1462,7 +1458,7 @@ fn vectorizelanes_all(x: &[DataValue], vector_type: types::Type) -> ValueResult<
     let lane_type = vector_type.lane_type();
     let iterations = match lane_type {
         types::I8 => 1,
-        types::I16 => 2,
+        types::I16 | types::F16 => 2,
         types::I32 | types::F32 => 4,
         types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),

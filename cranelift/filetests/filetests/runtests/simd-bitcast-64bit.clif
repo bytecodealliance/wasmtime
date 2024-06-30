@@ -1,0 +1,36 @@
+test run
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %bitcast_i32x2_to_i64(i32x2) -> i64 {
+block0(v0: i32x2):
+    v1 = bitcast.i64 little v0
+    return v1
+}
+; run: %bitcast_i32x2_to_i64([0xBEEF 0xC0FFEE]) == 0x00c0ffee_0000beef
+; run: %bitcast_i32x2_to_i64([-1 127]) == 0x0000007f_ffffffff
+
+
+function %bitcast_i64_to_i32x2(i64) -> i32x2 {
+block0(v0: i64):
+    v1 = bitcast.i32x2 little v0
+    return v1
+}
+; run: %bitcast_i64_to_i32x2(0x00c0ffee_0000beef) == [0xBEEF 0xC0FFEE]
+; run: %bitcast_i64_to_i32x2(0x0000007f_ffffffff) == [-1 127]
+
+function %bitcast_i32x2_to_f64(i32x2) -> f64 {
+block0(v0: i32x2):
+    v1 = bitcast.f64 little v0
+    return v1
+}
+; run: %bitcast_i32x2_to_f64([0xBEEF 0xC0FFEE]) == 0x1.0ffee0000beefp-1011
+; run: %bitcast_i32x2_to_f64([-1 127]) == 0x0.0007fffffffffp-1022
+
+function %bitcast_f64_to_i32x2(f64) -> i32x2 {
+block0(v0: f64):
+    v1 = bitcast.i32x2 little v0
+    return v1
+}
+; run: %bitcast_f64_to_i32x2(0x1.0ffee0000beefp-1011) == [0xBEEF 0xC0FFEE]
+; run: %bitcast_f64_to_i32x2(0x0.0007fffffffffp-1022) == [-1 127]

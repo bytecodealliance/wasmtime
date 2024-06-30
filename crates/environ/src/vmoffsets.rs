@@ -7,8 +7,9 @@
 //      magic: u32,
 //      _padding: u32, // (On 64-bit systems)
 //      runtime_limits: *const VMRuntimeLimits,
-//      builtins: *mut VMBuiltinFunctionsArray,
+//      builtin_functions: *mut VMBuiltinFunctionsArray,
 //      callee: *mut VMFunctionBody,
+//      epoch_ptr: *mut AtomicU64,
 //      gc_heap_base: *mut u8,
 //      gc_heap_bound: *mut u8,
 //      gc_heap_data: *mut T, // Collector-specific pointer
@@ -23,12 +24,11 @@
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
-//      call_indirect_caches: [VMCallIndirectCache; module.num_call_indirect_caches],
 // }
 
 use crate::{
-    CallIndirectSiteIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    FuncRefIndex, GlobalIndex, MemoryIndex, Module, TableIndex,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, FuncRefIndex,
+    GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use wasmtime_types::OwnedMemoryIndex;
@@ -73,20 +73,8 @@ pub struct VMOffsets<P> {
     /// The number of escaped functions in the module, the size of the func_refs
     /// array.
     pub num_escaped_funcs: u32,
-    /// The number of call_indirect cache entries in the cache array.
-    pub num_call_indirect_caches: u32,
 
     // precalculated offsets of various member fields
-    magic: u32,
-    runtime_limits: u32,
-    builtin_functions: u32,
-    callee: u32,
-    epoch_ptr: u32,
-    gc_heap_base: u32,
-    gc_heap_bound: u32,
-    gc_heap_data: u32,
-    store: u32,
-    type_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
     imported_memories: u32,
@@ -96,7 +84,6 @@ pub struct VMOffsets<P> {
     owned_memories: u32,
     defined_globals: u32,
     defined_func_refs: u32,
-    call_indirect_caches: u32,
     size: u32,
 }
 
@@ -228,25 +215,84 @@ pub trait PtrSize {
         .unwrap()
     }
 
-    // Offsets within `VMCallIndirectCache`.
-
-    /// Return the offset of `VMCallIndirectCache::wasm_call`.
-    fn vmcall_indirect_cache_wasm_call(&self) -> u8 {
+    /// Return the offset to the `magic` value in this `VMContext`.
+    #[inline]
+    fn vmctx_magic(&self) -> u8 {
+        // This is required by the implementation of `VMContext::instance` and
+        // `VMContext::instance_mut`. If this value changes then those locations
+        // need to be updated.
         0
     }
 
-    /// Return the offset of `VMCallIndirectCache::index`.
-    fn vmcall_indirect_cache_index(&self) -> u8 {
-        self.size()
+    /// Return the offset to the `VMRuntimeLimits` structure
+    #[inline]
+    fn vmctx_runtime_limits(&self) -> u8 {
+        self.vmctx_magic() + self.size()
     }
 
-    /// Return the size of a `VMCallIndirectCache`.
-    fn size_of_vmcall_indirect_cache(&self) -> u8 {
-        2 * self.size()
+    /// Return the offset to the `VMBuiltinFunctionsArray` structure
+    #[inline]
+    fn vmctx_builtin_functions(&self) -> u8 {
+        self.vmctx_runtime_limits() + self.size()
+    }
+
+    /// Return the offset to the `callee` member in this `VMContext`.
+    #[inline]
+    fn vmctx_callee(&self) -> u8 {
+        self.vmctx_builtin_functions() + self.size()
+    }
+
+    /// Return the offset to the `*const AtomicU64` epoch-counter
+    /// pointer.
+    #[inline]
+    fn vmctx_epoch_ptr(&self) -> u8 {
+        self.vmctx_callee() + self.size()
+    }
+
+    /// Return the offset to the GC heap base in this `VMContext`.
+    #[inline]
+    fn vmctx_gc_heap_base(&self) -> u8 {
+        self.vmctx_epoch_ptr() + self.size()
+    }
+
+    /// Return the offset to the GC heap bound in this `VMContext`.
+    #[inline]
+    fn vmctx_gc_heap_bound(&self) -> u8 {
+        self.vmctx_gc_heap_base() + self.size()
+    }
+
+    /// Return the offset to the `*mut T` collector-specific data.
+    ///
+    /// This is a pointer that different collectors can use however they see
+    /// fit.
+    #[inline]
+    fn vmctx_gc_heap_data(&self) -> u8 {
+        self.vmctx_gc_heap_bound() + self.size()
+    }
+
+    /// The offset of the `*const dyn Store` member.
+    #[inline]
+    fn vmctx_store(&self) -> u8 {
+        self.vmctx_gc_heap_data() + self.size()
+    }
+
+    /// The offset of the `type_ids` array pointer.
+    #[inline]
+    fn vmctx_type_ids_array(&self) -> u8 {
+        self.vmctx_store() + 2 * self.size()
+    }
+
+    /// The end of statically known offsets in `VMContext`.
+    ///
+    /// Data after this is dynamically sized.
+    #[inline]
+    fn vmctx_dynamic_data_start(&self) -> u8 {
+        self.vmctx_type_ids_array() + self.size()
     }
 }
 
 /// Type representing the size of a pointer for the current compilation host
+#[derive(Clone, Copy)]
 pub struct HostPtr;
 
 impl PtrSize for HostPtr {
@@ -287,8 +333,6 @@ pub struct VMOffsetsFields<P> {
     /// The number of escaped functions in the module, the size of the function
     /// references array.
     pub num_escaped_funcs: u32,
-    /// The number of call_indirect cache entries in the cache array.
-    pub num_call_indirect_caches: u32,
 }
 
 impl<P: PtrSize> VMOffsets<P> {
@@ -315,7 +359,6 @@ impl<P: PtrSize> VMOffsets<P> {
             num_owned_memories,
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
-            num_call_indirect_caches: cast_to_u32(module.num_call_indirect_caches),
         })
     }
 
@@ -345,7 +388,6 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_memories: _,
                     num_owned_memories: _,
                     num_escaped_funcs: _,
-                    num_call_indirect_caches: _,
 
                     // used as the initial size below
                     size,
@@ -365,13 +407,15 @@ impl<P: PtrSize> VMOffsets<P> {
                     let $name = last - $name;
                     last = tmp;
                 )*
-                assert_eq!(last, 0);
-                IntoIterator::into_iter([$(($desc, $name),)*])
+                assert_ne!(last, 0);
+                IntoIterator::into_iter([
+                    $(($desc, $name),)*
+                    ("static vmctx data", last),
+                ])
             }};
         }
 
         calculate_sizes! {
-            call_indirect_caches: "call_indirect caches",
             defined_func_refs: "module functions",
             defined_globals: "defined globals",
             owned_memories: "owned memories",
@@ -381,16 +425,6 @@ impl<P: PtrSize> VMOffsets<P> {
             imported_memories: "imported memories",
             imported_tables: "imported tables",
             imported_functions: "imported functions",
-            type_ids: "module types",
-            store: "jit store state",
-            gc_heap_data: "GC implementation-specific data",
-            gc_heap_bound: "GC heap bound",
-            gc_heap_base: "GC heap base",
-            epoch_ptr: "jit current epoch state",
-            callee: "callee function pointer",
-            builtin_functions: "jit builtin functions state",
-            runtime_limits: "jit runtime limits state",
-            magic: "magic value",
         }
     }
 }
@@ -408,17 +442,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_owned_memories: fields.num_owned_memories,
             num_defined_globals: fields.num_defined_globals,
             num_escaped_funcs: fields.num_escaped_funcs,
-            num_call_indirect_caches: fields.num_call_indirect_caches,
-            magic: 0,
-            runtime_limits: 0,
-            builtin_functions: 0,
-            callee: 0,
-            epoch_ptr: 0,
-            gc_heap_base: 0,
-            gc_heap_bound: 0,
-            gc_heap_data: 0,
-            store: 0,
-            type_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
             imported_memories: 0,
@@ -428,7 +451,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             owned_memories: 0,
             defined_globals: 0,
             defined_func_refs: 0,
-            call_indirect_caches: 0,
             size: 0,
         };
 
@@ -446,7 +468,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             count.checked_mul(u32::from(size)).unwrap()
         }
 
-        let mut next_field_offset = 0;
+        let mut next_field_offset = u32::from(ret.ptr.vmctx_dynamic_data_start());
 
         macro_rules! fields {
             (size($field:ident) = $size:expr, $($rest:tt)*) => {
@@ -462,17 +484,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         fields! {
-            size(magic) = 4u32,
-            align(u32::from(ret.ptr.size())),
-            size(runtime_limits) = ret.ptr.size(),
-            size(builtin_functions) = ret.ptr.size(),
-            size(callee) = ret.ptr.size(),
-            size(epoch_ptr) = ret.ptr.size(),
-            size(gc_heap_base) = ret.ptr.size(),
-            size(gc_heap_bound) = ret.ptr.size(),
-            size(gc_heap_data) = ret.ptr.size(),
-            size(store) = ret.ptr.size() * 2,
-            size(type_ids) = ret.ptr.size(),
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
             size(imported_tables)
@@ -494,18 +505,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vm_func_ref(),
             ),
-            size(call_indirect_caches) = cmul(
-                ret.num_call_indirect_caches,
-                ret.ptr.size_of_vmcall_indirect_cache(),
-            ),
         }
 
         ret.size = next_field_offset;
-
-        // This is required by the implementation of `VMContext::instance` and
-        // `VMContext::instance_mut`. If this value changes then those locations
-        // need to be updated.
-        assert_eq!(ret.magic, 0);
 
         return ret;
     }
@@ -639,63 +641,6 @@ impl<P: PtrSize> VMOffsets<P> {
 
 /// Offsets for `VMContext`.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset to the `magic` value in this `VMContext`.
-    #[inline]
-    pub fn vmctx_magic(&self) -> u32 {
-        self.magic
-    }
-
-    /// Return the offset to the `VMRuntimeLimits` structure
-    #[inline]
-    pub fn vmctx_runtime_limits(&self) -> u32 {
-        self.runtime_limits
-    }
-
-    /// Return the offset to the `callee` member in this `VMContext`.
-    pub fn vmctx_callee(&self) -> u32 {
-        self.callee
-    }
-
-    /// Return the offset to the `*const AtomicU64` epoch-counter
-    /// pointer.
-    #[inline]
-    pub fn vmctx_epoch_ptr(&self) -> u32 {
-        self.epoch_ptr
-    }
-
-    /// Return the offset to the GC heap base in this `VMContext`.
-    #[inline]
-    pub fn vmctx_gc_heap_base(&self) -> u32 {
-        self.gc_heap_base
-    }
-
-    /// Return the offset to the GC heap bound in this `VMContext`.
-    #[inline]
-    pub fn vmctx_gc_heap_bound(&self) -> u32 {
-        self.gc_heap_bound
-    }
-
-    /// Return the offset to the `*mut T` collector-specific data.
-    ///
-    /// This is a pointer that different collectors can use however they see
-    /// fit.
-    #[inline]
-    pub fn vmctx_gc_heap_data(&self) -> u32 {
-        self.gc_heap_data
-    }
-
-    /// The offset of the `*const dyn Store` member.
-    #[inline]
-    pub fn vmctx_store(&self) -> u32 {
-        self.store
-    }
-
-    /// The offset of the `type_ids` array pointer.
-    #[inline]
-    pub fn vmctx_type_ids_array(&self) -> u32 {
-        self.type_ids
-    }
-
     /// The offset of the `tables` array.
     #[inline]
     pub fn vmctx_imported_functions_begin(&self) -> u32 {
@@ -748,18 +693,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_func_refs_begin(&self) -> u32 {
         self.defined_func_refs
-    }
-
-    /// The offset of the builtin functions array.
-    #[inline]
-    pub fn vmctx_builtin_functions(&self) -> u32 {
-        self.builtin_functions
-    }
-
-    /// The offset of the `call_indirect_caches` array.
-    #[inline]
-    pub fn vmctx_call_indirec_caches_begin(&self) -> u32 {
-        self.call_indirect_caches
     }
 
     /// Return the size of the `VMContext` allocation.
@@ -905,31 +838,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmglobal_import_from(&self, index: GlobalIndex) -> u32 {
         self.vmctx_vmglobal_import(index) + u32::from(self.vmglobal_import_from())
-    }
-
-    /// Return the offset to the `VMCallIndirectCache` for the given
-    /// call-indirect site.
-    #[inline]
-    pub fn vmctx_call_indirect_cache(&self, call_site: CallIndirectSiteIndex) -> u32 {
-        assert!(call_site.as_u32() < self.num_call_indirect_caches);
-        self.vmctx_call_indirec_caches_begin()
-            + call_site.as_u32() * u32::from(self.ptr.size_of_vmcall_indirect_cache())
-    }
-
-    /// Return the offset to the `wasm_call` field in `*const
-    /// VMCallIndirectCache` with call-site ID `call_site`.
-    #[inline]
-    pub fn vmctx_call_indirect_cache_wasm_call(&self, call_site: CallIndirectSiteIndex) -> u32 {
-        self.vmctx_call_indirect_cache(call_site)
-            + u32::from(self.ptr.vmcall_indirect_cache_wasm_call())
-    }
-
-    /// Return the offset to the `index` field in `*const
-    /// VMCallIndirectCache` with call-site ID `call_site`.
-    #[inline]
-    pub fn vmctx_call_indirect_cache_index(&self, call_site: CallIndirectSiteIndex) -> u32 {
-        self.vmctx_call_indirect_cache(call_site)
-            + u32::from(self.ptr.vmcall_indirect_cache_index())
     }
 }
 

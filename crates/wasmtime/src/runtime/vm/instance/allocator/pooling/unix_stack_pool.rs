@@ -4,9 +4,9 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
 };
+use crate::prelude::*;
 use crate::runtime::vm::sys::vm::commit_pages;
-use crate::runtime::vm::{Mmap, PoolingInstanceAllocatorConfig};
-use anyhow::{anyhow, bail, Context, Result};
+use crate::runtime::vm::{round_usize_up_to_host_pages, Mmap, PoolingInstanceAllocatorConfig};
 
 /// Represents a pool of execution stacks (used for the async fiber implementation).
 ///
@@ -33,7 +33,7 @@ impl StackPool {
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         use rustix::mm::{mprotect, MprotectFlags};
 
-        let page_size = crate::runtime::vm::page_size();
+        let page_size = crate::runtime::vm::host_page_size();
 
         // Add a page to the stack size for the guard page when using fiber stacks
         let stack_size = if config.stack_size == 0 {
@@ -71,7 +71,9 @@ impl StackPool {
             max_stacks,
             page_size,
             async_stack_zeroing: config.async_stack_zeroing,
-            async_stack_keep_resident: config.async_stack_keep_resident,
+            async_stack_keep_resident: round_usize_up_to_host_pages(
+                config.async_stack_keep_resident,
+            )?,
             index_allocator: SimpleIndexAllocator::new(config.limits.total_stacks),
         })
     }
@@ -211,7 +213,6 @@ impl StackPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
     use crate::runtime::vm::InstanceLimits;
 
     #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
@@ -228,7 +229,7 @@ mod tests {
         };
         let pool = StackPool::new(&config)?;
 
-        let native_page_size = crate::runtime::vm::page_size();
+        let native_page_size = crate::runtime::vm::host_page_size();
         assert_eq!(pool.stack_size, 2 * native_page_size);
         assert_eq!(pool.max_stacks, 10);
         assert_eq!(pool.page_size, native_page_size);

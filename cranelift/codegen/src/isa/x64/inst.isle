@@ -1116,22 +1116,22 @@
 
 (rule 0 (to_amode_add flags x y offset)
         (amode_imm_reg_reg_shift flags x y offset))
-(rule 1 (to_amode_add flags x (iconst (simm32 c)) offset)
+(rule 1 (to_amode_add flags x (i32_from_iconst c) offset)
         (if-let sum (s32_add_fallible offset c))
         (amode_imm_reg flags x sum))
-(rule 2 (to_amode_add flags (iconst (simm32 c)) x offset)
+(rule 2 (to_amode_add flags (i32_from_iconst c) x offset)
         (if-let sum (s32_add_fallible offset c))
         (amode_imm_reg flags x sum))
-(rule 3 (to_amode_add flags (iadd x (iconst (simm32 c))) y offset)
+(rule 3 (to_amode_add flags (iadd x (i32_from_iconst c)) y offset)
         (if-let sum (s32_add_fallible offset c))
         (amode_imm_reg_reg_shift flags x y sum))
-(rule 4 (to_amode_add flags (iadd (iconst (simm32 c)) x) y offset)
+(rule 4 (to_amode_add flags (iadd (i32_from_iconst c) x) y offset)
         (if-let sum (s32_add_fallible offset c))
         (amode_imm_reg_reg_shift flags x y sum))
-(rule 5 (to_amode_add flags x (iadd y (iconst (simm32 c))) offset)
+(rule 5 (to_amode_add flags x (iadd y (i32_from_iconst c)) offset)
         (if-let sum (s32_add_fallible offset c))
         (amode_imm_reg_reg_shift flags x y sum))
-(rule 6 (to_amode_add flags x (iadd (iconst (simm32 c)) y) offset)
+(rule 6 (to_amode_add flags x (iadd (i32_from_iconst c) y) offset)
         (if-let sum (s32_add_fallible offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 
@@ -2171,7 +2171,7 @@
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
-(rule 2 (extend_to_gpr val @ (value_type ty) ty _kind)
+(rule 3 (extend_to_gpr val @ (value_type ty) ty _kind)
       val)
 
 ;; I32 -> I64 with op that produces a zero-extended value in a register.
@@ -2179,13 +2179,22 @@
 ;; As a particular x64 extra-pattern matching opportunity, all the ALU
 ;; opcodes on 32-bits will zero-extend the upper 32-bits, so we can
 ;; even not generate a zero-extended move in this case.
-(rule 1 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
+(rule 2 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
         (if-let $true (value32_zeros_upper32 src))
         (add_range_fact src 64 0 0xffff_ffff))
 
-(rule (extend_to_gpr (and val (value_type from_ty))
-                     to_ty
-                     kind)
+;; Both extend instructions are guaranteed to load exactly the source type's size.
+;; So we can use `sinkable_load_exact` here to sink loads for small types (<= 16 bits).
+(rule 1 (extend_to_gpr (and (sinkable_load_exact val) (value_type from_ty)) to_ty kind)
+      (extend_to_gpr_types val from_ty to_ty kind))
+
+;; Otherwise emit the extend from a Gpr to a Gpr.
+(rule (extend_to_gpr (and val (value_type from_ty)) to_ty kind)
+      (extend_to_gpr_types val from_ty to_ty kind))
+
+;; Calculates the correct extension mode for an extend between `from_ty` and `to_ty`.
+(decl extend_to_gpr_types (GprMem Type Type ExtendKind) Gpr)
+(rule (extend_to_gpr_types val from_ty to_ty kind)
       (let ((from_bits u16 (ty_bits_u16 from_ty))
             ;; Use `operand_size_of_type` so that the we clamp the output to 32-
             ;; or 64-bit width types.
@@ -2193,7 +2202,8 @@
         (extend kind
                 to_ty
                 (ext_mode from_bits to_bits)
-                (put_in_gpr_mem val))))
+                val)))
+
 
 ;; Do a sign or zero extension of the given `GprMem`.
 (decl extend (ExtendKind Type ExtMode GprMem) Gpr)

@@ -16,17 +16,13 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
         let type_ = match &m.tref {
             witx::TypeRef::Name(nt) => {
                 let tt = names::type_(&nt.name);
-                if m.tref.needs_lifetime() {
-                    quote!(#tt<'a>)
-                } else {
-                    quote!(#tt)
-                }
+                quote!(#tt)
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => names::builtin_type(*builtin),
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
                     let pointee_type = names::type_ref(&pointee, quote!('a));
-                    quote!(wiggle::GuestPtr<'a, #pointee_type>)
+                    quote!(wiggle::GuestPtr<#pointee_type>)
                 }
                 _ => unimplemented!("other anonymous struct members: {:?}", m.tref),
             },
@@ -53,20 +49,20 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
             witx::TypeRef::Name(nt) => {
                 let type_ = names::type_(&nt.name);
                 quote! {
-                    let #name = <#type_ as wiggle::GuestType>::read(&#location)?;
+                    let #name = <#type_ as wiggle::GuestType>::read(mem, #location)?;
                 }
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => {
                     let type_ = names::builtin_type(*builtin);
                     quote! {
-                        let #name = <#type_ as wiggle::GuestType>::read(&#location)?;
+                        let #name = <#type_ as wiggle::GuestType>::read(mem, #location)?;
                     }
                 }
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
                     let pointee_type = names::type_ref(&pointee, anon_lifetime());
                     quote! {
-                        let #name = <wiggle::GuestPtr::<#pointee_type> as wiggle::GuestType>::read(&#location)?;
+                        let #name = <wiggle::GuestPtr::<#pointee_type> as wiggle::GuestType>::read(mem, #location)?;
                     }
                 }
                 _ => unimplemented!("other anonymous struct members: {:?}", ty),
@@ -79,7 +75,8 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
         let offset = ml.offset as u32;
         quote! {
             wiggle::GuestType::write(
-                &location.cast::<u8>().add(#offset)?.cast(),
+                mem,
+                location.cast::<u8>().add(#offset)?.cast(),
                 val.#name,
             )?;
         }
@@ -93,15 +90,15 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
 
     quote! {
         #[derive(Clone, Debug #extra_derive)]
-        pub struct #ident #struct_lifetime {
+        pub struct #ident {
             #(#member_decls),*
         }
 
-        impl #struct_lifetime #ident #struct_lifetime {
+        impl #struct_lifetime #ident {
             #(#member_offsets)*
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident #struct_lifetime {
+        impl wiggle::GuestType for #ident {
             #[inline]
             fn guest_size() -> u32 {
                 #size
@@ -112,12 +109,12 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
                 #align
             }
 
-            fn read(location: &wiggle::GuestPtr<'a, Self>) -> Result<Self, wiggle::GuestError> {
+            fn read(mem: &wiggle::GuestMemory, location: wiggle::GuestPtr<Self>) -> Result<Self, wiggle::GuestError> {
                 #(#member_reads)*
                 Ok(#ident { #(#member_names),* })
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle::GuestError> {
+            fn write(mem: &mut wiggle::GuestMemory, location: wiggle::GuestPtr<Self>, val: Self) -> Result<(), wiggle::GuestError> {
                 #(#member_writes)*
                 Ok(())
             }

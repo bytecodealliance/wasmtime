@@ -13,13 +13,11 @@
 
 use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
-use anyhow::Result;
+use object::elf;
 use std::process;
 use std::sync::Mutex;
 use target_lexicon::Architecture;
 use wasmtime_jit_debug::perf_jitdump::*;
-
-use object::elf;
 
 /// Interface for driving the creation of jitdump files
 struct JitDumpAgent {

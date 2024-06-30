@@ -38,7 +38,7 @@ async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, 
 
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
-    let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
     Ok((store, command))
 }
 
@@ -120,6 +120,11 @@ fn api_proxy() {}
 #[allow(dead_code)]
 fn api_proxy_streaming() {}
 
+// This is tested in the wasi-http crate, but need to satisfy the `foreach_api!`
+// macro above.
+#[allow(dead_code)]
+fn api_proxy_forward_request() {}
+
 wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
@@ -141,8 +146,7 @@ async fn api_reactor() -> Result<()> {
 
     let mut store = Store::new(&engine, CommandCtx { table, wasi });
     let component = Component::from_file(&engine, API_REACTOR_COMPONENT)?;
-    let (reactor, _instance) =
-        TestReactor::instantiate_async(&mut store, &component, &linker).await?;
+    let reactor = TestReactor::instantiate_async(&mut store, &component, &linker).await?;
 
     // Show that integration with the WASI context is working - the guest will
     // interpolate $GOOD_DOG to gussie here using the environment:

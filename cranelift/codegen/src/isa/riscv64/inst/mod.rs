@@ -459,14 +459,19 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             y,
             ..
         } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
+            // Mark the condition registers as late use so that they don't overlap with the destination
+            // register. We may potentially write to the destination register before evaluating the
+            // condition.
+            collector.reg_late_use(rs1);
+            collector.reg_late_use(rs2);
+
             for reg in x.regs_mut() {
                 collector.reg_use(reg);
             }
             for reg in y.regs_mut() {
                 collector.reg_use(reg);
             }
+
             // If there's more than one destination register then use
             // `reg_early_def` to prevent destination registers from overlapping
             // with any operands. This ensures that the lowering doesn't have to
@@ -476,6 +481,8 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // When there's only one destination register though don't use an
             // early def because once the register is written no other inputs
             // are read so it's ok for the destination to overlap the sources.
+            // The condition registers are already marked as late use so they
+            // won't overlap with the destination.
             match dst.regs_mut() {
                 [reg] => collector.reg_def(reg),
                 regs => {
@@ -724,10 +731,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            &Inst::Call { .. }
-            | &Inst::CallInd { .. }
-            | &Inst::TrapIf { .. }
-            | &Inst::Udf { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } => true,
             _ => false,
         }
     }
@@ -840,8 +844,8 @@ impl MachInst for Inst {
     }
 
     fn worst_case_size() -> CodeOffset {
-        // calculate by test function riscv64_worst_case_instruction_size()
-        124
+        // Our worst case size is determined by the riscv64_worst_case_instruction_size test
+        84
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {

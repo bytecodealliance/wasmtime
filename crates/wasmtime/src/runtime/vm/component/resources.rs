@@ -24,7 +24,6 @@
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
 use crate::prelude::*;
-use anyhow::{bail, Result};
 use core::mem;
 use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::PrimaryMap;

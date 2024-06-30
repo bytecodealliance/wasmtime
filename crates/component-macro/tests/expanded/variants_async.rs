@@ -1,10 +1,90 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `my-world`.
+///
+/// This structure is created through [`MyWorldPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct MyWorldPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+    interface0: exports::foo::foo::variants::GuestPre,
+}
+impl<T> Clone for MyWorldPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `my-world`.
+///
+/// This structure is created through either
+/// [`MyWorld::instantiate_async`] or by first creating
+/// a [`MyWorldPre`] followed by using
+/// [`MyWorldPre::instantiate_async`].
 pub struct MyWorld {
     interface0: exports::foo::foo::variants::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> MyWorldPre<_T> {
+        /// Creates a new copy of `MyWorldPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            let interface0 = exports::foo::foo::variants::GuestPre::new(_component)?;
+            Ok(MyWorldPre {
+                instance_pre,
+                interface0,
+            })
+        }
+        /// Instantiates a new instance of [`MyWorld`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub async fn instantiate_async(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<MyWorld>
+        where
+            _T: Send,
+        {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate_async(&mut store).await?;
+            let interface0 = self.interface0.load(&mut store, &_instance)?;
+            Ok(MyWorld { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
+    }
     impl MyWorld {
+        /// Convenience wrapper around [`MyWorldPre::new`] and
+        /// [`MyWorldPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<MyWorld>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            MyWorldPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -15,53 +95,6 @@ const _: () = {
         {
             foo::foo::variants::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub async fn instantiate_async<T: Send>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate_async(&mut store, component).await?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub async fn instantiate_pre<T: Send>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate_async(&mut store).await?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            let interface0 = exports::foo::foo::variants::Guest::new(
-                &mut __exports
-                    .instance("foo:foo/variants")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "exported instance `foo:foo/variants` not present"
-                        )
-                    })?,
-            )?;
-            Ok(MyWorld { interface0 })
         }
         pub fn foo_foo_variants(&self) -> &exports::foo::foo::variants::Guest {
             &self.interface0
@@ -1190,30 +1223,132 @@ pub mod exports {
                     return_named_option: wasmtime::component::Func,
                     return_named_result: wasmtime::component::Func,
                 }
-                impl Guest {
+                #[derive(Clone)]
+                pub struct GuestPre {
+                    e1_arg: wasmtime::component::ComponentExportIndex,
+                    e1_result: wasmtime::component::ComponentExportIndex,
+                    v1_arg: wasmtime::component::ComponentExportIndex,
+                    v1_result: wasmtime::component::ComponentExportIndex,
+                    bool_arg: wasmtime::component::ComponentExportIndex,
+                    bool_result: wasmtime::component::ComponentExportIndex,
+                    option_arg: wasmtime::component::ComponentExportIndex,
+                    option_result: wasmtime::component::ComponentExportIndex,
+                    casts: wasmtime::component::ComponentExportIndex,
+                    result_arg: wasmtime::component::ComponentExportIndex,
+                    result_result: wasmtime::component::ComponentExportIndex,
+                    return_result_sugar: wasmtime::component::ComponentExportIndex,
+                    return_result_sugar2: wasmtime::component::ComponentExportIndex,
+                    return_result_sugar3: wasmtime::component::ComponentExportIndex,
+                    return_result_sugar4: wasmtime::component::ComponentExportIndex,
+                    return_option_sugar: wasmtime::component::ComponentExportIndex,
+                    return_option_sugar2: wasmtime::component::ComponentExportIndex,
+                    result_simple: wasmtime::component::ComponentExportIndex,
+                    is_clone_arg: wasmtime::component::ComponentExportIndex,
+                    is_clone_return: wasmtime::component::ComponentExportIndex,
+                    return_named_option: wasmtime::component::ComponentExportIndex,
+                    return_named_result: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "foo:foo/variants")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `foo:foo/variants`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `foo:foo/variants` does \
+                    not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let e1_arg = _lookup("e1-arg")?;
+                        let e1_result = _lookup("e1-result")?;
+                        let v1_arg = _lookup("v1-arg")?;
+                        let v1_result = _lookup("v1-result")?;
+                        let bool_arg = _lookup("bool-arg")?;
+                        let bool_result = _lookup("bool-result")?;
+                        let option_arg = _lookup("option-arg")?;
+                        let option_result = _lookup("option-result")?;
+                        let casts = _lookup("casts")?;
+                        let result_arg = _lookup("result-arg")?;
+                        let result_result = _lookup("result-result")?;
+                        let return_result_sugar = _lookup("return-result-sugar")?;
+                        let return_result_sugar2 = _lookup("return-result-sugar2")?;
+                        let return_result_sugar3 = _lookup("return-result-sugar3")?;
+                        let return_result_sugar4 = _lookup("return-result-sugar4")?;
+                        let return_option_sugar = _lookup("return-option-sugar")?;
+                        let return_option_sugar2 = _lookup("return-option-sugar2")?;
+                        let result_simple = _lookup("result-simple")?;
+                        let is_clone_arg = _lookup("is-clone-arg")?;
+                        let is_clone_return = _lookup("is-clone-return")?;
+                        let return_named_option = _lookup("return-named-option")?;
+                        let return_named_result = _lookup("return-named-result")?;
+                        Ok(GuestPre {
+                            e1_arg,
+                            e1_result,
+                            v1_arg,
+                            v1_result,
+                            bool_arg,
+                            bool_result,
+                            option_arg,
+                            option_result,
+                            casts,
+                            result_arg,
+                            result_result,
+                            return_result_sugar,
+                            return_result_sugar2,
+                            return_result_sugar3,
+                            return_result_sugar4,
+                            return_option_sugar,
+                            return_option_sugar2,
+                            result_simple,
+                            is_clone_arg,
+                            is_clone_return,
+                            return_named_option,
+                            return_named_result,
+                        })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let e1_arg = *__exports
-                            .typed_func::<(E1,), ()>("e1-arg")?
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let e1_arg = *_instance
+                            .get_typed_func::<(E1,), ()>(&mut store, &self.e1_arg)?
                             .func();
-                        let e1_result = *__exports
-                            .typed_func::<(), (E1,)>("e1-result")?
+                        let e1_result = *_instance
+                            .get_typed_func::<(), (E1,)>(&mut store, &self.e1_result)?
                             .func();
-                        let v1_arg = *__exports
-                            .typed_func::<(&V1,), ()>("v1-arg")?
+                        let v1_arg = *_instance
+                            .get_typed_func::<(&V1,), ()>(&mut store, &self.v1_arg)?
                             .func();
-                        let v1_result = *__exports
-                            .typed_func::<(), (V1,)>("v1-result")?
+                        let v1_result = *_instance
+                            .get_typed_func::<(), (V1,)>(&mut store, &self.v1_result)?
                             .func();
-                        let bool_arg = *__exports
-                            .typed_func::<(bool,), ()>("bool-arg")?
+                        let bool_arg = *_instance
+                            .get_typed_func::<(bool,), ()>(&mut store, &self.bool_arg)?
                             .func();
-                        let bool_result = *__exports
-                            .typed_func::<(), (bool,)>("bool-result")?
+                        let bool_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                (bool,),
+                            >(&mut store, &self.bool_result)?
                             .func();
-                        let option_arg = *__exports
-                            .typed_func::<
+                        let option_arg = *_instance
+                            .get_typed_func::<
                                 (
                                     Option<bool>,
                                     Option<()>,
@@ -1223,10 +1358,10 @@ pub mod exports {
                                     Option<Option<bool>>,
                                 ),
                                 (),
-                            >("option-arg")?
+                            >(&mut store, &self.option_arg)?
                             .func();
-                        let option_result = *__exports
-                            .typed_func::<
+                        let option_result = *_instance
+                            .get_typed_func::<
                                 (),
                                 (
                                     (
@@ -1238,16 +1373,16 @@ pub mod exports {
                                         Option<Option<bool>>,
                                     ),
                                 ),
-                            >("option-result")?
+                            >(&mut store, &self.option_result)?
                             .func();
-                        let casts = *__exports
-                            .typed_func::<
+                        let casts = *_instance
+                            .get_typed_func::<
                                 (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
                                 ((Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),),
-                            >("casts")?
+                            >(&mut store, &self.casts)?
                             .func();
-                        let result_arg = *__exports
-                            .typed_func::<
+                        let result_arg = *_instance
+                            .get_typed_func::<
                                 (
                                     Result<(), ()>,
                                     Result<(), E1>,
@@ -1257,10 +1392,10 @@ pub mod exports {
                                     Result<&str, &[u8]>,
                                 ),
                                 (),
-                            >("result-arg")?
+                            >(&mut store, &self.result_arg)?
                             .func();
-                        let result_result = *__exports
-                            .typed_func::<
+                        let result_result = *_instance
+                            .get_typed_func::<
                                 (),
                                 (
                                     (
@@ -1275,58 +1410,73 @@ pub mod exports {
                                         >,
                                     ),
                                 ),
-                            >("result-result")?
+                            >(&mut store, &self.result_result)?
                             .func();
-                        let return_result_sugar = *__exports
-                            .typed_func::<
+                        let return_result_sugar = *_instance
+                            .get_typed_func::<
                                 (),
                                 (Result<i32, MyErrno>,),
-                            >("return-result-sugar")?
+                            >(&mut store, &self.return_result_sugar)?
                             .func();
-                        let return_result_sugar2 = *__exports
-                            .typed_func::<
+                        let return_result_sugar2 = *_instance
+                            .get_typed_func::<
                                 (),
                                 (Result<(), MyErrno>,),
-                            >("return-result-sugar2")?
+                            >(&mut store, &self.return_result_sugar2)?
                             .func();
-                        let return_result_sugar3 = *__exports
-                            .typed_func::<
+                        let return_result_sugar3 = *_instance
+                            .get_typed_func::<
                                 (),
                                 (Result<MyErrno, MyErrno>,),
-                            >("return-result-sugar3")?
+                            >(&mut store, &self.return_result_sugar3)?
                             .func();
-                        let return_result_sugar4 = *__exports
-                            .typed_func::<
+                        let return_result_sugar4 = *_instance
+                            .get_typed_func::<
                                 (),
                                 (Result<(i32, u32), MyErrno>,),
-                            >("return-result-sugar4")?
+                            >(&mut store, &self.return_result_sugar4)?
                             .func();
-                        let return_option_sugar = *__exports
-                            .typed_func::<(), (Option<i32>,)>("return-option-sugar")?
+                        let return_option_sugar = *_instance
+                            .get_typed_func::<
+                                (),
+                                (Option<i32>,),
+                            >(&mut store, &self.return_option_sugar)?
                             .func();
-                        let return_option_sugar2 = *__exports
-                            .typed_func::<
+                        let return_option_sugar2 = *_instance
+                            .get_typed_func::<
                                 (),
                                 (Option<MyErrno>,),
-                            >("return-option-sugar2")?
+                            >(&mut store, &self.return_option_sugar2)?
                             .func();
-                        let result_simple = *__exports
-                            .typed_func::<(), (Result<u32, i32>,)>("result-simple")?
+                        let result_simple = *_instance
+                            .get_typed_func::<
+                                (),
+                                (Result<u32, i32>,),
+                            >(&mut store, &self.result_simple)?
                             .func();
-                        let is_clone_arg = *__exports
-                            .typed_func::<(&IsClone,), ()>("is-clone-arg")?
+                        let is_clone_arg = *_instance
+                            .get_typed_func::<
+                                (&IsClone,),
+                                (),
+                            >(&mut store, &self.is_clone_arg)?
                             .func();
-                        let is_clone_return = *__exports
-                            .typed_func::<(), (IsClone,)>("is-clone-return")?
+                        let is_clone_return = *_instance
+                            .get_typed_func::<
+                                (),
+                                (IsClone,),
+                            >(&mut store, &self.is_clone_return)?
                             .func();
-                        let return_named_option = *__exports
-                            .typed_func::<(), (Option<u8>,)>("return-named-option")?
+                        let return_named_option = *_instance
+                            .get_typed_func::<
+                                (),
+                                (Option<u8>,),
+                            >(&mut store, &self.return_named_option)?
                             .func();
-                        let return_named_result = *__exports
-                            .typed_func::<
+                        let return_named_result = *_instance
+                            .get_typed_func::<
                                 (),
                                 (Result<u8, MyErrno>,),
-                            >("return-named-result")?
+                            >(&mut store, &self.return_named_result)?
                             .func();
                         Ok(Guest {
                             e1_arg,
@@ -1353,6 +1503,8 @@ pub mod exports {
                             return_named_result,
                         })
                     }
+                }
+                impl Guest {
                     pub async fn call_e1_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,

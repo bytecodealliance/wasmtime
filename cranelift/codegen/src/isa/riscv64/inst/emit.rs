@@ -46,20 +46,28 @@ pub enum EmitVState {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
+    /// Safepoint stack map for upcoming instruction, as provided to
+    /// `pre_safepoint()`.
     stack_map: Option<StackMap>,
+
+    /// The user stack map for the upcoming instruction, as provided to
+    /// `pre_safepoint()`.
+    user_stack_map: Option<ir::UserStackMap>,
+
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
+
     /// Vector State
     /// Controls the current state of the vector unit at the emission point.
     vstate: EmitVState,
+
     frame_layout: FrameLayout,
 }
 
 impl EmitState {
-    fn take_stack_map(&mut self) -> Option<StackMap> {
-        self.stack_map.take()
+    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
+        (self.stack_map.take(), self.user_stack_map.take())
     }
 }
 
@@ -70,14 +78,20 @@ impl MachInstEmitState<Inst> for EmitState {
     ) -> Self {
         EmitState {
             stack_map: None,
+            user_stack_map: None,
             ctrl_plane,
             vstate: EmitVState::Unknown,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(&mut self, stack_map: StackMap) {
-        self.stack_map = Some(stack_map);
+    fn pre_safepoint(
+        &mut self,
+        stack_map: Option<StackMap>,
+        user_stack_map: Option<ir::UserStackMap>,
+    ) {
+        self.stack_map = stack_map;
+        self.user_stack_map = user_stack_map;
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -242,14 +256,21 @@ impl MachInstEmit for Inst {
             self.emit_uncompressed(sink, emit_info, state, &mut start_off);
         }
 
-        let end_off = sink.cur_offset();
-        assert!(
-            (end_off - start_off) <= Inst::worst_case_size(),
-            "Inst:{:?} length:{} worst_case_size:{}",
+        // We exclude br_table and return call from these checks since they emit
+        // their own islands, and thus are allowed to exceed the worst case size.
+        if !matches!(
             self,
-            end_off - start_off,
-            Inst::worst_case_size()
-        );
+            Inst::BrTable { .. } | Inst::ReturnCall { .. } | Inst::ReturnCallInd { .. }
+        ) {
+            let end_off = sink.cur_offset();
+            assert!(
+                (end_off - start_off) <= Inst::worst_case_size(),
+                "Inst:{:?} length:{} worst_case_size:{}",
+                self,
+                end_off - start_off,
+                Inst::worst_case_size()
+            );
+        }
     }
 
     fn pretty_print_inst(&self, state: &mut Self::State) -> String {
@@ -398,9 +419,6 @@ impl Inst {
             // c.unimp
             Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
-                }
                 sink.put2(0x0000);
             }
 
@@ -1130,12 +1148,20 @@ impl Inst {
                     sink.add_call_site(info.opcode);
                 }
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
-                if let Some(s) = state.take_stack_map() {
+
+                let (stack_map, user_stack_map) = state.take_stack_map();
+                if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
                 }
+
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
+
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset();
+                    sink.push_user_stack_map(state, offset, s);
+                }
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {
@@ -1154,8 +1180,13 @@ impl Inst {
                 }
                 .emit(sink, emit_info, state);
 
-                if let Some(s) = state.take_stack_map() {
+                let (stack_map, user_stack_map) = state.take_stack_map();
+                if let Some(s) = stack_map {
                     sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
+                }
+                if let Some(s) = user_stack_map {
+                    let offset = sink.cur_offset();
+                    sink.push_user_stack_map(state, offset, s);
                 }
 
                 if info.opcode.is_call() {
@@ -1520,25 +1551,68 @@ impl Inst {
                 ref x,
                 ref y,
             } => {
-                let label_true = sink.get_label();
-                let label_false = sink.get_label();
+                // The general form for this select is the following:
+                //
+                //     mv rd, x
+                //     b{cond} rcond, label_end
+                //     mv rd, y
+                // label_end:
+                //     ... etc
+                //
+                // This is built on the assumption that moves are cheap, but branches and jumps
+                // are not. So with this format we always avoid one jump instruction at the expense
+                // of an unconditional move.
+                //
+                // We also perform another optimization here. If the destination register is the same
+                // as one of the input registers, we can avoid emitting the first unconditional move
+                // and emit just the branch and the second move.
+                //
+                // To make sure that this happens as often as possible, we also try to invert the
+                // condition, so that if either of the input registers are the same as the destination
+                // we avoid that move.
+
                 let label_end = sink.get_label();
+
+                let xregs = x.regs();
+                let yregs = y.regs();
+                let dstregs: Vec<Reg> = dst.regs().into_iter().map(|r| r.to_reg()).collect();
+                let condregs = condition.regs();
+
+                // We are going to write to the destination register before evaluating
+                // the condition, so we need to make sure that the destination register
+                // is not one of the condition registers.
+                //
+                // This should never happen, since hopefully the regalloc constraints
+                // for this register are set up correctly.
+                debug_assert_ne!(dstregs, condregs);
+
+                // Check if we can invert the condition and avoid moving the y registers into
+                // the destination. This allows us to only emit the branch and one of the moves.
+                let (uncond_move, cond_move, condition) = if yregs == dstregs {
+                    (yregs, xregs, condition.inverse())
+                } else {
+                    (xregs, yregs, condition)
+                };
+
+                // Unconditonally move one of the values to the destination register.
+                //
+                // These moves may not end up being emitted if the source and
+                // destination registers are the same. That logic is built into
+                // the emit function for `Inst::Mov`.
+                for i in gen_moves(dst.regs(), uncond_move) {
+                    i.emit(sink, emit_info, state);
+                }
+
+                // If the condition passes we skip over the conditional move
                 Inst::CondBr {
-                    taken: CondBrTarget::Label(label_true),
-                    not_taken: CondBrTarget::Label(label_false),
+                    taken: CondBrTarget::Label(label_end),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: condition,
                 }
                 .emit(sink, emit_info, state);
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                // here is the true
-                // select the first value
-                for i in gen_moves(dst.regs(), x.regs()) {
-                    i.emit(sink, emit_info, state);
-                }
-                Inst::gen_jump(label_end).emit(sink, emit_info, state);
 
-                sink.bind_label(label_false, &mut state.ctrl_plane);
-                for i in gen_moves(dst.regs(), y.regs()) {
+                // Move the conditional value to the destination register.
+                for i in gen_moves(dst.regs(), cond_move) {
                     i.emit(sink, emit_info, state);
                 }
 
@@ -1995,12 +2069,6 @@ impl Inst {
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(
-                        StackMapExtent::UpcomingBytes(Inst::TRAP_OPCODE.len() as u32),
-                        s,
-                    );
-                }
                 sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::AtomicLoad { rd, ty, p } => {
@@ -2570,6 +2638,40 @@ impl Inst {
 }
 
 fn emit_return_call_common_sequence(
+    sink: &mut MachBuffer<Inst>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState,
+    info: &ReturnCallInfo,
+) {
+    // The return call sequence can potentially emit a lot of instructions (up to 634 bytes!)
+    // So lets emit an island here if we need it.
+    //
+    // It is difficult to calculate exactly how many instructions are going to be emitted, so
+    // we calculate it by emitting it into a disposable buffer, and then checking how many instructions
+    // were actually emitted.
+    let mut buffer = MachBuffer::new();
+    let mut fake_emit_state = state.clone();
+
+    return_call_emit_impl(&mut buffer, emit_info, &mut fake_emit_state, info);
+
+    // Finalize the buffer and get the number of bytes emitted.
+    let buffer = buffer.finish(&Default::default(), &mut Default::default());
+    let length = buffer.data().len() as u32;
+
+    // And now emit the island inline with this instruction.
+    if sink.island_needed(length) {
+        let jump_around_label = sink.get_label();
+        Inst::gen_jump(jump_around_label).emit(sink, emit_info, state);
+        sink.emit_island(length + 4, &mut state.ctrl_plane);
+        sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+    }
+
+    // Now that we're done, emit the *actual* return sequence.
+    return_call_emit_impl(sink, emit_info, state, info);
+}
+
+/// This should not be called directly, Instead prefer to call [emit_return_call_common_sequence].
+fn return_call_emit_impl(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,

@@ -21,11 +21,12 @@ runs:
   steps:
     - run: |
         target=${{ inputs.target }}
+        cc_target=$(echo ${{ inputs.target }} | tr - _)
         upcase=$(echo $target | tr a-z- A-Z_)
         ndk_bin=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
         linker=$ndk_bin/${target}${{ inputs.android-platform }}-clang
         echo CARGO_TARGET_${upcase}_LINKER=$linker >> $GITHUB_ENV
-        echo CC_${target}=$linker >> $GITHUB_ENV
-        echo RANLIB_${target}=$ndk_bin/llvm-ranlib >> $GITHUB_ENV
-        echo AR_${target}=$ndk_bin/llvm-ar >> $GITHUB_ENV
+        echo CC_${cc_target}=$linker >> $GITHUB_ENV
+        echo RANLIB_${cc_target}=$ndk_bin/llvm-ranlib >> $GITHUB_ENV
+        echo AR_${cc_target}=$ndk_bin/llvm-ar >> $GITHUB_ENV
       shell: bash

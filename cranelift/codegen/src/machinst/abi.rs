@@ -59,8 +59,10 @@
 //!
 //! ```plain
 //!   (high address)
-//!
-//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | caller frames             |
+//!                              |          ...              |
+//!                              +===========================+
 //!                              |          ...              |
 //!                              | stack args                |
 //! Canonical Frame Address -->  | (accessed via FP)         |
@@ -68,24 +70,24 @@
 //! SP at function entry ----->  | return address            |
 //!                              +---------------------------+
 //! FP after prologue -------->  | FP (pushed by prologue)   |
-//!                              +---------------------------+
-//!                              |          ...              |
-//!                              | clobbered callee-saves    |
-//! unwind-frame base -------->  | (pushed by prologue)      |
-//!                              +---------------------------+
-//!                              |          ...              |
-//!                              | spill slots               |
-//!                              | (accessed via SP)         |
-//!                              |          ...              |
-//!                              | stack slots               |
-//!                              | (accessed via SP)         |
-//!                              | (alloc'd by prologue)     |
-//!                              +---------------------------+
-//!                              | [alignment as needed]     |
-//!                              |          ...              |
-//!                              | args for largest call     |
-//! SP ----------------------->  | (alloc'd by prologue)     |
-//!                              +---------------------------+
+//!                              +---------------------------+   -----
+//!                              |          ...              |     |
+//!                              | clobbered callee-saves    |     |
+//! unwind-frame base -------->  | (pushed by prologue)      |     |
+//!                              +---------------------------+     |
+//!                              |          ...              |     |
+//!                              | spill slots               |     |
+//!                              | (accessed via SP)         |   active
+//!                              |          ...              |    size
+//!                              | stack slots               |     |
+//!                              | (accessed via SP)         |     |
+//!                              | (alloc'd by prologue)     |     |
+//!                              +---------------------------+     |
+//!                              | [alignment as needed]     |     |
+//!                              |          ...              |     |
+//!                              | args for largest call     |     |
+//! SP ----------------------->  | (alloc'd by prologue)     |     |
+//!                              +===========================+   -----
 //!
 //!   (low address)
 //! ```
@@ -1012,6 +1014,12 @@ impl FrameLayout {
         debug_assert!(floats.iter().all(|r| r.to_reg().class() == RegClass::Float));
         (ints, floats)
     }
+
+    /// The size of FP to SP while the frame is active (not during prologue
+    /// setup or epilogue tear down).
+    pub fn active_size(&self) -> u32 {
+        self.outgoing_args_size + self.fixed_frame_storage_size + self.clobber_size
+    }
 }
 
 /// ABI object for a function body.
@@ -1087,7 +1095,7 @@ fn checked_round_up(val: u32, mask: u32) -> Option<u32> {
 
 impl<M: ABIMachineSpec> Callee<M> {
     /// Create a new body ABI instance.
-    pub fn new<'a>(
+    pub fn new(
         f: &ir::Function,
         isa: &dyn TargetIsa,
         isa_flags: &M::F,
@@ -1164,13 +1172,9 @@ impl<M: ABIMachineSpec> Callee<M> {
         // stack limit. This can either be specified as a special-purpose
         // argument or as a global value which often calculates the stack limit
         // from the arguments.
-        let stack_limit =
-            get_special_purpose_param_register(f, sigs, sig, ir::ArgumentPurpose::StackLimit)
-                .map(|reg| (reg, smallvec![]))
-                .or_else(|| {
-                    f.stack_limit
-                        .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv))
-                });
+        let stack_limit = f
+            .stack_limit
+            .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv));
 
         let tail_args_size = sigs[sig].sized_stack_arg_space;
 

@@ -15,8 +15,69 @@
 //! [`Backend`]: crate::Backend
 //! [`types`]: crate::wit::types
 
-use crate::{ctx::UsageError, WasiNnCtx};
-use std::{error::Error, fmt, hash::Hash, str::FromStr};
+use crate::backend::Id;
+use crate::{Backend, Registry};
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::{fmt, str::FromStr};
+use wasmtime::component::{Resource, ResourceTable};
+
+/// Capture the state necessary for calling into the backend ML libraries.
+pub struct WasiNnCtx {
+    pub(crate) backends: HashMap<GraphEncoding, Backend>,
+    pub(crate) registry: Registry,
+}
+
+impl WasiNnCtx {
+    /// Make a new context from the default state.
+    pub fn new(backends: impl IntoIterator<Item = Backend>, registry: Registry) -> Self {
+        let backends = backends.into_iter().map(|b| (b.encoding(), b)).collect();
+        Self { backends, registry }
+    }
+}
+
+/// A wrapper capturing the needed internal wasi-nn state.
+///
+/// Unlike other WASI proposals (see `wasmtime-wasi`, `wasmtime-wasi-http`),
+/// this wrapper is not a `trait` but rather holds the references directly. This
+/// remove one layer of abstraction for simplicity only, and could be added back
+/// in the future if embedders need more control here.
+pub struct WasiNnView<'a> {
+    ctx: &'a mut WasiNnCtx,
+    table: &'a mut ResourceTable,
+}
+
+impl<'a> WasiNnView<'a> {
+    /// Create a new view into the wasi-nn state.
+    pub fn new(table: &'a mut ResourceTable, ctx: &'a mut WasiNnCtx) -> Self {
+        Self { ctx, table }
+    }
+}
+
+pub enum Error {
+    /// Caller module passed an invalid argument.
+    InvalidArgument,
+    /// Invalid encoding.
+    InvalidEncoding,
+    /// The operation timed out.
+    Timeout,
+    /// Runtime Error.
+    RuntimeError,
+    /// Unsupported operation.
+    UnsupportedOperation,
+    /// Graph is too large.
+    TooLarge,
+    /// Graph not found.
+    NotFound,
+    /// A runtime error occurred that we should trap on; see `StreamError`.
+    Trap(anyhow::Error),
+}
+
+impl From<wasmtime::component::ResourceTableError> for Error {
+    fn from(error: wasmtime::component::ResourceTableError) -> Self {
+        Self::Trap(error.into())
+    }
+}
 
 /// Generate the traits and types from the `wasi-nn` WIT specification.
 mod gen_ {
@@ -24,126 +85,241 @@ mod gen_ {
         world: "ml",
         path: "wit/wasi-nn.wit",
         trappable_imports: true,
+        with: {
+            // Configure all WIT http resources to be defined types in this
+            // crate to use the `ResourceTable` helper methods.
+            "wasi:nn/graph/graph": crate::Graph,
+            "wasi:nn/tensor/tensor": crate::Tensor,
+            "wasi:nn/inference/graph-execution-context": crate::ExecutionContext,
+        },
+        trappable_error_type: {
+            "wasi:nn/errors/error" => super::Error,
+        },
     });
 }
-use gen_::wasi::nn as gen; // Shortcut to the module containing the types we need.
+use gen_::wasi::nn::{self as gen}; // Shortcut to the module containing the types we need.
 
 // Export the `types` used in this crate as well as `ML::add_to_linker`.
 pub mod types {
     use super::gen;
-    pub use gen::graph::{ExecutionTarget, Graph, GraphEncoding};
+    pub use gen::errors::Error;
+    pub use gen::graph::{ExecutionTarget, Graph, GraphBuilder, GraphEncoding};
     pub use gen::inference::GraphExecutionContext;
     pub use gen::tensor::{Tensor, TensorType};
 }
+pub use gen::graph::{ExecutionTarget, Graph, GraphBuilder, GraphEncoding};
+pub use gen::inference::GraphExecutionContext;
+pub use gen::tensor::{Tensor, TensorData, TensorDimensions, TensorType};
 pub use gen_::Ml as ML;
 
-impl gen::graph::Host for WasiNnCtx {
-    /// Load an opaque sequence of bytes to use for inference.
+/// Add the WIT-based version of the `wasi-nn` API to a
+/// [`wasmtime::component::Linker`].
+pub fn add_to_linker<T>(
+    l: &mut wasmtime::component::Linker<T>,
+    f: impl Fn(&mut T) -> WasiNnView<'_> + Send + Sync + Copy + 'static,
+) -> anyhow::Result<()> {
+    gen::graph::add_to_linker_get_host(l, f)?;
+    gen::tensor::add_to_linker_get_host(l, f)?;
+    gen::inference::add_to_linker_get_host(l, f)?;
+    gen::errors::add_to_linker_get_host(l, f)?;
+    Ok(())
+}
+
+impl gen::graph::Host for WasiNnView<'_> {
     fn load(
         &mut self,
-        builders: Vec<gen::graph::GraphBuilder>,
-        encoding: gen::graph::GraphEncoding,
-        target: gen::graph::ExecutionTarget,
-    ) -> wasmtime::Result<Result<gen::graph::Graph, gen::errors::Error>> {
-        let graph = if let Some(backend) = self.backends.get_mut(&encoding) {
+        builders: Vec<GraphBuilder>,
+        encoding: GraphEncoding,
+        target: ExecutionTarget,
+    ) -> Result<Resource<crate::Graph>, Error> {
+        tracing::debug!("load {encoding:?} {target:?}");
+        if let Some(backend) = self.ctx.backends.get_mut(&encoding) {
             let slices = builders.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
-            backend.load(&slices, target.into())?
+            match backend.load(&slices, target.into()) {
+                Ok(graph) => {
+                    let graph = self.table.push(graph)?;
+                    Ok(graph)
+                }
+                Err(error) => {
+                    tracing::error!("failed to load graph: {error:?}");
+                    Err(Error::RuntimeError)
+                }
+            }
         } else {
-            return Err(UsageError::InvalidEncoding(encoding.into()).into());
-        };
-        let graph_id = self.graphs.insert(graph);
-        Ok(Ok(graph_id))
+            Err(Error::InvalidEncoding)
+        }
     }
 
-    fn load_by_name(
-        &mut self,
-        name: String,
-    ) -> wasmtime::Result<Result<gen::graph::Graph, gen::errors::Error>> {
-        if let Some(graph) = self.registry.get_mut(&name) {
-            let graph_id = self.graphs.insert(graph.clone().into());
-            Ok(Ok(graph_id))
+    fn load_by_name(&mut self, name: String) -> Result<Resource<Graph>, Error> {
+        use core::result::Result::*;
+        tracing::debug!("load by name {name:?}");
+        let registry = &self.ctx.registry;
+        if let Some(graph) = registry.get(&name) {
+            let graph = graph.clone();
+            let graph = self.table.push(graph)?;
+            Ok(graph)
         } else {
-            return Err(UsageError::NotFound(name.to_string()).into());
+            tracing::error!("failed to find graph with name: {name}");
+            Err(Error::NotFound)
         }
     }
 }
 
-impl gen::inference::Host for WasiNnCtx {
-    /// Create an execution instance of a loaded graph.
-    ///
-    /// TODO: remove completely?
+impl gen::graph::HostGraph for WasiNnView<'_> {
     fn init_execution_context(
         &mut self,
-        graph_id: gen::graph::Graph,
-    ) -> wasmtime::Result<Result<gen::inference::GraphExecutionContext, gen::errors::Error>> {
-        let exec_context = if let Some(graph) = self.graphs.get(graph_id) {
-            graph.init_execution_context()?
-        } else {
-            return Err(UsageError::InvalidGraphHandle.into());
-        };
-
-        let exec_context_id = self.executions.insert(exec_context);
-        Ok(Ok(exec_context_id))
-    }
-
-    /// Define the inputs to use for inference.
-    fn set_input(
-        &mut self,
-        exec_context_id: gen::inference::GraphExecutionContext,
-        index: u32,
-        tensor: gen::tensor::Tensor,
-    ) -> wasmtime::Result<Result<(), gen::errors::Error>> {
-        if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
-            exec_context.set_input(index, &tensor)?;
-            Ok(Ok(()))
-        } else {
-            Err(UsageError::InvalidGraphHandle.into())
+        graph: Resource<Graph>,
+    ) -> Result<Resource<GraphExecutionContext>, Error> {
+        use core::result::Result::*;
+        tracing::debug!("initialize execution context");
+        let graph = self.table.get(&graph)?;
+        match graph.init_execution_context() {
+            Ok(exec_context) => {
+                let exec_context = self.table.push(exec_context)?;
+                Ok(exec_context)
+            }
+            Err(error) => {
+                tracing::error!("failed to initialize execution context: {error:?}");
+                Err(Error::RuntimeError)
+            }
         }
     }
 
-    /// Compute the inference on the given inputs.
-    ///
-    /// TODO: refactor to compute(list<tensor>) -> result<list<tensor>, error>
-    fn compute(
-        &mut self,
-        exec_context_id: gen::inference::GraphExecutionContext,
-    ) -> wasmtime::Result<Result<(), gen::errors::Error>> {
-        if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
-            exec_context.compute()?;
-            Ok(Ok(()))
-        } else {
-            Err(UsageError::InvalidExecutionContextHandle.into())
-        }
-    }
-
-    /// Extract the outputs after inference.
-    fn get_output(
-        &mut self,
-        exec_context_id: gen::inference::GraphExecutionContext,
-        index: u32,
-    ) -> wasmtime::Result<Result<gen::tensor::TensorData, gen::errors::Error>> {
-        if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
-            // Read the output bytes. TODO: this involves a hard-coded upper
-            // limit on the tensor size that is necessary because there is no
-            // way to introspect the graph outputs
-            // (https://github.com/WebAssembly/wasi-nn/issues/37).
-            let mut destination = vec![0; 1024 * 1024];
-            let bytes_read = exec_context.get_output(index, &mut destination)?;
-            destination.truncate(bytes_read as usize);
-            Ok(Ok(destination))
-        } else {
-            Err(UsageError::InvalidGraphHandle.into())
-        }
+    fn drop(&mut self, graph: Resource<Graph>) -> wasmtime::Result<()> {
+        self.table.delete(graph)?;
+        Ok(())
     }
 }
 
-impl gen::errors::Host for WasiNnCtx {}
+impl gen::inference::HostGraphExecutionContext for WasiNnView<'_> {
+    fn set_input(
+        &mut self,
+        exec_context: Resource<GraphExecutionContext>,
+        name: String,
+        tensor: Resource<Tensor>,
+    ) -> Result<(), Error> {
+        let tensor = self.table.get(&tensor)?;
+        tracing::debug!("set input {name:?}: {tensor:?}");
+        let tensor = tensor.clone(); // TODO: avoid copying the tensor
+        let exec_context = self.table.get_mut(&exec_context)?;
+        if let Err(e) = exec_context.set_input(Id::Name(name), &tensor) {
+            tracing::error!("failed to set input: {e:?}");
+            Err(Error::InvalidArgument)
+        } else {
+            Ok(())
+        }
+    }
 
-impl gen::tensor::Host for WasiNnCtx {}
+    fn compute(&mut self, exec_context: Resource<GraphExecutionContext>) -> Result<(), Error> {
+        let exec_context = &mut self.table.get_mut(&exec_context)?;
+        tracing::debug!("compute");
+        match exec_context.compute() {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                tracing::error!("failed to compute: {error:?}");
+                Err(Error::RuntimeError)
+            }
+        }
+    }
+
+    #[doc = r" Extract the outputs after inference."]
+    fn get_output(
+        &mut self,
+        exec_context: Resource<GraphExecutionContext>,
+        name: String,
+    ) -> Result<Resource<Tensor>, Error> {
+        let exec_context = self.table.get_mut(&exec_context)?;
+        tracing::debug!("get output {name:?}");
+        match exec_context.get_output(Id::Name(name)) {
+            Ok(tensor) => {
+                let tensor = self.table.push(tensor)?;
+                Ok(tensor)
+            }
+            Err(error) => {
+                tracing::error!("failed to get output: {error:?}");
+                Err(Error::RuntimeError)
+            }
+        }
+    }
+
+    fn drop(&mut self, exec_context: Resource<GraphExecutionContext>) -> wasmtime::Result<()> {
+        self.table.delete(exec_context)?;
+        Ok(())
+    }
+}
+
+impl gen::tensor::HostTensor for WasiNnView<'_> {
+    fn new(
+        &mut self,
+        dimensions: TensorDimensions,
+        ty: TensorType,
+        data: TensorData,
+    ) -> wasmtime::Result<Resource<Tensor>> {
+        let tensor = Tensor {
+            dimensions,
+            ty,
+            data,
+        };
+        let tensor = self.table.push(tensor)?;
+        Ok(tensor)
+    }
+
+    fn dimensions(&mut self, tensor: Resource<Tensor>) -> wasmtime::Result<TensorDimensions> {
+        let tensor = self.table.get(&tensor)?;
+        Ok(tensor.dimensions.clone())
+    }
+
+    fn ty(&mut self, tensor: Resource<Tensor>) -> wasmtime::Result<TensorType> {
+        let tensor = self.table.get(&tensor)?;
+        Ok(tensor.ty)
+    }
+
+    fn data(&mut self, tensor: Resource<Tensor>) -> wasmtime::Result<TensorData> {
+        let tensor = self.table.get(&tensor)?;
+        Ok(tensor.data.clone())
+    }
+
+    fn drop(&mut self, tensor: Resource<Tensor>) -> wasmtime::Result<()> {
+        self.table.delete(tensor)?;
+        Ok(())
+    }
+}
+
+impl gen::tensor::Host for WasiNnView<'_> {}
+impl gen::errors::Host for WasiNnView<'_> {
+    fn convert_error(&mut self, err: Error) -> wasmtime::Result<gen::errors::Error> {
+        match err {
+            Error::InvalidArgument => Ok(gen::errors::Error::InvalidArgument),
+            Error::InvalidEncoding => Ok(gen::errors::Error::InvalidEncoding),
+            Error::Timeout => Ok(gen::errors::Error::Timeout),
+            Error::RuntimeError => Ok(gen::errors::Error::RuntimeError),
+            Error::UnsupportedOperation => Ok(gen::errors::Error::UnsupportedOperation),
+            Error::TooLarge => Ok(gen::errors::Error::TooLarge),
+            Error::NotFound => Ok(gen::errors::Error::NotFound),
+            Error::Trap(e) => Err(e),
+        }
+    }
+}
+impl gen::inference::Host for WasiNnView<'_> {}
 
 impl Hash for gen::graph::GraphEncoding {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        core::mem::discriminant(self).hash(state);
+        self.to_string().hash(state)
+    }
+}
+
+impl fmt::Display for gen::graph::GraphEncoding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use gen::graph::GraphEncoding::*;
+        match self {
+            Openvino => write!(f, "openvino"),
+            Onnx => write!(f, "onnx"),
+            Pytorch => write!(f, "pytorch"),
+            Tensorflow => write!(f, "tensorflow"),
+            Tensorflowlite => write!(f, "tensorflowlite"),
+            Autodetect => write!(f, "autodetect"),
+            Ggml => write!(f, "ggml"),
+        }
     }
 }
 
@@ -168,4 +344,4 @@ impl fmt::Display for GraphEncodingParseError {
         write!(f, "unknown graph encoding: {}", self.0)
     }
 }
-impl Error for GraphEncodingParseError {}
+impl std::error::Error for GraphEncodingParseError {}

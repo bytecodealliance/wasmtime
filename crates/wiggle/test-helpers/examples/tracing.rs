@@ -1,4 +1,5 @@
 use anyhow::Result;
+use wiggle::GuestMemory;
 use wiggle_test::{impl_errno, HostMemory, WasiCtx};
 
 /// The `errors` argument to the wiggle gives us a hook to map a rich error
@@ -53,7 +54,12 @@ impl<'a> types::UserErrorConversion for WasiCtx<'a> {
 }
 
 impl<'a> one_error_conversion::OneErrorConversion for WasiCtx<'a> {
-    fn foo(&mut self, strike: u32, _s: &types::S) -> Result<types::T, RichError> {
+    fn foo(
+        &mut self,
+        _: &mut GuestMemory<'_>,
+        strike: u32,
+        _s: &types::S,
+    ) -> Result<types::T, RichError> {
         // We use the argument to this function to exercise all of the
         // possible error cases we could hit here
         match strike {
@@ -83,11 +89,12 @@ fn main() {
     }
 
     let mut ctx = WasiCtx::new();
-    let host_memory = HostMemory::new();
+    let mut host_memory = HostMemory::new();
+    let mut memory = host_memory.guest_memory();
 
     // Exercise each of the branches in `foo`.
     // Start with the success case:
-    let r0 = one_error_conversion::foo(&mut ctx, &host_memory, 0, 0, 8).unwrap();
+    let r0 = one_error_conversion::foo(&mut ctx, &mut memory, 0, 0, 8).unwrap();
     assert_eq!(
         r0,
         types::Errno::Ok as i32,
@@ -96,7 +103,7 @@ fn main() {
     assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
 
     // First error case:
-    let r1 = one_error_conversion::foo(&mut ctx, &host_memory, 1, 0, 8).unwrap();
+    let r1 = one_error_conversion::foo(&mut ctx, &mut memory, 1, 0, 8).unwrap();
     assert_eq!(
         r1,
         types::Errno::PicketLine as i32,
@@ -109,7 +116,7 @@ fn main() {
     );
 
     // Second error case:
-    let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2, 0, 8).unwrap();
+    let r2 = one_error_conversion::foo(&mut ctx, &mut memory, 2, 0, 8).unwrap();
     assert_eq!(
         r2,
         types::Errno::InvalidArg as i32,

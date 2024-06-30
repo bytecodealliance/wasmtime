@@ -8,12 +8,11 @@ use crate::component::{
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
-use anyhow::{bail, Context, Result};
 use core::future::Future;
 use core::marker;
 use core::pin::Pin;
-use hashbrown::hash_map::{Entry, HashMap};
-use semver::Version;
+use hashbrown::hash_map::HashMap;
+use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::PrimaryMap;
 
 /// A type used to instantiate [`Component`]s.
@@ -60,7 +59,7 @@ use wasmtime_environ::PrimaryMap;
 pub struct Linker<T> {
     engine: Engine,
     strings: Strings,
-    map: NameMap,
+    map: NameMap<usize, Definition>,
     path: Vec<usize>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
@@ -95,49 +94,14 @@ pub struct LinkerInstance<'a, T> {
     path: &'a mut Vec<usize>,
     path_len: usize,
     strings: &'a mut Strings,
-    map: &'a mut NameMap,
+    map: &'a mut NameMap<usize, Definition>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-#[derive(Clone, Default)]
-pub(crate) struct NameMap {
-    /// A map of interned strings to the name that they define.
-    ///
-    /// Note that this map is "exact" where the name here is the exact name that
-    /// was specified when the `Linker` was configured. This doesn't have any
-    /// semver-mangling or anything like that.
-    ///
-    /// This map is always consulted first during lookups.
-    definitions: HashMap<usize, Definition>,
-
-    /// An auxiliary map tracking semver-compatible names. This is a map from
-    /// "semver compatible alternate name" to a name present in `definitions`
-    /// and the semver version it was registered at.
-    ///
-    /// The `usize` entries here map to intern'd keys, so an example map could
-    /// be:
-    ///
-    /// ```text
-    /// {
-    ///     "a:b/c@0.2": ("a:b/c@0.2.1", 0.2.1),
-    ///     "a:b/c@2": ("a:b/c@2.0.0+abc", 2.0.0+abc),
-    /// }
-    /// ```
-    ///
-    /// As names are inserted into `definitions` each name may have up to one
-    /// semver-compatible name with extra numbers/info chopped off which is
-    /// inserted into this map. This map is the lookup table from `@0.2` to
-    /// `@0.2.x` where `x` is what was inserted manually.
-    ///
-    /// The `Version` here is tracked to ensure that when multiple versions on
-    /// one track are defined that only the maximal version here is retained.
-    alternate_lookups: HashMap<usize, (usize, Version)>,
-}
-
 #[derive(Clone)]
 pub(crate) enum Definition {
-    Instance(NameMap),
+    Instance(NameMap<usize, Definition>),
     Func(Arc<HostFunc>),
     Module(Module),
     Resource(ResourceType, Arc<crate::func::HostFunc>),
@@ -335,6 +299,73 @@ impl<T> Linker<T> {
         self.instantiate_pre(component)?
             .instantiate_async(store)
             .await
+    }
+
+    /// Implement any imports of the given [`Component`] with a function which traps.
+    ///
+    /// By default a [`Linker`] will error when unknown imports are encountered when instantiating a [`Component`].
+    /// This changes this behavior from an instant error to a trap that will happen if the import is called.
+    pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
+        use wasmtime_environ::component::ComponentTypes;
+        use wasmtime_environ::component::TypeDef;
+        // Recursively stub out all imports of the component with a function that traps.
+        fn stub_item<T>(
+            linker: &mut LinkerInstance<T>,
+            item_name: &str,
+            item_def: &TypeDef,
+            parent_instance: Option<&str>,
+            types: &ComponentTypes,
+        ) -> Result<()> {
+            // Skip if the item isn't an instance and has already been defined in the linker.
+            if !matches!(item_def, TypeDef::ComponentInstance(_)) && linker.get(item_name).is_some()
+            {
+                return Ok(());
+            }
+
+            match item_def {
+                TypeDef::ComponentFunc(_) => {
+                    let fully_qualified_name = parent_instance
+                        .map(|parent| format!("{}#{}", parent, item_name))
+                        .unwrap_or_else(|| item_name.to_owned());
+                    linker.func_new(&item_name, move |_, _, _| {
+                        bail!("unknown import: `{fully_qualified_name}` has not been defined")
+                    })?;
+                }
+                TypeDef::ComponentInstance(i) => {
+                    let instance = &types[*i];
+                    let mut linker_instance = linker.instance(item_name)?;
+                    for (export_name, export) in instance.exports.iter() {
+                        stub_item(
+                            &mut linker_instance,
+                            export_name,
+                            export,
+                            Some(item_name),
+                            types,
+                        )?;
+                    }
+                }
+                TypeDef::Resource(_) => {
+                    let ty = crate::component::ResourceType::host::<()>();
+                    linker.resource(item_name, ty, |_, _| Ok(()))?;
+                }
+                TypeDef::Component(_) | TypeDef::Module(_) => {
+                    bail!("unable to define {} imports as traps", item_def.desc())
+                }
+                _ => {}
+            }
+            Ok(())
+        }
+
+        for (_, (import_name, import_type)) in &component.env_component().import_types {
+            stub_item(
+                &mut self.root(),
+                import_name,
+                import_type,
+                None,
+                component.types(),
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -582,9 +613,9 @@ impl<T> LinkerInstance<'_, T> {
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
-        let dtor = Arc::new(crate::func::HostFunc::wrap(
+        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
+            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
@@ -602,7 +633,7 @@ impl<T> LinkerInstance<'_, T> {
     /// parameters.
     pub fn into_instance(mut self, name: &str) -> Result<Self> {
         let name = self.insert(name, Definition::Instance(NameMap::default()))?;
-        self.map = match self.map.definitions.get_mut(&name) {
+        self.map = match self.map.raw_get_mut(&name) {
             Some(Definition::Instance(map)) => map,
             _ => unreachable!(),
         };
@@ -614,132 +645,17 @@ impl<T> LinkerInstance<'_, T> {
 
     fn insert(&mut self, name: &str, item: Definition) -> Result<usize> {
         self.map
-            .insert(name, &mut self.strings, self.allow_shadowing, item)
+            .insert(name, self.strings, self.allow_shadowing, item)
+    }
+
+    fn get(&self, name: &str) -> Option<&Definition> {
+        self.map.get(name, self.strings)
     }
 }
 
-impl NameMap {
-    /// Looks up `name` within this map, using the interning specified by
-    /// `strings`.
-    ///
-    /// This may return a definition even if `name` wasn't exactly defined in
-    /// this map, such as looking up `a:b/c@0.2.0` when the map only has
-    /// `a:b/c@0.2.1` defined.
-    pub(crate) fn get(&self, name: &str, strings: &Strings) -> Option<&Definition> {
-        // First look up an exact match and if that's found return that. This
-        // enables defining multiple versions in the map and the requested
-        // version is returned if it matches exactly.
-        let candidate = strings.lookup(name).and_then(|k| self.definitions.get(&k));
-        if let Some(def) = candidate {
-            return Some(def);
-        }
+impl NameMapIntern for Strings {
+    type Key = usize;
 
-        // Failing that, then try to look for a semver-compatible alternative.
-        // This looks up the key based on `name`, if any, and then looks to see
-        // if that was intern'd in `strings`. Given all that look to see if it
-        // was defined in `alternate_lookups` and finally at the end that exact
-        // key is then used to look up again in `self.definitions`.
-        let (alternate_name, _version) = alternate_lookup_key(name)?;
-        let alternate_key = strings.lookup(alternate_name)?;
-        let (exact_key, _version) = self.alternate_lookups.get(&alternate_key)?;
-        self.definitions.get(exact_key)
-    }
-
-    /// Inserts the `name` specified into this map.
-    ///
-    /// The name is intern'd through the `strings` argument and shadowing is
-    /// controlled by the `allow_shadowing` variable.
-    ///
-    /// This function will automatically insert an entry in
-    /// `self.alternate_lookups` if `name` is a semver-looking name.
-    fn insert(
-        &mut self,
-        name: &str,
-        strings: &mut Strings,
-        allow_shadowing: bool,
-        item: Definition,
-    ) -> Result<usize> {
-        // Always insert `name` and `item` as an exact definition.
-        let key = strings.intern(name);
-        match self.definitions.entry(key) {
-            Entry::Occupied(_) if !allow_shadowing => {
-                bail!("import of `{}` defined twice", strings.strings[key])
-            }
-            Entry::Occupied(mut e) => {
-                e.insert(item);
-            }
-            Entry::Vacant(v) => {
-                v.insert(item);
-            }
-        }
-
-        // If `name` is a semver-looking thing, like `a:b/c@1.0.0`, then also
-        // insert an entry in the semver-compatible map under a key such as
-        // `a:b/c@1`.
-        //
-        // This key is used during `get` later on.
-        if let Some((alternate_key, version)) = alternate_lookup_key(name) {
-            let alternate_key = strings.intern(alternate_key);
-            match self.alternate_lookups.entry(alternate_key) {
-                Entry::Occupied(mut e) => {
-                    let (_, prev_version) = e.get();
-                    // Prefer the latest version, so only do this if we're
-                    // greater than the prior version.
-                    if version > *prev_version {
-                        e.insert((key, version));
-                    }
-                }
-                Entry::Vacant(v) => {
-                    v.insert((key, version));
-                }
-            }
-        }
-        Ok(key)
-    }
-}
-
-/// Determines a version-based "alternate lookup key" for the `name` specified.
-///
-/// Some examples are:
-///
-/// * `foo` => `None`
-/// * `foo:bar/baz` => `None`
-/// * `foo:bar/baz@1.1.2` => `Some(foo:bar/baz@1)`
-/// * `foo:bar/baz@0.1.0` => `Some(foo:bar/baz@0.1)`
-/// * `foo:bar/baz@0.0.1` => `None`
-/// * `foo:bar/baz@0.1.0-rc.2` => `None`
-///
-/// This alternate lookup key is intended to serve the purpose where a
-/// semver-compatible definition can be located, if one is defined, at perhaps
-/// either a newer or an older version.
-fn alternate_lookup_key(name: &str) -> Option<(&str, Version)> {
-    let at = name.find('@')?;
-    let version_string = &name[at + 1..];
-    let version = Version::parse(version_string).ok()?;
-    if !version.pre.is_empty() {
-        // If there's a prerelease then don't consider that compatible with any
-        // other version number.
-        None
-    } else if version.major != 0 {
-        // If the major number is nonzero then compatibility is up to the major
-        // version number, so return up to the first decimal.
-        let first_dot = version_string.find('.')? + at + 1;
-        Some((&name[..first_dot], version))
-    } else if version.minor != 0 {
-        // Like the major version if the minor is nonzero then patch releases
-        // are all considered to be on a "compatible track".
-        let first_dot = version_string.find('.')? + at + 1;
-        let second_dot = name[first_dot + 1..].find('.')? + first_dot + 1;
-        Some((&name[..second_dot], version))
-    } else {
-        // If the patch number is the first nonzero entry then nothing can be
-        // compatible with this patch, e.g. 0.0.1 isn't' compatible with
-        // any other version inherently.
-        None
-    }
-}
-
-impl Strings {
     fn intern(&mut self, string: &str) -> usize {
         if let Some(idx) = self.string2idx.get(string) {
             return *idx;
@@ -751,33 +667,7 @@ impl Strings {
         idx
     }
 
-    pub fn lookup(&self, string: &str) -> Option<usize> {
+    fn lookup(&self, string: &str) -> Option<usize> {
         self.string2idx.get(string).cloned()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn alternate_lookup_key() {
-        fn alt(s: &str) -> Option<&str> {
-            super::alternate_lookup_key(s).map(|(s, _)| s)
-        }
-
-        assert_eq!(alt("x"), None);
-        assert_eq!(alt("x:y/z"), None);
-        assert_eq!(alt("x:y/z@1.0.0"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@1.1.0"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@1.1.2"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@2.1.2"), Some("x:y/z@2"));
-        assert_eq!(alt("x:y/z@2.1.2+abc"), Some("x:y/z@2"));
-        assert_eq!(alt("x:y/z@0.1.2"), Some("x:y/z@0.1"));
-        assert_eq!(alt("x:y/z@0.1.3"), Some("x:y/z@0.1"));
-        assert_eq!(alt("x:y/z@0.2.3"), Some("x:y/z@0.2"));
-        assert_eq!(alt("x:y/z@0.2.3+abc"), Some("x:y/z@0.2"));
-        assert_eq!(alt("x:y/z@0.0.1"), None);
-        assert_eq!(alt("x:y/z@0.0.1-pre"), None);
-        assert_eq!(alt("x:y/z@0.1.0-pre"), None);
-        assert_eq!(alt("x:y/z@1.0.0-pre"), None);
     }
 }

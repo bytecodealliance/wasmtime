@@ -2,11 +2,11 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2, TableAllocationIndex,
 };
-use crate::runtime::vm::sys::vm::commit_pages;
+use crate::prelude::*;
 use crate::runtime::vm::{
     InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use crate::{runtime::vm::sys::vm::commit_pages, vm::round_usize_up_to_host_pages};
 use std::mem;
 use std::ptr::NonNull;
 use wasmtime_environ::{Module, TablePlan};
@@ -30,7 +30,7 @@ pub struct TablePool {
 impl TablePool {
     /// Create a new `TablePool`.
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
-        let page_size = crate::runtime::vm::page_size();
+        let page_size = crate::runtime::vm::host_page_size();
 
         let table_size = round_up_to_pow2(
             mem::size_of::<*mut u8>()
@@ -56,7 +56,7 @@ impl TablePool {
             max_total_tables,
             tables_per_instance,
             page_size,
-            keep_resident: config.table_keep_resident,
+            keep_resident: round_usize_up_to_host_pages(config.table_keep_resident)?,
             table_elements: usize::try_from(config.limits.table_elements).unwrap(),
         })
     }
@@ -225,7 +225,7 @@ mod tests {
             ..Default::default()
         })?;
 
-        let host_page_size = crate::runtime::vm::page_size();
+        let host_page_size = crate::runtime::vm::host_page_size();
 
         assert_eq!(pool.table_size, host_page_size);
         assert_eq!(pool.max_total_tables, 7);

@@ -84,7 +84,7 @@
   (memory 0)
 )
 
-;; function u0:0(i64 vmctx, i64, i8x16) fast {
+;; function u0:0(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -105,7 +105,7 @@
 ;; @004b                               return
 ;; }
 ;;
-;; function u0:1(i64 vmctx, i64, i8x16) fast {
+;; function u0:1(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -128,7 +128,7 @@
 ;; @005a                               return
 ;; }
 ;;
-;; function u0:2(i64 vmctx, i64, i8x16) fast {
+;; function u0:2(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -151,7 +151,7 @@
 ;; @0069                               return
 ;; }
 ;;
-;; function u0:3(i64 vmctx, i64, i8x16) fast {
+;; function u0:3(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -174,7 +174,7 @@
 ;; @0079                               return
 ;; }
 ;;
-;; function u0:4(i64 vmctx, i64, i8x16) fast {
+;; function u0:4(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -195,7 +195,7 @@
 ;; @0088                               return
 ;; }
 ;;
-;; function u0:5(i64 vmctx, i64, i8x16) fast {
+;; function u0:5(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -218,7 +218,7 @@
 ;; @0097                               return
 ;; }
 ;;
-;; function u0:6(i64 vmctx, i64, i8x16) fast {
+;; function u0:6(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -241,7 +241,7 @@
 ;; @00a6                               return
 ;; }
 ;;
-;; function u0:7(i64 vmctx, i64, i8x16) fast {
+;; function u0:7(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -264,7 +264,7 @@
 ;; @00b6                               return
 ;; }
 ;;
-;; function u0:8(i64 vmctx, i64, i8x16) fast {
+;; function u0:8(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -285,7 +285,7 @@
 ;; @00c5                               return
 ;; }
 ;;
-;; function u0:9(i64 vmctx, i64, i8x16) fast {
+;; function u0:9(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -308,7 +308,7 @@
 ;; @00d4                               return
 ;; }
 ;;
-;; function u0:10(i64 vmctx, i64, i8x16) fast {
+;; function u0:10(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -331,7 +331,7 @@
 ;; @00e3                               return
 ;; }
 ;;
-;; function u0:11(i64 vmctx, i64, i8x16) fast {
+;; function u0:11(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -354,7 +354,7 @@
 ;; @00f3                               return
 ;; }
 ;;
-;; function u0:12(i64 vmctx, i64, i8x16) fast {
+;; function u0:12(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -375,7 +375,7 @@
 ;; @0102                               return
 ;; }
 ;;
-;; function u0:13(i64 vmctx, i64, i8x16) fast {
+;; function u0:13(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -398,7 +398,7 @@
 ;; @0111                               return
 ;; }
 ;;
-;; function u0:14(i64 vmctx, i64, i8x16) fast {
+;; function u0:14(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -421,7 +421,7 @@
 ;; @0120                               return
 ;; }
 ;;
-;; function u0:15(i64 vmctx, i64, i8x16) fast {
+;; function u0:15(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -442,7 +442,7 @@
 ;; @012f                               return
 ;; }
 ;;
-;; function u0:16(i64 vmctx, i64, i8x16) fast {
+;; function u0:16(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -465,7 +465,7 @@
 ;; @013e                               return
 ;; }
 ;;
-;; function u0:17(i64 vmctx, i64, i8x16) fast {
+;; function u0:17(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -488,7 +488,7 @@
 ;; @014d                               return
 ;; }
 ;;
-;; function u0:18(i64 vmctx, i64, i8x16) fast {
+;; function u0:18(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -511,7 +511,7 @@
 ;; @015d                               return
 ;; }
 ;;
-;; function u0:19(i64 vmctx, i64, i8x16) fast {
+;; function u0:19(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -532,7 +532,7 @@
 ;; @016c                               return
 ;; }
 ;;
-;; function u0:20(i64 vmctx, i64, i8x16) fast {
+;; function u0:20(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -555,7 +555,7 @@
 ;; @017b                               return
 ;; }
 ;;
-;; function u0:21(i64 vmctx, i64, i8x16) fast {
+;; function u0:21(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -578,7 +578,7 @@
 ;; @018a                               return
 ;; }
 ;;
-;; function u0:22(i64 vmctx, i64, i8x16) fast {
+;; function u0:22(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -601,7 +601,7 @@
 ;; @0199                               return
 ;; }
 ;;
-;; function u0:23(i64 vmctx, i64, i8x16) fast {
+;; function u0:23(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -624,7 +624,7 @@
 ;; @01a8                               return
 ;; }
 ;;
-;; function u0:24(i64 vmctx, i64, i8x16) fast {
+;; function u0:24(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -647,7 +647,7 @@
 ;; @01b7                               return
 ;; }
 ;;
-;; function u0:25(i64 vmctx, i64, i8x16) fast {
+;; function u0:25(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -670,7 +670,7 @@
 ;; @01c6                               return
 ;; }
 ;;
-;; function u0:26(i64 vmctx, i64, i8x16) fast {
+;; function u0:26(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -693,7 +693,7 @@
 ;; @01d5                               return
 ;; }
 ;;
-;; function u0:27(i64 vmctx, i64, i8x16) fast {
+;; function u0:27(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -716,7 +716,7 @@
 ;; @01e4                               return
 ;; }
 ;;
-;; function u0:28(i64 vmctx, i64, i8x16) fast {
+;; function u0:28(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -739,7 +739,7 @@
 ;; @01f3                               return
 ;; }
 ;;
-;; function u0:29(i64 vmctx, i64, i8x16) fast {
+;; function u0:29(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -762,7 +762,7 @@
 ;; @0202                               return
 ;; }
 ;;
-;; function u0:30(i64 vmctx, i64, i8x16) fast {
+;; function u0:30(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -785,7 +785,7 @@
 ;; @0211                               return
 ;; }
 ;;
-;; function u0:31(i64 vmctx, i64, i8x16) fast {
+;; function u0:31(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -808,7 +808,7 @@
 ;; @0220                               return
 ;; }
 ;;
-;; function u0:32(i64 vmctx, i64, i8x16) fast {
+;; function u0:32(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -831,7 +831,7 @@
 ;; @022f                               return
 ;; }
 ;;
-;; function u0:33(i64 vmctx, i64, i8x16) fast {
+;; function u0:33(i64 vmctx, i64, i8x16) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1

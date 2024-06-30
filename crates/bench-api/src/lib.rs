@@ -418,7 +418,7 @@ struct BenchState {
 struct HostState {
     wasi: WasiCtx,
     #[cfg(feature = "wasi-nn")]
-    wasi_nn: wasmtime_wasi_nn::WasiNnCtx,
+    wasi_nn: wasmtime_wasi_nn::witx::WasiNnCtx,
 }
 
 impl BenchState {
@@ -509,7 +509,7 @@ impl BenchState {
             #[cfg(feature = "wasi-nn")]
             wasi_nn: {
                 let (backends, registry) = wasmtime_wasi_nn::preload(&[])?;
-                wasmtime_wasi_nn::WasiNnCtx::new(backends, registry)
+                wasmtime_wasi_nn::witx::WasiNnCtx::new(backends, registry)
             },
         };
 

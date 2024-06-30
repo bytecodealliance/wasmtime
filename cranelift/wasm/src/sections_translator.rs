@@ -10,7 +10,7 @@
 use crate::environ::ModuleEnvironment;
 use crate::wasm_unsupported;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, Memory, MemoryIndex, TableIndex, Tag, TagIndex,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Tag, TagIndex,
     TypeIndex, WasmError, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
@@ -20,19 +20,10 @@ use std::vec::Vec;
 use wasmparser::{
     Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind, ElementSectionReader,
     Export, ExportSectionReader, ExternalKind, FunctionSectionReader, GlobalSectionReader,
-    ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator,
-    TableSectionReader, TagSectionReader, TagType, TypeRef, TypeSectionReader,
+    ImportSectionReader, MemorySectionReader, Operator, TableSectionReader, TagSectionReader,
+    TagType, TypeRef, TypeSectionReader,
 };
 use wasmtime_types::ConstExpr;
-
-fn memory(ty: MemoryType) -> Memory {
-    Memory {
-        minimum: ty.initial,
-        maximum: ty.maximum,
-        shared: ty.shared,
-        memory64: ty.memory64,
-    }
-}
 
 fn tag(e: TagType) -> Tag {
     match e.kind {
@@ -75,7 +66,7 @@ pub fn parse_import_section<'data>(
                 )?;
             }
             TypeRef::Memory(ty) => {
-                environ.declare_memory_import(memory(ty), import.module, import.name)?;
+                environ.declare_memory_import(ty.into(), import.module, import.name)?;
             }
             TypeRef::Tag(e) => {
                 environ.declare_tag_import(tag(e), import.module, import.name)?;
@@ -139,8 +130,7 @@ pub fn parse_memory_section(
     environ.reserve_memories(memories.count())?;
 
     for entry in memories {
-        let memory = memory(entry?);
-        environ.declare_memory(memory)?;
+        environ.declare_memory(entry?.into())?;
     }
 
     Ok(())
@@ -339,51 +329,5 @@ pub fn parse_data_section<'data>(
         }
     }
 
-    Ok(())
-}
-
-/// Parses the Name section of the wasm module.
-pub fn parse_name_section<'data>(
-    names: NameSectionReader<'data>,
-    environ: &mut dyn ModuleEnvironment<'data>,
-) -> WasmResult<()> {
-    for subsection in names {
-        match subsection? {
-            wasmparser::Name::Function(names) => {
-                for name in names {
-                    let Naming { index, name } = name?;
-                    // We reserve `u32::MAX` for our own use in cranelift-entity.
-                    if index != u32::max_value() {
-                        environ.declare_func_name(FuncIndex::from_u32(index), name);
-                    }
-                }
-            }
-            wasmparser::Name::Module { name, .. } => {
-                environ.declare_module_name(name);
-            }
-            wasmparser::Name::Local(reader) => {
-                for f in reader {
-                    let f = f?;
-                    if f.index == u32::max_value() {
-                        continue;
-                    }
-                    for name in f.names {
-                        let Naming { index, name } = name?;
-                        environ.declare_local_name(FuncIndex::from_u32(f.index), index, name)
-                    }
-                }
-            }
-            wasmparser::Name::Label(_)
-            | wasmparser::Name::Type(_)
-            | wasmparser::Name::Table(_)
-            | wasmparser::Name::Global(_)
-            | wasmparser::Name::Memory(_)
-            | wasmparser::Name::Element(_)
-            | wasmparser::Name::Data(_)
-            | wasmparser::Name::Tag(_)
-            | wasmparser::Name::Field(_)
-            | wasmparser::Name::Unknown { .. } => {}
-        }
-    }
     Ok(())
 }

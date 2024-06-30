@@ -14,9 +14,9 @@ use crate::ir::{
     Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
-    writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, InsnIndex, LoweredBlock,
-    MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants,
-    VCodeInst, ValueRegs, Writable,
+    writable_value_regs, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, Callee, InsnIndex,
+    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
+    VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::settings::Flags;
 use crate::{trace, CodegenResult};
@@ -398,7 +398,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
 
         // Find the sret register, if it's used.
-        let mut sret_reg = None;
+        let mut sret_param = None;
         for ret in vcode.abi().signature().returns.iter() {
             if ret.purpose == ArgumentPurpose::StructReturn {
                 let entry_bb = f.stencil.layout.entry_block().unwrap();
@@ -409,17 +409,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     .zip(vcode.abi().signature().params.iter())
                 {
                     if sig_param.purpose == ArgumentPurpose::StructReturn {
-                        let regs = value_regs[param];
-                        assert!(regs.len() == 1);
-
-                        assert!(sret_reg.is_none());
-                        sret_reg = Some(regs);
+                        assert!(sret_param.is_none());
+                        sret_param = Some(param);
                     }
                 }
 
-                assert!(sret_reg.is_some());
+                assert!(sret_param.is_some());
             }
         }
+
+        let sret_reg = sret_param.map(|param| {
+            let regs = value_regs[param];
+            assert!(regs.len() == 1);
+            regs
+        });
 
         // Compute instruction colors, find constant instructions, and find instructions with
         // side-effects, in one combined pass.
@@ -449,7 +452,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_end_colors[bb] = InstColor::new(cur_color);
         }
 
-        let value_ir_uses = Self::compute_use_states(f);
+        let value_ir_uses = Self::compute_use_states(f, sret_param);
 
         Ok(Lower {
             f,
@@ -482,7 +485,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Pre-analysis: compute `value_ir_uses`. See comment on
     /// `ValueUseState` for a description of what this analysis
     /// computes.
-    fn compute_use_states<'a>(f: &'a Function) -> SecondaryMap<Value, ValueUseState> {
+    fn compute_use_states(
+        f: &Function,
+        sret_param: Option<Value>,
+    ) -> SecondaryMap<Value, ValueUseState> {
         // We perform the analysis without recursion, so we don't
         // overflow the stack on long chains of ops in the input.
         //
@@ -501,6 +507,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // efficient than a full indirect-use-counting pass.
 
         let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
+
+        if let Some(sret_param) = sret_param {
+            // There's an implicit use of the struct-return parameter in each
+            // copy of the function epilogue, which we count here.
+            value_ir_uses[sret_param] = ValueUseState::Multiple;
+        }
 
         // Stack of iterators over Values as we do DFS to mark
         // Multiple-state subtrees. The iterator type is whatever is
@@ -755,7 +767,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
             if has_side_effect || value_needed {
-                trace!("lowering: inst {}: {:?}", inst, self.f.dfg.insts[inst]);
+                trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
                 let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
                     let ty = if self.num_outputs(inst) > 0 {
                         Some(self.output_ty(inst, 0))
@@ -791,8 +803,38 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 }
             }
 
+            let start = self.vcode.vcode.num_insts();
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
+
+            // If the instruction had a user stack map, forward it from the CLIF
+            // to the vcode.
+            if let Some(entries) = self.f.dfg.user_stack_map_entries(inst) {
+                let end = self.vcode.vcode.num_insts();
+                debug_assert!(end > start);
+                debug_assert_eq!(
+                    (start..end)
+                        .filter(|i| self.vcode.vcode[InsnIndex::new(*i)].is_safepoint())
+                        .count(),
+                    1
+                );
+                for i in start..end {
+                    let iix = InsnIndex::new(i);
+                    if self.vcode.vcode[iix].is_safepoint() {
+                        trace!(
+                            "Adding user stack map from clif\n\n\
+                                 {inst:?} `{}`\n\n\
+                             to vcode\n\n\
+                                 {iix:?} `{}`",
+                            self.f.dfg.display_inst(inst),
+                            &self.vcode.vcode[iix].pretty_print_inst(&mut Default::default()),
+                        );
+                        self.vcode
+                            .add_user_stack_map(BackwardsInsnIndex::new(iix.index()), entries);
+                        break;
+                    }
+                }
+            }
 
             // maybe insert random instruction
             if ctrl_plane.get_decision() {

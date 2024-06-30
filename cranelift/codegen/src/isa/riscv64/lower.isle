@@ -1115,15 +1115,35 @@
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (uextend val)))
   (zext val))
+
 (rule 1 (lower (has_type $I128 (uextend val)))
   (value_regs (zext val) (imm $I64 0)))
+
+;; When the source of an `uextend` is a load, we can merge both ops
+(rule 2 (lower (has_type (fits_in_64 _) (uextend (sinkable_load inst ty flags addr offset))))
+  (gen_sunk_load inst (amode addr offset) (uextend_load_op ty) flags))
+
+(decl pure uextend_load_op (Type) LoadOP)
+(rule (uextend_load_op $I8) (LoadOP.Lbu))
+(rule (uextend_load_op $I16) (LoadOP.Lhu))
+(rule (uextend_load_op $I32) (LoadOP.Lwu))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (sextend val @ (value_type in_ty))))
   (sext val))
+
 (rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
   (let ((lo XReg (sext val)))
     (value_regs lo (rv_srai lo (imm12_const 63)))))
+
+;; When the source of an `sextend` is a load, we can merge both ops
+(rule 2 (lower (has_type (fits_in_64 _) (sextend (sinkable_load inst ty flags addr offset))))
+  (gen_sunk_load inst (amode addr offset) (sextend_load_op ty) flags))
+
+(decl pure sextend_load_op (Type) LoadOP)
+(rule (sextend_load_op $I8) (LoadOP.Lb))
+(rule (sextend_load_op $I16) (LoadOP.Lh))
+(rule (sextend_load_op $I32) (LoadOP.Lw))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1826,16 +1846,27 @@
   (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
+
+;; Manually matching (iconst 0) here is a bit of a hack. We can't do that as part
+;; of the iconst rule because that runs into regalloc issues. gen_select_xreg
+;; has some optimizations based on the use of the zero register so we have to
+;; manually match it here.
+(rule 5 (lower (has_type (ty_int_ref_scalar_64 _) (select c (i64_from_iconst 0) y)))
+  (gen_select_xreg (is_nonzero_cmp c) (zero_reg) y))
+
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 _) (select c x (i64_from_iconst 0))))
+  (gen_select_xreg (is_nonzero_cmp c) x (zero_reg)))
+
+(rule 3 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
   (gen_select_xreg (is_nonzero_cmp c) x y))
 
-(rule 1 (lower (has_type $I128 (select c x y)))
+(rule 2 (lower (has_type $I128 (select c x y)))
   (gen_select_regs (is_nonzero_cmp c) x y))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
   (gen_select_vreg (is_nonzero_cmp c) x y))
 
-(rule 3 (lower (has_type (ty_scalar_float _) (select c x y)))
+(rule 0 (lower (has_type (ty_scalar_float _) (select c x y)))
   (gen_select_freg (is_nonzero_cmp c) x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
@@ -1996,11 +2027,6 @@
   (lower (trap code))
   (udf code))
 
-;;;;;  Rules for `resumable_trap`;;;;;;;;;
-(rule
-  (lower (resumable_trap code))
-  (udf code))
-
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))
   (gen_load (amode addr offset) (LoadOP.Lbu) flags))
@@ -2087,24 +2113,24 @@
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule (lower (istore8 flags src addr offset))
-  (gen_store (amode addr offset) (StoreOP.Sb) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sb) flags src))
 
 ;;;;;  Rules for `istore16`;;;;;;;;;
 (rule (lower (istore16 flags src addr offset))
-  (gen_store (amode addr offset) (StoreOP.Sh) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sh) flags src))
 
 ;;;;;  Rules for `istore32`;;;;;;;;;
 (rule (lower (istore32 flags src addr offset))
-  (gen_store (amode addr offset) (StoreOP.Sw) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sw) flags src))
 
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule (lower (store flags src @ (value_type ty) addr offset))
-  (gen_store (amode addr offset) (store_op ty) flags src))
+  (gen_store (amode addr offset) flags src))
 
 (rule 1 (lower (store flags src @ (value_type $I128) addr offset))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((_ InstOutput (gen_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
-    (gen_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
+  (let ((_ InstOutput (rv_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
+    (rv_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
 
 (rule 2 (lower (store flags src @ (value_type (ty_vec_fits_in_register ty)) addr offset))
   (let ((eew VecElementWidth (element_width_from_type ty))
@@ -2436,8 +2462,29 @@
       (elf_tls_get_addr name))
 
 ;;;;;  Rules for `bitcast`;;;;;;;;;
-(rule
-   (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
+
+;; These rules should probably be handled in `gen_bitcast`, but it's convenient to have that return
+;; a single register, instead of a `ValueRegs`
+(rule 3 (lower (has_type $I128 (bitcast _ v @ (value_type (ty_vec_fits_in_register _)))))
+    (value_regs
+      (gen_extractlane $I64X2 v 0)
+      (gen_extractlane $I64X2 v 1)))
+
+;; Move the high half into a vector register, and then use vslide1up to move it up and
+;; insert the lower half in one instruction.
+(rule 2 (lower (has_type (ty_vec_fits_in_register _) (bitcast _ v @ (value_type $I128))))
+    (let ((lo XReg (value_regs_get v 0))
+          (hi XReg (value_regs_get v 1))
+          (vstate VState (vstate_from_type $I64X2))
+          (vec VReg (rv_vmv_sx hi vstate)))
+      (rv_vslide1up_vx vec vec lo (unmasked) vstate)))
+
+;; `gen_bitcast` below only works with single register values, so handle I128
+;; specially here.
+(rule 1 (lower (has_type $I128 (bitcast _ v @ (value_type $I128))))
+   v)
+
+(rule 0 (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
    (gen_bitcast v in_ty out_ty))
 
 ;;;;;  Rules for `ceil`;;;;;;;;;

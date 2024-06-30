@@ -78,20 +78,20 @@
 
 use crate::instance::InstanceData;
 use crate::linker::Definition;
-use crate::module::{BareModuleInfo, RegisteredModuleId};
+use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     Backtrace, ExportGlobal, GcHeapAllocationIndex, GcRootsList, GcStore,
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits, WasmFault,
+    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleRuntimeInfo,
+    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef, VMGcRef,
+    VMRuntimeLimits, WasmFault,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::RootSet;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
-use crate::{Global, Instance, Memory, RootScope, Table};
+use crate::{Global, Instance, Memory, RootScope, Table, Uninhabited};
 use alloc::sync::Arc;
-use anyhow::{anyhow, bail, Result};
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::future::Future;
@@ -233,18 +233,24 @@ enum ResourceLimiterInner<T> {
 }
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", feature = "call-hook"))]
 #[async_trait::async_trait]
 pub trait CallHookHandler<T>: Send {
     /// A callback to run when wasmtime is about to enter a host call, or when about to
     /// exit the hostcall.
-    async fn handle_call_event(&self, t: &mut T, ch: CallHook) -> Result<()>;
+    async fn handle_call_event(&self, t: StoreContextMut<'_, T>, ch: CallHook) -> Result<()>;
 }
 
 enum CallHookInner<T> {
-    Sync(Box<dyn FnMut(&mut T, CallHook) -> Result<()> + Send + Sync>),
-    #[cfg(feature = "async")]
+    #[cfg(feature = "call-hook")]
+    Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
+    #[cfg(all(feature = "async", feature = "call-hook"))]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
+    #[allow(dead_code)]
+    ForceTypeParameterToBeUsed {
+        uninhabited: Uninhabited,
+        _marker: marker::PhantomData<T>,
+    },
 }
 
 /// What to do after returning from a callback when the engine epoch reaches
@@ -403,7 +409,9 @@ pub struct AutoAssertNoGc<'a> {
 impl<'a> AutoAssertNoGc<'a> {
     #[inline]
     pub fn new(store: &'a mut StoreOpaque) -> Self {
-        let entered = if let Some(gc_store) = store.gc_store.as_mut() {
+        let entered = if !cfg!(feature = "gc") {
+            false
+        } else if let Some(gc_store) = store.gc_store.as_mut() {
             gc_store.gc_heap.enter_no_gc_scope();
             true
         } else {
@@ -411,6 +419,29 @@ impl<'a> AutoAssertNoGc<'a> {
         };
 
         AutoAssertNoGc { store, entered }
+    }
+
+    /// Creates an `AutoAssertNoGc` value which is forcibly "not entered" and
+    /// disables checks for no GC happening for the duration of this value.
+    ///
+    /// This is used when it is statically otherwise known that a GC doesn't
+    /// happen for the various types involved.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is `unsafe` as it does not provide the same safety
+    /// guarantees as `AutoAssertNoGc::new`. It must be guaranteed by the
+    /// caller that a GC doesn't happen.
+    #[inline]
+    pub unsafe fn disabled(store: &'a mut StoreOpaque) -> Self {
+        if cfg!(debug_assertions) {
+            AutoAssertNoGc::new(store)
+        } else {
+            AutoAssertNoGc {
+                store,
+                entered: false,
+            }
+        }
     }
 }
 
@@ -534,7 +565,7 @@ impl<T> Store<T> {
         // is never null.
         inner.default_caller = {
             let module = Arc::new(wasmtime_environ::Module::default());
-            let shim = BareModuleInfo::empty(module).into_traitobj();
+            let shim = ModuleRuntimeInfo::bare(module);
             let allocator = OnDemandInstanceAllocator::default();
             allocator
                 .validate_module(shim.module(), shim.offsets())
@@ -748,7 +779,7 @@ impl<T> Store<T> {
     ///
     /// After this function returns a trap, it may be called for subsequent
     /// returns to host or wasm code as the trap propagates to the root call.
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", feature = "call-hook"))]
     pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
         self.inner.call_hook = Some(CallHookInner::Async(Box::new(hook)));
     }
@@ -767,9 +798,10 @@ impl<T> Store<T> {
     ///
     /// After this function returns a trap, it may be called for subsequent returns
     /// to host or wasm code as the trap propagates to the root call.
+    #[cfg(feature = "call-hook")]
     pub fn call_hook(
         &mut self,
-        hook: impl FnMut(&mut T, CallHook) -> Result<()> + Send + Sync + 'static,
+        hook: impl FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
     ) {
         self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
@@ -1140,19 +1172,38 @@ impl<T> StoreInner<T> {
             }
         }
 
-        match &mut self.call_hook {
-            Some(CallHookInner::Sync(hook)) => hook(&mut self.data, s),
+        // Temporarily take the configured behavior to avoid mutably borrowing
+        // multiple times.
+        if let Some(mut call_hook) = self.call_hook.take() {
+            let result = self.invoke_call_hook(&mut call_hook, s);
+            self.call_hook = Some(call_hook);
+            result
+        } else {
+            Ok(())
+        }
+    }
 
-            #[cfg(feature = "async")]
-            Some(CallHookInner::Async(handler)) => unsafe {
-                Ok(self
-                    .inner
+    fn invoke_call_hook(&mut self, call_hook: &mut CallHookInner<T>, s: CallHook) -> Result<()> {
+        match call_hook {
+            #[cfg(feature = "call-hook")]
+            CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
+
+            #[cfg(all(feature = "async", feature = "call-hook"))]
+            CallHookInner::Async(handler) => unsafe {
+                self.inner
                     .async_cx()
                     .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
-                    .block_on(handler.handle_call_event(&mut self.data, s).as_mut())??)
+                    .block_on(
+                        handler
+                            .handle_call_event((&mut *self).as_context_mut(), s)
+                            .as_mut(),
+                    )?
             },
 
-            None => Ok(()),
+            CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
+                let _ = s;
+                match *uninhabited {}
+            }
         }
     }
 }

@@ -78,7 +78,7 @@ mod empty_error {
         imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
-        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
         assert_eq!(
             results
@@ -191,7 +191,7 @@ mod string_error {
         imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
-        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
         assert_eq!(
             results
@@ -367,7 +367,7 @@ mod enum_error {
         imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
-        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
         assert_eq!(
             results
@@ -531,7 +531,7 @@ mod record_error {
         imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
-        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
         assert_eq!(
             results
@@ -726,7 +726,7 @@ mod variant_error {
         imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
-        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
         assert_eq!(
             results
@@ -929,7 +929,7 @@ mod multiple_interfaces_error {
         imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
-        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
         assert_eq!(
             results
@@ -1051,7 +1051,7 @@ mod with_remapping {
         interfaces::imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
-        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
         assert_eq!(
             results

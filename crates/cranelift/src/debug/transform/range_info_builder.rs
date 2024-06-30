@@ -2,7 +2,7 @@ use super::address_transform::AddressTransform;
 use super::{DebugInputContext, Reader};
 use anyhow::Error;
 use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit};
-use wasmtime_environ::{DefinedFuncIndex, EntityRef};
+use wasmtime_environ::DefinedFuncIndex;
 
 pub(crate) enum RangeInfoBuilder {
     Undefined,
@@ -145,7 +145,20 @@ impl RangeInfoBuilder {
                 for (begin, end) in ranges {
                     result.extend(addr_tr.translate_ranges(*begin, *end));
                 }
-                if result.len() != 1 {
+
+                // If we're seeing the ranges for a `DW_TAG_compile_unit` DIE
+                // then don't use `DW_AT_low_pc` and `DW_AT_high_pc`. These
+                // attributes, if set, will configure the base address of all
+                // location lists that this unit refers to. Currently this
+                // debug transform does not take this base address into account
+                // when generate the `.debug_loc` section. Consequently when a
+                // compile unit is configured here the `DW_AT_ranges` attribute
+                // is unconditionally used instead of
+                // `DW_AT_low_pc`/`DW_AT_high_pc`.
+                let is_attr_for_compile_unit =
+                    out_unit.get(current_scope_id).tag() == gimli::DW_TAG_compile_unit;
+
+                if result.len() != 1 || is_attr_for_compile_unit {
                     let range_list = result
                         .iter()
                         .map(|tr| write::Range::StartLength {
@@ -172,8 +185,8 @@ impl RangeInfoBuilder {
                 }
             }
             RangeInfoBuilder::Function(index) => {
+                let symbol = addr_tr.map()[*index].symbol;
                 let range = addr_tr.func_range(*index);
-                let symbol = index.index();
                 let addr = write::Address::Symbol {
                     symbol,
                     addend: range.0 as i64,

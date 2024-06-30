@@ -3,7 +3,7 @@ test run
 target aarch64
 target s390x
 target x86_64
-target x86_64 has_popcnt
+target x86_64 has_popcnt has_sse42
 target riscv64
 target riscv64 has_c has_zcb
 

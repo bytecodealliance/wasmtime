@@ -20,7 +20,7 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
             }
             builder.allow_blocking_current_thread(blocking);
         })?;
-        let (command, _instance) = Command::instantiate(&mut store, &component, &linker)?;
+        let command = Command::instantiate(&mut store, &component, &linker)?;
         command
             .wasi_cli_run()
             .call_run(&mut store)?

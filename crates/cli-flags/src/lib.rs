@@ -115,17 +115,6 @@ wasmtime_option_group! {
         /// The maximum runtime size of each linear memory in the pooling
         /// allocator, in bytes.
         pub pooling_max_memory_size: Option<usize>,
-
-        /// Whether to enable call-indirect caching.
-        pub cache_call_indirects: Option<bool>,
-
-        /// The maximum call-indirect cache slot count.
-        ///
-        /// One slot is allocated per indirect callsite; if the module
-        /// has more indirect callsites than this limit, then the
-        /// first callsites in linear order in the code section, up to
-        /// the limit, will receive a cache slot.
-        pub max_call_indirect_cache_slots: Option<usize>,
     }
 
     enum Optimize {
@@ -576,12 +565,6 @@ impl CommonOptions {
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
         }
-        if let Some(enable) = self.opts.cache_call_indirects {
-            config.cache_call_indirects(enable);
-        }
-        if let Some(max) = self.opts.max_call_indirect_cache_slots {
-            config.max_call_indirect_cache_slots(max);
-        }
 
         match_feature! {
             ["pooling-allocator" : self.opts.pooling_allocator.or(pooling_allocator_default)]
@@ -612,10 +595,14 @@ impl CommonOptions {
                     if let Some(limit) = self.opts.pooling_max_memory_size {
                         cfg.max_memory_size(limit);
                     }
-                    if let Some(enable) = self.opts.memory_protection_keys {
-                        if enable {
-                            cfg.memory_protection_keys(wasmtime::MpkEnabled::Enable);
-                        }
+                    match_feature! {
+                        ["memory-protection-keys" : self.opts.memory_protection_keys]
+                        enable => cfg.memory_protection_keys(if enable {
+                            wasmtime::MpkEnabled::Enable
+                        } else {
+                            wasmtime::MpkEnabled::Disable
+                        }),
+                        _ => err,
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
                 }

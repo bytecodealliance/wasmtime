@@ -4,10 +4,9 @@
 //! steps.
 
 use crate::prelude::*;
-use crate::runtime::vm::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
+use crate::runtime::vm::{CompiledModuleId, MmapVec};
 use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::str;
 use wasmtime_environ::{
     CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FuncIndex, FunctionLoc,
@@ -50,7 +49,6 @@ impl CompiledModule {
         code_memory: Arc<CodeMemory>,
         info: CompiledModuleInfo,
         profiler: &dyn ProfilingAgent,
-        id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
         let mut ret = Self {
             module: Arc::new(info.module),
@@ -60,7 +58,7 @@ impl CompiledModule {
             dbg_jit_registration: None,
             code_memory,
             meta: info.meta,
-            unique_id: id_allocator.alloc(),
+            unique_id: CompiledModuleId::new(),
             func_names: info.func_names,
         };
         ret.register_debug_and_profiling(profiler)?;
@@ -71,8 +69,6 @@ impl CompiledModule {
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
         #[cfg(feature = "debug-builtins")]
         if self.meta.native_debug_info_present {
-            use anyhow::Context;
-
             let text = self.text();
             let bytes = crate::debug::create_gdbjit_image(
                 self.mmap().to_vec(),
@@ -264,7 +260,6 @@ impl CompiledModule {
     /// what filename and line number a wasm pc comes from.
     #[cfg(feature = "addr2line")]
     pub fn symbolize_context(&self) -> Result<Option<SymbolizeContext<'_>>> {
-        use anyhow::Context;
         use gimli::EndianSlice;
         if !self.meta.has_wasm_debuginfo {
             return Ok(None);

@@ -138,7 +138,7 @@ fn main() {
                 config.async_support(true);
                 let engine = Engine::new(&config).unwrap();
                 let mut store = Store::new(&engine, ());
-                let f = Func::wrap0_async(&mut store, |_| {
+                let f = Func::wrap_async(&mut store, |_, _: ()| {
                     Box::new(async {
                         overrun_the_stack();
                     })
@@ -170,7 +170,7 @@ fn main() {
                 config.allocation_strategy(InstanceAllocationStrategy::pooling());
                 let engine = Engine::new(&config).unwrap();
                 let mut store = Store::new(&engine, ());
-                let f = Func::wrap0_async(&mut store, |_| {
+                let f = Func::wrap_async(&mut store, |_, _: ()| {
                     Box::new(async {
                         overrun_the_stack();
                     })

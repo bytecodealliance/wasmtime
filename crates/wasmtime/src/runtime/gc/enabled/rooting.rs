@@ -108,7 +108,6 @@ use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
-use anyhow::anyhow;
 use core::any;
 use core::marker;
 use core::mem;
@@ -408,9 +407,7 @@ impl RootSet {
     /// Calls to `{enter,exit}_lifo_scope` must happen in a strict LIFO order.
     #[inline]
     pub(crate) fn enter_lifo_scope(&self) -> usize {
-        let len = self.lifo_roots.len();
-        log::debug!("Entering GC root set LIFO scope: {len}");
-        len
+        self.lifo_roots.len()
     }
 
     /// Exit a LIFO rooting scope.
@@ -421,7 +418,6 @@ impl RootSet {
     /// Calls to `{enter,exit}_lifo_scope` must happen in a strict LIFO order.
     #[inline]
     pub(crate) fn exit_lifo_scope(&mut self, gc_store: &mut GcStore, scope: usize) {
-        log::debug!("Exiting GC root set LIFO scope: {scope}");
         debug_assert!(self.lifo_roots.len() >= scope);
 
         // If we actually have roots to unroot, call an out-of-line slow path.

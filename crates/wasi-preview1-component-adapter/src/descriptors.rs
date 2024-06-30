@@ -1,6 +1,6 @@
 use crate::bindings::wasi::cli::{stderr, stdin, stdout};
 use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
-use crate::{BlockingMode, BumpAlloc, ImportAlloc, State, TrappingUnwrap, WasmStr};
+use crate::{BlockingMode, ImportAlloc, State, TrappingUnwrap, WasmStr};
 use core::cell::{Cell, OnceCell, UnsafeCell};
 use core::mem::MaybeUninit;
 use core::num::NonZeroUsize;
@@ -232,9 +232,10 @@ impl Descriptors {
 
     #[cfg(not(feature = "proxy"))]
     pub unsafe fn get_preopen_path(&self, state: &State, fd: Fd, path: *mut u8, len: usize) {
+        let nth = fd - 3;
         let alloc = ImportAlloc::GetPreopenPath {
-            path: Some(BumpAlloc { base: path, len }),
-            nth: fd - 3,
+            cur: 0,
+            nth,
             alloc: state.temporary_alloc(),
         };
         let (preopens, _) = state.with_import_alloc(alloc, || {
@@ -253,6 +254,12 @@ impl Descriptors {
         for i in 0..preopens.len {
             let preopen = preopens.base.add(i).read();
             drop(preopen.descriptor);
+
+            if (i as u32) != nth {
+                continue;
+            }
+            assert!(preopen.path.len <= len);
+            core::ptr::copy(preopen.path.ptr, path, preopen.path.len);
         }
     }
 

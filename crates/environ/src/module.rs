@@ -1,7 +1,7 @@
 //! Data structures for representing decoded wasm modules.
 
 use crate::prelude::*;
-use crate::{PrimaryMap, Tunables, WASM_PAGE_SIZE};
+use crate::{PrimaryMap, Tunables};
 use alloc::collections::BTreeMap;
 use core::ops::Range;
 use cranelift_entity::{packed_option::ReservedValue, EntityRef};
@@ -28,25 +28,30 @@ pub enum MemoryStyle {
 impl MemoryStyle {
     /// Decide on an implementation style for the given `Memory`.
     pub fn for_memory(memory: Memory, tunables: &Tunables) -> (Self, u64) {
-        let is_static = match memory.maximum_byte_size() {
-            Ok(mut maximum) => {
-                if tunables.static_memory_bound_is_maximum {
-                    maximum = maximum.min(tunables.static_memory_reservation);
+        let is_static =
+            // Ideally we would compare against (an upper bound on) the target's
+            // page size, but unfortunately that is a little hard to plumb
+            // through here.
+            memory.page_size_log2 >= Memory::DEFAULT_PAGE_SIZE_LOG2
+            && match memory.maximum_byte_size() {
+                Ok(mut maximum) => {
+                    if tunables.static_memory_bound_is_maximum {
+                        maximum = maximum.min(tunables.static_memory_reservation);
+                    }
+
+                    // Ensure the minimum is less than the maximum; the minimum might exceed the maximum
+                    // when the memory is artificially bounded via `static_memory_bound_is_maximum` above
+                    memory.minimum_byte_size().unwrap() <= maximum
+                        && maximum <= tunables.static_memory_reservation
                 }
 
-                // Ensure the minimum is less than the maximum; the minimum might exceed the maximum
-                // when the memory is artificially bounded via `static_memory_bound_is_maximum` above
-                memory.minimum_byte_size().unwrap() <= maximum
-                    && maximum <= tunables.static_memory_reservation
-            }
-
-            // If the maximum size of this memory is not representable with
-            // `u64` then use the `static_memory_bound_is_maximum` to indicate
-            // whether it's a static memory or not. It should be ok to discard
-            // the linear memory's maximum size here as growth to the maximum is
-            // always fallible and never guaranteed.
-            Err(_) => tunables.static_memory_bound_is_maximum,
-        };
+                // If the maximum size of this memory is not representable with
+                // `u64` then use the `static_memory_bound_is_maximum` to indicate
+                // whether it's a static memory or not. It should be ok to discard
+                // the linear memory's maximum size here as growth to the maximum is
+                // always fallible and never guaranteed.
+                Err(_) => tunables.static_memory_bound_is_maximum,
+            };
 
         if is_static {
             return (
@@ -253,22 +258,20 @@ impl MemoryInitialization {
                 None => return false,
             };
 
-            let cur_size_in_pages = state.memory_size_in_pages(memory_index);
-
-            // Note that this `minimum` can overflow if `minimum` is
-            // `1 << 48`, the maximum number of minimum pages for 64-bit
-            // memories. If this overflow happens, though, then there's no need
-            // to check the `end` value since `end` fits in a `u64` and it is
-            // naturally less than the overflowed value.
-            //
-            // This is a bit esoteric though because it's impossible to actually
-            // create a memory of `u64::MAX + 1` bytes, so this is largely just
-            // here to avoid having the multiplication here overflow in debug
-            // mode.
-            if let Some(max) = cur_size_in_pages.checked_mul(u64::from(WASM_PAGE_SIZE)) {
-                if end > max {
-                    return false;
+            match state.memory_size_in_bytes(memory_index) {
+                Ok(max) => {
+                    if end > max {
+                        return false;
+                    }
                 }
+
+                // Note that computing the minimum can overflow if the page size
+                // is the default 64KiB and the memory's minimum size in pages
+                // is `1 << 48`, the maximum number of minimum pages for 64-bit
+                // memories. We don't return `false` to signal an error here and
+                // instead defer the error to runtime, when it will be
+                // impossible to allocate that much memory anyways.
+                Err(_) => {}
             }
 
             // The limits of the data segment have been validated at this point
@@ -291,9 +294,9 @@ impl MemoryInitialization {
 /// The various callbacks provided here are used to drive the smaller bits of
 /// memory initialization.
 pub trait InitMemory {
-    /// Returns the size, in wasm pages, of the memory specified. For
-    /// compile-time purposes this would be the memory type's minimum size.
-    fn memory_size_in_pages(&mut self, memory_index: MemoryIndex) -> u64;
+    /// Returns the size, in bytes, of the memory specified. For compile-time
+    /// purposes this would be the memory type's minimum size.
+    fn memory_size_in_bytes(&mut self, memory_index: MemoryIndex) -> Result<u64, SizeOverflow>;
 
     /// Returns the value of the constant expression, as a `u64`. Note that
     /// this may involve zero-extending a 32-bit global to a 64-bit number. May
@@ -335,24 +338,13 @@ pub struct TablePlan {
     pub table: Table,
     /// Our chosen implementation style.
     pub style: TableStyle,
-    /// Whether the table is observed to be written or possibly
-    /// written: either by some opcode present in the code section, or
-    /// by the fact that the table is exported.
-    pub written: bool,
-    /// Whether this table may have a non-null zero element.
-    pub non_null_zero: bool,
 }
 
 impl TablePlan {
     /// Draw up a plan for implementing a `Table`.
     pub fn for_table(table: Table, tunables: &Tunables) -> Self {
         let style = TableStyle::for_table(table, tunables);
-        Self {
-            table,
-            style,
-            written: false,
-            non_null_zero: false,
-        }
+        Self { table, style }
     }
 }
 
@@ -675,6 +667,12 @@ impl Module {
             signature,
             func_ref: FuncRefIndex::reserved_value(),
         })
+    }
+
+    /// Returns an iterator over all of the defined function indices in this
+    /// module.
+    pub fn defined_func_indices(&self) -> impl Iterator<Item = DefinedFuncIndex> {
+        (0..self.functions.len() - self.num_imported_funcs).map(|i| DefinedFuncIndex::new(i))
     }
 }
 

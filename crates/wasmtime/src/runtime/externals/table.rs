@@ -3,7 +3,6 @@ use crate::runtime::vm::{self as runtime};
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_table_export;
 use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
-use anyhow::{anyhow, bail, Context, Result};
 use core::iter;
 use core::ptr::NonNull;
 use runtime::{GcRootsList, SendSyncPtr};

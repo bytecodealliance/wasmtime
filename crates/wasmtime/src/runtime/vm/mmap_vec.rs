@@ -1,7 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::vm::Mmap;
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::ops::{Deref, DerefMut, Range};
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
@@ -64,8 +63,6 @@ impl MmapVec {
     /// it's too large to be fully mapped into memory.
     #[cfg(feature = "std")]
     pub fn from_file(path: &Path) -> Result<MmapVec> {
-        use anyhow::Context;
-
         let mmap = Mmap::from_file(path)
             .with_context(|| format!("failed to create mmap for file: {}", path.display()))?;
         let len = mmap.len();

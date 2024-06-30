@@ -5,7 +5,7 @@ use crate::bindings::{
     clocks::wall_clock::{self, Datetime},
 };
 use crate::poll::{subscribe, Subscribe};
-use crate::{Pollable, WasiView};
+use crate::{Pollable, WasiImpl, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -24,7 +24,10 @@ impl TryFrom<SystemTime> for Datetime {
     }
 }
 
-impl wall_clock::Host for dyn WasiView + '_ {
+impl<T> wall_clock::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn now(&mut self) -> anyhow::Result<Datetime> {
         let now = self.ctx().wall_clock.now();
         Ok(Datetime {
@@ -61,7 +64,10 @@ fn subscribe_to_duration(
     subscribe(table, sleep)
 }
 
-impl monotonic_clock::Host for dyn WasiView + '_ {
+impl<T> monotonic_clock::Host for WasiImpl<T>
+where
+    T: WasiView,
+{
     fn now(&mut self) -> anyhow::Result<Instant> {
         Ok(self.ctx().monotonic_clock.now())
     }

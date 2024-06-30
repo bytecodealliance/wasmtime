@@ -42,34 +42,27 @@ automatic and this is documenting what automation does.
 3. **Time passes and the `release-X.Y.Z` branch is maintained**
    * All changes land on `main` first, then are backported to `release-X.Y.Z` as
      necessary.
-   * Even changes to `RELEASES.md` are pushed to `main` first.
 4. On the 20th of every month (same CI job as before) another CI job will run
    performing:
-   * Download the current `main` branch.
-   * Update the release date of `X.Y.Z` to today in `RELEASES.md`
-   * Open a PR against `main` for this change
    * Reset to `release-X.Y.Z`
    * Update the release date of `X.Y.Z` to today in `RELEASES.md`
    * Add a special marker to the commit message to indicate a tag should be made.
    * Open a PR against `release-X.Y.Z` for this change
    * This step can also be [triggered manually][ci-trigger] with the `main`
      branch and the `release-latest` argument.
-5. **A maintainer of Wasmtime merges these two PRs**
-   * The PR against `main` is a small update to the release notes and should be
-     mergeable immediately.
-   * The PR against `release-X.Y.Z`, when merged, will trigger the next steps due
+5. **A maintainer of Wasmtime merges this PR**
+   * When merged, will trigger the next steps due
      to the marker in the commit message. A maintainer should double-check there
      are [no open security issues][rustsec-issues], but otherwise it's expected
      that all other release issues are resolved by this point.
-6. The `.github/workflow/push-tag.yml` workflow is triggered on all commits
-   including the one just created with a PR merge. This workflow will:
-   * Scan the git logs of pushed changes for the special marker added by
-     `release-process.yml`.
-   * If found, tags the current `main` commit and pushes that to the main
-     repository.
-7. Once a tag is created CI runs in full on the tag itself. CI for tags will
-   create a GitHub release with release artifacts and it will also publish
-   crates to crates.io. This is orchestrated by `.github/workflows/main.yml`.
+6. The main CI workflow at `.github/workflow/main.yml` has special logic
+   at the end such that pushes to the `release-*` branch will scan the git logs
+   of pushed changes for the special marker added by `release-process.yml`. If
+   found and CI passes a tag is created and pushed.
+7. Once a tag is created the `.github/workflows/publish-*` workflows run. One
+   publishes all crates as-is to crates.io and the other will download all
+   artifacts from the `main.yml` workflow and then upload them all as an
+   [official release](https://github.com/bytecodealliance/wasmtime/releases).
 
 If all goes well you won't have to read up much on this and after hitting the
 Big Green Button for the automatically created PRs everything will merrily
@@ -115,12 +108,6 @@ Like above human interaction is indicated with **bold** text in these steps.
    * Please make sure to update the `RELEASES.md` at this point to include the
      `Released on` date by pushing directly to the branch associated with the
      PR.
-4. **Forward-port the release notes to main**
-   * Once the release is done, please forward-port the release notes to the
-     `RELEASES.md` on the main branch, to ensure consistency in future releases.
-
-After a patch release has been made you'll also want to double-check that the
-release notes on the patch branch are in sync with the `main` branch.
 
 [bump-version]: https://github.com/bytecodealliance/wasmtime/actions/workflows/bump-version.yml
 
@@ -167,5 +154,19 @@ the runbook is merged.
      Note that the actual security fixes should be merged either before or as
      part of this PR.
 
-After a security release has been made you'll also want to double-check that
-the release notes on the branch are in sync with the `main` branch.
+## Releasing Notes
+
+Release notes for Wasmtime are written in the `RELEASES.md` file in the root of
+the repository. Management of this file looks like:
+
+* (theoretically) All changes on `main` which need to write an entry in
+  `RELEASES.md`.
+* When the `main` branch gets a version the `RELEASES.md` file is emptied and
+  replaced with `ci/RELEASES-template.md`. An entry for the upcoming release is
+  added to the bulleted list at the bottom.
+* (realistically) After a `release-X.Y.Z` branch is created release notes are
+  updated and edited on the release branch.
+
+This means that `RELEASES.md` only has release notes for the release branch that
+it is on. Historical release notes can be found through links at the bottom to
+previous copies of `RELEASES.md`

@@ -128,7 +128,7 @@ fn handle_module(
             let result = context.compiled_code().unwrap();
             print_all(
                 isa,
-                &context.func.params,
+                &context.func,
                 &mem,
                 code_info.total_size,
                 options.print,

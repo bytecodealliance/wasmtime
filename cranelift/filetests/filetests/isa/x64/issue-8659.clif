@@ -1,0 +1,27 @@
+test compile precise-output
+target x86_64
+
+function u0:11(i64 sret) system_v {
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

@@ -3,7 +3,6 @@ use super::coredump::WasmCoreDump;
 use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
-use anyhow::Error;
 use core::fmt;
 use wasmtime_environ::{
     demangle_function_name, demangle_function_name_or_index, EntityRef, FilePos,
@@ -20,11 +19,12 @@ use wasmtime_environ::{
 ///
 /// # Errors in Wasmtime
 ///
-/// Error-handling in Wasmtime is primarily done through the [`anyhow`] crate
-/// where most results are a [`Result<T>`](anyhow::Result) which is an alias for
-/// [`Result<T, anyhow::Error>`](std::result::Result). Errors in Wasmtime are
-/// represented with [`anyhow::Error`] which acts as a container for any type of
-/// error in addition to optional context for this error. The "base" error or
+/// Error-handling in Wasmtime is primarily done through the
+/// [`anyhow`][mod@anyhow] crate where most results are a
+/// [`Result<T>`](anyhow::Result) which is an alias for [`Result<T,
+/// anyhow::Error>`](std::result::Result). Errors in Wasmtime are represented
+/// with [`anyhow::Error`] which acts as a container for any type of error in
+/// addition to optional context for this error. The "base" error or
 /// [`anyhow::Error::root_cause`] is a [`Trap`] whenever WebAssembly hits a
 /// trap, or otherwise it's whatever the host created the error with when
 /// returning an error for a host call.

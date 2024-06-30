@@ -125,12 +125,18 @@ where
     }
 
     #[cfg(feature = "component-model")]
-    fn instantiate_component(&mut self, module: &[u8]) -> Result<Outcome<component::Instance>> {
+    fn instantiate_component(
+        &mut self,
+        component: &[u8],
+    ) -> Result<Outcome<(component::Component, component::Instance)>> {
         let engine = self.store.engine();
-        let module = component::Component::new(engine, module)?;
+        let component = component::Component::new(engine, component)?;
         Ok(
-            match self.component_linker.instantiate(&mut self.store, &module) {
-                Ok(i) => Outcome::Ok(i),
+            match self
+                .component_linker
+                .instantiate(&mut self.store, &component)
+            {
+                Ok(i) => Outcome::Ok((component, i)),
                 Err(e) => Outcome::Trap(e),
             },
         )
@@ -230,19 +236,28 @@ where
         } else {
             #[cfg(feature = "component-model")]
             {
-                let instance = match self.instantiate_component(&bytes)? {
+                let (component, instance) = match self.instantiate_component(&bytes)? {
                     Outcome::Ok(i) => i,
                     Outcome::Trap(e) => return Err(e).context("instantiation failed"),
                 };
                 if let Some(name) = name {
-                    // TODO: should ideally reflect more than just modules into
-                    // the linker's namespace but that's not easily supported
-                    // today for host functions due to the inability to take a
-                    // function from one instance and put it into the linker
-                    // (must go through the host right now).
+                    let ty = component.component_type();
                     let mut linker = self.component_linker.instance(name.name())?;
-                    for (name, module) in instance.exports(&mut self.store).root().modules() {
-                        linker.module(name, module)?;
+                    let engine = self.store.engine().clone();
+                    for (name, item) in ty.exports(&engine) {
+                        match item {
+                            component::types::ComponentItem::Module(_) => {
+                                let module = instance.get_module(&mut self.store, name).unwrap();
+                                linker.module(name, &module)?;
+                            }
+                            // TODO: should ideally reflect more than just
+                            // modules into the linker's namespace but that's
+                            // not easily supported today for host functions due
+                            // to the inability to take a function from one
+                            // instance and put it into the linker (must go
+                            // through the host right now).
+                            _ => {}
+                        }
                     }
                 }
                 self.current = Some(InstanceKind::Component(instance));

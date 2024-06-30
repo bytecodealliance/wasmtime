@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use anyhow::{bail, Result};
 
 /// Value returned by [`ResourceLimiter::instances`] default method
 pub const DEFAULT_INSTANCE_LIMIT: usize = 10000;

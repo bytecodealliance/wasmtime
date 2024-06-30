@@ -17,7 +17,6 @@ use crate::runtime::vm::{
     SendSyncPtr, Store, VMFunctionBody, VMGcRef, WasmFault,
 };
 use alloc::sync::Arc;
-use anyhow::{Error, Result};
 use core::alloc::Layout;
 use core::any::Any;
 use core::ops::Range;
@@ -28,9 +27,9 @@ use sptr::Strict;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    HostPtr, MemoryIndex, MemoryPlan, Module, ModuleInternedTypeIndex, PrimaryMap, TableIndex,
-    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
-    VMCONTEXT_MAGIC,
+    HostPtr, MemoryIndex, MemoryPlan, Module, ModuleInternedTypeIndex, PrimaryMap, PtrSize,
+    TableIndex, TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex,
+    WasmHeapTopType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -61,7 +60,7 @@ pub struct Instance {
     /// lazy initialization. This provides access to the underlying
     /// Wasm module entities, the compiled JIT code, metadata about
     /// functions, lazy initialization state, etc.
-    runtime_info: Arc<dyn ModuleRuntimeInfo>,
+    runtime_info: ModuleRuntimeInfo,
 
     /// WebAssembly linear memory data.
     ///
@@ -233,7 +232,7 @@ impl Instance {
     /// pointers to the same `Instance`.
     #[inline]
     pub unsafe fn from_vmctx<R>(vmctx: *mut VMContext, f: impl FnOnce(&mut Instance) -> R) -> R {
-        assert!(!vmctx.is_null());
+        debug_assert!(!vmctx.is_null());
         let ptr = vmctx
             .byte_sub(mem::size_of::<Instance>())
             .cast::<Instance>();
@@ -247,16 +246,16 @@ impl Instance {
     ///
     /// This method is unsafe because the `offset` must be within bounds of the
     /// `VMContext` object trailing this instance.
-    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
+    unsafe fn vmctx_plus_offset<T>(&self, offset: impl Into<u32>) -> *const T {
         self.vmctx()
-            .byte_add(usize::try_from(offset).unwrap())
+            .byte_add(usize::try_from(offset.into()).unwrap())
             .cast()
     }
 
     /// Dual of `vmctx_plus_offset`, but for mutability.
-    unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: u32) -> *mut T {
+    unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: impl Into<u32>) -> *mut T {
         self.vmctx()
-            .byte_add(usize::try_from(offset).unwrap())
+            .byte_add(usize::try_from(offset.into()).unwrap())
             .cast()
     }
 
@@ -421,27 +420,27 @@ impl Instance {
     /// Return a pointer to the interrupts structure
     #[inline]
     pub fn runtime_limits(&mut self) -> *mut *const VMRuntimeLimits {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_runtime_limits()) }
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_runtime_limits()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
     pub fn epoch_ptr(&mut self) -> *mut *const AtomicU64 {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_epoch_ptr()) }
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_epoch_ptr()) }
     }
 
     /// Return a pointer to the GC heap base pointer.
     pub fn gc_heap_base(&mut self) -> *mut *mut u8 {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_gc_heap_base()) }
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_base()) }
     }
 
     /// Return a pointer to the GC heap bound.
     pub fn gc_heap_bound(&mut self) -> *mut usize {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_gc_heap_bound()) }
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_bound()) }
     }
 
     /// Return a pointer to the collector-specific heap data.
     pub fn gc_heap_data(&mut self) -> *mut *mut u8 {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_gc_heap_data()) }
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_data()) }
     }
 
     /// Gets a pointer to this instance's `Store` which was originally
@@ -457,14 +456,14 @@ impl Instance {
     #[inline]
     pub fn store(&self) -> *mut dyn Store {
         let ptr =
-            unsafe { *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets().vmctx_store()) };
-        assert!(!ptr.is_null());
+            unsafe { *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets().ptr.vmctx_store()) };
+        debug_assert!(!ptr.is_null());
         ptr
     }
 
     pub(crate) unsafe fn set_store(&mut self, store: Option<*mut dyn Store>) {
         if let Some(store) = store {
-            *self.vmctx_plus_offset_mut(self.offsets().vmctx_store()) = store;
+            *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store()) = store;
             *self.runtime_limits() = (*store).vmruntime_limits();
             *self.epoch_ptr() = (*store).epoch_ptr();
             self.set_gc_heap((*store).maybe_gc_store());
@@ -473,7 +472,7 @@ impl Instance {
                 mem::size_of::<*mut dyn Store>(),
                 mem::size_of::<[*mut (); 2]>()
             );
-            *self.vmctx_plus_offset_mut::<[*mut (); 2]>(self.offsets().vmctx_store()) =
+            *self.vmctx_plus_offset_mut::<[*mut (); 2]>(self.offsets().ptr.vmctx_store()) =
                 [ptr::null_mut(), ptr::null_mut()];
             *self.runtime_limits() = ptr::null_mut();
             *self.epoch_ptr() = ptr::null_mut();
@@ -494,7 +493,7 @@ impl Instance {
     }
 
     pub(crate) unsafe fn set_callee(&mut self, callee: Option<NonNull<VMFunctionBody>>) {
-        *self.vmctx_plus_offset_mut(self.offsets().vmctx_callee()) =
+        *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_callee()) =
             callee.map_or(ptr::null_mut(), |c| c.as_ptr());
     }
 
@@ -579,7 +578,7 @@ impl Instance {
     /// Specifically, it provides access to the key-value pairs, where the keys
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
-    pub fn exports(&self) -> indexmap::map::Iter<String, EntityIndex> {
+    pub fn exports(&self) -> wasmparser::collections::index_map::Iter<String, EntityIndex> {
         self.module().exports.iter()
     }
 
@@ -600,6 +599,11 @@ impl Instance {
         );
         assert!(index.index() < self.tables.len());
         index
+    }
+
+    /// Get the given memory's page size, in bytes.
+    pub(crate) fn memory_page_size(&self, index: MemoryIndex) -> usize {
+        usize::try_from(self.module().memory_plans[index].memory.page_size()).unwrap()
     }
 
     /// Grow memory by the specified amount of pages.
@@ -713,7 +717,7 @@ impl Instance {
     ) {
         let type_index = unsafe {
             let base: *const VMSharedTypeIndex =
-                *self.vmctx_plus_offset_mut(self.offsets().vmctx_type_ids_array());
+                *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_type_ids_array());
             *base.add(sig.index())
         };
 
@@ -1176,16 +1180,16 @@ impl Instance {
     ) {
         assert!(ptr::eq(module, self.module().as_ref()));
 
-        *self.vmctx_plus_offset_mut(offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
+        *self.vmctx_plus_offset_mut(offsets.ptr.vmctx_magic()) = VMCONTEXT_MAGIC;
         self.set_callee(None);
         self.set_store(store.as_raw());
 
         // Initialize shared types
         let types = self.runtime_info.type_ids();
-        *self.vmctx_plus_offset_mut(offsets.vmctx_type_ids_array()) = types.as_ptr();
+        *self.vmctx_plus_offset_mut(offsets.ptr.vmctx_type_ids_array()) = types.as_ptr();
 
         // Initialize the built-in functions
-        *self.vmctx_plus_offset_mut(offsets.vmctx_builtin_functions()) =
+        *self.vmctx_plus_offset_mut(offsets.ptr.vmctx_builtin_functions()) =
             &VMBuiltinFunctionsArray::INIT;
 
         // Initialize the imports
@@ -1359,7 +1363,7 @@ impl InstanceHandle {
     /// Specifically, it provides access to the key-value pairs, where the keys
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
-    pub fn exports(&self) -> indexmap::map::Iter<String, EntityIndex> {
+    pub fn exports(&self) -> wasmparser::collections::index_map::Iter<String, EntityIndex> {
         self.instance().exports()
     }
 

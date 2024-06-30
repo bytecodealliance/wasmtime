@@ -1,4 +1,5 @@
 use wasmtime::{Config, Engine, Linker, Module, Store, Val};
+use wiggle::GuestMemory;
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
@@ -16,12 +17,18 @@ impl wiggle::GuestErrorType for types::Errno {
 
 #[wiggle::async_trait]
 impl atoms::Atoms for Ctx {
-    fn int_float_args(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
+    fn int_float_args(
+        &mut self,
+        _: &mut GuestMemory<'_>,
+        an_int: u32,
+        an_float: f32,
+    ) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())
     }
     async fn double_int_return_float(
         &mut self,
+        _: &mut GuestMemory<'_>,
         an_int: u32,
     ) -> Result<types::AliasToFloat, types::Errno> {
         // Do something inside this test that is Pending for a trivial amount of time,

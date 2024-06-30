@@ -51,7 +51,7 @@ mod no_imports {
 
         let linker = Linker::new(&engine);
         let mut store = Store::new(&engine, ());
-        let (no_imports, _) = NoImports::instantiate(&mut store, &component, &linker)?;
+        let no_imports = NoImports::instantiate(&mut store, &component, &linker)?;
         no_imports.call_bar(&mut store)?;
         no_imports.foo().call_foo(&mut store)?;
         Ok(())
@@ -114,7 +114,7 @@ mod one_import {
         let mut linker = Linker::new(&engine);
         foo::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
         let mut store = Store::new(&engine, MyImports::default());
-        let (one_import, _) = OneImport::instantiate(&mut store, &component, &linker)?;
+        let one_import = OneImport::instantiate(&mut store, &component, &linker)?;
         one_import.call_bar(&mut store)?;
         assert!(store.data().hit);
         Ok(())
@@ -202,7 +202,7 @@ mod resources_at_world_level {
         let mut linker = Linker::new(&engine);
         Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
         let mut store = Store::new(&engine, MyImports::default());
-        let (one_import, _) = Resources::instantiate(&mut store, &component, &linker)?;
+        let one_import = Resources::instantiate(&mut store, &component, &linker)?;
         one_import.call_y(&mut store, Resource::new_own(40))?;
         assert!(store.data().ctor_hit);
         assert_eq!(store.data().drops, 2);
@@ -307,7 +307,7 @@ mod resources_at_interface_level {
         let mut linker = Linker::new(&engine);
         Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
         let mut store = Store::new(&engine, MyImports::default());
-        let (one_import, _) = Resources::instantiate(&mut store, &component, &linker)?;
+        let one_import = Resources::instantiate(&mut store, &component, &linker)?;
         one_import
             .foo_foo_user()
             .call_y(&mut store, Resource::new_own(40))?;
@@ -596,7 +596,7 @@ mod exported_resources {
         let mut linker = Linker::new(&engine);
         Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
         let mut store = Store::new(&engine, MyImports::default());
-        let (i, _) = Resources::instantiate(&mut store, &component, &linker)?;
+        let i = Resources::instantiate(&mut store, &component, &linker)?;
 
         // call the root export `f` twice
         let ret = i.call_f(&mut store, Resource::new_own(1), Resource::new_own(2))?;

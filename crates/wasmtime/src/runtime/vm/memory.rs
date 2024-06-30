@@ -6,17 +6,14 @@ use crate::prelude::*;
 use crate::runtime::vm::mmap::Mmap;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{
-    MemoryImage, MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
+    round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MemoryImage,
+    MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
 };
 use alloc::sync::Arc;
-use anyhow::Error;
-use anyhow::{bail, format_err, Result};
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::time::Duration;
-use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap, WASM32_MAX_SIZE, WASM64_MAX_SIZE};
-
-const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
+use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap};
 
 /// A memory allocator
 pub trait RuntimeMemoryCreator: Send + Sync {
@@ -52,8 +49,20 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
     }
 }
 
-/// A linear memory
+/// A linear memory's backing storage.
+///
+/// This does not a full Wasm linear memory, as it may
 pub trait RuntimeLinearMemory: Send + Sync {
+    /// Returns the log2 of this memory's page size, in bytes.
+    fn page_size_log2(&self) -> u8;
+
+    /// Returns this memory's page size, in bytes.
+    fn page_size(&self) -> u64 {
+        let log2 = self.page_size_log2();
+        debug_assert!(log2 == 16 || log2 == 0);
+        1 << self.page_size_log2()
+    }
+
     /// Returns the number of allocated bytes.
     fn byte_size(&self) -> usize;
 
@@ -82,24 +91,23 @@ pub trait RuntimeLinearMemory: Send + Sync {
             return Ok(Some((old_byte_size, old_byte_size)));
         }
 
+        let page_size = usize::try_from(self.page_size()).unwrap();
+
         // The largest wasm-page-aligned region of memory is possible to
         // represent in a `usize`. This will be impossible for the system to
         // actually allocate.
-        let absolute_max = 0usize.wrapping_sub(WASM_PAGE_SIZE);
+        let absolute_max = 0usize.wrapping_sub(page_size);
 
         // Calculate the byte size of the new allocation. Let it overflow up to
         // `usize::MAX`, then clamp it down to `absolute_max`.
         let new_byte_size = usize::try_from(delta_pages)
             .unwrap_or(usize::MAX)
-            .saturating_mul(WASM_PAGE_SIZE)
-            .saturating_add(old_byte_size);
-        let new_byte_size = if new_byte_size > absolute_max {
-            absolute_max
-        } else {
-            new_byte_size
-        };
+            .saturating_mul(page_size)
+            .saturating_add(old_byte_size)
+            .min(absolute_max);
 
         let maximum = self.maximum_byte_size();
+
         // Store limiter gets first chance to reject memory_growing.
         if let Some(store) = &mut store {
             if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
@@ -167,17 +175,28 @@ pub struct MmapMemory {
     // The underlying allocation.
     mmap: Mmap,
 
-    // The number of bytes that are accessible in `mmap` and available for
-    // reading and writing.
+    // The current length of this Wasm memory, in bytes.
     //
-    // This region starts at `pre_guard_size` offset from the base of `mmap`.
-    accessible: usize,
+    // This region starts at `pre_guard_size` offset from the base of `mmap`. It
+    // is always accessible, which means that if the Wasm page size is smaller
+    // than the host page size, there may be some trailing region in the `mmap`
+    // that is accessible but should not be accessed. (We rely on explicit
+    // bounds checks in the compiled code to protect this region.)
+    len: usize,
 
     // The optional maximum accessible size, in bytes, for this linear memory.
     //
     // Note that this maximum does not factor in guard pages, so this isn't the
     // maximum size of the linear address space reservation for this memory.
+    //
+    // This is *not* always a multiple of the host page size, and
+    // `self.accessible()` may go past `self.maximum` when Wasm is using a small
+    // custom page size due to `self.accessible()`'s rounding up to the host
+    // page size.
     maximum: Option<usize>,
+
+    // The log2 of this Wasm memory's page size, in bytes.
+    page_size_log2: u8,
 
     // The amount of extra bytes to reserve whenever memory grows. This is
     // specified so that the cost of repeated growth is amortized.
@@ -208,10 +227,17 @@ impl MmapMemory {
         let offset_guard_bytes = usize::try_from(plan.offset_guard_size).unwrap();
         let pre_guard_bytes = usize::try_from(plan.pre_guard_size).unwrap();
 
+        // Ensure that our guard regions are multiples of the host page size.
+        let offset_guard_bytes = round_usize_up_to_host_pages(offset_guard_bytes)?;
+        let pre_guard_bytes = round_usize_up_to_host_pages(pre_guard_bytes)?;
+
         let (alloc_bytes, extra_to_reserve_on_growth) = match plan.style {
             // Dynamic memories start with the minimum size plus the `reserve`
             // amount specified to grow into.
-            MemoryStyle::Dynamic { reserve } => (minimum, usize::try_from(reserve).unwrap()),
+            MemoryStyle::Dynamic { reserve } => (
+                round_usize_up_to_host_pages(minimum)?,
+                round_usize_up_to_host_pages(usize::try_from(reserve).unwrap())?,
+            ),
 
             // Static memories will never move in memory and consequently get
             // their entire allocation up-front with no extra room to grow into.
@@ -221,20 +247,25 @@ impl MmapMemory {
             MemoryStyle::Static { byte_reservation } => {
                 assert!(byte_reservation >= plan.memory.minimum_byte_size().unwrap());
                 let bound_bytes = usize::try_from(byte_reservation).unwrap();
+                let bound_bytes = round_usize_up_to_host_pages(bound_bytes)?;
                 maximum = Some(bound_bytes.min(maximum.unwrap_or(usize::MAX)));
                 (bound_bytes, 0)
             }
         };
+        assert!(usize_is_multiple_of_host_page_size(alloc_bytes));
 
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
             .and_then(|i| i.checked_add(extra_to_reserve_on_growth))
             .and_then(|i| i.checked_add(offset_guard_bytes))
             .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
+        assert!(usize_is_multiple_of_host_page_size(request_bytes));
+
         let mut mmap = Mmap::accessible_reserved(0, request_bytes)?;
 
         if minimum > 0 {
-            mmap.make_accessible(pre_guard_bytes, minimum)?;
+            let accessible = round_usize_up_to_host_pages(minimum)?;
+            mmap.make_accessible(pre_guard_bytes, accessible)?;
         }
 
         // If a memory image was specified, try to create the MemoryImageSlot on
@@ -259,19 +290,34 @@ impl MmapMemory {
 
         Ok(Self {
             mmap,
-            accessible: minimum,
+            len: minimum,
             maximum,
+            page_size_log2: plan.memory.page_size_log2,
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
             memory_image,
         })
     }
+
+    /// Get the length of the accessible portion of the underlying `mmap`. This
+    /// is the same region as `self.len` but rounded up to a multiple of the
+    /// host page size.
+    fn accessible(&self) -> usize {
+        let accessible =
+            round_usize_up_to_host_pages(self.len).expect("accessible region always fits in usize");
+        debug_assert!(accessible <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size);
+        accessible
+    }
 }
 
 impl RuntimeLinearMemory for MmapMemory {
+    fn page_size_log2(&self) -> u8 {
+        self.page_size_log2
+    }
+
     fn byte_size(&self) -> usize {
-        self.accessible
+        self.len
     }
 
     fn maximum_byte_size(&self) -> Option<usize> {
@@ -279,26 +325,32 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
-        if new_size > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
+        assert!(usize_is_multiple_of_host_page_size(self.offset_guard_size));
+        assert!(usize_is_multiple_of_host_page_size(self.pre_guard_size));
+        assert!(usize_is_multiple_of_host_page_size(self.mmap.len()));
+
+        let new_accessible = round_usize_up_to_host_pages(new_size)?;
+        if new_accessible > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
             // If the new size of this heap exceeds the current size of the
             // allocation we have, then this must be a dynamic heap. Use
             // `new_size` to calculate a new size of an allocation, allocate it,
             // and then copy over the memory from before.
             let request_bytes = self
                 .pre_guard_size
-                .checked_add(new_size)
+                .checked_add(new_accessible)
                 .and_then(|s| s.checked_add(self.extra_to_reserve_on_growth))
                 .and_then(|s| s.checked_add(self.offset_guard_size))
                 .ok_or_else(|| format_err!("overflow calculating size of memory allocation"))?;
+            assert!(usize_is_multiple_of_host_page_size(request_bytes));
 
             let mut new_mmap = Mmap::accessible_reserved(0, request_bytes)?;
-            new_mmap.make_accessible(self.pre_guard_size, new_size)?;
+            new_mmap.make_accessible(self.pre_guard_size, new_accessible)?;
 
             // This method has an exclusive reference to `self.mmap` and just
             // created `new_mmap` so it should be safe to acquire references
             // into both of them and copy between them.
             unsafe {
-                let range = self.pre_guard_size..self.pre_guard_size + self.accessible;
+                let range = self.pre_guard_size..self.pre_guard_size + self.len;
                 let src = self.mmap.slice(range.clone());
                 let dst = new_mmap.slice_mut(range);
                 dst.copy_from_slice(src);
@@ -323,14 +375,28 @@ impl RuntimeLinearMemory for MmapMemory {
             // or "dynamic" heaps which have some space reserved after the
             // initial allocation to grow into before the heap is moved in
             // memory.
-            assert!(new_size > self.accessible);
-            self.mmap.make_accessible(
-                self.pre_guard_size + self.accessible,
-                new_size - self.accessible,
-            )?;
+            assert!(new_size > self.len);
+            assert!(self.maximum.map_or(true, |max| new_size <= max));
+            assert!(new_size <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size);
+
+            let new_accessible = round_usize_up_to_host_pages(new_size)?;
+            assert!(
+                new_accessible <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size,
+            );
+
+            // If the Wasm memory's page size is smaller than the host's page
+            // size, then we might not need to actually change permissions,
+            // since we are forced to round our accessible range up to the
+            // host's page size.
+            if new_accessible > self.accessible() {
+                self.mmap.make_accessible(
+                    self.pre_guard_size + self.accessible(),
+                    new_accessible - self.accessible(),
+                )?;
+            }
         }
 
-        self.accessible = new_size;
+        self.len = new_size;
 
         Ok(())
     }
@@ -338,7 +404,7 @@ impl RuntimeLinearMemory for MmapMemory {
     fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) },
-            current_length: self.accessible.into(),
+            current_length: self.len.into(),
         }
     }
 
@@ -372,6 +438,9 @@ struct StaticMemory {
     /// The current size, in bytes, of this memory.
     size: usize,
 
+    /// The log2 of this memory's page size.
+    page_size_log2: u8,
+
     /// The size, in bytes, of the virtual address allocation starting at `base`
     /// and going to the end of the guard pages at the end of the linear memory.
     memory_and_guard_size: usize,
@@ -387,6 +456,7 @@ impl StaticMemory {
         base_capacity: usize,
         initial_size: usize,
         maximum_size: Option<usize>,
+        page_size_log2: u8,
         memory_image: MemoryImageSlot,
         memory_and_guard_size: usize,
     ) -> Result<Self> {
@@ -409,6 +479,7 @@ impl StaticMemory {
             base: SendSyncPtr::new(NonNull::new(base_ptr).unwrap()),
             capacity: base_capacity,
             size: initial_size,
+            page_size_log2,
             memory_image,
             memory_and_guard_size,
         })
@@ -416,6 +487,10 @@ impl StaticMemory {
 }
 
 impl RuntimeLinearMemory for StaticMemory {
+    fn page_size_log2(&self) -> u8 {
+        self.page_size_log2
+    }
+
     fn byte_size(&self) -> usize {
         self.size
     }
@@ -494,6 +569,7 @@ impl Memory {
             base_capacity,
             minimum,
             maximum,
+            plan.memory.page_size_log2,
             memory_image,
             memory_and_guard_size,
         )?;
@@ -512,24 +588,13 @@ impl Memory {
 
     /// Calls the `store`'s limiter to optionally prevent a memory from being allocated.
     ///
-    /// Returns the minimum size and optional maximum size of the memory, in
-    /// bytes.
+    /// Returns a tuple of the minimum size, optional maximum size, and log(page
+    /// size) of the memory, all in bytes.
     pub(crate) fn limit_new(
         plan: &MemoryPlan,
         store: Option<&mut dyn Store>,
     ) -> Result<(usize, Option<usize>)> {
-        // Sanity-check what should already be true from wasm module validation.
-        let absolute_max = if plan.memory.memory64 {
-            WASM64_MAX_SIZE
-        } else {
-            WASM32_MAX_SIZE
-        };
-        if let Ok(size) = plan.memory.minimum_byte_size() {
-            assert!(size <= absolute_max);
-        }
-        if let Ok(max) = plan.memory.maximum_byte_size() {
-            assert!(max <= absolute_max);
-        }
+        let page_size = usize::try_from(plan.memory.page_size()).unwrap();
 
         // This is the absolute possible maximum that the module can try to
         // allocate, which is our entire address space minus a wasm page. That
@@ -542,7 +607,15 @@ impl Memory {
         // here. To actually faithfully represent the byte requests of modules
         // we'd have to represent things as `u128`, but that's kinda
         // overkill for this purpose.
-        let absolute_max = 0usize.wrapping_sub(WASM_PAGE_SIZE);
+        let absolute_max = 0usize.wrapping_sub(page_size);
+
+        // Sanity-check what should already be true from wasm module validation.
+        if let Ok(size) = plan.memory.minimum_byte_size() {
+            assert!(size <= u64::try_from(absolute_max).unwrap());
+        }
+        if let Ok(max) = plan.memory.maximum_byte_size() {
+            assert!(max <= u64::try_from(absolute_max).unwrap());
+        }
 
         // If the minimum memory size overflows the size of our own address
         // space, then we can't satisfy this request, but defer the error to
@@ -594,7 +667,13 @@ impl Memory {
                 plan.memory.minimum
             )
         })?;
+
         Ok((minimum, maximum))
+    }
+
+    /// Returns this memory's page size, in bytes.
+    pub fn page_size(&self) -> u64 {
+        self.0.page_size()
     }
 
     /// Returns the number of allocated wasm pages.

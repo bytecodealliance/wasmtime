@@ -6,19 +6,19 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
+use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
     VMOpaqueContext, VMWasmCallFunction, ValRaw,
 };
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::any::Any;
 use core::marker;
 use core::mem;
+use core::mem::offset_of;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
-use memoffset::offset_of;
 use sptr::Strict;
 use wasmtime_environ::component::*;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};

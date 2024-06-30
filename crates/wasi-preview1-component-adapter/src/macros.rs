@@ -33,7 +33,14 @@ macro_rules! eprintln {
     }};
 }
 
-pub(crate) fn eprint_u32(x: u32) {
+#[allow(dead_code)]
+#[doc(hidden)]
+pub fn eprint_unreachable(line: u32) {
+    eprint!("unreachable executed at adapter line ");
+    crate::macros::eprint_u32(line);
+}
+
+fn eprint_u32(x: u32) {
     if x == 0 {
         eprint!("0");
     } else {
@@ -50,22 +57,26 @@ pub(crate) fn eprint_u32(x: u32) {
     }
 }
 
+#[allow(dead_code)]
+#[doc(hidden)]
+pub fn unreachable(line: u32) -> ! {
+    crate::macros::eprint_unreachable(line);
+    eprint!("\n");
+    #[cfg(target_arch = "wasm32")]
+    core::arch::wasm32::unreachable();
+    // This is here to keep rust-analyzer happy when building for native:
+    #[cfg(not(target_arch = "wasm32"))]
+    std::process::abort();
+}
+
 /// A minimal `unreachable`.
 macro_rules! unreachable {
     () => {{
-        eprint!("unreachable executed at adapter line ");
-        crate::macros::eprint_u32(line!());
-        eprint!("\n");
-        #[cfg(target_arch = "wasm32")]
-        core::arch::wasm32::unreachable();
-        // This is here to keep rust-analyzer happy when building for native:
-        #[cfg(not(target_arch = "wasm32"))]
-        std::process::abort();
+        crate::macros::unreachable(line!());
     }};
 
     ($arg:tt) => {{
-        eprint!("unreachable executed at adapter line ");
-        crate::macros::eprint_u32(line!());
+        crate::macros::eprint_unreachable(line!());
         eprint!(": ");
         eprintln!($arg);
         eprint!("\n");
@@ -77,11 +88,23 @@ macro_rules! unreachable {
     }};
 }
 
+#[allow(dead_code)]
+#[doc(hidden)]
+pub fn assert_fail(line: u32) -> ! {
+    eprint!("assertion failed at adapter line ");
+    crate::macros::eprint_u32(line);
+    #[cfg(target_arch = "wasm32")]
+    core::arch::wasm32::unreachable();
+    // This is here to keep rust-analyzer happy when building for native:
+    #[cfg(not(target_arch = "wasm32"))]
+    std::process::abort();
+}
+
 /// A minimal `assert`.
 macro_rules! assert {
     ($cond:expr $(,)?) => {
         if !$cond {
-            unreachable!("assertion failed")
+            crate::macros::assert_fail(line!());
         }
     };
 }

@@ -1,10 +1,90 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `the-world`.
+///
+/// This structure is created through [`TheWorldPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct TheWorldPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+    interface0: exports::foo::foo::conventions::GuestPre,
+}
+impl<T> Clone for TheWorldPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `the-world`.
+///
+/// This structure is created through either
+/// [`TheWorld::instantiate_async`] or by first creating
+/// a [`TheWorldPre`] followed by using
+/// [`TheWorldPre::instantiate_async`].
 pub struct TheWorld {
     interface0: exports::foo::foo::conventions::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> TheWorldPre<_T> {
+        /// Creates a new copy of `TheWorldPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            let interface0 = exports::foo::foo::conventions::GuestPre::new(_component)?;
+            Ok(TheWorldPre {
+                instance_pre,
+                interface0,
+            })
+        }
+        /// Instantiates a new instance of [`TheWorld`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub async fn instantiate_async(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<TheWorld>
+        where
+            _T: Send,
+        {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate_async(&mut store).await?;
+            let interface0 = self.interface0.load(&mut store, &_instance)?;
+            Ok(TheWorld { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
+    }
     impl TheWorld {
+        /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -15,53 +95,6 @@ const _: () = {
         {
             foo::foo::conventions::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub async fn instantiate_async<T: Send>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate_async(&mut store, component).await?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub async fn instantiate_pre<T: Send>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate_async(&mut store).await?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            let interface0 = exports::foo::foo::conventions::Guest::new(
-                &mut __exports
-                    .instance("foo:foo/conventions")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "exported instance `foo:foo/conventions` not present"
-                        )
-                    })?,
-            )?;
-            Ok(TheWorld { interface0 })
         }
         pub fn foo_foo_conventions(&self) -> &exports::foo::foo::conventions::Guest {
             &self.interface0
@@ -365,38 +398,129 @@ pub mod exports {
                     explicit_kebab: wasmtime::component::Func,
                     bool: wasmtime::component::Func,
                 }
-                impl Guest {
+                #[derive(Clone)]
+                pub struct GuestPre {
+                    kebab_case: wasmtime::component::ComponentExportIndex,
+                    foo: wasmtime::component::ComponentExportIndex,
+                    function_with_dashes: wasmtime::component::ComponentExportIndex,
+                    function_with_no_weird_characters: wasmtime::component::ComponentExportIndex,
+                    apple: wasmtime::component::ComponentExportIndex,
+                    apple_pear: wasmtime::component::ComponentExportIndex,
+                    apple_pear_grape: wasmtime::component::ComponentExportIndex,
+                    a0: wasmtime::component::ComponentExportIndex,
+                    is_xml: wasmtime::component::ComponentExportIndex,
+                    explicit: wasmtime::component::ComponentExportIndex,
+                    explicit_kebab: wasmtime::component::ComponentExportIndex,
+                    bool: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "foo:foo/conventions")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `foo:foo/conventions`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `foo:foo/conventions` does \
+                not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let kebab_case = _lookup("kebab-case")?;
+                        let foo = _lookup("foo")?;
+                        let function_with_dashes = _lookup("function-with-dashes")?;
+                        let function_with_no_weird_characters = _lookup(
+                            "function-with-no-weird-characters",
+                        )?;
+                        let apple = _lookup("apple")?;
+                        let apple_pear = _lookup("apple-pear")?;
+                        let apple_pear_grape = _lookup("apple-pear-grape")?;
+                        let a0 = _lookup("a0")?;
+                        let is_xml = _lookup("is-XML")?;
+                        let explicit = _lookup("explicit")?;
+                        let explicit_kebab = _lookup("explicit-kebab")?;
+                        let bool = _lookup("bool")?;
+                        Ok(GuestPre {
+                            kebab_case,
+                            foo,
+                            function_with_dashes,
+                            function_with_no_weird_characters,
+                            apple,
+                            apple_pear,
+                            apple_pear_grape,
+                            a0,
+                            is_xml,
+                            explicit,
+                            explicit_kebab,
+                            bool,
+                        })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let kebab_case = *__exports
-                            .typed_func::<(), ()>("kebab-case")?
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let kebab_case = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.kebab_case)?
                             .func();
-                        let foo = *__exports
-                            .typed_func::<(LudicrousSpeed,), ()>("foo")?
+                        let foo = *_instance
+                            .get_typed_func::<
+                                (LudicrousSpeed,),
+                                (),
+                            >(&mut store, &self.foo)?
                             .func();
-                        let function_with_dashes = *__exports
-                            .typed_func::<(), ()>("function-with-dashes")?
+                        let function_with_dashes = *_instance
+                            .get_typed_func::<
+                                (),
+                                (),
+                            >(&mut store, &self.function_with_dashes)?
                             .func();
-                        let function_with_no_weird_characters = *__exports
-                            .typed_func::<(), ()>("function-with-no-weird-characters")?
+                        let function_with_no_weird_characters = *_instance
+                            .get_typed_func::<
+                                (),
+                                (),
+                            >(&mut store, &self.function_with_no_weird_characters)?
                             .func();
-                        let apple = *__exports.typed_func::<(), ()>("apple")?.func();
-                        let apple_pear = *__exports
-                            .typed_func::<(), ()>("apple-pear")?
+                        let apple = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.apple)?
                             .func();
-                        let apple_pear_grape = *__exports
-                            .typed_func::<(), ()>("apple-pear-grape")?
+                        let apple_pear = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.apple_pear)?
                             .func();
-                        let a0 = *__exports.typed_func::<(), ()>("a0")?.func();
-                        let is_xml = *__exports.typed_func::<(), ()>("is-XML")?.func();
-                        let explicit = *__exports
-                            .typed_func::<(), ()>("explicit")?
+                        let apple_pear_grape = *_instance
+                            .get_typed_func::<
+                                (),
+                                (),
+                            >(&mut store, &self.apple_pear_grape)?
                             .func();
-                        let explicit_kebab = *__exports
-                            .typed_func::<(), ()>("explicit-kebab")?
+                        let a0 = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.a0)?
                             .func();
-                        let bool = *__exports.typed_func::<(), ()>("bool")?.func();
+                        let is_xml = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.is_xml)?
+                            .func();
+                        let explicit = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.explicit)?
+                            .func();
+                        let explicit_kebab = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.explicit_kebab)?
+                            .func();
+                        let bool = *_instance
+                            .get_typed_func::<(), ()>(&mut store, &self.bool)?
+                            .func();
                         Ok(Guest {
                             kebab_case,
                             foo,
@@ -412,6 +536,8 @@ pub mod exports {
                             bool,
                         })
                     }
+                }
+                impl Guest {
                     pub async fn call_kebab_case<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,

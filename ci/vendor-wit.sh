@@ -36,5 +36,9 @@ cp -r $dst crates/wasi-http/wit
 # slightly different than above.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
 revision=e2310b
-curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit
 curl -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
+# TODO: the in-tree `wasi-nn` implementation does not yet fully support the
+# latest WIT specification on `main`. To create a baseline for moving forward,
+# the in-tree WIT incorporates some but not all of the upstream changes. This
+# TODO can be removed once the implementation catches up with the spec.
+# curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit

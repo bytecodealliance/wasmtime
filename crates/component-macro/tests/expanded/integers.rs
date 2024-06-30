@@ -1,10 +1,84 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `the-world`.
+///
+/// This structure is created through [`TheWorldPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct TheWorldPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+    interface0: exports::foo::foo::integers::GuestPre,
+}
+impl<T> Clone for TheWorldPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `the-world`.
+///
+/// This structure is created through either
+/// [`TheWorld::instantiate`] or by first creating
+/// a [`TheWorldPre`] followed by using
+/// [`TheWorldPre::instantiate`].
 pub struct TheWorld {
     interface0: exports::foo::foo::integers::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> TheWorldPre<_T> {
+        /// Creates a new copy of `TheWorldPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            let interface0 = exports::foo::foo::integers::GuestPre::new(_component)?;
+            Ok(TheWorldPre {
+                instance_pre,
+                interface0,
+            })
+        }
+        /// Instantiates a new instance of [`TheWorld`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub fn instantiate(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate(&mut store)?;
+            let interface0 = self.interface0.load(&mut store, &_instance)?;
+            Ok(TheWorld { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
+    }
     impl TheWorld {
+        /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -14,53 +88,6 @@ const _: () = {
         {
             foo::foo::integers::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate(&mut store, component)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate_pre<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate(&mut store)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            let interface0 = exports::foo::foo::integers::Guest::new(
-                &mut __exports
-                    .instance("foo:foo/integers")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "exported instance `foo:foo/integers` not present"
-                        )
-                    })?,
-            )?;
-            Ok(TheWorld { interface0 })
         }
         pub fn foo_foo_integers(&self) -> &exports::foo::foo::integers::Guest {
             &self.interface0
@@ -393,34 +420,156 @@ pub mod exports {
                     r8: wasmtime::component::Func,
                     pair_ret: wasmtime::component::Func,
                 }
-                impl Guest {
+                #[derive(Clone)]
+                pub struct GuestPre {
+                    a1: wasmtime::component::ComponentExportIndex,
+                    a2: wasmtime::component::ComponentExportIndex,
+                    a3: wasmtime::component::ComponentExportIndex,
+                    a4: wasmtime::component::ComponentExportIndex,
+                    a5: wasmtime::component::ComponentExportIndex,
+                    a6: wasmtime::component::ComponentExportIndex,
+                    a7: wasmtime::component::ComponentExportIndex,
+                    a8: wasmtime::component::ComponentExportIndex,
+                    a9: wasmtime::component::ComponentExportIndex,
+                    r1: wasmtime::component::ComponentExportIndex,
+                    r2: wasmtime::component::ComponentExportIndex,
+                    r3: wasmtime::component::ComponentExportIndex,
+                    r4: wasmtime::component::ComponentExportIndex,
+                    r5: wasmtime::component::ComponentExportIndex,
+                    r6: wasmtime::component::ComponentExportIndex,
+                    r7: wasmtime::component::ComponentExportIndex,
+                    r8: wasmtime::component::ComponentExportIndex,
+                    pair_ret: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "foo:foo/integers")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `foo:foo/integers`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `foo:foo/integers` does \
+                not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let a1 = _lookup("a1")?;
+                        let a2 = _lookup("a2")?;
+                        let a3 = _lookup("a3")?;
+                        let a4 = _lookup("a4")?;
+                        let a5 = _lookup("a5")?;
+                        let a6 = _lookup("a6")?;
+                        let a7 = _lookup("a7")?;
+                        let a8 = _lookup("a8")?;
+                        let a9 = _lookup("a9")?;
+                        let r1 = _lookup("r1")?;
+                        let r2 = _lookup("r2")?;
+                        let r3 = _lookup("r3")?;
+                        let r4 = _lookup("r4")?;
+                        let r5 = _lookup("r5")?;
+                        let r6 = _lookup("r6")?;
+                        let r7 = _lookup("r7")?;
+                        let r8 = _lookup("r8")?;
+                        let pair_ret = _lookup("pair-ret")?;
+                        Ok(GuestPre {
+                            a1,
+                            a2,
+                            a3,
+                            a4,
+                            a5,
+                            a6,
+                            a7,
+                            a8,
+                            a9,
+                            r1,
+                            r2,
+                            r3,
+                            r4,
+                            r5,
+                            r6,
+                            r7,
+                            r8,
+                            pair_ret,
+                        })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let a1 = *__exports.typed_func::<(u8,), ()>("a1")?.func();
-                        let a2 = *__exports.typed_func::<(i8,), ()>("a2")?.func();
-                        let a3 = *__exports.typed_func::<(u16,), ()>("a3")?.func();
-                        let a4 = *__exports.typed_func::<(i16,), ()>("a4")?.func();
-                        let a5 = *__exports.typed_func::<(u32,), ()>("a5")?.func();
-                        let a6 = *__exports.typed_func::<(i32,), ()>("a6")?.func();
-                        let a7 = *__exports.typed_func::<(u64,), ()>("a7")?.func();
-                        let a8 = *__exports.typed_func::<(i64,), ()>("a8")?.func();
-                        let a9 = *__exports
-                            .typed_func::<
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let a1 = *_instance
+                            .get_typed_func::<(u8,), ()>(&mut store, &self.a1)?
+                            .func();
+                        let a2 = *_instance
+                            .get_typed_func::<(i8,), ()>(&mut store, &self.a2)?
+                            .func();
+                        let a3 = *_instance
+                            .get_typed_func::<(u16,), ()>(&mut store, &self.a3)?
+                            .func();
+                        let a4 = *_instance
+                            .get_typed_func::<(i16,), ()>(&mut store, &self.a4)?
+                            .func();
+                        let a5 = *_instance
+                            .get_typed_func::<(u32,), ()>(&mut store, &self.a5)?
+                            .func();
+                        let a6 = *_instance
+                            .get_typed_func::<(i32,), ()>(&mut store, &self.a6)?
+                            .func();
+                        let a7 = *_instance
+                            .get_typed_func::<(u64,), ()>(&mut store, &self.a7)?
+                            .func();
+                        let a8 = *_instance
+                            .get_typed_func::<(i64,), ()>(&mut store, &self.a8)?
+                            .func();
+                        let a9 = *_instance
+                            .get_typed_func::<
                                 (u8, i8, u16, i16, u32, i32, u64, i64),
                                 (),
-                            >("a9")?
+                            >(&mut store, &self.a9)?
                             .func();
-                        let r1 = *__exports.typed_func::<(), (u8,)>("r1")?.func();
-                        let r2 = *__exports.typed_func::<(), (i8,)>("r2")?.func();
-                        let r3 = *__exports.typed_func::<(), (u16,)>("r3")?.func();
-                        let r4 = *__exports.typed_func::<(), (i16,)>("r4")?.func();
-                        let r5 = *__exports.typed_func::<(), (u32,)>("r5")?.func();
-                        let r6 = *__exports.typed_func::<(), (i32,)>("r6")?.func();
-                        let r7 = *__exports.typed_func::<(), (u64,)>("r7")?.func();
-                        let r8 = *__exports.typed_func::<(), (i64,)>("r8")?.func();
-                        let pair_ret = *__exports
-                            .typed_func::<(), ((i64, u8),)>("pair-ret")?
+                        let r1 = *_instance
+                            .get_typed_func::<(), (u8,)>(&mut store, &self.r1)?
+                            .func();
+                        let r2 = *_instance
+                            .get_typed_func::<(), (i8,)>(&mut store, &self.r2)?
+                            .func();
+                        let r3 = *_instance
+                            .get_typed_func::<(), (u16,)>(&mut store, &self.r3)?
+                            .func();
+                        let r4 = *_instance
+                            .get_typed_func::<(), (i16,)>(&mut store, &self.r4)?
+                            .func();
+                        let r5 = *_instance
+                            .get_typed_func::<(), (u32,)>(&mut store, &self.r5)?
+                            .func();
+                        let r6 = *_instance
+                            .get_typed_func::<(), (i32,)>(&mut store, &self.r6)?
+                            .func();
+                        let r7 = *_instance
+                            .get_typed_func::<(), (u64,)>(&mut store, &self.r7)?
+                            .func();
+                        let r8 = *_instance
+                            .get_typed_func::<(), (i64,)>(&mut store, &self.r8)?
+                            .func();
+                        let pair_ret = *_instance
+                            .get_typed_func::<
+                                (),
+                                ((i64, u8),),
+                            >(&mut store, &self.pair_ret)?
                             .func();
                         Ok(Guest {
                             a1,
@@ -443,6 +592,8 @@ pub mod exports {
                             pair_ret,
                         })
                     }
+                }
+                impl Guest {
                     pub fn call_a1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,

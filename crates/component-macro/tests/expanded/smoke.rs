@@ -1,8 +1,75 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `the-world`.
+///
+/// This structure is created through [`TheWorldPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct TheWorldPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+}
+impl<T> Clone for TheWorldPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+        }
+    }
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `the-world`.
+///
+/// This structure is created through either
+/// [`TheWorld::instantiate`] or by first creating
+/// a [`TheWorldPre`] followed by using
+/// [`TheWorldPre::instantiate`].
 pub struct TheWorld {}
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> TheWorldPre<_T> {
+        /// Creates a new copy of `TheWorldPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            Ok(TheWorldPre { instance_pre })
+        }
+        /// Instantiates a new instance of [`TheWorld`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub fn instantiate(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate(&mut store)?;
+            Ok(TheWorld {})
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
+    }
     impl TheWorld {
+        /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -12,44 +79,6 @@ const _: () = {
         {
             imports::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate(&mut store, component)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate_pre<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate(&mut store)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            Ok(TheWorld {})
         }
     }
 };

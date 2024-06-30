@@ -310,6 +310,10 @@ impl IntegerCompare {
             ..self
         }
     }
+
+    pub(crate) fn regs(&self) -> [Reg; 2] {
+        [self.rs1, self.rs2]
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -804,6 +808,8 @@ impl AluOPRRR {
             Self::Pack => "pack",
             Self::Packw => "packw",
             Self::Packh => "packh",
+            Self::CzeroEqz => "czero.eqz",
+            Self::CzeroNez => "czero.nez",
         }
     }
 
@@ -874,6 +880,10 @@ impl AluOPRRR {
             AluOPRRR::Pack => 0b100,
             AluOPRRR::Packw => 0b100,
             AluOPRRR::Packh => 0b111,
+
+            // ZiCond
+            AluOPRRR::CzeroEqz => 0b101,
+            AluOPRRR::CzeroNez => 0b111,
         }
     }
 
@@ -935,7 +945,9 @@ impl AluOPRRR {
             | AluOPRRR::Sh1add
             | AluOPRRR::Sh2add
             | AluOPRRR::Sh3add
-            | AluOPRRR::Xnor => 0b0110011,
+            | AluOPRRR::Xnor
+            | AluOPRRR::CzeroEqz
+            | AluOPRRR::CzeroNez => 0b0110011,
 
             AluOPRRR::Rolw
             | AluOPRRR::Rorw
@@ -1011,6 +1023,10 @@ impl AluOPRRR {
             AluOPRRR::Pack => 0b0000100,
             AluOPRRR::Packw => 0b0000100,
             AluOPRRR::Packh => 0b0000100,
+
+            // ZiCond
+            AluOPRRR::CzeroEqz => 0b0000111,
+            AluOPRRR::CzeroNez => 0b0000111,
         }
     }
 

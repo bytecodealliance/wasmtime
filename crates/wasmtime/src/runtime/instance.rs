@@ -1,8 +1,8 @@
 use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
-    Imports, InstanceAllocationRequest, StorePtr, VMFuncRef, VMFunctionImport, VMGlobalImport,
-    VMMemoryImport, VMOpaqueContext, VMTableImport,
+    Imports, InstanceAllocationRequest, ModuleRuntimeInfo, StorePtr, VMFuncRef, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
 };
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
@@ -11,7 +11,6 @@ use crate::{
     StoreContext, StoreContextMut, Table, TypedFunc,
 };
 use alloc::sync::Arc;
-use anyhow::{anyhow, bail, Context, Result};
 use core::ptr::NonNull;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::{
@@ -284,7 +283,7 @@ impl Instance {
                 .engine()
                 .allocator()
                 .allocate_module(InstanceAllocationRequest {
-                    runtime_info: &module.runtime_info(),
+                    runtime_info: &ModuleRuntimeInfo::Module(module.clone()),
                     imports,
                     host_state: Box::new(Instance(instance_to_be)),
                     store: StorePtr::new(store.traitobj()),
@@ -821,9 +820,7 @@ impl<T> InstancePre<T> {
                         // Wasm-to-native trampoline.
                         debug_assert!(matches!(f.host_ctx(), crate::HostContext::Array(_)));
                         func_refs.push(VMFuncRef {
-                            wasm_call: module
-                                .runtime_info()
-                                .wasm_to_array_trampoline(f.sig_index()),
+                            wasm_call: module.wasm_to_array_trampoline(f.sig_index()),
                             ..*f.func_ref()
                         });
                     }

@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::Result;
 use rustix::mm::{mprotect, MprotectFlags};
 use std::ops::Range;
 use std::ptr::{self, NonNull};
@@ -52,8 +51,6 @@ impl Mmap {
 
     #[cfg(feature = "std")]
     pub fn from_file(path: &Path) -> Result<(Self, File)> {
-        use anyhow::Context;
-
         let file = File::open(path)
             .err2anyhow()
             .context("failed to open file")?;

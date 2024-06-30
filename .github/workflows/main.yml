@@ -55,6 +55,26 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Quick JS formatting/linting checks for the little bits of JS we have for the
+  # `wasmtime explore` UI.
+  check_js:
+    name: Check JS
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: npm install
+      working-directory: ./crates/explorer
+    - run: npm run lint
+      working-directory: ./crates/explorer
+    - run: npm run fmt-check
+      working-directory: ./crates/explorer
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Check Code style quickly by running `clang-format` over all the C/C++ code
   #
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
@@ -176,6 +196,7 @@ jobs:
       test-nightly: ${{ steps.calculate.outputs.test-nightly }}
       audit: ${{ steps.calculate.outputs.audit }}
       preview1-adapter: ${{ steps.calculate.outputs.preview1-adapter }}
+      run-dwarf: ${{ steps.calculate.outputs.run-dwarf }}
     steps:
     - uses: actions/checkout@v4
     - id: calculate
@@ -196,6 +217,8 @@ jobs:
             run_full=true
           elif grep -q 'prtest:full' commits.log; then
             run_full=true
+          elif grep -q 'prtest:debug' commits.log; then
+            echo run-dwarf=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -215,6 +238,9 @@ jobs:
           if grep -q component-adapter names.log; then
             echo preview1-adapter=true >> $GITHUB_OUTPUT
           fi
+          if grep -q debug names.log; then
+            echo run-dwarf=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
@@ -229,6 +255,7 @@ jobs:
             echo test-nightly=true >> $GITHUB_OUTPUT
             echo audit=true >> $GITHUB_OUTPUT
             echo preview1-adapter=true >> $GITHUB_OUTPUT
+            echo run-dwarf=true >> $GITHUB_OUTPUT
         fi
 
   # Build all documentation of Wasmtime, including the C API documentation,
@@ -254,7 +281,8 @@ jobs:
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
     - run: echo "`pwd`/doxygen-1.9.3/bin" >> $GITHUB_PATH
-    - run: cd crates/c-api && doxygen doxygen.conf
+    - run: cmake -S crates/c-api -B target/c-api
+    - run: cmake --build target/c-api --target doc
 
     # install mdbook, build the docs, and test the docs
     - uses: actions/cache@v4
@@ -269,17 +297,19 @@ jobs:
     - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation.
-    # We pass in the `component-model` feature
-    # to match the docs.rs metadata in
-    # crates/wasmtime/Cargo.toml.
+    #
+    # Enable extra features in crates as well to ensure they're documented
     - run: |
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
-          --exclude wasi-http-tests \
           --exclude cranelift-codegen-meta \
-          --features component-model
+          --features call-hook
+      env:
+        RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
+      env:
+        RUSTDOCFLAGS: --cfg=docsrs
 
     # Assemble the documentation, and always upload it as an artifact for
     # inspection on PRs and such.
@@ -657,6 +687,9 @@ jobs:
       matrix:
         feature: ["openvino", "onnx"]
         os: ["ubuntu-latest", "windows-latest"]
+        include:
+          - os: windows-latest
+            feature: winml
     name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: determine
@@ -670,6 +703,15 @@ jobs:
     # Install OpenVINO
     - uses: abrown/install-openvino-action@v8
       if: runner.arch == 'X64'
+
+    # Install WinML for testing wasi-nn WinML backend. WinML is only available
+    # on Windows clients and Windows Server with desktop experience enabled.
+    # GitHub Actions Window Server image doesn't have desktop experience
+    # enabled, so we download the standalone library from ONNX Runtime project.
+    - uses: nuget/setup-nuget@v2
+      if: (matrix.os == 'windows-latest') && (matrix.feature == 'winml')
+    - run: nuget install Microsoft.AI.MachineLearning
+      if: (matrix.os == 'windows-latest') && (matrix.feature == 'winml')
 
     # Install Rust targets.
     - run: rustup target add wasm32-wasi
@@ -714,7 +756,7 @@ jobs:
   # Test debug (DWARF) related functionality.
   test_debug_dwarf:
     needs: determine
-    if: needs.determine.outputs.run-full
+    if: needs.determine.outputs.run-dwarf
     name: Test DWARF debugging
     runs-on: 'ubuntu-latest'
     steps:
@@ -728,7 +770,7 @@ jobs:
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
-        cargo test test_debug_dwarf -- --ignored --test-threads 1
+        cargo test --test all -- --ignored --test-threads 1 debug::
       env:
         RUST_BACKTRACE: 1
         LLDB: lldb-15 # override default version, 14
@@ -1038,6 +1080,7 @@ jobs:
       - build-preview1-component-adapter
       - build-wasmtime-target-wasm32
       - test-min-platform-example
+      - check_js
     if: always()
     steps:
     - name: Successful test and build

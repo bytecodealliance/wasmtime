@@ -574,3 +574,125 @@ mod custom_derives {
         }
     }
 }
+
+mod with_and_mixing_async {
+    mod with_async {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline;
+                interface foo {
+                    type t = u32;
+                    foo: func() -> t;
+                }
+                interface bar {
+                    use foo.{t};
+                    bar: func() -> t;
+                }
+                world x {
+                    import bar;
+                }
+            ",
+            async: {
+                only_imports: ["bar"],
+            },
+        });
+    }
+
+    mod without_async {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline;
+                interface foo {
+                    type t = u32;
+                    foo: func() -> t;
+                }
+                interface bar {
+                    use foo.{t};
+                    bar: func() -> t;
+                }
+                world x {
+                    import bar;
+                }
+            ",
+            with: {
+                "my:inline/foo": super::with_async::my::inline::foo,
+            },
+            require_store_data_send: true,
+        });
+    }
+
+    mod third {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline;
+                interface foo {
+                    type t = u32;
+                    foo: func() -> t;
+                }
+                interface bar {
+                    use foo.{t};
+                    bar: func() -> t;
+                }
+                interface baz {
+                    use bar.{t};
+                    baz: func() -> t;
+                }
+                world x {
+                    import baz;
+                }
+            ",
+            with: {
+                "my:inline/foo": super::with_async::my::inline::foo,
+                "my:inline/bar": super::without_async::my::inline::bar,
+            },
+            require_store_data_send: true,
+        });
+    }
+}
+
+mod trappable_error_type_and_versions {
+    struct MyError;
+
+    mod package_no_version_path_no_version {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline;
+                interface i {
+                    enum e { a, b, c }
+                }
+                world foo {}
+            ",
+            trappable_error_type: {
+                "my:inline/i/e" => super::MyError,
+            },
+        });
+    }
+    mod package_version_path_no_version {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline@1.0.0;
+                interface i {
+                    enum e { a, b, c }
+                }
+                world foo {}
+            ",
+            trappable_error_type: {
+                "my:inline/i/e" => super::MyError,
+            },
+        });
+    }
+    mod package_version_path_version {
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline@1.0.0;
+                interface i {
+                    enum e { a, b, c }
+                }
+                world foo {}
+            ",
+            trappable_error_type: {
+                "my:inline/i@1.0.0/e" => super::MyError,
+            },
+        });
+    }
+}

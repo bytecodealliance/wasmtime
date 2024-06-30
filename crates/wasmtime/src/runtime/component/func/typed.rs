@@ -7,7 +7,6 @@ use crate::runtime::vm::SendSyncPtr;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
-use anyhow::{anyhow, bail, Context, Result};
 use core::fmt;
 use core::marker;
 use core::mem::{self, MaybeUninit};

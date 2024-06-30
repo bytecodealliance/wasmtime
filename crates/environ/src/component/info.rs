@@ -106,8 +106,14 @@ pub struct Component {
     // best route is or whether such an optimization is even necessary here.
     pub imports: PrimaryMap<RuntimeImportIndex, (ImportIndex, Vec<String>)>,
 
-    /// A list of this component's exports, indexed by either position or name.
-    pub exports: IndexMap<String, Export>,
+    /// This component's own root exports from the component itself.
+    pub exports: NameMap<String, ExportIndex>,
+
+    /// All exports of this component and exported instances of this component.
+    ///
+    /// This is indexed by `ExportIndex` for fast lookup and `Export::Instance`
+    /// will refer back into this list.
+    pub export_items: PrimaryMap<ExportIndex, Export>,
 
     /// Initializers that must be processed when instantiating this component.
     ///
@@ -401,7 +407,12 @@ pub enum Export {
         options: CanonicalOptions,
     },
     /// A module defined within this component is exported.
-    ModuleStatic(StaticModuleIndex),
+    ModuleStatic {
+        /// The type of this module
+        ty: TypeModuleIndex,
+        /// Which module this is referring to.
+        index: StaticModuleIndex,
+    },
     /// A module imported into this component is exported.
     ModuleImport {
         /// Module type index
@@ -413,9 +424,9 @@ pub enum Export {
     /// `Export` items.
     Instance {
         /// Instance type index, if such is assigned
-        ty: Option<TypeComponentInstanceIndex>,
+        ty: TypeComponentInstanceIndex,
         /// Instance export map
-        exports: IndexMap<String, Export>,
+        exports: NameMap<String, ExportIndex>,
     },
     /// An exported type from a component or instance, currently only
     /// informational.

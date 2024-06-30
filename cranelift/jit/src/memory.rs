@@ -132,6 +132,8 @@ pub(crate) struct Memory {
     branch_protection: BranchProtection,
 }
 
+unsafe impl Send for Memory {}
+
 impl Memory {
     pub(crate) fn new(branch_protection: BranchProtection) -> Self {
         Self {

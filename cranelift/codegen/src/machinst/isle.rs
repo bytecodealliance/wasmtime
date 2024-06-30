@@ -223,10 +223,20 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn i64_from_iconst(&mut self, val: Value) -> Option<i64> {
             let inst = self.def_inst(val)?;
-            let constant = self.lower_ctx.get_constant(inst)? as i64;
+            let constant = match self.lower_ctx.data(inst) {
+                InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    imm,
+                } => imm.bits(),
+                _ => return None,
+            };
             let ty = self.lower_ctx.output_ty(inst, 0);
             let shift_amt = std::cmp::max(0, 64 - self.ty_bits(ty));
             Some((constant << shift_amt) >> shift_amt)
+        }
+
+        fn i32_from_iconst(&mut self, val: Value) -> Option<i32> {
+            self.i64_from_iconst(val)?.try_into().ok()
         }
 
         fn zero_value(&mut self, value: Value) -> Option<Value> {
@@ -560,11 +570,6 @@ macro_rules! isle_lower_prelude_methods {
             }
 
             Some(value)
-        }
-
-        #[inline]
-        fn simm32(&mut self, x: Imm64) -> Option<i32> {
-            i64::from(x).try_into().ok()
         }
 
         #[inline]

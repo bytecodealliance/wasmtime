@@ -83,13 +83,15 @@ fn generate_func(
     let arg_names = (0..params.len())
         .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
         .collect::<Vec<_>>();
-    let arg_decls = params
+    let arg_tys = params
         .iter()
-        .enumerate()
-        .map(|(i, ty)| {
-            let name = &arg_names[i];
-            let wasm = names::wasm_type(*ty);
-            quote! { #name: #wasm }
+        .map(|ty| names::wasm_type(*ty))
+        .collect::<Vec<_>>();
+    let arg_decls = arg_names
+        .iter()
+        .zip(arg_tys.iter())
+        .map(|(name, ty)| {
+            quote! { #name: #ty }
         })
         .collect::<Vec<_>>();
 
@@ -113,29 +115,29 @@ fn generate_func(
 
     let body = quote! {
         let export = caller.get_export("memory");
-        let (mem, ctx) = match &export {
+        let (mut mem, ctx) = match &export {
             Some(wiggle::wasmtime_crate::Extern::Memory(m)) => {
                 let (mem, ctx) = m.data_and_store_mut(&mut caller);
                 let ctx = get_cx(ctx);
-                (wiggle::wasmtime::WasmtimeGuestMemory::new(mem), ctx)
+                (wiggle::GuestMemory::Unshared(mem), ctx)
             }
             Some(wiggle::wasmtime_crate::Extern::SharedMemory(m)) => {
                 let ctx = get_cx(caller.data_mut());
-                (wiggle::wasmtime::WasmtimeGuestMemory::shared(m.data()), ctx)
+                (wiggle::GuestMemory::Shared(m.data()), ctx)
             }
             _ => wiggle::anyhow::bail!("missing required memory export"),
         };
-        Ok(<#ret_ty>::from(#abi_func(ctx, &mem #(, #arg_names)*) #await_ ?))
+        Ok(<#ret_ty>::from(#abi_func(ctx, &mut mem #(, #arg_names)*) #await_ ?))
     };
 
     match asyncness {
         Asyncness::Async => {
-            let wrapper = format_ident!("func_wrap{}_async", params.len());
+            let arg_decls = quote! { ( #(#arg_names,)* ) : ( #(#arg_tys,)* ) };
             quote! {
-                linker.#wrapper(
+                linker.func_wrap_async(
                     #module_str,
                     #field_str,
-                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| {
+                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T>, #arg_decls| {
                         Box::new(async move { #body })
                     },
                 )?;

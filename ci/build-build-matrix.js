@@ -59,6 +59,11 @@ const array = [
     "os": "ubuntu-latest",
     "target": "x86_64-linux-android",
   },
+  {
+    "build": "x86_64-musl",
+    "os": "ubuntu-latest",
+    "target": "x86_64-unknown-linux-musl",
+  },
 ];
 
 const builds = [];

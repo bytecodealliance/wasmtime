@@ -1,10 +1,84 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `the-world`.
+///
+/// This structure is created through [`TheWorldPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct TheWorldPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+    interface0: exports::foo::foo::floats::GuestPre,
+}
+impl<T> Clone for TheWorldPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `the-world`.
+///
+/// This structure is created through either
+/// [`TheWorld::instantiate`] or by first creating
+/// a [`TheWorldPre`] followed by using
+/// [`TheWorldPre::instantiate`].
 pub struct TheWorld {
     interface0: exports::foo::foo::floats::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> TheWorldPre<_T> {
+        /// Creates a new copy of `TheWorldPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            let interface0 = exports::foo::foo::floats::GuestPre::new(_component)?;
+            Ok(TheWorldPre {
+                instance_pre,
+                interface0,
+            })
+        }
+        /// Instantiates a new instance of [`TheWorld`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub fn instantiate(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate(&mut store)?;
+            let interface0 = self.interface0.load(&mut store, &_instance)?;
+            Ok(TheWorld { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
+    }
     impl TheWorld {
+        /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -14,51 +88,6 @@ const _: () = {
         {
             foo::foo::floats::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate(&mut store, component)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate_pre<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate(&mut store)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            let interface0 = exports::foo::foo::floats::Guest::new(
-                &mut __exports
-                    .instance("foo:foo/floats")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("exported instance `foo:foo/floats` not present")
-                    })?,
-            )?;
-            Ok(TheWorld { interface0 })
         }
         pub fn foo_foo_floats(&self) -> &exports::foo::foo::floats::Guest {
             &self.interface0
@@ -167,21 +196,78 @@ pub mod exports {
                     float32_result: wasmtime::component::Func,
                     float64_result: wasmtime::component::Func,
                 }
-                impl Guest {
+                #[derive(Clone)]
+                pub struct GuestPre {
+                    float32_param: wasmtime::component::ComponentExportIndex,
+                    float64_param: wasmtime::component::ComponentExportIndex,
+                    float32_result: wasmtime::component::ComponentExportIndex,
+                    float64_result: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "foo:foo/floats")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `foo:foo/floats`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `foo:foo/floats` does \
+                not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let float32_param = _lookup("float32-param")?;
+                        let float64_param = _lookup("float64-param")?;
+                        let float32_result = _lookup("float32-result")?;
+                        let float64_result = _lookup("float64-result")?;
+                        Ok(GuestPre {
+                            float32_param,
+                            float64_param,
+                            float32_result,
+                            float64_result,
+                        })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let float32_param = *__exports
-                            .typed_func::<(f32,), ()>("float32-param")?
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let float32_param = *_instance
+                            .get_typed_func::<
+                                (f32,),
+                                (),
+                            >(&mut store, &self.float32_param)?
                             .func();
-                        let float64_param = *__exports
-                            .typed_func::<(f64,), ()>("float64-param")?
+                        let float64_param = *_instance
+                            .get_typed_func::<
+                                (f64,),
+                                (),
+                            >(&mut store, &self.float64_param)?
                             .func();
-                        let float32_result = *__exports
-                            .typed_func::<(), (f32,)>("float32-result")?
+                        let float32_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                (f32,),
+                            >(&mut store, &self.float32_result)?
                             .func();
-                        let float64_result = *__exports
-                            .typed_func::<(), (f64,)>("float64-result")?
+                        let float64_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                (f64,),
+                            >(&mut store, &self.float64_result)?
                             .func();
                         Ok(Guest {
                             float32_param,
@@ -190,6 +276,8 @@ pub mod exports {
                             float64_result,
                         })
                     }
+                }
+                impl Guest {
                     pub fn call_float32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,

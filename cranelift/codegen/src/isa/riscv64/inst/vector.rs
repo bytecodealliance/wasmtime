@@ -268,13 +268,16 @@ impl VecAluOpRRRR {
             VecAluOpRRRR::VfnmaccVV | VecAluOpRRRR::VfnmaccVF => 0b101101,
             VecAluOpRRRR::VfmsacVV | VecAluOpRRRR::VfmsacVF => 0b101110,
             VecAluOpRRRR::VfnmsacVV | VecAluOpRRRR::VfnmsacVF => 0b101111,
+            VecAluOpRRRR::Vslide1upVX => 0b001110,
         }
     }
 
     pub fn category(&self) -> VecOpCategory {
         match self {
             VecAluOpRRRR::VmaccVV | VecAluOpRRRR::VnmsacVV => VecOpCategory::OPMVV,
-            VecAluOpRRRR::VmaccVX | VecAluOpRRRR::VnmsacVX => VecOpCategory::OPMVX,
+            VecAluOpRRRR::VmaccVX | VecAluOpRRRR::VnmsacVX | VecAluOpRRRR::Vslide1upVX => {
+                VecOpCategory::OPMVX
+            }
             VecAluOpRRRR::VfmaccVV
             | VecAluOpRRRR::VfnmaccVV
             | VecAluOpRRRR::VfmsacVV
@@ -299,7 +302,10 @@ impl VecAluOpRRRR {
 
 impl VecInstOverlapInfo for VecAluOpRRRR {
     fn forbids_src_dst_overlaps(&self) -> bool {
-        false
+        match self {
+            VecAluOpRRRR::Vslide1upVX => true,
+            _ => false,
+        }
     }
 }
 

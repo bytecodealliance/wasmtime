@@ -2,7 +2,6 @@ use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use super::GcHeapAllocationIndex;
 use crate::prelude::*;
 use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Result};
-use anyhow::anyhow;
 use std::sync::Mutex;
 
 /// A pool of reusable GC heaps.

@@ -3800,12 +3800,6 @@
       (side_effect (trap_impl trap_code)))
 
 
-;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (resumable_trap trap_code))
-      (side_effect (trap_impl trap_code)))
-
-
 ;;;; Rules for `trapz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trapz val trap_code))
@@ -3815,12 +3809,6 @@
 ;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trapnz val trap_code))
-      (side_effect (trap_if_bool (value_nonzero val) trap_code)))
-
-
-;;;; Rules for `resumable_trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (resumable_trapnz val trap_code))
       (side_effect (trap_if_bool (value_nonzero val) trap_code)))
 
 

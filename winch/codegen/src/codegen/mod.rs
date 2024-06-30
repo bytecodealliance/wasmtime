@@ -14,7 +14,7 @@ use wasmparser::{
 };
 use wasmtime_environ::{
     GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_MASK, WASM_PAGE_SIZE,
+    FUNCREF_MASK,
 };
 
 use cranelift_codegen::{
@@ -328,13 +328,13 @@ where
             .as_u32()
             .checked_mul(sig_index_bytes.into())
             .unwrap();
-        let signatures_base_offset = self.env.vmoffsets.vmctx_type_ids_array();
+        let signatures_base_offset = self.env.vmoffsets.ptr.vmctx_type_ids_array();
         let scratch = <M::ABI as ABI>::scratch_reg();
         let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
 
         // Load the signatures address into the scratch register.
         self.masm.load(
-            self.masm.address_at_vmctx(signatures_base_offset),
+            self.masm.address_at_vmctx(signatures_base_offset.into()),
             scratch,
             ptr_size,
         );
@@ -854,17 +854,13 @@ where
             .stack
             .push(TypedReg::new(heap_data.ty, size_reg).into());
 
-        // Since the page size is a power-of-two, verify that 2^16, equals the
-        // defined constant. This is mostly a safeguard in case the constant
-        // value ever changes.
-        let pow = 16;
-        debug_assert_eq!(2u32.pow(pow), WASM_PAGE_SIZE);
+        let pow = heap_data.page_size_log2;
 
         // Ensure that the constant is correctly typed according to the heap
         // type to reduce register pressure when emitting the shift operation.
         match heap_data.ty {
-            WasmValType::I32 => self.context.stack.push(Val::i32(pow as i32)),
-            WasmValType::I64 => self.context.stack.push(Val::i64(pow as i64)),
+            WasmValType::I32 => self.context.stack.push(Val::i32(i32::from(pow))),
+            WasmValType::I64 => self.context.stack.push(Val::i64(i64::from(pow))),
             _ => unreachable!(),
         }
 

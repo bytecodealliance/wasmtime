@@ -20,7 +20,7 @@ fn instantiate(pre: &InstancePre<WasiCtx>, engine: &Engine) -> Result<()> {
     Ok(())
 }
 
-fn benchmark_name<'a>(strategy: &InstanceAllocationStrategy) -> &'static str {
+fn benchmark_name(strategy: &InstanceAllocationStrategy) -> &'static str {
     match strategy {
         InstanceAllocationStrategy::OnDemand => "default",
         InstanceAllocationStrategy::Pooling { .. } => "pooling",

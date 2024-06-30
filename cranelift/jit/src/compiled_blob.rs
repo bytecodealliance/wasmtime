@@ -17,6 +17,8 @@ pub(crate) struct CompiledBlob {
     pub(crate) relocs: Vec<ModuleReloc>,
 }
 
+unsafe impl Send for CompiledBlob {}
+
 impl CompiledBlob {
     pub(crate) fn perform_relocations(
         &self,

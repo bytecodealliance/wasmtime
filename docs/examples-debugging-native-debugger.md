@@ -13,7 +13,8 @@ the same time:
 
 2. Run Wasmtime with the debug info enabled; this is `-D debug-info` from the
    CLI and `Config::debug_info(true)` in an embedding (e.g. see [debugging in a
-   Rust embedding](./examples-rust-debugging.md))
+   Rust embedding](./examples-rust-debugging.md)). It's also recommended to use
+   `-O opt-level=0` for better inspection of local variables if desired.
 
 3. Use a supported debugger:
 
@@ -21,7 +22,7 @@ the same time:
     lldb -- wasmtime run -D debug-info foo.wasm
     ```
     ```sh
-    gdb --args wasmtime run -D debug-info foo.wasm
+    gdb --args wasmtime run -D debug-info -O opt-level=0 foo.wasm
     ```
 
 If you run into trouble, the following discussions might help:

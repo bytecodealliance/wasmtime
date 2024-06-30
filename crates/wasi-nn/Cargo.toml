@@ -20,7 +20,11 @@ anyhow = { workspace = true, features = ['std'] }
 wiggle = { workspace = true, features = ["wasmtime"] }
 
 # This dependency is necessary for the WIT-generation macros to work:
-wasmtime = { workspace = true, features = ["component-model", "runtime"] }
+wasmtime = { workspace = true, features = [
+    "component-model",
+    "runtime",
+    "std",
+] }
 
 # These dependencies are necessary for the wasi-nn implementation:
 tracing = { workspace = true }
@@ -29,15 +33,14 @@ openvino = { version = "0.6.0", features = [
     "runtime-linking",
 ], optional = true }
 
-ort = { version = "2.0.0-rc.0", default-features = false, features = ["copy-dylibs", "download-binaries"], optional = true }
+ort = { version = "2.0.0-rc.2", default-features = false, features = [
+    "copy-dylibs",
+    "download-binaries",
+], optional = true }
 
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.52"
-features = [
-    "AI_MachineLearning",
-    "Storage_Streams",
-    "Foundation_Collections",
-]
+features = ["AI_MachineLearning", "Storage_Streams", "Foundation_Collections"]
 optional = true
 
 [build-dependencies]
@@ -45,15 +48,21 @@ walkdir = { workspace = true }
 
 [dev-dependencies]
 cap-std = { workspace = true }
+libtest-mimic = { workspace = true }
 test-programs-artifacts = { workspace = true }
-wasi-common = { workspace = true, features = ["sync"] }
+wasmtime-wasi = { workspace = true, features = ["preview1"] }
 wasmtime = { workspace = true, features = ["cranelift"] }
+tracing-subscriber = { workspace = true }
 
 [features]
-default = ["openvino"]
-# openvino is available on all platforms, it requires openvino installed.
+default = ["openvino", "winml"]
+# OpenVINO is available on all platforms; it requires OpenVINO to be installed.
 openvino = ["dep:openvino"]
-# onnx is available on all platforms.
+# ONNX is available on all platforms.
 onnx = ["dep:ort"]
-# winml is only available on Windows 10 1809 and later.
+# WinML is only available on Windows 10 1809 and later.
 winml = ["dep:windows"]
+
+[[test]]
+name = "test-programs"
+harness = false

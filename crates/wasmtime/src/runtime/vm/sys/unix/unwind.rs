@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use anyhow::Result;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
@@ -57,7 +56,7 @@ fn using_libunwind() -> bool {
         LIBUNWIND_NO => false,
         LIBUNWIND_UNKNOWN => {
             let looks_like_libunwind = unsafe {
-                !libc::dlsym(ptr::null_mut(), "__unw_add_dynamic_fde\0".as_ptr().cast()).is_null()
+                !libc::dlsym(ptr::null_mut(), c"__unw_add_dynamic_fde".as_ptr()).is_null()
             };
             USING_LIBUNWIND.store(
                 if looks_like_libunwind {
@@ -89,7 +88,7 @@ impl UnwindRegistration {
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
         debug_assert_eq!(
-            unwind_info as usize % crate::runtime::vm::page_size(),
+            unwind_info as usize % crate::runtime::vm::host_page_size(),
             0,
             "The unwind info must always be aligned to a page"
         );

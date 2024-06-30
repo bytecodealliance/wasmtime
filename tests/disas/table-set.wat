@@ -16,7 +16,7 @@
     local.get 1
     table.set 0))
 
-;; function u0:0(i64 vmctx, i64, r64) fast {
+;; function u0:0(i64 vmctx, i64, r64) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
@@ -142,7 +142,7 @@
 ;; @0057                               return
 ;; }
 ;;
-;; function u0:1(i64 vmctx, i64, i32, r64) fast {
+;; function u0:1(i64 vmctx, i64, i32, r64) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1

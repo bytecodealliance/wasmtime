@@ -358,10 +358,10 @@ block0(v0: i128, v1: i8):
 ;   srl a0,a0,a3
 ;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
-;   or a5,a3,a5
+;   or t0,a3,a5
 ;   li a3,64
-;   andi a2,a2,127
-;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a2 uge a3)
+;   andi a5,a2,127
+;   select [a0,a1],[zero,a4],[a4,t0]##condition=(a5 uge a3)
 ;   ret
 ;
 ; Disassembled:
@@ -371,20 +371,18 @@ block0(v0: i128, v1: i8):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   bnez a5, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a5, 8
 ;   mv a3, a0
 ;   sll a5, a1, a5
-;   or a5, a3, a5
+;   or t0, a3, a5
 ;   addi a3, zero, 0x40
-;   andi a2, a2, 0x7f
-;   bltu a2, a3, 0x10
+;   andi a5, a2, 0x7f
 ;   mv a0, zero
 ;   mv a1, a4
-;   j 0xc
+;   bgeu a5, a3, 0xc
 ;   mv a0, a4
-;   mv a1, a5
+;   mv a1, t0
 ;   ret
 
 function %ishl_i128_i16(i128, i16) -> i128 {
@@ -402,10 +400,10 @@ block0(v0: i128, v1: i16):
 ;   srl a0,a0,a3
 ;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
-;   or a5,a3,a5
+;   or t0,a3,a5
 ;   li a3,64
-;   andi a2,a2,127
-;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a2 uge a3)
+;   andi a5,a2,127
+;   select [a0,a1],[zero,a4],[a4,t0]##condition=(a5 uge a3)
 ;   ret
 ;
 ; Disassembled:
@@ -415,20 +413,18 @@ block0(v0: i128, v1: i16):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   bnez a5, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a5, 8
 ;   mv a3, a0
 ;   sll a5, a1, a5
-;   or a5, a3, a5
+;   or t0, a3, a5
 ;   addi a3, zero, 0x40
-;   andi a2, a2, 0x7f
-;   bltu a2, a3, 0x10
+;   andi a5, a2, 0x7f
 ;   mv a0, zero
 ;   mv a1, a4
-;   j 0xc
+;   bgeu a5, a3, 0xc
 ;   mv a0, a4
-;   mv a1, a5
+;   mv a1, t0
 ;   ret
 
 function %ishl_i128_i32(i128, i32) -> i128 {
@@ -446,10 +442,10 @@ block0(v0: i128, v1: i32):
 ;   srl a0,a0,a3
 ;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
-;   or a5,a3,a5
+;   or t0,a3,a5
 ;   li a3,64
-;   andi a2,a2,127
-;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a2 uge a3)
+;   andi a5,a2,127
+;   select [a0,a1],[zero,a4],[a4,t0]##condition=(a5 uge a3)
 ;   ret
 ;
 ; Disassembled:
@@ -459,20 +455,18 @@ block0(v0: i128, v1: i32):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   bnez a5, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a5, 8
 ;   mv a3, a0
 ;   sll a5, a1, a5
-;   or a5, a3, a5
+;   or t0, a3, a5
 ;   addi a3, zero, 0x40
-;   andi a2, a2, 0x7f
-;   bltu a2, a3, 0x10
+;   andi a5, a2, 0x7f
 ;   mv a0, zero
 ;   mv a1, a4
-;   j 0xc
+;   bgeu a5, a3, 0xc
 ;   mv a0, a4
-;   mv a1, a5
+;   mv a1, t0
 ;   ret
 
 function %ishl_i128_i64(i128, i64) -> i128 {
@@ -490,10 +484,10 @@ block0(v0: i128, v1: i64):
 ;   srl a0,a0,a3
 ;   select a3,zero,a0##condition=(a5 eq zero)
 ;   sll a5,a1,a5
-;   or a5,a3,a5
+;   or t0,a3,a5
 ;   li a3,64
-;   andi a2,a2,127
-;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a2 uge a3)
+;   andi a5,a2,127
+;   select [a0,a1],[zero,a4],[a4,t0]##condition=(a5 uge a3)
 ;   ret
 ;
 ; Disassembled:
@@ -503,20 +497,18 @@ block0(v0: i128, v1: i64):
 ;   sub a3, a3, a5
 ;   sll a4, a0, a5
 ;   srl a0, a0, a3
-;   bnez a5, 0xc
 ;   mv a3, zero
-;   j 8
+;   beqz a5, 8
 ;   mv a3, a0
 ;   sll a5, a1, a5
-;   or a5, a3, a5
+;   or t0, a3, a5
 ;   addi a3, zero, 0x40
-;   andi a2, a2, 0x7f
-;   bltu a2, a3, 0x10
+;   andi a5, a2, 0x7f
 ;   mv a0, zero
 ;   mv a1, a4
-;   j 0xc
+;   bgeu a5, a3, 0xc
 ;   mv a0, a4
-;   mv a1, a5
+;   mv a1, t0
 ;   ret
 
 function %ishl_i128_i128(i128, i128) -> i128 {
@@ -557,10 +549,9 @@ block0(v0: i128, v1: i128):
 ;   or a4, a3, a0
 ;   addi a3, zero, 0x40
 ;   andi a2, a2, 0x7f
-;   bltu a2, a3, 0x10
 ;   mv a0, zero
 ;   mv a1, a5
-;   j 0xc
+;   bgeu a2, a3, 0xc
 ;   mv a0, a5
 ;   mv a1, a4
 ;   ret

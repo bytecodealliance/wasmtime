@@ -9,9 +9,13 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl<'a> strings::Strings for WasiCtx<'a> {
-    fn hello_string(&mut self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {
-        let s = a_string
-            .as_str()
+    fn hello_string(
+        &mut self,
+        memory: &mut GuestMemory<'_>,
+        a_string: GuestPtr<str>,
+    ) -> Result<u32, types::Errno> {
+        let s = memory
+            .as_str(a_string)
             .expect("should be valid string")
             .expect("expected non-shared memory");
         println!("a_string='{}'", &*s);
@@ -20,20 +24,21 @@ impl<'a> strings::Strings for WasiCtx<'a> {
 
     fn multi_string(
         &mut self,
-        a: &GuestPtr<str>,
-        b: &GuestPtr<str>,
-        c: &GuestPtr<str>,
+        memory: &mut GuestMemory<'_>,
+        a: GuestPtr<str>,
+        b: GuestPtr<str>,
+        c: GuestPtr<str>,
     ) -> Result<u32, types::Errno> {
-        let sa = a
-            .as_str()
+        let sa = memory
+            .as_str(a)
             .expect("A should be valid string")
             .expect("expected non-shared memory");
-        let sb = b
-            .as_str()
+        let sb = memory
+            .as_str(b)
             .expect("B should be valid string")
             .expect("expected non-shared memory");
-        let sc = c
-            .as_str()
+        let sc = memory
+            .as_str(c)
             .expect("C should be valid string")
             .expect("expected non-shared memory");
         let total_len = sa.len() + sb.len() + sc.len();
@@ -82,19 +87,20 @@ impl HelloStringExercise {
 
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
         // Populate string in guest's memory
-        let ptr = host_memory.ptr::<str>((self.string_ptr_loc.ptr, self.test_word.len() as u32));
+        let ptr = GuestPtr::<str>::new((self.string_ptr_loc.ptr, self.test_word.len() as u32));
         for (slot, byte) in ptr.as_bytes().iter().zip(self.test_word.bytes()) {
-            slot.expect("should be valid pointer")
-                .write(byte)
+            memory
+                .write(slot.expect("should be valid pointer"), byte)
                 .expect("failed to write");
         }
 
         let res = strings::hello_string(
             &mut ctx,
-            &host_memory,
+            &mut memory,
             self.string_ptr_loc.ptr as i32,
             self.test_word.len() as i32,
             self.return_ptr_loc.ptr as i32,
@@ -102,9 +108,8 @@ impl HelloStringExercise {
         .unwrap();
         assert_eq!(res, types::Errno::Ok as i32, "hello string errno");
 
-        let given = host_memory
-            .ptr::<u32>(self.return_ptr_loc.ptr)
-            .read()
+        let given = memory
+            .read(GuestPtr::<u32>::new(self.return_ptr_loc.ptr))
             .expect("deref ptr to return value");
         assert_eq!(self.test_word.len() as u32, given);
     }
@@ -195,13 +200,14 @@ impl MultiStringExercise {
 
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
-        let write_string = |val: &str, loc: MemArea| {
-            let ptr = host_memory.ptr::<str>((loc.ptr, val.len() as u32));
+        let mut write_string = |val: &str, loc: MemArea| {
+            let ptr = GuestPtr::<str>::new((loc.ptr, val.len() as u32));
             for (slot, byte) in ptr.as_bytes().iter().zip(val.bytes()) {
-                slot.expect("should be valid pointer")
-                    .write(byte)
+                memory
+                    .write(slot.expect("should be valid pointer"), byte)
                     .expect("failed to write");
             }
         };
@@ -212,7 +218,7 @@ impl MultiStringExercise {
 
         let res = strings::multi_string(
             &mut ctx,
-            &host_memory,
+            &mut memory,
             self.sa_ptr_loc.ptr as i32,
             self.a.len() as i32,
             self.sb_ptr_loc.ptr as i32,
@@ -224,9 +230,8 @@ impl MultiStringExercise {
         .unwrap();
         assert_eq!(res, types::Errno::Ok as i32, "multi string errno");
 
-        let given = host_memory
-            .ptr::<u32>(self.return_ptr_loc.ptr)
-            .read()
+        let given = memory
+            .read(GuestPtr::<u32>::new(self.return_ptr_loc.ptr))
             .expect("deref ptr to return value");
         assert_eq!((self.a.len() + self.b.len() + self.c.len()) as u32, given);
     }
@@ -275,13 +280,14 @@ impl OverlappingStringExercise {
 
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
 
-        let write_string = |val: &str, loc: MemArea| {
-            let ptr = host_memory.ptr::<str>((loc.ptr, val.len() as u32));
+        let mut write_string = |val: &str, loc: MemArea| {
+            let ptr = GuestPtr::<str>::new((loc.ptr, val.len() as u32));
             for (slot, byte) in ptr.as_bytes().iter().zip(val.bytes()) {
-                slot.expect("should be valid pointer")
-                    .write(byte)
+                memory
+                    .write(slot.expect("should be valid pointer"), byte)
                     .expect("failed to write");
             }
         };
@@ -291,7 +297,7 @@ impl OverlappingStringExercise {
         let a_len = self.a.as_bytes().len() as i32;
         let res = strings::multi_string(
             &mut ctx,
-            &host_memory,
+            &mut memory,
             self.sa_ptr_loc.ptr as i32,
             a_len,
             (self.sa_ptr_loc.ptr + self.offset_b) as i32,
@@ -303,9 +309,8 @@ impl OverlappingStringExercise {
         .unwrap();
         assert_eq!(res, types::Errno::Ok as i32, "multi string errno");
 
-        let given = host_memory
-            .ptr::<u32>(self.return_ptr_loc.ptr)
-            .read()
+        let given = memory
+            .read(GuestPtr::<u32>::new(self.return_ptr_loc.ptr))
             .expect("deref ptr to return value");
         assert_eq!(
             ((3 * a_len) - (self.offset_b as i32 + self.offset_c as i32)) as u32,

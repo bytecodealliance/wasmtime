@@ -1,10 +1,84 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `the-flags`.
+///
+/// This structure is created through [`TheFlagsPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct TheFlagsPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+    interface0: exports::foo::foo::flegs::GuestPre,
+}
+impl<T> Clone for TheFlagsPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `the-flags`.
+///
+/// This structure is created through either
+/// [`TheFlags::instantiate`] or by first creating
+/// a [`TheFlagsPre`] followed by using
+/// [`TheFlagsPre::instantiate`].
 pub struct TheFlags {
     interface0: exports::foo::foo::flegs::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> TheFlagsPre<_T> {
+        /// Creates a new copy of `TheFlagsPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            let interface0 = exports::foo::foo::flegs::GuestPre::new(_component)?;
+            Ok(TheFlagsPre {
+                instance_pre,
+                interface0,
+            })
+        }
+        /// Instantiates a new instance of [`TheFlags`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub fn instantiate(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<TheFlags> {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate(&mut store)?;
+            let interface0 = self.interface0.load(&mut store, &_instance)?;
+            Ok(TheFlags { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
+    }
     impl TheFlags {
+        /// Convenience wrapper around [`TheFlagsPre::new`] and
+        /// [`TheFlagsPre::instantiate`].
+        pub fn instantiate<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheFlags> {
+            let pre = linker.instantiate_pre(component)?;
+            TheFlagsPre::new(pre)?.instantiate(store)
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -14,51 +88,6 @@ const _: () = {
         {
             foo::foo::flegs::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate(&mut store, component)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate_pre<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate(&mut store)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            let interface0 = exports::foo::foo::flegs::Guest::new(
-                &mut __exports
-                    .instance("foo:foo/flegs")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("exported instance `foo:foo/flegs` not present")
-                    })?,
-            )?;
-            Ok(TheFlags { interface0 })
         }
         pub fn foo_foo_flegs(&self) -> &exports::foo::foo::flegs::Guest {
             &self.interface0
@@ -490,30 +519,105 @@ pub mod exports {
                     roundtrip_flag32: wasmtime::component::Func,
                     roundtrip_flag64: wasmtime::component::Func,
                 }
-                impl Guest {
+                #[derive(Clone)]
+                pub struct GuestPre {
+                    roundtrip_flag1: wasmtime::component::ComponentExportIndex,
+                    roundtrip_flag2: wasmtime::component::ComponentExportIndex,
+                    roundtrip_flag4: wasmtime::component::ComponentExportIndex,
+                    roundtrip_flag8: wasmtime::component::ComponentExportIndex,
+                    roundtrip_flag16: wasmtime::component::ComponentExportIndex,
+                    roundtrip_flag32: wasmtime::component::ComponentExportIndex,
+                    roundtrip_flag64: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "foo:foo/flegs")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `foo:foo/flegs`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `foo:foo/flegs` does \
+                not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let roundtrip_flag1 = _lookup("roundtrip-flag1")?;
+                        let roundtrip_flag2 = _lookup("roundtrip-flag2")?;
+                        let roundtrip_flag4 = _lookup("roundtrip-flag4")?;
+                        let roundtrip_flag8 = _lookup("roundtrip-flag8")?;
+                        let roundtrip_flag16 = _lookup("roundtrip-flag16")?;
+                        let roundtrip_flag32 = _lookup("roundtrip-flag32")?;
+                        let roundtrip_flag64 = _lookup("roundtrip-flag64")?;
+                        Ok(GuestPre {
+                            roundtrip_flag1,
+                            roundtrip_flag2,
+                            roundtrip_flag4,
+                            roundtrip_flag8,
+                            roundtrip_flag16,
+                            roundtrip_flag32,
+                            roundtrip_flag64,
+                        })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let roundtrip_flag1 = *__exports
-                            .typed_func::<(Flag1,), (Flag1,)>("roundtrip-flag1")?
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let roundtrip_flag1 = *_instance
+                            .get_typed_func::<
+                                (Flag1,),
+                                (Flag1,),
+                            >(&mut store, &self.roundtrip_flag1)?
                             .func();
-                        let roundtrip_flag2 = *__exports
-                            .typed_func::<(Flag2,), (Flag2,)>("roundtrip-flag2")?
+                        let roundtrip_flag2 = *_instance
+                            .get_typed_func::<
+                                (Flag2,),
+                                (Flag2,),
+                            >(&mut store, &self.roundtrip_flag2)?
                             .func();
-                        let roundtrip_flag4 = *__exports
-                            .typed_func::<(Flag4,), (Flag4,)>("roundtrip-flag4")?
+                        let roundtrip_flag4 = *_instance
+                            .get_typed_func::<
+                                (Flag4,),
+                                (Flag4,),
+                            >(&mut store, &self.roundtrip_flag4)?
                             .func();
-                        let roundtrip_flag8 = *__exports
-                            .typed_func::<(Flag8,), (Flag8,)>("roundtrip-flag8")?
+                        let roundtrip_flag8 = *_instance
+                            .get_typed_func::<
+                                (Flag8,),
+                                (Flag8,),
+                            >(&mut store, &self.roundtrip_flag8)?
                             .func();
-                        let roundtrip_flag16 = *__exports
-                            .typed_func::<(Flag16,), (Flag16,)>("roundtrip-flag16")?
+                        let roundtrip_flag16 = *_instance
+                            .get_typed_func::<
+                                (Flag16,),
+                                (Flag16,),
+                            >(&mut store, &self.roundtrip_flag16)?
                             .func();
-                        let roundtrip_flag32 = *__exports
-                            .typed_func::<(Flag32,), (Flag32,)>("roundtrip-flag32")?
+                        let roundtrip_flag32 = *_instance
+                            .get_typed_func::<
+                                (Flag32,),
+                                (Flag32,),
+                            >(&mut store, &self.roundtrip_flag32)?
                             .func();
-                        let roundtrip_flag64 = *__exports
-                            .typed_func::<(Flag64,), (Flag64,)>("roundtrip-flag64")?
+                        let roundtrip_flag64 = *_instance
+                            .get_typed_func::<
+                                (Flag64,),
+                                (Flag64,),
+                            >(&mut store, &self.roundtrip_flag64)?
                             .func();
                         Ok(Guest {
                             roundtrip_flag1,
@@ -525,6 +629,8 @@ pub mod exports {
                             roundtrip_flag64,
                         })
                     }
+                }
+                impl Guest {
                     pub fn call_roundtrip_flag1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,

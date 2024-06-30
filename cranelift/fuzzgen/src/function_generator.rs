@@ -132,7 +132,7 @@ fn insert_stack_load(
 ) -> Result<()> {
     let typevar = rets[0];
     let type_size = typevar.bytes();
-    let (slot, slot_size, category) = fgen.stack_slot_with_size(type_size)?;
+    let (slot, slot_size, _align, category) = fgen.stack_slot_with_size(type_size)?;
 
     // `stack_load` doesn't support setting MemFlags, and it does not set any
     // alias analysis bits, so we can only emit it for `Other` slots.
@@ -159,7 +159,7 @@ fn insert_stack_store(
     let typevar = args[0];
     let type_size = typevar.bytes();
 
-    let (slot, slot_size, category) = fgen.stack_slot_with_size(type_size)?;
+    let (slot, slot_size, _align, category) = fgen.stack_slot_with_size(type_size)?;
 
     // `stack_store` doesn't support setting MemFlags, and it does not set any
     // alias analysis bits, so we can only emit it for `Other` slots.
@@ -764,9 +764,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[I128],
                     &[F32 | F64]
                 ),
-                // https://github.com/bytecodealliance/wasmtime/issues/6104
-                (Opcode::Bitcast, &[I128], &[_]),
-                (Opcode::Bitcast, &[_], &[I128]),
                 // TODO
                 (
                     Opcode::SelectSpectreGuard,
@@ -891,9 +888,7 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::Debugtrap),
                 (Opcode::Trap),
                 (Opcode::Trapz),
-                (Opcode::ResumableTrap),
                 (Opcode::Trapnz),
-                (Opcode::ResumableTrapnz),
                 (Opcode::CallIndirect, &[I32]),
                 (Opcode::FuncAddr),
                 (Opcode::X86Pshufb),
@@ -1185,6 +1180,8 @@ impl AACategory {
     }
 }
 
+pub type StackAlignment = StackSize;
+
 #[derive(Default)]
 struct Resources {
     vars: HashMap<Type, Vec<Variable>>,
@@ -1195,7 +1192,7 @@ struct Resources {
     /// This field is required to be sorted by stack slot size at all times.
     /// We use this invariant when searching for stack slots with a given size.
     /// See [FunctionGenerator::stack_slot_with_size]
-    stack_slots: Vec<(StackSlot, StackSize, AACategory)>,
+    stack_slots: Vec<(StackSlot, StackSize, StackAlignment, AACategory)>,
     usercalls: Vec<(UserExternalName, Signature)>,
     libcalls: Vec<LibCall>,
 }
@@ -1278,11 +1275,14 @@ where
     }
 
     /// Finds a stack slot with size of at least n bytes
-    fn stack_slot_with_size(&mut self, n: u32) -> Result<(StackSlot, StackSize, AACategory)> {
+    fn stack_slot_with_size(
+        &mut self,
+        n: u32,
+    ) -> Result<(StackSlot, StackSize, StackAlignment, AACategory)> {
         let first = self
             .resources
             .stack_slots
-            .partition_point(|&(_slot, size, _category)| size < n);
+            .partition_point(|&(_slot, size, _align, _category)| size < n);
         Ok(*self.u.choose(&self.resources.stack_slots[first..])?)
     }
 
@@ -1307,7 +1307,7 @@ where
         // TODO: Currently our only source of addresses is stack_addr, but we
         // should add global_value, symbol_value eventually
         let (addr, available_size, category) = {
-            let (ss, slot_size, category) = self.stack_slot_with_size(min_size)?;
+            let (ss, slot_size, _align, category) = self.stack_slot_with_size(min_size)?;
 
             // stack_slot_with_size guarantees that slot_size >= min_size
             let max_offset = slot_size - min_size;
@@ -1605,18 +1605,23 @@ where
     fn generate_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         for _ in 0..self.param(&self.config.static_stack_slots_per_function)? {
             let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
-            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes, 0);
+            let alignment = self.param(&self.config.stack_slot_alignment_log2)? as u8;
+            let alignment_bytes = 1 << alignment;
+
+            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes, alignment);
             let slot = builder.create_sized_stack_slot(ss_data);
 
             // Generate one Alias Analysis Category for each slot
             let category = *self.u.choose(AACategory::all())?;
 
-            self.resources.stack_slots.push((slot, bytes, category));
+            self.resources
+                .stack_slots
+                .push((slot, bytes, alignment_bytes, category));
         }
 
         self.resources
             .stack_slots
-            .sort_unstable_by_key(|&(_slot, bytes, _category)| bytes);
+            .sort_unstable_by_key(|&(_slot, bytes, _align, _category)| bytes);
 
         Ok(())
     }
@@ -1629,7 +1634,7 @@ where
         let i64_zero = builder.ins().iconst(I64, 0);
         let i128_zero = builder.ins().uextend(I128, i64_zero);
 
-        for &(slot, init_size, category) in self.resources.stack_slots.iter() {
+        for &(slot, init_size, _align, category) in self.resources.stack_slots.iter() {
             let mut size = init_size;
 
             // Insert the largest available store for the remaining size.

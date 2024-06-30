@@ -1,10 +1,84 @@
+/// Auto-generated bindings for a pre-instantiated version of a
+/// copmonent which implements the world `the-world`.
+///
+/// This structure is created through [`TheWorldPre::new`] which
+/// takes a [`InstancePre`](wasmtime::component::InstancePre) that
+/// has been created through a [`Linker`](wasmtime::component::Linker).
+pub struct TheWorldPre<T> {
+    instance_pre: wasmtime::component::InstancePre<T>,
+    interface0: exports::foo::foo::records::GuestPre,
+}
+impl<T> Clone for TheWorldPre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance_pre: self.instance_pre.clone(),
+            interface0: self.interface0.clone(),
+        }
+    }
+}
+/// Auto-generated bindings for an instance a component which
+/// implements the world `the-world`.
+///
+/// This structure is created through either
+/// [`TheWorld::instantiate`] or by first creating
+/// a [`TheWorldPre`] followed by using
+/// [`TheWorldPre::instantiate`].
 pub struct TheWorld {
     interface0: exports::foo::foo::records::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
+    impl<_T> TheWorldPre<_T> {
+        /// Creates a new copy of `TheWorldPre` bindings which can then
+        /// be used to instantiate into a particular store.
+        ///
+        /// This method may fail if the compoennt behind `instance_pre`
+        /// does not have the required exports.
+        pub fn new(
+            instance_pre: wasmtime::component::InstancePre<_T>,
+        ) -> wasmtime::Result<Self> {
+            let _component = instance_pre.component();
+            let interface0 = exports::foo::foo::records::GuestPre::new(_component)?;
+            Ok(TheWorldPre {
+                instance_pre,
+                interface0,
+            })
+        }
+        /// Instantiates a new instance of [`TheWorld`] within the
+        /// `store` provided.
+        ///
+        /// This function will use `self` as the pre-instantiated
+        /// instance to perform instantiation. Afterwards the preloaded
+        /// indices in `self` are used to lookup all exports on the
+        /// resulting instance.
+        pub fn instantiate(
+            &self,
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let mut store = store.as_context_mut();
+            let _instance = self.instance_pre.instantiate(&mut store)?;
+            let interface0 = self.interface0.load(&mut store, &_instance)?;
+            Ok(TheWorld { interface0 })
+        }
+        pub fn engine(&self) -> &wasmtime::Engine {
+            self.instance_pre.engine()
+        }
+        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+            &self.instance_pre
+        }
+    }
     impl TheWorld {
+        /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -14,53 +88,6 @@ const _: () = {
         {
             foo::foo::records::add_to_linker(linker, get)?;
             Ok(())
-        }
-        /// Instantiates the provided `module` using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            component: &wasmtime::component::Component,
-            linker: &wasmtime::component::Linker<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = linker.instantiate(&mut store, component)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Instantiates a pre-instantiated module using the specified
-        /// parameters, wrapping up the result in a structure that
-        /// translates between wasm and the host.
-        pub fn instantiate_pre<T>(
-            mut store: impl wasmtime::AsContextMut<Data = T>,
-            instance_pre: &wasmtime::component::InstancePre<T>,
-        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
-            let instance = instance_pre.instantiate(&mut store)?;
-            Ok((Self::new(store, &instance)?, instance))
-        }
-        /// Low-level creation wrapper for wrapping up the exports
-        /// of the `instance` provided in this structure of wasm
-        /// exports.
-        ///
-        /// This function will extract exports from the `instance`
-        /// defined within `store` and wrap them all up in the
-        /// returned structure which can be used to interact with
-        /// the wasm module.
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let mut store = store.as_context_mut();
-            let mut exports = instance.exports(&mut store);
-            let mut __exports = exports.root();
-            let interface0 = exports::foo::foo::records::Guest::new(
-                &mut __exports
-                    .instance("foo:foo/records")
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "exported instance `foo:foo/records` not present"
-                        )
-                    })?,
-            )?;
-            Ok(TheWorld { interface0 })
         }
         pub fn foo_foo_records(&self) -> &exports::foo::foo::records::Guest {
             &self.interface0
@@ -597,42 +624,138 @@ pub mod exports {
                     aggregate_result: wasmtime::component::Func,
                     typedef_inout: wasmtime::component::Func,
                 }
-                impl Guest {
+                #[derive(Clone)]
+                pub struct GuestPre {
+                    tuple_arg: wasmtime::component::ComponentExportIndex,
+                    tuple_result: wasmtime::component::ComponentExportIndex,
+                    empty_arg: wasmtime::component::ComponentExportIndex,
+                    empty_result: wasmtime::component::ComponentExportIndex,
+                    scalar_arg: wasmtime::component::ComponentExportIndex,
+                    scalar_result: wasmtime::component::ComponentExportIndex,
+                    flags_arg: wasmtime::component::ComponentExportIndex,
+                    flags_result: wasmtime::component::ComponentExportIndex,
+                    aggregate_arg: wasmtime::component::ComponentExportIndex,
+                    aggregate_result: wasmtime::component::ComponentExportIndex,
+                    typedef_inout: wasmtime::component::ComponentExportIndex,
+                }
+                impl GuestPre {
                     pub fn new(
-                        __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        component: &wasmtime::component::Component,
+                    ) -> wasmtime::Result<GuestPre> {
+                        let _component = component;
+                        let (_, instance) = component
+                            .export_index(None, "foo:foo/records")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `foo:foo/records`"
+                                )
+                            })?;
+                        let _lookup = |name: &str| {
+                            _component
+                                .export_index(Some(&instance), name)
+                                .map(|p| p.1)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "instance export `foo:foo/records` does \
+                not have export `{name}`"
+                                    )
+                                })
+                        };
+                        let tuple_arg = _lookup("tuple-arg")?;
+                        let tuple_result = _lookup("tuple-result")?;
+                        let empty_arg = _lookup("empty-arg")?;
+                        let empty_result = _lookup("empty-result")?;
+                        let scalar_arg = _lookup("scalar-arg")?;
+                        let scalar_result = _lookup("scalar-result")?;
+                        let flags_arg = _lookup("flags-arg")?;
+                        let flags_result = _lookup("flags-result")?;
+                        let aggregate_arg = _lookup("aggregate-arg")?;
+                        let aggregate_result = _lookup("aggregate-result")?;
+                        let typedef_inout = _lookup("typedef-inout")?;
+                        Ok(GuestPre {
+                            tuple_arg,
+                            tuple_result,
+                            empty_arg,
+                            empty_result,
+                            scalar_arg,
+                            scalar_result,
+                            flags_arg,
+                            flags_result,
+                            aggregate_arg,
+                            aggregate_result,
+                            typedef_inout,
+                        })
+                    }
+                    pub fn load(
+                        &self,
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
-                        let tuple_arg = *__exports
-                            .typed_func::<((char, u32),), ()>("tuple-arg")?
+                        let mut store = store.as_context_mut();
+                        let _ = &mut store;
+                        let _instance = instance;
+                        let tuple_arg = *_instance
+                            .get_typed_func::<
+                                ((char, u32),),
+                                (),
+                            >(&mut store, &self.tuple_arg)?
                             .func();
-                        let tuple_result = *__exports
-                            .typed_func::<(), ((char, u32),)>("tuple-result")?
+                        let tuple_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                ((char, u32),),
+                            >(&mut store, &self.tuple_result)?
                             .func();
-                        let empty_arg = *__exports
-                            .typed_func::<(Empty,), ()>("empty-arg")?
+                        let empty_arg = *_instance
+                            .get_typed_func::<(Empty,), ()>(&mut store, &self.empty_arg)?
                             .func();
-                        let empty_result = *__exports
-                            .typed_func::<(), (Empty,)>("empty-result")?
+                        let empty_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                (Empty,),
+                            >(&mut store, &self.empty_result)?
                             .func();
-                        let scalar_arg = *__exports
-                            .typed_func::<(Scalars,), ()>("scalar-arg")?
+                        let scalar_arg = *_instance
+                            .get_typed_func::<
+                                (Scalars,),
+                                (),
+                            >(&mut store, &self.scalar_arg)?
                             .func();
-                        let scalar_result = *__exports
-                            .typed_func::<(), (Scalars,)>("scalar-result")?
+                        let scalar_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                (Scalars,),
+                            >(&mut store, &self.scalar_result)?
                             .func();
-                        let flags_arg = *__exports
-                            .typed_func::<(ReallyFlags,), ()>("flags-arg")?
+                        let flags_arg = *_instance
+                            .get_typed_func::<
+                                (ReallyFlags,),
+                                (),
+                            >(&mut store, &self.flags_arg)?
                             .func();
-                        let flags_result = *__exports
-                            .typed_func::<(), (ReallyFlags,)>("flags-result")?
+                        let flags_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                (ReallyFlags,),
+                            >(&mut store, &self.flags_result)?
                             .func();
-                        let aggregate_arg = *__exports
-                            .typed_func::<(&Aggregates,), ()>("aggregate-arg")?
+                        let aggregate_arg = *_instance
+                            .get_typed_func::<
+                                (&Aggregates,),
+                                (),
+                            >(&mut store, &self.aggregate_arg)?
                             .func();
-                        let aggregate_result = *__exports
-                            .typed_func::<(), (Aggregates,)>("aggregate-result")?
+                        let aggregate_result = *_instance
+                            .get_typed_func::<
+                                (),
+                                (Aggregates,),
+                            >(&mut store, &self.aggregate_result)?
                             .func();
-                        let typedef_inout = *__exports
-                            .typed_func::<(TupleTypedef2,), (i32,)>("typedef-inout")?
+                        let typedef_inout = *_instance
+                            .get_typed_func::<
+                                (TupleTypedef2,),
+                                (i32,),
+                            >(&mut store, &self.typedef_inout)?
                             .func();
                         Ok(Guest {
                             tuple_arg,
@@ -648,6 +771,8 @@ pub mod exports {
                             typedef_inout,
                         })
                     }
+                }
+                impl Guest {
                     pub fn call_tuple_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,

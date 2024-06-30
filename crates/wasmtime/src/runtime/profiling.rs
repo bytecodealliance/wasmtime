@@ -1,12 +1,11 @@
+use crate::instantiate::CompiledModule;
 use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
-use crate::{instantiate::CompiledModule, AsContext, Module};
-#[allow(unused_imports)]
-use anyhow::bail;
-use anyhow::Result;
+use crate::{AsContext, CallHook, Module};
+use fxprof_processed_profile::debugid::DebugId;
 use fxprof_processed_profile::{
-    debugid::DebugId, CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, Profile,
-    ReferenceTimestamp, Symbol, SymbolTable, Timestamp,
+    CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, MarkerLocation, MarkerSchema,
+    MarkerTiming, Profile, ProfilerMarker, ReferenceTimestamp, Symbol, SymbolTable, Timestamp,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -14,8 +13,6 @@ use std::time::{Duration, Instant};
 use wasmtime_environ::demangle_function_name_or_index;
 
 // TODO: collect more data
-// - Provide additional hooks for recording host-guest transitions, to be
-//   invoked from a Store::call_hook
 // - On non-Windows, measure thread-local CPU usage between events with
 //   rustix::time::clock_gettime(ClockId::ThreadCPUTime)
 // - Report which wasm module, and maybe instance, each frame came from
@@ -75,11 +72,13 @@ use wasmtime_environ::demangle_function_name_or_index;
 #[derive(Debug)]
 pub struct GuestProfiler {
     profile: Profile,
-    modules: Vec<(Range<usize>, fxprof_processed_profile::LibraryHandle)>,
+    modules: Modules,
     process: fxprof_processed_profile::ProcessHandle,
     thread: fxprof_processed_profile::ThreadHandle,
     start: Instant,
 }
+
+type Modules = Vec<(Range<usize>, fxprof_processed_profile::LibraryHandle)>;
 
 impl GuestProfiler {
     /// Begin profiling a new guest. When this function is called, the current
@@ -138,35 +137,42 @@ impl GuestProfiler {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );
-
         let backtrace = Backtrace::new(store.as_context().0.vmruntime_limits());
-        let frames = backtrace
-            .frames()
-            // Samply needs to see the oldest frame first, but we list the newest
-            // first, so iterate in reverse.
-            .rev()
-            .filter_map(|frame| {
-                // Find the first module whose start address includes this PC.
-                let module_idx = self
-                    .modules
-                    .partition_point(|(range, _)| range.start > frame.pc());
-                if let Some((range, lib)) = self.modules.get(module_idx) {
-                    if range.contains(&frame.pc()) {
-                        return Some(FrameInfo {
-                            frame: Frame::RelativeAddressFromReturnAddress(
-                                *lib,
-                                u32::try_from(frame.pc() - range.start).unwrap(),
-                            ),
-                            category_pair: CategoryHandle::OTHER.into(),
-                            flags: FrameFlags::empty(),
-                        });
-                    }
-                }
-                None
-            });
-
+        let frames = lookup_frames(&self.modules, &backtrace);
         self.profile
             .add_sample(self.thread, now, frames, delta.into(), 1);
+    }
+
+    /// Add a marker for transitions between guest and host to the profile.
+    /// This function should typically be called from a callback registered
+    /// using [`Store::call_hook()`](crate::Store::call_hook), and the `kind`
+    /// parameter should be the value of the same type passed into that hook.
+    pub fn call_hook(&mut self, store: impl AsContext, kind: CallHook) {
+        let now = Timestamp::from_nanos_since_reference(
+            self.start.elapsed().as_nanos().try_into().unwrap(),
+        );
+        match kind {
+            CallHook::CallingWasm | CallHook::ReturningFromWasm => {}
+            CallHook::CallingHost => {
+                let backtrace = Backtrace::new(store.as_context().0.vmruntime_limits());
+                let frames = lookup_frames(&self.modules, &backtrace);
+                self.profile.add_marker_with_stack(
+                    self.thread,
+                    "hostcall",
+                    CallMarker,
+                    MarkerTiming::IntervalStart(now),
+                    frames,
+                );
+            }
+            CallHook::ReturningFromHost => {
+                self.profile.add_marker(
+                    self.thread,
+                    "hostcall",
+                    CallMarker,
+                    MarkerTiming::IntervalEnd(now),
+                );
+            }
+        }
     }
 
     /// When the guest finishes running, call this function to write the
@@ -218,4 +224,57 @@ fn module_symbols(name: String, compiled: &CompiledModule) -> Option<LibraryInfo
         arch: None,
         symbol_table: Some(Arc::new(SymbolTable::new(symbols))),
     })
+}
+
+fn lookup_frames<'a>(
+    modules: &'a Modules,
+    backtrace: &'a Backtrace,
+) -> impl Iterator<Item = FrameInfo> + 'a {
+    backtrace
+        .frames()
+        // Samply needs to see the oldest frame first, but we list the newest
+        // first, so iterate in reverse.
+        .rev()
+        .filter_map(|frame| {
+            // Find the first module whose start address includes this PC.
+            let module_idx = modules.partition_point(|(range, _)| range.start > frame.pc());
+            if let Some((range, lib)) = modules.get(module_idx) {
+                if range.contains(&frame.pc()) {
+                    return Some(FrameInfo {
+                        frame: Frame::RelativeAddressFromReturnAddress(
+                            *lib,
+                            u32::try_from(frame.pc() - range.start).unwrap(),
+                        ),
+                        category_pair: CategoryHandle::OTHER.into(),
+                        flags: FrameFlags::empty(),
+                    });
+                }
+            }
+            None
+        })
+}
+
+struct CallMarker;
+
+impl ProfilerMarker for CallMarker {
+    const MARKER_TYPE_NAME: &'static str = "hostcall";
+
+    fn schema() -> MarkerSchema {
+        MarkerSchema {
+            type_name: Self::MARKER_TYPE_NAME,
+            locations: vec![
+                MarkerLocation::MarkerChart,
+                MarkerLocation::MarkerTable,
+                MarkerLocation::TimelineOverview,
+            ],
+            chart_label: None,
+            tooltip_label: None,
+            table_label: None,
+            fields: vec![],
+        }
+    }
+
+    fn json_marker_data(&self) -> serde_json::Value {
+        serde_json::json!({ "type": Self::MARKER_TYPE_NAME })
+    }
 }

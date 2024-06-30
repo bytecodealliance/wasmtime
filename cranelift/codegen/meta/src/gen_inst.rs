@@ -725,7 +725,7 @@ fn gen_bitset<'a, T: IntoIterator<Item = &'a u16>>(
         assert!(u32::from(*x) < (1 << u32::from(field_size)));
         acc | x
     });
-    fmtln!(fmt, "{}: BitSet::<u{}>({}),", name, field_size, bits);
+    fmtln!(fmt, "{}: ScalarBitSet::<u{}>({}),", name, field_size, bits);
 }
 
 fn iterable_to_string<I: fmt::Display, T: IntoIterator<Item = I>>(iterable: T) -> String {

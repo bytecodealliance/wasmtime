@@ -133,6 +133,9 @@
 (decl pure u32_and (u32 u32) u32)
 (extern constructor u32_and u32_and)
 
+(decl pure u32_shl (u32 u32) u32)
+(extern constructor u32_shl u32_shl)
+
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
 (decl pure partial s32_add_fallible (i32 i32) i32)
@@ -577,16 +580,6 @@
 ;; type.
 (decl dynamic_lane (u32 u32) Type)
 (extern extractor dynamic_lane dynamic_lane)
-
-;; Match a dynamic-lane integer type, extracting (# bits per lane) from the given
-;; type.
-(decl dynamic_int_lane (u32) Type)
-(extern extractor dynamic_int_lane dynamic_int_lane)
-
-;; Match a dynamic-lane floating point type, extracting (# bits per lane)
-;; from the given type.
-(decl dynamic_fp_lane (u32) Type)
-(extern extractor dynamic_fp_lane dynamic_fp_lane)
 
 ;; An extractor that only matches 64-bit dynamic vector types with integer
 ;; lanes (I8X8XN, I16X4XN, I32X2XN)

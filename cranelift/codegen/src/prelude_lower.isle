@@ -284,6 +284,11 @@
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
 
+;; Extract a constant `i32` from a value defined by an `iconst`.
+;; The value is sign extended to 32 bits.
+(decl i32_from_iconst (i32) Value)
+(extern extractor i32_from_iconst i32_from_iconst)
+
 ;; Extract a constant `i64` from a value defined by an `iconst`.
 ;; The value is sign extended to 64 bits.
 (decl i64_from_iconst (i64) Value)
@@ -301,14 +306,6 @@
 ;; present.
 (decl maybe_uextend (Value) Value)
 (extern extractor maybe_uextend maybe_uextend)
-
-;; Get a signed 32-bit immediate in an u32 from an Imm64, if possible.
-;; Note that this checks that the raw i64 value from the Imm64 fits in i32,
-;; so `-1_u32` will not actually match -- it's treated as `0xFFFF_FFFF_i64`,
-;; which doesn't fit in an i32 and thus doesn't match the extractor.
-;; An Imm64 of `-1_i64` *will* match, however.
-(decl simm32 (i32) Imm64)
-(extern extractor simm32 simm32)
 
 ;; Get an unsigned 8-bit immediate in a u8 from an Imm64, if possible.
 (decl uimm8 (u8) Imm64)

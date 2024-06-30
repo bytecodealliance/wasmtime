@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{RuntimeLinearMemory, Store, VMMemoryDefinition, WaitResult};
-use anyhow::{bail, Result};
 use core::ops::Range;
 use core::time::Duration;
 use wasmtime_environ::{MemoryPlan, Trap};
@@ -63,6 +62,10 @@ impl SharedMemory {
 }
 
 impl RuntimeLinearMemory for SharedMemory {
+    fn page_size_log2(&self) -> u8 {
+        match *self {}
+    }
+
     fn byte_size(&self) -> usize {
         match *self {}
     }

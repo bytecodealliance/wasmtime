@@ -12,7 +12,7 @@ pub type V128Abi = u128;
 pub fn get_stack_pointer() -> usize {
     let stack_pointer: usize;
     unsafe {
-        std::arch::asm!(
+        core::arch::asm!(
             "mv {}, sp",
             out(reg) stack_pointer,
             options(nostack,nomem),

@@ -154,6 +154,7 @@ impl ObjectModule {
     pub fn new(builder: ObjectBuilder) -> Self {
         let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
         object.flags = builder.flags;
+        object.set_subsections_via_symbols();
         object.add_file_symbol(builder.name);
         Self {
             isa: builder.isa,
@@ -368,19 +369,14 @@ impl Module for ObjectModule {
         let align = alignment
             .max(self.isa.function_alignment().minimum.into())
             .max(self.isa.symbol_alignment());
-        let (section, offset) = if self.per_function_section {
+        let section = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
-            let (section, offset) =
-                self.object
-                    .add_subsection(StandardSection::Text, &symbol_name, bytes, align);
-            self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
-            self.object.symbol_mut(symbol).value = offset;
-            (section, offset)
+            self.object
+                .add_subsection(StandardSection::Text, &symbol_name)
         } else {
-            let section = self.object.section_id(StandardSection::Text);
-            let offset = self.object.add_symbol_data(symbol, section, bytes, align);
-            (section, offset)
+            self.object.section_id(StandardSection::Text)
         };
+        let offset = self.object.add_symbol_data(symbol, section, bytes, align);
 
         if !relocs.is_empty() {
             let relocs = relocs

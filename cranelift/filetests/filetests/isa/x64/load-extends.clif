@@ -1,0 +1,316 @@
+test compile precise-output
+set unwind_info=false
+target x86_64
+
+function %load_uextend_i8_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = uextend.i16 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbl  0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_uextend_i8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = uextend.i32 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbl  0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_uextend_i8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = uextend.i64 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbq  0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbq (%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_uextend_i16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i16 v0
+  v2 = uextend.i32 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzwl  0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzwl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_uextend_i16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i16 v0
+  v2 = uextend.i64 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzwq  0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzwq (%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_uextend_i32_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i32 v0
+  v2 = uextend.i64 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_sextend_i8_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = sextend.i16 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsbl  0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movsbl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_sextend_i8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = sextend.i32 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsbl  0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movsbl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_sextend_i8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = sextend.i64 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsbq  0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movsbq (%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_sextend_i16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i16 v0
+  v2 = sextend.i32 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movswl  0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movswl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_sextend_i16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i16 v0
+  v2 = sextend.i64 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movswq  0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movswq (%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_sextend_i32_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i32 v0
+  v2 = sextend.i64 v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movslq  0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movslq (%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

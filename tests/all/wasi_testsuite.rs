@@ -30,7 +30,25 @@ fn wasi_testsuite() -> Result<()> {
     // `cargo test wasi_testsuite -- --nocapture`. The printed output will show
     // the expected result, the actual result, and a command to replicate the
     // failure from the command line.
-    const WASI_COMMON_IGNORE_LIST: &[&str] = &["fd_advise.wasm"];
+    const WASI_COMMON_IGNORE_LIST: &[&str] = &[
+        // Uses functions not supported in Wasmtime due to portability concerns
+        "fd_advise.wasm",
+        "file_allocate.wasm",
+        // #8828
+        "remove_directory_trailing_slashes.wasm",
+        // Working with rights which are removed from wasmtime
+        "truncation_rights.wasm",
+        "fd_fdstat_set_rights.wasm",
+        "path_open_preopen.wasm",
+        "path_link.wasm",
+        // This test wants an operation to fail that wasmtime thinks is valid
+        "renumber.wasm",
+        // Works with FDFLAGS_SYNC which isn't supported
+        "path_filestat.wasm",
+        // this test asserts semantics of pwrite which don't match Linux so
+        // ignore the test for now.
+        "pwrite-with-append.wasm",
+    ];
     run_all(
         "tests/wasi_testsuite/wasi-common",
         &[],
@@ -65,7 +83,19 @@ fn run_all(testsuite_dir: &str, extra_flags: &[&str], ignore: &[&str]) -> Result
             if spec != result {
                 println!("  command: {cmd:?}");
                 println!("  spec: {spec:#?}");
-                println!("  result: {result:#?}");
+                println!("  result.status: {}", result.status);
+                if !result.stdout.is_empty() {
+                    println!(
+                        "  result.stdout:\n    {}",
+                        String::from_utf8_lossy(&result.stdout).replace("\n", "\n    ")
+                    );
+                }
+                if !result.stderr.is_empty() {
+                    println!(
+                        "  result.stderr:\n    {}",
+                        String::from_utf8_lossy(&result.stderr).replace("\n", "\n    ")
+                    );
+                }
                 panic!("FAILED! The result does not match the specification");
             }
         }
@@ -133,7 +163,7 @@ fn clean_garbage(testsuite_dir: &str) -> Result<()> {
     for path in list_files(testsuite_dir, is_garbage) {
         println!("Removing {}", path.display());
         if path.is_dir() {
-            fs::remove_dir(path)?;
+            fs::remove_dir_all(path)?;
         } else {
             fs::remove_file(path)?;
         }

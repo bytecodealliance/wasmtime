@@ -71,9 +71,8 @@ block0(v0: f64):
 ;   fsgnj.d fa4, fa2, fa0
 ;   fmv.d.x fa1, zero
 ;   fadd.d fa2, fa0, fa1, rne
-;   bnez a4, 0xc
 ;   fmv.d fa0, fa2
-;   j 8
+;   beqz a4, 8
 ;   fmv.d fa0, fa4
 ;   ret
 

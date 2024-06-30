@@ -33,7 +33,7 @@ fn build_and_generate_tests() {
         .arg("--target=wasm32-wasi")
         .arg("--package=test-programs")
         .env("CARGO_TARGET_DIR", &out_dir)
-        .env("CARGO_PROFILE_DEV_DEBUG", "1")
+        .env("CARGO_PROFILE_DEV_DEBUG", "2")
         .env("RUSTFLAGS", rustflags())
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
     eprintln!("running: {cmd:?}");
@@ -75,6 +75,7 @@ fn build_and_generate_tests() {
             s if s.starts_with("api_") => "api",
             s if s.starts_with("nn_") => "nn",
             s if s.starts_with("piped_") => "piped",
+            s if s.starts_with("dwarf_") => "dwarf",
             // If you're reading this because you hit this panic, either add it
             // to a test suite above or add a new "suite". The purpose of the
             // categorization above is to have a static assertion that tests
@@ -89,7 +90,10 @@ fn build_and_generate_tests() {
         }
 
         // Generate a component from each test.
-        if kind == "nn" {
+        if target == "dwarf_imported_memory"
+            || target == "dwarf_shared_memory"
+            || target.starts_with("nn_witx")
+        {
             continue;
         }
         let adapter = match target.as_str() {

@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use crate::{linker::DefinitionType, Engine, FuncType};
-use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
     EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex,
     WasmCompositeType, WasmFieldType, WasmHeapType, WasmRefType, WasmSubType, WasmValType,
@@ -228,6 +227,14 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
         actual.maximum,
         "memory",
     )?;
+    if expected.page_size_log2 != actual.page_size_log2 {
+        bail!(
+            "memory types incompatible: expected a memory with a page size of \
+             {}, but received a memory with a page size of {}",
+            expected.page_size(),
+            actual.page_size(),
+        )
+    }
     Ok(())
 }
 

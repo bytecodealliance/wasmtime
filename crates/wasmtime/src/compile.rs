@@ -24,7 +24,6 @@
 
 use crate::prelude::*;
 use crate::Engine;
-use anyhow::{Context, Result};
 use std::{
     any::Any,
     borrow::Cow,
@@ -70,8 +69,9 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     // about the wasm module. This is where the WebAssembly is parsed and
     // validated. Afterwards `types` will have all the type information for
     // this module.
-    let parser = wasmparser::Parser::new(0);
+    let mut parser = wasmparser::Parser::new(0);
     let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
+    parser.set_features(*validator.features());
     let mut types = ModuleTypesBuilder::new(&validator);
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
         .translate(parser, wasm)
@@ -122,7 +122,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 /// The output artifact here is the serialized object file contained within
 /// an owned mmap along with metadata about the compilation itself.
 #[cfg(feature = "component-model")]
-pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
+pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
     _dwarf_package: Option<&[u8]>,
@@ -167,19 +167,7 @@ pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
         module_translations,
         None, // TODO: Support dwarf packages for components.
     )?;
-    let (types, ty) = types.finish(
-        &compilation_artifacts.modules,
-        component
-            .component
-            .import_types
-            .iter()
-            .map(|(_, (name, ty))| (name.clone(), *ty)),
-        component
-            .component
-            .exports
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty)),
-    );
+    let (types, ty) = types.finish(&component.component);
 
     let info = CompiledComponentInfo {
         component: component.component,
@@ -413,11 +401,12 @@ impl<'a> CompileInputs<'a> {
         /// Maximum length of symbols generated in objects.
         const MAX_SYMBOL_LEN: usize = 96;
 
-        // Just to be on the safe side, avoid passing user-provided data to tools
-        // like "perf" or "objdump", and filter the name.  Let only characters usually
-        // used for function names, plus some characters that might be used in name
-        // mangling.
-        let bad_char = |c: char| !c.is_ascii_alphanumeric() && !r"<>[]_-:@$".contains(c);
+        // Just to be on the safe side, filter out characters that could
+        // pose issues to tools such as "perf" or "objdump".  To avoid
+        // having to update a list of allowed characters for each different
+        // language that compiles to Wasm, allows only graphic ASCII
+        // characters; replace runs of everything else with a "?".
+        let bad_char = |c: char| !c.is_ascii_graphic();
         if name.chars().any(bad_char) {
             let mut last_char_seen = '\u{0000}';
             Cow::Owned(
@@ -709,42 +698,18 @@ impl FunctionIndices {
         )?;
 
         // If requested, generate and add DWARF information.
-        if tunables.generate_native_debuginfo &&
-            // We can only add DWARF once. Supporting DWARF for components of
-            // multiple Wasm modules will require merging the DWARF sections
-            // together.
-            translations.len() == 1
-        {
-            for (module, translation) in &translations {
-                let funcs: PrimaryMap<_, _> = self
-                    .indices
-                    .get(&CompileKey::WASM_FUNCTION_KIND)
-                    .map(|xs| {
-                        xs.range(
-                            CompileKey::wasm_function(module, DefinedFuncIndex::from_u32(0))
-                                ..=CompileKey::wasm_function(
-                                    module,
-                                    DefinedFuncIndex::from_u32(u32::MAX - 1),
-                                ),
-                        )
-                    })
-                    .into_iter()
-                    .flat_map(|x| x)
-                    .map(|(_, x)| {
-                        let i = x.unwrap_function();
-                        (symbol_ids_and_locs[i].0, &*compiled_funcs[i].1)
-                    })
-                    .collect();
-                if !funcs.is_empty() {
-                    compiler.append_dwarf(
-                        &mut obj,
-                        translation,
-                        &funcs,
-                        dwarf_package_bytes,
-                        tunables,
-                    )?;
-                }
-            }
+        if tunables.generate_native_debuginfo {
+            compiler.append_dwarf(
+                &mut obj,
+                &translations,
+                &|module, func| {
+                    let bucket = &self.indices[&CompileKey::WASM_FUNCTION_KIND];
+                    let i = bucket[&CompileKey::wasm_function(module, func)].unwrap_function();
+                    (symbol_ids_and_locs[i].0, &*compiled_funcs[i].1)
+                },
+                dwarf_package_bytes,
+                tunables,
+            )?;
         }
 
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);

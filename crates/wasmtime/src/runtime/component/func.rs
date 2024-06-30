@@ -8,7 +8,6 @@ use crate::runtime::vm::{Export, ExportFunction};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
-use anyhow::{bail, Context, Result};
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{

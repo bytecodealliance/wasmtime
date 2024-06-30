@@ -13,13 +13,17 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow = { workspace = true }
 postcard = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true }
+cranelift-bitset = { workspace = true, features = ['enable-serde'] }
 wasmtime-types = { workspace = true }
-wasmparser = { workspace = true, features = ['validate'] }
+wasmparser = { workspace = true, features = ['validate', 'serde'] }
 indexmap = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
@@ -31,6 +35,7 @@ target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
+semver = { workspace = true, optional = true, features = ['serde'] }
 
 [dev-dependencies]
 clap = { workspace = true, features = ['default'] }
@@ -42,7 +47,7 @@ name = "factc"
 required-features = ['component-model', 'compile']
 
 [features]
-component-model = ["dep:wasmtime-component-util"]
+component-model = ["dep:wasmtime-component-util", "dep:semver"]
 demangle = ['std', 'dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
 compile = [

@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use alloc::sync::Arc;
-use anyhow::{bail, ensure, Result};
 use core::fmt;
 use core::str::FromStr;
 use hashbrown::{HashMap, HashSet};
@@ -29,8 +28,6 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
-#[cfg(feature = "pooling-allocator")]
-use crate::runtime::vm::mpk;
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::MpkEnabled;
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
@@ -154,15 +151,13 @@ struct ConfigTunables {
     debug_adapter_modules: Option<bool>,
     relaxed_simd_deterministic: Option<bool>,
     tail_callable: Option<bool>,
-    cache_call_indirects: Option<bool>,
-    max_call_indirect_cache_slots: Option<usize>,
 }
 
 /// User-provided configuration for the compiler.
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 #[derive(Debug, Clone)]
 struct CompilerConfig {
-    strategy: Strategy,
+    strategy: Option<Strategy>,
     target: Option<target_lexicon::Triple>,
     settings: HashMap<String, String>,
     flags: HashSet<String>,
@@ -174,9 +169,9 @@ struct CompilerConfig {
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 impl CompilerConfig {
-    fn new(strategy: Strategy) -> Self {
+    fn new() -> Self {
         Self {
-            strategy,
+            strategy: Strategy::Auto.not_auto(),
             target: None,
             settings: HashMap::new(),
             flags: HashSet::new(),
@@ -210,7 +205,7 @@ impl CompilerConfig {
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 impl Default for CompilerConfig {
     fn default() -> Self {
-        Self::new(Strategy::Auto)
+        Self::new()
     }
 }
 
@@ -721,12 +716,38 @@ impl Config {
     /// programs to implement some recursive algorithms with *O(1)* stack space
     /// usage.
     ///
-    /// This feature is disabled by default.
+    /// This is `true` by default except on s390x or when the Winch compiler is
+    /// enabled.
     ///
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::TAIL_CALL, enable);
         self.tunables.tail_callable = Some(enable);
+        self
+    }
+
+    /// Configures whether the WebAssembly custom-page-sizes proposal will be
+    /// enabled for compilation or not.
+    ///
+    /// The [WebAssembly custom-page-sizes proposal] allows a memory to
+    /// customize its page sizes. By default, Wasm page sizes are 64KiB
+    /// large. This proposal allows the memory to opt into smaller page sizes
+    /// instead, allowing Wasm to run in environments with less than 64KiB RAM
+    /// available, for example.
+    ///
+    /// Note that the page size is part of the memory's type, and because
+    /// different memories may have different types, they may also have
+    /// different page sizes.
+    ///
+    /// Currently the only valid page sizes are 64KiB (the default) and 1
+    /// byte. Future extensions may relax this constraint and allow all powers
+    /// of two.
+    ///
+    /// Support for this proposal is disabled by default.
+    ///
+    /// [WebAssembly custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
+    pub fn wasm_custom_page_sizes(&mut self, enable: bool) -> &mut Self {
+        self.features.set(WasmFeatures::CUSTOM_PAGE_SIZES, enable);
         self
     }
 
@@ -963,57 +984,6 @@ impl Config {
         self
     }
 
-    /// Configures whether we enable the "indirect call cache" optimization.
-    ///
-    /// This feature adds, for each `call_indirect` instruction in a
-    /// Wasm module (i.e., a function-pointer call in guest code), a
-    /// one-entry cache that speeds up the translation from a table
-    /// index to the actual machine code. By default, the VM's
-    /// implementation of this translation requires several
-    /// indirections and checks (table bounds-check, function
-    /// signature-check, table lazy-initialization logic). The intent
-    /// of this feature is to speed up indirect calls substantially
-    /// when they are repeated frequently in hot code.
-    ///
-    /// While it accelerates repeated calls, this feature has the
-    /// potential to slow down instantiation slightly, because it adds
-    /// additional state (the cache storage -- usually 16 bytes per
-    /// `call_indirect` instruction for each instance) that has to be
-    /// initialized. In practice, we have not seen
-    /// measurable/statistically-significant impact from this, though.
-    ///
-    /// Until we have further experience with this feature, it will
-    /// remain off: it is `false` by default.
-    pub fn cache_call_indirects(&mut self, enable: bool) -> &mut Self {
-        self.tunables.cache_call_indirects = Some(enable);
-        self
-    }
-
-    /// Configures the "indirect call cache" maximum capacity.
-    ///
-    /// If the [`Config::cache_call_indirects`] configuration option
-    /// is enabled, the engine allocates "cache slots" directly in its
-    /// per-instance state struct for each `call_indirect` in the
-    /// module's code. We place a limit on this count in order to
-    /// avoid inflating the state too much with very large modules. If
-    /// a module exceeds the limit, the first `max` indirect
-    /// call-sites will still have a one-entry cache, but any indirect
-    /// call-sites beyond the limit (in linear order in the module's
-    /// code section) do not participate in the caching, as if the
-    /// option were turned off.
-    ///
-    /// There is also an internal hard cap to this limit:
-    /// configurations with `max` beyond `50_000` will effectively cap
-    /// the limit at `50_000`. This is so that instance state does not
-    /// become unreasonably large.
-    ///
-    /// This is `50_000` by default.
-    pub fn max_call_indirect_cache_slots(&mut self, max: usize) -> &mut Self {
-        const HARD_CAP: usize = 50_000; // See doc-comment above.
-        self.tunables.max_call_indirect_cache_slots = Some(core::cmp::min(max, HARD_CAP));
-        self
-    }
-
     /// Configures which compilation strategy will be used for wasm modules.
     ///
     /// This method can be used to configure which compiler is used for wasm
@@ -1023,7 +993,7 @@ impl Config {
     /// The default value for this is `Strategy::Auto`.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
-        self.compiler_config.strategy = strategy;
+        self.compiler_config.strategy = strategy.not_auto();
         self
     }
 
@@ -1368,7 +1338,7 @@ impl Config {
     /// for pooling allocation by using memory protection; see
     /// `PoolingAllocatorConfig::memory_protection_keys` for details.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
-        self.tunables.static_memory_reservation = Some(round_up_to_pages(max_size));
+        self.tunables.static_memory_reservation = Some(max_size);
         self
     }
 
@@ -1439,7 +1409,6 @@ impl Config {
     /// The `Engine::new` method will return an error if this option is smaller
     /// than the value configured for [`Config::dynamic_memory_guard_size`].
     pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
-        let guard_size = round_up_to_pages(guard_size);
         self.tunables.static_memory_offset_guard_size = Some(guard_size);
         self
     }
@@ -1472,7 +1441,6 @@ impl Config {
     /// The `Engine::new` method will return an error if this option is larger
     /// than the value configured for [`Config::static_memory_guard_size`].
     pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
-        let guard_size = round_up_to_pages(guard_size);
         self.tunables.dynamic_memory_offset_guard_size = Some(guard_size);
         self
     }
@@ -1512,7 +1480,7 @@ impl Config {
     /// For 64-bit platforms this defaults to 2GB, and for 32-bit platforms this
     /// defaults to 1MB.
     pub fn dynamic_memory_reserved_for_growth(&mut self, reserved: u64) -> &mut Self {
-        self.tunables.dynamic_memory_growth_reserve = Some(round_up_to_pages(reserved));
+        self.tunables.dynamic_memory_growth_reserve = Some(reserved);
         self
     }
 
@@ -1745,7 +1713,7 @@ impl Config {
         // compilation strategy is the only one that supports tail calls, but not targeting s390x.
         if self.tunables.tail_callable.is_none() {
             #[cfg(feature = "cranelift")]
-            let default_tail_calls = self.compiler_config.strategy == Strategy::Cranelift
+            let default_tail_calls = self.compiler_config.strategy == Some(Strategy::Cranelift)
                 && self.compiler_config.target.as_ref().map_or_else(
                     || target_lexicon::Triple::host().architecture,
                     |triple| triple.architecture,
@@ -1828,18 +1796,12 @@ impl Config {
             debug_adapter_modules
             relaxed_simd_deterministic
             tail_callable
-            cache_call_indirects
-            max_call_indirect_cache_slots
         }
 
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
-            tunables.winch_callable = match self.compiler_config.strategy {
-                Strategy::Auto => !cfg!(feature = "cranelift") && cfg!(feature = "winch"),
-                Strategy::Cranelift => false,
-                Strategy::Winch => true,
-            };
+            tunables.winch_callable = self.compiler_config.strategy == Some(Strategy::Winch);
 
             if tunables.winch_callable && tunables.tail_callable {
                 bail!("Winch does not support the WebAssembly tail call proposal");
@@ -1918,17 +1880,15 @@ impl Config {
 
         let mut compiler = match self.compiler_config.strategy {
             #[cfg(feature = "cranelift")]
-            Strategy::Auto => wasmtime_cranelift::builder(target)?,
-            #[cfg(all(feature = "winch", not(feature = "cranelift")))]
-            Strategy::Auto => wasmtime_winch::builder(target)?,
-            #[cfg(feature = "cranelift")]
-            Strategy::Cranelift => wasmtime_cranelift::builder(target)?,
+            Some(Strategy::Cranelift) => wasmtime_cranelift::builder(target)?,
             #[cfg(not(feature = "cranelift"))]
-            Strategy::Cranelift => bail!("cranelift support not compiled in"),
+            Some(Strategy::Cranelift) => bail!("cranelift support not compiled in"),
             #[cfg(feature = "winch")]
-            Strategy::Winch => wasmtime_winch::builder(target)?,
+            Some(Strategy::Winch) => wasmtime_winch::builder(target)?,
             #[cfg(not(feature = "winch"))]
-            Strategy::Winch => bail!("winch support not compiled in"),
+            Some(Strategy::Winch) => bail!("winch support not compiled in"),
+
+            None | Some(Strategy::Auto) => unreachable!(),
         };
 
         if let Some(path) = &self.compiler_config.clif_dir {
@@ -2115,23 +2075,6 @@ impl Config {
     }
 }
 
-/// If building without the runtime feature we can't determine the page size of
-/// the platform where the execution will happen so just keep the original
-/// values.
-#[cfg(not(feature = "runtime"))]
-fn round_up_to_pages(val: u64) -> u64 {
-    val
-}
-
-#[cfg(feature = "runtime")]
-fn round_up_to_pages(val: u64) -> u64 {
-    let page_size = crate::runtime::vm::page_size() as u64;
-    debug_assert!(page_size.is_power_of_two());
-    val.checked_add(page_size - 1)
-        .map(|val| val & !(page_size - 1))
-        .unwrap_or(u64::MAX / page_size + 1)
-}
-
 impl Default for Config {
     fn default() -> Config {
         Config::new()
@@ -2141,34 +2084,22 @@ impl Default for Config {
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut f = f.debug_struct("Config");
-        f.field("debug_info", &self.tunables.generate_native_debuginfo)
-            .field(
-                "wasm_threads",
-                &self.features.contains(WasmFeatures::THREADS),
-            )
-            .field(
-                "wasm_reference_types",
-                &self.features.contains(WasmFeatures::REFERENCE_TYPES),
-            )
-            .field(
-                "wasm_function_references",
-                &self.features.contains(WasmFeatures::FUNCTION_REFERENCES),
-            )
-            .field("wasm_gc", &self.features.contains(WasmFeatures::GC))
-            .field(
-                "wasm_bulk_memory",
-                &self.features.contains(WasmFeatures::BULK_MEMORY),
-            )
-            .field("wasm_simd", &self.features.contains(WasmFeatures::SIMD))
-            .field(
-                "wasm_relaxed_simd",
-                &self.features.contains(WasmFeatures::RELAXED_SIMD),
-            )
-            .field(
-                "wasm_multi_value",
-                &self.features.contains(WasmFeatures::MULTI_VALUE),
-            )
-            .field("parallel_compilation", &self.parallel_compilation);
+        f.field("debug_info", &self.tunables.generate_native_debuginfo);
+
+        // Not every flag in WasmFeatures can be enabled as part of creating
+        // a Config. This impl gives a complete picture of all WasmFeatures
+        // enabled, and doesn't require maintence by hand (which has become out
+        // of date in the past), at the cost of possible confusion for why
+        // a flag in this set doesn't have a Config setter.
+        use bitflags::Flags;
+        for flag in WasmFeatures::FLAGS.iter() {
+            f.field(
+                &format!("wasm_{}", flag.name().to_lowercase()),
+                &self.features.contains(*flag.value()),
+            );
+        }
+
+        f.field("parallel_compilation", &self.parallel_compilation);
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             f.field("compiler_config", &self.compiler_config);
@@ -2217,6 +2148,23 @@ pub enum Strategy {
     /// A baseline compiler for WebAssembly, currently under active development and not ready for
     /// production applications.
     Winch,
+}
+
+impl Strategy {
+    fn not_auto(&self) -> Option<Strategy> {
+        match self {
+            Strategy::Auto => {
+                if cfg!(feature = "cranelift") {
+                    Some(Strategy::Cranelift)
+                } else if cfg!(feature = "winch") {
+                    Some(Strategy::Winch)
+                } else {
+                    None
+                }
+            }
+            other => Some(*other),
+        }
+    }
 }
 
 /// Possible optimization levels for the Cranelift codegen backend.
@@ -2472,7 +2420,6 @@ impl PoolingAllocationConfig {
     /// never be decommitted.
     #[cfg(feature = "async")]
     pub fn async_stack_keep_resident(&mut self, size: usize) -> &mut Self {
-        let size = round_up_to_pages(size as u64) as usize;
         self.config.async_stack_keep_resident = size;
         self
     }
@@ -2489,7 +2436,6 @@ impl PoolingAllocationConfig {
     /// which can, in some configurations, reduce the number of page faults
     /// taken when a slot is reused.
     pub fn linear_memory_keep_resident(&mut self, size: usize) -> &mut Self {
-        let size = round_up_to_pages(size as u64) as usize;
         self.config.linear_memory_keep_resident = size;
         self
     }
@@ -2504,7 +2450,6 @@ impl PoolingAllocationConfig {
     /// [`PoolingAllocationConfig::linear_memory_keep_resident`] except that it
     /// is applicable to tables instead.
     pub fn table_keep_resident(&mut self, size: usize) -> &mut Self {
-        let size = round_up_to_pages(size as u64) as usize;
         self.config.table_keep_resident = size;
         self
     }
@@ -2759,7 +2704,9 @@ impl PoolingAllocationConfig {
 
     /// The maximum byte size that any WebAssembly linear memory may grow to.
     ///
-    /// This option defaults to 10 MiB.
+    /// This option defaults to 4 GiB meaning that for 32-bit linear memories
+    /// there is no restrictions. 64-bit linear memories will not be allowed to
+    /// grow beyond 4 GiB by default.
     ///
     /// If a memory's minimum size is greater than this value, the module will
     /// fail to instantiate.
@@ -2769,11 +2716,15 @@ impl PoolingAllocationConfig {
     /// instruction.
     ///
     /// This value is used to control the maximum accessible space for each
-    /// linear memory of a core instance.
+    /// linear memory of a core instance. This can be thought of as a simple
+    /// mechanism like [`Store::limiter`](crate::Store::limiter) to limit memory
+    /// at runtime. This value can also affect striping/coloring behavior when
+    /// used in conjunction with
+    /// [`memory_protection_keys`](PoolingAllocationConfig::memory_protection_keys).
     ///
-    /// The reservation size of each linear memory is controlled by the
-    /// `static_memory_maximum_size` setting and this value cannot exceed the
-    /// configured static memory maximum size.
+    /// The virtual memory reservation size of each linear memory is controlled
+    /// by the [`Config::static_memory_maximum_size`] setting and this method's
+    /// configuration cannot exceed [`Config::static_memory_maximum_size`].
     pub fn max_memory_size(&mut self, bytes: usize) -> &mut Self {
         self.config.limits.max_memory_size = bytes;
         self
@@ -2789,6 +2740,11 @@ impl PoolingAllocationConfig {
     /// "coloring" memory regions with different memory keys and setting which
     /// regions are accessible each time executions switches from host to guest
     /// (or vice versa).
+    ///
+    /// Leveraging MPK requires configuring a smaller-than-default
+    /// [`max_memory_size`](PoolingAllocationConfig::max_memory_size) to enable
+    /// this coloring/striping behavior. For example embeddings might want to
+    /// reduce the default 4G allowance to 128M.
     ///
     /// MPK is only available on Linux (called `pku` there) and recent x86
     /// systems; we check for MPK support at runtime by examining the `CPUID`
@@ -2807,6 +2763,7 @@ impl PoolingAllocationConfig {
     /// your own risk! MPK uses kernel and CPU features to protect memory
     /// regions; you may observe segmentation faults if anything is
     /// misconfigured.
+    #[cfg(feature = "memory-protection-keys")]
     pub fn memory_protection_keys(&mut self, enable: MpkEnabled) -> &mut Self {
         self.config.memory_protection_keys = enable;
         self
@@ -2824,6 +2781,7 @@ impl PoolingAllocationConfig {
     /// engines will share the same set of allocated keys; this setting will
     /// limit how many keys are allocated initially and thus available to all
     /// other engines.
+    #[cfg(feature = "memory-protection-keys")]
     pub fn max_memory_protection_keys(&mut self, max: usize) -> &mut Self {
         self.config.max_memory_protection_keys = max;
         self
@@ -2835,8 +2793,9 @@ impl PoolingAllocationConfig {
     /// same method that [`MpkEnabled::Auto`] does. See
     /// [`PoolingAllocationConfig::memory_protection_keys`] for more
     /// information.
+    #[cfg(feature = "memory-protection-keys")]
     pub fn are_memory_protection_keys_available() -> bool {
-        mpk::is_supported()
+        crate::runtime::vm::mpk::is_supported()
     }
 
     /// The maximum number of concurrent GC heaps supported (default is `1000`).

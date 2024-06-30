@@ -1,0 +1,28 @@
+{
+  "name": "wasmtime-explorer",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint",
+    "fmt": "prettier --write .",
+    "fmt-check": "prettier --check ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bytecodealliance/wasmtime.git#main"
+  },
+  "author": "The Wasmtime Project Developers",
+  "license": "Apache-2.0 WITH LLVM-exception",
+  "bugs": {
+    "url": "https://github.com/bytecodealliance/wasmtime/issues"
+  },
+  "homepage": "https://github.com/bytecodealliance/wasmtime/tree/main#readme",
+  "description": "",
+  "devDependencies": {
+    "@eslint/js": "^9.3.0",
+    "eslint": "^9.3.0",
+    "prettier": "3.2.5"
+  },
+  "type": "module"
+}

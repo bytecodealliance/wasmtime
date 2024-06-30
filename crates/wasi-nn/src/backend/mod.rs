@@ -3,20 +3,20 @@
 //! implementations to maintain backend-specific state between calls.
 
 #[cfg(feature = "onnx")]
-pub mod onnxruntime;
+pub mod onnx;
 #[cfg(feature = "openvino")]
 pub mod openvino;
 #[cfg(all(feature = "winml", target_os = "windows"))]
 pub mod winml;
 
 #[cfg(feature = "onnx")]
-use self::onnxruntime::OnnxBackend;
+use self::onnx::OnnxBackend;
 #[cfg(feature = "openvino")]
 use self::openvino::OpenvinoBackend;
 #[cfg(all(feature = "winml", target_os = "windows"))]
 use self::winml::WinMLBackend;
 
-use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
+use crate::wit::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph};
 use std::fs::File;
 use std::io::Read;
@@ -69,9 +69,30 @@ pub trait BackendGraph: Send + Sync {
 /// A [BackendExecutionContext] performs the actual inference; this is the
 /// backing implementation for a user-facing execution context.
 pub trait BackendExecutionContext: Send + Sync {
-    fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError>;
+    fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError>;
     fn compute(&mut self) -> Result<(), BackendError>;
-    fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError>;
+    fn get_output(&mut self, id: Id) -> Result<Tensor, BackendError>;
+}
+
+/// An identifier for a tensor in a [Graph].
+#[derive(Debug)]
+pub enum Id {
+    Index(u32),
+    Name(String),
+}
+impl Id {
+    pub fn index(&self) -> Option<u32> {
+        match self {
+            Id::Index(i) => Some(*i),
+            Id::Name(_) => None,
+        }
+    }
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Id::Index(_) => None,
+            Id::Name(n) => Some(n),
+        }
+    }
 }
 
 /// Errors returned by a backend; [BackendError::BackendAccess] is a catch-all

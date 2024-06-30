@@ -54,12 +54,10 @@
 //! }
 //! ```
 
+use crate::prelude::*;
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{Instance, TrapReason, VMGcRef};
-#[cfg(feature = "wmemcheck")]
-use anyhow::bail;
-use anyhow::Result;
 #[cfg(feature = "threads")]
 use core::time::Duration;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};
@@ -197,7 +195,7 @@ fn memory32_grow(
                 error,
                 needs_backtrace: true,
             })? {
-            Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+            Some(size_in_bytes) => size_in_bytes / instance.memory_page_size(memory_index),
             None => usize::max_value(),
         };
     Ok(result as *mut _)

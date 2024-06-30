@@ -1,7 +1,7 @@
 #[cfg(all(not(target_os = "windows"), not(miri)))]
 mod not_for_windows {
     use wasmtime::*;
-    use wasmtime_environ::{WASM32_MAX_SIZE, WASM_PAGE_SIZE};
+    use wasmtime_environ::WASM32_MAX_SIZE;
 
     use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
@@ -22,7 +22,8 @@ mod not_for_windows {
             let page_size = rustix::param::page_size();
             let guard_size = page_size;
             let size = maximum + guard_size;
-            assert_eq!(size % page_size, 0); // we rely on WASM_PAGE_SIZE being multiple of host page size
+            // We rely on the Wasm page size being multiple of host page size.
+            assert_eq!(size % page_size, 0);
 
             let mem = mmap_anonymous(null_mut(), size, ProtFlags::empty(), MapFlags::PRIVATE)
                 .expect("mmap failed");
@@ -180,7 +181,10 @@ mod not_for_windows {
 
         // we take the lock outside the assert, so it won't get poisoned on assert failure
         let tot_pages = *mem_creator.num_total_bytes.lock().unwrap();
-        assert_eq!(tot_pages, (4 * WASM_PAGE_SIZE) as usize);
+        assert_eq!(
+            tot_pages,
+            (4 * wasmtime_environ::Memory::DEFAULT_PAGE_SIZE) as usize
+        );
 
         drop(store);
         let tot_pages = *mem_creator.num_total_bytes.lock().unwrap();

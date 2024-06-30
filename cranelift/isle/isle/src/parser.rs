@@ -356,7 +356,7 @@ impl<'a> Parser<'a> {
         } else {
             Err(self.error(
                 pos,
-                "Invalid extern: must be (extern constructor ...) or (extern extractor ...)"
+                "Invalid extern: must be (extern constructor ...), (extern extractor ...) or (extern const ...)"
                     .to_string(),
             ))
         }
