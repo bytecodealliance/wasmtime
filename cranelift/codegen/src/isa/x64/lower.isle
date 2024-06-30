@@ -2863,6 +2863,29 @@
 (rule 3 (fnmadd ty (fneg x) y z) (fmadd ty x y z))
 (rule 4 (fnmadd ty x (fneg y) z) (fmadd ty x y z))
 
+
+(rule 2 (lower (has_type ty (fma x y (fneg z))))
+      (if-let $true (use_fma))
+      (fmsub ty x y z))
+
+;; fmsub and fnmsub
+(decl fmsub (Type Value Value Value) Xmm)
+;;(decl fnmsub (Type Value Value Value) Xmm)
+
+;; Base case, will sink a load of `z` automatically.
+(rule (fmsub ty x y z) (x64_vfmsub213 ty x y z))
+
+;; Allow sinking loads with one of the two values being multiplied in addition
+;; to the value being subtracted. Note that both x and y can be sunk here due to
+;; multiplication being commutative.
+;;(rule 1 (fmsub ty (sinkable_load x) y z) (x64_vfmsub132 ty y z x))
+;;(rule 2 (fmsub ty x (sinkable_load y) z) (x64_vfmsub132 ty x z y))
+
+;; Like `fmsub` if one argument is negated switch which one is being codegen'd
+;;(rule 3 (fnmsub ty (fneg x) y z) (fmsub ty x y z))
+;;(rule 4 (fnmsub ty x (fneg y) z) (fmsub ty x y z))
+
+
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; In order to load a value from memory to a GPR register, we may need to extend
