@@ -5,8 +5,9 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
+use crate::ir::immediates::Ieee128;
 use crate::ir::pcc::Fact;
-use crate::ir::{Block, DataFlowGraph, Function, Inst, SigRef, Type, Value, ValueDef};
+use crate::ir::{Block, DataFlowGraph, Function, Inst, Opcode, SigRef, Type, Value, ValueDef};
 use crate::packed_option::ReservedValue;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -396,6 +397,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         StoreNoOffset { flags, args, .. } => write!(w, "{} {}, {}", flags, args[0], args[1]),
         Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
+        UnaryIeee16 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryGlobalValue { global_value, .. } => write!(w, " {}", global_value),
@@ -494,8 +496,15 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         if let ValueDef::Result(src, _) = dfg.value_def(arg) {
             let imm = match dfg.insts[src] {
                 UnaryImm { imm, .. } => imm.to_string(),
+                UnaryIeee16 { imm, .. } => imm.to_string(),
                 UnaryIeee32 { imm, .. } => imm.to_string(),
                 UnaryIeee64 { imm, .. } => imm.to_string(),
+                UnaryConst {
+                    constant_handle,
+                    opcode: Opcode::F128const,
+                } => Ieee128::try_from(dfg.constants.get(constant_handle))
+                    .expect("16-byte f128 constant")
+                    .to_string(),
                 UnaryConst {
                     constant_handle, ..
                 } => constant_handle.to_string(),

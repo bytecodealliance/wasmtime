@@ -843,6 +843,12 @@ impl FromStr for Ieee16 {
     }
 }
 
+impl IntoBytes for Ieee16 {
+    fn into_bytes(self) -> Vec<u8> {
+        self.bits().to_le_bytes().to_vec()
+    }
+}
+
 impl Ieee32 {
     /// Create a new `Ieee32` containing the bits of `x`.
     pub fn with_bits(x: u32) -> Self {
@@ -1354,6 +1360,12 @@ impl FromStr for Ieee128 {
             Ok(b) => Ok(Self(b)),
             Err(s) => Err(s),
         }
+    }
+}
+
+impl IntoBytes for Ieee128 {
+    fn into_bytes(self) -> Vec<u8> {
+        self.bits().to_le_bytes().to_vec()
     }
 }
 

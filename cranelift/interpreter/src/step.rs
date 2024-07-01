@@ -83,18 +83,19 @@ where
     let imm = || -> DataValue {
         DataValue::from(match inst {
             InstructionData::UnaryConst {
-                constant_handle, ..
+                constant_handle,
+                opcode,
             } => {
                 let buffer = state
                     .get_current_function()
                     .dfg
                     .constants
-                    .get(constant_handle.clone())
-                    .as_slice();
-                match ctrl_ty.bytes() {
-                    16 => DataValue::V128(buffer.try_into().expect("a 16-byte data buffer")),
-                    8 => DataValue::V64(buffer.try_into().expect("an 8-byte data buffer")),
-                    length => panic!("unexpected UnaryConst buffer length {}", length),
+                    .get(constant_handle.clone());
+                match (ctrl_ty.bytes(), opcode) {
+                    (_, Opcode::F128const) => DataValue::F128(buffer.try_into().expect("a 16-byte data buffer")),
+                    (16, Opcode::Vconst) => DataValue::V128(buffer.as_slice().try_into().expect("a 16-byte data buffer")),
+                    (8, Opcode::Vconst) => DataValue::V64(buffer.as_slice().try_into().expect("an 8-byte data buffer")),
+                    (length, opcode) => panic!("unexpected UnaryConst controlling type size {length} for opcode {opcode:?}"),
                 }
             }
             InstructionData::Shuffle { imm, .. } => {
@@ -115,6 +116,8 @@ where
             InstructionData::BinaryImm8 { imm, .. } | InstructionData::TernaryImm8 { imm, .. } => {
                 DataValue::from(imm as i8) // Note the switch from unsigned to signed.
             }
+            // 16-bit
+            InstructionData::UnaryIeee16 { imm, .. } => DataValue::from(imm),
             // 32-bit
             InstructionData::UnaryIeee32 { imm, .. } => DataValue::from(imm),
             InstructionData::Load { offset, .. }
@@ -552,8 +555,10 @@ where
             ControlFlow::Continue
         }
         Opcode::Iconst => assign(DataValueExt::int(imm().into_int_signed()?, ctrl_ty)?),
+        Opcode::F16const => assign(imm()),
         Opcode::F32const => assign(imm()),
         Opcode::F64const => assign(imm()),
+        Opcode::F128const => assign(imm()),
         Opcode::Vconst => assign(imm()),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
