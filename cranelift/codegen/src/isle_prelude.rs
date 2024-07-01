@@ -938,6 +938,18 @@ macro_rules! isle_common_prelude_methods {
             }
         }
 
+        fn f16_neg(&mut self, n: Ieee16) -> Ieee16 {
+            -n
+        }
+
+        fn f16_abs(&mut self, n: Ieee16) -> Ieee16 {
+            n.abs()
+        }
+
+        fn f16_copysign(&mut self, a: Ieee16, b: Ieee16) -> Ieee16 {
+            a.copysign(b)
+        }
+
         fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
             n.neg()
         }
@@ -959,6 +971,18 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn f64_copysign(&mut self, a: Ieee64, b: Ieee64) -> Ieee64 {
+            a.copysign(b)
+        }
+
+        fn f128_neg(&mut self, n: Ieee128) -> Ieee128 {
+            -n
+        }
+
+        fn f128_abs(&mut self, n: Ieee128) -> Ieee128 {
+            n.abs()
+        }
+
+        fn f128_copysign(&mut self, a: Ieee128, b: Ieee128) -> Ieee128 {
             a.copysign(b)
         }
     };
