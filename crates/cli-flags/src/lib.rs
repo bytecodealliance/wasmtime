@@ -589,8 +589,10 @@ impl CommonOptions {
                     if let Some(limit) = self.opts.pooling_total_tables {
                         cfg.total_tables(limit);
                     }
-                    if let Some(limit) = self.opts.pooling_total_stacks {
-                        cfg.total_stacks(limit);
+                    match_feature! {
+                        ["async" : self.opts.pooling_total_stacks]
+                        limit => cfg.total_stacks(limit),
+                        _ => err,
                     }
                     if let Some(limit) = self.opts.pooling_max_memory_size {
                         cfg.max_memory_size(limit);
