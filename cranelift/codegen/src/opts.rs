@@ -3,7 +3,7 @@
 use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
-pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
+pub use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
 use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{

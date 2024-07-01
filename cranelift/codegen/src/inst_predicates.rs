@@ -121,6 +121,7 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
     }
     match data {
         &InstructionData::UnaryImm { imm, .. } => Some(imm.bits() as u64),
+        &InstructionData::UnaryIeee16 { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee32 { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee64 { imm, .. } => Some(imm.bits()),
         _ => None,

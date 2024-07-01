@@ -36,6 +36,7 @@ pub(crate) struct Formats {
     pub(crate) unary: Rc<InstructionFormat>,
     pub(crate) unary_const: Rc<InstructionFormat>,
     pub(crate) unary_global_value: Rc<InstructionFormat>,
+    pub(crate) unary_ieee16: Rc<InstructionFormat>,
     pub(crate) unary_ieee32: Rc<InstructionFormat>,
     pub(crate) unary_ieee64: Rc<InstructionFormat>,
     pub(crate) unary_imm: Rc<InstructionFormat>,
@@ -47,6 +48,8 @@ impl Formats {
             unary: Builder::new("Unary").value().build(),
 
             unary_imm: Builder::new("UnaryImm").imm(&imm.imm64).build(),
+
+            unary_ieee16: Builder::new("UnaryIeee16").imm(&imm.ieee16).build(),
 
             unary_ieee32: Builder::new("UnaryIeee32").imm(&imm.ieee32).build(),
 

@@ -31,6 +31,11 @@ pub(crate) struct Immediates {
     /// This is used to represent an immediate address offset in load/store instructions.
     pub offset32: OperandKind,
 
+    /// A 16-bit immediate floating point operand.
+    ///
+    /// IEEE 754-2008 binary16 interchange format.
+    pub ieee16: OperandKind,
+
     /// A 32-bit immediate floating point operand.
     ///
     /// IEEE 754-2008 binary32 interchange format.
@@ -118,6 +123,11 @@ impl Immediates {
                 "offset",
                 "ir::immediates::Offset32",
                 "A 32-bit immediate signed offset.",
+            ),
+            ieee16: new_imm(
+                "imm",
+                "ir::immediates::Ieee16",
+                "A 16-bit immediate floating point number.",
             ),
             ieee32: new_imm(
                 "imm",
