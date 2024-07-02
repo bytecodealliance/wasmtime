@@ -14,15 +14,9 @@ jobs:
     if: github.repository == 'bytecodealliance/wasmtime'
     steps:
     - uses: actions/checkout@v4
+    - uses: ./.github/actions/fetch-run-id
     - run: |
-        sha=${{ github.sha }}
-        run_id=$(
-          gh api -H 'Accept: application/vnd.github+json' \
-              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?exclude_pull_requests=true \
-              | jq '.workflow_runs' \
-              | jq "map(select(.head_commit.id == \"$sha\"))[0].id" \
-        )
-        gh run download $run_id
+        gh run download ${COMMIT_RUN_ID}
         ls
         find bins-*
       env:
