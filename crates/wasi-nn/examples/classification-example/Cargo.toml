@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 wasi-nn = "0.1.0"
 
-# This crate is built with the wasm32-wasi target, so it's separate
+# This crate is built with the wasm32-wasip1 target, so it's separate
 # from the main Wasmtime build, so use this directive to exclude it
 # from the parent directory's workspace.
 [workspace]

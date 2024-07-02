@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
 
     // Instantiate our 'Hello World' wasm module.
     // Note: This is a module built against the preview1 WASI API.
-    let module = Module::from_file(&engine, "target/wasm32-wasi/debug/wasi.wasm")?;
+    let module = Module::from_file(&engine, "target/wasm32-wasip1/debug/wasi.wasm")?;
     let func = linker
         .module_async(&mut store, "", &module)
         .await?

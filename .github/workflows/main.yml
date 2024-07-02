@@ -588,7 +588,7 @@ jobs:
         toolchain: ${{ matrix.rust }}
 
     # Install targets in order to build various tests throughout the repo
-    - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
+    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown ${{ matrix.target }}
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
       if: matrix.target != ''
 
@@ -716,7 +716,7 @@ jobs:
       if: (matrix.os == 'windows-latest') && (matrix.feature == 'winml')
 
     # Install Rust targets.
-    - run: rustup target add wasm32-wasi
+    - run: rustup target add wasm32-wasip1
 
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
@@ -766,7 +766,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
+    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
@@ -796,7 +796,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
+    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
 
     - name: Install wasm-tools
       run: |
@@ -862,8 +862,8 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
-    - run: cargo build --target wasm32-wasi --no-default-features --features compile,cranelift,all-arch
+    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+    - run: cargo build --target wasm32-wasip1 --no-default-features --features compile,cranelift,all-arch
       env:
         VERSION: ${{ github.sha }}
 
@@ -884,7 +884,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasi
+    - run: rustup target add wasm32-wasip1
     - run: cargo test --benches --release
 
     # common logic to cancel the entire run if this job fails

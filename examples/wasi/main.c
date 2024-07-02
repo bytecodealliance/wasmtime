@@ -48,7 +48,7 @@ int main() {
 
   wasm_byte_vec_t wasm;
   // Load our input file to parse it next
-  FILE *file = fopen("target/wasm32-wasi/debug/wasi.wasm", "rb");
+  FILE *file = fopen("target/wasm32-wasip1/debug/wasi.wasm", "rb");
   if (!file) {
     printf("> Error loading file!\n");
     exit(1);

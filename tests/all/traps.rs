@@ -723,7 +723,7 @@ fn rustc(src: &str) -> Vec<u8> {
         .arg("-o")
         .arg(&output)
         .arg("--target")
-        .arg("wasm32-wasi")
+        .arg("wasm32-wasip1")
         .arg("-g")
         .output()
         .unwrap();
