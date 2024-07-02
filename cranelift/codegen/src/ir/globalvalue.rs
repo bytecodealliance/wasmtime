@@ -9,7 +9,7 @@ use core::fmt;
 use serde_derive::{Deserialize, Serialize};
 
 /// Information about a global value declaration.
-#[derive(Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum GlobalValueData {
     /// Value is the address of the VM context struct.

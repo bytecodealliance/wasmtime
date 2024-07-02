@@ -1448,12 +1448,22 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
 
         for block in 0..self.num_blocks() {
             let block = BlockIndex::new(block);
-            writeln!(f, "Block {}:", block.index())?;
+            writeln!(
+                f,
+                "Block {}({:?}):",
+                block.index(),
+                self.block_params(block)
+            )?;
             if let Some(bb) = self.bindex_to_bb(block) {
                 writeln!(f, "    (original IR block: {})", bb)?;
             }
-            for succ in self.block_succs(block) {
-                writeln!(f, "    (successor: Block {})", succ.index())?;
+            for (succ_idx, succ) in self.block_succs(block).iter().enumerate() {
+                writeln!(
+                    f,
+                    "    (successor: Block {}({:?}))",
+                    succ.index(),
+                    self.branch_blockparams(block, InsnIndex::new(0) /* dummy */, succ_idx)
+                )?;
             }
             for inst in self.block_ranges.get(block.index()) {
                 writeln!(
