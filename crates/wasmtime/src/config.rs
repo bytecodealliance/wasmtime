@@ -984,6 +984,18 @@ impl Config {
         self
     }
 
+    /// Configures whether components support more than 32 flags in each `flags`
+    /// type.
+    ///
+    /// This is part of the transition plan in
+    /// https://github.com/WebAssembly/component-model/issues/370.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_more_flags(&mut self, enable: bool) -> &mut Self {
+        self.features
+            .set(WasmFeatures::COMPONENT_MODEL_MORE_FLAGS, enable);
+        self
+    }
+
     /// Configures which compilation strategy will be used for wasm modules.
     ///
     /// This method can be used to configure which compiler is used for wasm

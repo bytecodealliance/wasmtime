@@ -254,7 +254,9 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         cfg.cranelift_debug_verifier(true);
     }
 
-    cfg.wasm_component_model(feature_found(wast, "component-model"));
+    let component_model = feature_found(wast, "component-model");
+    cfg.wasm_component_model(component_model)
+        .wasm_component_model_more_flags(component_model);
 
     if feature_found(wast, "canonicalize-nan") && is_cranelift {
         cfg.cranelift_nan_canonicalization(true);
