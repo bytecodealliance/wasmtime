@@ -671,11 +671,11 @@ impl<'a> Verifier<'a> {
                 self.verify_bitcast(inst, flags, arg, errors)?;
             }
             UnaryConst {
-                opcode: Opcode::Vconst,
+                opcode: opcode @ (Opcode::Vconst | Opcode::F128const),
                 constant_handle,
                 ..
             } => {
-                self.verify_constant_size(inst, constant_handle, errors)?;
+                self.verify_constant_size(inst, opcode, constant_handle, errors)?;
             }
 
             // Exhaustive list so we can't forget to add new formats
@@ -686,6 +686,7 @@ impl<'a> Verifier<'a> {
             | Unary { .. }
             | UnaryConst { .. }
             | UnaryImm { .. }
+            | UnaryIeee16 { .. }
             | UnaryIeee32 { .. }
             | UnaryIeee64 { .. }
             | Binary { .. }
@@ -1034,10 +1035,15 @@ impl<'a> Verifier<'a> {
     fn verify_constant_size(
         &self,
         inst: Inst,
+        opcode: Opcode,
         constant: Constant,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
-        let type_size = self.func.dfg.ctrl_typevar(inst).bytes() as usize;
+        let type_size = match opcode {
+            Opcode::F128const => types::F128.bytes(),
+            Opcode::Vconst => self.func.dfg.ctrl_typevar(inst).bytes(),
+            _ => unreachable!("unexpected opcode {opcode:?}"),
+        } as usize;
         let constant_size = self.func.dfg.constants.get(constant).len();
         if type_size != constant_size {
             errors.fatal((

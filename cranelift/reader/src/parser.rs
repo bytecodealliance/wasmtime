@@ -2874,6 +2874,10 @@ impl<'a> Parser<'a> {
                     imm: Imm64::new(unsigned),
                 }
             }
+            InstructionFormat::UnaryIeee16 => InstructionData::UnaryIeee16 {
+                opcode,
+                imm: self.match_ieee16("expected immediate 16-bit float operand")?,
+            },
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
                 imm: self.match_ieee32("expected immediate 32-bit float operand")?,
@@ -2888,6 +2892,9 @@ impl<'a> Parser<'a> {
                     let c = self.match_constant()?;
                     ctx.check_constant(c, self.loc)?;
                     c
+                } else if opcode == Opcode::F128const {
+                    let ieee128 = self.match_ieee128("expected immediate 128-bit float operand")?;
+                    ctx.function.dfg.constants.insert(ieee128.into())
                 } else if let Some(controlling_type) = explicit_control_type {
                     // If an explicit control type is present, we expect a sized value and insert
                     // it in the constant pool.

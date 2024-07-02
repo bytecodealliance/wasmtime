@@ -8,7 +8,7 @@
 //! - ensuring alignment of constants within the pool,
 //! - bucketing constants by size.
 
-use crate::ir::immediates::{IntoBytes, V128Imm};
+use crate::ir::immediates::{Ieee128, IntoBytes, V128Imm};
 use crate::ir::Constant;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
@@ -51,6 +51,22 @@ impl From<&[u8]> for ConstantData {
 impl From<V128Imm> for ConstantData {
     fn from(v: V128Imm) -> Self {
         Self(v.to_vec())
+    }
+}
+
+impl From<Ieee128> for ConstantData {
+    fn from(v: Ieee128) -> Self {
+        Self(v.into_bytes())
+    }
+}
+
+impl TryFrom<&ConstantData> for Ieee128 {
+    type Error = <[u8; 16] as TryFrom<&'static [u8]>>::Error;
+
+    fn try_from(value: &ConstantData) -> Result<Self, Self::Error> {
+        Ok(Ieee128::with_bits(u128::from_le_bytes(
+            value.as_slice().try_into()?,
+        )))
     }
 }
 
@@ -458,5 +474,16 @@ mod tests {
             parse_to_uimm128("0x1234_5678"),
             [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
+    }
+
+    #[test]
+    fn constant_ieee128() {
+        let value = Ieee128::with_bits(0x000102030405060708090a0b0c0d0e0f);
+        let constant = ConstantData::from(value);
+        assert_eq!(
+            constant.as_slice(),
+            &[0xf, 0xe, 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0]
+        );
+        assert_eq!(Ieee128::try_from(&constant).unwrap().bits(), value.bits());
     }
 }
