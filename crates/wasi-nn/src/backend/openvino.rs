@@ -94,7 +94,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
             Id::Name(name) => name,
         };
 
-        // Construct the blob structure. TODO: there must be some good way to
+        // Construct the tensor. TODO: there must be some good way to
         // discover the layout here; `desc` should not have to default to NHWC.
         let precision = map_tensor_type_to_precision(tensor.ty);
         let dimensions = tensor
