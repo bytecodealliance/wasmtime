@@ -300,12 +300,12 @@ block0(v0: i64, v1: i64, v2: i64):
     v241 -> v1
     v256 -> v1
     v262 -> v1
-    v3 = imul v0, v1
+    @0001 v3 = imul v0, v1
     v4 = imul v1, v2
     store aligned v4, v3
     v5 = load.i64 aligned v2+8
     store aligned v5, v3+8
-    v6 = stack_addr.i64 ss1
+    @0002 v6 = stack_addr.i64 ss1
     v7 = stack_addr.i64 ss2
     v8 = stack_addr.i64 ss3
     v9 = stack_addr.i64 ss4
@@ -366,7 +366,7 @@ block0(v0: i64, v1: i64, v2: i64):
     v64 = stack_addr.i64 ss59
     v65 = stack_addr.i64 ss60
     v66 = stack_addr.i64 ss61
-    v67 = stack_addr.i64 ss62
+    @0003 v67 = stack_addr.i64 ss62
     v68 = stack_addr.i64 ss63
     v69 = stack_addr.i64 ss64
     v70 = stack_addr.i64 ss65
