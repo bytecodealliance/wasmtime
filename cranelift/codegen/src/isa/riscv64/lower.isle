@@ -1554,11 +1554,21 @@
 (rule 1 (is_fneg (fneg x)) (IsFneg.Result 1 x))
 (rule 0 (is_fneg x) (IsFneg.Result 0 x))
 
+(decl pure is_fneg_neg (IsFneg) u64)
+(rule (is_fneg_neg (IsFneg.Result n _)) n)
+
+(decl pure get_fneg_value (IsFneg) Value)
+(rule (get_fneg_value (IsFneg.Result _ v)) v)
+
 (rule (lower (has_type ty (fma x_src y_src z_src)))
-  (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
-  (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
-  (if-let (IsFneg.Result neg_z z) (is_fneg z_src))
-  (rv_fma ty (u64_xor neg_x neg_y) neg_z x y z))
+  (let
+    ((x_res IsFneg (is_fneg x_src))
+     (y_res IsFneg (is_fneg y_src))
+     (z_res IsFneg (is_fneg z_src))
+     (x Value (get_fneg_value x_res))
+     (y Value (get_fneg_value y_res))
+     (z Value (get_fneg_value z_res)))
+    (rv_fma ty (u64_xor (is_fneg_neg x_res) (is_fneg_neg y_res)) (is_fneg_neg z_res) x y z)))
 
 ; parity arguments indicate whether to negate the x*y term or the z term, respectively
 (decl rv_fma (Type u64 u64 Value Value Value) InstOutput)
