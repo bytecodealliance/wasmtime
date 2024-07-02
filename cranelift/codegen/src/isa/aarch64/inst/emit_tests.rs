@@ -6442,6 +6442,19 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRRR {
+            fpu_op: FPUOp3::MSub,
+            size: ScalarSize::Size32,
+            rd: writable_vreg(15),
+            rn: vreg(30),
+            rm: vreg(31),
+            ra: vreg(1),
+        },
+        "CF871F1F",
+        "fmsub s15, s30, s31, s1",
+    ));
+
+    insns.push((
+        Inst::FpuRRRR {
             fpu_op: FPUOp3::MAdd,
             size: ScalarSize::Size64,
             rd: writable_vreg(15),
@@ -6451,6 +6464,19 @@ fn test_aarch64_binemit() {
         },
         "CF075F1F",
         "fmadd d15, d30, d31, d1",
+    ));
+
+    insns.push((
+        Inst::FpuRRRR {
+            fpu_op: FPUOp3::MSub,
+            size: ScalarSize::Size64,
+            rd: writable_vreg(15),
+            rn: vreg(30),
+            rm: vreg(31),
+            ra: vreg(1),
+        },
+        "CF875F1F",
+        "fmsub d15, d30, d31, d1",
     ));
 
     insns.push((
