@@ -262,6 +262,7 @@ wasm-smith = "0.211.1"
 wasm-mutate = "0.211.1"
 wit-parser = "0.211.1"
 wit-component = "0.211.1"
+wasm-wave = "0.211.1"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

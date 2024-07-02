@@ -1,18 +1,17 @@
 use crate::component::instance::{Instance, InstanceData};
 use crate::component::storage::storage_as_slice;
-use crate::component::types::Type;
+use crate::component::types::{ComponentFunc, Type};
 use crate::component::values::Val;
 use crate::prelude::*;
 use crate::runtime::vm::component::ResourceTables;
 use crate::runtime::vm::{Export, ExportFunction};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
-use alloc::sync::Arc;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
-    TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalOptions, CoreDef, InterfaceType, RuntimeComponentInstanceIndex, TypeFuncIndex,
+    TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 
 mod host;
@@ -42,7 +41,6 @@ pub struct Func(Stored<FuncData>);
 pub struct FuncData {
     export: ExportFunction,
     ty: TypeFuncIndex,
-    types: Arc<ComponentTypes>,
     options: Options,
     instance: Instance,
     component_instance: RuntimeComponentInstanceIndex,
@@ -77,7 +75,6 @@ impl Func {
             export,
             options,
             ty,
-            types: data.component_types().clone(),
             instance: *instance,
             component_instance,
             post_return,
@@ -208,28 +205,22 @@ impl Func {
         Ok(())
     }
 
-    /// Get the parameter types for this function.
-    pub fn params(&self, store: impl AsContext) -> Box<[Type]> {
+    /// Get the `ComponentFunc`, which describes the type of this function.
+    pub fn ty(&self, store: impl AsContext) -> ComponentFunc {
         let store = store.as_context();
         let data = &store[self.0];
         let instance = store[data.instance.0].as_ref().unwrap();
-        data.types[data.types[data.ty].params]
-            .types
-            .iter()
-            .map(|ty| Type::from(ty, &instance.ty()))
-            .collect()
+        ComponentFunc::from(data.ty, &instance.ty())
+    }
+
+    /// Get the parameter types for this function.
+    pub fn params(&self, store: impl AsContext) -> Box<[Type]> {
+        self.ty(&store).params().collect()
     }
 
     /// Get the result types for this function.
     pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
-        let store = store.as_context();
-        let data = &store[self.0];
-        let instance = store[data.instance.0].as_ref().unwrap();
-        data.types[data.types[data.ty].results]
-            .types
-            .iter()
-            .map(|ty| Type::from(ty, &instance.ty()))
-            .collect()
+        self.ty(&store).results().collect()
     }
 
     /// Invokes this function with the `params` given and returns the result.

@@ -33,6 +33,7 @@ wasmtime-wmemcheck = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
+wasm-wave = { workspace = true, optional = true }
 anyhow = { workspace = true }
 libc = { workspace = true }
 cfg-if = { workspace = true }
@@ -269,3 +270,6 @@ call-hook = []
 # Enables support for "memory protection keys" which can be used in conjunction
 # with the pooling allocator on x64 to compact linear memory allocations.
 memory-protection-keys = ["pooling-allocator"]
+
+# Wave
+wave = ["dep:wasm-wave"]
