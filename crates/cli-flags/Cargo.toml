@@ -21,6 +21,7 @@ wasmtime = { workspace = true, features = ["gc"] }
 humantime = { workspace = true }
 
 [features]
+async = ["wasmtime/async"]
 pooling-allocator = ["wasmtime/pooling-allocator"]
 component-model = ["wasmtime/component-model"]
 cache = ["wasmtime/cache"]

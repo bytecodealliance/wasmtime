@@ -369,8 +369,10 @@ jobs:
           - name: wasmtime-cli
             checks: |
               -p wasmtime-cli --no-default-features
+              -p wasmtime-cli --no-default-features --features pooling-allocator
               -p wasmtime-cli --no-default-features --features run
               -p wasmtime-cli --no-default-features --features run,component-model
+              -p wasmtime-cli --no-default-features --features run,pooling-allocator
               -p wasmtime-cli --no-default-features --features compile
               -p wasmtime-cli --no-default-features --features compile,cranelift
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
