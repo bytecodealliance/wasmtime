@@ -37,6 +37,7 @@ pub fn generate(
   <body class="hbox">
     <pre id="wat"></pre>
     <div id="asm"></div>
+    <div id="bridge" class="hovered"></div>
     <script>
       window.WAT = {wat_json};
       window.ASM = {asm_json};
