@@ -733,7 +733,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         _uses: CallArgList,
         _defs: CallRetList,
         _clobbers: PRegSet,
-        _opcode: ir::Opcode,
         _tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,

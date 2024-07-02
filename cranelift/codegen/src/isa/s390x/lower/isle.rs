@@ -193,15 +193,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         name: ExternalName,
         uses: &CallArgList,
         defs: &CallRetList,
-        opcode: &Opcode,
     ) -> BoxCallInfo {
-        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
+        let sig_data = &self.lower_ctx.sigs()[abi];
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set later.
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
         Box::new(CallInfo {
             dest: name.clone(),
             uses: uses.clone(),
             defs: defs.clone(),
             clobbers,
-            opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
             callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
             tls_symbol: None,
@@ -214,15 +215,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         target: Reg,
         uses: &CallArgList,
         defs: &CallRetList,
-        opcode: &Opcode,
     ) -> BoxCallIndInfo {
-        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
+        let sig_data = &self.lower_ctx.sigs()[abi];
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set later.
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
         Box::new(CallIndInfo {
             rn: target,
             uses: uses.clone(),
             defs: defs.clone(),
             clobbers,
-            opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
             callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
         })
@@ -288,18 +290,14 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         let caller_callconv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let callee_callconv = CallConv::for_libcall(&self.backend.flags, caller_callconv);
 
-        // Clobbers are defined by the calling convention.  Remove defs from clobbers.
-        let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_callconv);
-        for reg in &info.defs {
-            clobbers.remove(PReg::from(reg.preg.to_real_reg().unwrap()));
-        }
+        // Clobbers are defined by the calling convention. We will remove return value regs later.
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_callconv);
 
         Box::new(CallInfo {
             dest: ExternalName::LibCall(info.libcall),
             uses: info.uses.clone(),
             defs: info.defs.clone(),
             clobbers,
-            opcode: Opcode::Call,
             caller_callconv,
             callee_callconv,
             tls_symbol: info.tls_symbol.clone(),

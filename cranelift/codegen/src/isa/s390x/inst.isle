@@ -3535,22 +3535,22 @@
 (decl abi_first_ret (SigRef Sig) usize)
 (extern constructor abi_first_ret abi_first_ret)
 
-(decl abi_call_info (Sig ExternalName CallArgList CallRetList Opcode) BoxCallInfo)
+(decl abi_call_info (Sig ExternalName CallArgList CallRetList) BoxCallInfo)
 (extern constructor abi_call_info abi_call_info)
 
-(decl abi_call_ind_info (Sig Reg CallArgList CallRetList Opcode) BoxCallIndInfo)
+(decl abi_call_ind_info (Sig Reg CallArgList CallRetList) BoxCallIndInfo)
 (extern constructor abi_call_ind_info abi_call_ind_info)
 
 (decl writable_link_reg () WritableReg)
 (rule (writable_link_reg) (writable_gpr 14))
 
-(decl abi_call (Sig ExternalName CallArgList CallRetList Opcode) SideEffectNoResult)
-(rule (abi_call abi name uses defs opcode)
-      (call_impl (writable_link_reg) (abi_call_info abi name uses defs opcode)))
+(decl abi_call (Sig ExternalName CallArgList CallRetList) SideEffectNoResult)
+(rule (abi_call abi name uses defs)
+      (call_impl (writable_link_reg) (abi_call_info abi name uses defs)))
 
-(decl abi_call_ind (Sig Reg CallArgList CallRetList Opcode) SideEffectNoResult)
-(rule (abi_call_ind abi target uses defs opcode)
-      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target uses defs opcode)))
+(decl abi_call_ind (Sig Reg CallArgList CallRetList) SideEffectNoResult)
+(rule (abi_call_ind abi target uses defs)
+      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target uses defs)))
 
 (decl abi_accumulate_outgoing_args_size (Sig) Unit)
 (extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
