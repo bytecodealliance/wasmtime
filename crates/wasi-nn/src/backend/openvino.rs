@@ -3,7 +3,7 @@
 use super::{
     read, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id,
 };
-use crate::wit::{self, ExecutionTarget, GraphEncoding, Tensor, TensorType};
+use crate::wit::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use openvino::{DeviceType, ElementType, InferenceError, SetupError, Shape, Tensor as OvTensor};
 use std::path::Path;
@@ -89,13 +89,7 @@ struct OpenvinoExecutionContext(openvino::InferRequest);
 
 impl BackendExecutionContext for OpenvinoExecutionContext {
     fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError> {
-        let input_name = match id {
-            Id::Index(i) => self.0.get_input_name(i as usize)?,
-            Id::Name(name) => name,
-        };
-
-        // Construct the tensor. TODO: there must be some good way to
-        // discover the layout here; `desc` should not have to default to NHWC.
+        // Construct the tensor.
         let precision = map_tensor_type_to_precision(tensor.ty);
         let dimensions = tensor
             .dimensions
@@ -106,10 +100,11 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         let mut new_tensor = OvTensor::new(precision, &shape)?;
         let buffer = new_tensor.get_raw_data_mut()?;
         buffer.copy_from_slice(&tensor.data);
-
         // Assign the tensor to the request.
-        self.0
-            .set_input_tensor_by_index(index as usize, &new_tensor)?;
+        match id {
+            Id::Index(i) => self.0.set_input_tensor_by_index(i as usize, &new_tensor)?,
+            Id::Name(name) => self.0.set_tensor(&name, &new_tensor)?,
+        };
         Ok(())
     }
 
@@ -120,13 +115,17 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
 
     fn get_output(&mut self, id: Id) -> Result<Tensor, BackendError> {
         let output_name = match id {
-            Id::Index(i) => self.0.get_output_name(i as usize)?,
-            Id::Name(name) => name,
+            Id::Index(i) => self.0.get_output_tensor_by_index(i as usize)?,
+            Id::Name(name) => self.0.get_tensor(&name)?,
         };
-        let dimensions = vec![]; // TODO: get actual shape
-        let ty = wit::TensorType::Fp32; // TODO: get actual type.
-        let blob = self.1.get_blob(&output_name)?;
-        let data = blob.buffer()?.to_vec();
+        let dimensions = output_name
+            .get_shape()?
+            .get_dimensions()
+            .iter()
+            .map(|&dim| dim as u32)
+            .collect::<Vec<u32>>();
+        let ty = map_precision_to_tensor_type(output_name.get_element_type()?);
+        let data = output_name.get_raw_data()?.to_vec();
         Ok(Tensor {
             dimensions,
             ty,
@@ -167,6 +166,33 @@ fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::ElementTyp
         TensorType::U8 => ElementType::U8,
         TensorType::I32 => ElementType::I32,
         TensorType::I64 => ElementType::I64,
-        TensorType::Bf16 => todo!("not yet supported in `openvino` bindings"),
+        TensorType::Bf16 => ElementType::Bf16,
+    }
+}
+
+/// Return the `TensorType` enum provided by wasi-nn for OpenVINO's precision type
+fn map_precision_to_tensor_type(element_type: openvino::ElementType) -> TensorType {
+    match element_type {
+        ElementType::F16 => TensorType::Fp16,
+        ElementType::F32 => TensorType::Fp32,
+        ElementType::F64 => TensorType::Fp64,
+        ElementType::U8 => TensorType::U8,
+        ElementType::I32 => TensorType::I32,
+        ElementType::I64 => TensorType::I64,
+        ElementType::Bf16 => TensorType::Bf16,
+        ElementType::Undefined => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::Dynamic => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::Boolean => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::I4 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::I8 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::I16 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::U1 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::U4 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::U16 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::U32 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::U64 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::NF4 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::F8E4M3 => todo!("not yet supported in wasi-nn `TensorType`"),
+        ElementType::F8E5M3 => todo!("not yet supported in wasi-nn `TensorType`"),
     }
 }
