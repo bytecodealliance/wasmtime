@@ -1584,9 +1584,7 @@ impl StoreOpaque {
 
     #[inline]
     pub(crate) fn exit_gc_lifo_scope(&mut self, scope: usize) {
-        if let Some(gc_store) = self.gc_store.as_mut() {
-            self.gc_roots.exit_lifo_scope(gc_store, scope);
-        }
+        self.gc_roots.exit_lifo_scope(self.gc_store.as_mut(), scope);
     }
 
     #[cfg(feature = "gc")]

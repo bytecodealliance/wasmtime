@@ -16,6 +16,7 @@ mod funcref;
 mod gc;
 mod globals;
 mod host_funcs;
+mod i31ref;
 mod iloop;
 mod import_calling_export;
 mod import_indexes;
