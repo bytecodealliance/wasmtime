@@ -45,7 +45,7 @@ impl RootSet {
         usize::MAX
     }
 
-    pub(crate) fn exit_lifo_scope(&mut self, _gc_store: &mut GcStore, _scope: usize) {}
+    pub(crate) fn exit_lifo_scope(&mut self, _gc_store: Option<&mut GcStore>, _scope: usize) {}
 
     pub(crate) fn with_lifo_scope<T>(
         store: &mut StoreOpaque,
