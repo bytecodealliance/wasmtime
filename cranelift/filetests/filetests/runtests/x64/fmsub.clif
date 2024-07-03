@@ -1,0 +1,18 @@
+test interpret
+test run
+target x86_64 has_avx has_fma
+
+function %fnmsub_f64(f64, f64, f64) -> f64 {
+    ss0 = explicit_slot 16
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = stack_addr.i64 ss0
+    store.f64 v2, v3
+    v4 = load.f64 v3
+    v5 = fneg v0
+    v6 = fneg v4
+    v7 = fma v5, v1, v6
+    return v7
+}
+; run: %fnmsub_f64(0x1.3b88ea148dd4ap14, 0x2.680916809121p6, 0x9.887218721837p1) == -0x1.7ba6ebee17417p21
+; run: %fnmsub_f64(-0x1.3b88ea148dd4ap14, 0x2.680916809121p6, 0x9.887218721837p1) == 0x1.7ba5badfd4333p21
+; run: %fnmsub_f64(-0x1.3b88ea148dd4ap14, 0x2.680916809121p6, -0x9.887218721837p1) == 0x1.7ba6ebee17417p21

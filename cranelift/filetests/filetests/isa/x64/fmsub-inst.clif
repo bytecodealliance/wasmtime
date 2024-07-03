@@ -436,3 +436,45 @@ block0(v0: f64x2, v1: i64, v2: f64x2):
 ;   popq %rbp
 ;   retq
 
+;; This test is here to ensure, that the runtests for fnmsub do the right thing
+;; If this breaks, re-evaluate that the runtests still exercise the load sinking
+;; lowering rules
+
+function %fnmsub_f64(f64, f64, f64) -> f64 {
+    ss0 = explicit_slot 16
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = stack_addr.i64 ss0
+    store.f64 v2, v3
+    v4 = load.f64 v3
+    v5 = fneg v0
+    v6 = fneg v4
+    v7 = fma v5, v1, v6
+    return v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r8
+;   vmovsd  %xmm2, 0(%r8)
+;   vfnmsub213sd %xmm0, %xmm1, 0(%r8), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r8
+;   vmovsd %xmm2, (%r8) ; trap: heap_oob
+;   vfnmsub213sd (%r8), %xmm1, %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
