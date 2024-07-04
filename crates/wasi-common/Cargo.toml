@@ -79,7 +79,6 @@ wasmtime = [
 # This feature enables an implementation of the Wasi traits for a
 # synchronous wasmtime embedding.
 sync = [
-    "wasmtime",
     "dep:cap-fs-ext",
     "dep:cap-time-ext",
     "dep:fs-set-times",
