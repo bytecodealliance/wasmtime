@@ -29,10 +29,18 @@ pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
 
 #[no_mangle]
 pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Box<wasm_engine_t> {
+    #[cfg(feature = "logging")]
+    drop(env_logger::try_init());
+
     let config = c.config;
     Box::new(wasm_engine_t {
         engine: Engine::new(&config).unwrap(),
     })
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_engine_clone(engine: &wasm_engine_t) -> Box<wasm_engine_t> {
+    Box::new(engine.clone())
 }
 
 #[no_mangle]
