@@ -996,8 +996,19 @@ impl ModuleTranslation<'_> {
 
         // Validate that the memory information collected is indeed valid for
         // static memory initialization.
-        for info in info.values().filter(|i| i.data_size > 0) {
+        for (i, info) in info.iter().filter(|(_, info)| info.data_size > 0) {
             let image_size = info.max_addr - info.min_addr;
+
+            // Simplify things for now by bailing out entirely if any memory has
+            // a page size smaller than the host's page size. This fixes a case
+            // where currently initializers are created in host-page-size units
+            // of length which means that a larger-than-the-entire-memory
+            // initializer can be created. This can be handled technically but
+            // would require some more changes to help fix the assert elsewhere
+            // that this protects against.
+            if self.module.memory_plans[i].memory.page_size() < page_size {
+                return;
+            }
 
             // If the range of memory being initialized is less than twice the
             // total size of the data itself then it's assumed that static
