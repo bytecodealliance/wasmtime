@@ -1,0 +1,25 @@
+name: 'Build wasi component adapter provider'
+description: 'Build the wasi-preview1-component-adapter provider using the adapter artefacts'
+
+inputs:
+  run-id:
+    description: 'run id of the main.yml action that produced the adapter artefacts'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: bins-wasi-preview1-component-adapter
+        path: crates/wasi-preview1-component-adapter/provider/artefacts
+        github-token: ${{ github.token }}
+        run-id: ${{ inputs.run-id }}
+
+    - name: Install required Rust components
+      shell: bash
+      run: rustup component add rustfmt clippy
+
+    - name: Build and checl the adapter provider
+      shell: bash
+      run: ./ci/build-wasi-preview1-component-adapter-provider.sh

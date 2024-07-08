@@ -15,6 +15,11 @@ Unreleased.
 * Wasmtime now supports the custom-page-sizes proposal.
   [#8763](https://github.com/bytecodealliance/wasmtime/pull/8763)
 
+* This project now publishes a crate named
+  `wasi-preview1-component-adapter-provider` which provides the WASIp1 adapters
+  as constants in Rust code.
+  [#8874](https://github.com/bytecodealliance/wasmtime/pull/8874)
+
 ### Changed
 
 * Call hooks now have access to the full `StoreContextMut<T>`.
