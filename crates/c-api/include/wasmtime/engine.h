@@ -14,6 +14,14 @@ extern "C" {
 #endif
 
 /**
+ * \brief Create a new reference to the same underlying engine.
+ *
+ * This function clones the reference-counted pointer to the internal object,
+ * and must be freed using #wasm_engine_delete.
+ */
+WASM_API_EXTERN wasm_engine_t *wasmtime_engine_clone(wasm_engine_t *engine);
+
+/**
  * \brief Increments the engine-local epoch variable.
  *
  * This function will increment the engine's current epoch which can be used to

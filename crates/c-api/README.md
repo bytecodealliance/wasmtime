@@ -8,7 +8,7 @@ For more information you can find the documentation for this library
 To use Wasmtime from a C or C++ project, you can use Cargo to build the Wasmtime C bindings. From the root of the Wasmtime repository, run the following command:
 
 ```
-cargo build --release wasmtime-c-api
+cargo build --release -p wasmtime-c-api
 ```
 
 This will create static and dynamic libraries called `libwasmtime` in the `target/release` directory.
