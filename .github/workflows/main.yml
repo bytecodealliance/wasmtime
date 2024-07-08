@@ -818,6 +818,26 @@ jobs:
       if: failure() && github.event_name != 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
+  
+  build-preview1-component-adapter-provider:
+    name: Build wasi-preview1-component-adapter-provider
+    needs: build-preview1-component-adapter
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/build-adapter-provider
+      with:
+        run-id: ${{ github.run_id }}
+    
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Verify the "min platform" example still works.
   test-min-platform-example:
@@ -1080,6 +1100,7 @@ jobs:
       - determine
       - miri
       - build-preview1-component-adapter
+      - build-preview1-component-adapter-provider
       - build-wasmtime-target-wasm32
       - test-min-platform-example
       - check_js
