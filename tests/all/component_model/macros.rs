@@ -4,7 +4,7 @@ use super::{make_echo_component, TypedFuncExt};
 use anyhow::Result;
 use component_macro_test::{add_variants, flags_test};
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
-use wasmtime::Store;
+use wasmtime::{Engine, Store};
 
 #[test]
 fn record_derive() -> Result<()> {
@@ -337,7 +337,9 @@ fn enum_derive() -> Result<()> {
 
 #[test]
 fn flags() -> Result<()> {
-    let engine = super::engine();
+    let mut config = component_test_util::config();
+    config.wasm_component_model_more_flags(true);
+    let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
     // Simple 8-bit flags
