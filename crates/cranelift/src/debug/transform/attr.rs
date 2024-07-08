@@ -116,7 +116,15 @@ where
                     ..
                 } = file_context
                 {
-                    write::AttributeValue::FileIndex(Some(file_map[(i - file_index_base) as usize]))
+                    let index = usize::try_from(i - file_index_base)
+                        .ok()
+                        .and_then(|i| file_map.get(i).copied());
+                    match index {
+                        Some(index) => write::AttributeValue::FileIndex(Some(index)),
+                        // This was seen to be invalid in #8884 and #8904 so
+                        // ignore this seemingly invalid DWARF from LLVM
+                        None => continue,
+                    }
                 } else {
                     return Err(TransformError("unexpected file index attribute").into());
                 }
