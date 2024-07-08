@@ -47,10 +47,10 @@ impl Drop for VTuneAgent {
 
 impl State {
     /// Notify vtune about a newly tracked code region.
-    fn notify_code(&mut self, module_name: &str, method_name: &str, addr: *const u8, len: usize) {
+    fn notify_code(&mut self, module_name: &str, method_name: &str, code: &[u8]) {
         self.vtune
             .load_method(
-                MethodLoadBuilder::new(method_name.to_owned(), addr, len)
+                MethodLoadBuilder::new(method_name.to_owned(), code.as_ptr(), code.len())
                     .class_file_name(module_name.to_owned())
                     .source_file_name("<unknown wasm filename>".to_owned()),
             )
@@ -65,16 +65,13 @@ impl State {
 }
 
 impl ProfilingAgent for VTuneAgent {
-    fn register_function(&self, name: &str, addr: *const u8, size: usize) {
-        self.state
-            .lock()
-            .unwrap()
-            .register_function(name, addr, size);
+    fn register_function(&self, name: &str, code: &[u8]) {
+        self.state.lock().unwrap().register_function(name, code);
     }
 }
 
 impl State {
-    fn register_function(&mut self, name: &str, addr: *const u8, size: usize) {
-        self.notify_code("wasmtime", name, addr, size);
+    fn register_function(&mut self, name: &str, code: &[u8]) {
+        self.notify_code("wasmtime", name, code);
     }
 }
