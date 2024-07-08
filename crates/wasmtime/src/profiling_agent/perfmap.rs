@@ -21,26 +21,27 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
 }
 
 impl PerfMapAgent {
-    fn make_line(
-        writer: &mut dyn Write,
-        name: &str,
-        addr: *const u8,
-        len: usize,
-    ) -> io::Result<()> {
+    fn make_line(writer: &mut dyn Write, name: &str, code: &[u8]) -> io::Result<()> {
         // Format is documented here: https://github.com/torvalds/linux/blob/master/tools/perf/Documentation/jit-interface.txt
         // Try our best to sanitize the name, since wasm allows for any utf8 string in there.
         let sanitized_name = name.replace('\n', "_").replace('\r', "_");
-        write!(writer, "{:x} {:x} {}\n", addr as usize, len, sanitized_name)?;
+        write!(
+            writer,
+            "{:p} {:x} {}\n",
+            code.as_ptr(),
+            code.len(),
+            sanitized_name
+        )?;
         writer.flush()?;
         Ok(())
     }
 }
 
 impl ProfilingAgent for PerfMapAgent {
-    fn register_function(&self, name: &str, addr: *const u8, size: usize) {
+    fn register_function(&self, name: &str, code: &[u8]) {
         let mut file = PERFMAP_FILE.lock().unwrap();
         let file = file.as_mut().unwrap();
-        if let Err(err) = Self::make_line(file, name, addr, size) {
+        if let Err(err) = Self::make_line(file, name, code) {
             eprintln!("Error when writing import trampoline info to the perf map file: {err}");
         }
     }

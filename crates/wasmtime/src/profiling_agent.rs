@@ -45,7 +45,7 @@ cfg_if::cfg_if! {
 
 /// Common interface for profiling tools.
 pub trait ProfilingAgent: Send + Sync + 'static {
-    fn register_function(&self, name: &str, addr: *const u8, size: usize);
+    fn register_function(&self, name: &str, code: &[u8]);
 
     fn register_module(&self, code: &[u8], custom_name: &dyn Fn(usize) -> Option<String>) {
         use object::{File, Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
@@ -55,9 +55,9 @@ pub trait ProfilingAgent: Send + Sync + 'static {
             Err(_) => return,
         };
 
-        let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
+        let text = match image.sections().find(|s| s.kind() == SectionKind::Text) {
             Some(section) => match section.data() {
-                Ok(data) => data.as_ptr() as usize,
+                Ok(data) => data,
                 Err(_) => return,
             },
             None => return,
@@ -76,7 +76,6 @@ pub trait ProfilingAgent: Send + Sync + 'static {
                 continue;
             }
             if let Ok(name) = sym.name() {
-                let addr = text_base + address as usize;
                 let owned;
                 let name = match custom_name(address as usize) {
                     Some(name) => {
@@ -85,7 +84,8 @@ pub trait ProfilingAgent: Send + Sync + 'static {
                     }
                     None => name,
                 };
-                self.register_function(name, addr as *const u8, size as usize);
+                let code = &text[address as usize..][..size as usize];
+                self.register_function(name, code)
             }
         }
     }
@@ -99,6 +99,6 @@ pub fn new_null() -> Box<dyn ProfilingAgent> {
 struct NullProfilerAgent;
 
 impl ProfilingAgent for NullProfilerAgent {
-    fn register_function(&self, _name: &str, _addr: *const u8, _size: usize) {}
+    fn register_function(&self, _name: &str, _code: &[u8]) {}
     fn register_module(&self, _code: &[u8], _custom_name: &dyn Fn(usize) -> Option<String>) {}
 }

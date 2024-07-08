@@ -50,14 +50,13 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
 }
 
 impl ProfilingAgent for JitDumpAgent {
-    fn register_function(&self, name: &str, addr: *const u8, size: usize) {
+    fn register_function(&self, name: &str, code: &[u8]) {
         let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
         let jitdump_file = jitdump_file.as_mut().unwrap();
         let timestamp = jitdump_file.get_time_stamp();
         #[allow(trivial_numeric_casts)]
         let tid = rustix::thread::gettid().as_raw_nonzero().get() as u32;
-        if let Err(err) =
-            jitdump_file.dump_code_load_record(&name, addr, size, timestamp, self.pid, tid)
+        if let Err(err) = jitdump_file.dump_code_load_record(&name, code, timestamp, self.pid, tid)
         {
             println!("Jitdump: write_code_load_failed_record failed: {:?}\n", err);
         }
