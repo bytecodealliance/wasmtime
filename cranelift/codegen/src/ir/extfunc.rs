@@ -233,7 +233,13 @@ pub enum ArgumentPurpose {
     Normal,
 
     /// A C struct passed as argument.
-    StructArgument(u32),
+    ///
+    /// Note that this should only be used when interacting with code following
+    /// a C ABI which is expecting a struct passed *by value*.
+    StructArgument(
+        /// The size, in bytes, of the struct.
+        u32,
+    ),
 
     /// Struct return pointer.
     ///
