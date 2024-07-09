@@ -568,14 +568,14 @@ impl fmt::Display for WasmFuncType {
         write!(f, "(func")?;
         if !self.params.is_empty() {
             write!(f, " (param")?;
-            for p in &self.params {
+            for p in self.params.iter() {
                 write!(f, " {p}")?;
             }
             write!(f, ")")?;
         }
         if !self.returns.is_empty() {
             write!(f, " (result")?;
-            for r in &self.returns {
+            for r in self.returns.iter() {
                 write!(f, " {r}")?;
             }
             write!(f, ")")?;
@@ -812,7 +812,7 @@ pub struct WasmStructType {
 impl fmt::Display for WasmStructType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(struct")?;
-        for ty in &self.fields {
+        for ty in self.fields.iter() {
             write!(f, " {ty}")?;
         }
         write!(f, ")")
