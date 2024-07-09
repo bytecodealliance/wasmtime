@@ -401,8 +401,42 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn shift(&mut self, _context: &mut CodeGenContext, _kind: ShiftKind, _size: OperandSize) {
-        todo!()
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
+        let top = context.stack.peek().expect("value at stack top");
+
+        if size == OperandSize::S32 && top.is_i32_const() {
+            let val = context
+                .stack
+                .pop_i32_const()
+                .expect("i32 const value at stack top");
+            let typed_reg = context.pop_to_reg(self, None);
+
+            self.asm
+                .shift_ir(val as u64, typed_reg.into(), typed_reg.into(), kind, size);
+
+            context.stack.push(typed_reg.into());
+        } else if size == OperandSize::S64 && top.is_i64_const() {
+            let val = context
+                .stack
+                .pop_i64_const()
+                .expect("i64 const value at stack top");
+            let typed_reg = context.pop_to_reg(self, None);
+
+            self.asm
+                .shift_ir(val as u64, typed_reg.into(), typed_reg.into(), kind, size);
+
+            context.stack.push(typed_reg.into());
+        } else {
+            // Number of bits to shift must be in the CL register.
+            let src = context.pop_to_reg(self, None);
+            let dst = context.pop_to_reg(self, None);
+
+            self.asm
+                .shift_rrr(src.into(), dst.into(), dst.into(), kind, size);
+
+            context.free_reg(src);
+            context.stack.push(dst.into());
+        }
     }
 
     fn div(&mut self, _context: &mut CodeGenContext, _kind: DivKind, _size: OperandSize) {

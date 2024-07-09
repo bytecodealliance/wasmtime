@@ -138,6 +138,7 @@ pub(crate) enum FloatCmpKind {
 /// Kinds of shifts in WebAssembly.The [`masm`] implementation for each ISA is
 /// responsible for emitting the correct sequence of instructions when
 /// lowering to machine code.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ShiftKind {
     /// Left shift.
     Shl,

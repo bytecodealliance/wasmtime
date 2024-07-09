@@ -1,12 +1,12 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::RoundingMode;
+use crate::masm::{RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
     FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic,
-    ScalarSize,
+    ImmShift, ScalarSize,
 };
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
@@ -28,6 +28,20 @@ impl From<OperandSize> for inst::OperandSize {
         }
     }
 }
+
+impl Into<ALUOp> for ShiftKind {
+    fn into(self) -> ALUOp {
+        match self {
+            ShiftKind::Shl => ALUOp::Lsl,
+            ShiftKind::ShrS => ALUOp::Asr,
+            ShiftKind::ShrU => ALUOp::Lsr,
+            ShiftKind::Rotl => ALUOp::RotR,
+            // Rotr is implemented as neg+ROR.
+            ShiftKind::Rotr => unimplemented!(),
+        }
+    }
+}
+
 impl Into<ScalarSize> for OperandSize {
     fn into(self) -> ScalarSize {
         match self {
@@ -290,6 +304,38 @@ impl Assembler {
         }
     }
 
+    /// Shift with three registers.
+    pub fn shift_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, kind: ShiftKind, size: OperandSize) {
+        let shift_op: ALUOp = if kind == ShiftKind::Rotl {
+            // Emulate Rotr with rm := neg(rm); with neg(x) := sub(zero, x).
+            self.emit_alu_rrr(ALUOp::Sub, regs::zero(), rm, rm, size);
+            ALUOp::RotR
+        } else {
+            kind.into()
+        };
+
+        self.emit_alu_rrr(shift_op, rm, rn, rd, size);
+    }
+
+    /// Shift immediate and register.
+    pub fn shift_ir(&mut self, imm: u64, rn: Reg, rd: Reg, kind: ShiftKind, size: OperandSize) {
+        let shift_op: ALUOp = if kind == ShiftKind::Rotl {
+            // Emulate Rotr with rm := neg(rm); with neg(x) := sub(zero, x).
+            self.emit_alu_rrr(ALUOp::Sub, regs::zero(), rn, rn, size);
+            ALUOp::RotR
+        } else {
+            kind.into()
+        };
+
+        if let Some(imm) = ImmShift::maybe_from_u64(imm) {
+            self.emit_alu_rri_shift(shift_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(shift_op, scratch, rn, rd, size);
+        }
+    }
+
     /// Float add with three registers.
     pub fn fadd_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_fpu_rrr(FPUOp2::Add, rm, rn, rd, size);
@@ -414,6 +460,23 @@ impl Assembler {
         });
     }
 
+    fn emit_alu_rri_shift(
+        &mut self,
+        op: ALUOp,
+        imm: ImmShift,
+        rn: Reg,
+        rd: Reg,
+        size: OperandSize,
+    ) {
+        self.emit(Inst::AluRRImmShift {
+            alu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            immshift: imm,
+        });
+    }
+
     fn emit_alu_rrr(&mut self, op: ALUOp, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit(Inst::AluRRR {
             alu_op: op,
@@ -445,6 +508,38 @@ impl Assembler {
             ra: ra.into(),
         });
     }
+
+    // fn emit_alu_rrr_shift(
+    //     &mut self,
+    //     op: ALUOp,
+    //     rd: Reg,
+    //     rn: Reg,
+    //     rm: Reg,
+    //     kind: ShiftKind,
+    //     amount: u64,
+    //     size: OperandSize,
+    // ) {
+
+    //     let shift_op: ShiftOp =
+    //         if kind == ShiftKind::Rotl {
+    //             // Emulate Rotr with rm := neg(rm); with neg(x) := sub(zero, x).
+    //             self.emit_alu_rrr(ALUOp::Sub, regs::zero(), rm, rm, size);
+    //             ShiftOp::ROR
+    //         } else { kind.into() };
+
+    //     let sh_op_amt =
+    //         ShiftOpShiftImm::maybe_from_shift(amount)
+    //         .expect("amount should be smaller than MAX_SHIFT");
+
+    //     self.emit(Inst::AluRRRShift {
+    //         alu_op: op,
+    //         shiftop: ShiftOpAndAmt::new(shift_op, sh_op_amt),
+    //         size: size.into(),
+    //         rd: Writable::from_reg(rd.into()),
+    //         rn: rn.into(),
+    //         rm: rm.into(),
+    //     });
+    // }
 
     fn emit_fpu_rrr(&mut self, op: FPUOp2, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit(Inst::FpuRRR {
