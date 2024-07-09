@@ -13,7 +13,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
-    bindings::http::types::ErrorCode,
+    bindings::http::types::{ErrorCode, Scheme},
     body::HyperOutgoingBody,
     io::TokioIo,
     types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
@@ -166,7 +166,7 @@ async fn run_wasi_http(
         wasmtime_wasi_http::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
             .await?;
 
-    let req = store.data_mut().new_incoming_request(req)?;
+    let req = store.data_mut().new_incoming_request(Scheme::Http, req)?;
 
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let out = store.data_mut().new_response_outparam(sender)?;

@@ -312,25 +312,11 @@ where
     }
     fn scheme(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Option<Scheme>> {
         let req = self.table().get(&id)?;
-        Ok(req.parts.uri.scheme().map(|scheme| {
-            if scheme == &http::uri::Scheme::HTTP {
-                return Scheme::Http;
-            }
-
-            if scheme == &http::uri::Scheme::HTTPS {
-                return Scheme::Https;
-            }
-
-            Scheme::Other(req.parts.uri.scheme_str().unwrap().to_owned())
-        }))
+        Ok(Some(req.scheme.clone()))
     }
     fn authority(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Option<String>> {
         let req = self.table().get(&id)?;
-        Ok(req
-            .parts
-            .uri
-            .authority()
-            .map(|auth| auth.as_str().to_owned()))
+        Ok(Some(req.authority.clone()))
     }
 
     fn headers(
