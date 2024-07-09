@@ -1814,6 +1814,37 @@ stderr [1] :: after empty
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn cli_serve_authority_and_scheme() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("/")
+                    .header("Host", "localhost")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .method("CONNECT")
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        Ok(())
+    }
 }
 
 #[test]

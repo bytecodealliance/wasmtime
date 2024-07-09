@@ -73,6 +73,7 @@
 //! use wasmtime::{Config, Engine, Result, Store};
 //! use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 //! use wasmtime_wasi_http::bindings::ProxyPre;
+//! use wasmtime_wasi_http::bindings::http::types::Scheme;
 //! use wasmtime_wasi_http::body::HyperOutgoingBody;
 //! use wasmtime_wasi_http::io::TokioIo;
 //! use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
@@ -146,7 +147,7 @@
 //!             },
 //!         );
 //!         let (sender, receiver) = tokio::sync::oneshot::channel();
-//!         let req = store.data_mut().new_incoming_request(req)?;
+//!         let req = store.data_mut().new_incoming_request(Scheme::Http, req)?;
 //!         let out = store.data_mut().new_response_outparam(sender)?;
 //!         let pre = self.pre.clone();
 //!
