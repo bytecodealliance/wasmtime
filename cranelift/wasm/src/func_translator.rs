@@ -13,7 +13,7 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use wasmparser::{BinaryReader, FuncValidator, FunctionBody, WasmFeatures, WasmModuleResources};
+use wasmparser::{BinaryReader, FuncValidator, FunctionBody, WasmModuleResources};
 
 /// WebAssembly to Cranelift IR function translator.
 ///
@@ -40,14 +40,7 @@ impl FuncTranslator {
         &mut self.func_ctx
     }
 
-    /// Translate a binary WebAssembly function.
-    ///
-    /// The `code` slice contains the binary WebAssembly *function code* as it appears in the code
-    /// section of a WebAssembly module, not including the initial size of the function code. The
-    /// slice is expected to contain two parts:
-    ///
-    /// - The declaration of *locals*, and
-    /// - The function *body* as an expression.
+    /// Translate a binary WebAssembly function from a `FunctionBody`.
     ///
     /// See [the WebAssembly specification][wasm].
     ///
@@ -57,24 +50,6 @@ impl FuncTranslator {
     /// and `func.name` fields. The signature may contain special-purpose arguments which are not
     /// regarded as WebAssembly local variables. Any signature arguments marked as
     /// `ArgumentPurpose::Normal` are made accessible as WebAssembly local variables.
-    ///
-    pub fn translate<FE: FuncEnvironment + ?Sized>(
-        &mut self,
-        validator: &mut FuncValidator<impl WasmModuleResources>,
-        code: &[u8],
-        code_offset: usize,
-        func: &mut ir::Function,
-        environ: &mut FE,
-    ) -> WasmResult<()> {
-        self.translate_body(
-            validator,
-            FunctionBody::new(BinaryReader::new(code, code_offset, WasmFeatures::all())),
-            func,
-            environ,
-        )
-    }
-
-    /// Translate a binary WebAssembly function from a `FunctionBody`.
     pub fn translate_body<FE: FuncEnvironment + ?Sized>(
         &mut self,
         validator: &mut FuncValidator<impl WasmModuleResources>,
