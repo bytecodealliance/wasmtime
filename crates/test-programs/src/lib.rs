@@ -3,7 +3,11 @@ pub mod nn;
 pub mod preview1;
 pub mod sockets;
 
-wit_bindgen::generate!("test-command" in "../wasi/wit");
+wit_bindgen::generate!({
+    world: "test-command",
+    path: "../wasi/wit",
+    generate_all,
+});
 
 pub mod proxy {
     wit_bindgen::generate!({
@@ -14,6 +18,15 @@ pub mod proxy {
         with: {
             "wasi:http/types@0.2.0": crate::wasi::http::types,
             "wasi:http/outgoing-handler@0.2.0": crate::wasi::http::outgoing_handler,
+            "wasi:random/random@0.2.0": crate::wasi::random::random,
+            "wasi:io/error@0.2.0": crate::wasi::io::error,
+            "wasi:io/poll@0.2.0": crate::wasi::io::poll,
+            "wasi:io/streams@0.2.0": crate::wasi::io::streams,
+            "wasi:cli/stdout@0.2.0": crate::wasi::cli::stdout,
+            "wasi:cli/stderr@0.2.0": crate::wasi::cli::stderr,
+            "wasi:cli/stdin@0.2.0": crate::wasi::cli::stdin,
+            "wasi:clocks/monotonic-clock@0.2.0": crate::wasi::clocks::monotonic_clock,
+            "wasi:clocks/wall-clock@0.2.0": crate::wasi::clocks::wall_clock,
         },
     });
 }

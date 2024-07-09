@@ -260,6 +260,8 @@ wasmtime_option_group! {
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
         pub gc: Option<bool>,
+        /// Configure support for the custom-page-sizes proposal.
+        pub custom_page_sizes: Option<bool>,
     }
 
     enum Wasm {
@@ -659,6 +661,9 @@ impl CommonOptions {
         }
         if let Some(enable) = self.wasm.memory64.or(all) {
             config.wasm_memory64(enable);
+        }
+        if let Some(enable) = self.wasm.custom_page_sizes.or(all) {
+            config.wasm_custom_page_sizes(enable);
         }
 
         macro_rules! handle_conditionally_compiled {

@@ -1,6 +1,7 @@
 wit_bindgen::generate!({
     world: "test-reactor",
     path: "../wasi/wit",
+    generate_all,
 });
 
 struct T;
