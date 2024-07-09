@@ -1,8 +1,8 @@
 use crate::prelude::*;
 use crate::{linker::DefinitionType, Engine, FuncType};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex,
-    WasmCompositeType, WasmFieldType, WasmHeapType, WasmRefType, WasmSubType, WasmValType,
+    EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex, WasmHeapType,
+    WasmRefType, WasmSubType, WasmValType,
 };
 
 pub struct MatchCx<'a> {
@@ -114,60 +114,7 @@ fn concrete_type_mismatch(
     expected: &WasmSubType,
     actual: &WasmSubType,
 ) -> anyhow::Error {
-    let render_field = |ty: &WasmFieldType| {
-        if ty.mutable {
-            format!("(mut {})", ty.element_type)
-        } else {
-            ty.element_type.to_string()
-        }
-    };
-
-    let render = |ty: &WasmSubType| match &ty.composite_type {
-        WasmCompositeType::Array(ty) => {
-            format!("(array {})", render_field(&ty.0))
-        }
-        WasmCompositeType::Func(ty) => {
-            let params = if ty.params().is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " (param {})",
-                    ty.params()
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
-            };
-            let returns = if ty.returns().is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " (result {})",
-                    ty.returns()
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
-            };
-            format!("(func{params}{returns})")
-        }
-        WasmCompositeType::Struct(ty) => {
-            let mut s = "(struct".to_string();
-            for f in ty.fields.iter() {
-                s.push_str(&format!(" {}", render_field(f)));
-            }
-            s.push(')');
-            s
-        }
-    };
-
-    anyhow!(
-        "{msg}: expected type `{}`, found type `{}`",
-        render(expected),
-        render(actual)
-    )
+    anyhow!("{msg}: expected type `{expected}`, found type `{actual}`")
 }
 
 fn global_ty(expected: &Global, actual: &Global) -> Result<()> {
