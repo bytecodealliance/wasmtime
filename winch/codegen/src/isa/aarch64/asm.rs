@@ -5,7 +5,8 @@ use crate::masm::RoundingMode;
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
-    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ScalarSize
+    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic,
+    ScalarSize,
 };
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
@@ -396,9 +397,15 @@ impl Assembler {
         });
     }
 
-
-    fn emit_alu_rri_logic(&mut self, op: ALUOp, imm: ImmLogic, rn: Reg, rd: Reg, size: OperandSize) {
-        self.emit(Inst::AluRRImmLogic { 
+    fn emit_alu_rri_logic(
+        &mut self,
+        op: ALUOp,
+        imm: ImmLogic,
+        rn: Reg,
+        rd: Reg,
+        size: OperandSize,
+    ) {
+        self.emit(Inst::AluRRImmLogic {
             alu_op: op,
             size: size.into(),
             rd: Writable::from_reg(rd.into()),

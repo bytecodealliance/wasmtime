@@ -4,7 +4,7 @@ use crate::isa::reg::Reg;
 use cranelift_codegen::ir::Type;
 use cranelift_codegen::{
     binemit::CodeOffset,
-    ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef, types},
+    ir::{types, Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -236,10 +236,9 @@ impl OperandSize {
         match self {
             OperandSize::S32 => types::I32,
             OperandSize::S64 => types::I64,
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
-    
 }
 
 /// An abstraction over a register or immediate.
