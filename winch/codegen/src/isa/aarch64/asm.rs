@@ -35,9 +35,9 @@ impl Into<ALUOp> for ShiftKind {
             ShiftKind::Shl => ALUOp::Lsl,
             ShiftKind::ShrS => ALUOp::Asr,
             ShiftKind::ShrU => ALUOp::Lsr,
-            ShiftKind::Rotl => ALUOp::RotR,
-            // Rotr is implemented as neg+ROR.
-            ShiftKind::Rotr => unimplemented!(),
+            ShiftKind::Rotr => ALUOp::RotR,
+            // Rotl is implemented as neg+ROR.
+            ShiftKind::Rotl => unimplemented!(),
         }
     }
 }
