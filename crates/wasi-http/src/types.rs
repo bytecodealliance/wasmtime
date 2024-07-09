@@ -8,6 +8,7 @@ use crate::{
     error::dns_error,
     hyper_request_error,
 };
+use anyhow::bail;
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -81,6 +82,7 @@ pub trait WasiHttpView: Send {
     /// Create a new incoming request resource.
     fn new_incoming_request<B>(
         &mut self,
+        scheme: Scheme,
         req: hyper::Request<B>,
     ) -> wasmtime::Result<Resource<HostIncomingRequest>>
     where
@@ -94,7 +96,7 @@ pub trait WasiHttpView: Send {
             // TODO: this needs to be plumbed through
             std::time::Duration::from_millis(600 * 1000),
         );
-        let incoming_req = HostIncomingRequest::new(self, parts, Some(body));
+        let incoming_req = HostIncomingRequest::new(self, parts, scheme, Some(body))?;
         Ok(self.table().push(incoming_req)?)
     }
 
@@ -486,6 +488,8 @@ impl TryInto<http::Method> for types::Method {
 /// The concrete type behind a `wasi:http/types/incoming-request` resource.
 pub struct HostIncomingRequest {
     pub(crate) parts: http::request::Parts,
+    pub(crate) scheme: Scheme,
+    pub(crate) authority: String,
     /// The body of the incoming request.
     pub body: Option<HostIncomingBody>,
 }
@@ -495,10 +499,24 @@ impl HostIncomingRequest {
     pub fn new(
         view: &mut dyn WasiHttpView,
         mut parts: http::request::Parts,
+        scheme: Scheme,
         body: Option<HostIncomingBody>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
+        let authority = match parts.uri.authority() {
+            Some(authority) => authority.to_string(),
+            None => match parts.headers.get(http::header::HOST) {
+                Some(host) => host.to_str()?.to_string(),
+                None => bail!("invalid HTTP request missing authority in URI and host header"),
+            },
+        };
+
         remove_forbidden_headers(view, &mut parts.headers);
-        Self { parts, body }
+        Ok(Self {
+            parts,
+            authority,
+            scheme,
+            body,
+        })
     }
 }
 

@@ -12,6 +12,7 @@ use std::{
 use wasmtime::component::Linker;
 use wasmtime::{Config, Engine, Memory, MemoryType, Store, StoreLimits};
 use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
@@ -400,22 +401,21 @@ async fn handle_request(
 ) -> Result<hyper::Response<HyperOutgoingBody>> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
 
+    let req_id = inner.next_req_id();
+
+    log::info!(
+        "Request {req_id} handling {} to {}",
+        req.method(),
+        req.uri()
+    );
+
+    let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
+
+    let req = store.data_mut().new_incoming_request(Scheme::Http, req)?;
+    let out = store.data_mut().new_response_outparam(sender)?;
+    let proxy = inner.instance_pre.instantiate_async(&mut store).await?;
+
     let task = tokio::task::spawn(async move {
-        let req_id = inner.next_req_id();
-
-        log::info!(
-            "Request {req_id} handling {} to {}",
-            req.method(),
-            req.uri()
-        );
-
-        let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
-
-        let req = store.data_mut().new_incoming_request(req)?;
-        let out = store.data_mut().new_response_outparam(sender)?;
-
-        let proxy = inner.instance_pre.instantiate_async(&mut store).await?;
-
         if let Err(e) = proxy
             .wasi_http_incoming_handler()
             .call_handle(store, req, out)
