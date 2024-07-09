@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use alloc::borrow::Cow;
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
@@ -1301,10 +1300,10 @@ impl StorageType {
     ///
     /// If this is a packed `StorageType::I8` or `StorageType::I16, then a
     /// `ValType::I32` is returned.
-    pub fn unpack(&self) -> Cow<ValType> {
+    pub fn unpack(&self) -> &ValType {
         match self {
-            StorageType::I8 | StorageType::I16 => Cow::Owned(ValType::I32),
-            StorageType::ValType(ty) => Cow::Borrowed(ty),
+            StorageType::I8 | StorageType::I16 => &ValType::I32,
+            StorageType::ValType(ty) => ty,
         }
     }
 
