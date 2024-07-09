@@ -509,38 +509,6 @@ impl Assembler {
         });
     }
 
-    // fn emit_alu_rrr_shift(
-    //     &mut self,
-    //     op: ALUOp,
-    //     rd: Reg,
-    //     rn: Reg,
-    //     rm: Reg,
-    //     kind: ShiftKind,
-    //     amount: u64,
-    //     size: OperandSize,
-    // ) {
-
-    //     let shift_op: ShiftOp =
-    //         if kind == ShiftKind::Rotl {
-    //             // Emulate Rotr with rm := neg(rm); with neg(x) := sub(zero, x).
-    //             self.emit_alu_rrr(ALUOp::Sub, regs::zero(), rm, rm, size);
-    //             ShiftOp::ROR
-    //         } else { kind.into() };
-
-    //     let sh_op_amt =
-    //         ShiftOpShiftImm::maybe_from_shift(amount)
-    //         .expect("amount should be smaller than MAX_SHIFT");
-
-    //     self.emit(Inst::AluRRRShift {
-    //         alu_op: op,
-    //         shiftop: ShiftOpAndAmt::new(shift_op, sh_op_amt),
-    //         size: size.into(),
-    //         rd: Writable::from_reg(rd.into()),
-    //         rn: rn.into(),
-    //         rm: rm.into(),
-    //     });
-    // }
-
     fn emit_fpu_rrr(&mut self, op: FPUOp2, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit(Inst::FpuRRR {
             fpu_op: op,
