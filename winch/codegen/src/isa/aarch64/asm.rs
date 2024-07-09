@@ -5,8 +5,7 @@ use crate::masm::RoundingMode;
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
-    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
-    ScalarSize,
+    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ScalarSize
 };
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
@@ -239,6 +238,57 @@ impl Assembler {
         self.emit_alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
     }
 
+    /// And with three registers.
+    pub fn and_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::And, rm, rn, rd, size);
+    }
+
+    /// And immediate and register.
+    pub fn and_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let alu_op = ALUOp::And;
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, size.to_ty()) {
+            self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(alu_op, scratch, rn, rd, size);
+        }
+    }
+
+    /// Or with three registers.
+    pub fn or_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::Orr, rm, rn, rd, size);
+    }
+
+    /// Or immediate and register.
+    pub fn or_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let alu_op = ALUOp::Orr;
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, size.to_ty()) {
+            self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(alu_op, scratch, rn, rd, size);
+        }
+    }
+
+    /// Xor with three registers.
+    pub fn xor_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::Eor, rm, rn, rd, size);
+    }
+
+    /// Xor immediate and register.
+    pub fn xor_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let alu_op = ALUOp::Eor;
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, size.to_ty()) {
+            self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(alu_op, scratch, rn, rd, size);
+        }
+    }
+
     /// Float add with three registers.
     pub fn fadd_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_fpu_rrr(FPUOp2::Add, rm, rn, rd, size);
@@ -343,6 +393,27 @@ impl Assembler {
             rd: Writable::from_reg(rd.into()),
             rn: rn.into(),
             imm12: imm,
+        });
+    }
+
+
+    fn emit_alu_rri_logic(&mut self, op: ALUOp, imm: ImmLogic, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::AluRRImmLogic { 
+            alu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            imml: imm,
+        });
+    }
+
+    fn emit_alu_rrr(&mut self, op: ALUOp, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::AluRRR {
+            alu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            rm: rm.into(),
         });
     }
 
