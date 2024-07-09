@@ -231,7 +231,7 @@ impl OperandSize {
         }
     }
 
-    /// Convert to I32, I64, or I128.
+    /// Convert to I32 and I64.
     pub fn to_ty(self) -> Type {
         match self {
             OperandSize::S32 => types::I32,
