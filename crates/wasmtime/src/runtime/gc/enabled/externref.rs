@@ -394,9 +394,14 @@ impl ExternRef {
     /// [`ValRaw`]: crate::ValRaw
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<ExternRef>> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        Self::_from_raw(&mut store, raw)
+    }
+
+    // (Not actually memory unsafe since we have indexed GC heaps.)
+    pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<ExternRef>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
         let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
-        Some(Self::from_cloned_gc_ref(&mut store, gc_ref))
+        Some(Self::from_cloned_gc_ref(store, gc_ref))
     }
 
     /// Converts this [`ExternRef`] to a raw value suitable to store within a
@@ -413,7 +418,11 @@ impl ExternRef {
     /// [`ValRaw`]: crate::ValRaw
     pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        let gc_ref = self.inner.try_clone_gc_ref(&mut store)?;
+        self._to_raw(&mut store)
+    }
+
+    pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc) -> Result<u32> {
+        let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = gc_ref.as_raw_u32();
         store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
         Ok(raw)

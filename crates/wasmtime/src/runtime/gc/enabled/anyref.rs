@@ -1,6 +1,9 @@
 //! Implementation of `anyref` in Wasmtime.
 
+use wasmtime_environ::VMGcKind;
+
 use crate::runtime::vm::VMGcRef;
+use crate::{prelude::*, ArrayType, StructType};
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType, Result,
@@ -169,8 +172,13 @@ impl AnyRef {
     /// [`ValRaw`]: crate::ValRaw
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        Self::_from_raw(&mut store, raw)
+    }
+
+    // (Not actually memory unsafe since we have indexed GC heaps.)
+    pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<Self>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
-        Some(Self::from_cloned_gc_ref(&mut store, gc_ref))
+        Some(Self::from_cloned_gc_ref(store, gc_ref))
     }
 
     /// Create a new `Rooted<AnyRef>` from the given GC reference.
@@ -185,6 +193,11 @@ impl AnyRef {
         assert!(gc_ref.is_i31());
         assert!(VMGcRef::ONLY_EXTERN_REF_AND_I31);
         Rooted::new(store, gc_ref)
+    }
+
+    #[inline]
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
+        self.inner.comes_from_same_store(store)
     }
 
     /// Converts this [`AnyRef`] to a raw value suitable to store within a
@@ -207,14 +220,90 @@ impl AnyRef {
         Ok(raw)
     }
 
+    /// Get the type of this reference.
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn ty(&self, store: impl AsContext) -> Result<HeapType> {
+        self._ty(store.as_context().0)
+    }
+
+    pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<HeapType> {
+        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
+        if gc_ref.is_i31() {
+            return Ok(HeapType::I31);
+        }
+
+        let header = store.gc_store()?.header(gc_ref);
+
+        if header.kind().matches(VMGcKind::StructRef) {
+            return Ok(HeapType::ConcreteStruct(
+                StructType::from_shared_type_index(store.engine(), header.ty().unwrap()),
+            ));
+        }
+
+        if header.kind().matches(VMGcKind::ArrayRef) {
+            return Ok(HeapType::ConcreteArray(ArrayType::from_shared_type_index(
+                store.engine(),
+                header.ty().unwrap(),
+            )));
+        }
+
+        unreachable!("no other kinds of `anyref`s")
+    }
+
+    /// Does this `anyref` match the given type?
+    ///
+    /// That is, is this object's type a subtype of the given type?
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn matches_ty(&self, store: impl AsContext, ty: &HeapType) -> Result<bool> {
+        self._matches_ty(store.as_context().0, ty)
+    }
+
+    pub(crate) fn _matches_ty(&self, store: &StoreOpaque, ty: &HeapType) -> Result<bool> {
+        assert!(self.comes_from_same_store(store));
+        Ok(self._ty(store)?.matches(ty))
+    }
+
+    pub(crate) fn ensure_matches_ty(&self, store: &StoreOpaque, ty: &HeapType) -> Result<()> {
+        if !self.comes_from_same_store(store) {
+            bail!("function used with wrong store");
+        }
+        if self._matches_ty(store, ty)? {
+            Ok(())
+        } else {
+            let actual_ty = self._ty(store)?;
+            bail!("type mismatch: expected `(ref {ty})`, found `(ref {actual_ty})`")
+        }
+    }
+
     /// Is this `anyref` an `i31`?
     ///
-    /// Returns an `Err(_)` if this reference has been unrooted.
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
     pub fn is_i31(&self, store: impl AsContext) -> Result<bool> {
         self._is_i31(store.as_context().0)
     }
 
     pub(crate) fn _is_i31(&self, store: &StoreOpaque) -> Result<bool> {
+        assert!(self.comes_from_same_store(store));
         // NB: Can't use `AutoAssertNoGc` here because we only have a shared
         // context, not a mutable context.
         let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
@@ -227,18 +316,36 @@ impl AnyRef {
     ///
     /// If this `anyref` is not an `i31`, then `None` is returned.
     ///
-    /// Returns an `Err(_)` if this reference has been unrooted.
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
     pub fn as_i31(&self, store: impl AsContext) -> Result<Option<I31>> {
+        self._as_i31(store.as_context().0)
+    }
+
+    pub(crate) fn _as_i31(&self, store: &StoreOpaque) -> Result<Option<I31>> {
+        assert!(self.comes_from_same_store(store));
         // NB: Can't use `AutoAssertNoGc` here because we only have a shared
         // context, not a mutable context.
-        let gc_ref = self.inner.unchecked_try_gc_ref(store.as_context().0)?;
+        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
         Ok(gc_ref.as_i31().map(Into::into))
     }
 
     /// Downcast this `anyref` to an `i31`, panicking if this `anyref` is not an
     /// `i31`.
     ///
-    /// Returns an `Err(_)` if this reference has been unrooted.
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store, or if
+    /// this `anyref` is not an `i31`.
     pub fn unwrap_i31(&self, store: impl AsContext) -> Result<I31> {
         Ok(self.as_i31(store)?.expect("AnyRef::unwrap_i31 on non-i31"))
     }
@@ -256,8 +363,13 @@ unsafe impl WasmTy for Rooted<AnyRef> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
-        unreachable!()
+    fn dynamic_concrete_type_check(
+        &self,
+        store: &StoreOpaque,
+        _nullable: bool,
+        ty: &HeapType,
+    ) -> Result<()> {
+        self.ensure_matches_ty(store, ty)
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
@@ -293,8 +405,22 @@ unsafe impl WasmTy for Option<Rooted<AnyRef>> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
-        unreachable!()
+    fn dynamic_concrete_type_check(
+        &self,
+        store: &StoreOpaque,
+        nullable: bool,
+        ty: &HeapType,
+    ) -> Result<()> {
+        match self {
+            Some(a) => a.ensure_matches_ty(store, ty),
+            None => {
+                ensure!(
+                    nullable,
+                    "expected a non-null reference, but found a null reference"
+                );
+                Ok(())
+            }
+        }
     }
 
     #[inline]
@@ -374,8 +500,22 @@ unsafe impl WasmTy for Option<ManuallyRooted<AnyRef>> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
-        unreachable!()
+    fn dynamic_concrete_type_check(
+        &self,
+        store: &StoreOpaque,
+        nullable: bool,
+        ty: &HeapType,
+    ) -> Result<()> {
+        match self {
+            Some(a) => a.ensure_matches_ty(store, ty),
+            None => {
+                ensure!(
+                    nullable,
+                    "expected a non-null reference, but found a null reference"
+                );
+                Ok(())
+            }
+        }
     }
 
     #[inline]
