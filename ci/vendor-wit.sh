@@ -6,39 +6,22 @@
 # This script is executed on CI to ensure that everything is up-to-date.
 set -ex
 
-# Space-separated list of wasi proposals that are vendored here along with the
-# tag that they're all vendored at.
-#
-# This assumes that the repositories all have the pattern:
-# https://github.com/WebAssembly/wasi-$repo
-# and every repository has a tag `v$tag` here. That is currently done as part
-# of the WASI release process.
-repos="cli clocks filesystem http io random sockets"
-tag=0.2.0
+# Check if the command exists
+if ! command -v "wit-deps" &> /dev/null; then
+    echo "wit-deps not found, installing..."
+    cargo install wit-deps-cli
+fi
 
-# First, replace the existing vendored WIT files in the `wasi` crate.
-dst=crates/wasi/wit/deps
-rm -rf $dst
-mkdir -p $dst
-for repo in $repos; do
-  mkdir $dst/$repo
-  curl -L https://github.com/WebAssembly/wasi-$repo/archive/refs/tags/v$tag.tar.gz | \
-    tar xzf - --strip-components=2 -C $dst/$repo wasi-$repo-$tag/wit
-  rm -rf $dst/$repo/deps*
-done
+wit-deps --manifest crates/wasi/wit/deps.toml --lock crates/wasi/wit/deps.lock --deps crates/wasi/wit/deps
+wit-deps --manifest crates/wasi-http/wit/deps.toml --lock crates/wasi-http/wit/deps.lock --deps crates/wasi-http/wit/deps
 
-# Also replace the `wasi-http` WIT files since they match those in the `wasi`
-# crate.
-rm -rf crates/wasi-http/wit/deps
-cp -r $dst crates/wasi-http/wit
+# TODO: the in-tree `wasi-nn` implementation does not yet fully support the
+# latest WIT specification on `main`. To create a baseline for moving forward,
+# the in-tree WIT incorporates some but not all of the upstream changes.
+# Once the implementation catches up with the spec, this TODO can be removed
+# and wit-deps can be used to manage wit dependencies.
 
-# Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is
-# slightly different than above.
+# Vendor the `wasi-nn` WITX files.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
 revision=e2310b
 curl -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
-# TODO: the in-tree `wasi-nn` implementation does not yet fully support the
-# latest WIT specification on `main`. To create a baseline for moving forward,
-# the in-tree WIT incorporates some but not all of the upstream changes. This
-# TODO can be removed once the implementation catches up with the spec.
-# curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit
