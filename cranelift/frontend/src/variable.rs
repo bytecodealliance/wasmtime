@@ -16,11 +16,3 @@ use cranelift_codegen::entity::entity_impl;
 pub struct Variable(u32);
 
 entity_impl!(Variable, "var");
-
-impl Variable {
-    /// Create a new Variable with the given index.
-    #[deprecated = "Use Variable::from_u32 instead"]
-    pub fn with_u32(index: u32) -> Self {
-        Variable::from_u32(index)
-    }
-}
