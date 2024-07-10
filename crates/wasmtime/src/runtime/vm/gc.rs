@@ -22,7 +22,7 @@ use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
-use wasmtime_environ::StackMap;
+use wasmtime_environ::{StackMap, VMGcKind};
 
 /// Used by the runtime to lookup information about a module given a
 /// program counter value.
@@ -78,6 +78,18 @@ impl GcStore {
     pub async fn gc_async(&mut self, roots: GcRootsIter<'_>) {
         let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
         collect_async(collection).await;
+    }
+
+    /// Get the kind of the given GC reference.
+    pub fn kind(&self, gc_ref: &VMGcRef) -> VMGcKind {
+        debug_assert!(!gc_ref.is_i31());
+        self.header(gc_ref).kind()
+    }
+
+    /// Get the header of the given GC reference.
+    pub fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader {
+        debug_assert!(!gc_ref.is_i31());
+        self.gc_heap.header(gc_ref)
     }
 
     /// Clone a GC reference, calling GC write barriers as necessary.

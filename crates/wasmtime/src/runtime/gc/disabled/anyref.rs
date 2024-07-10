@@ -1,7 +1,7 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    AsContext, AsContextMut, GcRefImpl, Result, Rooted, I31,
+    AsContext, AsContextMut, GcRefImpl, HeapType, Result, Rooted, I31,
 };
 
 /// Support for `anyref` disabled at compile time because the `gc` cargo feature
@@ -25,6 +25,14 @@ impl AnyRef {
     }
 
     pub unsafe fn to_raw(&self, _store: impl AsContextMut) -> Result<u32> {
+        match *self {}
+    }
+
+    pub fn ty(&self, _store: impl AsContext) -> Result<HeapType> {
+        match *self {}
+    }
+
+    pub fn matches_ty(&self, _store: impl AsContext, _ty: &HeapType) -> Result<bool> {
         match *self {}
     }
 
