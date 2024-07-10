@@ -49,39 +49,39 @@ impl VMGcHeader {
     /// Get the kind of GC object that this is.
     pub fn kind(&self) -> VMGcKind {
         let upper = u32::try_from(self.0 >> 32).unwrap();
-        VMGcKind::from_u32(upper)
+        VMGcKind::from_high_bits_of_u32(upper)
     }
 
-    /// Get the reserved 30 bits in this header.
+    /// Get the reserved 26 bits in this header.
     ///
     /// These are bits are reserved for `GcRuntime` implementations to make use
     /// of however they see fit.
-    pub fn reserved_u30(&self) -> u32 {
+    pub fn reserved_u26(&self) -> u32 {
         let upper = u32::try_from(self.0 >> 32).unwrap();
         upper & VMGcKind::UNUSED_MASK
     }
 
-    /// Set the 30-bit reserved value.
+    /// Set the 26-bit reserved value.
     ///
     /// # Panics
     ///
     /// Panics if the given `value` has any of the upper 2 bits set.
-    pub fn set_reserved_u30(&mut self, value: u32) {
+    pub fn set_reserved_u26(&mut self, value: u32) {
         assert_eq!(
             value & VMGcKind::MASK,
             0,
-            "VMGcHeader::set_reserved_u30 with value using more than 30 bits"
+            "VMGcHeader::set_reserved_u26 with value using more than 26 bits"
         );
         self.0 |= u64::from(value) << 32;
     }
 
-    /// Set the 30-bit reserved value.
+    /// Set the 26-bit reserved value.
     ///
     /// # Safety
     ///
-    /// The given `value` must only use the lower 30 bits; its upper 2 bits must
+    /// The given `value` must only use the lower 26 bits; its upper 2 bits must
     /// be unset.
-    pub unsafe fn unchecked_set_reserved_u30(&mut self, value: u32) {
+    pub unsafe fn unchecked_set_reserved_u26(&mut self, value: u32) {
         self.0 |= u64::from(value) << 32;
     }
 
