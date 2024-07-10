@@ -29,7 +29,7 @@ pub struct FunctionBuilderContext {
     ssa: SSABuilder,
     status: SecondaryMap<Block, BlockStatus>,
     types: SecondaryMap<Variable, Type>,
-    needs_stack_map: EntitySet<Value>,
+    stack_map_values: EntitySet<Value>,
     dfs: Dfs,
 }
 
@@ -513,13 +513,13 @@ impl<'a> FunctionBuilder<'a> {
     /// # Panics
     ///
     /// Panics if `val` is larger than 16 bytes.
-    pub fn declare_needs_stack_map(&mut self, val: Value) {
+    pub fn declare_value_needs_stack_map(&mut self, val: Value) {
         // We rely on these properties in `insert_safepoint_spills`.
         let size = self.func.dfg.value_type(val).bytes();
         assert!(size <= 16);
         assert!(size.is_power_of_two());
 
-        self.func_ctx.needs_stack_map.insert(val);
+        self.func_ctx.stack_map_values.insert(val);
     }
 
     /// Creates a jump table in the function, to be used by [`br_table`](InstBuilder::br_table) instructions.
@@ -738,7 +738,7 @@ impl<'a> FunctionBuilder<'a> {
                 // instruction to the live set. This includes branch arguments,
                 // as mentioned above.
                 for val in self.func.dfg.inst_values(inst) {
-                    if self.func_ctx.needs_stack_map.contains(val) {
+                    if self.func_ctx.stack_map_values.contains(val) {
                         live.insert(val);
                     }
                 }
@@ -844,7 +844,7 @@ impl<'a> FunctionBuilder<'a> {
             }
         }
 
-        if !self.func_ctx.needs_stack_map.is_empty() {
+        if !self.func_ctx.stack_map_values.is_empty() {
             self.insert_safepoint_spills();
         }
 
@@ -2110,8 +2110,8 @@ block0:
         builder.append_block_params_for_function_params(block0);
         let a = builder.func.dfg.block_params(block0)[0];
         let b = builder.func.dfg.block_params(block0)[1];
-        builder.declare_needs_stack_map(a);
-        builder.declare_needs_stack_map(b);
+        builder.declare_value_needs_stack_map(a);
+        builder.declare_value_needs_stack_map(b);
         builder.switch_to_block(block0);
         builder.ins().call(func_ref, &[a]);
         builder.ins().jump(block0, &[a, b]);
@@ -2182,13 +2182,13 @@ block0(v0: i32, v1: i32):
         builder.append_block_params_for_function_params(block0);
         builder.switch_to_block(block0);
         let v0 = builder.ins().iconst(ir::types::I32, 0);
-        builder.declare_needs_stack_map(v0);
+        builder.declare_value_needs_stack_map(v0);
         let v1 = builder.ins().iconst(ir::types::I32, 1);
-        builder.declare_needs_stack_map(v1);
+        builder.declare_value_needs_stack_map(v1);
         let v2 = builder.ins().iconst(ir::types::I32, 2);
-        builder.declare_needs_stack_map(v2);
+        builder.declare_value_needs_stack_map(v2);
         let v3 = builder.ins().iconst(ir::types::I32, 3);
-        builder.declare_needs_stack_map(v3);
+        builder.declare_value_needs_stack_map(v3);
         builder.ins().call(func_ref, &[v0]);
         builder.ins().call(func_ref, &[v0]);
         builder.ins().call(func_ref, &[v1]);
@@ -2286,7 +2286,7 @@ block0:
 
         builder.switch_to_block(block1);
         let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
+        builder.declare_value_needs_stack_map(v1);
         builder.ins().jump(block3, &[]);
 
         builder.switch_to_block(block2);
@@ -2380,7 +2380,7 @@ block3:
         builder.switch_to_block(block0);
         let v0 = builder.func.dfg.block_params(block0)[0];
         let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
+        builder.declare_value_needs_stack_map(v1);
         builder.ins().brif(v0, block1, &[], block2, &[]);
 
         builder.switch_to_block(block1);
@@ -2457,7 +2457,7 @@ block2:
         builder.switch_to_block(block0);
         let v0 = builder.func.dfg.block_params(block0)[0];
         let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
+        builder.declare_value_needs_stack_map(v1);
         builder.ins().brif(v0, block1, &[], block2, &[]);
 
         builder.switch_to_block(block1);
@@ -2544,7 +2544,7 @@ block2:
         builder.switch_to_block(block0);
         let v0 = builder.func.dfg.block_params(block0)[0];
         let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
+        builder.declare_value_needs_stack_map(v1);
         builder.ins().brif(v0, block1, &[], block2, &[]);
 
         builder.switch_to_block(block1);
@@ -2619,7 +2619,7 @@ block2:
         builder.switch_to_block(block0);
         let v0 = builder.func.dfg.block_params(block0)[0];
         let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
+        builder.declare_value_needs_stack_map(v1);
         builder.ins().brif(v0, block1, &[], block2, &[]);
 
         builder.switch_to_block(block1);
@@ -2713,17 +2713,17 @@ block2:
 
         builder.switch_to_block(block1);
         let v1 = builder.ins().iconst(ir::types::I64, 1);
-        builder.declare_needs_stack_map(v1);
+        builder.declare_value_needs_stack_map(v1);
         let v2 = builder.ins().iconst(ir::types::I64, 2);
-        builder.declare_needs_stack_map(v2);
+        builder.declare_value_needs_stack_map(v2);
         builder.ins().call(func_ref, &[]);
         builder.ins().jump(block3, &[v1, v2]);
 
         builder.switch_to_block(block2);
         let v3 = builder.ins().iconst(ir::types::I64, 3);
-        builder.declare_needs_stack_map(v3);
+        builder.declare_value_needs_stack_map(v3);
         let v4 = builder.ins().iconst(ir::types::I64, 4);
-        builder.declare_needs_stack_map(v4);
+        builder.declare_value_needs_stack_map(v4);
         builder.ins().call(func_ref, &[]);
         builder.ins().jump(block3, &[v3, v3]);
 
@@ -2826,7 +2826,7 @@ block3:
         builder.switch_to_block(block0);
         let params = builder.func.dfg.block_params(block0).to_vec();
         for val in &params {
-            builder.declare_needs_stack_map(*val);
+            builder.declare_value_needs_stack_map(*val);
         }
         builder.ins().call(func_ref, &[]);
         builder.ins().return_(&params);
