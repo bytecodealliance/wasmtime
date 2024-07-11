@@ -5,7 +5,7 @@ use crate::{
     vm::GcStructLayout,
     AnyRef, ExternRef, HeapType, RootedGcRefImpl, StorageType, Val, ValType, V128,
 };
-use core::fmt;
+use core::{fmt, mem};
 use wasmtime_environ::VMGcKind;
 
 /// A `VMGcRef` that we know points to a `struct`.
@@ -141,20 +141,20 @@ impl VMStructRef {
         let offset = layout.fields[field];
         let data = store.unwrap_gc_store_mut().struct_data(self, layout.size);
         match ty {
-            StorageType::I8 => Val::I32(data.read_pod::<u8>(offset).into()),
-            StorageType::I16 => Val::I32(data.read_pod::<u16>(offset).into()),
-            StorageType::ValType(ValType::I32) => Val::I32(data.read_pod::<i32>(offset)),
-            StorageType::ValType(ValType::I64) => Val::I64(data.read_pod::<i64>(offset)),
-            StorageType::ValType(ValType::F32) => Val::F32(data.read_pod::<u32>(offset)),
-            StorageType::ValType(ValType::F64) => Val::F64(data.read_pod::<u64>(offset)),
-            StorageType::ValType(ValType::V128) => Val::V128(data.read_pod::<V128>(offset)),
+            StorageType::I8 => Val::I32(data.read_u8(offset).into()),
+            StorageType::I16 => Val::I32(data.read_u16(offset).into()),
+            StorageType::ValType(ValType::I32) => Val::I32(data.read_i32(offset)),
+            StorageType::ValType(ValType::I64) => Val::I64(data.read_i64(offset)),
+            StorageType::ValType(ValType::F32) => Val::F32(data.read_u32(offset)),
+            StorageType::ValType(ValType::F64) => Val::F64(data.read_u64(offset)),
+            StorageType::ValType(ValType::V128) => Val::V128(data.read_v128(offset)),
             StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
                 HeapType::Extern => {
-                    let raw = data.read_pod::<u32>(offset);
+                    let raw = data.read_u32(offset);
                     Val::ExternRef(ExternRef::_from_raw(store, raw))
                 }
                 HeapType::Any => {
-                    let raw = data.read_pod::<u32>(offset);
+                    let raw = data.read_u32(offset);
                     Val::AnyRef(AnyRef::_from_raw(store, raw))
                 }
                 HeapType::Func => todo!("funcrefs inside gc objects not yet implemented"),
@@ -187,13 +187,13 @@ impl VMStructRef {
         let offset = layout.fields[field];
         let mut data = store.gc_store_mut()?.struct_data(self, layout.size);
         match val {
-            Val::I32(i) if ty.is_i8() => data.write_pod(offset, i as i8),
-            Val::I32(i) if ty.is_i16() => data.write_pod(offset, i as i16),
-            Val::I32(i) => data.write_pod(offset, i),
-            Val::I64(i) => data.write_pod(offset, i),
-            Val::F32(f) => data.write_pod(offset, f),
-            Val::F64(f) => data.write_pod(offset, f),
-            Val::V128(v) => data.write_pod(offset, v),
+            Val::I32(i) if ty.is_i8() => data.write_i8(offset, i as i8),
+            Val::I32(i) if ty.is_i16() => data.write_i16(offset, i as i16),
+            Val::I32(i) => data.write_i32(offset, i),
+            Val::I64(i) => data.write_i64(offset, i),
+            Val::F32(f) => data.write_u32(offset, f),
+            Val::F64(f) => data.write_u64(offset, f),
+            Val::V128(v) => data.write_v128(offset, v),
 
             // For GC-managed references, we need to take care to run the
             // appropriate barriers, even when we are writing null references
@@ -208,7 +208,7 @@ impl VMStructRef {
             // method is ever hot enough, we can always come back and clean
             // it up in the future.
             Val::ExternRef(e) => {
-                let raw = data.read_pod::<u32>(offset);
+                let raw = data.read_u32(offset);
                 let mut gc_ref = VMGcRef::from_raw_u32(raw);
                 let e = match e {
                     Some(e) => Some(e.try_gc_ref(store)?.unchecked_copy()),
@@ -216,10 +216,10 @@ impl VMStructRef {
                 };
                 store.gc_store_mut()?.write_gc_ref(&mut gc_ref, e.as_ref());
                 let mut data = store.gc_store_mut()?.struct_data(self, layout.size);
-                data.write_pod(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
+                data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
             Val::AnyRef(a) => {
-                let raw = data.read_pod::<u32>(offset);
+                let raw = data.read_u32(offset);
                 let mut gc_ref = VMGcRef::from_raw_u32(raw);
                 let a = match a {
                     Some(a) => Some(a.try_gc_ref(store)?.unchecked_copy()),
@@ -227,7 +227,7 @@ impl VMStructRef {
                 };
                 store.gc_store_mut()?.write_gc_ref(&mut gc_ref, a.as_ref());
                 let mut data = store.gc_store_mut()?.struct_data(self, layout.size);
-                data.write_pod(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
+                data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
 
             Val::FuncRef(_) => todo!("funcrefs inside gc objects not yet implemented"),
@@ -273,31 +273,31 @@ impl VMStructRef {
             Val::I32(i) if ty.is_i8() => store
                 .gc_store_mut()?
                 .struct_data(self, layout.size)
-                .write_pod(offset, i as i8),
+                .write_i8(offset, i as i8),
             Val::I32(i) if ty.is_i16() => store
                 .gc_store_mut()?
                 .struct_data(self, layout.size)
-                .write_pod(offset, i as i16),
+                .write_i16(offset, i as i16),
             Val::I32(i) => store
                 .gc_store_mut()?
                 .struct_data(self, layout.size)
-                .write_pod(offset, i),
+                .write_i32(offset, i),
             Val::I64(i) => store
                 .gc_store_mut()?
                 .struct_data(self, layout.size)
-                .write_pod(offset, i),
+                .write_i64(offset, i),
             Val::F32(f) => store
                 .gc_store_mut()?
                 .struct_data(self, layout.size)
-                .write_pod(offset, f),
+                .write_u32(offset, f),
             Val::F64(f) => store
                 .gc_store_mut()?
                 .struct_data(self, layout.size)
-                .write_pod(offset, f),
+                .write_u64(offset, f),
             Val::V128(v) => store
                 .gc_store_mut()?
                 .struct_data(self, layout.size)
-                .write_pod(offset, v),
+                .write_v128(offset, v),
 
             // NB: We don't need to do a write barrier when initializing a
             // field, because there is nothing being overwritten. Therefore, we
@@ -310,7 +310,7 @@ impl VMStructRef {
                 store
                     .gc_store_mut()?
                     .struct_data(self, layout.size)
-                    .write_pod(offset, x);
+                    .write_u32(offset, x);
             }
             Val::AnyRef(x) => {
                 let x = match x {
@@ -320,7 +320,7 @@ impl VMStructRef {
                 store
                     .gc_store_mut()?
                     .struct_data(self, layout.size)
-                    .write_pod(offset, x);
+                    .write_u32(offset, x);
             }
 
             Val::FuncRef(_) => {
@@ -338,113 +338,46 @@ impl VMStructRef {
 /// A plain-old-data type that can be stored in a `ValType` or a `StorageType`.
 ///
 /// Safety: implementations must be POD and all bit patterns must be valid.
-pub unsafe trait PodValType: Copy {
+pub trait PodValType<const SIZE: usize>: Copy {
     /// Read an instance of `Self` from the given little-endian bytes.
-    fn read_le(le_bytes: &[u8]) -> Self;
+    fn read_le(le_bytes: &[u8; SIZE]) -> Self;
 
     /// Write `self` into the given memory location, as little-endian bytes.
-    unsafe fn write_le(&self, into: *mut u8);
+    fn write_le(&self, into: &mut [u8; SIZE]);
 }
 
-unsafe impl PodValType for u8 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        u8::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for u16 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        u16::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for u32 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        u32::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for u64 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        u64::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for usize {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        usize::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for i8 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        i8::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for i16 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        i16::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for i32 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        i32::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for i64 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        i64::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
-}
-unsafe impl PodValType for isize {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        isize::from_le_bytes(le_bytes.try_into().unwrap())
-    }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
-    }
+macro_rules! impl_pod_val_type {
+    ( $( $t:ty , )* ) => {
+        $(
+            impl PodValType<{core::mem::size_of::<$t>()}> for $t {
+                fn read_le(le_bytes: &[u8; core::mem::size_of::<$t>()]) -> Self {
+                    <$t>::from_le_bytes(*le_bytes)
+                }
+                fn write_le(&self, into: &mut [u8; core::mem::size_of::<$t>()]) {
+                    *into = self.to_le_bytes();
+                }
+            }
+        )*
+    };
 }
 
-unsafe impl PodValType for V128 {
-    fn read_le(le_bytes: &[u8]) -> Self {
-        let u128 = u128::from_le_bytes(le_bytes.try_into().unwrap());
-        u128.into()
+impl_pod_val_type! {
+    u8,
+    u16,
+    u32,
+    u64,
+    i8,
+    i16,
+    i32,
+    i64,
+}
+
+impl PodValType<{ mem::size_of::<V128>() }> for V128 {
+    fn read_le(le_bytes: &[u8; mem::size_of::<V128>()]) -> Self {
+        u128::from_le_bytes(*le_bytes).into()
     }
-    unsafe fn write_le(&self, into: *mut u8) {
-        let le_bytes = self.as_u128().to_le_bytes();
-        core::ptr::copy_nonoverlapping(le_bytes.as_ptr(), into, le_bytes.len());
+    fn write_le(&self, into: &mut [u8; mem::size_of::<V128>()]) {
+        *into = self.as_u128().to_le_bytes();
     }
 }
 
@@ -465,8 +398,35 @@ pub struct VMStructDataMut<'a> {
     data: &'a mut [u8],
 }
 
+macro_rules! impl_pod_methods {
+    ( $( $t:ty, $read:ident, $write:ident; )* ) => {
+        $(
+            /// Read from a `
+            #[doc = stringify!($t)]
+            /// ` field in this struct.
+            ///
+            /// Panics on out-of-bounds accesses.
+            #[inline]
+            pub fn $read(&self, offset: u32) -> $t {
+                self.read_pod::<{ mem::size_of::<$t>() }, $t>(offset)
+            }
+
+            /// Write to a `
+            #[doc = stringify!($t)]
+            /// ` field in this struct.
+            ///
+            /// Panics on out-of-bounds accesses.
+            #[inline]
+            pub fn $write(&mut self, offset: u32, val: $t) {
+                self.write_pod::<{ mem::size_of::<$t>() }, $t>(offset, val);
+            }
+        )*
+    };
+}
+
 impl<'a> VMStructDataMut<'a> {
     /// Construct a `VMStructDataMut` from the given slice of bytes.
+    #[inline]
     pub fn new(data: &'a mut [u8]) -> Self {
         Self { data }
     }
@@ -474,20 +434,48 @@ impl<'a> VMStructDataMut<'a> {
     /// Read a POD field out of this struct.
     ///
     /// Panics on out-of-bounds accesses.
-    pub fn read_pod<T: PodValType>(&self, offset: u32) -> T {
+    ///
+    /// Don't generally use this method, use `read_u8`, `read_i64`,
+    /// etc... instead.
+    #[inline]
+    fn read_pod<const N: usize, T>(&self, offset: u32) -> T
+    where
+        T: PodValType<N>,
+    {
+        assert_eq!(N, mem::size_of::<T>());
         let offset = usize::try_from(offset).unwrap();
-        let end = offset.checked_add(core::mem::size_of::<T>()).unwrap();
+        let end = offset.checked_add(N).unwrap();
         let bytes = self.data.get(offset..end).expect("out of bounds field");
-        T::read_le(bytes)
+        T::read_le(bytes.try_into().unwrap())
     }
 
     /// Read a POD field out of this struct.
     ///
     /// Panics on out-of-bounds accesses.
-    pub fn write_pod<T: PodValType>(&mut self, offset: u32, val: T) {
+    ///
+    /// Don't generally use this method, use `write_u8`, `write_i64`,
+    /// etc... instead.
+    #[inline]
+    fn write_pod<const N: usize, T>(&mut self, offset: u32, val: T)
+    where
+        T: PodValType<N>,
+    {
+        assert_eq!(N, mem::size_of::<T>());
         let offset = usize::try_from(offset).unwrap();
-        let end = offset.checked_add(core::mem::size_of::<T>()).unwrap();
+        let end = offset.checked_add(N).unwrap();
         let into = self.data.get_mut(offset..end).expect("out of bounds field");
-        unsafe { val.write_le(into.as_mut_ptr()) };
+        val.write_le(into.try_into().unwrap());
+    }
+
+    impl_pod_methods! {
+        u8, read_u8, write_u8;
+        u16, read_u16, write_u16;
+        u32, read_u32, write_u32;
+        u64, read_u64, write_u64;
+        i8, read_i8, write_i8;
+        i16, read_i16, write_i16;
+        i32, read_i32, write_i32;
+        i64, read_i64, write_i64;
+        V128, read_v128, write_v128;
     }
 }
