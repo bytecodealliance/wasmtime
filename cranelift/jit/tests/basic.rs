@@ -103,8 +103,8 @@ fn switch_error() {
         let bb3 = bcx.create_block();
         println!("{} {} {} {} {}", start, bb0, bb1, bb2, bb3);
 
-        bcx.declare_var(Variable::new(0), types::I32, StackMapBehavior::Exclude);
-        bcx.declare_var(Variable::new(1), types::I32, StackMapBehavior::Exclude);
+        bcx.declare_var(Variable::new(0), types::I32);
+        bcx.declare_var(Variable::new(1), types::I32);
         let in_val = bcx.append_block_param(start, types::I32);
         bcx.switch_to_block(start);
         bcx.def_var(Variable::new(0), in_val);
