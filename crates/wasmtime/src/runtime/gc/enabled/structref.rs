@@ -187,6 +187,9 @@ impl StructRef {
     ///
     /// # Errors
     ///
+    /// If the given `fields` values' types do not match the field types of the
+    /// `allocator`'s struct type, an error is returned.
+    ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, but performing a garbage collection might free up space
     /// such that retrying the allocation afterwards might succeed, then a
