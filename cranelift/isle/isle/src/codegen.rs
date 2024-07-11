@@ -37,16 +37,15 @@ enum Nested<'a> {
     Arms(BindingId, Iter<'a, MatchArm>),
 }
 
-struct BodyContext<'a, 'b, W> {
+struct BodyContext<'a, W> {
     out: &'a mut W,
     ruleset: &'a RuleSet,
     indent: String,
     is_ref: StableSet<BindingId>,
     is_bound: StableSet<BindingId>,
-    stack: Vec<(Nested<'b>, &'b str, StableSet<BindingId>)>,
 }
 
-impl<'a, 'b, W: Write> BodyContext<'a, 'b, W> {
+impl<'a, W: Write> BodyContext<'a, W> {
     fn new(out: &'a mut W, ruleset: &'a RuleSet) -> Self {
         Self {
             out,
@@ -54,7 +53,6 @@ impl<'a, 'b, W: Write> BodyContext<'a, 'b, W> {
             indent: Default::default(),
             is_ref: Default::default(),
             is_bound: Default::default(),
-            stack: Default::default(),
         }
     }
 
@@ -68,20 +66,9 @@ impl<'a, 'b, W: Write> BodyContext<'a, 'b, W> {
         writeln!(self.out, " {{")
     }
 
-    fn begin_nested(
-        &mut self,
-        nested: Nested<'b>,
-        last_line: &'b str,
-        scope: StableSet<BindingId>,
-    ) -> std::fmt::Result {
-        self.stack.push((nested, last_line, scope));
-        self.begin_block()
-    }
-
-    fn end_nested(&mut self) -> std::fmt::Result {
-        let (_, end, scope) = self.stack.pop().unwrap();
-        if !end.is_empty() {
-            writeln!(self.out, "{}{}", &self.indent, end)?;
+    fn end_block(&mut self, last_line: &str, scope: StableSet<BindingId>) -> std::fmt::Result {
+        if !last_line.is_empty() {
+            writeln!(self.out, "{}{}", &self.indent, last_line)?;
         }
         self.is_bound = scope;
         self.end_block_without_newline()?;
@@ -511,24 +498,27 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         Nested::Cases(block.steps.iter())
     }
 
-    fn emit_block<'b, W: Write>(
+    fn emit_block<W: Write>(
         &self,
-        ctx: &mut BodyContext<'_, 'b, W>,
-        block: &'b Block,
+        ctx: &mut BodyContext<W>,
+        block: &Block,
         ret_kind: ReturnKind,
-        last_expr: &'b str,
+        last_expr: &str,
         scope: StableSet<BindingId>,
     ) -> std::fmt::Result {
-        assert!(ctx.stack.is_empty());
-        ctx.begin_nested(Self::validate_block(ret_kind, block), last_expr, scope)?;
+        let mut stack = Vec::new();
+        ctx.begin_block()?;
+        stack.push((Self::validate_block(ret_kind, block), last_expr, scope));
 
-        while let Some((nested, _end, _scope)) = ctx.stack.last_mut() {
-            match nested {
+        while let Some((mut nested, last_line, scope)) = stack.pop() {
+            match &mut nested {
                 Nested::Cases(cases) => {
                     let Some(case) = cases.next() else {
-                        ctx.end_nested()?;
+                        ctx.end_block(last_line, scope)?;
                         continue;
                     };
+                    // Iterator isn't done, put it back on the stack.
+                    stack.push((nested, last_line, scope));
 
                     for &expr in case.bind_order.iter() {
                         let iter_return = match &ctx.ruleset.bindings[expr.index()] {
@@ -596,21 +586,20 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                     self.emit_source(ctx, *source, arm.constraint)?;
                                 }
                             }
-                            ctx.begin_nested(Self::validate_block(ret_kind, &arm.body), "", scope)?;
+                            ctx.begin_block()?;
+                            stack.push((Self::validate_block(ret_kind, &arm.body), "", scope));
                         }
 
                         ControlFlow::Match { source, arms } => {
                             let scope = ctx.enter_scope();
                             write!(ctx.out, "{}match ", &ctx.indent)?;
                             self.emit_source(ctx, *source, arms[0].constraint)?;
-                            ctx.begin_nested(
-                                Nested::Arms(*source, arms.iter()),
-                                // Always add a catchall arm, because we
-                                // don't do exhaustiveness checking on the
-                                // match arms.
-                                "_ => {}",
-                                scope,
-                            )?;
+                            ctx.begin_block()?;
+
+                            // Always add a catchall arm, because we
+                            // don't do exhaustiveness checking on the
+                            // match arms.
+                            stack.push((Nested::Arms(*source, arms.iter()), "_ => {}", scope));
                         }
 
                         ControlFlow::Equal { a, b, body } => {
@@ -619,7 +608,8 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                             self.emit_expr(ctx, *a)?;
                             write!(ctx.out, " == ")?;
                             self.emit_expr(ctx, *b)?;
-                            ctx.begin_nested(Self::validate_block(ret_kind, body), "", scope)?;
+                            ctx.begin_block()?;
+                            stack.push((Self::validate_block(ret_kind, body), "", scope));
                         }
 
                         ControlFlow::Loop { result, body } => {
@@ -645,7 +635,8 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                 source.index()
                             )?;
                             ctx.is_bound.insert(*result);
-                            ctx.begin_nested(Self::validate_block(ret_kind, body), "", scope)?;
+                            ctx.begin_block()?;
+                            stack.push((Self::validate_block(ret_kind, body), "", scope));
                         }
 
                         &ControlFlow::Return { pos, result } => {
@@ -683,16 +674,19 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
                 Nested::Arms(source, arms) => {
                     let Some(arm) = arms.next() else {
-                        ctx.end_nested()?;
+                        ctx.end_block(last_line, scope)?;
                         continue;
                     };
-
                     let source = *source;
+                    // Iterator isn't done, put it back on the stack.
+                    stack.push((nested, last_line, scope));
+
                     let scope = ctx.enter_scope();
                     write!(ctx.out, "{}", &ctx.indent)?;
                     self.emit_constraint(ctx, source, arm)?;
                     write!(ctx.out, " =>")?;
-                    ctx.begin_nested(Self::validate_block(ret_kind, &arm.body), "", scope)?;
+                    ctx.begin_block()?;
+                    stack.push((Self::validate_block(ret_kind, &arm.body), "", scope));
                 }
             }
         }
