@@ -126,6 +126,10 @@ impl VMStructRef {
     ///
     /// `i8` and `i16` fields are zero-extended into `Val::I32(_)`s.
     ///
+    /// Does not check that the field is actually of type `ty`. That is the
+    /// caller's responsibility. Failure to do so is memory safe, but will lead
+    /// to general incorrectness such as panics and wrong results.
+    ///
     /// Panics on out-of-bounds accesses.
     pub fn read_field(
         &self,
@@ -164,6 +168,11 @@ impl VMStructRef {
     /// Returns an error if `val` is a GC reference that has since been
     /// unrooted.
     ///
+    /// Does not check that `val` matches `ty`, nor that the field is actually
+    /// of type `ty`. Checking those things is the caller's responsibility.
+    /// Failure to do so is memory safe, but will lead to general incorrectness
+    /// such as panics and wrong results.
+    ///
     /// Panics on out-of-bounds accesses.
     pub fn write_field(
         &self,
@@ -173,8 +182,8 @@ impl VMStructRef {
         field: usize,
         val: Val,
     ) -> Result<()> {
-        val.ensure_matches_ty(&store, &ty.unpack())
-            .with_context(|| format!("cannot set field {field}: type mismatch"))?;
+        debug_assert!(val._matches_ty(&store, &ty.unpack())?);
+
         let offset = layout.fields[field];
         let mut data = store.gc_store_mut()?.struct_data(self, layout.size);
         match val {
@@ -228,10 +237,23 @@ impl VMStructRef {
 
     /// Initialize a field in this structref that is currently uninitialized.
     ///
+    /// The difference between this method and `write_field` is that GC barriers
+    /// are handled differently. When overwriting an initialized field (aka
+    /// `write_field`) we need to call the full write GC write barrier, which
+    /// logically drops the old GC reference and clones the new GC
+    /// reference. When we are initializing a field for the first time, there is
+    /// no old GC reference that is being overwritten and which we need to drop,
+    /// so we only need to clone the new GC reference.
+    ///
     /// Calling this method on a structref that has already had the associated
     /// field initialized will result in GC bugs. These are memory safe but will
     /// lead to generally incorrect behavior such as panics, leaks, and
     /// incorrect results.
+    ///
+    /// Does not check that `val` matches `ty`, nor that the field is actually
+    /// of type `ty`. Checking those things is the caller's responsibility.
+    /// Failure to do so is memory safe, but will lead to general incorrectness
+    /// such as panics and wrong results.
     ///
     /// Returns an error if `val` is a GC reference that has since been
     /// unrooted.
@@ -245,8 +267,7 @@ impl VMStructRef {
         field: usize,
         val: Val,
     ) -> Result<()> {
-        val.ensure_matches_ty(&store, &ty.unpack())
-            .with_context(|| format!("cannot initialize field {field}: type mismatch"))?;
+        debug_assert!(val._matches_ty(&store, &ty.unpack())?);
         let offset = layout.fields[field];
         match val {
             Val::I32(i) if ty.is_i8() => store
@@ -279,7 +300,8 @@ impl VMStructRef {
                 .write_pod(offset, v),
 
             // NB: We don't need to do a write barrier when initializing a
-            // field, just the clone barrier.
+            // field, because there is nothing being overwritten. Therefore, we
+            // just the clone barrier.
             Val::ExternRef(x) => {
                 let x = match x {
                     None => 0,
