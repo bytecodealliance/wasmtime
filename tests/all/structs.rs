@@ -371,6 +371,7 @@ fn struct_fields_unrooted() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn passing_structs_through_wasm_with_untyped_calls() -> Result<()> {
     let mut store = gc_store()?;
 
@@ -421,6 +422,7 @@ fn passing_structs_through_wasm_with_untyped_calls() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn passing_structs_through_wasm_with_typed_calls() -> Result<()> {
     let mut store = gc_store()?;
 
@@ -465,6 +467,7 @@ fn passing_structs_through_wasm_with_typed_calls() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn host_sets_struct_global() -> Result<()> {
     let mut store = gc_store()?;
 
@@ -509,6 +512,7 @@ fn host_sets_struct_global() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wasm_sets_struct_global() -> Result<()> {
     let mut store = gc_store()?;
 
@@ -558,6 +562,7 @@ fn wasm_sets_struct_global() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn host_sets_struct_in_table() -> Result<()> {
     let mut store = gc_store()?;
 
@@ -603,6 +608,7 @@ fn host_sets_struct_in_table() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wasm_sets_struct_in_table() -> Result<()> {
     let mut store = gc_store()?;
 
