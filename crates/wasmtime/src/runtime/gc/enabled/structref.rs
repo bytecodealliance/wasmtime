@@ -7,7 +7,7 @@ use crate::{
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
     AsContext, AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted,
-    RefType, RootSet, Rooted, StorageType, StructType, Val, ValRaw, ValType, WasmTy,
+    RefType, RootSet, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
 };
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
@@ -230,11 +230,8 @@ impl StructRef {
                 val.comes_from_same_store(store),
                 "field value comes from the wrong store",
             );
-            let ty = match ty.element_type() {
-                StorageType::I8 | StorageType::I16 => &ValType::I32,
-                StorageType::ValType(ty) => ty,
-            };
-            val.ensure_matches_ty(store, &ty)
+            let ty = ty.element_type().unpack();
+            val.ensure_matches_ty(store, ty)
                 .context("field type mismatch")?;
         }
 
