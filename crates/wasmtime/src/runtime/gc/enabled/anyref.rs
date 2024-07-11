@@ -98,14 +98,14 @@ pub struct AnyRef {
 impl From<Rooted<StructRef>> for Rooted<AnyRef> {
     #[inline]
     fn from(s: Rooted<StructRef>) -> Self {
-        s.cast()
+        s.unchecked_cast()
     }
 }
 
 impl From<ManuallyRooted<StructRef>> for ManuallyRooted<AnyRef> {
     #[inline]
     fn from(s: ManuallyRooted<StructRef>) -> Self {
-        s.cast()
+        s.unchecked_cast()
     }
 }
 

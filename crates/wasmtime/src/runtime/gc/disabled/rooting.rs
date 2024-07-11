@@ -125,7 +125,7 @@ impl<T: GcRef> Rooted<T> {
         a.assert_unreachable()
     }
 
-    pub(crate) fn cast<U: GcRef>(self) -> Rooted<U> {
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> Rooted<U> {
         match self.inner {}
     }
 }
@@ -217,7 +217,7 @@ where
         match self.inner {}
     }
 
-    pub(crate) fn cast<U: GcRef>(self) -> ManuallyRooted<U> {
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> ManuallyRooted<U> {
         match self.inner {}
     }
 }

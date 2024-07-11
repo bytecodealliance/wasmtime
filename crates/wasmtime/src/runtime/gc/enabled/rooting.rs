@@ -949,7 +949,7 @@ impl<T: GcRef> Rooted<T> {
     /// It is the caller's responsibility to ensure that `self` is actually a
     /// `U`. Failure to uphold this invariant will be memory safe but will
     /// result in general incorrectness such as panics and wrong results.
-    pub(crate) fn cast<U: GcRef>(self) -> Rooted<U> {
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> Rooted<U> {
         Rooted::from_gc_root_index(self.inner)
     }
 }
@@ -1593,7 +1593,7 @@ where
     /// It is the caller's responsibility to ensure that `self` is actually a
     /// `U`. Failure to uphold this invariant will be memory safe but will
     /// result in general incorrectness such as panics and wrong results.
-    pub(crate) fn cast<U: GcRef>(self) -> ManuallyRooted<U> {
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> ManuallyRooted<U> {
         let u = ManuallyRooted {
             inner: self.inner,
             _phantom: core::marker::PhantomData,

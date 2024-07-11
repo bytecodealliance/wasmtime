@@ -485,14 +485,14 @@ impl From<Option<Rooted<AnyRef>>> for Val {
 impl From<Rooted<StructRef>> for Val {
     #[inline]
     fn from(val: Rooted<StructRef>) -> Val {
-        Val::AnyRef(Some(val.cast()))
+        Val::AnyRef(Some(val.unchecked_cast()))
     }
 }
 
 impl From<Option<Rooted<StructRef>>> for Val {
     #[inline]
     fn from(val: Option<Rooted<StructRef>>) -> Val {
-        Val::AnyRef(val.map(|s| s.cast()))
+        Val::AnyRef(val.map(|s| s.unchecked_cast()))
     }
 }
 
@@ -655,14 +655,14 @@ impl From<Option<Rooted<AnyRef>>> for Ref {
 impl From<Rooted<StructRef>> for Ref {
     #[inline]
     fn from(e: Rooted<StructRef>) -> Ref {
-        Ref::Any(Some(e.cast::<AnyRef>()))
+        Ref::Any(Some(e.unchecked_cast::<AnyRef>()))
     }
 }
 
 impl From<Option<Rooted<StructRef>>> for Ref {
     #[inline]
     fn from(e: Option<Rooted<StructRef>>) -> Ref {
-        Ref::Any(e.map(|e| e.cast::<AnyRef>()))
+        Ref::Any(e.map(|e| e.unchecked_cast::<AnyRef>()))
     }
 }
 
