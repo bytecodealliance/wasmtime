@@ -61,9 +61,6 @@
 //! Here is how you build the corresponding Cranelift IR function using [`FunctionBuilderContext`]:
 //!
 //! ```rust
-//! extern crate cranelift_codegen;
-//! extern crate cranelift_frontend;
-//!
 //! use cranelift_codegen::entity::EntityRef;
 //! use cranelift_codegen::ir::types::*;
 //! use cranelift_codegen::ir::{AbiParam, UserFuncName, Function, InstBuilder, Signature};
