@@ -915,7 +915,7 @@ impl<T> Store<T> {
     /// yield and then continue.
     ///
     /// This deadline is always set relative to the current epoch:
-    /// `delta_beyond_current` ticks in the future. The deadline can
+    /// `ticks_beyond_current` ticks in the future. The deadline can
     /// be set explicitly via this method, or refilled automatically
     /// on a yield if configured via
     /// [`epoch_deadline_async_yield_and_update()`](Store::epoch_deadline_async_yield_and_update). After
