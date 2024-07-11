@@ -3,9 +3,11 @@
 mod drc;
 mod externref;
 mod free_list;
+mod structref;
 
 pub use drc::*;
 pub use externref::*;
+pub use structref::*;
 
 use crate::runtime::vm::GcRuntime;
 

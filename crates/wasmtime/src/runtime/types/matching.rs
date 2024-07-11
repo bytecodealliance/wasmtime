@@ -1,5 +1,6 @@
-use crate::prelude::*;
+use crate::type_registry::RegisteredType;
 use crate::{linker::DefinitionType, Engine, FuncType};
+use crate::{prelude::*, ArrayType, StructType};
 use wasmtime_environ::{
     EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex, WasmHeapType,
     WasmRefType, WasmSubType, WasmValType,
@@ -19,14 +20,28 @@ impl MatchCx<'_> {
         // Avoid matching on structure for subtyping checks when we have
         // precisely the same type.
         let matches = expected == actual || {
-            let expected = FuncType::from_shared_type_index(self.engine, expected);
-            let actual = FuncType::from_shared_type_index(self.engine, actual);
-            actual.matches(&expected)
+            let expected = RegisteredType::root(self.engine, expected).unwrap();
+            let actual = RegisteredType::root(self.engine, actual).unwrap();
+            if expected.is_array() && actual.is_array() {
+                let expected = ArrayType::from_registered_type(expected);
+                let actual = ArrayType::from_registered_type(actual);
+                actual.matches(&expected)
+            } else if expected.is_func() && actual.is_func() {
+                let expected = FuncType::from_registered_type(expected);
+                let actual = FuncType::from_registered_type(actual);
+                actual.matches(&expected)
+            } else if expected.is_struct() && actual.is_struct() {
+                let expected = StructType::from_registered_type(expected);
+                let actual = StructType::from_registered_type(actual);
+                actual.matches(&expected)
+            } else {
+                false
+            }
         };
         if matches {
             return Ok(());
         }
-        let msg = "function types incompatible";
+        let msg = "types incompatible";
         let expected = match self.engine.signatures().borrow(expected) {
             Some(ty) => ty,
             None => panic!("{expected:?} is not registered"),

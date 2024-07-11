@@ -1,6 +1,6 @@
-use crate::prelude::*;
-use crate::runtime::vm::{TableElement, VMGcRef};
+use crate::runtime::vm::TableElement;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::{prelude::*, StructRef};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType, Rooted, RootedGcRefImpl,
     ValType, V128,
@@ -111,31 +111,38 @@ impl Val {
     }
 
     /// Returns the corresponding [`ValType`] for this `Val`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value is a GC reference that has since been
+    /// unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is associated with a different store.
     #[inline]
-    pub fn ty(&self, store: impl AsContext) -> ValType {
+    pub fn ty(&self, store: impl AsContext) -> Result<ValType> {
         self.load_ty(&store.as_context().0)
     }
 
     #[inline]
-    pub(crate) fn load_ty(&self, store: &StoreOpaque) -> ValType {
-        match self {
+    pub(crate) fn load_ty(&self, store: &StoreOpaque) -> Result<ValType> {
+        Ok(match self {
             Val::I32(_) => ValType::I32,
             Val::I64(_) => ValType::I64,
             Val::F32(_) => ValType::F32,
             Val::F64(_) => ValType::F64,
             Val::V128(_) => ValType::V128,
-            Val::ExternRef(_) => ValType::EXTERNREF,
+            Val::ExternRef(Some(_)) => ValType::EXTERNREF,
+            Val::ExternRef(None) => ValType::NULLFUNCREF,
             Val::FuncRef(None) => ValType::NULLFUNCREF,
             Val::FuncRef(Some(f)) => ValType::Ref(RefType::new(
                 false,
                 HeapType::ConcreteFunc(f.load_ty(store)),
             )),
             Val::AnyRef(None) => ValType::NULLREF,
-            Val::AnyRef(Some(_)) => {
-                assert!(VMGcRef::ONLY_EXTERN_REF_AND_I31);
-                ValType::Ref(RefType::new(false, HeapType::I31))
-            }
-        }
+            Val::AnyRef(Some(a)) => ValType::Ref(RefType::new(false, a._ty(store)?)),
+        })
     }
 
     /// Does this value match the given type?
@@ -188,7 +195,7 @@ impl Val {
         if self._matches_ty(store, ty)? {
             Ok(())
         } else {
-            let actual_ty = self.load_ty(store);
+            let actual_ty = self.load_ty(store)?;
             bail!("type mismatch: expected {ty}, found {actual_ty}")
         }
     }
@@ -475,6 +482,20 @@ impl From<Option<Rooted<AnyRef>>> for Val {
     }
 }
 
+impl From<Rooted<StructRef>> for Val {
+    #[inline]
+    fn from(val: Rooted<StructRef>) -> Val {
+        Val::AnyRef(Some(val.unchecked_cast()))
+    }
+}
+
+impl From<Option<Rooted<StructRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Rooted<StructRef>>) -> Val {
+        Val::AnyRef(val.map(|s| s.unchecked_cast()))
+    }
+}
+
 impl From<Func> for Val {
     #[inline]
     fn from(val: Func) -> Val {
@@ -631,6 +652,20 @@ impl From<Option<Rooted<AnyRef>>> for Ref {
     }
 }
 
+impl From<Rooted<StructRef>> for Ref {
+    #[inline]
+    fn from(e: Rooted<StructRef>) -> Ref {
+        Ref::Any(Some(e.unchecked_cast::<AnyRef>()))
+    }
+}
+
+impl From<Option<Rooted<StructRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Rooted<StructRef>>) -> Ref {
+        Ref::Any(e.map(|e| e.unchecked_cast::<AnyRef>()))
+    }
+}
+
 impl Ref {
     /// Create a null reference to the given heap type.
     #[inline]
@@ -761,33 +796,35 @@ impl Ref {
 
     /// Get the type of this reference.
     ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn ty(&self, store: impl AsContext) -> RefType {
+    pub fn ty(&self, store: impl AsContext) -> Result<RefType> {
         self.load_ty(&store.as_context().0)
     }
 
-    pub(crate) fn load_ty(&self, store: &StoreOpaque) -> RefType {
+    pub(crate) fn load_ty(&self, store: &StoreOpaque) -> Result<RefType> {
         assert!(self.comes_from_same_store(store));
-        RefType::new(
+        Ok(RefType::new(
             self.is_null(),
+            // NB: We choose the most-specific heap type we can here and let
+            // subtyping do its thing if callers are matching against a
+            // `HeapType::Func`.
             match self {
-                Ref::Extern(_) => HeapType::Extern,
+                Ref::Extern(None) => HeapType::NoExtern,
+                Ref::Extern(Some(_)) => HeapType::Extern,
 
-                // NB: We choose the most-specific heap type we can here and let
-                // subtyping do its thing if callers are matching against a
-                // `HeapType::Func`.
-                Ref::Func(Some(f)) => HeapType::ConcreteFunc(f.load_ty(store)),
                 Ref::Func(None) => HeapType::NoFunc,
+                Ref::Func(Some(f)) => HeapType::ConcreteFunc(f.load_ty(store)),
 
-                Ref::Any(Some(_)) => {
-                    assert!(VMGcRef::ONLY_EXTERN_REF_AND_I31);
-                    HeapType::I31
-                }
                 Ref::Any(None) => HeapType::None,
+                Ref::Any(Some(a)) => a._ty(store)?,
             },
-        )
+        ))
     }
 
     /// Does this reference value match the given type?
@@ -818,7 +855,23 @@ impl Ref {
 
             (Ref::Any(_), HeapType::Any) => true,
             (Ref::Any(Some(a)), HeapType::I31) => a._is_i31(store)?,
-            (Ref::Any(None), HeapType::None | HeapType::I31) => true,
+            (Ref::Any(Some(a)), HeapType::Struct) => a._is_struct(store)?,
+            (Ref::Any(Some(a)), HeapType::ConcreteStruct(ty)) => match a._as_struct(store)? {
+                None => false,
+                Some(s) => s._matches_ty(store, ty)?,
+            },
+            (Ref::Any(Some(_)), HeapType::Eq) => todo!("eqref"),
+            (Ref::Any(Some(_)), HeapType::Array) => todo!("wasm GC arrays"),
+            (Ref::Any(Some(_)), HeapType::ConcreteArray(_)) => todo!("wasm GC arrays"),
+            (
+                Ref::Any(None),
+                HeapType::None
+                | HeapType::I31
+                | HeapType::ConcreteStruct(_)
+                | HeapType::Struct
+                | HeapType::ConcreteArray(_)
+                | HeapType::Array,
+            ) => true,
             (Ref::Any(_), _) => false,
         })
     }
@@ -833,7 +886,7 @@ impl Ref {
         if self._matches_ty(store, ty)? {
             Ok(())
         } else {
-            let actual_ty = self.load_ty(store);
+            let actual_ty = self.load_ty(store)?;
             bail!("type mismatch: expected {ty}, found {actual_ty}")
         }
     }

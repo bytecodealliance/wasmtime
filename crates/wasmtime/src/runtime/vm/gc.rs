@@ -22,7 +22,7 @@ use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
-use wasmtime_environ::{StackMap, VMGcKind};
+use wasmtime_environ::{StackMap, VMGcKind, VMSharedTypeIndex};
 
 /// Used by the runtime to lookup information about a module given a
 /// program counter value.
@@ -176,6 +176,37 @@ impl GcStore {
         let host_data_id = self.gc_heap.externref_host_data(externref);
         self.host_data_table.get_mut(host_data_id)
     }
+
+    /// Allocate an uninitialized struct with the given type index and layout.
+    ///
+    /// This does NOT check that the index is currently allocated in the types
+    /// registry or that the layout matches the index's type. Failure to uphold
+    /// those invariants is memory safe, but will lead to general incorrectness
+    /// such as panics and wrong results.
+    pub fn alloc_uninit_struct(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcStructLayout,
+    ) -> Result<Option<VMStructRef>> {
+        self.gc_heap.alloc_uninit_struct(ty, layout)
+    }
+
+    /// Deallocate an uninitialized struct.
+    pub fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
+        self.gc_heap.dealloc_uninit_struct(structref);
+    }
+
+    /// Get the data for the given struct reference.
+    ///
+    /// Panics when the structref and its size is out of the GC heap bounds.
+    ///
+    /// This does NOT check for mismatches where the referenced struct is not
+    /// actually `size` bytes large. Failure to pass the right `size` is memory
+    /// safe, but will lead to general incorrectness such as panics and wrong
+    /// results.
+    pub fn struct_data(&mut self, structref: &VMStructRef, size: u32) -> VMStructDataMut<'_> {
+        self.gc_heap.struct_data(structref, size)
+    }
 }
 
 /// Get a no-op GC heap for when GC is disabled (either statically at compile
@@ -224,6 +255,22 @@ pub fn disabled_gc_heap() -> Box<dyn GcHeap> {
             )
         }
         fn externref_host_data(&self, _externref: &VMExternRef) -> ExternRefHostDataId {
+            unreachable!()
+        }
+        fn alloc_uninit_struct(
+            &mut self,
+            _ty: wasmtime_environ::VMSharedTypeIndex,
+            _layout: &GcStructLayout,
+        ) -> Result<Option<VMStructRef>> {
+            bail!(
+                "GC support disabled either in the `Config` or at compile time \
+                 because the `gc` cargo feature was not enabled"
+            )
+        }
+        fn dealloc_uninit_struct(&mut self, _structref: VMStructRef) {
+            unreachable!()
+        }
+        fn struct_data(&mut self, _structref: &VMStructRef, _size: u32) -> VMStructDataMut<'_> {
             unreachable!()
         }
         fn gc<'a>(

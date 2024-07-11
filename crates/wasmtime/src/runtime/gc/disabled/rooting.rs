@@ -104,7 +104,6 @@ impl<T: GcRef> Deref for Rooted<T> {
     }
 }
 
-#[allow(missing_docs)]
 impl<T: GcRef> Rooted<T> {
     pub(crate) fn comes_from_same_store(&self, _store: &StoreOpaque) -> bool {
         match self.inner {}
@@ -125,6 +124,10 @@ impl<T: GcRef> Rooted<T> {
     ) -> Result<bool> {
         a.assert_unreachable()
     }
+
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> Rooted<U> {
+        match self.inner {}
+    }
 }
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
@@ -137,7 +140,6 @@ where
     _phantom: marker::PhantomData<C>,
 }
 
-#[allow(missing_docs)]
 impl<C> RootScope<C>
 where
     C: AsContextMut,
@@ -191,7 +193,6 @@ impl<T: GcRef> Deref for ManuallyRooted<T> {
     }
 }
 
-#[allow(missing_docs)]
 impl<T> ManuallyRooted<T>
 where
     T: GcRef,
@@ -213,6 +214,10 @@ where
     }
 
     pub fn into_rooted(self, _context: impl AsContextMut) -> Rooted<T> {
+        match self.inner {}
+    }
+
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> ManuallyRooted<U> {
         match self.inner {}
     }
 }

@@ -121,7 +121,7 @@ pub(crate) enum Definition {
 /// This is a sort of slimmed down `ExternType` which notably doesn't have a
 /// `FuncType`, which is an allocation, and additionally retains the current
 /// size of the table/memory.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum DefinitionType {
     Func(wasmtime_environ::VMSharedTypeIndex),
     Global(wasmtime_environ::Global),

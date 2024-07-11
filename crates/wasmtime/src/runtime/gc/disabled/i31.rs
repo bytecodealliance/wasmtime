@@ -2,7 +2,6 @@
 /// was not enabled.
 pub enum I31 {}
 
-#[allow(missing_docs)]
 impl I31 {
     pub fn get_u32(&self) -> u32 {
         match *self {}

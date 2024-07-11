@@ -88,6 +88,7 @@ use crate::runtime::vm::{
     VMRuntimeLimits, WasmFault,
 };
 use crate::trampoline::VMHostGlobalContext;
+use crate::type_registry::RegisteredType;
 use crate::RootSet;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory, RootScope, Table, Uninhabited};
@@ -323,6 +324,8 @@ pub struct StoreOpaque {
     gc_store: Option<GcStore>,
     gc_roots: RootSet,
     gc_roots_list: GcRootsList,
+    // Types for which the embedder has created an allocator for.
+    gc_host_alloc_types: hashbrown::HashSet<RegisteredType>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -521,6 +524,7 @@ impl<T> Store<T> {
                 gc_store: None,
                 gc_roots: RootSet::default(),
                 gc_roots_list: GcRootsList::default(),
+                gc_host_alloc_types: hashbrown::HashSet::default(),
                 modules: ModuleRegistry::default(),
                 func_refs: FuncRefs::default(),
                 host_globals: Vec::new(),
@@ -1767,6 +1771,14 @@ impl StoreOpaque {
         log::trace!("Begin trace GC roots :: user");
         self.gc_roots.trace_roots(gc_roots_list);
         log::trace!("End trace GC roots :: user");
+    }
+
+    /// Insert a type into this store. This makes it suitable for the embedder
+    /// to allocate instances of this type in this store, and we don't have to
+    /// worry about the type being reclaimed (since it is possible that none of
+    /// the Wasm modules in this store are holding it alive).
+    pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
+        self.gc_host_alloc_types.insert(ty);
     }
 
     /// Yields the async context, assuming that we are executing on a fiber and

@@ -21,6 +21,12 @@ const ALIGN_U32: u32 = ALIGN_USIZE as u32;
 const MIN_BLOCK_SIZE: u32 = 24;
 
 impl FreeList {
+    /// Create a new `Layout` from the given `size` with an alignment that is
+    /// compatible with this free list.
+    pub fn layout(size: usize) -> Layout {
+        Layout::from_size_align(size, ALIGN_USIZE).unwrap()
+    }
+
     /// Create a new `FreeList` for a contiguous region of memory of the given
     /// size.
     pub fn new(capacity: usize) -> Self {
