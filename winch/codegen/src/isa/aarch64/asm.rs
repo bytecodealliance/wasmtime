@@ -261,7 +261,8 @@ impl Assembler {
     /// And immediate and register.
     pub fn and_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
         let alu_op = ALUOp::And;
-        if let Some(imm) = ImmLogic::maybe_from_u64(imm, size.to_ty()) {
+        let cl_size: inst::OperandSize = size.into();
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
             self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
@@ -278,7 +279,8 @@ impl Assembler {
     /// Or immediate and register.
     pub fn or_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
         let alu_op = ALUOp::Orr;
-        if let Some(imm) = ImmLogic::maybe_from_u64(imm, size.to_ty()) {
+        let cl_size: inst::OperandSize = size.into();
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
             self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
@@ -295,7 +297,8 @@ impl Assembler {
     /// Xor immediate and register.
     pub fn xor_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
         let alu_op = ALUOp::Eor;
-        if let Some(imm) = ImmLogic::maybe_from_u64(imm, size.to_ty()) {
+        let cl_size: inst::OperandSize = size.into();
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
             self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
@@ -306,26 +309,13 @@ impl Assembler {
 
     /// Shift with three registers.
     pub fn shift_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, kind: ShiftKind, size: OperandSize) {
-        let shift_op: ALUOp = if kind == ShiftKind::Rotl {
-            // Emulate Rotr with rm := neg(rm); with neg(x) := sub(zero, x).
-            self.emit_alu_rrr(ALUOp::Sub, regs::zero(), rm, rm, size);
-            ALUOp::RotR
-        } else {
-            kind.into()
-        };
-
+        let shift_op = self.shift_kind_to_alu_op(kind, rm, size);
         self.emit_alu_rrr(shift_op, rm, rn, rd, size);
     }
 
     /// Shift immediate and register.
     pub fn shift_ir(&mut self, imm: u64, rn: Reg, rd: Reg, kind: ShiftKind, size: OperandSize) {
-        let shift_op: ALUOp = if kind == ShiftKind::Rotl {
-            // Emulate Rotr with rm := neg(rm); with neg(x) := sub(zero, x).
-            self.emit_alu_rrr(ALUOp::Sub, regs::zero(), rn, rn, size);
-            ALUOp::RotR
-        } else {
-            kind.into()
-        };
+        let shift_op = self.shift_kind_to_alu_op(kind, rn, size);
 
         if let Some(imm) = ImmShift::maybe_from_u64(imm) {
             self.emit_alu_rri_shift(shift_op, imm, rn, rd, size);
@@ -551,6 +541,22 @@ impl Assembler {
             rd: Writable::from_reg(rd.into()),
             rn: rn.into(),
         });
+    }
+
+    // Convert ShiftKind to ALUOp. If kind == Rotl, then emulate it by emitting
+    // the negation of the given reg r, and returns ALUOp::RotR.
+    fn shift_kind_to_alu_op(&mut self, kind: ShiftKind, r: Reg, size: OperandSize) -> ALUOp {
+        match kind {
+            ShiftKind::Shl => ALUOp::Lsl,
+            ShiftKind::ShrS => ALUOp::Asr,
+            ShiftKind::ShrU => ALUOp::Lsr,
+            ShiftKind::Rotr => ALUOp::RotR,
+            ShiftKind::Rotl => {
+                // neg(r) is sub(zero, r).
+                self.emit_alu_rrr(ALUOp::Sub, regs::zero(), r, r, size);
+                ALUOp::RotR
+            }
+        }
     }
 
     /// Get a label from the underlying machine code buffer.

@@ -1,10 +1,9 @@
 use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::{CodeGenContext, FuncEnv};
 use crate::isa::reg::Reg;
-use cranelift_codegen::ir::Type;
 use cranelift_codegen::{
     binemit::CodeOffset,
-    ir::{types, Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
+    ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -229,15 +228,6 @@ impl OperandSize {
             8 => S64,
             16 => S128,
             _ => panic!("Invalid bytes {} for OperandSize", bytes),
-        }
-    }
-
-    /// Convert to I32 and I64.
-    pub fn to_ty(self) -> Type {
-        match self {
-            OperandSize::S32 => types::I32,
-            OperandSize::S64 => types::I64,
-            _ => unimplemented!(),
         }
     }
 }
