@@ -10,7 +10,6 @@ pub enum AnyRef {}
 
 impl GcRefImpl for AnyRef {}
 
-#[allow(missing_docs)]
 impl AnyRef {
     pub(crate) fn from_cloned_gc_ref(
         _store: &mut AutoAssertNoGc<'_>,

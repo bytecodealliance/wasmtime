@@ -6,6 +6,8 @@
 //! disabled at compile time. While we implement dummy methods for these types'
 //! public methods, we do not, however, create dummy constructors constructors.
 
+#![allow(missing_docs, unreachable_code)]
+
 mod anyref;
 mod externref;
 mod i31;

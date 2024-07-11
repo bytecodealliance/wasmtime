@@ -104,7 +104,6 @@ impl<T: GcRef> Deref for Rooted<T> {
     }
 }
 
-#[allow(missing_docs)]
 impl<T: GcRef> Rooted<T> {
     pub(crate) fn comes_from_same_store(&self, _store: &StoreOpaque) -> bool {
         match self.inner {}
@@ -141,7 +140,6 @@ where
     _phantom: marker::PhantomData<C>,
 }
 
-#[allow(missing_docs)]
 impl<C> RootScope<C>
 where
     C: AsContextMut,
@@ -195,7 +193,6 @@ impl<T: GcRef> Deref for ManuallyRooted<T> {
     }
 }
 
-#[allow(missing_docs)]
 impl<T> ManuallyRooted<T>
 where
     T: GcRef,

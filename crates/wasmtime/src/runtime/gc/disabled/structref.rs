@@ -14,7 +14,6 @@ pub enum StructRef {}
 
 impl GcRefImpl for StructRef {}
 
-#[allow(missing_docs, unreachable_code)]
 impl StructRef {
     pub(crate) fn from_cloned_gc_ref(
         _store: &mut AutoAssertNoGc<'_>,
