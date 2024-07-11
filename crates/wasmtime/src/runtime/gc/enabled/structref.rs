@@ -2,7 +2,8 @@
 
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
-use crate::vm::{GcStructLayout, VMStructRef};
+use crate::vm::{GcLayout, GcStructLayout, VMGcHeader, VMStructRef};
+use crate::FieldType;
 use crate::{
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
@@ -340,76 +341,106 @@ impl StructRef {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn fields<'a, T: 'a>(
-        &self,
+        &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         self._fields(store.into().0)
     }
 
     pub(crate) fn _fields<'a>(
-        &self,
+        &'a self,
         store: &'a mut StoreOpaque,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         assert!(self.comes_from_same_store(store));
-
         let store = AutoAssertNoGc::new(store);
-        let gc_ref = self.inner.try_gc_ref(&store)?.unchecked_copy();
 
-        let header = store.gc_store()?.header(&gc_ref);
+        let gc_ref = self.inner.try_gc_ref(&store)?;
+        let header = store.gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::StructRef));
 
         let index = header.ty().expect("structrefs should have concrete types");
         let ty = StructType::from_shared_type_index(store.engine(), index);
+        let len = ty.fields().len();
 
-        let layout = store
-            .engine()
-            .signatures()
-            .layout(index)
-            .expect("struct types should have GC layouts");
-        let layout = match layout {
-            crate::vm::GcLayout::Array(_) => unreachable!(),
-            crate::vm::GcLayout::Struct(s) => s,
-        };
-
-        let structref = gc_ref.into_structref_unchecked();
-        debug_assert_eq!(ty.fields().len(), layout.fields.len());
         return Ok(Fields {
+            structref: self,
             store,
-            structref,
-            ty,
-            layout,
             index: 0,
+            len,
         });
 
-        struct Fields<'a> {
-            store: AutoAssertNoGc<'a>,
-            structref: VMStructRef,
-            ty: StructType,
-            layout: GcStructLayout,
+        struct Fields<'a, 'b> {
+            structref: &'a StructRef,
+            store: AutoAssertNoGc<'b>,
             index: usize,
+            len: usize,
         }
 
-        impl Iterator for Fields<'_> {
+        impl Iterator for Fields<'_, '_> {
             type Item = Val;
 
+            #[inline]
             fn next(&mut self) -> Option<Self::Item> {
-                let ty = self.ty.field(self.index)?;
-                let ty = ty.element_type();
                 let i = self.index;
+                debug_assert!(i <= self.len);
+                if i >= self.len {
+                    return None;
+                }
                 self.index += 1;
-                Some(
-                    self.structref
-                        .read_field(&mut self.store, &self.layout, ty, i),
-                )
+                Some(self.structref._field(&mut self.store, i).unwrap())
             }
 
+            #[inline]
             fn size_hint(&self) -> (usize, Option<usize>) {
-                let len = self.layout.fields.len() - self.index;
+                let len = self.len - self.index;
                 (len, Some(len))
             }
         }
 
-        impl ExactSizeIterator for Fields<'_> {}
+        impl ExactSizeIterator for Fields<'_, '_> {
+            #[inline]
+            fn len(&self) -> usize {
+                self.len - self.index
+            }
+        }
+    }
+
+    fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
+        assert!(self.comes_from_same_store(&store));
+        let gc_ref = self.inner.try_gc_ref(store)?;
+        Ok(store.gc_store()?.header(gc_ref))
+    }
+
+    fn structref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMStructRef> {
+        assert!(self.comes_from_same_store(&store));
+        let gc_ref = self.inner.try_gc_ref(store)?;
+        debug_assert!(self.header(store)?.kind().matches(VMGcKind::StructRef));
+        Ok(gc_ref.as_structref_unchecked())
+    }
+
+    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcStructLayout> {
+        assert!(self.comes_from_same_store(&store));
+        let type_index = self.type_index(store)?;
+        let layout = store
+            .engine()
+            .signatures()
+            .layout(type_index)
+            .expect("struct types should have GC layouts");
+        match layout {
+            GcLayout::Struct(s) => Ok(s),
+            GcLayout::Array(_) => unreachable!(),
+        }
+    }
+
+    fn field_ty(&self, store: &StoreOpaque, field: usize) -> Result<FieldType> {
+        let ty = self._ty(store)?;
+        match ty.field(field) {
+            Some(f) => Ok(f),
+            None => {
+                let len = ty.fields().len();
+                bail!("cannot access field {field}: struct only has {len} fields")
+            }
+        }
     }
 
     /// Get this struct's `index`th field.
@@ -426,17 +457,16 @@ impl StructRef {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn field(&self, mut store: impl AsContextMut, index: usize) -> Result<Val> {
-        self._field(store.as_context_mut().0, index)
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        self._field(&mut store, index)
     }
 
-    pub(crate) fn _field(&self, store: &mut StoreOpaque, index: usize) -> Result<Val> {
+    pub(crate) fn _field(&self, store: &mut AutoAssertNoGc<'_>, index: usize) -> Result<Val> {
         assert!(self.comes_from_same_store(store));
-
-        let mut fields = self._fields(store)?;
-        let len = fields.len();
-        fields
-            .nth(index)
-            .ok_or_else(|| anyhow!("cannot get field {index}: struct only has {len} fields"))
+        let structref = self.structref(store)?.unchecked_copy();
+        let field_ty = self.field_ty(store, index)?;
+        let layout = self.layout(store)?;
+        Ok(structref.read_field(store, &layout, field_ty.element_type(), index))
     }
 
     /// Set this struct's `index`th field.
@@ -469,43 +499,20 @@ impl StructRef {
         value: Val,
     ) -> Result<()> {
         assert!(self.comes_from_same_store(store));
-
         let mut store = AutoAssertNoGc::new(store);
-        let gc_ref = self.inner.try_gc_ref(&store)?.unchecked_copy();
 
-        let header = store.gc_store()?.header(&gc_ref);
-        debug_assert!(header.kind().matches(VMGcKind::StructRef));
-
-        let ty_index = header.ty().expect("structrefs should have concrete types");
-        let ty = StructType::from_shared_type_index(store.engine(), ty_index);
-
-        let layout = store
-            .engine()
-            .signatures()
-            .layout(ty_index)
-            .expect("struct types should have GC layouts");
-        let layout = match layout {
-            crate::vm::GcLayout::Array(_) => unreachable!(),
-            crate::vm::GcLayout::Struct(s) => s,
-        };
-
-        let structref = gc_ref.into_structref_unchecked();
-        debug_assert_eq!(ty.fields().len(), layout.fields.len());
-
-        let field_ty = match ty.field(index) {
-            Some(ty) => ty,
-            None => bail!(
-                "cannot set field {index}: struct only has {} fields",
-                ty.fields().len()
-            ),
-        };
+        let field_ty = self.field_ty(&store, index)?;
         ensure!(
             field_ty.mutability().is_var(),
             "cannot set field {index}: field is not mutable"
         );
+
         value
             .ensure_matches_ty(&store, &field_ty.element_type().unpack())
             .with_context(|| format!("cannot set field {index}: type mismatch"))?;
+
+        let layout = self.layout(&store)?;
+        let structref = self.structref(&store)?.unchecked_copy();
 
         structref.write_field(&mut store, &layout, field_ty.element_type(), index, value)
     }
