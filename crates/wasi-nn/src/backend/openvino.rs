@@ -47,7 +47,7 @@ impl BackendInner for OpenvinoBackend {
             .as_mut()
             .expect("openvino::Core was previously constructed");
         let model = core.read_model_from_buffer(&xml, Some(&weights_tensor))?;
-        let compiled_model = core.compile_model(&model, map_execution_target_to_string(target))?;
+        let compiled_model = core.compile_model(&model, target.into())?;
         let box_: Box<dyn BackendGraph> =
             Box::new(OpenvinoGraph(Arc::new(Mutex::new(compiled_model))));
         Ok(box_.into())
@@ -90,7 +90,7 @@ struct OpenvinoExecutionContext(openvino::InferRequest);
 impl BackendExecutionContext for OpenvinoExecutionContext {
     fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError> {
         // Construct the tensor.
-        let precision = map_tensor_type_to_precision(tensor.ty);
+        let precision = tensor.ty.into();
         let dimensions = tensor
             .dimensions
             .iter()
@@ -124,7 +124,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
             .iter()
             .map(|&dim| dim as u32)
             .collect::<Vec<u32>>();
-        let ty = map_precision_to_tensor_type(output_name.get_element_type()?);
+        let ty = output_name.get_element_type()?.try_into()?;
         let data = output_name.get_raw_data()?.to_vec();
         Ok(Tensor {
             dimensions,
@@ -148,51 +148,49 @@ impl From<SetupError> for BackendError {
 
 /// Return the execution target string expected by OpenVINO from the
 /// `ExecutionTarget` enum provided by wasi-nn.
-fn map_execution_target_to_string(target: ExecutionTarget) -> DeviceType<'static> {
-    match target {
-        ExecutionTarget::Cpu => DeviceType::CPU,
-        ExecutionTarget::Gpu => DeviceType::GPU,
-        ExecutionTarget::Tpu => unimplemented!("OpenVINO does not support TPU execution targets"),
+impl From<ExecutionTarget> for DeviceType<'static> {
+    fn from(target: ExecutionTarget) -> Self {
+        match target {
+            ExecutionTarget::Cpu => DeviceType::CPU,
+            ExecutionTarget::Gpu => DeviceType::GPU,
+            ExecutionTarget::Tpu => {
+                unimplemented!("OpenVINO does not support TPU execution targets")
+            }
+        }
     }
 }
 
 /// Return OpenVINO's precision type for the `TensorType` enum provided by
 /// wasi-nn.
-fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::ElementType {
-    match tensor_type {
-        TensorType::Fp16 => ElementType::F16,
-        TensorType::Fp32 => ElementType::F32,
-        TensorType::Fp64 => ElementType::F64,
-        TensorType::U8 => ElementType::U8,
-        TensorType::I32 => ElementType::I32,
-        TensorType::I64 => ElementType::I64,
-        TensorType::Bf16 => ElementType::Bf16,
+impl From<TensorType> for ElementType {
+    fn from(tensor_type: TensorType) -> Self {
+        match tensor_type {
+            TensorType::Fp16 => ElementType::F16,
+            TensorType::Fp32 => ElementType::F32,
+            TensorType::Fp64 => ElementType::F64,
+            TensorType::U8 => ElementType::U8,
+            TensorType::I32 => ElementType::I32,
+            TensorType::I64 => ElementType::I64,
+            TensorType::Bf16 => ElementType::Bf16,
+        }
     }
 }
 
 /// Return the `TensorType` enum provided by wasi-nn for OpenVINO's precision type
-fn map_precision_to_tensor_type(element_type: openvino::ElementType) -> TensorType {
-    match element_type {
-        ElementType::F16 => TensorType::Fp16,
-        ElementType::F32 => TensorType::Fp32,
-        ElementType::F64 => TensorType::Fp64,
-        ElementType::U8 => TensorType::U8,
-        ElementType::I32 => TensorType::I32,
-        ElementType::I64 => TensorType::I64,
-        ElementType::Bf16 => TensorType::Bf16,
-        ElementType::Undefined => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::Dynamic => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::Boolean => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::I4 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::I8 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::I16 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::U1 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::U4 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::U16 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::U32 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::U64 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::NF4 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::F8E4M3 => todo!("not yet supported in wasi-nn `TensorType`"),
-        ElementType::F8E5M3 => todo!("not yet supported in wasi-nn `TensorType`"),
+impl TryFrom<ElementType> for TensorType {
+    type Error = BackendError;
+    fn try_from(element_type: ElementType) -> Result<Self, Self::Error> {
+        match element_type {
+            ElementType::F16 => Ok(TensorType::Fp16),
+            ElementType::F32 => Ok(TensorType::Fp32),
+            ElementType::F64 => Ok(TensorType::Fp64),
+            ElementType::U8 => Ok(TensorType::U8),
+            ElementType::I32 => Ok(TensorType::I32),
+            ElementType::I64 => Ok(TensorType::I64),
+            ElementType::Bf16 => Ok(TensorType::Bf16),
+            _ => Err(BackendError::UnsupportedTensorType(
+                element_type.to_string(),
+            )),
+        }
     }
 }
