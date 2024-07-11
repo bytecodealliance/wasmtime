@@ -135,7 +135,7 @@ impl StructRefPre {
 ///     let my_struct = match StructRef::new(&mut scope, &allocator, &[Val::I32(42)]) {
 ///         Ok(s) => s,
 ///         // If the heap is out of memory, then do a GC and try again.
-///         Err(e) if e.is::<GcHeapOutOfMemory<&'static str>>() => {
+///         Err(e) if e.is::<GcHeapOutOfMemory<()>>() => {
 ///             // Do a GC! Note: in an async context, you'd want to do
 ///             // `scope.as_context_mut().gc_async().await`.
 ///             scope.as_context_mut().gc();
