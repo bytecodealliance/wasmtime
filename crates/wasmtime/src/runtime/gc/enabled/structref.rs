@@ -3,13 +3,13 @@
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
 use crate::vm::{GcLayout, GcStructLayout, VMGcHeader, VMStructRef};
-use crate::FieldType;
 use crate::{
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
     AsContext, AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted,
     RefType, RootSet, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
 };
+use crate::{AnyRef, FieldType};
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
@@ -180,6 +180,22 @@ unsafe impl GcRefImpl for StructRef {
         ));
 
         me
+    }
+}
+
+impl Rooted<StructRef> {
+    /// Upcast this `structref` into an `anyref`.
+    #[inline]
+    pub fn to_anyref(self) -> Rooted<AnyRef> {
+        self.unchecked_cast()
+    }
+}
+
+impl ManuallyRooted<StructRef> {
+    /// Upcast this `structref` into an `anyref`.
+    #[inline]
+    pub fn to_anyref(self) -> ManuallyRooted<AnyRef> {
+        self.unchecked_cast()
     }
 }
 
