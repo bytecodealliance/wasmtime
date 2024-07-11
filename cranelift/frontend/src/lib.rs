@@ -61,16 +61,13 @@
 //! Here is how you build the corresponding Cranelift IR function using [`FunctionBuilderContext`]:
 //!
 //! ```rust
-//! extern crate cranelift_codegen;
-//! extern crate cranelift_frontend;
-//!
 //! use cranelift_codegen::entity::EntityRef;
 //! use cranelift_codegen::ir::types::*;
 //! use cranelift_codegen::ir::{AbiParam, UserFuncName, Function, InstBuilder, Signature};
 //! use cranelift_codegen::isa::CallConv;
 //! use cranelift_codegen::settings;
 //! use cranelift_codegen::verifier::verify_function;
-//! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+//! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable, StackMapBehavior};
 //!
 //! let mut sig = Signature::new(CallConv::SystemV);
 //! sig.returns.push(AbiParam::new(I32));
@@ -87,9 +84,9 @@
 //!     let x = Variable::new(0);
 //!     let y = Variable::new(1);
 //!     let z = Variable::new(2);
-//!     builder.declare_var(x, I32);
-//!     builder.declare_var(y, I32);
-//!     builder.declare_var(z, I32);
+//!     builder.declare_var(x, I32, StackMapBehavior::Exclude);
+//!     builder.declare_var(y, I32, StackMapBehavior::Exclude);
+//!     builder.declare_var(z, I32, StackMapBehavior::Exclude);
 //!     builder.append_block_params_for_function_params(block0);
 //!
 //!     builder.switch_to_block(block0);
@@ -174,7 +171,9 @@ use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-pub use crate::frontend::{FuncInstBuilder, FunctionBuilder, FunctionBuilderContext};
+pub use crate::frontend::{
+    FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, StackMapBehavior,
+};
 pub use crate::switch::Switch;
 pub use crate::variable::Variable;
 

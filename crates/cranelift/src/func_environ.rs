@@ -9,8 +9,8 @@ use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
-use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
+use cranelift_frontend::{FunctionBuilder, StackMapBehavior};
 use cranelift_wasm::{
     EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
     HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
@@ -294,7 +294,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // `self.fuel_var` to make fuel modifications fast locally. This cache
         // is then periodically flushed to the Store-defined location in
         // `VMRuntimeLimits` later.
-        builder.declare_var(self.fuel_var, ir::types::I64);
+        builder.declare_var(self.fuel_var, ir::types::I64, StackMapBehavior::Exclude);
         self.fuel_load_into_var(builder);
         self.fuel_check(builder);
     }
@@ -503,10 +503,17 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
-        builder.declare_var(self.epoch_deadline_var, ir::types::I64);
+        builder.declare_var(
+            self.epoch_deadline_var,
+            ir::types::I64,
+            StackMapBehavior::Exclude,
+        );
         // Let epoch_check_full load the current deadline and call def_var
-
-        builder.declare_var(self.epoch_ptr_var, self.pointer_type());
+        builder.declare_var(
+            self.epoch_ptr_var,
+            self.pointer_type(),
+            StackMapBehavior::Exclude,
+        );
         let epoch_ptr = self.epoch_ptr(builder);
         builder.def_var(self.epoch_ptr_var, epoch_ptr);
 

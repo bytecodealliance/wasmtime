@@ -12,7 +12,7 @@ use crate::WasmResult;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
-use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, StackMapBehavior, Variable};
 use wasmparser::{BinaryReader, FuncValidator, FunctionBody, WasmModuleResources};
 
 /// WebAssembly to Cranelift IR function translator.
@@ -113,7 +113,7 @@ fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
         if environ.is_wasm_parameter(&builder.func.signature, i) {
             // This is a normal WebAssembly signature parameter, so create a local for it.
             let local = Variable::new(next_local);
-            builder.declare_var(local, param_type.value_type);
+            builder.declare_var(local, param_type.value_type, StackMapBehavior::Exclude);
             next_local += 1;
 
             let param_value = builder.block_params(entry_block)[i];
@@ -205,7 +205,7 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
 
     for _ in 0..count {
         let local = Variable::new(*next_local);
-        builder.declare_var(local, ty);
+        builder.declare_var(local, ty, StackMapBehavior::Exclude);
         if let Some(init) = init {
             builder.def_var(local, init);
             builder.set_val_label(init, ValueLabel::new(*next_local));

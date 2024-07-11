@@ -29,6 +29,7 @@ pub struct FunctionBuilderContext {
     ssa: SSABuilder,
     status: SecondaryMap<Block, BlockStatus>,
     types: SecondaryMap<Variable, Type>,
+    stack_map_vars: EntitySet<Variable>,
     stack_map_values: EntitySet<Value>,
     dfs: Dfs,
 }
@@ -260,6 +261,20 @@ impl fmt::Display for DefVariableError {
     }
 }
 
+/// Whether to include or exclude a variable inside stack maps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StackMapBehavior {
+    /// Include the associated variable in stack maps.
+    ///
+    /// At every safepoint, all values that are uses of the associated variable
+    /// will be spilled to the stack and included in stack map metadata, so that
+    /// the collector can identify all on-stack roots.
+    Include,
+
+    /// Do not include this variable, or its use values, in stack maps.
+    Exclude,
+}
+
 /// This module allows you to create a function in Cranelift IR in a straightforward way, hiding
 /// all the complexity of its internal representation.
 ///
@@ -382,21 +397,56 @@ impl<'a> FunctionBuilder<'a> {
         self.handle_ssa_side_effects(side_effects);
     }
 
-    /// Declares the type of a variable, so that it can be used later (by calling
-    /// [`FunctionBuilder::use_var`]). This function will return an error if the variable
-    /// has been previously declared.
-    pub fn try_declare_var(&mut self, var: Variable, ty: Type) -> Result<(), DeclareVariableError> {
+    /// Declares the type of a variable.
+    ///
+    /// This allows the variable to be used later (by calling
+    /// [`FunctionBuilder::use_var`]).
+    ///
+    /// If `stack_map_behavior` is `StackMapBehavior::Include`, then all values
+    /// yielded by using the resulting variable will automatically be declared
+    /// as needing to be present in stack maps. See also
+    /// [`FunctionBuilder::declare_value_needs_stack_map`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the variable has been previously
+    /// declared.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `needs_stack_map` is `true` and the given type is larger than
+    /// 16 bytes.
+    pub fn try_declare_var(
+        &mut self,
+        var: Variable,
+        ty: Type,
+        stack_map_behavior: StackMapBehavior,
+    ) -> Result<(), DeclareVariableError> {
+        if stack_map_behavior == StackMapBehavior::Include {
+            assert!(
+                ty.bytes() <= 16,
+                "types larger than 16 bytes cannot be in stack maps"
+            );
+        }
         if self.func_ctx.types[var] != types::INVALID {
             return Err(DeclareVariableError::DeclaredMultipleTimes(var));
         }
         self.func_ctx.types[var] = ty;
+        if stack_map_behavior == StackMapBehavior::Include {
+            self.func_ctx.stack_map_vars.insert(var);
+        }
         Ok(())
     }
 
-    /// In order to use a variable (by calling [`FunctionBuilder::use_var`]), you need
-    /// to first declare its type with this method.
-    pub fn declare_var(&mut self, var: Variable, ty: Type) {
-        self.try_declare_var(var, ty)
+    /// Declares the type of a variable, panicking if it is already declared.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either the variable has already been declared, or if
+    /// `stack_map_behavior` is `StackMapBehavior::Include` and the given type
+    /// is larger than 16 bytes.
+    pub fn declare_var(&mut self, var: Variable, ty: Type, stack_map_behavior: StackMapBehavior) {
+        self.try_declare_var(var, ty, stack_map_behavior)
             .unwrap_or_else(|_| panic!("the variable {:?} has been declared multiple times", var))
     }
 
@@ -426,6 +476,13 @@ impl<'a> FunctionBuilder<'a> {
                 .use_var(self.func, var, ty, self.position.unwrap())
         };
         self.handle_ssa_side_effects(side_effects);
+
+        // If the variable was declared as needing stack maps, then propagate
+        // that requirement to all values derived from using the variable.
+        if self.func_ctx.stack_map_vars.contains(var) {
+            self.declare_value_needs_stack_map(val);
+        }
+
         Ok(val)
     }
 
@@ -1332,7 +1389,7 @@ mod tests {
     use super::greatest_divisible_power_of_two;
     use crate::frontend::{
         DeclareVariableError, DefVariableError, FunctionBuilder, FunctionBuilderContext,
-        UseVariableError,
+        StackMapBehavior, UseVariableError,
     };
     use crate::Variable;
     use alloc::string::ToString;
@@ -1362,9 +1419,9 @@ mod tests {
             let x = Variable::new(0);
             let y = Variable::new(1);
             let z = Variable::new(2);
-            builder.declare_var(x, I32);
-            builder.declare_var(y, I32);
-            builder.declare_var(z, I32);
+            builder.declare_var(x, I32, StackMapBehavior::Exclude);
+            builder.declare_var(y, I32, StackMapBehavior::Exclude);
+            builder.declare_var(z, I32, StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
 
             builder.switch_to_block(block0);
@@ -1489,9 +1546,9 @@ mod tests {
             let x = Variable::new(0);
             let y = Variable::new(1);
             let z = Variable::new(2);
-            builder.declare_var(x, frontend_config.pointer_type());
-            builder.declare_var(y, frontend_config.pointer_type());
-            builder.declare_var(z, I32);
+            builder.declare_var(x, frontend_config.pointer_type(), StackMapBehavior::Exclude);
+            builder.declare_var(y, frontend_config.pointer_type(), StackMapBehavior::Exclude);
+            builder.declare_var(z, I32, StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
             builder.switch_to_block(block0);
 
@@ -1537,8 +1594,8 @@ block0:
             let block0 = builder.create_block();
             let x = Variable::new(0);
             let y = Variable::new(16);
-            builder.declare_var(x, frontend_config.pointer_type());
-            builder.declare_var(y, frontend_config.pointer_type());
+            builder.declare_var(x, frontend_config.pointer_type(), StackMapBehavior::Exclude);
+            builder.declare_var(y, frontend_config.pointer_type(), StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
             builder.switch_to_block(block0);
 
@@ -1591,8 +1648,8 @@ block0:
             let block0 = builder.create_block();
             let x = Variable::new(0);
             let y = Variable::new(16);
-            builder.declare_var(x, frontend_config.pointer_type());
-            builder.declare_var(y, frontend_config.pointer_type());
+            builder.declare_var(x, frontend_config.pointer_type(), StackMapBehavior::Exclude);
+            builder.declare_var(y, frontend_config.pointer_type(), StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
             builder.switch_to_block(block0);
 
@@ -1647,7 +1704,7 @@ block0:
 
             let block0 = builder.create_block();
             let y = Variable::new(16);
-            builder.declare_var(y, frontend_config.pointer_type());
+            builder.declare_var(y, frontend_config.pointer_type(), StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
             builder.switch_to_block(block0);
 
@@ -1687,7 +1744,7 @@ block0:
 
             let block0 = builder.create_block();
             let y = Variable::new(16);
-            builder.declare_var(y, frontend_config.pointer_type());
+            builder.declare_var(y, frontend_config.pointer_type(), StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
             builder.switch_to_block(block0);
 
@@ -1748,9 +1805,9 @@ block0:
             let x = Variable::new(0);
             let y = Variable::new(1);
             let z = Variable::new(2);
-            builder.declare_var(x, target.pointer_type());
-            builder.declare_var(y, target.pointer_type());
-            builder.declare_var(z, target.pointer_type());
+            builder.declare_var(x, target.pointer_type(), StackMapBehavior::Exclude);
+            builder.declare_var(y, target.pointer_type(), StackMapBehavior::Exclude);
+            builder.declare_var(z, target.pointer_type(), StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
             builder.switch_to_block(block0);
 
@@ -1960,8 +2017,8 @@ block0:
             let block0 = builder.create_block();
             let x = Variable::new(0);
             let y = Variable::new(1);
-            builder.declare_var(x, target.pointer_type());
-            builder.declare_var(y, target.pointer_type());
+            builder.declare_var(x, target.pointer_type(), StackMapBehavior::Exclude);
+            builder.declare_var(y, target.pointer_type(), StackMapBehavior::Exclude);
             builder.append_block_params_for_function_params(block0);
             builder.switch_to_block(block0);
 
@@ -1996,9 +2053,9 @@ block0:
             let a = Variable::new(0);
             let b = Variable::new(1);
             let c = Variable::new(2);
-            builder.declare_var(a, I8X16);
-            builder.declare_var(b, I8X16);
-            builder.declare_var(c, F32X4);
+            builder.declare_var(a, I8X16, StackMapBehavior::Exclude);
+            builder.declare_var(b, I8X16, StackMapBehavior::Exclude);
+            builder.declare_var(c, F32X4, StackMapBehavior::Exclude);
             builder.switch_to_block(block0);
 
             let a = builder.use_var(a);
@@ -2064,9 +2121,17 @@ block0:
                 )))
             );
 
-            builder.declare_var(Variable::from_u32(0), cranelift_codegen::ir::types::I32);
+            builder.declare_var(
+                Variable::from_u32(0),
+                cranelift_codegen::ir::types::I32,
+                StackMapBehavior::Exclude,
+            );
             assert_eq!(
-                builder.try_declare_var(Variable::from_u32(0), cranelift_codegen::ir::types::I32),
+                builder.try_declare_var(
+                    Variable::from_u32(0),
+                    cranelift_codegen::ir::types::I32,
+                    StackMapBehavior::Exclude
+                ),
                 Err(DeclareVariableError::DeclaredMultipleTimes(
                     Variable::from_u32(0)
                 ))
@@ -2859,6 +2924,74 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: i128, v5: f32, v6: f64, v7: i8x16,
     stack_store v8, ss4+32
     call fn0(), stack_map=[i8 @ ss0+0, i16 @ ss1+0, i32 @ ss2+0, f32 @ ss2+4, i64 @ ss3+0, f64 @ ss3+8, i128 @ ss4+0, i8x16 @ ss4+16, i16x8 @ ss4+32]
     return v0, v1, v2, v3, v4, v5, v6, v7, v8
+}
+            "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn var_needs_stack_map() {
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params
+            .push(AbiParam::new(cranelift_codegen::ir::types::I32));
+        sig.returns
+            .push(AbiParam::new(cranelift_codegen::ir::types::I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let var = Variable::from_u32(0);
+        builder.declare_var(
+            var,
+            cranelift_codegen::ir::types::I32,
+            StackMapBehavior::Include,
+        );
+
+        let name = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 0,
+            });
+        let signature = builder
+            .func
+            .import_signature(Signature::new(CallConv::SystemV));
+        let func_ref = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name),
+            signature,
+            colocated: true,
+        });
+
+        let block0 = builder.create_block();
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+
+        let arg = builder.func.dfg.block_params(block0)[0];
+        builder.def_var(var, arg);
+
+        builder.ins().call(func_ref, &[]);
+
+        let val = builder.use_var(var);
+        builder.ins().return_(&[val]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        eprintln!("Actual = {}", func.display());
+        assert_eq!(
+            func.display().to_string().trim(),
+            r#"
+function %sample(i32) -> i32 system_v {
+    ss0 = explicit_slot 4, align = 4
+    sig0 = () system_v
+    fn0 = colocated u0:0 sig0
+
+block0(v0: i32):
+    stack_store v0, ss0
+    call fn0(), stack_map=[i32 @ ss0+0]
+    return v0
 }
             "#
             .trim()
