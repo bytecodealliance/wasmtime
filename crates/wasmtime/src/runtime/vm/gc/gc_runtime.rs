@@ -243,6 +243,14 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         layout: &GcStructLayout,
     ) -> Result<Option<VMStructRef>>;
 
+    /// Deallocate an uninitialized, GC-managed struct.
+    ///
+    /// This is useful for if initialization of the struct's fields fails, so
+    /// that the struct's allocation can be eagerly reclaimed, and so that the
+    /// collector doesn't attempt to treat any of the uninitialized fields as
+    /// valid GC references, or something like that.
+    fn dealloc_uninit_struct(&mut self, structref: VMStructRef);
+
     /// Get a mutable borrow of the the given struct's data.
     ///
     /// Panics on out-of-bounds accesses.

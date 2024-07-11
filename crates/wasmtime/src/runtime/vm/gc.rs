@@ -191,6 +191,11 @@ impl GcStore {
         self.gc_heap.alloc_uninit_struct(ty, layout)
     }
 
+    /// Deallocate an uninitialized struct.
+    pub fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
+        self.gc_heap.dealloc_uninit_struct(structref);
+    }
+
     /// Get the data for the given struct reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
@@ -261,6 +266,9 @@ pub fn disabled_gc_heap() -> Box<dyn GcHeap> {
                 "GC support disabled either in the `Config` or at compile time \
                  because the `gc` cargo feature was not enabled"
             )
+        }
+        fn dealloc_uninit_struct(&mut self, _structref: VMStructRef) {
+            unreachable!()
         }
         fn struct_data(&mut self, _structref: &VMStructRef, _size: u32) -> VMStructDataMut<'_> {
             unreachable!()

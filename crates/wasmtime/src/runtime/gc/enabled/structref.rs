@@ -244,18 +244,30 @@ impl StructRef {
             .context("unrecoverable error when allocating new `structref`")?
             .ok_or_else(|| GcHeapOutOfMemory::new(()))
             .err2anyhow()?;
-        let mut store = AutoAssertNoGc::new(store);
-        for (index, (ty, val)) in allocator.ty.fields().zip(fields).enumerate() {
-            structref.initialize_field(
-                &mut store,
-                allocator.layout(),
-                ty.element_type(),
-                index,
-                val.clone(),
-            )?;
-        }
 
-        Ok(Rooted::new(&mut store, structref.into()))
+        // From this point on, if we get any errors, then the struct is not
+        // fully initialized, so we need to eagerly deallocate it before the
+        // next GC where the collector might try to interpret one of the
+        // uninitialized fields as a GC reference.
+        let mut store = AutoAssertNoGc::new(store);
+        match (|| {
+            for (index, (ty, val)) in allocator.ty.fields().zip(fields).enumerate() {
+                structref.initialize_field(
+                    &mut store,
+                    allocator.layout(),
+                    ty.element_type(),
+                    index,
+                    val.clone(),
+                )?;
+            }
+            Ok(())
+        })() {
+            Ok(()) => Ok(Rooted::new(&mut store, structref.into())),
+            Err(e) => {
+                store.gc_store_mut()?.dealloc_uninit_struct(structref);
+                Err(e)
+            }
+        }
     }
 
     #[inline]

@@ -214,6 +214,14 @@ impl DrcHeap {
         Ok(Some(gc_ref))
     }
 
+    fn dealloc(&mut self, gc_ref: VMGcRef) {
+        let drc_ref = drc_ref(&gc_ref);
+        let size = self.index(drc_ref).object_size();
+        let layout = FreeList::layout(size);
+        self.free_list
+            .dealloc(gc_ref.as_heap_index().unwrap(), layout);
+    }
+
     /// Index into this heap and get a shared reference to the `T` that `gc_ref`
     /// points to.
     ///
@@ -321,11 +329,7 @@ impl DrcHeap {
             // object.
 
             // Deallocate this GC object.
-            let drc_ref = drc_ref(gc_ref);
-            let size = self.index(drc_ref).object_size();
-            let layout = FreeList::layout(size);
-            self.free_list
-                .dealloc(gc_ref.as_heap_index().unwrap(), layout);
+            self.dealloc(gc_ref.unchecked_copy());
         }
     }
 
@@ -678,6 +682,10 @@ unsafe impl GcHeap for DrcHeap {
             Some(gc_ref) => gc_ref,
         };
         Ok(Some(gc_ref.into_structref_unchecked()))
+    }
+
+    fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
+        self.dealloc(structref.into());
     }
 
     fn struct_data(&mut self, structref: &VMStructRef, size: u32) -> VMStructDataMut<'_> {
