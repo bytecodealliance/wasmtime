@@ -102,15 +102,15 @@
 //! can. However, if you really must, consider also using an `AutoAssertNoGc`
 //! across the block of code that is manipulating raw GC references.
 
-use crate::prelude::*;
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
+use crate::{prelude::*, ValRaw};
 use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use core::any;
 use core::marker;
-use core::mem;
+use core::mem::{self, MaybeUninit};
 use core::num::NonZeroU64;
 use core::{
     fmt::{self, Debug},
@@ -952,6 +952,64 @@ impl<T: GcRef> Rooted<T> {
     pub(crate) fn unchecked_cast<U: GcRef>(self) -> Rooted<U> {
         Rooted::from_gc_root_index(self.inner)
     }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `Rooted<T>`s.
+    pub(super) fn wasm_ty_store(
+        self,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        let gc_ref = self.inner.try_clone_gc_ref(store)?;
+        let raw = gc_ref.as_raw_u32();
+        debug_assert_ne!(raw, 0);
+        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        ptr.write(val_raw(raw));
+        Ok(())
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `Rooted<T>`s.
+    pub(super) fn wasm_ty_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Self,
+    ) -> Self {
+        debug_assert_ne!(raw_gc_ref, 0);
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        from_cloned_gc_ref(store, gc_ref)
+    }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `Option<Rooted<T>>`s.
+    pub(super) fn wasm_ty_option_store(
+        me: Option<Self>,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        match me {
+            Some(me) => me.wasm_ty_store(store, ptr, val_raw),
+            None => {
+                ptr.write(val_raw(0));
+                Ok(())
+            }
+        }
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `Option<Rooted<T>>`s.
+    pub(super) fn wasm_ty_option_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Self,
+    ) -> Option<Self> {
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        Some(from_cloned_gc_ref(store, gc_ref))
+    }
 }
 
 /// Nested rooting scopes.
@@ -1600,6 +1658,76 @@ where
         };
         core::mem::forget(self);
         u
+    }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `ManuallyRooted<T>`s.
+    pub(super) fn wasm_ty_store(
+        self,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        let gc_ref = self.try_clone_gc_ref(store)?;
+        let raw = gc_ref.as_raw_u32();
+        debug_assert_ne!(raw, 0);
+        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        ptr.write(val_raw(raw));
+        Ok(())
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `ManuallyRooted<T>`s.
+    pub(super) fn wasm_ty_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Rooted<T>,
+    ) -> Self {
+        debug_assert_ne!(raw_gc_ref, 0);
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        RootSet::with_lifo_scope(store, |store| {
+            let rooted = from_cloned_gc_ref(store, gc_ref);
+            rooted
+                ._to_manually_rooted(store)
+                .expect("rooted is in scope")
+        })
+    }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `Option<ManuallyRooted<T>>`s.
+    pub(super) fn wasm_ty_option_store(
+        me: Option<Self>,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        match me {
+            Some(me) => me.wasm_ty_store(store, ptr, val_raw),
+            None => {
+                ptr.write(val_raw(0));
+                Ok(())
+            }
+        }
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `Option<ManuallyRooted<T>>`s.
+    pub(super) fn wasm_ty_option_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Rooted<T>,
+    ) -> Option<Self> {
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        RootSet::with_lifo_scope(store, |store| {
+            let rooted = from_cloned_gc_ref(store, gc_ref);
+            Some(
+                rooted
+                    ._to_manually_rooted(store)
+                    .expect("rooted is in scope"),
+            )
+        })
     }
 }
 
