@@ -808,6 +808,7 @@ impl<'a> FunctionBuilder<'a> {
                 // instruction to the live set. This includes branch arguments,
                 // as mentioned above.
                 for val in self.func.dfg.inst_values(inst) {
+                    let val = self.func.dfg.resolve_aliases(val);
                     if self.func_ctx.stack_map_values.contains(val) {
                         live.insert(val);
                     }
