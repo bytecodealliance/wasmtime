@@ -744,6 +744,11 @@ pub fn table_ops(
 
         {
             let mut scope = RootScope::new(&mut store);
+
+            log::info!(
+                "table_ops: begin allocating {} externref arguments",
+                ops.num_globals
+            );
             let args: Vec<_> = (0..ops.num_params)
                 .map(|_| {
                     Ok(Val::ExternRef(Some(ExternRef::new(
@@ -752,11 +757,16 @@ pub fn table_ops(
                     )?)))
                 })
                 .collect::<Result<_>>()?;
+            log::info!(
+                "table_ops: end allocating {} externref arguments",
+                ops.num_globals
+            );
 
             // The generated function should always return a trap. The only two
             // valid traps are table-out-of-bounds which happens through `table.get`
             // and `table.set` generated or an out-of-fuel trap. Otherwise any other
             // error is unexpected and should fail fuzzing.
+            log::info!("table_ops: calling into Wasm `run` function");
             let trap = run
                 .call(&mut scope, &args, &mut [])
                 .unwrap_err()

@@ -70,24 +70,24 @@
 //! SP at function entry ----->  | return address            |
 //!                              +---------------------------+
 //! FP after prologue -------->  | FP (pushed by prologue)   |
-//!                              +---------------------------+   -----
-//!                              |          ...              |     |
-//!                              | clobbered callee-saves    |     |
-//! unwind-frame base -------->  | (pushed by prologue)      |     |
-//!                              +---------------------------+     |
-//!                              |          ...              |     |
-//!                              | spill slots               |     |
-//!                              | (accessed via SP)         |   active
-//!                              |          ...              |    size
-//!                              | stack slots               |     |
-//!                              | (accessed via SP)         |     |
-//!                              | (alloc'd by prologue)     |     |
-//!                              +---------------------------+     |
-//!                              | [alignment as needed]     |     |
-//!                              |          ...              |     |
-//!                              | args for largest call     |     |
-//! SP ----------------------->  | (alloc'd by prologue)     |     |
-//!                              +===========================+   -----
+//!                              +---------------------------+           -----
+//!                              |          ...              |             |
+//!                              | clobbered callee-saves    |             |
+//! unwind-frame base -------->  | (pushed by prologue)      |             |
+//!                              +---------------------------+   -----     |
+//!                              |          ...              |     |       |
+//!                              | spill slots               |     |       |
+//!                              | (accessed via SP)         |   fixed   active
+//!                              |          ...              |   frame    size
+//!                              | stack slots               |  storage    |
+//!                              | (accessed via SP)         |    size     |
+//!                              | (alloc'd by prologue)     |     |       |
+//!                              +---------------------------+   -----     |
+//!                              | [alignment as needed]     |             |
+//!                              |          ...              |             |
+//!                              | args for largest call     |             |
+//! SP ----------------------->  | (alloc'd by prologue)     |             |
+//!                              +===========================+           -----
 //!
 //!   (low address)
 //! ```
@@ -985,6 +985,11 @@ impl FrameLayout {
     /// setup or epilogue tear down).
     pub fn active_size(&self) -> u32 {
         self.outgoing_args_size + self.fixed_frame_storage_size + self.clobber_size
+    }
+
+    /// Get the offset from the SP to the sized stack slots area.
+    pub fn sp_to_sized_stack_slots(&self) -> u32 {
+        self.outgoing_args_size
     }
 }
 

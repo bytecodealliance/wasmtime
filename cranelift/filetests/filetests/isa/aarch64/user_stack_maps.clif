@@ -52,7 +52,7 @@ block0:
 ;   mov x22, x0
 ;   mov x0, x24
 ;   bl 0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
 ;   mov x12, sp
 ;   mov x0, x19
 ;   str w0, [x12]
@@ -62,13 +62,13 @@ block0:
 ;   mov x22, x0
 ;   mov x0, x24
 ;   bl 0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
 ;   mov x15, sp
 ;   mov x0, x22
 ;   str w0, [x15]
 ;   mov x0, x19
 ;   bl 0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
 ;   mov x0, x22
 ;   bl 0
 ;   add sp, sp, #16
@@ -167,7 +167,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   str d1, [x1]
 ;   str q1, [sp, #112]
 ;   bl 0
-;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})] }
+;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})], sp_to_sized_stack_slots: None }
 ;   mov x0, x23
 ;   mov x1, x20
 ;   mov x2, x21

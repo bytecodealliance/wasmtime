@@ -1700,11 +1700,12 @@ impl StoreOpaque {
             let pc = frame.pc();
             debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
-            let fp = frame.fp();
+            let fp = frame.fp() as *mut usize;
             debug_assert!(
-                fp != 0,
+                !fp.is_null(),
                 "we should always get a valid frame pointer for Wasm frames"
             );
+
             let module_info = self
                 .modules()
                 .lookup(pc)
@@ -1718,31 +1719,16 @@ impl StoreOpaque {
                 }
             };
             log::trace!(
-                "We have a stack map that maps {} words in this Wasm frame",
-                stack_map.mapped_words()
+                "We have a stack map that maps {} bytes in this Wasm frame",
+                stack_map.frame_size()
             );
 
-            let sp = fp - stack_map.mapped_words() as usize * mem::size_of::<usize>();
+            let sp = unsafe { stack_map.sp(fp) };
+            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
+                let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+                log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
 
-            for i in 0..(stack_map.mapped_words() as usize) {
-                // Stack maps have one bit per word in the frame, and the
-                // zero^th bit is the *lowest* addressed word in the frame,
-                // i.e. the closest to the SP. So to get the `i`^th word in
-                // this frame, we add `i * sizeof(word)` to the SP.
-                let stack_slot = sp + i * mem::size_of::<usize>();
-                let stack_slot = stack_slot as *mut u64;
-
-                if !stack_map.get_bit(i) {
-                    log::trace!("Stack slot @ {stack_slot:p} does not contain gc_refs");
-                    continue;
-                }
-
-                let gc_ref = unsafe { core::ptr::read(stack_slot) };
-                log::trace!("Stack slot @ {stack_slot:p} = {gc_ref:#x}");
-
-                let gc_ref = VMGcRef::from_r64(gc_ref)
-                    .expect("we should never use the high 32 bits of an r64");
-
+                let gc_ref = VMGcRef::from_raw_u32(raw);
                 if gc_ref.is_some() {
                     unsafe {
                         gc_roots_list.add_wasm_stack_root(SendSyncPtr::new(

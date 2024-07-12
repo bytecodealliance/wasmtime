@@ -49,19 +49,19 @@ block0:
 ;   mvhi 0(%r4), 2
 ;   lgr %r2, %r11
 ;   brasl %r14, userextname0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
 ;   la %r2, 160(%r15)
 ;   mvhi 0(%r2), 1
 ;   la %r3, 164(%r15)
 ;   mvhi 0(%r3), 2
 ;   lgr %r2, %r11
 ;   brasl %r14, userextname0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
 ;   la %r5, 160(%r15)
 ;   mvhi 0(%r5), 2
 ;   lgr %r2, %r7
 ;   brasl %r14, userextname0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
 ;   lgr %r2, %r9
 ;   brasl %r14, userextname0
 ;   lmg %r7, %r15, 232(%r15)
@@ -152,7 +152,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   std %f2, 0(%r3)
 ;   vst %v2, 272(%r15)
 ;   brasl %r14, userextname0
-;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})] }
+;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})], sp_to_sized_stack_slots: None }
 ;   lgr %r2, %r11
 ;   lgr %r3, %r9
 ;   lgr %r4, %r7

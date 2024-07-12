@@ -241,22 +241,14 @@ unsafe impl WasmTy for I31 {
     }
 
     fn store(self, _store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        let r64 = VMGcRef::from_i31(self.into()).into_r64();
-        let anyref = u32::try_from(r64).unwrap();
-        ptr.write(ValRaw::anyref(anyref));
+        let gc_ref = VMGcRef::from_i31(self.into()).as_raw_u32();
+        ptr.write(ValRaw::anyref(gc_ref));
         Ok(())
     }
 
     unsafe fn load(_store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         let raw = ptr.get_anyref();
-        if cfg!(debug_assertions) {
-            let gc_ref = VMGcRef::from_raw_u32(raw).unwrap();
-            assert!(gc_ref.is_i31());
-        }
-        let r64 = u64::from(raw);
-        let gc_ref = VMGcRef::from_r64(r64)
-            .expect("valid r64")
-            .expect("non-null");
+        let gc_ref = VMGcRef::from_raw_u32(raw).expect("non-null");
         gc_ref.unwrap_i31().into()
     }
 }
@@ -292,8 +284,8 @@ unsafe impl WasmTy for Option<I31> {
     }
 
     unsafe fn load(_store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        let r64 = u64::from(ptr.get_anyref());
-        let gc_ref = VMGcRef::from_r64(r64).expect("valid r64")?;
+        let raw = ptr.get_anyref();
+        let gc_ref = VMGcRef::from_raw_u32(raw)?;
         Some(I31(gc_ref.unwrap_i31()))
     }
 }

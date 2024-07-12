@@ -3629,6 +3629,7 @@ dependencies = [
  "gimli",
  "log",
  "object",
+ "smallvec",
  "target-lexicon",
  "thiserror",
  "wasmparser",

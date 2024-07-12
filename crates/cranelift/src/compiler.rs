@@ -4,14 +4,15 @@ use crate::DEBUG_ASSERT_TRAP_CODE;
 use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
 use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
 use anyhow::{Context as _, Result};
+use cranelift_codegen::binemit::CodeOffset;
+use cranelift_codegen::bitset::CompoundBitSet;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{
     unwind::{UnwindInfo, UnwindInfoKind},
     OwnedTargetIsa, TargetIsa,
 };
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::Context;
-use cranelift_codegen::{CompiledCode, MachStackMap};
+use cranelift_codegen::{CompiledCode, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{DefinedFuncIndex, FuncTranslator, WasmFuncType, WasmValType};
@@ -147,8 +148,14 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env =
-            FuncEnvironment::new(isa, translation, types, &self.tunables, self.wmemcheck);
+        let mut func_env = FuncEnvironment::new(
+            isa,
+            translation,
+            types,
+            &self.tunables,
+            self.wmemcheck,
+            wasm_func_ty,
+        );
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -866,7 +873,7 @@ impl FunctionCompiler<'_> {
         }
 
         let stack_maps =
-            mach_stack_maps_to_stack_maps(compiled_code.buffer.take_stack_maps().into_iter());
+            clif_to_env_stack_maps(compiled_code.buffer.take_user_stack_maps().into_iter());
         compiled_function
             .set_sized_stack_slots(std::mem::take(&mut context.func.sized_stack_slots));
         self.compiler.contexts.lock().unwrap().push(self.cx);
@@ -881,23 +888,24 @@ impl FunctionCompiler<'_> {
     }
 }
 
-fn mach_stack_maps_to_stack_maps(
-    mach_stack_maps: impl ExactSizeIterator<Item = MachStackMap>,
+/// Convert from Cranelift's representation of a stack map to Wasmtime's
+/// compiler-agnostic representation.
+fn clif_to_env_stack_maps(
+    clif_stack_maps: impl ExactSizeIterator<Item = (CodeOffset, u32, ir::UserStackMap)>,
 ) -> Vec<StackMapInformation> {
-    // This is converting from Cranelift's representation of a stack map to
-    // Wasmtime's representation. They happen to align today but that may
-    // not always be true in the future.
-    let mut stack_maps = Vec::with_capacity(mach_stack_maps.len());
-    for MachStackMap {
-        offset_end,
-        stack_map,
-        ..
-    } in mach_stack_maps
-    {
-        let mapped_words = stack_map.mapped_words();
-        let stack_map = wasmtime_environ::StackMap::new(mapped_words, stack_map.into_bitset());
+    let mut stack_maps = Vec::with_capacity(clif_stack_maps.len());
+    for (code_offset, mapped_bytes, stack_map) in clif_stack_maps {
+        let mut bitset = CompoundBitSet::new();
+        for (ty, offset) in stack_map.entries() {
+            assert_eq!(ty, ir::types::I32);
+            bitset.insert(usize::try_from(offset).unwrap());
+        }
+        if bitset.is_empty() {
+            continue;
+        }
+        let stack_map = wasmtime_environ::StackMap::new(mapped_bytes, bitset);
         stack_maps.push(StackMapInformation {
-            code_offset: offset_end,
+            code_offset,
             stack_map,
         });
     }
