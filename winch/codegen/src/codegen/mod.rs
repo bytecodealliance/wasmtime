@@ -5,7 +5,7 @@ use crate::{
     masm::{
         ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode,
     },
-    stack::{TypedReg, Val},
+    stack::TypedReg,
 };
 use anyhow::Result;
 use smallvec::SmallVec;
@@ -848,24 +848,17 @@ where
             .masm
             .address_at_reg(base, heap_data.current_length_offset);
         self.masm.load_ptr(size_addr, size_reg);
-        // Prepare the stack to emit a shift to get the size in pages rather
-        // than in bytes.
-        self.context
-            .stack
-            .push(TypedReg::new(heap_data.ty, size_reg).into());
-
+        // Emit a shift to get the size in pages rather than in bytes.
+        let dst = TypedReg::new(heap_data.ty, size_reg);
         let pow = heap_data.page_size_log2;
-
-        // Ensure that the constant is correctly typed according to the heap
-        // type to reduce register pressure when emitting the shift operation.
-        match heap_data.ty {
-            WasmValType::I32 => self.context.stack.push(Val::i32(i32::from(pow))),
-            WasmValType::I64 => self.context.stack.push(Val::i64(i64::from(pow))),
-            _ => unreachable!(),
-        }
-
-        self.masm
-            .shift(&mut self.context, ShiftKind::ShrU, heap_data.ty.into());
+        self.masm.shift_ir(
+            dst.reg,
+            pow as u64,
+            dst.into(),
+            ShiftKind::ShrU,
+            heap_data.ty.into(),
+        );
+        self.context.stack.push(dst.into());
     }
 }
 

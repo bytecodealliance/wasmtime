@@ -5,7 +5,7 @@ use crate::{
     abi::{vmctx, ABIOperand, ABIResults, RetArea, ABI},
     frame::Frame,
     isa::reg::RegClass,
-    masm::{MacroAssembler, OperandSize, RegImm, SPOffset, StackSlot},
+    masm::{MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
     reg::Reg,
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
@@ -316,6 +316,61 @@ impl<'a> CodeGenContext<'a> {
             self.binop(masm, OperandSize::S64, |masm, dst, src, size| {
                 emit(masm, dst, src.into(), size)
             });
+        };
+    }
+
+    /// Prepares arguments for emitting an i32 shift operation.
+    ///
+    /// The `emit` function returns the `TypedReg` to put on the value stack.
+    pub fn i32_shift<M>(&mut self, masm: &mut M, kind: ShiftKind)
+    where
+        M: MacroAssembler,
+    {
+        let top = self.stack.peek().expect("value at stack top");
+
+        if top.is_i32_const() {
+            let val = self
+                .stack
+                .pop_i32_const()
+                .expect("i32 const value at stack top");
+            let typed_reg = self.pop_to_reg(masm, None);
+            masm.shift_ir(
+                typed_reg.reg,
+                val as u64,
+                typed_reg.reg,
+                kind,
+                OperandSize::S32,
+            );
+            self.stack.push(typed_reg.into());
+        } else {
+            masm.shift_rr(self, kind, OperandSize::S32);
+        }
+    }
+
+    /// Prepares arguments for emitting an i64 binary operation.
+    ///
+    /// The `emit` function returns the `TypedReg` to put on the value stack.
+    pub fn i64_shift<M>(&mut self, masm: &mut M, kind: ShiftKind)
+    where
+        M: MacroAssembler,
+    {
+        let top = self.stack.peek().expect("value at stack top");
+        if top.is_i64_const() {
+            let val = self
+                .stack
+                .pop_i64_const()
+                .expect("i64 const value at stack top");
+            let typed_reg = self.pop_to_reg(masm, None);
+            masm.shift_ir(
+                typed_reg.reg,
+                val as u64,
+                typed_reg.reg,
+                kind,
+                OperandSize::S64,
+            );
+            self.stack.push(typed_reg.into());
+        } else {
+            masm.shift_rr(self, kind, OperandSize::S64);
         };
     }
 
