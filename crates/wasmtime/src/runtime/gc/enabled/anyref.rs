@@ -253,7 +253,7 @@ impl AnyRef {
     }
 
     pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<HeapType> {
-        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         if gc_ref.is_i31() {
             return Ok(HeapType::I31);
         }
@@ -323,9 +323,7 @@ impl AnyRef {
 
     pub(crate) fn _is_i31(&self, store: &StoreOpaque) -> Result<bool> {
         assert!(self.comes_from_same_store(store));
-        // NB: Can't use `AutoAssertNoGc` here because we only have a shared
-        // context, not a mutable context.
-        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         Ok(gc_ref.is_i31())
     }
 
@@ -348,9 +346,7 @@ impl AnyRef {
 
     pub(crate) fn _as_i31(&self, store: &StoreOpaque) -> Result<Option<I31>> {
         assert!(self.comes_from_same_store(store));
-        // NB: Can't use `AutoAssertNoGc` here because we only have a shared
-        // context, not a mutable context.
-        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         Ok(gc_ref.as_i31().map(Into::into))
     }
 
@@ -383,9 +379,7 @@ impl AnyRef {
     }
 
     pub(crate) fn _is_struct(&self, store: &StoreOpaque) -> Result<bool> {
-        // NB: Can't use `AutoAssertNoGc` here because we only have a shared
-        // context, not a mutable context.
-        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         Ok(!gc_ref.is_i31() && store.gc_store()?.kind(gc_ref).matches(VMGcKind::StructRef))
     }
 

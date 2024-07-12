@@ -534,7 +534,7 @@ impl StructRef {
     }
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
-        let gc_ref = self.inner.unchecked_try_gc_ref(store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::StructRef));
         Ok(header.ty().expect("structrefs should have concrete types"))
