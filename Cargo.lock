@@ -3711,6 +3711,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-reader",
  "cranelift-wasm",
+ "env_logger",
  "libfuzzer-sys",
  "once_cell",
  "proc-macro2",

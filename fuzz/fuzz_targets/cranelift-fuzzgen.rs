@@ -171,6 +171,7 @@ impl fmt::Debug for TestCase {
 
 impl<'a> Arbitrary<'a> for TestCase {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let _ = env_logger::try_init();
         Self::generate(u).map_err(|_| {
             STATISTICS.invalid_inputs.fetch_add(1, Ordering::SeqCst);
             arbitrary::Error::IncorrectFormat
