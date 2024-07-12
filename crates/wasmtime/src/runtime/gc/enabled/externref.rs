@@ -319,7 +319,7 @@ impl ExternRef {
         T: 'a,
     {
         let store = store.into().0;
-        let gc_ref = self.inner.unchecked_try_gc_ref(&store)?;
+        let gc_ref = self.inner.try_gc_ref(&store)?;
         let externref = gc_ref.as_externref_unchecked();
         Ok(store.gc_store()?.externref_host_data(externref))
     }
@@ -359,7 +359,10 @@ impl ExternRef {
         T: 'a,
     {
         let store = store.into().0;
-        let gc_ref = self.inner.unchecked_try_gc_ref(store)?.unchecked_copy();
+        // NB: need to do an unchecked copy to release the borrow on the store
+        // so that we can get the store's GC store. But importantly we cannot
+        // trigger a GC while we are working with `gc_ref` here.
+        let gc_ref = self.inner.try_gc_ref(store)?.unchecked_copy();
         let externref = gc_ref.as_externref_unchecked();
         Ok(store.gc_store_mut()?.externref_host_data_mut(externref))
     }

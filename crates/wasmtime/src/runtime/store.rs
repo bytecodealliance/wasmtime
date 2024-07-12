@@ -2614,7 +2614,7 @@ unsafe impl<T> crate::runtime::vm::Store for StoreInner<T> {
             None => None,
             Some(r) => {
                 let r = r
-                    .unchecked_get_gc_ref(store)
+                    .get_gc_ref(store)
                     .expect("still in scope")
                     .unchecked_copy();
                 Some(store.gc_store_mut()?.clone_gc_ref(&r))

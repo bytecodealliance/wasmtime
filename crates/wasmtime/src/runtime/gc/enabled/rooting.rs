@@ -209,13 +209,23 @@ impl GcRootIndex {
         self.store_id == store.id()
     }
 
-    /// Same as `RootedGcRefImpl::get_gc_ref` but doesn't check that the raw GC
-    /// ref is only used during the scope of an `AutoAssertNoGc`.
+    /// Same as `RootedGcRefImpl::get_gc_ref` but not associated with any
+    /// particular `T: GcRef`.
     ///
-    /// It is up to callers to avoid triggering a GC while holding onto the
-    /// resulting raw `VMGcRef`. Failure to uphold this invariant is memory safe
-    /// but will lead to general incorrectness such as panics and wrong results.
-    pub(crate) fn unchecked_get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
+    /// We must avoid triggering a GC while holding onto the resulting raw
+    /// `VMGcRef` to avoid use-after-free bugs and similar. The `'a` lifetime
+    /// threaded from the `store` to the result will normally prevent GCs
+    /// statically, at compile time, since performing a GC requires a mutable
+    /// borrow of the store. However, if you call `VMGcRef::unchecked_copy` on
+    /// the resulting GC reference, then all bets are off and this invariant is
+    /// up to you to manually uphold. Failure to uphold this invariant is memory
+    /// safe but will lead to general incorrectness such as panics and wrong
+    /// results.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not associated with the given store.
+    pub(crate) fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
         assert!(
             self.comes_from_same_store(store),
             "object used with wrong store"
@@ -236,27 +246,13 @@ impl GcRootIndex {
         }
     }
 
-    /// Same as `RootedGcRefImpl::get_gc_ref` but not associated with any
-    /// particular `T: GcRef`.
-    pub(crate) fn get_gc_ref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Option<&'a VMGcRef> {
-        self.unchecked_get_gc_ref(store)
-    }
-
-    /// Same as `unchecked_get_gc_ref` but returns an error instead of `None` if
+    /// Same as `get_gc_ref` but returns an error instead of `None` if
     /// the GC reference has been unrooted.
     ///
     /// # Panics
     ///
     /// Panics if `self` is not associated with the given store.
-    pub(crate) fn unchecked_try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
-        self.unchecked_get_gc_ref(store).ok_or_else(|| {
-            anyhow!("attempted to use a garbage-collected object that has been unrooted")
-        })
-    }
-
-    /// Same as `get_gc_ref` but returns an error instead of `None` if the GC
-    /// reference has been unrooted.
-    pub(crate) fn try_gc_ref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcRef> {
+    pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
         self.get_gc_ref(store).ok_or_else(|| {
             anyhow!("attempted to use a garbage-collected object that has been unrooted")
         })
