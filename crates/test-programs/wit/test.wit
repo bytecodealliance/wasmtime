@@ -1,6 +1,5 @@
 package wasmtime:wasi;
 
-// only used as part of `test-programs`
 world test-reactor {
   include wasi:cli/imports@0.2.0;
 

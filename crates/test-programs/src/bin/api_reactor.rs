@@ -1,6 +1,6 @@
 wit_bindgen::generate!({
     world: "test-reactor",
-    path: "../wasi/wit",
+    path: "wit",
     generate_all,
 });
 

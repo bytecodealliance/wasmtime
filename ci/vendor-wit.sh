@@ -32,6 +32,9 @@ done
 rm -rf crates/wasi-http/wit/deps
 cp -r $dst crates/wasi-http/wit
 
+rm -rf crates/test-programs/wit/deps
+cp -r $dst crates/test-programs/wit
+
 # Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is
 # slightly different than above.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn

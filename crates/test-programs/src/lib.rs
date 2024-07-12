@@ -3,15 +3,17 @@ pub mod nn;
 pub mod preview1;
 pub mod sockets;
 
+// All the imports APIs
 wit_bindgen::generate!({
     world: "test-command",
-    path: "../wasi/wit",
+    path: "wit",
     generate_all,
 });
 
+// The exports APIs per-world
 pub mod proxy {
     wit_bindgen::generate!({
-        path: "../wasi-http/wit",
+        path: "wit",
         world: "wasi:http/proxy",
         default_bindings_module: "test_programs::proxy",
         pub_export_macro: true,
