@@ -2,6 +2,53 @@ test interpret
 test run
 target x86_64 has_avx has_fma
 
+;; testing load sinkind on fmsub and fmnsub instructions
+function %fmsub_f32(f32, f32, f32) -> f32 {
+    ss0 = explicit_slot 4
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = stack_addr.i64 ss0
+    store.f32 v1, v3
+    v4 = load.f32 v3
+    v5 = fneg v2
+    v6 = fma v0, v4, v5
+    return v6
+}
+; run: %fmsub_f32(0x83.0, 0x2.68091p6, 0x9.88721p1) == 0x1.3af060p14
+; run: %fmsub_f32(-0x83.0, 0x2.68091p6, 0x9.88721p1) == -0x1.3b88e6p14
+; run: %fmsub_f32(-0x83.0, 0x2.68091p6, -0x9.88721p1) == -0x1.3af060p14
+
+
+function %fmnsub_f32(f32, f32, f32) -> f32 {
+    ss0 = explicit_slot 4
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = stack_addr.i64 ss0
+    v4 = fneg v1
+    store.f32 v4, v3
+    v5 = load.f32 v3
+    v6 = fneg v2
+    v7 = fma v0, v5, v6
+    return v7
+}
+; run: %fmnsub_f32(0x83.0, -0x2.68091p6, 0x9.88721p1) == 0x1.3af060p14
+; run: %fmnsub_f32(-0x83.0, -0x2.68091p6, 0x9.88721p1) == -0x1.3b88e6p14
+; run: %fmnsub_f32(-0x83.0, -0x2.68091p6, -0x9.88721p1) == -0x1.3af060p14
+
+;; load first, then negate
+function %fmnsub_f32_load_first(f32, f32, f32) -> f32 {
+    ss0 = explicit_slot 4
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = stack_addr.i64 ss0
+    store.f32 v1, v3
+    v4 = load.f32 v3
+    v5 = fneg v4
+    v6 = fneg v2
+    v7 = fma v0, v5, v6
+    return v7
+}
+; run: %fmnsub_f32_load_first(0x83.0, -0x2.68091p6, 0x9.88721p1) == 0x1.3af060p14
+; run: %fmnsub_f32_load_first(-0x83.0, -0x2.68091p6, 0x9.88721p1) == -0x1.3b88e6p14
+; run: %fmnsub_f32_load_first(-0x83.0, -0x2.68091p6, -0x9.88721p1) == -0x1.3af060p14
+
 function %fnmsub_f64(f64, f64, f64) -> f64 {
     ss0 = explicit_slot 16
 block0(v0: f64, v1: f64, v2: f64):
@@ -16,3 +63,29 @@ block0(v0: f64, v1: f64, v2: f64):
 ; run: %fnmsub_f64(0x1.3b88ea148dd4ap14, 0x2.680916809121p6, 0x9.887218721837p1) == -0x1.7ba6ebee17417p21
 ; run: %fnmsub_f64(-0x1.3b88ea148dd4ap14, 0x2.680916809121p6, 0x9.887218721837p1) == 0x1.7ba5badfd4333p21
 ; run: %fnmsub_f64(-0x1.3b88ea148dd4ap14, 0x2.680916809121p6, -0x9.887218721837p1) == 0x1.7ba6ebee17417p21
+
+function %fmsub_f64(f64, f64, f64) -> f64 {
+    ss0 = explicit_slot 16
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = stack_addr.i64 ss0
+    store.f64 v2, v3
+    v4 = load.f64 v3
+    v5 = fneg v4
+    v6 = fma v0, v1, v5
+    return v6
+}
+; run: %fmsub_f64(-0x1.3b88ea148dd4ap14, 0x2.680916809121p6, 0x9.887218721837p1) == -0x1.7ba6ebee17417p21
+; run: %fmsub_f64(0x1.3b88ea148dd4ap14, 0x2.680916809121p6, 0x9.887218721837p1) == 0x1.7ba5badfd4333p21
+; run: %fmsub_f64(0x1.3b88ea148dd4ap14, 0x2.680916809121p6, -0x9.887218721837p1) == 0x1.7ba6ebee17417p21
+
+function %fmsub_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
+    ss0 = explicit_slot 16
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = stack_addr.i64 ss0
+    store.f32x4 v0, v3
+    v4 = load.f32x4 v3
+    v5 = fneg v2
+    v6 = fma v4, v1, v5
+    return v6
+}
+; run: %fmsub_f32x4([0x9.0 0x83.0 0x1.99999ap-2 -0x1.4cccccp0], [0x9.0 0x2.68091p6 0x1.333334p-1 -0x1.666666p1], [-0x9.0 -0x9.88721p1 -0x1.400000p1 0x1.b33334p0]) == [0x1.680000p6 0x1.3b88e6p14 0x1.5eb852p1 0x1.f0a3d2p0]
