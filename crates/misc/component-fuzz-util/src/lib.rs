@@ -176,9 +176,7 @@ impl Type {
                 err: Type::generate_opt(u, depth - 1, fuel)?.map(Box::new),
             },
             20 => {
-                // Generate 1 flag all the way up to 65 flags which exercises
-                // the 1 to 3 x u32 cases.
-                let amt = u.int_in_range(1..=(*fuel).min(65))?;
+                let amt = u.int_in_range(1..=(*fuel).min(32))?;
                 *fuel -= amt;
                 Type::Flags(amt)
             }
