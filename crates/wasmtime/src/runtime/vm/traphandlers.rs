@@ -11,6 +11,7 @@ mod coredump;
 mod coredump;
 
 use crate::prelude::*;
+use crate::runtime::module::lookup_code;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
 use crate::sync::OnceLock;
@@ -24,21 +25,9 @@ pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmC
 
 pub use traphandlers::SignalHandler;
 
-/// Globally-set callback to determine whether a program counter is actually a
-/// wasm trap.
-///
-/// This is initialized during `init_traps` below. The definition lives within
-/// `wasmtime` currently.
-pub(crate) static mut GET_WASM_TRAP: fn(usize) -> Option<wasmtime_environ::Trap> = |_| None;
-
 /// This function is required to be called before any WebAssembly is entered.
 /// This will configure global state such as signal handlers to prepare the
 /// process to receive wasm traps.
-///
-/// The `get_wasm_trap` argument is used when a trap happens to determine if a
-/// program counter is the pc of an actual wasm trap or not. This is then used
-/// to disambiguate faults that happen due to wasm and faults that happen due to
-/// bugs in Rust or elsewhere.
 ///
 /// # Panics
 ///
@@ -47,14 +36,10 @@ pub(crate) static mut GET_WASM_TRAP: fn(usize) -> Option<wasmtime_environ::Trap>
 ///
 /// This function will also panic if the `std` feature is disabled and it's
 /// called concurrently.
-pub fn init_traps(
-    get_wasm_trap: fn(usize) -> Option<wasmtime_environ::Trap>,
-    macos_use_mach_ports: bool,
-) {
+pub fn init_traps(macos_use_mach_ports: bool) {
     static INIT: OnceLock<()> = OnceLock::new();
 
     INIT.get_or_init(|| unsafe {
-        GET_WASM_TRAP = get_wasm_trap;
         traphandlers::platform_init(macos_use_mach_ports);
     });
 
@@ -460,9 +445,12 @@ impl CallThreadState {
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        let trap = match unsafe { GET_WASM_TRAP(pc as usize) } {
-            Some(trap) => trap,
-            None => return TrapTest::NotWasm,
+        let Some((code, text_offset)) = lookup_code(pc as usize) else {
+            return TrapTest::NotWasm;
+        };
+
+        let Some(trap) = code.lookup_trap_code(text_offset) else {
+            return TrapTest::NotWasm;
         };
 
         // If all that passed then this is indeed a wasm trap, so return the
