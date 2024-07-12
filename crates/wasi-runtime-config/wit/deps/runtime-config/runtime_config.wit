@@ -1,0 +1,25 @@
+interface runtime {
+    /// An error type that encapsulates the different errors that can occur fetching config
+    variant config-error {
+        /// This indicates an error from an "upstream" config source. 
+        /// As this could be almost _anything_ (such as Vault, Kubernetes ConfigMaps, KeyValue buckets, etc), 
+        /// the error message is a string.
+        upstream(string),
+        /// This indicates an error from an I/O operation. 
+        /// As this could be almost _anything_ (such as a file read, network connection, etc), 
+        /// the error message is a string. 
+        /// Depending on how this ends up being consumed, 
+        /// we may consider moving this to use the `wasi:io/error` type instead. 
+        /// For simplicity right now in supporting multiple implementations, it is being left as a string.
+        io(string),
+    }
+
+    /// Gets a single opaque config value set at the given key if it exists
+    get: func(
+        /// A string key to fetch
+        key: string
+    ) -> result<option<string>, config-error>;
+
+    /// Gets a list of all set config data
+    get-all: func() -> result<list<tuple<string, string>>, config-error>;
+}
