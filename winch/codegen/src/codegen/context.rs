@@ -320,8 +320,6 @@ impl<'a> CodeGenContext<'a> {
     }
 
     /// Prepares arguments for emitting an i32 shift operation.
-    ///
-    /// The `emit` function returns the `TypedReg` to put on the value stack.
     pub fn i32_shift<M>(&mut self, masm: &mut M, kind: ShiftKind)
     where
         M: MacroAssembler,
@@ -348,8 +346,6 @@ impl<'a> CodeGenContext<'a> {
     }
 
     /// Prepares arguments for emitting an i64 binary operation.
-    ///
-    /// The `emit` function returns the `TypedReg` to put on the value stack.
     pub fn i64_shift<M>(&mut self, masm: &mut M, kind: ShiftKind)
     where
         M: MacroAssembler,
