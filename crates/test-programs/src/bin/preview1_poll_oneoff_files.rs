@@ -13,7 +13,7 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Even
     Ok(out)
 }
 
-/// Repeatedly call `poll_oneoff` until all the subcriptions in `in` have
+/// Repeatedly call `poll_oneoff` until all the subscriptions in `in` have
 /// seen their events occur.
 unsafe fn poll_oneoff_with_retry(
     r#in: &[wasi::Subscription],

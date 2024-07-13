@@ -243,7 +243,7 @@ impl Component {
     /// An important point to note here is that the precise type of imports and
     /// exports of a component change when it is instantiated with respect to
     /// resources. For example a [`Component`] represents an un-instantiated
-    /// component meaning that its imported resources are represeted as abstract
+    /// component meaning that its imported resources are represented as abstract
     /// resource types. These abstract types are not equal to any other
     /// component's types.
     ///

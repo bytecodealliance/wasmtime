@@ -81,7 +81,7 @@ pub trait Subscribe: Send + 'static {
     async fn ready(&mut self);
 }
 
-/// Creates a `pollable` resource which is susbcribed to the provided
+/// Creates a `pollable` resource which is subscribed to the provided
 /// `resource`.
 ///
 /// If `resource` is an owned resource then it will be deleted when the returned

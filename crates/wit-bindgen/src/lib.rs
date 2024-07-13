@@ -442,7 +442,7 @@ impl Wasmtime {
                     // If this interface is remapped then that means that it was
                     // provided via the `with` key in the bindgen configuration.
                     // That means that bindings generation is skipped here. To
-                    // accomodate future bindgens depending on this bindgen
+                    // accommodate future bindgens depending on this bindgen
                     // though we still generate a module which reexports the
                     // original module. This helps maintain the same output
                     // structure regardless of whether `with` is used.
@@ -734,7 +734,7 @@ pub fn new(
             self.src,
             "
             /// Auto-generated bindings for a pre-instantiated version of a
-            /// copmonent which implements the world `{world_name}`.
+            /// component which implements the world `{world_name}`.
             ///
             /// This structure is created through [`{camel}Pre::new`] which
             /// takes a [`InstancePre`]({wt}::component::InstancePre) that
@@ -791,7 +791,7 @@ pub fn new(
                 /// Creates a new copy of `{camel}Pre` bindings which can then
                 /// be used to instantiate into a particular store.
                 ///
-                /// This method may fail if the compoennt behind `instance_pre`
+                /// This method may fail if the component behind `instance_pre`
                 /// does not have the required exports.
                 pub fn new(
                     instance_pre: {wt}::component::InstancePre<_T>,

@@ -15,7 +15,7 @@ pub struct CompiledFunctionInfo {
     /// The [`WasmFunctionInfo`] for this function.
     pub wasm_func_info: WasmFunctionInfo,
     /// The [`FunctionLoc`] indicating the location of this function in the text
-    /// section of the compition artifact.
+    /// section of the competition artifact.
     pub wasm_func_loc: FunctionLoc,
     /// A trampoline for array callers (e.g. `Func::new`) calling into this function (if needed).
     pub array_to_wasm_trampoline: Option<FunctionLoc>,

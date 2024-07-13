@@ -164,7 +164,7 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
                 .unwrap();
             Destination::Stack(&dst_flat, &helper.dst.opts)
         }
-        // This is the same as a memroy-based source but note that the address
+        // This is the same as a memory-based source but note that the address
         // of the destination is passed as the final parameter to the function.
         HelperLocation::Memory => {
             nlocals += 1;

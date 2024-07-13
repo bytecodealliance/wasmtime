@@ -33,7 +33,7 @@ pub const NON_NULL_NON_I31_MASK: u64 = !I31_DISCRIMINANT;
 /// We say "abstract-ish" type because in addition to the abstract heap types
 /// (other than `i31`) we also have variants for `externref`s that have been
 /// converted into an `anyref` via `extern.convert_any` and `externref`s that
-/// have been convered into an `anyref` via `any.convert_extern`. Note that in
+/// have been converted into an `anyref` via `any.convert_extern`. Note that in
 /// the latter case, because `any.convert_extern $foo` produces a value that is
 /// not an instance of `eqref`, `VMGcKind::AnyOfExternRef & VMGcKind::EqRef !=
 /// VMGcKind::EqRef`.

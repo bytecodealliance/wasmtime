@@ -1,5 +1,5 @@
 /// Auto-generated bindings for a pre-instantiated version of a
-/// copmonent which implements the world `the-lists`.
+/// component which implements the world `the-lists`.
 ///
 /// This structure is created through [`TheListsPre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
@@ -33,7 +33,7 @@ const _: () = {
         /// Creates a new copy of `TheListsPre` bindings which can then
         /// be used to instantiate into a particular store.
         ///
-        /// This method may fail if the compoennt behind `instance_pre`
+        /// This method may fail if the component behind `instance_pre`
         /// does not have the required exports.
         pub fn new(
             instance_pre: wasmtime::component::InstancePre<_T>,

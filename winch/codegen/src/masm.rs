@@ -536,7 +536,7 @@ pub(crate) trait MacroAssembler {
     fn store_ptr(&mut self, src: Reg, dst: Self::Address);
 
     /// Perform a WebAssembly store.
-    /// A WebAssebly store introduces several additional invariants compared to
+    /// A WebAssembly store introduces several additional invariants compared to
     /// [Self::store], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
@@ -549,7 +549,7 @@ pub(crate) trait MacroAssembler {
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
 
     /// Perform a WebAssembly load.
-    /// A WebAssebly load introduces several additional invariants compared to
+    /// A WebAssembly load introduces several additional invariants compared to
     /// [Self::load], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with

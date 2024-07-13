@@ -1534,7 +1534,7 @@ impl Config {
         self
     }
 
-    /// Configure the version information used in serialized and deserialzied [`crate::Module`]s.
+    /// Configure the version information used in serialized and deserialized [`crate::Module`]s.
     /// This effects the behavior of [`crate::Module::serialize()`], as well as
     /// [`crate::Module::deserialize()`] and related functions.
     ///
@@ -2100,7 +2100,7 @@ impl fmt::Debug for Config {
 
         // Not every flag in WasmFeatures can be enabled as part of creating
         // a Config. This impl gives a complete picture of all WasmFeatures
-        // enabled, and doesn't require maintence by hand (which has become out
+        // enabled, and doesn't require maintenance by hand (which has become out
         // of date in the past), at the cost of possible confusion for why
         // a flag in this set doesn't have a Config setter.
         use bitflags::Flags;

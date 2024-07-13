@@ -176,7 +176,7 @@ pub(crate) struct StackState {
     /// The base stack pointer offset.
     /// This offset is set when entering the block, after saving any live
     /// registers and locals.
-    /// It is calcuated by subtracting the size, in bytes, of any block params
+    /// It is calculated by subtracting the size, in bytes, of any block params
     /// to the current stack pointer offset.
     pub base_offset: SPOffset,
     /// The target stack pointer offset.

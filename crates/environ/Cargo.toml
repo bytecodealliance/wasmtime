@@ -2,7 +2,7 @@
 name = "wasmtime-environ"
 version.workspace = true
 authors.workspace = true
-description = "Standalone environment support for WebAsssembly code in Cranelift"
+description = "Standalone environment support for WebAssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-environ/"
