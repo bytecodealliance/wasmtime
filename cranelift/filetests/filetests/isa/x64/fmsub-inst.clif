@@ -596,6 +596,9 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   retq
 
 ;; negate first, then load
+;; FIXME: there is a missed optimization here due to the order of load and
+;; negation. This should really generate a vfmnsub instruction removing the
+;; need to negate the argument explicitly
 function %fmnsub_f32(f32, f32, f32) -> f32 {
     ss0 = explicit_slot 4
 block0(v0: f32, v1: f32, v2: f32):
@@ -619,42 +622,6 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   vxorps  %xmm1, %xmm3, %xmm3
 ;   vmovss  %xmm3, 0(%r11)
 ;   vfmsub132ss %xmm0, %xmm2, 0(%r11), %xmm0
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-; block1: ; offset 0x8
-;   leaq (%rsp), %r11
-;   movl $0x80000000, %r9d
-;   vmovd %r9d, %xmm3
-;   vxorps %xmm3, %xmm1, %xmm3
-;   vmovss %xmm3, (%r11) ; trap: heap_oob
-;   vfmsub132ss (%r11), %xmm2, %xmm0 ; trap: heap_oob
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-
-;; FIXME: there is a missed optimization here due to the order of load and
-;; negation. This should really generate a vfmnsub instruction removing the
-;; need to negate the argument explicitly
-; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-; block0:
-;   lea     rsp(0 + virtual offset), %r11
-;   movl    $-2147483648, %r9d
-;   vmovd   %r9d, %xmm3
-;   vxorps  %xmm1, %xmm3, %xmm3
-;   vmovss  %xmm3, 0(%r11)
-;   vfmsub132ss %xmm0, %xmm2, 0(%r11), %xmm0 ;; <<--ideally vfmnsub132ss
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
