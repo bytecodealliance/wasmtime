@@ -1,0 +1,686 @@
+test compile precise-output
+target x86_64 has_avx=true has_fma=true
+
+function %vfmsub213ss(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub213ss %xmm0, %xmm1, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub213ss %xmm2, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfmsub213sd(f64, f64, i64) -> f64 {
+block0(v0: f64, v1: f64, v2: i64):
+    v3 = load.f64 v2
+    v4 = fneg v3
+    v5 = fma v0, v1, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub213sd %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub213sd (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfmsub213ps(f32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub213ps %xmm0, %xmm1, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub213ps %xmm2, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfmsub213pd(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub213pd %xmm0, %xmm1, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub213pd %xmm2, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfmsub132ss(f32, i64, f32) -> f32 {
+block0(v0: f32, v1: i64, v2: f32):
+    v3 = load.f32 v1
+    v4 = fneg v2
+    v5 = fma v0, v3, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub132ss %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub132ss (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfmsub132sd(i64, f64, f64) -> f64 {
+block0(v0: i64, v1: f64, v2: f64):
+    v3 = load.f64 v0
+    v4 = fneg v2
+    v5 = fma v3, v1, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub132sd %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub132sd (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfmsub132ps(f32x4, i64, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: i64, v2: f32x4):
+    v3 = load.f32x4 v1
+    v4 = fneg v2
+    v5 = fma v0, v3, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub132ps %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub132ps (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfmsub132pd(i64, f64x2, f64x2) -> f64x2 {
+block0(v0: i64, v1: f64x2, v2: f64x2):
+    v3 = load.f64x2 v0
+    v4 = fneg v2
+    v5 = fma v3, v1, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmsub132pd %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfmsub132pd (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub213ss(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = fneg v0
+    v4 = fneg v2
+    v5 = fma v3, v1, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub213ss %xmm0, %xmm1, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub213ss %xmm2, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub213sd(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = fneg v1
+    v4 = fneg v2
+    v5 = fma v0, v3, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub213sd %xmm0, %xmm1, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub213sd %xmm2, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub213ps(f32x4, f32x4, i64) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: i64):
+    v3 = fneg v0
+    v4 = load.f32x4 v2
+    v5 = fneg v4
+    v6 = fma v3, v1, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub213ps %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub213ps (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub213pd(f64x2, f64x2, i64) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: i64):
+    v3 = fneg v1
+    v4 = load.f64x2 v2
+    v5 = fneg v4
+    v6 = fma v0, v3, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub213pd %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub213pd (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub132ss(f32, i64, f32) -> f32 {
+block0(v0: f32, v1: i64, v2: f32):
+    v3 = fneg v0
+    v4 = load.f32 v1
+    v5 = fneg v2
+    v6 = fma v3, v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub132ss %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub132ss (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub132sd(i64, f64, f64) -> f64 {
+block0(v0: i64, v1: f64, v2: f64):
+    v3 = fneg v1
+    v4 = load.f64 v0
+    v5 = fneg v2
+    v6 = fma v4, v3, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub132sd %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub132sd (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub132ps(i64, f32x4, f32x4) -> f32x4 {
+block0(v0: i64, v1: f32x4, v2: f32x4):
+    v3 = load.f32x4 v0
+    v4 = fneg v3
+    v5 = fneg v2
+    v6 = fma v4, v1, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub132ps %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub132ps (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %vfnmsub132pd(f64x2, i64, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: i64, v2: f64x2):
+    v3 = load.f64x2 v1
+    v4 = fneg v3
+    v5 = fneg v2
+    v6 = fma v0, v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfnmsub132pd %xmm0, %xmm1, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vfnmsub132pd (%rdi), %xmm1, %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; The following tests are here to ensure, that the runtests for fnmsub actually
+;; generate code that sinks the loads. If they don't, then the runtests
+;; don't actually test the correct lowering
+
+function %fnmsub_f64(f64, f64, f64) -> f64 {
+    ss0 = explicit_slot 16
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = stack_addr.i64 ss0
+    store.f64 v2, v3
+    v4 = load.f64 v3
+    v5 = fneg v0
+    v6 = fneg v4
+    v7 = fma v5, v1, v6
+    return v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r8
+;   vmovsd  %xmm2, 0(%r8)
+;   vfnmsub213sd %xmm0, %xmm1, 0(%r8), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r8
+;   vmovsd %xmm2, (%r8) ; trap: heap_oob
+;   vfnmsub213sd (%r8), %xmm1, %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fmsub_f64(f64, f64, f64) -> f64 {
+    ss0 = explicit_slot 16
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = stack_addr.i64 ss0
+    store.f64 v2, v3
+    v4 = load.f64 v3
+    v5 = fneg v4
+    v6 = fma v0, v1, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r8
+;   vmovsd  %xmm2, 0(%r8)
+;   vfmsub213sd %xmm0, %xmm1, 0(%r8), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r8
+;   vmovsd %xmm2, (%r8) ; trap: heap_oob
+;   vfmsub213sd (%r8), %xmm1, %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fmsub_f32(f32, f32, f32) -> f32 {
+    ss0 = explicit_slot 4
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = stack_addr.i64 ss0
+    store.f32 v1, v3
+    v4 = load.f32 v3
+    v5 = fneg v2
+    v6 = fma v0, v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r8
+;   vmovss  %xmm1, 0(%r8)
+;   vfmsub132ss %xmm0, %xmm2, 0(%r8), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r8
+;   vmovss %xmm1, (%r8) ; trap: heap_oob
+;   vfmsub132ss (%r8), %xmm2, %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; load first, then negate
+function %fmnsub_f32(f32, f32, f32) -> f32 {
+    ss0 = explicit_slot 4
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = stack_addr.i64 ss0
+    store.f32 v1, v3
+    v4 = load.f32 v3
+    v5 = fneg v4
+    v6 = fneg v2
+    v7 = fma v0, v5, v6
+    return v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r8
+;   vmovss  %xmm1, 0(%r8)
+;   vfnmsub132ss %xmm0, %xmm2, 0(%r8), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r8
+;   vmovss %xmm1, (%r8) ; trap: heap_oob
+;   vfnmsub132ss (%r8), %xmm2, %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; negate first, then load
+;; FIXME (see issue #8953): there is a missed optimization here due to the order
+;; of load and negation. This should really generate a vfmnsub instruction 
+;; removing the need to negate the argument explicitly
+function %fmnsub_f32(f32, f32, f32) -> f32 {
+    ss0 = explicit_slot 4
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = stack_addr.i64 ss0
+    v4 = fneg v1
+    store.f32 v4, v3
+    v5 = load.f32 v3
+    v6 = fneg v2
+    v7 = fma v0, v5, v6
+    return v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r11
+;   movl    $-2147483648, %r9d
+;   vmovd   %r9d, %xmm3
+;   vxorps  %xmm1, %xmm3, %xmm3
+;   vmovss  %xmm3, 0(%r11)
+;   vfmsub132ss %xmm0, %xmm2, 0(%r11), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r11
+;   movl $0x80000000, %r9d
+;   vmovd %r9d, %xmm3
+;   vxorps %xmm3, %xmm1, %xmm3
+;   vmovss %xmm3, (%r11) ; trap: heap_oob
+;   vfmsub132ss (%r11), %xmm2, %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fmsub_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
+    ss0 = explicit_slot 16
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = stack_addr.i64 ss0
+    store.f32x4 v0, v3
+    v4 = load.f32x4 v3
+    v5 = fneg v2
+    v6 = fma v4, v1, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r8
+;   vmovups %xmm0, 0(%r8)
+;   movdqa  %xmm1, %xmm0
+;   vfmsub132ps %xmm0, %xmm2, 0(%r8), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r8
+;   vmovups %xmm0, (%r8) ; trap: heap_oob
+;   movdqa %xmm1, %xmm0
+;   vfmsub132ps (%r8), %xmm2, %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
