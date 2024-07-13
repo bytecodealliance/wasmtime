@@ -313,6 +313,50 @@ block0:
 ; check: v2 = iconst.i64 0xf0de_bc9a_7856_3412
 ; nextln: return v2
 
+function %f32_fadd() -> f32 {
+block0:
+    v1 = f32const 0x1.fp2
+    v2 = f32const 0x1.9p3
+    v3 = fadd v1, v2
+    return v3
+}
+
+; check: v4 = f32const 0x1.440000p4
+; check: return v4  ; v4 = 0x1.440000p4
+
+function %f32_fsub() -> f32 {
+block0:
+    v1 = f32const 0x1.fp2
+    v2 = f32const 0x1.9p3
+    v3 = fsub v1, v2
+    return v3
+}
+
+; check: v4 = f32const -0x1.300000p2
+; check: return v4  ; v4 = -0x1.300000p2
+
+function %f32_fmul() -> f32 {
+block0:
+    v1 = f32const 0x1.fp2
+    v2 = f32const 0x1.9p3
+    v3 = fmul v1, v2
+    return v3
+}
+
+; check: v4 = f32const 0x1.838000p6
+; check: return v4  ; v4 = 0x1.838000p6
+
+function %f32_fdiv() -> f32 {
+block0:
+    v1 = f32const 0x1.9p5
+    v2 = f32const 0x1.9p3
+    v3 = fdiv v1, v2
+    return v3
+}
+
+; check: v4 = f32const 0x1.000000p2
+; check: return v4  ; v4 = 0x1.000000p2
+
 function %f32_fneg() -> f32 {
 block0:
     v1 = f32const 0.0
@@ -343,6 +387,50 @@ block0:
 
 ; check: v4 = f32const -NaN
 ; check: return v4  ; v4 = -NaN
+
+function %f64_fadd() -> f64 {
+block0:
+    v1 = f64const 0x1.fp2
+    v2 = f64const 0x1.9p3
+    v3 = fadd v1, v2
+    return v3
+}
+
+; check: v4 = f64const 0x1.4400000000000p4
+; check: return v4  ; v4 = 0x1.4400000000000p4
+
+function %f64_fsub() -> f64 {
+block0:
+    v1 = f64const 0x1.fp2
+    v2 = f64const 0x1.9p3
+    v3 = fsub v1, v2
+    return v3
+}
+
+; check: v4 = f64const -0x1.3000000000000p2
+; check: return v4  ; v4 = -0x1.3000000000000p2
+
+function %f64_fmul() -> f64 {
+block0:
+    v1 = f64const 0x1.fp2
+    v2 = f64const 0x1.9p3
+    v3 = fmul v1, v2
+    return v3
+}
+
+; check: v4 = f64const 0x1.8380000000000p6
+; check: return v4  ; v4 = 0x1.8380000000000p6
+
+function %f64_fdiv() -> f64 {
+block0:
+    v1 = f64const 0x1.9p5
+    v2 = f64const 0x1.9p3
+    v3 = fdiv v1, v2
+    return v3
+}
+
+; check: v4 = f64const 0x1.0000000000000p2
+; check: return v4  ; v4 = 0x1.0000000000000p2
 
 function %f64_fneg() -> f64 {
 block0:

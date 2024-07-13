@@ -938,6 +938,22 @@ macro_rules! isle_common_prelude_methods {
             }
         }
 
+        fn f32_add(&mut self, lhs: Ieee32, rhs: Ieee32) -> Ieee32 {
+            lhs + rhs
+        }
+
+        fn f32_sub(&mut self, lhs: Ieee32, rhs: Ieee32) -> Ieee32 {
+            lhs - rhs
+        }
+
+        fn f32_mul(&mut self, lhs: Ieee32, rhs: Ieee32) -> Ieee32 {
+            lhs * rhs
+        }
+
+        fn f32_div(&mut self, lhs: Ieee32, rhs: Ieee32) -> Ieee32 {
+            lhs / rhs
+        }
+
         fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
             n.neg()
         }
@@ -948,6 +964,22 @@ macro_rules! isle_common_prelude_methods {
 
         fn f32_copysign(&mut self, a: Ieee32, b: Ieee32) -> Ieee32 {
             a.copysign(b)
+        }
+
+        fn f64_add(&mut self, lhs: Ieee64, rhs: Ieee64) -> Ieee64 {
+            lhs + rhs
+        }
+
+        fn f64_sub(&mut self, lhs: Ieee64, rhs: Ieee64) -> Ieee64 {
+            lhs - rhs
+        }
+
+        fn f64_mul(&mut self, lhs: Ieee64, rhs: Ieee64) -> Ieee64 {
+            lhs * rhs
+        }
+
+        fn f64_div(&mut self, lhs: Ieee64, rhs: Ieee64) -> Ieee64 {
+            lhs / rhs
         }
 
         fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {
