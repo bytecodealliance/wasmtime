@@ -954,6 +954,26 @@ macro_rules! isle_common_prelude_methods {
             lhs / rhs
         }
 
+        fn f32_sqrt(&mut self, n: Ieee32) -> Ieee32 {
+            n.sqrt()
+        }
+
+        fn f32_ceil(&mut self, n: Ieee32) -> Ieee32 {
+            n.ceil()
+        }
+
+        fn f32_floor(&mut self, n: Ieee32) -> Ieee32 {
+            n.floor()
+        }
+
+        fn f32_trunc(&mut self, n: Ieee32) -> Ieee32 {
+            n.trunc()
+        }
+
+        fn f32_nearest(&mut self, n: Ieee32) -> Ieee32 {
+            n.round_ties_even()
+        }
+
         fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
             n.neg()
         }
@@ -980,6 +1000,26 @@ macro_rules! isle_common_prelude_methods {
 
         fn f64_div(&mut self, lhs: Ieee64, rhs: Ieee64) -> Ieee64 {
             lhs / rhs
+        }
+
+        fn f64_sqrt(&mut self, n: Ieee64) -> Ieee64 {
+            n.sqrt()
+        }
+
+        fn f64_ceil(&mut self, n: Ieee64) -> Ieee64 {
+            n.ceil()
+        }
+
+        fn f64_floor(&mut self, n: Ieee64) -> Ieee64 {
+            n.floor()
+        }
+
+        fn f64_trunc(&mut self, n: Ieee64) -> Ieee64 {
+            n.trunc()
+        }
+
+        fn f64_nearest(&mut self, n: Ieee64) -> Ieee64 {
+            n.round_ties_even()
         }
 
         fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {

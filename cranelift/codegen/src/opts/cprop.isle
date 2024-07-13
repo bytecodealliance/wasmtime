@@ -299,6 +299,31 @@
 (rule (simplify (fdiv $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
       (subsume (f64const $F64 (f64_div lhs rhs))))
 
+(rule (simplify (sqrt $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_sqrt n))))
+(rule (simplify (sqrt $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_sqrt n))))
+
+(rule (simplify (ceil $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_ceil n))))
+(rule (simplify (ceil $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_ceil n))))
+
+(rule (simplify (floor $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_floor n))))
+(rule (simplify (floor $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_floor n))))
+
+(rule (simplify (trunc $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_trunc n))))
+(rule (simplify (trunc $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_trunc n))))
+
+(rule (simplify (nearest $F32 (f32const $F32 n)))
+      (subsume (f32const $F32 (f32_nearest n))))
+(rule (simplify (nearest $F64 (f64const $F64 n)))
+      (subsume (f64const $F64 (f64_nearest n))))
+
 (rule (simplify (fneg $F32 (f32const $F32 n)))
       (subsume (f32const $F32 (f32_neg n))))
 (rule (simplify (fneg $F64 (f64const $F64 n)))
