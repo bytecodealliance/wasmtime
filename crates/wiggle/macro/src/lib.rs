@@ -27,8 +27,8 @@ use syn::parse_macro_input;
 ///       and return `Result<($return_types),$error_type>`
 ///
 ///     * When the `wiggle` crate is built with the `wasmtime_integration`
-///     feature, each module contains an `add_to_linker` function to add it to
-///     a `wasmtime::Linker`.
+///       feature, each module contains an `add_to_linker` function to add it to
+///       a `wasmtime::Linker`.
 ///
 /// Arguments are provided using Rust struct value syntax.
 ///

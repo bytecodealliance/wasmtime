@@ -55,13 +55,13 @@
 //! * Value `A` is allocated into the slab, yielding id `i`.
 //!
 //! * `A` is deallocated, and so `i`'s associated entry is added to the slab's
-//! free list.
+//!   free list.
 //!
 //! * Value `B` is allocated into the slab, reusing `i`'s associated entry,
-//! yielding id `i`.
+//!   yielding id `i`.
 //!
 //! * The "original" id `i` is used to access the arena, expecting the
-//! deallocated value `A`, but getting the new value `B`.
+//!   deallocated value `A`, but getting the new value `B`.
 //!
 //! That is, it does not detect and prevent against the memory-safe version of
 //! use-after-free bugs.
