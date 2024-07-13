@@ -596,9 +596,9 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   retq
 
 ;; negate first, then load
-;; FIXME: there is a missed optimization here due to the order of load and
-;; negation. This should really generate a vfmnsub instruction removing the
-;; need to negate the argument explicitly
+;; FIXME (see issue #8953): there is a missed optimization here due to the order
+;; of load and negation. This should really generate a vfmnsub instruction 
+;; removing the need to negate the argument explicitly
 function %fmnsub_f32(f32, f32, f32) -> f32 {
     ss0 = explicit_slot 4
 block0(v0: f32, v1: f32, v2: f32):
