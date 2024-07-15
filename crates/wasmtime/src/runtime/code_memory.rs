@@ -7,7 +7,7 @@ use core::ops::Range;
 use object::endian::NativeEndian;
 use object::read::{elf::ElfFile64, Object, ObjectSection};
 use object::ObjectSymbol;
-use wasmtime_environ::obj;
+use wasmtime_environ::{lookup_trap_code, obj, Trap};
 use wasmtime_jit_icache_coherence as icache_coherence;
 
 /// Management of executable memory within a `MmapVec`
@@ -316,6 +316,12 @@ impl CodeMemory {
                 .context("failed to create unwind info registration")?;
         *self.unwind_registration = Some(registration);
         Ok(())
+    }
+
+    /// Looks up the given offset within this module's text section and returns
+    /// the trap code associated with that instruction, if there is one.
+    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
+        lookup_trap_code(self.trap_data(), text_offset)
     }
 }
 
