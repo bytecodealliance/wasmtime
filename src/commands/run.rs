@@ -54,6 +54,15 @@ pub struct RunCommand {
     )]
     pub preloads: Vec<(String, PathBuf)>,
 
+    /// Override the value of `argv[0]`, typically the name of the executable of
+    /// the application being run.
+    ///
+    /// This can be useful to pass in situations where a CLI tool is being
+    /// executed that dispatches its functionality on the value of `argv[0]`
+    /// without needing to rename the original wasm binary.
+    #[arg(long)]
+    pub argv0: Option<String>,
+
     /// The WebAssembly module to run and arguments to pass to it.
     ///
     /// Arguments passed to the wasm module will be configured as WASI CLI
@@ -233,7 +242,10 @@ impl RunCommand {
             // For argv[0], which is the program name. Only include the base
             // name of the main wasm module, to avoid leaking path information.
             let arg = if i == 0 {
-                Path::new(arg).components().next_back().unwrap().as_os_str()
+                match &self.argv0 {
+                    Some(s) => s.as_ref(),
+                    None => Path::new(arg).components().next_back().unwrap().as_os_str(),
+                }
             } else {
                 arg.as_ref()
             };
