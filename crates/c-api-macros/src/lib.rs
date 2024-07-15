@@ -41,7 +41,8 @@ pub fn declare_ty(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let docs = format!(
         "Creates a new [`{name}`] which matches the provided one.\n\n\
         The caller is responsible for deleting the returned value via [`{prefix}_delete`].\n\n\
-    ");
+    "
+    );
 
     (quote! {
         wasmtime_c_api_macros::declare_own!(#ty);
