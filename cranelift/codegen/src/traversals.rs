@@ -52,8 +52,7 @@ impl Dfs {
     /// This iterator can be used to perform either pre- or post-order
     /// traversals, or a combination of the two.
     pub fn iter<'a>(&'a mut self, func: &'a ir::Function) -> DfsIter<'a> {
-        self.seen.clear();
-        self.stack.clear();
+        self.clear();
         if let Some(e) = func.layout.entry_block() {
             self.stack.push((Event::Enter, e));
         }
@@ -72,6 +71,13 @@ impl Dfs {
     /// Yields `ir::Block` items.
     pub fn post_order_iter<'a>(&'a mut self, func: &'a ir::Function) -> DfsPostOrderIter<'a> {
         DfsPostOrderIter(self.iter(func))
+    }
+
+    /// Clear this DFS, but keep its allocations for future reuse.
+    pub fn clear(&mut self) {
+        let Dfs { stack, seen } = self;
+        stack.clear();
+        seen.clear();
     }
 }
 
