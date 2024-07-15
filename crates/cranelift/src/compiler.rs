@@ -528,7 +528,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         // Now it's time to delegate to the actual builtin. Builtins are stored
         // in an array in all `VMContext`s. First load the base pointer of the
-        // array and then load the entry of the array that correspons to this
+        // array and then load the entry of the array that corresponds to this
         // builtin.
         let mem_flags = ir::MemFlags::trusted().with_readonly();
         let array_addr = builder.ins().load(

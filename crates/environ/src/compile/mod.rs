@@ -346,7 +346,7 @@ pub trait Compiler: Send + Sync {
     /// Get a flag indicating whether branch protection is enabled.
     fn is_branch_protection_enabled(&self) -> bool;
 
-    /// Returns a suitable compiler usable for component-related compliations.
+    /// Returns a suitable compiler usable for component-related compilations.
     ///
     /// Note that the `ComponentCompiler` trait can also be implemented for
     /// `Self` in which case this function would simply return `self`.

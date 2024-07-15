@@ -122,7 +122,7 @@ impl Frame {
                     )),
                     defined_locals_end,
                 ),
-                // If the resuls operand is a register, we give this register
+                // If the results operand is a register, we give this register
                 // the same treatment as all the other argument registers and
                 // spill it, therefore, we need to increase the locals size by
                 // one slot.
