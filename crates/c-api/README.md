@@ -5,13 +5,45 @@ For more information you can find the documentation for this library
 
 ## Using in a C Project
 
-To use Wasmtime from a C or C++ project, you can use Cargo to build the Wasmtime C bindings. From the root of the Wasmtime repository, run the following command:
+### Using a Pre-Built Static or Dynamic Library
+
+Each release on Wasmtime's [GitHub Releases
+page](https://github.com/bytecodealliance/wasmtime/releases) has pre-built
+binaries for both static and dynamic libraries for a variety of architectures
+and operating systems attached, as well as header files you can include.
+
+### Building Wasmtime's C API from Source
+
+To use Wasmtime from a C or C++ project, you must have
+[CMake](https://cmake.org/) and [a Rust
+toolchain](https://www.rust-lang.org/tools/install) installed.
+
+From the root of the Wasmtime repository, run the following commands:
 
 ```
-cargo build --release -p wasmtime-c-api
+$ cmake -S crates/c-api -B target/c-api
+$ cmake --build target/c-api
 ```
 
-This will create static and dynamic libraries called `libwasmtime` in the `target/release` directory.
+These commands will produce the following files:
+
+* `target/<triple>/release/libwasmtime.{a,lib}`: Static Wasmtime library. Exact
+  extension depends on your operating system. `<triple>` is your platform's
+  target triple, such as `x86_64-unknown-linux-gnu`.
+
+* `target/<triple>/release/libwasmtime.{so,dylib,dll}`: Dynamic Wasmtime
+  library. Exact extension depends on your operating system.  `<triple>` is your
+  platform's target triple, such as `x86_64-unknown-linux-gnu`.
+
+* `target/c-api/include/wasmtime/conf.h`: A header file that tells the main
+  Wasmtime header which optional features were compiled into these libraries.
+
+* `crates/c-api/html/index.html`: Doxygen documentation for the Wasmtime C API.
+
+Other header files you will want:
+
+* `crates/c-api/include/wasmtime.h`
+* `crates/c-api/include/wasmtime/*.h`
 
 ## Using in a Rust Project
 

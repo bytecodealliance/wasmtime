@@ -54,16 +54,9 @@ with `cargo run`.
 
 ## Building the Wasmtime C API
 
-To build the C API of Wasmtime you can run:
-
-```shell
-cargo build --release -p wasmtime-c-api
-```
-
-This will place the shared library inside of `target/release`. On Linux it will
-be called `libwasmtime.{a,so}`, on macOS it will be called
-`libwasmtime.{a,dylib}`, and on Windows it will be called
-`wasmtime.{lib,dll,dll.lib}`.
+See
+[`crates/c-api/README.md`](https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/README.md)
+for details.
 
 ## Building Other Wasmtime Crates
 
