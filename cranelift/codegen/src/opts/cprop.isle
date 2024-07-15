@@ -279,6 +279,7 @@
 (extern constructor u64_bswap64 u64_bswap64)
 
 ;; Constant fold float operations
+;; TODO: fmin, fmax, fcmp, fma, demote, promote, from and to ops
 (rule (simplify (fadd $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
       (subsume (f32const $F32 (f32_add lhs rhs))))
 (rule (simplify (fadd $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
