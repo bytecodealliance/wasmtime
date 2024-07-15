@@ -1,7 +1,9 @@
 # Wasmtime's C API
 
-For more information you can find the documentation for this library
-[online](https://bytecodealliance.github.io/wasmtime/c-api/).
+## API Documentation
+
+[The API documentation for the Wasmtime C library is hosted
+here.](https://bytecodealliance.github.io/wasmtime/c-api/).
 
 ## Using in a C Project
 
@@ -21,29 +23,20 @@ toolchain](https://www.rust-lang.org/tools/install) installed.
 From the root of the Wasmtime repository, run the following commands:
 
 ```
-$ cmake -S crates/c-api -B target/c-api
+$ cmake -S crates/c-api -B target/c-api --install-prefix "$(pwd)/artifacts"
 $ cmake --build target/c-api
+$ cmake --install target/c-api
 ```
 
 These commands will produce the following files:
 
-* `target/<triple>/release/libwasmtime.{a,lib}`: Static Wasmtime library. Exact
-  extension depends on your operating system. `<triple>` is your platform's
-  target triple, such as `x86_64-unknown-linux-gnu`.
+* `artifacts/lib/libwasmtime.{a,lib}`: Static Wasmtime library. Exact extension
+  depends on your operating system.
 
-* `target/<triple>/release/libwasmtime.{so,dylib,dll}`: Dynamic Wasmtime
-  library. Exact extension depends on your operating system.  `<triple>` is your
-  platform's target triple, such as `x86_64-unknown-linux-gnu`.
+* `artifacts/lib/libwasmtime.{so,dylib,dll}`: Dynamic Wasmtime library. Exact
+  extension depends on your operating system.
 
-* `target/c-api/include/wasmtime/conf.h`: A header file that tells the main
-  Wasmtime header which optional features were compiled into these libraries.
-
-* `crates/c-api/html/index.html`: Doxygen documentation for the Wasmtime C API.
-
-Other header files you will want:
-
-* `crates/c-api/include/wasmtime.h`
-* `crates/c-api/include/wasmtime/*.h`
+* `artifacts/include/**.h`: Header files for working with Wasmtime.
 
 ## Using in a Rust Project
 
