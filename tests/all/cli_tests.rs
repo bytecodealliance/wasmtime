@@ -1845,6 +1845,14 @@ stderr [1] :: after empty
 
         Ok(())
     }
+
+    #[test]
+    fn cli_argv0() -> Result<()> {
+        run_wasmtime(&["run", "--argv0=a", CLI_ARGV0, "a"])?;
+        run_wasmtime(&["run", "--argv0=b", CLI_ARGV0_COMPONENT, "b"])?;
+        run_wasmtime(&["run", "--argv0=foo.wasm", CLI_ARGV0, "foo.wasm"])?;
+        Ok(())
+    }
 }
 
 #[test]
