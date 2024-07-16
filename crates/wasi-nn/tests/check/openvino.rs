@@ -4,8 +4,12 @@ use std::fs;
 
 /// Return `Ok` if we find a working OpenVINO installation.
 pub fn is_installed() -> Result<()> {
-    match std::panic::catch_unwind(|| println!("> found openvino version: {}", openvino::version()))
-    {
+    match std::panic::catch_unwind(|| {
+        println!(
+            "> found openvino version: {}",
+            openvino::version().build_number
+        )
+    }) {
         Ok(_) => Ok(()),
         Err(e) => bail!(
             "unable to find an OpenVINO installation: {:?}",

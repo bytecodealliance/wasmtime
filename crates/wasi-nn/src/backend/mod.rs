@@ -107,6 +107,8 @@ pub enum BackendError {
     InvalidNumberOfBuilders(usize, usize),
     #[error("Not enough memory to copy tensor data of size: {0}")]
     NotEnoughMemory(usize),
+    #[error("Unsupported tensor type: {0}")]
+    UnsupportedTensorType(String),
 }
 
 /// Read a file into a byte vector.
