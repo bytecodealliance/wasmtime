@@ -66,9 +66,20 @@ impl FunctionBuilderContext {
     }
 
     fn clear(&mut self) {
-        self.ssa.clear();
-        self.status.clear();
-        self.types.clear();
+        let FunctionBuilderContext {
+            ssa,
+            status,
+            types,
+            stack_map_vars,
+            stack_map_values,
+            dfs,
+        } = self;
+        ssa.clear();
+        status.clear();
+        types.clear();
+        stack_map_values.clear();
+        stack_map_vars.clear();
+        dfs.clear();
     }
 
     fn is_empty(&self) -> bool {
