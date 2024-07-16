@@ -137,6 +137,7 @@ pub(crate) enum FloatCmpKind {
 /// Kinds of shifts in WebAssembly.The [`masm`] implementation for each ISA is
 /// responsible for emitting the correct sequence of instructions when
 /// lowering to machine code.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ShiftKind {
     /// Left shift.
     Shl,
@@ -694,8 +695,11 @@ pub(crate) trait MacroAssembler {
     /// Perform logical exclusive or operation.
     fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
-    /// Perform a shift operation.
-    /// Shift is special in that some architectures have specific expectations
+    /// Perform a shift operation between a register and an immediate.
+    fn shift_ir(&mut self, dst: Reg, imm: u64, lhs: Reg, kind: ShiftKind, size: OperandSize);
+
+    /// Perform a shift operation between two registers.
+    /// This case is special in that some architectures have specific expectations
     /// regarding the location of the instruction arguments. To free the
     /// caller from having to deal with the architecture specific constraints
     /// we give this function access to the code generation context, allowing
