@@ -29,19 +29,6 @@ impl From<OperandSize> for inst::OperandSize {
     }
 }
 
-impl Into<ALUOp> for ShiftKind {
-    fn into(self) -> ALUOp {
-        match self {
-            ShiftKind::Shl => ALUOp::Lsl,
-            ShiftKind::ShrS => ALUOp::Asr,
-            ShiftKind::ShrU => ALUOp::Lsr,
-            ShiftKind::Rotr => ALUOp::RotR,
-            // Rotl is implemented as neg+ROR.
-            ShiftKind::Rotl => unimplemented!(),
-        }
-    }
-}
-
 impl Into<ScalarSize> for OperandSize {
     fn into(self) -> ScalarSize {
         match self {

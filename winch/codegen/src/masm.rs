@@ -704,7 +704,7 @@ pub(crate) trait MacroAssembler {
     /// caller from having to deal with the architecture specific constraints
     /// we give this function access to the code generation context, allowing
     /// each implementation to decide the lowering path.
-    fn shift_rr(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize);
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize);
 
     /// Perform division operation.
     /// Division is special in that some architectures have specific

@@ -341,7 +341,7 @@ impl<'a> CodeGenContext<'a> {
             );
             self.stack.push(typed_reg.into());
         } else {
-            masm.shift_rr(self, kind, OperandSize::S32);
+            masm.shift(self, kind, OperandSize::S32);
         }
     }
 
@@ -366,7 +366,7 @@ impl<'a> CodeGenContext<'a> {
             );
             self.stack.push(typed_reg.into());
         } else {
-            masm.shift_rr(self, kind, OperandSize::S64);
+            masm.shift(self, kind, OperandSize::S64);
         };
     }
 

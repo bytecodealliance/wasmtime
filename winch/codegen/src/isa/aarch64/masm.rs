@@ -405,8 +405,7 @@ impl Masm for MacroAssembler {
         self.asm.shift_ir(imm, lhs, dst, kind, size)
     }
 
-    fn shift_rr(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
-        // Number of bits to shift must be in the CL register.
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
         let src = context.pop_to_reg(self, None);
         let dst = context.pop_to_reg(self, None);
 
