@@ -21,7 +21,7 @@ use crate::{
         MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InstOutput},
+    machinst::{ArgPair, InstOutput, IsTailCall},
 };
 use crate::{isa, isle_common_prelude_methods};
 use regalloc2::PReg;
@@ -79,7 +79,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            IsTailCall::Yes,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -108,7 +108,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            IsTailCall::Yes,
             caller_conv,
             self.backend.flags().clone(),
         );

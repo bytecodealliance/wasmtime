@@ -2,7 +2,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
-use crate::ir::{types, ExternalName, MemFlags, Opcode, Type};
+use crate::ir::{types, ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -86,8 +86,6 @@ pub struct CallInfo {
     pub defs: CallRetList,
     /// Clobbers register set.
     pub clobbers: PRegSet,
-    /// Instruction opcode.
-    pub opcode: Opcode,
     /// Caller calling convention.
     pub caller_callconv: CallConv,
     /// Callee calling convention.
@@ -110,8 +108,6 @@ pub struct CallIndInfo {
     pub defs: SmallVec<[CallRetPair; 8]>,
     /// Clobbers register set.
     pub clobbers: PRegSet,
-    /// Instruction opcode.
-    pub opcode: Opcode,
     /// Caller calling convention.
     pub caller_callconv: CallConv,
     /// Callee calling convention.
@@ -128,8 +124,6 @@ pub struct CallIndInfo {
 pub struct ReturnCallInfo {
     /// Arguments to the call instruction.
     pub uses: CallArgList,
-    /// Instruction opcode.
-    pub opcode: Opcode,
     /// The size of the new stack frame's stack arguments. This is necessary
     /// for copying the frame over our current frame. It must already be
     /// allocated on the stack.

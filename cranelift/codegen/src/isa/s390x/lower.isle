@@ -3900,7 +3900,7 @@
             (_ Unit (abi_accumulate_outgoing_args_size abi))
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
-            (_ InstOutput (side_effect (abi_call abi name uses defs (Opcode.Call)))))
+            (_ InstOutput (side_effect (abi_call abi name uses defs))))
         (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
                                          (abi_num_rets abi)) (output_builder_new))))
 
@@ -3911,7 +3911,7 @@
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
             (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
-            (_ InstOutput (side_effect (abi_call_ind abi target uses defs (Opcode.Call)))))
+            (_ InstOutput (side_effect (abi_call_ind abi target uses defs))))
         (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
                                          (abi_num_rets abi)) (output_builder_new))))
 
@@ -3922,7 +3922,7 @@
             (_ Unit (abi_accumulate_outgoing_args_size abi))
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
-            (_ InstOutput (side_effect (abi_call_ind abi target uses defs (Opcode.CallIndirect)))))
+            (_ InstOutput (side_effect (abi_call_ind abi target uses defs))))
         (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
                                          (abi_num_rets abi)) (output_builder_new))))
 

@@ -1144,9 +1144,7 @@ impl Inst {
             }
 
             &Inst::Call { ref info } => {
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
+                sink.add_call_site();
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
 
                 let (stack_map, user_stack_map) = state.take_stack_map();
@@ -1189,9 +1187,7 @@ impl Inst {
                     sink.push_user_stack_map(state, offset, s);
                 }
 
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
+                sink.add_call_site();
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {
@@ -1207,7 +1203,7 @@ impl Inst {
             } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
-                sink.add_call_site(ir::Opcode::ReturnCall);
+                sink.add_call_site();
                 sink.add_reloc(Reloc::RiscvCallPlt, &**callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
@@ -2037,7 +2033,6 @@ impl Inst {
                         dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
                         uses: smallvec![],
                         defs: smallvec![],
-                        opcode: crate::ir::Opcode::TlsValue,
                         caller_callconv: CallConv::SystemV,
                         callee_callconv: CallConv::SystemV,
                         callee_pop_size: 0,

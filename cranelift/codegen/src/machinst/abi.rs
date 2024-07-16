@@ -546,7 +546,6 @@ pub trait ABIMachineSpec {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
@@ -888,39 +887,6 @@ impl SigSet {
     /// Get information specifying how to pass one return value.
     pub fn get_ret(&self, sig: Sig, idx: usize) -> ABIArg {
         self.rets(sig)[idx].clone()
-    }
-
-    /// Return all clobbers for the callsite.
-    pub fn call_clobbers<M: ABIMachineSpec>(&self, sig: Sig) -> PRegSet {
-        let sig_data = &self.sigs[sig];
-        // Get clobbers: all caller-saves. These may include return value
-        // regs, which we will remove from the clobber set below.
-        let mut clobbers = M::get_regs_clobbered_by_call(sig_data.call_conv);
-
-        // Remove retval regs from clobbers. Skip StructRets: these
-        // are not, semantically, returns at the CLIF level, so we
-        // treat such a value as a clobber instead.
-        for ret in self.rets(sig) {
-            if let &ABIArg::Slots {
-                ref slots, purpose, ..
-            } = ret
-            {
-                if purpose == ir::ArgumentPurpose::StructReturn {
-                    continue;
-                }
-                for slot in slots {
-                    match slot {
-                        &ABIArgSlot::Reg { reg, .. } => {
-                            crate::trace!("call_clobbers: retval reg {:?}", reg);
-                            clobbers.remove(PReg::from(reg));
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        clobbers
     }
 
     /// Get the number of arguments expected.
@@ -1956,6 +1922,11 @@ pub struct CallRetPair {
 pub type CallArgList = SmallVec<[CallArgPair; 8]>;
 pub type CallRetList = SmallVec<[CallRetPair; 8]>;
 
+pub enum IsTailCall {
+    Yes,
+    No,
+}
+
 /// ABI object for a callsite.
 pub struct CallSite<M: ABIMachineSpec> {
     /// The called function's signature.
@@ -1965,12 +1936,9 @@ pub struct CallSite<M: ABIMachineSpec> {
     uses: CallArgList,
     /// All defs for the callsite, i.e., return values.
     defs: CallRetList,
-    /// Caller-save clobbers.
-    clobbers: PRegSet,
     /// Call destination.
     dest: CallDest,
-    /// Actual call opcode; used to distinguish various types of calls.
-    opcode: ir::Opcode,
+    is_tail_call: IsTailCall,
     /// Caller's calling convention.
     caller_conv: isa::CallConv,
     /// The settings controlling this compilation.
@@ -1994,20 +1962,18 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs: &SigSet,
         sig_ref: ir::SigRef,
         extname: &ir::ExternalName,
-        opcode: ir::Opcode,
+        is_tail_call: IsTailCall,
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
     ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
-        let clobbers = sigs.call_clobbers::<M>(sig);
         CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
-            clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
-            opcode,
+            is_tail_call,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2025,14 +1991,12 @@ impl<M: ABIMachineSpec> CallSite<M> {
         flags: settings::Flags,
     ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_signature(sig);
-        let clobbers = sigs.call_clobbers::<M>(sig);
         CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
-            clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
-            opcode: ir::Opcode::Call,
+            is_tail_call: IsTailCall::No,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2045,19 +2009,17 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs: &SigSet,
         sig_ref: ir::SigRef,
         ptr: Reg,
-        opcode: ir::Opcode,
+        is_tail_call: IsTailCall,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
     ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
-        let clobbers = sigs.call_clobbers::<M>(sig);
         CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
-            clobbers,
             dest: CallDest::Reg(ptr),
-            opcode,
+            is_tail_call,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2066,10 +2028,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
     pub(crate) fn dest(&self) -> &CallDest {
         &self.dest
-    }
-
-    pub(crate) fn opcode(&self) -> ir::Opcode {
-        self.opcode
     }
 
     pub(crate) fn take_uses(self) -> CallArgList {
@@ -2081,10 +2039,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
     }
 
     pub(crate) fn is_tail_call(&self) -> bool {
-        matches!(
-            self.opcode,
-            ir::Opcode::ReturnCall | ir::Opcode::ReturnCallIndirect
-        )
+        matches!(self.is_tail_call, IsTailCall::Yes)
     }
 }
 
@@ -2382,6 +2337,18 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
         let uses = mem::take(&mut self.uses);
         let defs = mem::take(&mut self.defs);
+        let clobbers = {
+            // Get clobbers: all caller-saves. These may include return value
+            // regs, which we will remove from the clobber set below.
+            let mut clobbers = <M>::get_regs_clobbered_by_call(ctx.sigs()[self.sig].call_conv);
+
+            // Remove retval regs from clobbers.
+            for def in &defs {
+                clobbers.remove(PReg::from(def.preg.to_real_reg().unwrap()));
+            }
+
+            clobbers
+        };
 
         let sig = &ctx.sigs()[self.sig];
         let callee_pop_size = if sig.call_conv() == isa::CallConv::Tail {
@@ -2413,8 +2380,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             &self.dest,
             uses,
             defs,
-            self.clobbers,
-            self.opcode,
+            clobbers,
             tmp,
             call_conv,
             self.caller_conv,
