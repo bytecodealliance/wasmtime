@@ -2094,6 +2094,11 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs.num_args(self.sig)
     }
 
+    /// Get the number of return values expected.
+    pub fn num_rets(&self, sigs: &SigSet) -> usize {
+        sigs.num_rets(self.sig)
+    }
+
     /// Emit a copy of a large argument into its associated stack buffer, if
     /// any.  We must be careful to perform all these copies (as necessary)
     /// before setting up the argument registers, since we may have to invoke
@@ -2297,25 +2302,28 @@ impl<M: ABIMachineSpec> CallSite<M> {
     /// Define a return value after the call returns.
     pub fn gen_retval(
         &mut self,
-        ctx: &Lower<M::I>,
+        ctx: &mut Lower<M::I>,
         idx: usize,
-        into_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<M::I> {
+    ) -> (SmallInstVec<M::I>, ValueRegs<Reg>) {
         let mut insts = smallvec![];
-        match &ctx.sigs().rets(self.sig)[idx] {
-            &ABIArg::Slots { ref slots, .. } => {
-                assert_eq!(into_regs.len(), slots.len());
-                for (slot, into_reg) in slots.iter().zip(into_regs.regs().iter()) {
+        let mut into_regs: SmallVec<[Reg; 2]> = smallvec![];
+        let ret = ctx.sigs().rets(self.sig)[idx].clone();
+        match ret {
+            ABIArg::Slots { ref slots, .. } => {
+                for slot in slots {
                     match slot {
                         // Extension mode doesn't matter because we're copying out, not in,
                         // and we ignore high bits in our own registers by convention.
-                        &ABIArgSlot::Reg { reg, .. } => {
+                        &ABIArgSlot::Reg { reg, ty, .. } => {
+                            let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
                             self.defs.push(CallRetPair {
-                                vreg: *into_reg,
+                                vreg: into_reg,
                                 preg: reg.into(),
                             });
+                            into_regs.push(into_reg.to_reg());
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
+                            let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
                             let sig_data = &ctx.sigs()[self.sig];
                             // The outgoing argument area must always be restored after a call,
                             // ensuring that the return values will be in a consistent place after
@@ -2323,21 +2331,28 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             let ret_area_base = sig_data.sized_stack_arg_space();
                             insts.push(M::gen_load_stack(
                                 StackAMode::OutgoingArg(offset + ret_area_base),
-                                *into_reg,
+                                into_reg,
                                 ty,
                             ));
+                            into_regs.push(into_reg.to_reg());
                         }
                     }
                 }
             }
-            &ABIArg::StructArg { .. } => {
+            ABIArg::StructArg { .. } => {
                 panic!("StructArg not supported in return position");
             }
-            &ABIArg::ImplicitPtrArg { .. } => {
+            ABIArg::ImplicitPtrArg { .. } => {
                 panic!("ImplicitPtrArg not supported in return position");
             }
         }
-        insts
+
+        let value_regs = match *into_regs {
+            [a] => ValueRegs::one(a),
+            [a, b] => ValueRegs::two(a, b),
+            _ => panic!("Expected to see one or two slots only from {:?}", ret),
+        };
+        (insts, value_regs)
     }
 
     /// Emit the call itself.
@@ -2365,10 +2380,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
             self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg()));
         }
 
-        let (uses, defs) = (
-            mem::replace(&mut self.uses, Default::default()),
-            mem::replace(&mut self.defs, Default::default()),
-        );
+        let uses = mem::take(&mut self.uses);
+        let defs = mem::take(&mut self.defs);
 
         let sig = &ctx.sigs()[self.sig];
         let callee_pop_size = if sig.call_conv() == isa::CallConv::Tail {

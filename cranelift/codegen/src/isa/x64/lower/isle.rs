@@ -22,8 +22,8 @@ use crate::{
         inst::{args::*, regs, CallInfo, ReturnCallInfo},
     },
     machinst::{
-        isle::*, valueregs, ArgPair, InsnInput, InstOutput, MachAtomicRmwOp, MachInst,
-        VCodeConstant, VCodeConstantData,
+        isle::*, ArgPair, InsnInput, InstOutput, MachAtomicRmwOp, MachInst, VCodeConstant,
+        VCodeConstantData,
     },
 };
 use alloc::vec::Vec;
@@ -689,57 +689,48 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
-        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
-
-        emit_vm_call(
+        let outputs = emit_vm_call(
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
             libcall.clone(),
             &[a],
-            &[output_reg],
         )
         .expect("Failed to emit LibCall");
 
-        output_reg.to_reg()
+        debug_assert_eq!(outputs.len(), 1);
+
+        outputs[0]
     }
 
     fn libcall_2(&mut self, libcall: &LibCall, a: Reg, b: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
-        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
-
-        emit_vm_call(
+        let outputs = emit_vm_call(
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
             libcall.clone(),
             &[a, b],
-            &[output_reg],
         )
         .expect("Failed to emit LibCall");
 
-        output_reg.to_reg()
+        debug_assert_eq!(outputs.len(), 1);
+
+        outputs[0]
     }
 
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
-        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
-
-        emit_vm_call(
+        let outputs = emit_vm_call(
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
             libcall.clone(),
             &[a, b, c],
-            &[output_reg],
         )
         .expect("Failed to emit LibCall");
 
-        output_reg.to_reg()
+        debug_assert_eq!(outputs.len(), 1);
+
+        outputs[0]
     }
 
     #[inline]
@@ -1005,8 +996,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
-    isle_prelude_method_helpers!(X64CallSite);
-
     fn load_xmm_unaligned(&mut self, addr: SyntheticAmode) -> Xmm {
         let tmp = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
         self.lower_ctx.emit(MInst::XmmUnaryRmRUnaligned {
