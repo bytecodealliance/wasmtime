@@ -392,10 +392,18 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
                         WasmCompositeType::Struct(_) => WasmHeapType::ConcreteStruct(index),
                     }
                 } else if let Some((wasmparser_types, _)) = self.rec_group_context.as_ref() {
-                    match &wasmparser_types[id].composite_type {
-                        wasmparser::CompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
-                        wasmparser::CompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
-                        wasmparser::CompositeType::Struct(_) => WasmHeapType::ConcreteStruct(index),
+                    let wasmparser_ty = &wasmparser_types[id].composite_type;
+                    assert!(!wasmparser_ty.shared);
+                    match &wasmparser_ty.inner {
+                        wasmparser::CompositeInnerType::Array(_) => {
+                            WasmHeapType::ConcreteArray(index)
+                        }
+                        wasmparser::CompositeInnerType::Func(_) => {
+                            WasmHeapType::ConcreteFunc(index)
+                        }
+                        wasmparser::CompositeInnerType::Struct(_) => {
+                            WasmHeapType::ConcreteStruct(index)
+                        }
                     }
                 } else {
                     panic!("forward reference to type outside of rec group?")
@@ -424,10 +432,18 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
                         .rec_group_elements(*rec_group)
                         .nth(rec_group_index)
                         .unwrap();
-                    match &parser_types[id].composite_type {
-                        wasmparser::CompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
-                        wasmparser::CompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
-                        wasmparser::CompositeType::Struct(_) => WasmHeapType::ConcreteStruct(index),
+                    let wasmparser_ty = &parser_types[id].composite_type;
+                    assert!(!wasmparser_ty.shared);
+                    match &wasmparser_ty.inner {
+                        wasmparser::CompositeInnerType::Array(_) => {
+                            WasmHeapType::ConcreteArray(index)
+                        }
+                        wasmparser::CompositeInnerType::Func(_) => {
+                            WasmHeapType::ConcreteFunc(index)
+                        }
+                        wasmparser::CompositeInnerType::Struct(_) => {
+                            WasmHeapType::ConcreteStruct(index)
+                        }
                     }
                 } else {
                     panic!("forward reference to type outside of rec group?")

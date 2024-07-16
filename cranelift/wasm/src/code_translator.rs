@@ -2551,7 +2551,34 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::GlobalAtomicRmwXor { .. }
         | Operator::GlobalAtomicRmwAnd { .. }
         | Operator::GlobalAtomicRmwXchg { .. }
-        | Operator::GlobalAtomicRmwCmpxchg { .. } => {
+        | Operator::GlobalAtomicRmwCmpxchg { .. }
+        | Operator::TableAtomicGet { .. }
+        | Operator::TableAtomicSet { .. }
+        | Operator::TableAtomicRmwXchg { .. }
+        | Operator::TableAtomicRmwCmpxchg { .. }
+        | Operator::StructAtomicGet { .. }
+        | Operator::StructAtomicGetS { .. }
+        | Operator::StructAtomicGetU { .. }
+        | Operator::StructAtomicSet { .. }
+        | Operator::StructAtomicRmwAdd { .. }
+        | Operator::StructAtomicRmwSub { .. }
+        | Operator::StructAtomicRmwOr { .. }
+        | Operator::StructAtomicRmwXor { .. }
+        | Operator::StructAtomicRmwAnd { .. }
+        | Operator::StructAtomicRmwXchg { .. }
+        | Operator::StructAtomicRmwCmpxchg { .. }
+        | Operator::ArrayAtomicGet { .. }
+        | Operator::ArrayAtomicGetS { .. }
+        | Operator::ArrayAtomicGetU { .. }
+        | Operator::ArrayAtomicSet { .. }
+        | Operator::ArrayAtomicRmwAdd { .. }
+        | Operator::ArrayAtomicRmwSub { .. }
+        | Operator::ArrayAtomicRmwOr { .. }
+        | Operator::ArrayAtomicRmwXor { .. }
+        | Operator::ArrayAtomicRmwAnd { .. }
+        | Operator::ArrayAtomicRmwXchg { .. }
+        | Operator::ArrayAtomicRmwCmpxchg { .. }
+        | Operator::RefI31Shared { .. } => {
             unimplemented!("shared-everything-threads not yet implemented")
         }
     };

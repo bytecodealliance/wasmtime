@@ -996,6 +996,17 @@ impl Config {
         self
     }
 
+    /// Configures whether components support more than one return value for functions.
+    ///
+    /// This is part of the transition plan in
+    /// https://github.com/WebAssembly/component-model/pull/368.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_multiple_returns(&mut self, enable: bool) -> &mut Self {
+        self.features
+            .set(WasmFeatures::COMPONENT_MODEL_MULTIPLE_RETURNS, enable);
+        self
+    }
+
     /// Configures which compilation strategy will be used for wasm modules.
     ///
     /// This method can be used to configure which compiler is used for wasm

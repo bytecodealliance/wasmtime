@@ -3235,9 +3235,9 @@ checksum = "ca6ad05a4870b2bf5fe995117d3728437bd27d7cd5f06f13c17443ef369775a1"
 
 [[package]]
 name = "wasm-encoder"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "501940df4418b8929eb6d52f1aade1fdd15a5b86c92453cb696e3c906bd3fc33"
+checksum = "ff694f02a8d7a50b6922b197ae03883fbf18cdb2ae9fbee7b6148456f5f44041"
 dependencies = [
  "leb128",
  "wasmparser",
@@ -3245,9 +3245,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-metadata"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a1849fac257fd76c43268555e73d74848c8dff23975c238c2cbad61cffe5045"
+checksum = "865c5bff5f7a3781b5f92ea4cfa99bb38267da097441cdb09080de1568ef3075"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
@@ -3261,9 +3261,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-mutate"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff58202fe6f3750ba930d160a2451087973d902e09a2632b9a78ab7c86150a59"
+checksum = "bf9fb8fb035aaada5f46c4eac0fb93a493143708815f28a0a008e3c92074f270"
 dependencies = [
  "egg",
  "log",
@@ -3275,9 +3275,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-smith"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8185faf41a5630ec7cf301fa1f63bb757f4c267a057f8b6b56bde0cba1144c1"
+checksum = "ffe5856b6e06e8d37dad11167111e49339a5b017ab1399f7cb708fcb4c4550d0"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -3329,9 +3329,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d28bc49ba1e5c5b61ffa7a2eace10820443c4b7d1c0b144109261d14570fdf8"
+checksum = "5309c1090e3e84dad0d382f42064e9933fdaedb87e468cc239f0eabea73ddcb6"
 dependencies = [
  "ahash",
  "bitflags 2.4.1",
@@ -3352,9 +3352,9 @@ dependencies = [
 
 [[package]]
 name = "wasmprinter"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfac65326cc561112af88c3028f6dfdb140acff67ede33a8e86be2dc6b8956f7"
+checksum = "58d4f2b3f7bd2ba10f99e03f885ff90d5db3455e163bccecebbbf60406bd8980"
 dependencies = [
  "anyhow",
  "termcolor",
@@ -3559,7 +3559,7 @@ dependencies = [
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
- "wast 212.0.0",
+ "wast 214.0.0",
  "wat",
  "windows-sys 0.52.0",
  "wit-component",
@@ -3904,7 +3904,7 @@ dependencies = [
  "anyhow",
  "log",
  "wasmtime",
- "wast 212.0.0",
+ "wast 214.0.0",
 ]
 
 [[package]]
@@ -3947,9 +3947,9 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "212.0.0"
+version = "214.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4606a05fb0aae5d11dd7d8280a640d88a63ee019360ba9be552da3d294b8d1f5"
+checksum = "694bcdb24c49c8709bd8713768b71301a11e823923eee355d530f1d8d0a7f8e9"
 dependencies = [
  "bumpalo",
  "leb128",
@@ -3960,11 +3960,11 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.212.0"
+version = "1.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c74ca7f93f11a5d6eed8499f2a8daaad6e225cab0151bc25a091fff3b987532f"
+checksum = "347249eb56773fa728df2656cfe3a8c19437ded61a922a0b5e0839d9790e278e"
 dependencies = [
- "wast 212.0.0",
+ "wast 214.0.0",
 ]
 
 [[package]]
@@ -4271,9 +4271,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fabce76bbb8938536c437da0c3e1d4dda9065453f72a68f797c0cb3d67356a28"
+checksum = "89178260ed223de8a5a81f9cff961481dfbbd55b25c17e4dd0b4c8e4b8ae646d"
 dependencies = [
  "wit-bindgen-rt",
  "wit-bindgen-rust-macro",
@@ -4281,9 +4281,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen-core"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b43fbdd3497c471bbfb6973b1fb9ffe6949f158248cb43171d6f1cf3de7eaa3"
+checksum = "5e3fd9b11c16b9888c1bd159130b1b3487da913c45dbd34d408bfdf81f8a865a"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
@@ -4292,18 +4292,18 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen-rt"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75956ff0a04a87ca0526b07199ce3b9baee899f2e4723b5b63aa296ab172ec52"
+checksum = "d7a37bd9274cb2d4754b915d624447ec0dce9105d174361841c0826efc79ceb9"
 dependencies = [
  "bitflags 2.4.1",
 ]
 
 [[package]]
 name = "wit-bindgen-rust"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf509c4ef97b18ec0218741c8318706ac30ff16bc1731f990319a42bbbcfe8e3"
+checksum = "0f195cd3774ff22f9bbd582a4ab97667c0a47d36ed8ed0c9ed357afe811b564b"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
@@ -4317,9 +4317,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen-rust-macro"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d6f2e025e38395d71fc1bf064e581b2ad275ce322d6f8d87ddc5e76a7b8c42"
+checksum = "683e47441b5d0a82fc4304619dcc0672bc84ef47de2c85cd493c37cb29de062f"
 dependencies = [
  "anyhow",
  "prettyplease",
@@ -4332,9 +4332,9 @@ dependencies = [
 
 [[package]]
 name = "wit-component"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ed5b0f9fc3d6424787d2a49e1142bf954ae4f26ee891992c144f0cfd68c4b7f"
+checksum = "fd9fd46f0e783bf80f1ab7291f9d442fa5553ff0e96cdb71964bd8859b734b55"
 dependencies = [
  "anyhow",
  "bitflags 2.4.1",
@@ -4351,9 +4351,9 @@ dependencies = [
 
 [[package]]
 name = "wit-parser"
-version = "0.212.0"
+version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceeb0424aa8679f3fcf2d6e3cfa381f3d6fa6179976a2c05a6249dd2bb426716"
+checksum = "681d526d6ea42e28f9afe9eae2b50e0b0a627aef8822c75eb04078db84d03e57"
 dependencies = [
  "anyhow",
  "id-arena",

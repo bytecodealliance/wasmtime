@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap};
+use wasmtime::{Config, Engine, Store, StoreContextMut, Trap};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
@@ -83,7 +83,9 @@ fn typecheck() -> Result<()> {
         )
     "#;
 
-    let engine = super::engine();
+    let mut config = Config::new();
+    config.wasm_component_model_multiple_returns(true);
+    let engine = Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
@@ -874,8 +876,7 @@ fn many_parameters() -> Result<()> {
                 (param "pc" (list char))     ;; offset 56, size 8
                 (param "pd" (list string))   ;; offset 64, size 8
 
-                (result "all-memory" (list u8))
-                (result "pointer" u32)
+                (result (tuple (list u8) u32))
             ))
             (func (export "many-param") (type $t)
                 (canon lift
@@ -905,7 +906,7 @@ fn many_parameters() -> Result<()> {
         &[bool],
         &[char],
         &[&str],
-    ), (WasmList<u8>, u32)>(&mut store, "many-param")?;
+    ), ((WasmList<u8>, u32),)>(&mut store, "many-param")?;
 
     let input = (
         -100,
@@ -929,7 +930,7 @@ fn many_parameters() -> Result<()> {
         ]
         .as_slice(),
     );
-    let (memory, pointer) = func.call(&mut store, input)?;
+    let ((memory, pointer),) = func.call(&mut store, input)?;
     let memory = memory.as_le_slice(&store);
 
     let mut actual = &memory[pointer as usize..][..72];
@@ -1246,7 +1247,7 @@ fn char_bool_memory() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "ret-tuple") (param "a" u32) (param "b" u32) (result "c" bool) (result "d" char)
+            (func (export "ret-tuple") (param "a" u32) (param "b" u32) (result (tuple bool char))
                 (canon lift (core func $i "ret-tuple")
                     (memory $i "memory")
                     (realloc (func $i "realloc")))
@@ -1258,17 +1259,17 @@ fn char_bool_memory() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(u32, u32), (bool, char)>(&mut store, "ret-tuple")?;
+    let func = instance.get_typed_func::<(u32, u32), ((bool, char),)>(&mut store, "ret-tuple")?;
 
-    let ret = func.call(&mut store, (0, 'a' as u32))?;
+    let (ret,) = func.call(&mut store, (0, 'a' as u32))?;
     assert_eq!(ret, (false, 'a'));
     func.post_return(&mut store)?;
 
-    let ret = func.call(&mut store, (1, '🍰' as u32))?;
+    let (ret,) = func.call(&mut store, (1, '🍰' as u32))?;
     assert_eq!(ret, (true, '🍰'));
     func.post_return(&mut store)?;
 
-    let ret = func.call(&mut store, (2, 'a' as u32))?;
+    let (ret,) = func.call(&mut store, (2, 'a' as u32))?;
     assert_eq!(ret, (true, 'a'));
     func.post_return(&mut store)?;
 
@@ -1441,13 +1442,13 @@ fn option() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "option-u8-to-tuple") (param "a" (option u8)) (result "a" u32) (result "b" u32)
+            (func (export "option-u8-to-tuple") (param "a" (option u8)) (result (tuple u32 u32))
                 (canon lift (core func $i "pass1") (memory $i "memory"))
             )
-            (func (export "option-u32-to-tuple") (param "a" (option u32)) (result "a" u32) (result "b" u32)
+            (func (export "option-u32-to-tuple") (param "a" (option u32)) (result (tuple u32 u32))
                 (canon lift (core func $i "pass1") (memory $i "memory"))
             )
-            (func (export "option-string-to-tuple") (param "a" (option string)) (result "a" u32) (result "b" string)
+            (func (export "option-string-to-tuple") (param "a" (option string)) (result (tuple u32 string))
                 (canon lift
                     (core func $i "pass2")
                     (memory $i "memory")
@@ -1479,38 +1480,43 @@ fn option() -> Result<()> {
     let linker = Linker::new(&engine);
     let instance = linker.instantiate(&mut store, &component)?;
 
-    let option_u8_to_tuple =
-        instance.get_typed_func::<(Option<u8>,), (u32, u32)>(&mut store, "option-u8-to-tuple")?;
-    assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, (0, 0));
+    let option_u8_to_tuple = instance
+        .get_typed_func::<(Option<u8>,), ((u32, u32),)>(&mut store, "option-u8-to-tuple")?;
+    assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, ((0, 0),));
     option_u8_to_tuple.post_return(&mut store)?;
-    assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, (1, 0));
+    assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
     option_u8_to_tuple.post_return(&mut store)?;
-    assert_eq!(option_u8_to_tuple.call(&mut store, (Some(100),))?, (1, 100));
+    assert_eq!(
+        option_u8_to_tuple.call(&mut store, (Some(100),))?,
+        ((1, 100),)
+    );
     option_u8_to_tuple.post_return(&mut store)?;
 
-    let option_u32_to_tuple =
-        instance.get_typed_func::<(Option<u32>,), (u32, u32)>(&mut store, "option-u32-to-tuple")?;
-    assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, (0, 0));
+    let option_u32_to_tuple = instance
+        .get_typed_func::<(Option<u32>,), ((u32, u32),)>(&mut store, "option-u32-to-tuple")?;
+    assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, ((0, 0),));
     option_u32_to_tuple.post_return(&mut store)?;
-    assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, (1, 0));
+    assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
     option_u32_to_tuple.post_return(&mut store)?;
     assert_eq!(
         option_u32_to_tuple.call(&mut store, (Some(100),))?,
-        (1, 100)
+        ((1, 100),)
     );
     option_u32_to_tuple.post_return(&mut store)?;
 
-    let option_string_to_tuple = instance
-        .get_typed_func::<(Option<&str>,), (u32, WasmStr)>(&mut store, "option-string-to-tuple")?;
-    let (a, b) = option_string_to_tuple.call(&mut store, (None,))?;
+    let option_string_to_tuple = instance.get_typed_func::<(Option<&str>,), ((u32, WasmStr),)>(
+        &mut store,
+        "option-string-to-tuple",
+    )?;
+    let ((a, b),) = option_string_to_tuple.call(&mut store, (None,))?;
     assert_eq!(a, 0);
     assert_eq!(b.to_str(&store)?, "");
     option_string_to_tuple.post_return(&mut store)?;
-    let (a, b) = option_string_to_tuple.call(&mut store, (Some(""),))?;
+    let ((a, b),) = option_string_to_tuple.call(&mut store, (Some(""),))?;
     assert_eq!(a, 1);
     assert_eq!(b.to_str(&store)?, "");
     option_string_to_tuple.post_return(&mut store)?;
-    let (a, b) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
+    let ((a, b),) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
     assert_eq!(a, 1);
     assert_eq!(b.to_str(&store)?, "hello");
     option_string_to_tuple.post_return(&mut store)?;
@@ -1613,11 +1619,11 @@ fn expected() -> Result<()> {
             (func (export "take-expected-unit") (param "a" (result)) (result u32)
                 (canon lift (core func $i "pass0"))
             )
-            (func (export "take-expected-u8-f32") (param "a" (result u8 (error float32))) (result "a" u32) (result "b" u32)
+            (func (export "take-expected-u8-f32") (param "a" (result u8 (error float32))) (result (tuple u32 u32))
                 (canon lift (core func $i "pass1") (memory $i "memory"))
             )
             (type $list (list u8))
-            (func (export "take-expected-string") (param "a" (result string (error $list))) (result "a" u32) (result "b" string)
+            (func (export "take-expected-string") (param "a" (result string (error $list))) (result (tuple u32 string))
                 (canon lift
                     (core func $i "pass2")
                     (memory $i "memory")
@@ -1650,24 +1656,25 @@ fn expected() -> Result<()> {
     take_expected_unit.post_return(&mut store)?;
 
     let take_expected_u8_f32 = instance
-        .get_typed_func::<(Result<u8, f32>,), (u32, u32)>(&mut store, "take-expected-u8-f32")?;
-    assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, (0, 1));
+        .get_typed_func::<(Result<u8, f32>,), ((u32, u32),)>(&mut store, "take-expected-u8-f32")?;
+    assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, ((0, 1),));
     take_expected_u8_f32.post_return(&mut store)?;
     assert_eq!(
         take_expected_u8_f32.call(&mut store, (Err(2.0),))?,
-        (1, 2.0f32.to_bits())
+        ((1, 2.0f32.to_bits()),)
     );
     take_expected_u8_f32.post_return(&mut store)?;
 
-    let take_expected_string = instance.get_typed_func::<(Result<&str, &[u8]>,), (u32, WasmStr)>(
-        &mut store,
-        "take-expected-string",
-    )?;
-    let (a, b) = take_expected_string.call(&mut store, (Ok("hello"),))?;
+    let take_expected_string = instance
+        .get_typed_func::<(Result<&str, &[u8]>,), ((u32, WasmStr),)>(
+            &mut store,
+            "take-expected-string",
+        )?;
+    let ((a, b),) = take_expected_string.call(&mut store, (Ok("hello"),))?;
     assert_eq!(a, 0);
     assert_eq!(b.to_str(&store)?, "hello");
     take_expected_string.post_return(&mut store)?;
-    let (a, b) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
+    let ((a, b),) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
     assert_eq!(a, 1);
     assert_eq!(b.to_str(&store)?, "goodbye");
     take_expected_string.post_return(&mut store)?;
@@ -1746,9 +1753,7 @@ fn fancy_list() -> Result<()> {
             (type $input (list (tuple $a $b)))
             (func (export "take")
                 (param "a" $input)
-                (result "ptr" u32)
-                (result "len" u32)
-                (result "list" (list u8))
+                (result (tuple u32 u32 (list u8)))
                 (canon lift
                     (core func $i "take")
                     (memory $i "memory")
@@ -1764,7 +1769,7 @@ fn fancy_list() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     let func = instance
-        .get_typed_func::<(&[(Option<u8>, Result<(), &str>)],), (u32, u32, WasmList<u8>)>(
+        .get_typed_func::<(&[(Option<u8>, Result<(), &str>)],), ((u32, u32, WasmList<u8>),)>(
             &mut store, "take",
         )?;
 
@@ -1773,7 +1778,7 @@ fn fancy_list() -> Result<()> {
         (Some(2), Err("hello there")),
         (Some(200), Err("general kenobi")),
     ];
-    let (ptr, len, list) = func.call(&mut store, (&input,))?;
+    let ((ptr, len, list),) = func.call(&mut store, (&input,))?;
     let memory = list.as_le_slice(&store);
     let ptr = usize::try_from(ptr).unwrap();
     let len = usize::try_from(len).unwrap();
