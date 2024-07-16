@@ -86,6 +86,7 @@ impl TableOps {
             minimum: self.table_size as u64,
             maximum: None,
             table64: false,
+            shared: false,
         });
 
         // Define our globals.
