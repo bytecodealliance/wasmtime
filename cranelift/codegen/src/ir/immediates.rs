@@ -902,17 +902,21 @@ impl Ieee32 {
 
     /// Computes the absolute value of self.
     pub fn abs(self) -> Self {
-        Self::with_float(self.as_f32().abs())
+        Self(self.0 & !(1u32 << 31))
     }
 
     /// Returns a number composed of the magnitude of self and the sign of sign.
     pub fn copysign(self, sign: Self) -> Self {
-        Self::with_float(self.as_f32().copysign(sign.as_f32()))
+        if self.is_negative() == sign.is_negative() {
+            self
+        } else {
+            self.neg()
+        }
     }
 
     /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
     pub fn is_negative(&self) -> bool {
-        self.as_f32().is_sign_negative()
+        self.0 & (1 << 31) != 0
     }
 
     /// Returns true if self is positive or negative zero
@@ -992,7 +996,7 @@ impl Neg for Ieee32 {
     type Output = Ieee32;
 
     fn neg(self) -> Self::Output {
-        Self::with_float(self.as_f32().neg())
+        Self(self.0 ^ (1 << 31))
     }
 }
 
@@ -1120,17 +1124,21 @@ impl Ieee64 {
 
     /// Computes the absolute value of self.
     pub fn abs(self) -> Self {
-        Self::with_float(self.as_f64().abs())
+        Self(self.0 & !(1u64 << 63))
     }
 
     /// Returns a number composed of the magnitude of self and the sign of sign.
     pub fn copysign(self, sign: Self) -> Self {
-        Self::with_float(self.as_f64().copysign(sign.as_f64()))
+        if self.is_negative() == sign.is_negative() {
+            self
+        } else {
+            self.neg()
+        }
     }
 
     /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
     pub fn is_negative(&self) -> bool {
-        self.as_f64().is_sign_negative()
+        self.0 & (1 << 63) != 0
     }
 
     /// Returns true if self is positive or negative zero
@@ -1216,7 +1224,7 @@ impl Neg for Ieee64 {
     type Output = Ieee64;
 
     fn neg(self) -> Self::Output {
-        Self::with_float(self.as_f64().neg())
+        Self(self.0 ^ (1 << 63))
     }
 }
 
