@@ -13,7 +13,7 @@ use crate::backend::{
 use crate::wit::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use std::{fs::File, io::Read, mem::size_of, path::Path};
-use windows::core::{ComInterface, HSTRING};
+use windows::core::{ComInterface, Error, IInspectable, HSTRING};
 use windows::Foundation::Collections::IVectorView;
 use windows::Storage::Streams::{
     DataWriter, InMemoryRandomAccessStream, RandomAccessStreamReference,
@@ -21,7 +21,7 @@ use windows::Storage::Streams::{
 use windows::AI::MachineLearning::{
     ILearningModelFeatureDescriptor, LearningModel, LearningModelBinding, LearningModelDevice,
     LearningModelDeviceKind, LearningModelEvaluationResult, LearningModelSession,
-    TensorFeatureDescriptor, TensorFloat,
+    TensorFeatureDescriptor, TensorFloat, TensorFloat16Bit, TensorInt64Bit, TensorKind,
 };
 
 #[derive(Default)]
@@ -136,32 +136,15 @@ impl WinMLExecutionContext {
 
 impl BackendExecutionContext for WinMLExecutionContext {
     fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError> {
+        // TODO: Clear previous bindings when needed.
+
         let input_features = self.session.Model()?.InputFeatures()?;
         let index = self.find(id, &input_features)?;
         let input = input_features.GetAt(index)?;
 
-        // TODO: Support other tensor types. Only FP32 is supported right now.
-        match tensor.ty {
-            crate::wit::types::TensorType::Fp32 => {}
-            _ => unimplemented!(),
-        }
-
-        // TODO: this is quite unsafe and probably incorrect--will the slice
-        // still be around by the time the binding is used?!
-        let data = unsafe {
-            std::slice::from_raw_parts(
-                tensor.data.as_ptr() as *const f32,
-                tensor.data.len() / size_of::<f32>(),
-            )
-        };
-
-        self.binding.Bind(
-            &input.Name()?,
-            &TensorFloat::CreateFromArray(
-                &input.cast::<TensorFeatureDescriptor>()?.Shape()?,
-                data,
-            )?,
-        )?;
+        let inpsectable =
+            to_inspectable(tensor, input.cast::<TensorFeatureDescriptor>()?.Shape()?)?;
+        self.binding.Bind(&input.Name()?, &inpsectable)?;
 
         Ok(())
     }
@@ -175,23 +158,19 @@ impl BackendExecutionContext for WinMLExecutionContext {
         if let Some(result) = &self.result {
             let output_features = self.session.Model()?.OutputFeatures()?;
             let index = self.find(id, &output_features)?;
-            let output = output_features.GetAt(index)?;
-            // TODO: this only handles FP32!
-            let tensor = result
-                .Outputs()?
-                .Lookup(&output.Name()?)?
-                .cast::<TensorFloat>()?;
-            let dimensions = dimensions_as_u32(&tensor.Shape()?)?;
-            let view = tensor.GetAsVectorView()?;
-            let mut data = Vec::with_capacity(view.Size()? as usize * size_of::<f32>());
-            for f in view.into_iter() {
-                data.extend(f.to_le_bytes());
-            }
-            Ok(Tensor {
-                ty: TensorType::Fp32,
-                dimensions,
-                data,
-            })
+            let output_feature = output_features.GetAt(index)?;
+            let tensor_kind = match output_feature.Kind()? {
+                windows::AI::MachineLearning::LearningModelFeatureKind::Tensor => output_feature
+                    .cast::<TensorFeatureDescriptor>()?
+                    .TensorKind()?,
+                _ => unimplemented!(),
+            };
+            // TODO: this only handles FP16, FP32 and I64!
+            let tensor = to_tensor(
+                result.Outputs()?.Lookup(&output_feature.Name()?)?,
+                tensor_kind,
+            );
+            tensor
         } else {
             return Err(BackendError::BackendAccess(anyhow::Error::msg(
                 "Output is not ready.",
@@ -225,4 +204,181 @@ fn convert_i64(i: i64) -> Result<u32, BackendError> {
     u32::try_from(i).map_err(|d| -> BackendError {
         anyhow::anyhow!("unable to convert dimension to u32: {d}").into()
     })
+}
+
+// Convert from wasi-nn tensor to WinML tensor.
+fn to_inspectable(tensor: &Tensor, shape: IVectorView<i64>) -> Result<IInspectable, Error> {
+    match tensor.ty {
+        crate::wit::types::TensorType::Fp16 => unsafe {
+            let data = std::slice::from_raw_parts(
+                tensor.data.as_ptr() as *const f32,
+                tensor.data.len() / size_of::<f32>(),
+            );
+            TensorFloat16Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
+        },
+        crate::wit::types::TensorType::Fp32 => unsafe {
+            let data = std::slice::from_raw_parts(
+                tensor.data.as_ptr() as *const f32,
+                tensor.data.len() / size_of::<f32>(),
+            );
+            TensorFloat::CreateFromArray(&shape, data)?.cast::<IInspectable>()
+        },
+        crate::wit::types::TensorType::I64 => unsafe {
+            let data = std::slice::from_raw_parts(
+                tensor.data.as_ptr() as *const i64,
+                tensor.data.len() / size_of::<i64>(),
+            );
+            TensorInt64Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
+        },
+        _ => unimplemented!(),
+    }
+}
+
+// Convert from WinML tensor to wasi-nn tensor.
+fn to_tensor(inspectable: IInspectable, tensor_kind: TensorKind) -> Result<Tensor, BackendError> {
+    let tensor = match tensor_kind {
+        TensorKind::Float16 => {
+            let output_tensor = inspectable.cast::<TensorFloat16Bit>()?;
+            let dimensions = dimensions_as_u32(&output_tensor.Shape()?)?;
+            let view = output_tensor.GetAsVectorView()?;
+            // TODO: Move to f16 when it's available in stable.
+            let mut data = Vec::with_capacity(view.Size()? as usize * size_of::<f32>());
+            for f in view.into_iter() {
+                data.extend(f.to_le_bytes());
+            }
+            Tensor {
+                ty: TensorType::Fp16,
+                dimensions,
+                data,
+            }
+        }
+        TensorKind::Float => {
+            let output_tensor = inspectable.cast::<TensorFloat>()?;
+            let dimensions = dimensions_as_u32(&output_tensor.Shape()?)?;
+            let view = output_tensor.GetAsVectorView()?;
+            let mut data = Vec::with_capacity(view.Size()? as usize * size_of::<f32>());
+            for f in view.into_iter() {
+                data.extend(f.to_le_bytes());
+            }
+            Tensor {
+                ty: TensorType::Fp32,
+                dimensions,
+                data,
+            }
+        }
+        TensorKind::Int64 => {
+            let output_tensor = inspectable.cast::<TensorInt64Bit>()?;
+            let dimensions = dimensions_as_u32(&output_tensor.Shape()?)?;
+            let view = output_tensor.GetAsVectorView()?;
+            let mut data = Vec::with_capacity(view.Size()? as usize * size_of::<i64>());
+            for f in view.into_iter() {
+                data.extend(f.to_le_bytes());
+            }
+            Tensor {
+                ty: TensorType::I64,
+                dimensions,
+                data,
+            }
+        }
+        _ => unimplemented!(),
+    };
+    Ok(tensor)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Unit tests for different data types. Convert from wasi-nn tensor to WinML tensor and back.
+    #[test]
+    fn fp16() {
+        let data = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let mut buffer = Vec::with_capacity(data.len() * size_of::<f32>());
+        for f in &data {
+            buffer.extend(f.to_ne_bytes());
+        }
+        let buffer_copy = buffer.clone();
+        let tensor = Tensor {
+            ty: TensorType::Fp16,
+            dimensions: vec![2, 3],
+            data: buffer_copy,
+        };
+        let shape = IVectorView::<i64>::try_from(vec![2i64, 3]).unwrap();
+        let inspectable = to_inspectable(&tensor, shape);
+        assert!(inspectable.is_ok());
+        let winml_tensor = inspectable
+            .as_ref()
+            .unwrap()
+            .cast::<TensorFloat16Bit>()
+            .unwrap();
+        let view = winml_tensor.GetAsVectorView().unwrap();
+        assert_eq!(view.into_iter().collect::<Vec<f32>>(), data);
+        // Convert back.
+        let t = to_tensor(inspectable.unwrap(), TensorKind::Float16);
+        assert!(t.as_ref().is_ok());
+        let t_ref = t.as_ref();
+        assert_eq!(t_ref.unwrap().data, buffer);
+        assert_eq!(t_ref.unwrap().dimensions, tensor.dimensions);
+        assert_eq!(t_ref.unwrap().ty, TensorType::Fp16);
+    }
+
+    #[test]
+    fn fp32() {
+        let data = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let mut buffer = Vec::with_capacity(data.len() * size_of::<f32>());
+        for f in &data {
+            buffer.extend(f.to_ne_bytes());
+        }
+        let buffer_copy = buffer.clone();
+        let tensor = Tensor {
+            ty: TensorType::Fp32,
+            dimensions: vec![2, 3],
+            data: buffer_copy,
+        };
+        let shape = IVectorView::<i64>::try_from(vec![2i64, 3]).unwrap();
+        let inspectable = to_inspectable(&tensor, shape);
+        assert!(inspectable.is_ok());
+        let winml_tensor = inspectable.as_ref().unwrap().cast::<TensorFloat>().unwrap();
+        let view = winml_tensor.GetAsVectorView().unwrap();
+        assert_eq!(view.into_iter().collect::<Vec<f32>>(), data);
+        // Convert back.
+        let t = to_tensor(inspectable.unwrap(), TensorKind::Float);
+        assert!(t.as_ref().is_ok());
+        let t_ref = t.as_ref();
+        assert_eq!(t_ref.unwrap().data, buffer);
+        assert_eq!(t_ref.unwrap().dimensions, tensor.dimensions);
+        assert_eq!(t_ref.unwrap().ty, TensorType::Fp32);
+    }
+
+    #[test]
+    fn i64() {
+        let data = vec![6i64, 5, 4, 3, 2, 1];
+        let mut buffer = Vec::with_capacity(data.len() * size_of::<i64>());
+        for f in &data {
+            buffer.extend(f.to_ne_bytes());
+        }
+        let buffer_copy = buffer.clone();
+        let tensor = Tensor {
+            ty: TensorType::I64,
+            dimensions: vec![1, 6],
+            data: buffer_copy,
+        };
+        let shape = IVectorView::<i64>::try_from(vec![1i64, 6]).unwrap();
+        let inspectable = to_inspectable(&tensor, shape);
+        assert!(inspectable.is_ok());
+        let winml_tensor = inspectable
+            .as_ref()
+            .unwrap()
+            .cast::<TensorInt64Bit>()
+            .unwrap();
+        let view = winml_tensor.GetAsVectorView().unwrap();
+        assert_eq!(view.into_iter().collect::<Vec<i64>>(), data);
+        // Convert back.
+        let t = to_tensor(inspectable.unwrap(), TensorKind::Int64);
+        assert!(t.as_ref().is_ok());
+        let t_ref = t.as_ref();
+        assert_eq!(t_ref.unwrap().data, buffer);
+        assert_eq!(t_ref.unwrap().dimensions, tensor.dimensions);
+        assert_eq!(t_ref.unwrap().ty, TensorType::I64);
+    }
 }
