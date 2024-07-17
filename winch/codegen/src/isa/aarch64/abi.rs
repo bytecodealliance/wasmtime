@@ -121,6 +121,10 @@ impl ABI for Aarch64ABI {
         regs::float_scratch()
     }
 
+    fn vector_scratch_reg() -> Reg {
+        todo!()
+    }
+
     fn vmctx_reg() -> Reg {
         regs::xreg(9)
     }

@@ -46,6 +46,11 @@ impl RegIndexEnv {
         }
     }
 
+    fn next_vr(&mut self) -> Option<u8> {
+        // 128-bit vectors also use XMM registers.
+        self.next_fpr()
+    }
+
     fn increment(index: &mut u8) -> Option<u8> {
         let current = *index;
         match index.checked_add(1) {
@@ -149,6 +154,10 @@ impl ABI for X64ABI {
         regs::scratch_xmm()
     }
 
+    fn vector_scratch_reg() -> Reg {
+        regs::scratch_xmm()
+    }
+
     fn vmctx_reg() -> Reg {
         regs::vmctx()
     }
@@ -165,7 +174,7 @@ impl ABI for X64ABI {
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
             WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
-            ty => unimplemented!("Support for WasmType: {ty}"),
+            WasmValType::V128 => Self::word_bytes() * 2,
         }
     }
 }
@@ -197,7 +206,10 @@ impl X64ABI {
                 ty,
             ),
 
-            ty => unimplemented!("Support for argument of WasmType: {ty}"),
+            ty @ WasmValType::V128 => (
+                Self::vector_reg_for(index_env.next_vr(), call_conv, params_or_returns),
+                ty,
+            ),
         };
 
         let ty_size = <Self as ABI>::sizeof(wasm_arg);
@@ -305,6 +317,14 @@ impl X64ABI {
         }
 
         None
+    }
+
+    fn vector_reg_for(
+        index: Option<u8>,
+        call_conv: &CallingConvention,
+        params_or_returns: ParamsOrReturns,
+    ) -> Option<Reg> {
+        Self::float_reg_for(index, call_conv, params_or_returns)
     }
 }
 

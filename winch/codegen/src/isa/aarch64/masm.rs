@@ -200,6 +200,7 @@ impl Masm for MacroAssembler {
                     I::I64(v) => v,
                     I::F32(v) => v as u64,
                     I::F64(v) => v,
+                    I::V128(_) => todo!(),
                 };
 
                 let scratch = regs::scratch();

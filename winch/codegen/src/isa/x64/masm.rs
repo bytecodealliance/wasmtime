@@ -215,7 +215,7 @@ impl Masm for MacroAssembler {
                 self.asm.pop_r(dst);
                 self.decrement_sp(<Self::ABI as ABI>::word_bytes() as u32);
             }
-            (RegClass::Float, _) => {
+            (RegClass::Float, _) | (RegClass::Vector, _) => {
                 let addr = self.address_from_sp(current_sp);
                 self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 self.free_stack(size.bytes());
@@ -293,6 +293,10 @@ impl Masm for MacroAssembler {
                     self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 }
                 I::F64(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
+                }
+                I::V128(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
                     self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 }
@@ -1043,6 +1047,7 @@ impl MacroAssembler {
     fn store_impl(&mut self, src: RegImm, dst: Address, size: OperandSize, flags: MemFlags) {
         let scratch = <Self as Masm>::ABI::scratch_reg();
         let float_scratch = <Self as Masm>::ABI::float_scratch_reg();
+        let vector_scratch = <Self as Masm>::ABI::vector_scratch_reg();
         match src {
             RegImm::Imm(imm) => match imm {
                 I::I32(v) => self.asm.mov_im(v as i32, &dst, size, flags),
@@ -1070,6 +1075,14 @@ impl MacroAssembler {
                     self.asm
                         .xmm_mov_mr(&addr, float_scratch, size, MemFlags::trusted());
                     self.asm.xmm_mov_rm(float_scratch, &dst, size, flags);
+                }
+                I::V128(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    // Always trusted, since we are loading the constant from
+                    // the constant pool.
+                    self.asm
+                        .xmm_mov_mr(&addr, vector_scratch, size, MemFlags::trusted());
+                    self.asm.xmm_mov_rm(vector_scratch, &dst, size, flags);
                 }
             },
             RegImm::Reg(reg) => {

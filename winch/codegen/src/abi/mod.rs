@@ -144,6 +144,9 @@ pub(crate) trait ABI {
     /// Returns the designated floating point scratch register.
     fn float_scratch_reg() -> Reg;
 
+    /// Returns the designated vector scratch register.
+    fn vector_scratch_reg() -> Reg;
+
     /// Returns the designated scratch register for the given [WasmType].
     fn scratch_for(ty: &WasmValType) -> Reg {
         match ty {
@@ -154,6 +157,7 @@ pub(crate) trait ABI {
                 ..
             }) => Self::scratch_reg(),
             WasmValType::F32 | WasmValType::F64 => Self::float_scratch_reg(),
+            WasmValType::V128 => Self::vector_scratch_reg(),
             _ => unimplemented!(),
         }
     }

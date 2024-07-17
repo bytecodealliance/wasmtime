@@ -1966,7 +1966,7 @@ fn typed_v128(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(simd))]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn typed_v128_imports(config: &mut Config) -> anyhow::Result<()> {
