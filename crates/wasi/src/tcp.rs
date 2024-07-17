@@ -539,8 +539,6 @@ impl TcpSocket {
     }
 
     pub fn set_keep_alive_count(&self, value: u32) -> SocketResult<()> {
-        // TODO(rylev): do we need to check and clamp the value?
-
         let view = &*self.as_std_view()?;
         Ok(network::util::set_tcp_keepcnt(view, value)?)
     }
