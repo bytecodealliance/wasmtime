@@ -324,6 +324,10 @@ async fn preview2_tcp_states() {
     run(PREVIEW2_TCP_STATES_COMPONENT, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_tcp_streams() {
+    run(PREVIEW2_TCP_STREAMS_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview2_tcp_bind() {
     run(PREVIEW2_TCP_BIND_COMPONENT, false).await.unwrap()
 }

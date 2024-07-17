@@ -694,7 +694,7 @@ impl HostInputStream for TcpReadStream {
             // A 0-byte read indicates that the stream has closed.
             Ok(0) => {
                 self.closed = true;
-                0
+                return Err(StreamError::Closed);
             }
             Ok(n) => n,
 
