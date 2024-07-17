@@ -1,0 +1,20 @@
+[package]
+name = "wasmtime-wasi-runtime-config"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository = "https://github.com/bytecodealliance/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Wasmtime implementation of the wasi-runtime-config API"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+wasmtime = { workspace = true, features = ["runtime", "component-model"] }
+
+[dev-dependencies]
+test-programs-artifacts = { workspace = true }
+wasmtime-wasi = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }

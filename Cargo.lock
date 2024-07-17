@@ -3557,6 +3557,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wasmtime-wasi-nn",
+ "wasmtime-wasi-runtime-config",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
  "wast 214.0.0",
@@ -3884,6 +3885,17 @@ dependencies = [
  "wasmtime-wasi",
  "wiggle",
  "windows",
+]
+
+[[package]]
+name = "wasmtime-wasi-runtime-config"
+version = "24.0.0"
+dependencies = [
+ "anyhow",
+ "test-programs-artifacts",
+ "tokio",
+ "wasmtime",
+ "wasmtime-wasi",
 ]
 
 [[package]]
