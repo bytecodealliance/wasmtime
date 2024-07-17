@@ -18,7 +18,7 @@
 //!     Config, Engine, Result, Store,
 //! };
 //! use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
-//! use wasmtime_wasi_runtime_config::WasiRuntimeConfig;
+//! use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
@@ -29,18 +29,17 @@
 //!     let mut store = Store::new(&engine, Ctx {
 //!         table: ResourceTable::new(),
 //!         wasi_ctx: WasiCtxBuilder::new().build(),
+//!         wasi_runtime_config_vars: WasiRuntimeConfigVariables::from_iter(vec![
+//!             ("config_key1", "value1"),
+//!             ("config_key2", "value2"),
+//!         ]),
 //!     });
 //!
 //!     let mut linker = Linker::<Ctx>::new(&engine);
 //!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
 //!     // add `wasi-runtime-config` world's interfaces to the linker
-//!     wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |_| {
-//!         // These configuration items can come from many places,
-//!         // and if necessary, `Ctx` can also be accessed in this closure
-//!         WasiRuntimeConfig::from_iter(vec![
-//!             ("config_key1", "value1"),
-//!             ("config_key2", "value2"),
-//!         ])
+//!     wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |h: &mut Ctx| {
+//!         WasiRuntimeConfig::from(&h.wasi_runtime_config_vars)
 //!     })?;
 //!
 //!     // ... use `linker` to instantiate within `store` ...
@@ -51,6 +50,7 @@
 //! struct Ctx {
 //!     table: ResourceTable,
 //!     wasi_ctx: WasiCtx,
+//!     wasi_runtime_config_vars: WasiRuntimeConfigVariables,
 //! }
 //!
 //! impl WasiView for Ctx {
@@ -79,9 +79,9 @@ use self::gen_::wasi::config::runtime as generated;
 
 /// Capture the state necessary for use in the `wasi-runtime-config` API implementation.
 #[derive(Default)]
-pub struct WasiRuntimeConfig(HashMap<String, String>);
+pub struct WasiRuntimeConfigVariables(HashMap<String, String>);
 
-impl<S: Into<String>> FromIterator<(S, S)> for WasiRuntimeConfig {
+impl<S: Into<String>> FromIterator<(S, S)> for WasiRuntimeConfigVariables {
     fn from_iter<I: IntoIterator<Item = (S, S)>>(iter: I) -> Self {
         Self(
             iter.into_iter()
@@ -91,26 +91,38 @@ impl<S: Into<String>> FromIterator<(S, S)> for WasiRuntimeConfig {
     }
 }
 
-impl WasiRuntimeConfig {
-    /// Create a new struct into the `wasi-runtime-config` state.
+impl WasiRuntimeConfigVariables {
+    /// Create a new runtime configuration.
     pub fn new() -> Self {
         Default::default()
     }
 
-    /// Insert a key-value pair into the state.
+    /// Insert a key-value pair into the configuration map.
     pub fn insert(&mut self, key: impl Into<String>, value: impl Into<String>) -> &mut Self {
         self.0.insert(key.into(), value.into());
         self
     }
 }
 
-impl generated::Host for WasiRuntimeConfig {
+/// A wrapper capturing the needed internal `wasi-runtime-config` state.
+pub struct WasiRuntimeConfig<'a> {
+    vars: &'a WasiRuntimeConfigVariables,
+}
+
+impl<'a> From<&'a WasiRuntimeConfigVariables> for WasiRuntimeConfig<'a> {
+    fn from(vars: &'a WasiRuntimeConfigVariables) -> Self {
+        Self { vars }
+    }
+}
+
+impl generated::Host for WasiRuntimeConfig<'_> {
     fn get(&mut self, key: String) -> Result<Result<Option<String>, generated::ConfigError>> {
-        Ok(Ok(self.0.get(&key).map(|s| s.to_owned())))
+        Ok(Ok(self.vars.0.get(&key).map(|s| s.to_owned())))
     }
 
     fn get_all(&mut self) -> Result<Result<Vec<(String, String)>, generated::ConfigError>> {
         Ok(Ok(self
+            .vars
             .0
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -121,7 +133,7 @@ impl generated::Host for WasiRuntimeConfig {
 /// Add all the `wasi-runtime-config` world's interfaces to a [`wasmtime::component::Linker`].
 pub fn add_to_linker<T>(
     l: &mut wasmtime::component::Linker<T>,
-    f: impl Fn(&mut T) -> WasiRuntimeConfig + Send + Sync + Copy + 'static,
+    f: impl Fn(&mut T) -> WasiRuntimeConfig<'_> + Send + Sync + Copy + 'static,
 ) -> Result<()> {
     generated::add_to_linker_get_host(l, f)?;
     Ok(())

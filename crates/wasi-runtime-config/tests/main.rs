@@ -5,11 +5,12 @@ use wasmtime::{
     Store,
 };
 use wasmtime_wasi::{add_to_linker_async, bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
 struct Ctx {
     table: ResourceTable,
     wasi_ctx: WasiCtx,
-    config: Vec<(String, String)>,
+    wasi_runtime_config_vars: WasiRuntimeConfigVariables,
 }
 
 impl WasiView for Ctx {
@@ -32,7 +33,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
     wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |h: &mut Ctx| {
-        h.config.clone().into_iter().collect()
+        WasiRuntimeConfig::from(&h.wasi_runtime_config_vars)
     })?;
 
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
@@ -59,7 +60,9 @@ async fn runtime_config_get() -> Result<()> {
         Ctx {
             table: ResourceTable::new(),
             wasi_ctx: WasiCtxBuilder::new().build(),
-            config: vec![("hello".to_string(), "world".to_string())],
+            wasi_runtime_config_vars: WasiRuntimeConfigVariables::from_iter(vec![(
+                "hello", "world",
+            )]),
         },
     )
     .await
