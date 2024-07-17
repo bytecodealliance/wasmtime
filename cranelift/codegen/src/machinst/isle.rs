@@ -253,7 +253,7 @@ macro_rules! isle_lower_prelude_methods {
                         return self.zero_value(arg);
                     }
                     InstructionData::UnaryConst {
-                        opcode: Opcode::Vconst,
+                        opcode: Opcode::Vconst | Opcode::F128const,
                         constant_handle,
                     } => {
                         let constant_data =
@@ -265,6 +265,13 @@ macro_rules! isle_lower_prelude_methods {
                         }
                     }
                     InstructionData::UnaryImm { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    InstructionData::UnaryIeee16 { imm, .. } => {
                         if imm.bits() == 0 {
                             return Some(value);
                         } else {

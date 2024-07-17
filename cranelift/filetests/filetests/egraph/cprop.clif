@@ -313,6 +313,37 @@ block0:
 ; check: v2 = iconst.i64 0xf0de_bc9a_7856_3412
 ; nextln: return v2
 
+function %f16_fneg() -> f16 {
+block0:
+    v1 = f16const 0.0
+    v2 = fneg v1
+    return v2
+}
+
+; check: v3 = f16const -0.0
+; check: return v3  ; v3 = -0.0
+
+function %f16_fabs() -> f16 {
+block0:
+    v1 = f16const -0.0
+    v2 = fabs v1
+    return v2
+}
+
+; check: v3 = f16const 0.0
+; check: return v3  ; v3 = 0.0
+
+function %f16_fcopysign() -> f16 {
+block0:
+    v1 = f16const -0.0
+    v2 = f16const NaN
+    v3 = fcopysign v2, v1
+    return v3
+}
+
+; check: v4 = f16const -NaN
+; check: return v4  ; v4 = -NaN
+
 function %f32_fneg() -> f32 {
 block0:
     v1 = f32const 0.0
@@ -333,7 +364,7 @@ block0:
 ; check: v3 = f32const 0.0
 ; check: return v3  ; v3 = 0.0
 
-function %f32_fabs() -> f32 {
+function %f32_fcopysign() -> f32 {
 block0:
     v1 = f32const -0.0
     v2 = f32const NaN
@@ -364,7 +395,7 @@ block0:
 ; check: v3 = f64const 0.0
 ; check: return v3  ; v3 = 0.0
 
-function %f64_fabs() -> f64 {
+function %f64_fcopysign() -> f64 {
 block0:
     v1 = f64const -0.0
     v2 = f64const NaN
@@ -373,4 +404,38 @@ block0:
 }
 
 ; check: v4 = f64const -NaN
+; check: return v4  ; v4 = -NaN
+
+function %f128_fneg() -> f128 {
+block0:
+    v1 = f128const 0.0
+    v2 = fneg v1
+    return v2
+}
+
+; check: const1 = 0x80000000000000000000000000000000
+; check: v3 = f128const const1
+; check: return v3  ; v3 = -0.0
+
+function %f128_fabs() -> f128 {
+block0:
+    v1 = f128const -0.0
+    v2 = fabs v1
+    return v2
+}
+
+; check: const1 = 0x00000000000000000000000000000000
+; check: v3 = f128const const1
+; check: return v3  ; v3 = 0.0
+
+function %f128_fcopysign() -> f128 {
+block0:
+    v1 = f128const -0.0
+    v2 = f128const NaN
+    v3 = fcopysign v2, v1
+    return v3
+}
+
+; check: const2 = 0xffff8000000000000000000000000000
+; check: v4 = f128const const2
 ; check: return v4  ; v4 = -NaN
