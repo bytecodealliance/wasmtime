@@ -730,7 +730,7 @@ impl<T: GcRef> Rooted<T> {
     /// Create a new `Rooted<T>` from a `GcRootIndex`.
     ///
     /// Note that `Rooted::from_gc_root_index(my_rooted.index)` is not
-    /// necessarily an identity funciton, as it allows changing the `T` type
+    /// necessarily an identity function, as it allows changing the `T` type
     /// parameter.
     ///
     /// The given index should be a LIFO index of a GC reference pointing to an

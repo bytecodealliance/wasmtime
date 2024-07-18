@@ -6,7 +6,7 @@ use crate::component::Component;
 use crate::prelude::*;
 use crate::runtime::vm::VMWasmCallFunction;
 use crate::sync::{OnceLock, RwLock};
-use crate::{code_memory::CodeMemory, FrameInfo, Module, Trap};
+use crate::{code_memory::CodeMemory, FrameInfo, Module};
 use alloc::collections::btree_map::{BTreeMap, Entry};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
@@ -254,23 +254,13 @@ fn global_code() -> &'static RwLock<GlobalRegistry> {
 
 type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
-/// Returns whether the `pc`, according to globally registered information,
-/// is a wasm trap or not.
-pub fn get_wasm_trap(pc: usize) -> Option<Trap> {
-    let (code, text_offset) = {
-        let all_modules = global_code().read();
-
-        let (end, (start, module)) = match all_modules.range(pc..).next() {
-            Some(info) => info,
-            None => return None,
-        };
-        if pc < *start || *end < pc {
-            return None;
-        }
-        (module.clone(), pc - *start)
-    };
-
-    wasmtime_environ::lookup_trap_code(code.trap_data(), text_offset)
+/// Find which registered region of code contains the given program counter, and
+/// what offset that PC is within that module's code.
+pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
+    let all_modules = global_code().read();
+    let (_end, (start, module)) = all_modules.range(pc..).next()?;
+    let text_offset = pc.checked_sub(*start)?;
+    Some((module.clone(), text_offset))
 }
 
 /// Registers a new region of code.

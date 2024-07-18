@@ -33,6 +33,7 @@
 
 #![allow(non_snake_case, clippy::cast_sign_loss)]
 
+use crate::runtime::module::lookup_code;
 use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
 use crate::runtime::vm::traphandlers::tls;
 use mach2::exc::*;
@@ -325,9 +326,12 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // pointer value and if `MAP` changes happen after we read our entry that's
     // ok since they won't invalidate our entry.
     let (pc, fp) = get_pc_and_fp(&thread_state);
-    let trap = match crate::runtime::vm::traphandlers::GET_WASM_TRAP(pc as usize) {
-        Some(trap) => trap,
-        None => return false,
+    let Some((code, text_offset)) = lookup_code(pc as usize) else {
+        return false;
+    };
+
+    let Some(trap) = code.lookup_trap_code(text_offset) else {
+        return false;
     };
 
     // We have determined that this is a wasm trap and we need to actually

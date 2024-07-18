@@ -1,17 +1,42 @@
 # Wasmtime's C API
 
-For more information you can find the documentation for this library
-[online](https://bytecodealliance.github.io/wasmtime/c-api/).
+## API Documentation
+
+[The API documentation for the Wasmtime C library is hosted
+here.](https://bytecodealliance.github.io/wasmtime/c-api/).
 
 ## Using in a C Project
 
-To use Wasmtime from a C or C++ project, you can use Cargo to build the Wasmtime C bindings. From the root of the Wasmtime repository, run the following command:
+### Using a Pre-Built Static or Dynamic Library
+
+Each release on Wasmtime's [GitHub Releases
+page](https://github.com/bytecodealliance/wasmtime/releases) has pre-built
+binaries for both static and dynamic libraries for a variety of architectures
+and operating systems attached, as well as header files you can include.
+
+### Building Wasmtime's C API from Source
+
+To use Wasmtime from a C or C++ project, you must have
+[CMake](https://cmake.org/) and [a Rust
+toolchain](https://www.rust-lang.org/tools/install) installed.
+
+From the root of the Wasmtime repository, run the following commands:
 
 ```
-cargo build --release -p wasmtime-c-api
+$ cmake -S crates/c-api -B target/c-api --install-prefix "$(pwd)/artifacts"
+$ cmake --build target/c-api
+$ cmake --install target/c-api
 ```
 
-This will create static and dynamic libraries called `libwasmtime` in the `target/release` directory.
+These commands will produce the following files:
+
+* `artifacts/lib/libwasmtime.{a,lib}`: Static Wasmtime library. Exact extension
+  depends on your operating system.
+
+* `artifacts/lib/libwasmtime.{so,dylib,dll}`: Dynamic Wasmtime library. Exact
+  extension depends on your operating system.
+
+* `artifacts/include/**.h`: Header files for working with Wasmtime.
 
 ## Using in a Rust Project
 

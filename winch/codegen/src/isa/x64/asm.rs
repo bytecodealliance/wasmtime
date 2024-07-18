@@ -6,7 +6,7 @@ use crate::{
 };
 use cranelift_codegen::{
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, Opcode, SourceLoc, TrapCode,
+        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode,
         UserExternalNameRef,
     },
     isa::{
@@ -1251,7 +1251,6 @@ impl Assembler {
     pub fn call_with_reg(&mut self, callee: Reg) {
         self.emit(Inst::CallUnknown {
             dest: RegMem::reg(callee.into()),
-            opcode: Opcode::Call,
             info: None,
         });
     }
@@ -1259,11 +1258,7 @@ impl Assembler {
     /// Emit a call to a locally defined function through an index.
     pub fn call_with_name(&mut self, name: UserExternalNameRef) {
         let dest = ExternalName::user(name);
-        self.emit(Inst::CallKnown {
-            dest,
-            opcode: Opcode::Call,
-            info: None,
-        });
+        self.emit(Inst::CallKnown { dest, info: None });
     }
 
     /// Emit a call to a well-known libcall.
@@ -1276,7 +1271,7 @@ impl Assembler {
         // emitting to binary.
         //
         // See [wasmtime::engine::Engine::check_compatible_with_shared_flag] and
-        // [wasmtime_cranelift::obj::ModuleTextBuilder::apend_func]
+        // [wasmtime_cranelift::obj::ModuleTextBuilder::append_func]
         self.emit(Inst::LoadExtName {
             dst: Writable::from_reg(dst.into()),
             name: Box::new(dest),

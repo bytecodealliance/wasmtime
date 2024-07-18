@@ -37,7 +37,7 @@ pub struct CodeObject {
 
 impl CodeObject {
     pub fn new(mmap: Arc<CodeMemory>, signatures: TypeCollection, types: Types) -> CodeObject {
-        // The corresopnding unregister for this is below in `Drop for
+        // The corresponding unregister for this is below in `Drop for
         // CodeObject`.
         crate::module::register_code(&mmap);
 

@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, MInst};
+use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
@@ -21,7 +21,7 @@ use crate::{
         MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InstOutput},
+    machinst::{ArgPair, InstOutput, IsTailCall},
 };
 use crate::{isa, isle_common_prelude_methods};
 use regalloc2::PReg;
@@ -34,7 +34,6 @@ type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
 type VecArgPair = Vec<ArgPair>;
-use crate::machinst::valueregs;
 
 pub(crate) struct RV64IsleContext<'a, 'b, I, B>
 where
@@ -49,8 +48,6 @@ where
 }
 
 impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
-    isle_prelude_method_helpers!(Riscv64ABICallSite);
-
     fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
         Self {
             lower_ctx,
@@ -82,7 +79,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            IsTailCall::Yes,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -111,7 +108,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            IsTailCall::Yes,
             caller_conv,
             self.backend.flags().clone(),
         );

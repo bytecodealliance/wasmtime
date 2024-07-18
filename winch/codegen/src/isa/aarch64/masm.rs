@@ -347,20 +347,73 @@ impl Masm for MacroAssembler {
         self.asm.fsqrt_rr(src, dst, size);
     }
 
-    fn and(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
-        todo!()
+    fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        match (rhs, lhs, dst) {
+            (RegImm::Imm(v), rn, rd) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
+
+                self.asm.and_ir(imm, rn, rd, size);
+            }
+
+            (RegImm::Reg(rm), rn, rd) => {
+                self.asm.and_rrr(rm, rn, rd, size);
+            }
+        }
     }
 
-    fn or(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
-        todo!()
+    fn or(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        match (rhs, lhs, dst) {
+            (RegImm::Imm(v), rn, rd) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
+
+                self.asm.or_ir(imm, rn, rd, size);
+            }
+
+            (RegImm::Reg(rm), rn, rd) => {
+                self.asm.or_rrr(rm, rn, rd, size);
+            }
+        }
     }
 
-    fn xor(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
-        todo!()
+    fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        match (rhs, lhs, dst) {
+            (RegImm::Imm(v), rn, rd) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
+
+                self.asm.xor_ir(imm, rn, rd, size);
+            }
+
+            (RegImm::Reg(rm), rn, rd) => {
+                self.asm.xor_rrr(rm, rn, rd, size);
+            }
+        }
     }
 
-    fn shift(&mut self, _context: &mut CodeGenContext, _kind: ShiftKind, _size: OperandSize) {
-        todo!()
+    fn shift_ir(&mut self, dst: Reg, imm: u64, lhs: Reg, kind: ShiftKind, size: OperandSize) {
+        self.asm.shift_ir(imm, lhs, dst, kind, size)
+    }
+
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
+        let src = context.pop_to_reg(self, None);
+        let dst = context.pop_to_reg(self, None);
+
+        self.asm
+            .shift_rrr(src.into(), dst.into(), dst.into(), kind, size);
+
+        context.free_reg(src);
+        context.stack.push(dst.into());
     }
 
     fn div(&mut self, _context: &mut CodeGenContext, _kind: DivKind, _size: OperandSize) {

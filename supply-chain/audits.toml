@@ -2109,6 +2109,11 @@ who = "Iceber Gu <caiwei95@hotmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.5.0 -> 0.6.0"
 
+[[audits.openvino]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.0 -> 0.7.2"
+
 [[audits.openvino-finder]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -2127,6 +2132,11 @@ who = "Iceber Gu <caiwei95@hotmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.5.0 -> 0.6.0"
 
+[[audits.openvino-finder]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.0 -> 0.7.2"
+
 [[audits.openvino-sys]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -2144,6 +2154,11 @@ delta = "0.4.2 -> 0.5.0"
 who = "Iceber Gu <caiwei95@hotmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.5.0 -> 0.6.0"
+
+[[audits.openvino-sys]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.0 -> 0.7.2"
 
 [[audits.ort]]
 who = "Andrew Brown <andrew.brown@intel.com>"

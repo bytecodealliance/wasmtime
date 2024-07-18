@@ -256,6 +256,8 @@ wasmtime_option_group! {
         pub component_model: Option<bool>,
         /// Configure support for 33+ flags in the component model.
         pub component_model_more_flags: Option<bool>,
+        /// Component model support for more than one return value.
+        pub component_model_multiple_returns: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
@@ -682,6 +684,7 @@ impl CommonOptions {
         handle_conditionally_compiled! {
             ("component-model", component_model, wasm_component_model)
             ("component-model", component_model_more_flags, wasm_component_model_more_flags)
+            ("component-model", component_model_multiple_returns, wasm_component_model_multiple_returns)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)

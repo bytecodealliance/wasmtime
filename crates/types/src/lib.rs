@@ -1723,14 +1723,15 @@ pub trait TypeConvert {
     }
 
     fn convert_composite_type(&self, ty: &wasmparser::CompositeType) -> WasmCompositeType {
-        match ty {
-            wasmparser::CompositeType::Func(f) => {
+        assert!(!ty.shared);
+        match &ty.inner {
+            wasmparser::CompositeInnerType::Func(f) => {
                 WasmCompositeType::Func(self.convert_func_type(f))
             }
-            wasmparser::CompositeType::Array(a) => {
+            wasmparser::CompositeInnerType::Array(a) => {
                 WasmCompositeType::Array(self.convert_array_type(a))
             }
-            wasmparser::CompositeType::Struct(s) => {
+            wasmparser::CompositeInnerType::Struct(s) => {
                 WasmCompositeType::Struct(self.convert_struct_type(s))
             }
         }

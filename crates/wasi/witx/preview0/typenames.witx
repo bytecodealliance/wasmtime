@@ -521,7 +521,7 @@
     (field $userdata $userdata)
     ;;; If non-zero, an error that occurred while processing the subscription request.
     (field $error $errno)
-    ;;; The type of event that occured
+    ;;; The type of event that occurred
     (field $type $eventtype)
     ;;; The contents of the event, if it is an `eventtype::fd_read` or
     ;;; `eventtype::fd_write`. `eventtype::clock` events ignore this field.

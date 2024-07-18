@@ -67,6 +67,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi",
     "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
+    "wasmtime-wasi-runtime-config",
     "wasmtime-wasi-threads",
     "wasmtime-wast",
     "wasmtime-c-api-macros",
@@ -86,6 +87,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime",
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
+    "wasmtime-wasi-runtime-config",
     "wasmtime-wasi-threads",
     "wasmtime-cli",
     // all cranelift crates are considered "public" in that they can't

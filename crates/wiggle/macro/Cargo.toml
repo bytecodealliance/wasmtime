@@ -9,6 +9,9 @@ categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 test = false

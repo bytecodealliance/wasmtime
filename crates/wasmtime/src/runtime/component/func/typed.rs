@@ -152,7 +152,7 @@ where
     /// # Panics
     ///
     /// Panics if this is called on a function in an asynchronous store. This
-    /// only works with functions defined within a synchonous store. Also
+    /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
     pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
         assert!(

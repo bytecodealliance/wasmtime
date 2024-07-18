@@ -93,10 +93,7 @@ impl Engine {
             // configured. This is the per-program initialization required for
             // handling traps, such as configuring signals, vectored exception
             // handlers, etc.
-            crate::runtime::vm::init_traps(
-                crate::module::get_wasm_trap,
-                config.macos_use_mach_ports,
-            );
+            crate::runtime::vm::init_traps(config.macos_use_mach_ports);
             #[cfg(feature = "debug-builtins")]
             crate::runtime::vm::debug_builtins::ensure_exported();
         }

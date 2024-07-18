@@ -1,5 +1,3 @@
-extern crate proc_macro;
-
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
@@ -27,8 +25,8 @@ use syn::parse_macro_input;
 ///       and return `Result<($return_types),$error_type>`
 ///
 ///     * When the `wiggle` crate is built with the `wasmtime_integration`
-///     feature, each module contains an `add_to_linker` function to add it to
-///     a `wasmtime::Linker`.
+///       feature, each module contains an `add_to_linker` function to add it to
+///       a `wasmtime::Linker`.
 ///
 /// Arguments are provided using Rust struct value syntax.
 ///
@@ -96,7 +94,7 @@ use syn::parse_macro_input;
 /// /// is an asynchronous method. Therefore, we use the `async_trait` proc macro
 /// /// to define this trait, so that `double_int_return_float` can be an `async fn`.
 /// /// `wiggle::async_trait` is defined as `#[async_trait::async_trait(?Send)]` -
-/// /// in wiggle, async methods do not have the Send constaint.
+/// /// in wiggle, async methods do not have the Send constraint.
 /// impl example::Example for YourCtxType {
 ///     /// The arrays module has two methods, shown here.
 ///     /// Note that the `GuestPtr` type comes from `wiggle`,

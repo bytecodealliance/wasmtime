@@ -30,3 +30,10 @@ pub mod proxy {
         },
     });
 }
+
+pub mod config {
+    wit_bindgen::generate!({
+        path: "../wasi-runtime-config/wit",
+        world: "wasi:config/imports",
+    });
+}

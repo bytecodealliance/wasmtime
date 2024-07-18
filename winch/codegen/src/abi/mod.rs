@@ -309,7 +309,7 @@ impl RetArea {
         }
     }
 
-    /// Returns true if the return area is uninitiliazed.
+    /// Returns true if the return area is uninitialized.
     pub fn is_uninit(&self) -> bool {
         match self {
             Self::Uninit => true,

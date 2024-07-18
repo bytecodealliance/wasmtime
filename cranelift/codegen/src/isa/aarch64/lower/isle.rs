@@ -18,7 +18,6 @@ use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInf
 use crate::isa::aarch64::AArch64Backend;
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
-use crate::machinst::valueregs;
 use crate::{
     binemit::CodeOffset,
     ir::{
@@ -28,7 +27,9 @@ use crate::{
     isa::aarch64::abi::AArch64CallSite,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::inst::SImm7Scaled,
-    machinst::{abi::ArgPair, ty_bits, InstOutput, MachInst, VCodeConstant, VCodeConstantData},
+    machinst::{
+        abi::ArgPair, ty_bits, InstOutput, IsTailCall, MachInst, VCodeConstant, VCodeConstantData,
+    },
 };
 use regalloc2::PReg;
 use std::boxed::Box;
@@ -70,10 +71,6 @@ pub struct ExtendedValue {
     extend: ExtendOp,
 }
 
-impl IsleContext<'_, '_, MInst, AArch64Backend> {
-    isle_prelude_method_helpers!(AArch64CallSite);
-}
-
 impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(
@@ -99,7 +96,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            IsTailCall::Yes,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -128,7 +125,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            IsTailCall::Yes,
             caller_conv,
             self.backend.flags().clone(),
         );

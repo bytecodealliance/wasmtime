@@ -24,7 +24,7 @@ use wasmtime_environ::{
 mod registry;
 
 pub use registry::{
-    get_wasm_trap, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
+    lookup_code, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
 };
 
 /// A compiled WebAssembly module, ready to be instantiated.

@@ -599,8 +599,10 @@ pub(crate) fn define(
 
     // Operand kind shorthands.
     let i8: &TypeVar = &ValueType::from(LaneType::from(types::Int::I8)).into();
+    let f16_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F16)).into();
     let f32_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F32)).into();
     let f64_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F64)).into();
+    let f128_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F128)).into();
 
     // Starting definitions.
     let Int = &TypeVar::new(
@@ -1287,6 +1289,22 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "f16const",
+            r#"
+        Floating point constant.
+
+        Create a `f16` SSA value with an immediate constant value.
+        "#,
+            &formats.unary_ieee16,
+        )
+        .operands_in(vec![Operand::new("N", &imm.ieee16)])
+        .operands_out(vec![
+            Operand::new("a", f16_).with_doc("A constant f16 scalar value")
+        ]),
+    );
+
+    ig.push(
+        Inst::new(
             "f32const",
             r#"
         Floating point constant.
@@ -1314,6 +1332,22 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("N", &imm.ieee64)])
         .operands_out(vec![
             Operand::new("a", f64_).with_doc("A constant f64 scalar value")
+        ]),
+    );
+
+    ig.push(
+        Inst::new(
+            "f128const",
+            r#"
+        Floating point constant.
+
+        Create a `f128` SSA value with an immediate constant value.
+        "#,
+            &formats.unary_const,
+        )
+        .operands_in(vec![Operand::new("N", &imm.pool_constant)])
+        .operands_out(vec![
+            Operand::new("a", f128_).with_doc("A constant f128 scalar value")
         ]),
     );
 

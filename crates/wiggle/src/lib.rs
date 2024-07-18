@@ -90,7 +90,7 @@ impl<'a> GuestMemory<'a> {
     /// Acquires a slice or owned copy of the memory pointed to by `ptr`.
     ///
     /// This method will attempt to borrow `ptr` directly from linear memory. If
-    /// memory is shared and cannot be borrowed directy then an owned copy is
+    /// memory is shared and cannot be borrowed directly then an owned copy is
     /// returned instead.
     ///
     /// # Errors

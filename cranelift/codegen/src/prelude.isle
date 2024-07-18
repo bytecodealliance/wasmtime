@@ -239,6 +239,12 @@
 
 ;; Floating point operations
 
+(decl pure f16_neg (Ieee16) Ieee16)
+(extern constructor f16_neg f16_neg)
+(decl pure f16_abs (Ieee16) Ieee16)
+(extern constructor f16_abs f16_abs)
+(decl pure f16_copysign (Ieee16 Ieee16) Ieee16)
+(extern constructor f16_copysign f16_copysign)
 (decl pure partial f32_add (Ieee32 Ieee32) Ieee32)
 (extern constructor f32_add f32_add)
 (decl pure partial f32_sub (Ieee32 Ieee32) Ieee32)
@@ -295,6 +301,13 @@
 (extern constructor f64_abs f64_abs)
 (decl pure f64_copysign (Ieee64 Ieee64) Ieee64)
 (extern constructor f64_copysign f64_copysign)
+(decl pure f128_neg (Ieee128) Ieee128)
+(extern constructor f128_neg f128_neg)
+(decl pure f128_abs (Ieee128) Ieee128)
+(extern constructor f128_abs f128_abs)
+(decl pure f128_copysign (Ieee128 Ieee128) Ieee128)
+(extern constructor f128_copysign f128_copysign)
+(type Ieee128 (primitive Ieee128))
 
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -307,8 +320,10 @@
 (extern const $R32 Type)
 (extern const $R64 Type)
 
+(extern const $F16 Type)
 (extern const $F32 Type)
 (extern const $F64 Type)
+(extern const $F128 Type)
 
 (extern const $I8X8 Type)
 (extern const $I8X16 Type)

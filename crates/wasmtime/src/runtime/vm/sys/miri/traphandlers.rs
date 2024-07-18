@@ -37,7 +37,7 @@ pub fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
 #[allow(missing_docs)]
 pub type SignalHandler<'a> = dyn Fn() + Send + Sync + 'a;
 
-pub fn platform_init(_macos_use_mach_ports: bool) {}
+pub unsafe fn platform_init(_macos_use_mach_ports: bool) {}
 
 pub fn lazy_per_thread_init() {}
 

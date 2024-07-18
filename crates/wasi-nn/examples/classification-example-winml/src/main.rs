@@ -41,7 +41,7 @@ pub fn main() {
     let mut output_buffer = vec![0f32; 1000];
     context.get_output(0, &mut output_buffer[..]).unwrap();
 
-    // Postprocessing. Calculating the softmax probablility scores.
+    // Postprocessing. Calculating the softmax probability scores.
     let result = postprocess(output_buffer);
 
     // Load labels for classification

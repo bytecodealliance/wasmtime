@@ -1070,73 +1070,63 @@ where
     }
 
     fn visit_i32_shl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Shl, S32);
+        self.context.i32_shift(self.masm, Shl);
     }
 
     fn visit_i64_shl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Shl, S64);
+        self.context.i64_shift(self.masm, Shl);
     }
 
     fn visit_i32_shr_s(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrS, S32);
+        self.context.i32_shift(self.masm, ShrS);
     }
 
     fn visit_i64_shr_s(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrS, S64);
+        self.context.i64_shift(self.masm, ShrS);
     }
 
     fn visit_i32_shr_u(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrU, S32);
+        self.context.i32_shift(self.masm, ShrU);
     }
 
     fn visit_i64_shr_u(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrU, S64);
+        self.context.i64_shift(self.masm, ShrU);
     }
 
     fn visit_i32_rotl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotl, S32);
+        self.context.i32_shift(self.masm, Rotl);
     }
 
     fn visit_i64_rotl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotl, S64);
+        self.context.i64_shift(self.masm, Rotl);
     }
 
     fn visit_i32_rotr(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotr, S32);
+        self.context.i32_shift(self.masm, Rotr);
     }
 
     fn visit_i64_rotr(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotr, S64);
+        self.context.i64_shift(self.masm, Rotr);
     }
 
     fn visit_end(&mut self) {
