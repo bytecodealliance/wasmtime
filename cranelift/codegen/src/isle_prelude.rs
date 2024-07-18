@@ -974,6 +974,26 @@ macro_rules! isle_common_prelude_methods {
             Some(n.round_ties_even()).filter(|r| !r.is_nan())
         }
 
+        fn f32_min(&mut self, a: Ieee32, b: Ieee32) -> Option<Ieee32> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a <= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+
+        fn f32_max(&mut self, a: Ieee32, b: Ieee32) -> Option<Ieee32> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a >= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+
         fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
             n.neg()
         }
@@ -1020,6 +1040,26 @@ macro_rules! isle_common_prelude_methods {
 
         fn f64_nearest(&mut self, n: Ieee64) -> Option<Ieee64> {
             Some(n.round_ties_even()).filter(|r| !r.is_nan())
+        }
+
+        fn f64_min(&mut self, a: Ieee64, b: Ieee64) -> Option<Ieee64> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a <= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+
+        fn f64_max(&mut self, a: Ieee64, b: Ieee64) -> Option<Ieee64> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a >= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
         }
 
         fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {

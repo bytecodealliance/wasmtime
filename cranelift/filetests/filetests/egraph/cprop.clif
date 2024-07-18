@@ -407,6 +407,28 @@ block0:
 ; check: v3 = f32const 0x1.800000p3
 ; check: return v3  ; v3 = 0x1.800000p3
 
+function %f32_fmin() -> f32 {
+block0:
+    v1 = f32const 0x1.5p6
+    v2 = f32const 0x1.5p7
+    v3 = fmin v2, v1
+    return v3
+}
+
+; check: v4 = f32const 0x1.500000p6
+; check: return v4  ; v4 = 0x1.500000p6
+
+function %f32_fmax() -> f32 {
+block0:
+    v1 = f32const 0x1.5p6
+    v2 = f32const 0x1.5p7
+    v3 = fmax v2, v1
+    return v3
+}
+
+; check: v4 = f32const 0x1.500000p7
+; check: return v4  ; v4 = 0x1.500000p7
+
 function %f32_fneg() -> f32 {
 block0:
     v1 = f32const 0.0
@@ -531,6 +553,28 @@ block0:
 
 ; check: v3 = f64const 0x1.8000000000000p3
 ; check: return v3  ; v3 = 0x1.8000000000000p3
+
+function %f64_fmin() -> f64 {
+block0:
+    v1 = f64const -0x1.5p6
+    v2 = f64const -0x1.5p7
+    v3 = fmin v2, v1
+    return v3
+}
+
+; check: v4 = f64const -0x1.5000000000000p7
+; check: return v4  ; v4 = -0x1.5000000000000p7
+
+function %f64_fmax() -> f64 {
+block0:
+    v1 = f64const -0x1.5p6
+    v2 = f64const -0x1.5p7
+    v3 = fmax v2, v1
+    return v3
+}
+
+; check: v4 = f64const -0x1.5000000000000p6
+; check: return v4  ; v4 = -0x1.5000000000000p6
 
 function %f64_fneg() -> f64 {
 block0:

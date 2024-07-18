@@ -282,7 +282,7 @@
 ;; Note: With the exception of fabs, fneg and copysign,
 ;; constant folding is only performed when
 ;; the result of an instruction isn't NaN.
-;; TODO: fmin, fmax, fcmp, fma, demote, promote, to-int ops
+;; TODO: fcmp, fma, demote, promote, to-int ops
 (rule (simplify (fadd $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
       (if-let r (f32_add lhs rhs))
       (subsume (f32const $F32 r)))
@@ -344,6 +344,20 @@
       (subsume (f32const $F32 r)))
 (rule (simplify (nearest $F64 (f64const $F64 n)))
       (if-let r (f64_nearest n))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (fmin $F32 (f32const $F32 n) (f32const $F32 m)))
+      (if-let r (f32_min n m))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fmin $F64 (f64const $F64 n) (f64const $F64 m)))
+      (if-let r (f64_min n m))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (fmax $F32 (f32const $F32 n) (f32const $F32 m)))
+      (if-let r (f32_max n m))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fmax $F64 (f64const $F64 n) (f64const $F64 m)))
+      (if-let r (f64_max n m))
       (subsume (f64const $F64 r)))
 
 (rule (simplify (fneg $F32 (f32const $F32 n)))
