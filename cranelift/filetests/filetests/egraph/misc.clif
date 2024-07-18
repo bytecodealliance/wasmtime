@@ -1,4 +1,4 @@
-test optimize
+test optimize precise-output
 set opt_level=speed
 target x86_64
 
@@ -11,10 +11,12 @@ block0(v0: i64):
   return v1
 }
 
-; check: function %stack_load(i64) -> i64 fast {
-; nextln:    ss0 = explicit_slot 8
-; check:  block0(v0: i64):
-; nextln:     v2 = stack_addr.i64 ss0
-; nextln:     store notrap v0, v2
-; nextln:     return v0
-; nextln: }
+; function %stack_load(i64) -> i64 fast {
+;     ss0 = explicit_slot 8
+;
+; block0(v0: i64):
+;     v2 = stack_addr.i64 ss0
+;     store notrap stack v0, v2
+;     return v0
+; }
+
