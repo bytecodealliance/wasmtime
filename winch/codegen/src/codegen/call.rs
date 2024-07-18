@@ -57,7 +57,7 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea, ABI},
+    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
     codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext},
     masm::{
         CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,

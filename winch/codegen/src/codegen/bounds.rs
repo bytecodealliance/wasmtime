@@ -3,7 +3,7 @@
 //! recommended when working on this area of Winch.
 use super::env::{HeapData, HeapStyle};
 use crate::{
-    abi::{scratch, vmctx, ABI},
+    abi::{scratch, vmctx},
     codegen::CodeGenContext,
     isa::reg::Reg,
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},

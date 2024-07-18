@@ -1,5 +1,5 @@
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea, ABI},
+    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
     codegen::BlockSig,
     isa::reg::Reg,
     masm::{

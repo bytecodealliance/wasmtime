@@ -2,7 +2,7 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABIResults, RetArea, ABI},
+    abi::{scratch, vmctx, ABIOperand, ABIResults, RetArea},
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
