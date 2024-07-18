@@ -217,8 +217,7 @@ for (const func of state.clif.functions) {
     func.name === null ? `function[${func.func_index}]` : func.name;
   let demangled_name =
     func.demangled_name !== null ? func.demangled_name : func_name;
-  funcHeader.textContent =
-    `Intermediate Representation of function <${demangled_name}>:`;
+  funcHeader.textContent = `Intermediate Representation of function <${demangled_name}>:`;
   funcHeader.title = `Function ${func.func_index}: ${func_name}`;
   funcElem.appendChild(funcHeader);
 
