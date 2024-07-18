@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime explore` command.
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use std::{
     borrow::Cow,
@@ -61,7 +61,9 @@ impl ExploreCommand {
                 let clif_dir = output_dir.join("clif");
                 if let Err(err) = create_dir(&clif_dir) {
                     match err.kind() {
-                        io::ErrorKind::AlreadyExists => {}
+                        io::ErrorKind::AlreadyExists => {
+                            return Err(anyhow!("clif directory exists"));
+                        }
                         _ => return Err(err.into()),
                     }
                 }
