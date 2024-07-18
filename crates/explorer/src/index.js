@@ -55,6 +55,9 @@ const watByOffset = new Map();
 // Get asm instruction elements by Wasm offset.
 const asmByOffset = new Map();
 
+// Get clif instruction elements by Wasm offset.
+const clifByOffset = new Map();
+
 // Get all (WAT chunk or asm instruction) elements by offset.
 const anyByOffset = new Map();
 
@@ -82,6 +85,18 @@ const addAsmElem = (offset, elem) => {
   anyByOffset.get(offset).push(elem);
 };
 
+const addClifElem = (offset, elem) => {
+  if (!clifByOffset.has(offset)) {
+    clifByOffset.set(offset, []);
+  }
+  clifByOffset.get(offset).push(elem);
+
+  if (!anyByOffset.has(offset)) {
+    anyByOffset.set(offset, []);
+  }
+  anyByOffset.get(offset).push(elem);
+};
+
 /*** Event Handlers ************************************************************/
 
 const watElem = document.getElementById("wat");
@@ -97,6 +112,12 @@ watElem.addEventListener(
       return;
     }
 
+    const firstClifElem = clifByOffset.get(offset)[0];
+    firstClifElem.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
     const firstAsmElem = asmByOffset.get(offset)[0];
     firstAsmElem.scrollIntoView({
       behavior: "smooth",
@@ -126,6 +147,12 @@ asmElem.addEventListener(
       block: "center",
       inline: "nearest",
     });
+    const firstClifElem = clifByOffset.get(offset)[0];
+    firstClifElem.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
   },
   { passive: true },
 );
@@ -144,6 +171,12 @@ clifElem.addEventListener(
 
     const firstWatElem = watByOffset.get(offset)[0];
     firstWatElem.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+    const firstAsmElem = asmByOffset.get(offset)[0];
+    firstAsmElem.scrollIntoView({
       behavior: "smooth",
       block: "center",
       inline: "nearest",
@@ -231,7 +264,7 @@ for (const func of state.clif.functions) {
       instElem.style.backgroundColor = `hsl(${hue} 50% 90%)`;
       instElem.addEventListener("mouseenter", onMouseEnter);
       instElem.addEventListener("mouseleave", onMouseLeave);
-      addAsmElem(inst.wasm_offset, instElem);
+      addClifElem(inst.wasm_offset, instElem);
     }
     bodyElem.appendChild(instElem);
   }
