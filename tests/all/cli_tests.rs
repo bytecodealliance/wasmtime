@@ -1853,6 +1853,39 @@ stderr [1] :: after empty
         run_wasmtime(&["run", "--argv0=foo.wasm", CLI_ARGV0, "foo.wasm"])?;
         Ok(())
     }
+
+    #[tokio::test]
+    async fn cli_serve_runtime_config() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_RUNTIME_CONFIG_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("-Sruntime-config");
+            cmd.arg("-Sruntime-config-var=hello=world");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "world");
+        Ok(())
+    }
+
+    #[test]
+    fn cli_runtime_config() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Sruntime-config",
+            "-Sruntime-config-var=hello=world",
+            RUNTIME_CONFIG_GET_COMPONENT,
+        ])?;
+        Ok(())
+    }
 }
 
 #[test]

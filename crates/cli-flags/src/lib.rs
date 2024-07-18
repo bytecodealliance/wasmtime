@@ -284,6 +284,8 @@ wasmtime_option_group! {
         pub threads: Option<bool>,
         /// Enable support for WASI HTTP API (experimental)
         pub http: Option<bool>,
+        /// Enable support for WASI runtime config API (experimental)
+        pub runtime_config: Option<bool>,
         /// Inherit environment variables and file descriptors following the
         /// systemd listen fd specification (UNIX only)
         pub listenfd: Option<bool>,
@@ -321,6 +323,8 @@ wasmtime_option_group! {
         ///
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
+        /// Pass a wasi runtime config variable to the program.
+        pub runtime_config_var: Vec<WasiRuntimeConfigVariable>,
     }
 
     enum Wasi {
@@ -332,6 +336,12 @@ wasmtime_option_group! {
 pub struct WasiNnGraph {
     pub format: String,
     pub dir: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WasiRuntimeConfigVariable {
+    pub key: String,
+    pub value: String,
 }
 
 /// Common options for commands that translate WebAssembly modules
