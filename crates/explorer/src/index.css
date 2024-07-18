@@ -15,13 +15,19 @@ body {
 }
 
 #wat {
-  width: 50%;
+  width: 33%;
+  height: 100%;
+  overflow: scroll;
+}
+
+#clif {
+  width: 33%;
   height: 100%;
   overflow: scroll;
 }
 
 #asm {
-  width: 50%;
+  width: 33%;
   height: 100%;
   overflow: scroll;
 }

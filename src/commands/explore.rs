@@ -2,7 +2,12 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use std::{borrow::Cow, path::PathBuf};
+use std::{
+    borrow::Cow,
+    fs::{create_dir, remove_dir_all},
+    io,
+    path::PathBuf,
+};
 use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.
@@ -30,7 +35,7 @@ impl ExploreCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
-        let config = self.common.config(self.target.as_deref(), None)?;
+        let mut config = self.common.config(self.target.as_deref(), None)?;
 
         let bytes =
             Cow::Owned(std::fs::read(&self.module).with_context(|| {
@@ -50,7 +55,33 @@ impl ExploreCommand {
             .with_context(|| format!("failed to create file: {}", output.display()))?;
         let mut output_file = std::io::BufWriter::new(output_file);
 
-        wasmtime_explorer::generate(&config, self.target.as_deref(), &bytes, &mut output_file)?;
+        let clif_dir = output
+            .parent()
+            .map::<Result<PathBuf>, _>(|output_dir| {
+                let clif_dir = output_dir.join("clif");
+                if let Err(err) = create_dir(&clif_dir) {
+                    match err.kind() {
+                        io::ErrorKind::AlreadyExists => {}
+                        _ => return Err(err.into()),
+                    }
+                }
+                config.emit_clif(&clif_dir);
+                Ok(clif_dir)
+            })
+            .transpose()?;
+
+        wasmtime_explorer::generate(
+            &config,
+            self.target.as_deref(),
+            clif_dir.as_deref(),
+            &bytes,
+            &mut output_file,
+        )?;
+
+        if let Some(clif_dir) = clif_dir {
+            remove_dir_all(&clif_dir)?;
+        }
+
         println!("Exploration written to {}", output.display());
         Ok(())
     }
