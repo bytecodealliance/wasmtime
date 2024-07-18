@@ -890,6 +890,11 @@ impl Ieee32 {
         self.as_f32().is_nan()
     }
 
+    /// Returns `None` if `self` is a NaN and `Some(self)` otherwise.
+    pub fn non_nan(self) -> Option<Self> {
+        Some(self).filter(|f| !f.is_nan())
+    }
+
     /// Converts Self to a rust f32
     pub fn as_f32(self) -> f32 {
         f32::from_bits(self.0)
@@ -1110,6 +1115,11 @@ impl Ieee64 {
     /// all set.
     pub fn is_nan(&self) -> bool {
         self.as_f64().is_nan()
+    }
+
+    /// Returns `None` if `self` is a NaN and `Some(self)` otherwise.
+    pub fn non_nan(self) -> Option<Self> {
+        Some(self).filter(|f| !f.is_nan())
     }
 
     /// Converts Self to a rust f64
