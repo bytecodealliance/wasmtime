@@ -1,5 +1,5 @@
 use crate::{
-    abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
+    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea, ABI},
     codegen::BlockSig,
     isa::reg::Reg,
     masm::{
@@ -329,7 +329,7 @@ where
             .checked_mul(sig_index_bytes.into())
             .unwrap();
         let signatures_base_offset = self.env.vmoffsets.ptr.vmctx_type_ids_array();
-        let scratch = <M::ABI as ABI>::scratch_reg();
+        let scratch = scratch!(M);
         let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
 
         // Load the signatures address into the scratch register.
@@ -443,7 +443,7 @@ where
 
         let addr = if data.imported {
             let global_base = self.masm.address_at_reg(vmctx!(M), data.offset);
-            let scratch = <M::ABI as ABI>::scratch_reg();
+            let scratch = scratch!(M);
             self.masm.load_ptr(global_base, scratch);
             self.masm.address_at_reg(scratch, 0)
         } else {
@@ -754,7 +754,7 @@ where
         base: Reg,
         table_data: &TableData,
     ) -> M::Address {
-        let scratch = <M::ABI as ABI>::scratch_reg();
+        let scratch = scratch!(M);
         let bound = self.context.any_gpr(self.masm);
         let tmp = self.context.any_gpr(self.masm);
         let ptr_size: OperandSize = self.env.ptr_type().into();
@@ -811,7 +811,7 @@ where
 
     /// Retrieves the size of the table, pushing the result to the value stack.
     pub fn emit_compute_table_size(&mut self, table_data: &TableData) {
-        let scratch = <M::ABI as ABI>::scratch_reg();
+        let scratch = scratch!(M);
         let size = self.context.any_gpr(self.masm);
         let ptr_size: OperandSize = self.env.ptr_type().into();
 
@@ -834,7 +834,7 @@ where
     /// Retrieves the size of the memory, pushing the result to the value stack.
     pub fn emit_compute_memory_size(&mut self, heap_data: &HeapData) {
         let size_reg = self.context.any_gpr(self.masm);
-        let scratch = <M::ABI as ABI>::scratch_reg();
+        let scratch = scratch!(M);
 
         let base = if let Some(offset) = heap_data.import_from {
             self.masm
