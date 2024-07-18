@@ -15,19 +15,19 @@ body {
 }
 
 #wat {
-  width: 33%;
+  flex: 1;
   height: 100%;
   overflow: scroll;
 }
 
 #clif {
-  width: 33%;
+  flex: 1;
   height: 100%;
   overflow: scroll;
 }
 
 #asm {
-  width: 33%;
+  flex: 1;
   height: 100%;
   overflow: scroll;
 }
