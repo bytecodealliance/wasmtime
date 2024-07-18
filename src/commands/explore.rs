@@ -1,13 +1,9 @@
 //! The module that implements the `wasmtime explore` command.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
-use std::{
-    borrow::Cow,
-    fs::{create_dir, remove_dir_all},
-    io,
-    path::PathBuf,
-};
+use std::{borrow::Cow, path::PathBuf};
+use tempfile::tempdir;
 use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.
@@ -55,34 +51,16 @@ impl ExploreCommand {
             .with_context(|| format!("failed to create file: {}", output.display()))?;
         let mut output_file = std::io::BufWriter::new(output_file);
 
-        let clif_dir = output
-            .parent()
-            .map::<Result<PathBuf>, _>(|output_dir| {
-                let clif_dir = output_dir.join("clif");
-                if let Err(err) = create_dir(&clif_dir) {
-                    match err.kind() {
-                        io::ErrorKind::AlreadyExists => {
-                            return Err(anyhow!("clif directory exists"));
-                        }
-                        _ => return Err(err.into()),
-                    }
-                }
-                config.emit_clif(&clif_dir);
-                Ok(clif_dir)
-            })
-            .transpose()?;
+        let clif_dir = tempdir()?;
+        config.emit_clif(clif_dir.path());
 
         wasmtime_explorer::generate(
             &config,
             self.target.as_deref(),
-            clif_dir.as_deref(),
+            clif_dir.path(),
             &bytes,
             &mut output_file,
         )?;
-
-        if let Some(clif_dir) = clif_dir {
-            remove_dir_all(&clif_dir)?;
-        }
 
         println!("Exploration written to {}", output.display());
         Ok(())

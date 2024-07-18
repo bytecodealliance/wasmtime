@@ -69,6 +69,7 @@ wasmparser = { workspace = true }
 tracing = { workspace = true }
 log = { workspace = true }
 humantime = { workspace = true }
+tempfile = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }

@@ -12,7 +12,7 @@ use wasmtime_environ::demangle_function_name;
 pub fn generate(
     config: &wasmtime::Config,
     target: Option<&str>,
-    clif_dir: Option<&Path>,
+    clif_dir: &Path,
     wasm: &[u8],
     dest: &mut dyn Write,
 ) -> Result<()> {
@@ -238,12 +238,9 @@ struct AnnotatedClifInstruction {
     clif: String,
 }
 
-fn annotate_clif(clif_dir: Option<&Path>, asm: &AnnotatedAsm) -> Result<AnnotatedClif> {
+fn annotate_clif(clif_dir: &Path, asm: &AnnotatedAsm) -> Result<AnnotatedClif> {
     let mut clif = AnnotatedClif {
         functions: Vec::new(),
-    };
-    let Some(clif_dir) = clif_dir else {
-        return Ok(clif);
     };
     for function in &asm.functions {
         let function_path = clif_dir.join(format!("wasm_func_{}.clif", function.func_index));
