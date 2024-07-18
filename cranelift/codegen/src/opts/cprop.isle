@@ -280,8 +280,12 @@
 
 ;; Constant fold float operations
 ;; Note: With the exception of fabs, fneg and copysign,
-;; constant folding is only performed when
-;; the result of an instruction isn't NaN.
+;; constant folding is only performed when the result of
+;; an instruction isn't NaN. We want the NaN bit patterns
+;; produced by an instruction to be consistent, and
+;; compile-time evaluation in a cross-compilation scenario
+;; risks producing different NaN bit patterns than the target
+;; would have at run-time.
 ;; TODO: fcmp, fma, demote, promote, to-int ops
 (rule (simplify (fadd $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
       (if-let r (f32_add lhs rhs))
