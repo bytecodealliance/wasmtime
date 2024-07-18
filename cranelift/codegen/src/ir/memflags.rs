@@ -19,11 +19,33 @@ pub enum Endianness {
 /// Which disjoint region of aliasing memory is accessed in this memory
 /// operation.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[repr(u8)]
 #[allow(missing_docs)]
+#[rustfmt::skip]
 pub enum AliasRegion {
-    Heap,
-    Table,
-    Vmctx,
+    // None = 0b00;
+    Heap    = 0b01,
+    Table   = 0b10,
+    Vmctx   = 0b11,
+}
+
+impl AliasRegion {
+    const fn from_bits(bits: u8) -> Option<Self> {
+        match bits {
+            0b00 => None,
+            0b01 => Some(Self::Heap),
+            0b10 => Some(Self::Table),
+            0b11 => Some(Self::Vmctx),
+            _ => panic!("invalid alias region bits"),
+        }
+    }
+
+    const fn to_bits(region: Option<Self>) -> u8 {
+        match region {
+            None => 0b00,
+            Some(r) => r as u8,
+        }
+    }
 }
 
 /// Flags for memory operations like load/store.
@@ -114,27 +136,14 @@ impl MemFlags {
 
     /// Reads the alias region that this memory operation works with.
     pub const fn alias_region(self) -> Option<AliasRegion> {
-        // NB: keep in sync with `with_alias_region`
-        match (self.bits & MASK_ALIAS_REGION) >> ALIAS_REGION_OFFSET {
-            0b00 => None,
-            0b01 => Some(AliasRegion::Heap),
-            0b10 => Some(AliasRegion::Table),
-            0b11 => Some(AliasRegion::Vmctx),
-            _ => unreachable!(),
-        }
+        AliasRegion::from_bits(((self.bits & MASK_ALIAS_REGION) >> ALIAS_REGION_OFFSET) as u8)
     }
 
     /// Sets the alias region that this works on to the specified `region`.
     pub const fn with_alias_region(mut self, region: Option<AliasRegion>) -> Self {
-        // NB: keep in sync with `alias_region`
-        let bits = match region {
-            None => 0b00,
-            Some(AliasRegion::Heap) => 0b01,
-            Some(AliasRegion::Table) => 0b10,
-            Some(AliasRegion::Vmctx) => 0b11,
-        };
+        let bits = AliasRegion::to_bits(region);
         self.bits &= !MASK_ALIAS_REGION;
-        self.bits |= bits << ALIAS_REGION_OFFSET;
+        self.bits |= (bits as u16) << ALIAS_REGION_OFFSET;
         self
     }
 
