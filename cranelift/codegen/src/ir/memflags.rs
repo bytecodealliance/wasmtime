@@ -23,26 +23,28 @@ pub enum Endianness {
 #[allow(missing_docs)]
 #[rustfmt::skip]
 pub enum AliasRegion {
-    // None = 0b00;
-    Heap    = 0b01,
-    Table   = 0b10,
-    Vmctx   = 0b11,
+    // None = 0b000;
+    Heap    = 0b001,
+    Table   = 0b010,
+    Vmctx   = 0b011,
+    Stack   = 0b100,
 }
 
 impl AliasRegion {
     const fn from_bits(bits: u8) -> Option<Self> {
         match bits {
-            0b00 => None,
-            0b01 => Some(Self::Heap),
-            0b10 => Some(Self::Table),
-            0b11 => Some(Self::Vmctx),
+            0b000 => None,
+            0b001 => Some(Self::Heap),
+            0b010 => Some(Self::Table),
+            0b011 => Some(Self::Vmctx),
+            0b100 => Some(Self::Stack),
             _ => panic!("invalid alias region bits"),
         }
     }
 
     const fn to_bits(region: Option<Self>) -> u8 {
         match region {
-            None => 0b00,
+            None => 0b000,
             Some(r) => r as u8,
         }
     }
@@ -70,9 +72,9 @@ pub struct MemFlags {
     // * 2 - little endian flag
     // * 3 - big endian flag
     // * 4 - checked flag
-    // * 5/6 - alias region
-    // * 7/8/9/10 - trap code
-    // * 11/12/13/14/15 - unallocated
+    // * 5/6/7 - alias region
+    // * 8/9/10/11 - trap code
+    // * 12/13/14/15 - unallocated
     //
     // Current properties upheld are:
     //
@@ -104,12 +106,12 @@ const BIT_CHECKED: u16 = 1 << 4;
 
 /// Used for alias analysis, indicates which disjoint part of the abstract state
 /// is being accessed.
-const MASK_ALIAS_REGION: u16 = 0b11 << ALIAS_REGION_OFFSET;
+const MASK_ALIAS_REGION: u16 = 0b111 << ALIAS_REGION_OFFSET;
 const ALIAS_REGION_OFFSET: u16 = 5;
 
 /// Trap code, if any, for this memory operation.
 const MASK_TRAP_CODE: u16 = 0b1111 << TRAP_CODE_OFFSET;
-const TRAP_CODE_OFFSET: u16 = 7;
+const TRAP_CODE_OFFSET: u16 = 8;
 
 impl MemFlags {
     /// Create a new empty set of flags.
@@ -195,6 +197,12 @@ impl MemFlags {
                     return Err("cannot set more than one alias region");
                 }
                 self.with_alias_region(Some(AliasRegion::Vmctx))
+            }
+            "stack" => {
+                if self.alias_region().is_some() {
+                    return Err("cannot set more than one alias region");
+                }
+                self.with_alias_region(Some(AliasRegion::Stack))
             }
             "checked" => self.with_checked(),
 
@@ -416,6 +424,7 @@ impl fmt::Display for MemFlags {
             Some(AliasRegion::Heap) => write!(f, " heap")?,
             Some(AliasRegion::Table) => write!(f, " table")?,
             Some(AliasRegion::Vmctx) => write!(f, " vmctx")?,
+            Some(AliasRegion::Stack) => write!(f, " stack")?,
         }
         Ok(())
     }

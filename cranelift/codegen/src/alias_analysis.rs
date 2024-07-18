@@ -80,6 +80,7 @@ pub struct LastStores {
     heap: PackedOption<Inst>,
     table: PackedOption<Inst>,
     vmctx: PackedOption<Inst>,
+    stack: PackedOption<Inst>,
     other: PackedOption<Inst>,
 }
 
@@ -90,6 +91,7 @@ impl LastStores {
             self.heap = inst.into();
             self.table = inst.into();
             self.vmctx = inst.into();
+            self.stack = inst.into();
             self.other = inst.into();
         } else if opcode.can_store() {
             if let Some(memflags) = func.dfg.insts[inst].memflags() {
@@ -98,11 +100,13 @@ impl LastStores {
                     Some(AliasRegion::Heap) => self.heap = inst.into(),
                     Some(AliasRegion::Table) => self.table = inst.into(),
                     Some(AliasRegion::Vmctx) => self.vmctx = inst.into(),
+                    Some(AliasRegion::Stack) => self.stack = inst.into(),
                 }
             } else {
                 self.heap = inst.into();
                 self.table = inst.into();
                 self.vmctx = inst.into();
+                self.stack = inst.into();
                 self.other = inst.into();
             }
         }
@@ -115,6 +119,7 @@ impl LastStores {
                 Some(AliasRegion::Heap) => self.heap,
                 Some(AliasRegion::Table) => self.table,
                 Some(AliasRegion::Vmctx) => self.vmctx,
+                Some(AliasRegion::Stack) => self.stack,
             }
         } else if func.dfg.insts[inst].opcode().can_load()
             || func.dfg.insts[inst].opcode().can_store()
@@ -139,6 +144,7 @@ impl LastStores {
         self.heap = meet(self.heap, other.heap);
         self.table = meet(self.table, other.table);
         self.vmctx = meet(self.vmctx, other.vmctx);
+        self.stack = meet(self.stack, other.stack);
         self.other = meet(self.other, other.other);
     }
 }

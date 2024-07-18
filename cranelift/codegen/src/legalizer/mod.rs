@@ -92,6 +92,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     // Stack slots are required to be accessible.
                     // We can't currently ensure that they are aligned.
                     let mut mflags = MemFlags::new();
+                    mflags.set_alias_region(Some(ir::AliasRegion::Stack));
                     mflags.set_notrap();
                     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
                 }
@@ -111,6 +112,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     // Stack slots are required to be accessible.
                     // We can't currently ensure that they are aligned.
                     let mut mflags = MemFlags::new();
+                    mflags.set_alias_region(Some(ir::AliasRegion::Stack));
                     mflags.set_notrap();
                     pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
                 }
@@ -128,7 +130,8 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
 
                     // Stack slots are required to be accessible and aligned.
-                    let mflags = MemFlags::trusted();
+                    let mflags =
+                        MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Stack));
                     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
                 }
                 InstructionData::DynamicStackStore {
@@ -143,10 +146,9 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
 
                     let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
 
-                    let mut mflags = MemFlags::new();
                     // Stack slots are required to be accessible and aligned.
-                    mflags.set_notrap();
-                    mflags.set_aligned();
+                    let mflags =
+                        MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Stack));
                     pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
                 }
 

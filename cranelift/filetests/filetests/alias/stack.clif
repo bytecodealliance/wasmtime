@@ -1,0 +1,78 @@
+;; This isn't `test alias-analysis` because we need legalization and GVN to run
+;; in order to dedupe `stack_load`s.
+test optimize precise-output
+
+set opt_level=speed
+target x86_64
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Redundant-load elimination
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f0(i32) -> i32, i32, i32, i32, i32 {
+    ss0 = explicit_slot 8
+    fn0 = %g()
+
+block0(v1: i32):
+    v2 = stack_load.i32 ss0+0
+
+    ;; This should reuse the load above.
+    v3 = stack_load.i32 ss0+0
+
+    ;; This should not reuse the above load.
+    v4 = stack_load.i32 ss0+4
+
+    call fn0()
+
+    ;; The second load is redundant wrt the first, but the call above
+    ;; is a barrier that prevents reusing v2 or v3.
+    v5 = stack_load.i32 ss0+0
+    v6 = stack_load.i32 ss0+0
+
+    return v2, v3, v4, v5, v6
+}
+
+; function %f0(i32) -> i32, i32, i32, i32, i32 fast {
+;     ss0 = explicit_slot 8
+;     sig0 = () fast
+;     fn0 = %g sig0
+;
+; block0(v1: i32):
+;     v7 = stack_addr.i64 ss0
+;     v2 = load.i32 notrap stack v7
+;     v9 = stack_addr.i64 ss0+4
+;     v4 = load.i32 notrap stack v9
+;     call fn0()
+;     v5 = load.i32 notrap stack v7
+;     return v2, v2, v4, v5, v5
+; }
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Store-to-load forwarding
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f1(i32) -> i32, i32 {
+    ss0 = explicit_slot 8
+
+block0(v0: i32):
+    stack_store.i32 v0, ss0+0
+
+    ;; This load should pick up the store above.
+    v1 = stack_load.i32 ss0+0
+
+    ;; This load should not pick up the store above.
+    v2 = stack_load.i32 ss0+4
+
+    return v1, v2
+}
+
+; function %f1(i32) -> i32, i32 fast {
+;     ss0 = explicit_slot 8
+;
+; block0(v0: i32):
+;     v3 = stack_addr.i64 ss0
+;     store notrap stack v0, v3
+;     v5 = stack_addr.i64 ss0+4
+;     v2 = load.i32 notrap stack v5
+;     return v0, v2
+; }
