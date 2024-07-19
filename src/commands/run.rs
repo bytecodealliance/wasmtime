@@ -25,6 +25,8 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttpCtx;
+#[cfg(feature = "wasi-runtime-config")]
+use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
@@ -670,6 +672,38 @@ impl RunCommand {
             }
         }
 
+        if self.run.common.wasi.runtime_config == Some(true) {
+            #[cfg(not(feature = "wasi-runtime-config"))]
+            {
+                bail!("Cannot enable wasi-runtime-config when the binary is not compiled with this feature.");
+            }
+            #[cfg(all(feature = "wasi-runtime-config", feature = "component-model"))]
+            {
+                match linker {
+                    CliLinker::Core(_) => {
+                        bail!("Cannot enable wasi-runtime-config for core wasm modules");
+                    }
+                    CliLinker::Component(linker) => {
+                        let vars = WasiRuntimeConfigVariables::from_iter(
+                            self.run
+                                .common
+                                .wasi
+                                .runtime_config_var
+                                .iter()
+                                .map(|v| (v.key.clone(), v.value.clone())),
+                        );
+
+                        wasmtime_wasi_runtime_config::add_to_linker(linker, |h| {
+                            WasiRuntimeConfig::new(
+                                Arc::get_mut(h.wasi_runtime_config.as_mut().unwrap()).unwrap(),
+                            )
+                        })?;
+                        store.data_mut().wasi_runtime_config = Some(Arc::new(vars));
+                    }
+                }
+            }
+        }
+
         if self.run.common.wasi.threads == Some(true) {
             #[cfg(not(feature = "wasi-threads"))]
             {
@@ -814,6 +848,9 @@ struct Host {
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
+
+    #[cfg(feature = "wasi-runtime-config")]
+    wasi_runtime_config: Option<Arc<WasiRuntimeConfigVariables>>,
 }
 
 impl Host {

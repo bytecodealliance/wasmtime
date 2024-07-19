@@ -115,6 +115,13 @@ impl<'a> From<&'a WasiRuntimeConfigVariables> for WasiRuntimeConfig<'a> {
     }
 }
 
+impl<'a> WasiRuntimeConfig<'a> {
+    /// Create a new view into the `wasi-runtime-config` state.
+    pub fn new(vars: &'a WasiRuntimeConfigVariables) -> Self {
+        Self { vars }
+    }
+}
+
 impl generated::Host for WasiRuntimeConfig<'_> {
     fn get(&mut self, key: String) -> Result<Result<Option<String>, generated::ConfigError>> {
         Ok(Ok(self.vars.0.get(&key).map(|s| s.to_owned())))

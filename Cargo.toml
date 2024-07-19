@@ -350,6 +350,7 @@ default = [
   "wasi-nn",
   "wasi-threads",
   "wasi-http",
+  "wasi-runtime-config",
 
   # Most features of Wasmtime are enabled by default.
   "wat",
@@ -395,6 +396,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
+wasi-runtime-config = ["dep:wasmtime-wasi-runtime-config"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",

@@ -19,6 +19,8 @@ use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnCtx;
+#[cfg(feature = "wasi-runtime-config")]
+use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
 struct Host {
     table: wasmtime::component::ResourceTable,
@@ -29,6 +31,9 @@ struct Host {
 
     #[cfg(feature = "wasi-nn")]
     nn: Option<WasiNnCtx>,
+
+    #[cfg(feature = "wasi-runtime-config")]
+    wasi_runtime_config: Option<WasiRuntimeConfigVariables>,
 }
 
 impl WasiView for Host {
@@ -147,6 +152,8 @@ impl ServeCommand {
 
             #[cfg(feature = "wasi-nn")]
             nn: None,
+            #[cfg(feature = "wasi-runtime-config")]
+            wasi_runtime_config: None,
         };
 
         if self.run.common.wasi.nn == Some(true) {
@@ -162,6 +169,21 @@ impl ServeCommand {
                     .collect::<Vec<_>>();
                 let (backends, registry) = wasmtime_wasi_nn::preload(&graphs)?;
                 host.nn.replace(WasiNnCtx::new(backends, registry));
+            }
+        }
+
+        if self.run.common.wasi.runtime_config == Some(true) {
+            #[cfg(feature = "wasi-runtime-config")]
+            {
+                let vars = WasiRuntimeConfigVariables::from_iter(
+                    self.run
+                        .common
+                        .wasi
+                        .runtime_config_var
+                        .iter()
+                        .map(|v| (v.key.clone(), v.value.clone())),
+                );
+                host.wasi_runtime_config.replace(vars);
             }
         }
 
@@ -224,6 +246,19 @@ impl ServeCommand {
                 wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
                     let ctx = h.nn.as_mut().unwrap();
                     wasmtime_wasi_nn::wit::WasiNnView::new(&mut h.table, ctx)
+                })?;
+            }
+        }
+
+        if self.run.common.wasi.runtime_config == Some(true) {
+            #[cfg(not(feature = "wasi-runtime-config"))]
+            {
+                bail!("support for wasi-runtime-config was disabled at compile time");
+            }
+            #[cfg(feature = "wasi-runtime-config")]
+            {
+                wasmtime_wasi_runtime_config::add_to_linker(linker, |h| {
+                    WasiRuntimeConfig::from(h.wasi_runtime_config.as_ref().unwrap())
                 })?;
             }
         }
