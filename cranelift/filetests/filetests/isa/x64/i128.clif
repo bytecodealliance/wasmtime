@@ -1878,7 +1878,7 @@ block0(v0: i128):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -1895,3 +1895,125 @@ block0(v0: i128):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+
+function %mul_wide_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   mulq    %rax, %rsi, %rax, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   mulq %rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_concat_64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v10 = iconst.i64 0
+    v2 = iconcat v0, v10
+    v3 = iconcat v1, v10
+    v4 = iadd v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rdi, %rax
+;   addq    %rax, %rsi, %rax
+;   adcq    %rdx, $0, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %rdx, %rdx
+;   movq %rdi, %rax
+;   addq %rsi, %rax
+;   adcq $0, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mul_uextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   mulq    %rax, %rsi, %rax, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   mulq %rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mul_sextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   imulq   %rax, %rsi, %rax, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   imulq %rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

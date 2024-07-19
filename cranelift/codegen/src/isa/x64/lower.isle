@@ -101,15 +101,27 @@
 (rule 1 (lower (has_type $I128 (iadd x y)))
       ;; Get the high/low registers for `x`.
       (let ((x_regs ValueRegs x)
-            (x_lo Gpr (value_regs_get_gpr x_regs 0))
-            (x_hi Gpr (value_regs_get_gpr x_regs 1)))
-        ;; Get the high/low registers for `y`.
-        (let ((y_regs ValueRegs y)
-              (y_lo Gpr (value_regs_get_gpr y_regs 0))
-              (y_hi Gpr (value_regs_get_gpr y_regs 1)))
-          ;; Do an add followed by an add-with-carry.
-          (with_flags (x64_add_with_flags_paired $I64 x_lo y_lo)
-                      (x64_adc_paired $I64 x_hi y_hi)))))
+            (y_regs ValueRegs y))
+        (iadd128
+          (value_regs_get_gpr x_regs 0)
+          (value_regs_get_gpr x_regs 1)
+          (value_regs_get_gpr y_regs 0)
+          (value_regs_get_gpr y_regs 1))))
+(rule 2 (lower (has_type $I128 (iadd x (iconcat y_lo y_hi))))
+        (let ((x_regs ValueRegs x))
+          (iadd128 (value_regs_get_gpr x 0) (value_regs_get_gpr x 1) y_lo y_hi)))
+(rule 3 (lower (has_type $I128 (iadd x (uextend y @ (value_type $I64)))))
+        (let ((x_regs ValueRegs x))
+          (iadd128 (value_regs_get_gpr x 0) (value_regs_get_gpr x 1)
+                   y (RegMemImm.Imm 0))))
+
+;; Helper for lowering 128-bit addition with the 64-bit halves of the lhs/rhs
+;; already split. The first two arguments are lo/hi for the lhs and the second
+;; two are lo/hi for the rhs.
+(decl iadd128 (Gpr Gpr GprMemImm GprMemImm) ValueRegs)
+(rule (iadd128 x_lo x_hi y_lo y_hi)
+      (with_flags (x64_add_with_flags_paired $I64 x_lo y_lo)
+                  (x64_adc_paired $I64 x_hi y_hi)))
 
 ;;;; Helpers for `*_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -245,15 +257,22 @@
 (rule 1 (lower (has_type $I128 (isub x y)))
       ;; Get the high/low registers for `x`.
       (let ((x_regs ValueRegs x)
-            (x_lo Gpr (value_regs_get_gpr x_regs 0))
-            (x_hi Gpr (value_regs_get_gpr x_regs 1)))
-        ;; Get the high/low registers for `y`.
-        (let ((y_regs ValueRegs y)
-              (y_lo Gpr (value_regs_get_gpr y_regs 0))
-              (y_hi Gpr (value_regs_get_gpr y_regs 1)))
-          ;; Do a sub followed by an sub-with-borrow.
-          (with_flags (x64_sub_with_flags_paired $I64 x_lo y_lo)
-                      (x64_sbb_paired $I64 x_hi y_hi)))))
+            (y_regs ValueRegs y))
+        (isub128
+          (value_regs_get_gpr x_regs 0)
+          (value_regs_get_gpr x_regs 1)
+          (value_regs_get_gpr y_regs 0)
+          (value_regs_get_gpr y_regs 1))))
+(rule 2 (lower (has_type $I128 (isub (iconcat x_lo x_hi) (iconcat y_lo y_hi))))
+        (isub128 x_lo x_hi y_lo y_hi))
+
+;; Helper for lowering 128-bit subtraction with the 64-bit halves of the lhs/rhs
+;; already split. The first two arguments are lo/hi for the lhs and the second
+;; two are lo/hi for the rhs.
+(decl isub128 (Gpr Gpr GprMemImm GprMemImm) ValueRegs)
+(rule (isub128 x_lo x_hi y_lo y_hi)
+      (with_flags (x64_sub_with_flags_paired $I64 x_lo y_lo)
+                  (x64_sbb_paired $I64 x_hi y_hi)))
 
 ;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -999,6 +1018,22 @@
 
 ;; `i128`.
 
+(rule 2 (lower (has_type $I128 (imul x y)))
+      (let ((x_regs ValueRegs x)
+            (y_regs ValueRegs y))
+        (imul128
+          (value_regs_get_gpr x_regs 0)
+          (value_regs_get_gpr x_regs 1)
+          (value_regs_get_gpr y_regs 0)
+          (value_regs_get_gpr y_regs 1))))
+
+(rule 4 (lower (has_type $I128 (imul (iconcat x_lo x_hi) (iconcat y_lo y_hi))))
+        (imul128 x_lo x_hi y_lo y_hi))
+
+;; Helper for lowering 128-bit multiplication with the 64-bit halves of the
+;; lhs/rhs already split. The first two arguments are lo/hi for the lhs and the
+;; second two are lo/hi for the rhs.
+;;
 ;; mul:
 ;;   dst_lo = lhs_lo * rhs_lo
 ;;   dst_hi = umulhi(lhs_lo, rhs_lo) +
@@ -1012,16 +1047,10 @@
 ;;   dst_lo:hi_lolo = mulhi_u x_lo, y_lo
 ;;   dst_hi = add hilo_hilo, hi_lolo
 ;;   return (dst_lo, dst_hi)
-(rule 2 (lower (has_type $I128 (imul x y)))
+(decl imul128 (Gpr Gpr GprMem GprMem) ValueRegs)
+(rule (imul128 x_lo x_hi y_lo y_hi)
       ;; Put `x` into registers and unpack its hi/lo halves.
-      (let ((x_regs ValueRegs x)
-            (x_lo Gpr (value_regs_get_gpr x_regs 0))
-            (x_hi Gpr (value_regs_get_gpr x_regs 1))
-            ;; Put `y` into registers and unpack its hi/lo halves.
-            (y_regs ValueRegs y)
-            (y_lo Gpr (value_regs_get_gpr y_regs 0))
-            (y_hi Gpr (value_regs_get_gpr y_regs 1))
-            ;; lo_hi = mul x_lo, y_hi
+      (let (;; lo_hi = mul x_lo, y_hi
             (lo_hi Gpr (x64_imul $I64 x_lo y_hi))
             ;; hi_lo = mul x_hi, y_lo
             (hi_lo Gpr (x64_imul $I64 x_hi y_lo))
@@ -1034,6 +1063,17 @@
             ;; dst_hi = add hilo_hilo, hi_lolo
             (dst_hi Gpr (x64_add $I64 hilo_hilo hi_lolo)))
         (value_gprs dst_lo dst_hi)))
+
+;; The `mul` and `imul` instructions on x64 are defined as taking 64-bit
+;; operands and producing a 128-bit result, which exactly matches the semantics
+;; of widening 64-bit inputs to 128-bit and then multiplying them. That means
+;; that these cases can get some some simpler codegen.
+(rule 5 (lower (has_type $I128 (imul (uextend x @ (value_type $I64))
+                                     (uextend y @ (value_type $I64)))))
+        (x64_mul $I64 $false x y))
+(rule 5 (lower (has_type $I128 (imul (sextend x @ (value_type $I64))
+                                     (sextend y @ (value_type $I64)))))
+        (x64_mul $I64 $true x y))
 
 ;; SSE.
 
