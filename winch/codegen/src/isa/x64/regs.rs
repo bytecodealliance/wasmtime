@@ -99,18 +99,6 @@ pub(crate) fn scratch() -> Reg {
     r11()
 }
 
-/// This register is used as a scratch register, in the context of trampolines only,
-/// where we assume that callee-saved registers are given the correct handling
-/// according to the system ABI. r12 is chosen given that it's a callee-saved,
-/// non-argument register.
-///
-/// In the context of all other internal functions, this register is not excluded
-/// from register allocation, so no extra assumptions should be made regarding
-/// its availability.
-pub(crate) fn argv() -> Reg {
-    r12()
-}
-
 fn fpr(enc: u8) -> Reg {
     Reg::new(PReg::new(enc as usize, RegClass::Float))
 }
