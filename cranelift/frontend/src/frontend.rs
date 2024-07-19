@@ -505,7 +505,7 @@ impl<'a> FunctionBuilder<'a> {
 
         // If `var` needs inclusion in stack maps, then `val` does too.
         if self.func_ctx.stack_map_vars.contains(var) {
-            self.declare_value_needs_stack_map(val)
+            self.declare_value_needs_stack_map(val);
         }
 
         self.func_ctx.ssa.def_var(var, val, self.position.unwrap());
@@ -708,6 +708,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Third, and finally, we spill the live needs-stack-map values at each
     /// safepoint into those stack slots.
     fn insert_safepoint_spills(&mut self) {
+        log::trace!(
+            "before inserting safepoint spills and reloads:\n{}",
+            self.func.display()
+        );
+
         // Find all the GC values that are live across each safepoint and add
         // stack map entries for them.
         let stack_slots = self.find_live_stack_map_values_at_each_safepoint();
@@ -715,6 +720,11 @@ impl<'a> FunctionBuilder<'a> {
         // Insert spills to our new stack slots before each safepoint
         // instruction.
         self.insert_safepoint_spills_and_reloads(&stack_slots);
+
+        log::trace!(
+            "after inserting safepoint spills and reloads:\n{}",
+            self.func.display()
+        );
     }
 
     /// Find the live GC references for each safepoint instruction in this
@@ -747,24 +757,6 @@ impl<'a> FunctionBuilder<'a> {
         // order.
         let mut live = BTreeSet::new();
 
-        // Helper to process a value's definition. This removes it from the live
-        // set and returns its stack slot to the appropriate free list for
-        // future reuse.
-        let process_def = |func: &Function,
-                           stack_slots: &crate::HashMap<_, _>,
-                           free_stack_slots: &mut crate::HashMap<u32, SmallVec<_>>,
-                           live: &mut BTreeSet<ir::Value>,
-                           val: ir::Value| {
-            log::trace!("stack map liveness: defining {val:?}, removing it from the live set");
-            live.remove(&val);
-
-            // This value's stack slot, if any, is now available for reuse.
-            if let Some(slot) = stack_slots.get(&val) {
-                let ty = func.dfg.value_type(val);
-                free_stack_slots.entry(ty.bytes()).or_default().push(*slot);
-            }
-        };
-
         // Do our single-pass liveness analysis.
         //
         // Use a post-order traversal, traversing the IR backwards from uses to
@@ -773,9 +765,8 @@ impl<'a> FunctionBuilder<'a> {
         // 1. The definition of a value removes it from our `live` set. Values
         //    are not live before they are defined.
         //
-        // 2. When we see any instruction that requires a safepoint (aka
-        //    non-tail calls) we record the current live set of needs-stack-map
-        //    values.
+        // 2. When we see any instruction that is a safepoint (aka non-tail
+        //    calls) we record the current live set of needs-stack-map values.
         //
         //    We ignore tail calls because this caller and its frame won't exist
         //    by the time the callee is executing and potentially triggers a GC;
@@ -804,6 +795,83 @@ impl<'a> FunctionBuilder<'a> {
         //    simplest thing. Besides, none of our mid-end optimization passes
         //    have run at this point in time yet, so there probably isn't much,
         //    if any, dead code.
+
+        // Helper for (1)
+        let process_def = |func: &Function,
+                           stack_slots: &crate::HashMap<_, _>,
+                           free_stack_slots: &mut crate::HashMap<u32, SmallVec<_>>,
+                           live: &mut BTreeSet<ir::Value>,
+                           val: ir::Value| {
+            log::trace!("stack map liveness:   defining {val:?}, removing it from the live set");
+            live.remove(&val);
+
+            // This value's stack slot, if any, is now available for reuse.
+            if let Some(slot) = stack_slots.get(&val) {
+                log::trace!("stack map liveness:     returning {slot:?} to the free list");
+                let ty = func.dfg.value_type(val);
+                free_stack_slots.entry(ty.bytes()).or_default().push(*slot);
+            }
+        };
+
+        // Helper for (2)
+        let process_safepoint = |func: &mut Function,
+                                 stack_slots: &mut crate::HashMap<Value, StackSlot>,
+                                 free_stack_slots: &mut crate::HashMap<u32, SmallVec<_>>,
+                                 live: &BTreeSet<_>,
+                                 inst: Inst| {
+            log::trace!(
+                "stack map liveness:   found safepoint: {inst:?}: {}",
+                func.dfg.display_inst(inst)
+            );
+            log::trace!("stack map liveness:     live set = {live:?}");
+
+            for val in live {
+                let ty = func.dfg.value_type(*val);
+                let slot = *stack_slots.entry(*val).or_insert_with(|| {
+                    log::trace!("stack map liveness:     {val:?} needs a stack slot");
+                    let size = func.dfg.value_type(*val).bytes();
+                    free_stack_slots
+                        .get_mut(&size)
+                        .and_then(|list| list.pop().inspect(|slot| {
+                            log::trace!(
+                                "stack map liveness:       reusing free stack slot {slot:?} for {val:?}"
+                            )
+                        }))
+                        .unwrap_or_else(|| {
+                            debug_assert!(size.is_power_of_two());
+                            let log2_size = size.ilog2();
+                            let slot = func.create_sized_stack_slot(ir::StackSlotData::new(
+                                ir::StackSlotKind::ExplicitSlot,
+                                size,
+                                log2_size.try_into().unwrap(),
+                            ));
+                            log::trace!(
+                                "stack map liveness:       created new stack slot {slot:?} for {val:?}"
+                            );
+                            slot
+                        })
+                });
+                func.dfg.append_user_stack_map_entry(
+                    inst,
+                    ir::UserStackMapEntry {
+                        ty,
+                        slot,
+                        offset: 0,
+                    },
+                );
+            }
+        };
+
+        // Helper for (3)
+        let process_use = |func: &Function, live: &mut BTreeSet<_>, inst: Inst, val: Value| {
+            if live.insert(val) {
+                log::trace!(
+                    "stack map liveness:   found use of {val:?}, marking it live: {inst:?}: {}",
+                    func.dfg.display_inst(inst)
+                );
+            }
+        };
+
         for block in self
             .func_ctx
             .dfs
@@ -831,38 +899,13 @@ impl<'a> FunctionBuilder<'a> {
                 // stack map entries to record the values in `live`.
                 let opcode = self.func.dfg.insts[inst].opcode();
                 if opcode.is_call() && !opcode.is_return() {
-                    log::trace!(
-                        "stack map liveness: found safepoint: {inst:?}: {}",
-                        self.func.dfg.display_inst(inst)
+                    process_safepoint(
+                        &mut self.func,
+                        &mut stack_slots,
+                        &mut free_stack_slots,
+                        &live,
+                        inst,
                     );
-                    log::trace!("  live = {live:?}");
-
-                    for val in &live {
-                        let ty = self.func.dfg.value_type(*val);
-                        let slot = *stack_slots.entry(*val).or_insert_with(|| {
-                            let size = self.func.dfg.value_type(*val).bytes();
-                            free_stack_slots
-                                .get_mut(&size)
-                                .and_then(|list| list.pop())
-                                .unwrap_or_else(|| {
-                                    debug_assert!(size.is_power_of_two());
-                                    let log2_size = size.ilog2();
-                                    self.func.create_sized_stack_slot(ir::StackSlotData::new(
-                                        ir::StackSlotKind::ExplicitSlot,
-                                        size,
-                                        log2_size.try_into().unwrap(),
-                                    ))
-                                })
-                        });
-                        self.func.dfg.append_user_stack_map_entry(
-                            inst,
-                            ir::UserStackMapEntry {
-                                ty,
-                                slot,
-                                offset: 0,
-                            },
-                        );
-                    }
                 }
 
                 // (3) Add all needs-stack-map values that are operands to this
@@ -871,12 +914,7 @@ impl<'a> FunctionBuilder<'a> {
                 for val in self.func.dfg.inst_values(inst) {
                     let val = self.func.dfg.resolve_aliases(val);
                     if self.func_ctx.stack_map_values.contains(val) {
-                        if live.insert(val) {
-                            log::trace!(
-                                "stack map liveness: found use of {val:?}, marking it live: {inst:?}: {}",
-                                self.func.dfg.display_inst(inst)
-                            );
-                        }
+                        process_use(&self.func, &mut live, inst, val);
                     }
                 }
 
@@ -906,7 +944,8 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// 2. Replace all uses of the needs-stack-map value with loads from that
     ///    stack slot. This will introduce many redundant loads, but the alias
-    ///    analysis pass in the mid-end can clean all these up.
+    ///    analysis pass in the mid-end should clean most of these up when not
+    ///    actually needed.
     fn insert_safepoint_spills_and_reloads(
         &mut self,
         stack_slots: &crate::HashMap<ir::Value, ir::StackSlot>,
@@ -926,6 +965,16 @@ impl<'a> FunctionBuilder<'a> {
                     spilled_any = true;
                 }
             }
+
+            // The cursor needs to point just *before* the first original
+            // instruction in the block that we didn't introduce just above, so
+            // that when we loop over `next_inst()` below we are processing the
+            // block's original instructions. If we inserted spills, then it
+            // already does point there. If we did not insert spills, then it is
+            // currently pointing at the first original instruction, but that
+            // means that the upcoming `pos.next_inst()` call will skip over the
+            // first original instruction, so in this case we need to back up
+            // the cursor.
             if !spilled_any {
                 pos = pos.at_position(CursorPosition::Before(block));
             }
@@ -3150,6 +3199,8 @@ block0:
 
     #[test]
     fn vars_block_params_and_needs_stack_map() {
+        let _ = env_logger::try_init();
+
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(ir::types::I32));
         sig.returns.push(AbiParam::new(ir::types::I32));
