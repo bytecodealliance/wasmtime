@@ -950,6 +950,62 @@ macro_rules! isle_common_prelude_methods {
             a.copysign(b)
         }
 
+        fn f32_add(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs + rhs).non_nan()
+        }
+
+        fn f32_sub(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs - rhs).non_nan()
+        }
+
+        fn f32_mul(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs * rhs).non_nan()
+        }
+
+        fn f32_div(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs / rhs).non_nan()
+        }
+
+        fn f32_sqrt(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.sqrt().non_nan()
+        }
+
+        fn f32_ceil(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.ceil().non_nan()
+        }
+
+        fn f32_floor(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.floor().non_nan()
+        }
+
+        fn f32_trunc(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.trunc().non_nan()
+        }
+
+        fn f32_nearest(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.round_ties_even().non_nan()
+        }
+
+        fn f32_min(&mut self, a: Ieee32, b: Ieee32) -> Option<Ieee32> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a <= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+
+        fn f32_max(&mut self, a: Ieee32, b: Ieee32) -> Option<Ieee32> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a >= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+
         fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
             n.neg()
         }
@@ -960,6 +1016,62 @@ macro_rules! isle_common_prelude_methods {
 
         fn f32_copysign(&mut self, a: Ieee32, b: Ieee32) -> Ieee32 {
             a.copysign(b)
+        }
+
+        fn f64_add(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs + rhs).non_nan()
+        }
+
+        fn f64_sub(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs - rhs).non_nan()
+        }
+
+        fn f64_mul(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs * rhs).non_nan()
+        }
+
+        fn f64_div(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs / rhs).non_nan()
+        }
+
+        fn f64_sqrt(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.sqrt().non_nan()
+        }
+
+        fn f64_ceil(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.ceil().non_nan()
+        }
+
+        fn f64_floor(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.floor().non_nan()
+        }
+
+        fn f64_trunc(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.trunc().non_nan()
+        }
+
+        fn f64_nearest(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.round_ties_even().non_nan()
+        }
+
+        fn f64_min(&mut self, a: Ieee64, b: Ieee64) -> Option<Ieee64> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a <= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+
+        fn f64_max(&mut self, a: Ieee64, b: Ieee64) -> Option<Ieee64> {
+            if a.is_nan() || b.is_nan() {
+                None
+            } else if a >= b {
+                Some(a)
+            } else {
+                Some(b)
+            }
         }
 
         fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {

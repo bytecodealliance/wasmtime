@@ -182,8 +182,6 @@
       (if-let $true (u64_lt (i64_as_u64 (i64_neg k)) (i64_as_u64 k)))
       (iadd ty x (iconst ty (imm64_masked ty (i64_as_u64 (i64_neg k))))))
 
-;; TODO: fadd, fsub, fmul, fdiv, fneg, fabs
-
 ;; A splat of a constant can become a direct `vconst` with the appropriate bit
 ;; pattern.
 (rule (simplify (splat dst (iconst $I8 n)))
@@ -280,7 +278,92 @@
 (decl pure u64_bswap64 (u64) u64)
 (extern constructor u64_bswap64 u64_bswap64)
 
-;; Constant fold bitwise float operations (fneg/fabs/fcopysign)
+;; Constant fold float operations
+;; Note: With the exception of fabs, fneg and copysign,
+;; constant folding is only performed when the result of
+;; an instruction isn't NaN. We want the NaN bit patterns
+;; produced by an instruction to be consistent, and
+;; compile-time evaluation in a cross-compilation scenario
+;; risks producing different NaN bit patterns than the target
+;; would have at run-time.
+;; TODO: fcmp, fma, demote, promote, to-int ops
+(rule (simplify (fadd $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
+      (if-let r (f32_add lhs rhs))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fadd $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
+      (if-let r (f64_add lhs rhs))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (fsub $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
+      (if-let r (f32_sub lhs rhs))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fsub $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
+      (if-let r (f64_sub lhs rhs))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (fmul $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
+      (if-let r (f32_mul lhs rhs))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fmul $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
+      (if-let r (f64_mul lhs rhs))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (fdiv $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
+      (if-let r (f32_div lhs rhs))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fdiv $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
+      (if-let r (f64_div lhs rhs))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (sqrt $F32 (f32const $F32 n)))
+      (if-let r (f32_sqrt n))
+      (subsume (f32const $F32 r)))
+(rule (simplify (sqrt $F64 (f64const $F64 n)))
+      (if-let r (f64_sqrt n))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (ceil $F32 (f32const $F32 n)))
+      (if-let r (f32_ceil n))
+      (subsume (f32const $F32 r)))
+(rule (simplify (ceil $F64 (f64const $F64 n)))
+      (if-let r (f64_ceil n))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (floor $F32 (f32const $F32 n)))
+      (if-let r (f32_floor n))
+      (subsume (f32const $F32 r)))
+(rule (simplify (floor $F64 (f64const $F64 n)))
+      (if-let r (f64_floor n))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (trunc $F32 (f32const $F32 n)))
+      (if-let r (f32_trunc n))
+      (subsume (f32const $F32 r)))
+(rule (simplify (trunc $F64 (f64const $F64 n)))
+      (if-let r (f64_trunc n))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (nearest $F32 (f32const $F32 n)))
+      (if-let r (f32_nearest n))
+      (subsume (f32const $F32 r)))
+(rule (simplify (nearest $F64 (f64const $F64 n)))
+      (if-let r (f64_nearest n))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (fmin $F32 (f32const $F32 n) (f32const $F32 m)))
+      (if-let r (f32_min n m))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fmin $F64 (f64const $F64 n) (f64const $F64 m)))
+      (if-let r (f64_min n m))
+      (subsume (f64const $F64 r)))
+
+(rule (simplify (fmax $F32 (f32const $F32 n) (f32const $F32 m)))
+      (if-let r (f32_max n m))
+      (subsume (f32const $F32 r)))
+(rule (simplify (fmax $F64 (f64const $F64 n) (f64const $F64 m)))
+      (if-let r (f64_max n m))
+      (subsume (f64const $F64 r)))
+
 (rule (simplify (fneg $F16 (f16const $F16 n)))
       (subsume (f16const $F16 (f16_neg n))))
 (rule (simplify (fneg $F32 (f32const $F32 n)))

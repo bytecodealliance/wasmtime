@@ -915,6 +915,11 @@ impl Ieee32 {
         self.as_f32().is_nan()
     }
 
+    /// Returns `None` if `self` is a NaN and `Some(self)` otherwise.
+    pub fn non_nan(self) -> Option<Self> {
+        Some(self).filter(|f| !f.is_nan())
+    }
+
     /// Converts Self to a rust f32
     pub fn as_f32(self) -> f32 {
         f32::from_bits(self.0)
@@ -927,17 +932,21 @@ impl Ieee32 {
 
     /// Computes the absolute value of self.
     pub fn abs(self) -> Self {
-        Self::with_float(self.as_f32().abs())
+        Self(self.0 & !(1u32 << 31))
     }
 
     /// Returns a number composed of the magnitude of self and the sign of sign.
     pub fn copysign(self, sign: Self) -> Self {
-        Self::with_float(self.as_f32().copysign(sign.as_f32()))
+        if self.is_negative() == sign.is_negative() {
+            self
+        } else {
+            self.neg()
+        }
     }
 
     /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
     pub fn is_negative(&self) -> bool {
-        self.as_f32().is_sign_negative()
+        self.0 & (1 << 31) != 0
     }
 
     /// Returns true if self is positive or negative zero
@@ -963,17 +972,7 @@ impl Ieee32 {
     /// Returns the nearest integer to `self`. Rounds half-way cases to the number
     /// with an even least significant digit.
     pub fn round_ties_even(self) -> Self {
-        // TODO: Replace with the native implementation once
-        // https://github.com/rust-lang/rust/issues/96710 is stabilized
-        let toint_32: f32 = 1.0 / f32::EPSILON;
-
-        let f = self.as_f32();
-        let e = self.0 >> 23 & 0xff;
-        if e >= 0x7f_u32 + 23 {
-            self
-        } else {
-            Self::with_float((f.abs() + toint_32 - toint_32).copysign(f))
-        }
+        Self::with_float(self.as_f32().round_ties_even())
     }
 }
 
@@ -1017,7 +1016,7 @@ impl Neg for Ieee32 {
     type Output = Ieee32;
 
     fn neg(self) -> Self::Output {
-        Self::with_float(self.as_f32().neg())
+        Self(self.0 ^ (1 << 31))
     }
 }
 
@@ -1133,6 +1132,11 @@ impl Ieee64 {
         self.as_f64().is_nan()
     }
 
+    /// Returns `None` if `self` is a NaN and `Some(self)` otherwise.
+    pub fn non_nan(self) -> Option<Self> {
+        Some(self).filter(|f| !f.is_nan())
+    }
+
     /// Converts Self to a rust f64
     pub fn as_f64(self) -> f64 {
         f64::from_bits(self.0)
@@ -1145,17 +1149,21 @@ impl Ieee64 {
 
     /// Computes the absolute value of self.
     pub fn abs(self) -> Self {
-        Self::with_float(self.as_f64().abs())
+        Self(self.0 & !(1u64 << 63))
     }
 
     /// Returns a number composed of the magnitude of self and the sign of sign.
     pub fn copysign(self, sign: Self) -> Self {
-        Self::with_float(self.as_f64().copysign(sign.as_f64()))
+        if self.is_negative() == sign.is_negative() {
+            self
+        } else {
+            self.neg()
+        }
     }
 
     /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
     pub fn is_negative(&self) -> bool {
-        self.as_f64().is_sign_negative()
+        self.0 & (1 << 63) != 0
     }
 
     /// Returns true if self is positive or negative zero
@@ -1181,17 +1189,7 @@ impl Ieee64 {
     /// Returns the nearest integer to `self`. Rounds half-way cases to the number
     /// with an even least significant digit.
     pub fn round_ties_even(self) -> Self {
-        // TODO: Replace with the native implementation once
-        // https://github.com/rust-lang/rust/issues/96710 is stabilized
-        let toint_64: f64 = 1.0 / f64::EPSILON;
-
-        let f = self.as_f64();
-        let e = self.0 >> 52 & 0x7ff_u64;
-        if e >= 0x3ff_u64 + 52 {
-            self
-        } else {
-            Self::with_float((f.abs() + toint_64 - toint_64).copysign(f))
-        }
+        Self::with_float(self.as_f64().round_ties_even())
     }
 }
 
@@ -1241,7 +1239,7 @@ impl Neg for Ieee64 {
     type Output = Ieee64;
 
     fn neg(self) -> Self::Output {
-        Self::with_float(self.as_f64().neg())
+        Self(self.0 ^ (1 << 63))
     }
 }
 
