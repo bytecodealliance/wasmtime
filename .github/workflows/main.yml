@@ -726,13 +726,8 @@ jobs:
     # Install Rust targets.
     - run: rustup target add wasm32-wasip1
 
-    # Run integration tests!
+    # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
-      env:
-        RUST_BACKTRACE: 1
-
-    # Run unit tests.
-    - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }} --lib
       env:
         RUST_BACKTRACE: 1
 

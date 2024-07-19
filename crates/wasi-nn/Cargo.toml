@@ -46,11 +46,6 @@ features = [
     "Foundation_Collections",
     # For Int64 input support.
     "implement",
-    # Following 4 features are needed for creating a LearningModelDevice from NPU.
-    "Win32_Graphics_Direct3D",
-    "Win32_Graphics_Direct3D12",
-    "Win32_Graphics_DXCore",
-    "Win32_System_WinRT_ML",
 ]
 optional = true
 
