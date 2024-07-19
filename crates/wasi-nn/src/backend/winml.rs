@@ -142,9 +142,9 @@ impl BackendExecutionContext for WinMLExecutionContext {
         let index = self.find(id, &input_features)?;
         let input = input_features.GetAt(index)?;
 
-        let inpsectable =
+        let inspectable =
             to_inspectable(tensor, input.cast::<TensorFeatureDescriptor>()?.Shape()?)?;
-        self.binding.Bind(&input.Name()?, &inpsectable)?;
+        self.binding.Bind(&input.Name()?, &inspectable)?;
 
         Ok(())
     }
@@ -163,9 +163,11 @@ impl BackendExecutionContext for WinMLExecutionContext {
                 windows::AI::MachineLearning::LearningModelFeatureKind::Tensor => output_feature
                     .cast::<TensorFeatureDescriptor>()?
                     .TensorKind()?,
-                _ => unimplemented!(),
+                _ => unimplemented!(
+                    "the WinML backend only supports tensors, found: {:?}",
+                    output_feature.Kind()
+                ),
             };
-            // TODO: this only handles FP16, FP32 and I64!
             let tensor = to_tensor(
                 result.Outputs()?.Lookup(&output_feature.Name()?)?,
                 tensor_kind,
@@ -209,23 +211,23 @@ fn convert_i64(i: i64) -> Result<u32, BackendError> {
 // Convert from wasi-nn tensor to WinML tensor.
 fn to_inspectable(tensor: &Tensor, shape: IVectorView<i64>) -> Result<IInspectable, Error> {
     match tensor.ty {
-        crate::wit::types::TensorType::Fp16 => unsafe {
+        TensorType::Fp16 => unsafe {
             let data = std::slice::from_raw_parts(
-                tensor.data.as_ptr() as *const f32,
+                tensor.data.as_ptr().cast::<f32>(),
                 tensor.data.len() / size_of::<f32>(),
             );
             TensorFloat16Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
-        crate::wit::types::TensorType::Fp32 => unsafe {
+        TensorType::Fp32 => unsafe {
             let data = std::slice::from_raw_parts(
-                tensor.data.as_ptr() as *const f32,
+                tensor.data.as_ptr().cast::<f32>(),
                 tensor.data.len() / size_of::<f32>(),
             );
             TensorFloat::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
-        crate::wit::types::TensorType::I64 => unsafe {
+        TensorType::I64 => unsafe {
             let data = std::slice::from_raw_parts(
-                tensor.data.as_ptr() as *const i64,
+                tensor.data.as_ptr().cast::<i64>(),
                 tensor.data.len() / size_of::<i64>(),
             );
             TensorInt64Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
