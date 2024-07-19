@@ -972,17 +972,7 @@ impl Ieee32 {
     /// Returns the nearest integer to `self`. Rounds half-way cases to the number
     /// with an even least significant digit.
     pub fn round_ties_even(self) -> Self {
-        // TODO: Replace with the native implementation once
-        // https://github.com/rust-lang/rust/issues/96710 is stabilized
-        let toint_32: f32 = 1.0 / f32::EPSILON;
-
-        let f = self.as_f32();
-        let e = self.0 >> 23 & 0xff;
-        if e >= 0x7f_u32 + 23 {
-            self
-        } else {
-            Self::with_float((f.abs() + toint_32 - toint_32).copysign(f))
-        }
+        Self::with_float(self.as_f32().round_ties_even())
     }
 }
 
@@ -1199,17 +1189,7 @@ impl Ieee64 {
     /// Returns the nearest integer to `self`. Rounds half-way cases to the number
     /// with an even least significant digit.
     pub fn round_ties_even(self) -> Self {
-        // TODO: Replace with the native implementation once
-        // https://github.com/rust-lang/rust/issues/96710 is stabilized
-        let toint_64: f64 = 1.0 / f64::EPSILON;
-
-        let f = self.as_f64();
-        let e = self.0 >> 52 & 0x7ff_u64;
-        if e >= 0x3ff_u64 + 52 {
-            self
-        } else {
-            Self::with_float((f.abs() + toint_64 - toint_64).copysign(f))
-        }
+        Self::with_float(self.as_f64().round_ties_even())
     }
 }
 
