@@ -214,21 +214,21 @@ fn to_inspectable(tensor: &Tensor, shape: IVectorView<i64>) -> Result<IInspectab
         TensorType::Fp16 => unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr().cast::<f32>(),
-                tensor.data.len() / size_of::<f32>(),
+                get_safe_len::<f32>(&tensor.data),
             );
             TensorFloat16Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
         TensorType::Fp32 => unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr().cast::<f32>(),
-                tensor.data.len() / size_of::<f32>(),
+                get_safe_len::<f32>(&tensor.data),
             );
             TensorFloat::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
         TensorType::I64 => unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr().cast::<i64>(),
-                tensor.data.len() / size_of::<i64>(),
+                get_safe_len::<i64>(&tensor.data),
             );
             TensorInt64Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
@@ -285,6 +285,20 @@ fn to_tensor(inspectable: IInspectable, tensor_kind: TensorKind) -> Result<Tenso
         _ => unimplemented!(),
     };
     Ok(tensor)
+}
+
+/// Convenience function for checking that we can cast `data` to a slice of `T`, returning the
+/// length of that slice.
+fn get_safe_len<T>(data: &[u8]) -> usize {
+    assert!(
+        data.len() % std::mem::size_of::<T>() == 0,
+        "data size is not a multiple of the size of `T`"
+    );
+    assert!(
+        data.as_ptr() as usize % std::mem::align_of::<T>() == 0,
+        "raw data is not aligned to `T`'s alignment"
+    );
+    data.len() / std::mem::size_of::<T>()
 }
 
 #[cfg(test)]
