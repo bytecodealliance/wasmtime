@@ -1632,6 +1632,36 @@ fn test_x64_emit() {
         "4520FF",
         "andb    %r15b, %r15b, %r15b",
     ));
+    insns.push((
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Sbb,
+            RegMemImm::reg(r14),
+            w_r15,
+        ),
+        "4519F7",
+        "sbbl    %r15d, %r14d, %r15d",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Sbb,
+            RegMemImm::imm(0),
+            w_r15,
+        ),
+        "4983DF00",
+        "sbbq    %r15, $0, %r15",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Adc,
+            RegMemImm::imm(0),
+            w_r15,
+        ),
+        "4983D700",
+        "adcq    %r15, $0, %r15",
+    ));
 
     // ========================================================
     // AluRM
