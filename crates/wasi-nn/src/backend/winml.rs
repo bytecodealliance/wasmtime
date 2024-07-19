@@ -309,10 +309,11 @@ mod tests {
     #[test]
     fn fp16() {
         let data = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
-        let mut buffer = Vec::with_capacity(data.len() * size_of::<f32>());
-        for f in &data {
-            buffer.extend(f.to_ne_bytes());
-        }
+        let buffer = data
+            .iter()
+            .map(|f| f.to_ne_bytes())
+            .flatten()
+            .collect::<Vec<u8>>();
         let buffer_copy = buffer.clone();
         let tensor = Tensor {
             ty: TensorType::Fp16,
@@ -332,10 +333,7 @@ mod tests {
         // Convert back.
         let t = to_tensor(inspectable.unwrap(), TensorKind::Float16);
         assert!(t.as_ref().is_ok());
-        let t_ref = t.as_ref();
-        assert_eq!(t_ref.unwrap().data, buffer);
-        assert_eq!(t_ref.unwrap().dimensions, tensor.dimensions);
-        assert_eq!(t_ref.unwrap().ty, TensorType::Fp16);
+        assert_eq!(t.unwrap(), tensor);
     }
 
     #[test]
@@ -360,10 +358,7 @@ mod tests {
         // Convert back.
         let t = to_tensor(inspectable.unwrap(), TensorKind::Float);
         assert!(t.as_ref().is_ok());
-        let t_ref = t.as_ref();
-        assert_eq!(t_ref.unwrap().data, buffer);
-        assert_eq!(t_ref.unwrap().dimensions, tensor.dimensions);
-        assert_eq!(t_ref.unwrap().ty, TensorType::Fp32);
+        assert_eq!(t.unwrap(), tensor);
     }
 
     #[test]
@@ -392,9 +387,6 @@ mod tests {
         // Convert back.
         let t = to_tensor(inspectable.unwrap(), TensorKind::Int64);
         assert!(t.as_ref().is_ok());
-        let t_ref = t.as_ref();
-        assert_eq!(t_ref.unwrap().data, buffer);
-        assert_eq!(t_ref.unwrap().dimensions, tensor.dimensions);
-        assert_eq!(t_ref.unwrap().ty, TensorType::I64);
+        assert_eq!(t.unwrap(), tensor);
     }
 }

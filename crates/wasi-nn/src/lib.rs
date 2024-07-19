@@ -84,6 +84,12 @@ impl fmt::Debug for Tensor {
     }
 }
 
+impl PartialEq for Tensor {
+    fn eq(&self, other: &Self) -> bool {
+        self.dimensions == other.dimensions && self.ty == other.ty && self.data == other.data
+    }
+}
+
 /// A backend-defined execution context.
 pub struct ExecutionContext(Box<dyn backend::BackendExecutionContext>);
 impl From<Box<dyn backend::BackendExecutionContext>> for ExecutionContext {
