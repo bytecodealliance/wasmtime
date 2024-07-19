@@ -21,6 +21,7 @@ hashbrown = { workspace = true, optional = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
+env_logger = { workspace = true }
 similar = { workspace = true }
 cranelift-codegen = { workspace = true, features = ['x86'] }
 
