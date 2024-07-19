@@ -467,7 +467,7 @@ jobs:
     - run: git diff --exit-code
 
     # Re-vendor the C API and make sure it's up-to-date.
-    - name: Re-vendor WIT
+    - name: Re-vendor C API
       run: ./ci/vendor-c-api-headers.sh
     - run: git diff --exit-code
 
