@@ -8,6 +8,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// A type that wraps any type implementing [`tokio::io::AsyncRead`] and [`tokio::io::AsyncWrite`]
 /// and itself implements [`hyper::rt::Read`] and [`hyper::rt::Write`].
+#[derive(Debug)]
 pub struct TokioIo<T> {
     inner: T,
 }
