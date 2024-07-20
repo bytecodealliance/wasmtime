@@ -1007,7 +1007,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
-            n.neg()
+            -n
         }
 
         fn f32_abs(&mut self, n: Ieee32) -> Ieee32 {
@@ -1075,7 +1075,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {
-            n.neg()
+            -n
         }
 
         fn f64_abs(&mut self, n: Ieee64) -> Ieee64 {

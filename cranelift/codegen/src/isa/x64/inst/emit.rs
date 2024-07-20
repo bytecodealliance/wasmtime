@@ -3577,7 +3577,7 @@ pub(crate) fn emit(
                 let output_bits = dst_size.to_bits();
                 match *src_size {
                     OperandSize::Size32 => {
-                        let cst = Ieee32::pow2(output_bits - 1).neg().bits();
+                        let cst = (-Ieee32::pow2(output_bits - 1)).bits();
                         let inst = Inst::imm(OperandSize::Size32, cst as u64, tmp_gpr);
                         inst.emit(sink, info, state);
                     }
@@ -3588,7 +3588,7 @@ pub(crate) fn emit(
                             no_overflow_cc = CC::NBE; // >
                             Ieee64::fcvt_to_sint_negative_overflow(output_bits)
                         } else {
-                            Ieee64::pow2(output_bits - 1).neg()
+                            -Ieee64::pow2(output_bits - 1)
                         };
                         let inst = Inst::imm(OperandSize::Size64, cst.bits(), tmp_gpr);
                         inst.emit(sink, info, state);
