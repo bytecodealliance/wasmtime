@@ -96,11 +96,13 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
+| WASI Proposal        | [`wasi-runtime-config`]           | unstable proposal           |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
 
 [`wasi-nn`]: https://github.com/WebAssembly/wasi-nn
 [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
+[`wasi-runtime-config`]: https://github.com/WebAssembly/wasi-runtime-config
 [`gc`]: https://github.com/WebAssembly/gc
 
 [^1]: This is intended to encompass features that Cranelift supports as a
@@ -159,7 +161,6 @@ features to figure out how best to implement them and at least move them to Tier
 * [WASI proposal: `wasi-message-queue`](https://github.com/WebAssembly/wasi-message-queue)
 * [WASI proposal: `wasi-parallel`](https://github.com/WebAssembly/wasi-parallel)
 * [WASI proposal: `wasi-pubsub`](https://github.com/WebAssembly/wasi-pubsub)
-* [WASI proposal: `wasi-runtime-config`](https://github.com/WebAssembly/wasi-runtime-config)
 * [WASI proposal: `wasi-sql`](https://github.com/WebAssembly/wasi-sql)
 * [WASI proposal: `wasi-url`](https://github.com/WebAssembly/wasi-url)
 
