@@ -1,6 +1,86 @@
 //! Safepoints and stack maps.
 
+use core::ops::{Index, IndexMut};
+
 use super::*;
+
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum SlotSize {
+    Size8 = 0,
+    Size16 = 1,
+    Size32 = 2,
+    Size64 = 3,
+    Size128 = 4,
+    // If adding support for more slot sizes, update `SLOT_SIZE_LEN` below.
+}
+const SLOT_SIZE_LEN: usize = 5;
+
+impl TryFrom<ir::Type> for SlotSize {
+    type Error = &'static str;
+
+    fn try_from(ty: ir::Type) -> Result<Self, Self::Error> {
+        Self::new(ty.bytes()).ok_or("type is not supported in stack maps")
+    }
+}
+
+impl SlotSize {
+    fn new(bytes: u32) -> Option<Self> {
+        match bytes {
+            1 => Some(Self::Size8),
+            2 => Some(Self::Size16),
+            4 => Some(Self::Size32),
+            8 => Some(Self::Size64),
+            16 => Some(Self::Size128),
+            _ => None,
+        }
+    }
+
+    fn unwrap_new(bytes: u32) -> Self {
+        Self::new(bytes).unwrap_or_else(|| panic!("cannot create a `SlotSize` for {bytes} bytes"))
+    }
+}
+
+/// A map from every `SlotSize` to a `T`.
+struct SlotSizeMap<T>([T; SLOT_SIZE_LEN]);
+
+impl<T> Index<SlotSize> for SlotSizeMap<T> {
+    type Output = T;
+    fn index(&self, index: SlotSize) -> &Self::Output {
+        self.get(index)
+    }
+}
+
+impl<T> IndexMut<SlotSize> for SlotSizeMap<T> {
+    fn index_mut(&mut self, index: SlotSize) -> &mut Self::Output {
+        self.get_mut(index)
+    }
+}
+
+impl<T> SlotSizeMap<T> {
+    fn new() -> Self
+    where
+        T: Default,
+    {
+        Self([
+            T::default(),
+            T::default(),
+            T::default(),
+            T::default(),
+            T::default(),
+        ])
+    }
+
+    fn get(&self, size: SlotSize) -> &T {
+        let index = size as u8 as usize;
+        &self.0[index]
+    }
+
+    fn get_mut(&mut self, size: SlotSize) -> &mut T {
+        let index = size as u8 as usize;
+        &mut self.0[index]
+    }
+}
 
 impl FunctionBuilder<'_> {
     /// Insert spills for every value that needs to be in a stack map at every
@@ -56,11 +136,10 @@ impl FunctionBuilder<'_> {
         // reloads and all that stuff.
         let mut stack_slots: crate::HashMap<ir::Value, ir::StackSlot> = Default::default();
 
-        // A map from size/align to free stack slots that are not being used
+        // A map from slot size to free stack slots that are not being used
         // anymore. This allows us to reuse stack slots across multiple values
         // helps cut down on the ultimate size of our stack frames.
-        let mut free_stack_slots: crate::HashMap<u32, SmallVec<[ir::StackSlot; 4]>> =
-            Default::default();
+        let mut free_stack_slots = SlotSizeMap::<SmallVec<[ir::StackSlot; 4]>>::new();
 
         // The set of needs-stack-maps values that are currently live in our
         // traversal.
@@ -112,7 +191,7 @@ impl FunctionBuilder<'_> {
         // Helper for (1)
         let process_def = |func: &Function,
                            stack_slots: &crate::HashMap<_, _>,
-                           free_stack_slots: &mut crate::HashMap<u32, SmallVec<_>>,
+                           free_stack_slots: &mut SlotSizeMap<SmallVec<_>>,
                            live: &mut BTreeSet<ir::Value>,
                            val: ir::Value| {
             log::trace!("liveness:   defining {val:?}, removing it from the live set");
@@ -122,14 +201,14 @@ impl FunctionBuilder<'_> {
             if let Some(slot) = stack_slots.get(&val) {
                 log::trace!("liveness:     returning {slot:?} to the free list");
                 let ty = func.dfg.value_type(val);
-                free_stack_slots.entry(ty.bytes()).or_default().push(*slot);
+                free_stack_slots[SlotSize::try_from(ty).unwrap()].push(*slot);
             }
         };
 
         // Helper for (2)
         let process_safepoint = |func: &mut Function,
                                  stack_slots: &mut crate::HashMap<Value, StackSlot>,
-                                 free_stack_slots: &mut crate::HashMap<u32, SmallVec<_>>,
+                                 free_stack_slots: &mut SlotSizeMap<SmallVec<_>>,
                                  live: &BTreeSet<_>,
                                  inst: Inst| {
             log::trace!(
@@ -143,14 +222,14 @@ impl FunctionBuilder<'_> {
                 let slot = *stack_slots.entry(*val).or_insert_with(|| {
                     log::trace!("liveness:     {val:?} needs a stack slot");
                     let size = func.dfg.value_type(*val).bytes();
-                    free_stack_slots
-                        .get_mut(&size)
-                        .and_then(|list| list.pop().inspect(|slot| {
+                    match free_stack_slots[SlotSize::unwrap_new(size)].pop() {
+                        Some(slot) => {
                             log::trace!(
                                 "liveness:       reusing free stack slot {slot:?} for {val:?}"
-                            )
-                        }))
-                        .unwrap_or_else(|| {
+                            );
+                            slot
+                        }
+                        None => {
                             debug_assert!(size.is_power_of_two());
                             let log2_size = size.ilog2();
                             let slot = func.create_sized_stack_slot(ir::StackSlotData::new(
@@ -162,7 +241,8 @@ impl FunctionBuilder<'_> {
                                 "liveness:       created new stack slot {slot:?} for {val:?}"
                             );
                             slot
-                        })
+                        }
+                    }
                 });
                 func.dfg.append_user_stack_map_entry(
                     inst,
