@@ -674,6 +674,7 @@ name = "cranelift-frontend"
 version = "0.111.0"
 dependencies = [
  "cranelift-codegen",
+ "env_logger",
  "hashbrown 0.14.3",
  "log",
  "similar",
