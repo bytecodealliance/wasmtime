@@ -6,7 +6,6 @@ description = "Various bitset stuff for use inside Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-bitset"
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 
 [lints]
