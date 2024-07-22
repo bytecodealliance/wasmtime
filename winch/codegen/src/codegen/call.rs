@@ -57,7 +57,7 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
+    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
     codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext},
     masm::{
         CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
@@ -299,7 +299,7 @@ impl FnCall {
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(offset));
                     let size: OperandSize = ty.into();
-                    let scratch = <M::ABI as ABI>::scratch_for(&ty);
+                    let scratch = scratch!(M, &ty);
                     context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
                 }
@@ -319,7 +319,7 @@ impl FnCall {
                     let slot = masm.address_at_sp(SPOffset::from_u32(offset));
                     // Don't rely on `ABI::scratch_for` as we always use
                     // an int register as the return pointer.
-                    let scratch = <M::ABI as ABI>::scratch_reg();
+                    let scratch = scratch!(M);
                     masm.load_addr(addr, scratch, ty.into());
                     masm.store(scratch.into(), slot, ty.into());
                 }

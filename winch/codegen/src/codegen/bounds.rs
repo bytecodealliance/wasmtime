@@ -3,7 +3,7 @@
 //! recommended when working on this area of Winch.
 use super::env::{HeapData, HeapStyle};
 use crate::{
-    abi::{vmctx, ABI},
+    abi::{scratch, vmctx},
     codegen::CodeGenContext,
     isa::reg::Reg,
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
@@ -96,7 +96,7 @@ where
             masm.mov(RegImm::i64(max_size as i64), dst, ptr_size)
         }
         (_, HeapStyle::Dynamic) => {
-            let scratch = <M::ABI as ABI>::scratch_reg();
+            let scratch = scratch!(M);
             let base = if let Some(offset) = heap.import_from {
                 let addr = masm.address_at_vmctx(offset);
                 masm.load_ptr(addr, scratch);
@@ -199,7 +199,7 @@ pub(crate) fn load_heap_addr_unchecked<M>(
     let base = if let Some(offset) = heap.import_from {
         // If the WebAssembly memory is imported, load the address into
         // the scratch register.
-        let scratch = <M::ABI as ABI>::scratch_reg();
+        let scratch = scratch!(M);
         masm.load_ptr(masm.address_at_vmctx(offset), scratch);
         scratch
     } else {

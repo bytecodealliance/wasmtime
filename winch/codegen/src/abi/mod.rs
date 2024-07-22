@@ -67,10 +67,22 @@ pub(super) enum ParamsOrReturns {
 /// Macro to get the pinned register holding the [VMContext].
 macro_rules! vmctx {
     ($m:ident) => {
-        <$m::ABI as ABI>::vmctx_reg()
+        <$m::ABI as $crate::abi::ABI>::vmctx_reg()
     };
 }
 
+/// Macro to get the designated general purpose scratch register or the
+/// designated scratch register for the given type.
+macro_rules! scratch {
+    ($m:ident) => {
+        <$m::ABI as $crate::abi::ABI>::scratch_reg()
+    };
+    ($m:ident, $wasm_type:expr) => {
+        <$m::ABI as $crate::abi::ABI>::scratch_for($wasm_type)
+    };
+}
+
+pub(crate) use scratch;
 pub(crate) use vmctx;
 
 /// Constructs an [ABISig] using Winch's ABI.

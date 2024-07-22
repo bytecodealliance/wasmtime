@@ -1,4 +1,4 @@
-use crate::abi::{self, align_to, LocalSlot};
+use crate::abi::{self, align_to, scratch, LocalSlot};
 use crate::codegen::{CodeGenContext, FuncEnv};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
@@ -592,7 +592,7 @@ pub(crate) trait MacroAssembler {
         debug_assert!(bytes % 4 == 0);
         let mut remaining = bytes;
         let word_bytes = <Self::ABI as abi::ABI>::word_bytes();
-        let scratch = <Self::ABI as abi::ABI>::scratch_reg();
+        let scratch = scratch!(Self);
 
         let mut dst_offs = dst.as_u32() - bytes;
         let mut src_offs = src.as_u32() - bytes;
@@ -869,7 +869,7 @@ pub(crate) trait MacroAssembler {
             // Add an upper bound to this generation;
             // given a considerably large amount of slots
             // this will be inefficient.
-            let zero = <Self::ABI as abi::ABI>::scratch_reg();
+            let zero = scratch!(Self);
             self.zero(zero);
             let zero = RegImm::reg(zero);
 
