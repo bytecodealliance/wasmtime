@@ -1,7 +1,7 @@
 [package]
 name = "cranelift-codegen-meta"
 authors = ["The Cranelift Project Developers"]
-version = "0.110.0"
+version = "0.110.1"
 description = "Metaprogram for cranelift-codegen code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -15,4 +15,4 @@ workspace = true
 rustdoc-args = [ "--document-private-items" ]
 
 [dependencies]
-cranelift-codegen-shared = { path = "../shared", version = "0.110.0" }
+cranelift-codegen-shared = { path = "../shared", version = "0.110.1" }
