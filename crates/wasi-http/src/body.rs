@@ -23,6 +23,7 @@ pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
 pub type HyperOutgoingBody = BoxBody<Bytes, types::ErrorCode>;
 
 /// The concrete type behind a `was:http/types/incoming-body` resource.
+#[derive(Debug)]
 pub struct HostIncomingBody {
     body: IncomingBodyState,
     /// An optional worker task to keep alive while this body is being read.
@@ -72,6 +73,7 @@ impl HostIncomingBody {
 }
 
 /// Internal state of a [`HostIncomingBody`].
+#[derive(Debug)]
 enum IncomingBodyState {
     /// The body is stored here meaning that within `HostIncomingBody` the
     /// `take_stream` method can be called for example.
@@ -84,6 +86,7 @@ enum IncomingBodyState {
 }
 
 /// Small wrapper around [`HyperIncomingBody`] which adds a timeout to every frame.
+#[derive(Debug)]
 struct BodyWithTimeout {
     /// Underlying stream that frames are coming from.
     inner: HyperIncomingBody,
@@ -146,6 +149,7 @@ impl Body for BodyWithTimeout {
 
 /// Message sent when a `HostIncomingBodyStream` is done to the
 /// `HostFutureTrailers` state.
+#[derive(Debug)]
 enum StreamEnd {
     /// The body wasn't completely read and was dropped early. May still have
     /// trailers, but requires reading more frames.
@@ -158,6 +162,7 @@ enum StreamEnd {
 
 /// The concrete type behind the `wasi:io/streams/input-stream` resource returned
 /// by `wasi:http/types/incoming-body`'s `stream` method.
+#[derive(Debug)]
 pub struct HostIncomingBodyStream {
     state: IncomingBodyStreamState,
     buffer: Bytes,
@@ -209,6 +214,7 @@ impl HostIncomingBodyStream {
     }
 }
 
+#[derive(Debug)]
 enum IncomingBodyStreamState {
     /// The body is currently open for reading and present here.
     ///
@@ -293,6 +299,7 @@ impl Drop for HostIncomingBodyStream {
 }
 
 /// The concrete type behind a `wasi:http/types/future-trailers` resource.
+#[derive(Debug)]
 pub enum HostFutureTrailers {
     /// Trailers aren't here yet.
     ///
@@ -378,7 +385,7 @@ impl Subscribe for HostFutureTrailers {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct WrittenState {
     expected: u64,
     written: Arc<std::sync::atomic::AtomicU64>,
@@ -540,6 +547,7 @@ impl HostOutgoingBody {
 }
 
 /// Message sent to end the `[HostOutgoingBody]` stream.
+#[derive(Debug)]
 enum FinishMessage {
     Finished,
     Trailers(hyper::HeaderMap),
@@ -566,6 +574,7 @@ impl StreamContext {
 }
 
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
+#[derive(Debug)]
 struct BodyWriteStream {
     context: StreamContext,
     writer: mpsc::Sender<Bytes>,

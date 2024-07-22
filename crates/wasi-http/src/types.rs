@@ -21,6 +21,7 @@ use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, Subscribe};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
+#[derive(Debug)]
 pub struct WasiHttpCtx {
     _priv: (),
 }
@@ -486,6 +487,7 @@ impl TryInto<http::Method> for types::Method {
 }
 
 /// The concrete type behind a `wasi:http/types/incoming-request` resource.
+#[derive(Debug)]
 pub struct HostIncomingRequest {
     pub(crate) parts: http::request::Parts,
     pub(crate) scheme: Scheme,
@@ -561,6 +563,7 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
 }
 
 /// The concrete type behind a `wasi:http/types/outgoing-request` resource.
+#[derive(Debug)]
 pub struct HostOutgoingRequest {
     /// The method of the request.
     pub method: Method,
@@ -577,7 +580,7 @@ pub struct HostOutgoingRequest {
 }
 
 /// The concrete type behind a `wasi:http/types/request-options` resource.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct HostRequestOptions {
     /// How long to wait for a connection to be established.
     pub connect_timeout: Option<std::time::Duration>,
@@ -588,6 +591,7 @@ pub struct HostRequestOptions {
 }
 
 /// The concrete type behind a `wasi:http/types/incoming-response` resource.
+#[derive(Debug)]
 pub struct HostIncomingResponse {
     /// The response status
     pub status: u16,
@@ -598,6 +602,7 @@ pub struct HostIncomingResponse {
 }
 
 /// The concrete type behind a `wasi:http/types/fields` resource.
+#[derive(Debug)]
 pub enum HostFields {
     /// A reference to the fields of a parent entry.
     Ref {
@@ -626,6 +631,7 @@ pub type FutureIncomingResponseHandle =
     AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponse, types::ErrorCode>>>;
 
 /// A response that is in the process of being received.
+#[derive(Debug)]
 pub struct IncomingResponse {
     /// The response itself.
     pub resp: hyper::Response<HyperIncomingBody>,
@@ -636,6 +642,7 @@ pub struct IncomingResponse {
 }
 
 /// The concrete type behind a `wasi:http/types/future-incoming-response` resource.
+#[derive(Debug)]
 pub enum HostFutureIncomingResponse {
     /// A pending response
     Pending(FutureIncomingResponseHandle),

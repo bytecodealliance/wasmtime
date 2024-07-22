@@ -37,6 +37,7 @@ pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
 ///
 /// This behavior makes it easier to tie a worker task to the lifetime of a Resource
 /// by keeping this handle owned by the Resource.
+#[derive(Debug)]
 pub struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
 impl<T> Drop for AbortOnDropJoinHandle<T> {
     fn drop(&mut self) {
