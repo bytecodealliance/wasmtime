@@ -86,32 +86,25 @@ impl FunctionBuilder<'_> {
     /// Insert spills for every value that needs to be in a stack map at every
     /// safepoint.
     ///
-    /// First, we do a very simple, imprecise, and overapproximating liveness
+    /// We begin with a very simple, imprecise, and overapproximating liveness
     /// analysis. This considers any use (regardless if that use produces side
     /// effects or flows into another instruction that produces side effects!)
     /// of a needs-stack-map value to keep the value live. This allows us to do
     /// this liveness analysis in a single post-order traversal of the IR,
-    /// without any fixed-point loop. The result of this analysis is the set of
-    /// live needs-stack-map values at each instruction that must be a safepoint
-    /// (currently this is just non-tail calls).
+    /// without any fixed-point loop. The result of this analysis is the mapping
+    /// from each needs-stack-map value that is live across a safepoint to its
+    /// associated stack slot.
     ///
-    /// Second, take those results, add stack slots so we have a place to spill
-    /// to.
-    ///
-    /// Third, and finally, we spill the live needs-stack-map values at each
-    /// safepoint into those stack slots.
+    /// Finally, we spill each of the needs-stack-map values that are live
+    /// across a safepoint to their associated stack slot upon definition, and
+    /// insert reloads from that stack slot at each use of the value.
     pub(super) fn insert_safepoint_spills(&mut self) {
         log::trace!(
             "before inserting safepoint spills and reloads:\n{}",
             self.func.display()
         );
 
-        // Find all the GC values that are live across each safepoint and add
-        // stack map entries for them.
         let stack_slots = self.find_live_stack_map_values_at_each_safepoint();
-
-        // Insert spills to our new stack slots before each safepoint
-        // instruction.
         self.insert_safepoint_spills_and_reloads(&stack_slots);
 
         log::trace!(
