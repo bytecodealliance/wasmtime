@@ -58,6 +58,8 @@ make_vendor "wasi-http" "
 
 make_vendor "wasi-runtime-config" "runtime-config@c667fe6"
 
+make_vendor "wasi-keyvalue" "keyvalue@219ea36"
+
 rm -rf $cache_dir
 
 # Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is

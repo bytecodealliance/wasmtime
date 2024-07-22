@@ -1,0 +1,26 @@
+[package]
+name = "wasmtime-wasi-keyvalue"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository = "https://github.com/bytecodealliance/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Wasmtime implementation of the wasi-keyvalue API"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+wasmtime = { workspace = true, features = ["runtime", "async", "component-model"] }
+async-trait = { workspace = true }
+url = { workspace = true }
+redis = { workspace = true, optional = true, features = ["tokio-comp"] }
+
+[dev-dependencies]
+test-programs-artifacts = { workspace = true }
+wasmtime-wasi = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+
+[features]
+redis = ["dep:redis"]

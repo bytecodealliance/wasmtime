@@ -37,3 +37,11 @@ pub mod config {
         world: "wasi:config/imports",
     });
 }
+
+pub mod keyvalue {
+    wit_bindgen::generate!({
+        path: "../wasi-keyvalue/wit",
+        world: "wasi:keyvalue/imports",
+        type_section_suffix: "keyvalue",
+    });
+}

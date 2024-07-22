@@ -1,0 +1,26 @@
+package wasi:keyvalue@0.2.0-draft;
+
+/// The `wasi:keyvalue/imports` world provides common APIs for interacting with key-value stores.
+/// Components targeting this world will be able to do:
+/// 
+/// 1. CRUD (create, read, update, delete) operations on key-value stores.
+/// 2. Atomic `increment` and CAS (compare-and-swap) operations.
+/// 3. Batch operations that can reduce the number of round trips to the network.
+world imports {
+	/// The `store` capability allows the component to perform eventually consistent operations on
+	/// the key-value store.
+	import store;
+
+	/// The `atomic` capability allows the component to perform atomic / `increment` and CAS
+	/// (compare-and-swap) operations.
+	import atomics;
+
+	/// The `batch` capability allows the component to perform eventually consistent batch
+	/// operations that can reduce the number of round trips to the network.
+	import batch;
+}
+
+world watch-service {
+	include imports;
+	export watcher;
+}

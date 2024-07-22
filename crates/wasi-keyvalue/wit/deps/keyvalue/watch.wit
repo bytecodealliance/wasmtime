@@ -1,0 +1,16 @@
+/// A keyvalue interface that provides watch operations.
+/// 
+/// This interface is used to provide event-driven mechanisms to handle
+/// keyvalue changes.
+interface watcher {
+	/// A keyvalue interface that provides handle-watch operations.
+	use store.{bucket};
+
+	/// Handle the `set` event for the given bucket and key. It includes a reference to the `bucket`
+	/// that can be used to interact with the store.
+	on-set: func(bucket: bucket, key: string, value: list<u8>);
+
+	/// Handle the `delete` event for the given bucket and key. It includes a reference to the
+	/// `bucket` that can be used to interact with the store.
+	on-delete: func(bucket: bucket, key: string);
+}
