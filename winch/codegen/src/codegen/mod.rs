@@ -723,6 +723,7 @@ where
             let dst = match ty {
                 WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm),
                 WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm),
+                WasmValType::V128 => self.context.reg_for_type(ty, self.masm),
                 _ => unreachable!(),
             };
 
