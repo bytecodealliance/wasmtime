@@ -487,8 +487,17 @@ fn publish(krate: &Crate) -> bool {
 fn verify(crates: &[Crate]) {
     verify_capi();
 
-    drop(fs::remove_dir_all(".cargo"));
-    drop(fs::remove_dir_all("vendor"));
+    if fs::exists(".cargo") != Ok(false) {
+        panic!(
+            "`.cargo` already exists on the file system, remove it and then run the script again"
+        );
+    }
+    if fs::exists("vendor") != Ok(false) {
+        panic!(
+            "`vendor` already exists on the file system, remove it and then run the script again"
+        );
+    }
+
     let vendor = cmd_output(Command::new("cargo").arg("vendor").stderr(Stdio::inherit()));
     assert!(vendor.status.success());
 
