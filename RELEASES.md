@@ -1,3 +1,14 @@
+## 23.0.1
+
+Released 2024-07-22.
+
+### Fixed
+
+* Fixed some issues when auto-publishing crates to crates.io.
+  [#8986](https://github.com/bytecodealliance/wasmtime/pull/8986)
+
+----
+
 ## 23.0.0
 
 Released 2024-07-22.
