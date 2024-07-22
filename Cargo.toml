@@ -69,7 +69,7 @@ wasmparser = { workspace = true }
 tracing = { workspace = true }
 log = { workspace = true }
 humantime = { workspace = true }
-tempfile = { workspace = true }
+tempfile = { workspace = true, optional = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }
@@ -418,7 +418,7 @@ gc = ["wasmtime-cli-flags/gc"]
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
 serve = ["wasi-http", "component-model", "dep:http-body-util", "dep:http"]
-explore = ["dep:wasmtime-explorer"]
+explore = ["dep:wasmtime-explorer", "dep:tempfile"]
 wast = ["dep:wasmtime-wast"]
 config = ["cache"]
 compile = ["cranelift"]
