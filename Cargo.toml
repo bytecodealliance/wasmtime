@@ -15,7 +15,7 @@ rust-version.workspace = true
 
 [package.metadata.binstall]
 pkg-url = "{repo}/releases/download/v{version}/wasmtime-v{version}-{target-arch}-{target-family}{archive-suffix}"
-bin-dir = "wasmtime-{version}-{target-arch}-{target-family}/{bin}{binary-ext}"
+bin-dir = "wasmtime-v{version}-{target-arch}-{target-family}/{bin}{binary-ext}"
 pkg-fmt = "txz"
 [package.metadata.binstall.overrides.x86_64-apple-darwin]
 pkg-url = "{repo}/releases/download/v{version}/wasmtime-v{version}-{target-arch}-macos{archive-suffix}"
