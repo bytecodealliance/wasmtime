@@ -507,7 +507,7 @@ fn verify(crates: &[Crate]) {
         cmd.arg("publish")
             .arg("--manifest-path")
             .arg(&krate.manifest)
-            .arg("--dry-run");
+            .arg("--dry-run")
             .env("CARGO_TARGET_DIR", "./target");
         if krate.name.contains("wasi-nn") {
             cmd.arg("--no-verify");
