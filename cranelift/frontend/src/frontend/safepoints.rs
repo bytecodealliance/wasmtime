@@ -115,12 +115,12 @@ impl FunctionBuilder<'_> {
                            free_stack_slots: &mut crate::HashMap<u32, SmallVec<_>>,
                            live: &mut BTreeSet<ir::Value>,
                            val: ir::Value| {
-            log::trace!("stack map liveness:   defining {val:?}, removing it from the live set");
+            log::trace!("liveness:   defining {val:?}, removing it from the live set");
             live.remove(&val);
 
             // This value's stack slot, if any, is now available for reuse.
             if let Some(slot) = stack_slots.get(&val) {
-                log::trace!("stack map liveness:     returning {slot:?} to the free list");
+                log::trace!("liveness:     returning {slot:?} to the free list");
                 let ty = func.dfg.value_type(val);
                 free_stack_slots.entry(ty.bytes()).or_default().push(*slot);
             }
@@ -133,21 +133,21 @@ impl FunctionBuilder<'_> {
                                  live: &BTreeSet<_>,
                                  inst: Inst| {
             log::trace!(
-                "stack map liveness:   found safepoint: {inst:?}: {}",
+                "liveness:   found safepoint: {inst:?}: {}",
                 func.dfg.display_inst(inst)
             );
-            log::trace!("stack map liveness:     live set = {live:?}");
+            log::trace!("liveness:     live set = {live:?}");
 
             for val in live {
                 let ty = func.dfg.value_type(*val);
                 let slot = *stack_slots.entry(*val).or_insert_with(|| {
-                    log::trace!("stack map liveness:     {val:?} needs a stack slot");
+                    log::trace!("liveness:     {val:?} needs a stack slot");
                     let size = func.dfg.value_type(*val).bytes();
                     free_stack_slots
                         .get_mut(&size)
                         .and_then(|list| list.pop().inspect(|slot| {
                             log::trace!(
-                                "stack map liveness:       reusing free stack slot {slot:?} for {val:?}"
+                                "liveness:       reusing free stack slot {slot:?} for {val:?}"
                             )
                         }))
                         .unwrap_or_else(|| {
@@ -159,7 +159,7 @@ impl FunctionBuilder<'_> {
                                 log2_size.try_into().unwrap(),
                             ));
                             log::trace!(
-                                "stack map liveness:       created new stack slot {slot:?} for {val:?}"
+                                "liveness:       created new stack slot {slot:?} for {val:?}"
                             );
                             slot
                         })
@@ -179,7 +179,7 @@ impl FunctionBuilder<'_> {
         let process_use = |func: &Function, live: &mut BTreeSet<_>, inst: Inst, val: Value| {
             if live.insert(val) {
                 log::trace!(
-                    "stack map liveness:   found use of {val:?}, marking it live: {inst:?}: {}",
+                    "liveness:   found use of {val:?}, marking it live: {inst:?}: {}",
                     func.dfg.display_inst(inst)
                 );
             }
@@ -193,7 +193,7 @@ impl FunctionBuilder<'_> {
             // we can add the stack map entries below.
             .collect::<Vec<_>>()
         {
-            log::trace!("stack map liveness: traversing {block:?}");
+            log::trace!("liveness: traversing {block:?}");
             let mut option_inst = self.func.layout.last_inst(block);
             while let Some(inst) = option_inst {
                 // (1) Remove values defined by this instruction from the `live`
