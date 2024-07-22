@@ -504,9 +504,10 @@ fn verify(crates: &[Crate]) {
 
     fn verify_and_vendor(krate: &Crate) {
         let mut cmd = Command::new("cargo");
-        cmd.arg("package")
+        cmd.arg("publish")
             .arg("--manifest-path")
             .arg(&krate.manifest)
+            .arg("--dry-run");
             .env("CARGO_TARGET_DIR", "./target");
         if krate.name.contains("wasi-nn") {
             cmd.arg("--no-verify");
