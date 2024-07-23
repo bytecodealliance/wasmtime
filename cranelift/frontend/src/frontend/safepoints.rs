@@ -100,6 +100,10 @@ impl FunctionBuilder<'_> {
     /// insert reloads from that stack slot at each use of the value.
     pub(super) fn insert_safepoint_spills(&mut self) {
         log::trace!(
+            "values needing inclusion in stack maps: {:?}",
+            self.func_ctx.stack_map_values
+        );
+        log::trace!(
             "before inserting safepoint spills and reloads:\n{}",
             self.func.display()
         );
@@ -117,7 +121,7 @@ impl FunctionBuilder<'_> {
     /// function.
     ///
     /// Returns a map from each safepoint instruction to the set of GC
-    /// references that are live across it
+    /// references that are live across it.
     fn find_live_stack_map_values_at_each_safepoint(
         &mut self,
     ) -> crate::HashMap<ir::Value, ir::StackSlot> {
@@ -340,6 +344,8 @@ impl FunctionBuilder<'_> {
         let mut vals: SmallVec<[_; 8]> = Default::default();
 
         while let Some(block) = pos.next_block() {
+            log::trace!("rewriting: processing {block:?}");
+
             // Spill needs-stack-map values defined by block parameters to their
             // associated stack slot.
             vals.extend_from_slice(pos.func.dfg.block_params(block));
@@ -366,6 +372,11 @@ impl FunctionBuilder<'_> {
             }
 
             while let Some(mut inst) = pos.next_inst() {
+                log::trace!(
+                    "rewriting:   considering {inst:?}: {}",
+                    pos.func.dfg.display_inst(inst)
+                );
+
                 // Replace all uses of needs-stack-map values with loads from
                 // the value's associated stack slot.
                 vals.extend(pos.func.dfg.inst_values(inst));
@@ -374,11 +385,22 @@ impl FunctionBuilder<'_> {
                     if let Some(slot) = stack_slots.get(val) {
                         replaced_any = true;
                         let ty = pos.func.dfg.value_type(*val);
+                        let old_val = *val;
                         *val = pos.ins().stack_load(ty, *slot, 0);
+                        log::trace!(
+                            "rewriting:     found use of {old_val:?}, reloading: {}",
+                            pos.func
+                                .dfg
+                                .display_inst(pos.func.dfg.value_def(*val).unwrap_inst())
+                        );
                     }
                 }
                 if replaced_any {
                     pos.func.dfg.overwrite_inst_values(inst, vals.drain(..));
+                    log::trace!(
+                        "rewriting:     updated inst operands with reloaded values: {}",
+                        pos.func.dfg.display_inst(inst)
+                    );
                 } else {
                     vals.clear();
                 }
@@ -390,6 +412,10 @@ impl FunctionBuilder<'_> {
                 for val in vals.drain(..) {
                     if let Some(slot) = stack_slots.get(&val) {
                         inst = pos.ins().stack_store(val, *slot, 0);
+                        log::trace!(
+                            "rewriting:     spilling instruction result {val:?} to {slot:?}: {}",
+                            pos.func.dfg.display_inst(inst)
+                        );
                     }
                 }
 
