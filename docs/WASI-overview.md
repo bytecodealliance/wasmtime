@@ -24,7 +24,7 @@ still can run in browsers; see below).
 ## Capability-Oriented
 
 The design follows
-[CloudABI](https://cloudabi.org/)'s
+[CloudABI](https://github.com/NuxiNL/cloudlibc)'s
 (and in turn
 [Capsicum](https://www.cl.cam.ac.uk/research/security/capsicum/))'s concept of
 [capability-based security](https://en.wikipedia.org/wiki/Capability-based_security),
