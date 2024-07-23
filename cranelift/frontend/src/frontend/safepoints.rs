@@ -350,24 +350,30 @@ impl FunctionBuilder<'_> {
             // associated stack slot.
             vals.extend_from_slice(pos.func.dfg.block_params(block));
             pos.next_inst();
-            let mut spilled_any = false;
+            let mut inst = None;
             for val in vals.drain(..) {
                 if let Some(slot) = stack_slots.get(&val) {
-                    pos.ins().stack_store(val, *slot, 0);
-                    spilled_any = true;
+                    let i = pos.ins().stack_store(val, *slot, 0);
+                    log::trace!(
+                        "rewriting:   spilling block parameter {val:?} to {slot:?}: {}",
+                        pos.func.dfg.display_inst(i)
+                    );
+                    inst = Some(i);
                 }
             }
 
             // The cursor needs to point just *before* the first original
             // instruction in the block that we didn't introduce just above, so
             // that when we loop over `next_inst()` below we are processing the
-            // block's original instructions. If we inserted spills, then it
-            // already does point there. If we did not insert spills, then it is
-            // currently pointing at the first original instruction, but that
-            // means that the upcoming `pos.next_inst()` call will skip over the
-            // first original instruction, so in this case we need to back up
-            // the cursor.
-            if !spilled_any {
+            // block's original instructions. If we inserted spills, then the
+            // cursor should point at the last spill instruction we inserted. If
+            // we did not insert spills, then it is currently pointing at the
+            // first original instruction, but that means that the upcoming
+            // `pos.next_inst()` call will skip over the first original
+            // instruction, so in this case we need to back the cursor up.
+            if let Some(inst) = inst {
+                pos = pos.at_inst(inst);
+            } else {
                 pos = pos.at_position(CursorPosition::Before(block));
             }
 
@@ -488,12 +494,14 @@ function %sample(i32, i32) system_v {
 block0(v0: i32, v1: i32):
     stack_store v0, ss0
     stack_store v1, ss1
-    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss1+0]
     v2 = stack_load.i32 ss0
-    v3 = stack_load.i32 ss1
-    jump block0(v2, v3)
-}            "#
-                .trim()
+    call fn0(v2), stack_map=[i32 @ ss0+0, i32 @ ss1+0]
+    v3 = stack_load.i32 ss0
+    v4 = stack_load.i32 ss1
+    jump block0(v3, v4)
+}
+            "#
+            .trim()
         );
     }
 
@@ -1524,9 +1532,10 @@ block2:
 
 block3(v6: i32):
     stack_store v6, ss0
-    call fn0(v6), stack_map=[i32 @ ss0+0]
     v12 = stack_load.i32 ss0
-    return v12
+    call fn0(v12), stack_map=[i32 @ ss0+0]
+    v13 = stack_load.i32 ss0
+    return v13
 }
             "#
             .trim()
@@ -1593,6 +1602,87 @@ block0(v0: i32):
     call fn0(), stack_map=[i32 @ ss0+0]
     v1 = stack_load.i32 ss0
     return v1
+}
+            "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn first_inst_defines_needs_stack_map() {
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params
+            .push(AbiParam::new(cranelift_codegen::ir::types::I32));
+        sig.returns
+            .push(AbiParam::new(cranelift_codegen::ir::types::I32));
+        sig.returns
+            .push(AbiParam::new(cranelift_codegen::ir::types::I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let name = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 0,
+            });
+        let signature = builder
+            .func
+            .import_signature(Signature::new(CallConv::SystemV));
+        let func_ref = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name),
+            signature,
+            colocated: true,
+        });
+
+        // Regression test found via fuzzing in
+        // https://github.com/bytecodealliance/wasmtime/pull/8941 involving the
+        // combination of cursor positions after we have block parameters that
+        // need inclusion in stack maps and when the first instruction in a
+        // block defines a value that needs inclusion in stack maps.
+        //
+        // block0(v0: i32):
+        //   v1 = iconst.i32 42
+        //   call $foo()
+        //   return v0, v1
+
+        let block0 = builder.create_block();
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+
+        let arg = builder.func.dfg.block_params(block0)[0];
+        builder.declare_value_needs_stack_map(arg);
+
+        let val = builder.ins().iconst(ir::types::I32, 42);
+        builder.declare_value_needs_stack_map(val);
+
+        builder.ins().call(func_ref, &[]);
+
+        builder.ins().return_(&[arg, val]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        eprintln!("Actual = {}", func.display());
+        assert_eq!(
+            func.display().to_string().trim(),
+            r#"
+function %sample(i32) -> i32, i32 system_v {
+    ss0 = explicit_slot 4, align = 4
+    ss1 = explicit_slot 4, align = 4
+    sig0 = () system_v
+    fn0 = colocated u0:0 sig0
+
+block0(v0: i32):
+    stack_store v0, ss0
+    v1 = iconst.i32 42
+    stack_store v1, ss1  ; v1 = 42
+    call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0]
+    v2 = stack_load.i32 ss0
+    v3 = stack_load.i32 ss1
+    return v2, v3
 }
             "#
             .trim()
