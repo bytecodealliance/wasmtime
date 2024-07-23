@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use arbitrary::{Arbitrary, Unstructured};
 
 /// The control plane of chaos mode.
@@ -73,7 +74,7 @@ impl ControlPlane {
         let rest = u.take_rest();
         self.tmp.resize(rest.len(), 0); // allocates once per control plane
         self.tmp.copy_from_slice(rest);
-        std::mem::swap(&mut self.data, &mut self.tmp);
+        core::mem::swap(&mut self.data, &mut self.tmp);
 
         res
     }
@@ -107,7 +108,7 @@ impl ControlPlane {
         let rest = u.take_rest();
         self.tmp.resize(rest.len(), 0); // allocates once per control plane
         self.tmp.copy_from_slice(rest);
-        std::mem::swap(&mut self.data, &mut self.tmp);
+        core::mem::swap(&mut self.data, &mut self.tmp);
     }
 
     /// Returns a new iterator over the same items as the input iterator in

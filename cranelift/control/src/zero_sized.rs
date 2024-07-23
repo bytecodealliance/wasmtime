@@ -12,6 +12,7 @@ pub struct ControlPlane {
 /// A shim for ControlPlane's `Arbitrary` implementation when chaos mode is
 /// disabled. It doesn't consume any bytes and always returns a default
 /// control plane.
+#[cfg(feature = "fuzz")]
 impl arbitrary::Arbitrary<'_> for ControlPlane {
     fn arbitrary(_u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
         Ok(Self::default())
@@ -33,7 +34,7 @@ impl ControlPlane {
     /// Returns an arbitrary value. This variant is used when chaos mode is
     /// disabled. It always returns the default value.
     #[inline]
-    pub fn get_arbitrary<T: for<'a> arbitrary::Arbitrary<'a> + Default>(&mut self) -> T {
+    pub fn get_arbitrary<T: Default>(&mut self) -> T {
         T::default()
     }
 
