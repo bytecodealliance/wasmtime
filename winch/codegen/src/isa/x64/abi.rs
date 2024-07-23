@@ -46,11 +46,6 @@ impl RegIndexEnv {
         }
     }
 
-    fn next_vr(&mut self) -> Option<u8> {
-        // 128-bit vectors also use XMM registers.
-        self.next_fpr()
-    }
-
     fn increment(index: &mut u8) -> Option<u8> {
         let current = *index;
         match index.checked_add(1) {
@@ -202,13 +197,9 @@ impl X64ABI {
                 ty,
             ),
 
-            ty @ (WasmValType::F32 | WasmValType::F64) => (
+            // v128 also uses an XMM register (that is, an fpr).
+            ty @ (WasmValType::F32 | WasmValType::F64 | WasmValType::V128) => (
                 Self::float_reg_for(index_env.next_fpr(), call_conv, params_or_returns),
-                ty,
-            ),
-
-            ty @ WasmValType::V128 => (
-                Self::vector_reg_for(index_env.next_vr(), call_conv, params_or_returns),
                 ty,
             ),
         };
@@ -318,14 +309,6 @@ impl X64ABI {
         }
 
         None
-    }
-
-    fn vector_reg_for(
-        index: Option<u8>,
-        call_conv: &CallingConvention,
-        params_or_returns: ParamsOrReturns,
-    ) -> Option<Reg> {
-        Self::float_reg_for(index, call_conv, params_or_returns)
     }
 }
 
