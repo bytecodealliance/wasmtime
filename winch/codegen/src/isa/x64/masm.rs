@@ -1041,8 +1041,6 @@ impl MacroAssembler {
 
     /// A common implementation for stack stores.
     fn store_impl(&mut self, src: RegImm, dst: Address, size: OperandSize, flags: MemFlags) {
-        let scratch = <Self as Masm>::ABI::scratch_reg();
-        let float_scratch = <Self as Masm>::ABI::float_scratch_reg();
         match src {
             RegImm::Imm(imm) => match imm {
                 I::I32(v) => self.asm.mov_im(v as i32, &dst, size, flags),
@@ -1051,12 +1049,14 @@ impl MacroAssembler {
                     Err(_) => {
                         // If the immediate doesn't sign extend, use a scratch
                         // register.
+                        let scratch = regs::scratch();
                         self.asm.mov_ir(v, scratch, size);
                         self.asm.mov_rm(scratch, &dst, size, flags);
                     }
                 },
                 I::F32(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    let float_scratch = regs::scratch_xmm();
                     // Always trusted, since we are loading the constant from
                     // the constant pool.
                     self.asm
@@ -1065,6 +1065,7 @@ impl MacroAssembler {
                 }
                 I::F64(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    let float_scratch = regs::scratch_xmm();
                     // Similar to above, always trusted since we are loading the
                     // constant from the constant pool.
                     self.asm
