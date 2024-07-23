@@ -147,6 +147,8 @@ members = [
   "examples/min-platform",
   "examples/min-platform/embedding",
   "fuzz",
+  "pulley",
+  "pulley/fuzz",
   "winch/codegen",
 ]
 exclude = [
