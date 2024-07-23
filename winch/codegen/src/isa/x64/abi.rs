@@ -3,7 +3,7 @@ use crate::{
     abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI},
     isa::{reg::Reg, CallingConvention},
 };
-use wasmtime_environ::{WasmHeapType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
 
 /// Helper environment to track argument-register
 /// assignment in x64.
@@ -141,12 +141,17 @@ impl ABI for X64ABI {
         })
     }
 
-    fn scratch_reg() -> Reg {
-        regs::scratch()
-    }
-
-    fn float_scratch_reg() -> Reg {
-        regs::scratch_xmm()
+    fn scratch_for(ty: &WasmValType) -> Reg {
+        match ty {
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func,
+                ..
+            }) => regs::scratch(),
+            WasmValType::F32 | WasmValType::F64 => regs::scratch_xmm(),
+            _ => unimplemented!(),
+        }
     }
 
     fn vmctx_reg() -> Reg {
