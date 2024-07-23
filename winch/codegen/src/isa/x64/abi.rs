@@ -62,9 +62,8 @@ impl RegIndexEnv {
 pub(crate) struct X64ABI;
 
 impl ABI for X64ABI {
-    // TODO: change to 16 once SIMD is supported
     fn stack_align() -> u8 {
-        8
+        16
     }
 
     fn call_stack_align() -> u8 {
@@ -159,7 +158,7 @@ impl ABI for X64ABI {
     }
 
     fn stack_slot_size() -> u8 {
-        Self::word_bytes()
+        Self::word_bytes() * 2
     }
 
     fn sizeof(ty: &WasmValType) -> u8 {
