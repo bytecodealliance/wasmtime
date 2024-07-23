@@ -19,27 +19,25 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
 ;;       movq    (%r11), %r11
-;;       addq    $0x20, %r11
+;;       addq    $0x28, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x8b
+;;       ja      0x84
 ;;   1b: movq    %rdi, %r14
-;;       subq    $0x18, %rsp
-;;       movq    %rdi, 0x10(%rsp)
-;;       movq    %rsi, 8(%rsp)
-;;       movq    $0, (%rsp)
-;;       subq    $8, %rsp
+;;       subq    $0x20, %rsp
+;;       movq    %rdi, 0x18(%rsp)
+;;       movq    %rsi, 0x10(%rsp)
+;;       movq    $0, 8(%rsp)
 ;;       movq    %r14, %rdi
 ;;       movq    %r14, %rsi
 ;;       movl    $0x14, %edx
 ;;       movl    $0x50, %ecx
 ;;       callq   0x90
-;;       addq    $8, %rsp
-;;       movq    0x10(%rsp), %r14
+;;       movq    0x18(%rsp), %r14
 ;;       movl    $2, %ecx
-;;       movl    %ecx, 4(%rsp)
+;;       movl    %ecx, 0xc(%rsp)
 ;;       subq    $4, %rsp
 ;;       movl    %eax, (%rsp)
-;;       movl    8(%rsp), %r11d
+;;       movl    0x10(%rsp), %r11d
 ;;       subq    $4, %rsp
 ;;       movl    %r11d, (%rsp)
 ;;       movl    (%rsp), %ecx
@@ -48,30 +46,30 @@
 ;;       addq    $4, %rsp
 ;;       xorl    %edx, %edx
 ;;       divl    %ecx
-;;       addq    $0x18, %rsp
+;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   8b: ud2
+;;   84: ud2
 ;;
 ;; wasm[0]::function[1]::product:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
 ;;       movq    (%r11), %r11
-;;       addq    $0x18, %r11
+;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0xd5
+;;       ja      0xd7
 ;;   ab: movq    %rdi, %r14
-;;       subq    $0x18, %rsp
-;;       movq    %rdi, 0x10(%rsp)
-;;       movq    %rsi, 8(%rsp)
-;;       movl    %edx, 4(%rsp)
-;;       movl    %ecx, (%rsp)
-;;       movl    (%rsp), %eax
-;;       movl    4(%rsp), %ecx
+;;       subq    $0x20, %rsp
+;;       movq    %rdi, 0x18(%rsp)
+;;       movq    %rsi, 0x10(%rsp)
+;;       movl    %edx, 0xc(%rsp)
+;;       movl    %ecx, 8(%rsp)
+;;       movl    8(%rsp), %eax
+;;       movl    0xc(%rsp), %ecx
 ;;       imull   %eax, %ecx
 ;;       movl    %ecx, %eax
-;;       addq    $0x18, %rsp
+;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   d5: ud2
+;;   d7: ud2
