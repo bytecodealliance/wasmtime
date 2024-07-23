@@ -487,12 +487,12 @@ fn publish(krate: &Crate) -> bool {
 fn verify(crates: &[Crate]) {
     verify_capi();
 
-    if fs::exists(".cargo") != Ok(false) {
+    if Path::new(".cargo").exists() {
         panic!(
             "`.cargo` already exists on the file system, remove it and then run the script again"
         );
     }
-    if fs::exists("vendor") != Ok(false) {
+    if Path::new("vendor").exists() {
         panic!(
             "`vendor` already exists on the file system, remove it and then run the script again"
         );
