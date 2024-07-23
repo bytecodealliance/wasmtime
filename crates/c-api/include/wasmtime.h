@@ -90,7 +90,7 @@
  *   issue](https://github.com/bytecodealliance/wasmtime/issues/new).
  *
  * * [C embedding
- *   examples](https://bytecodealliance.github.io/wasmtime/examples-c-embed.html)
+ *   examples](https://bytecodealliance.github.io/wasmtime/lang-c.html)
  *   are available online and are tested from the Wasmtime repository itself.
  *
  * * [Contribution documentation for

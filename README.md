@@ -131,7 +131,7 @@ Languages supported by the community:
 * **Perl** - the [`Wasm` Perl package's `Wasm::Wasmtime`]
 
 [Rust]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
-[C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
+[C]: https://bytecodealliance.github.io/wasmtime/lang-c.html
 [`wasmtime` crate]: https://crates.io/crates/wasmtime
 [c-headers]: https://bytecodealliance.github.io/wasmtime/c-api/
 [Python]: https://bytecodealliance.github.io/wasmtime/lang-python.html
