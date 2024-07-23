@@ -157,33 +157,35 @@ asmElem.addEventListener(
   { passive: true },
 );
 const clifElem = document.getElementById("clif");
-clifElem.addEventListener(
-  "click",
-  event => {
-    if (event.target.dataset.wasmOffset == null) {
-      return;
-    }
+if (clifElem) {
+  clifElem.addEventListener(
+    "click",
+    event => {
+      if (event.target.dataset.wasmOffset == null) {
+        return;
+      }
 
-    const offset = parseInt(event.target.dataset.wasmOffset);
-    if (!watByOffset.get(offset)) {
-      return;
-    }
+      const offset = parseInt(event.target.dataset.wasmOffset);
+      if (!watByOffset.get(offset)) {
+        return;
+      }
 
-    const firstWatElem = watByOffset.get(offset)[0];
-    firstWatElem.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
-    const firstAsmElem = asmByOffset.get(offset)[0];
-    firstAsmElem.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
-  },
-  { passive: true },
-);
+      const firstWatElem = watByOffset.get(offset)[0];
+      firstWatElem.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+      const firstAsmElem = asmByOffset.get(offset)[0];
+      firstAsmElem.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    },
+    { passive: true },
+  );
+}
 
 const onMouseEnter = event => {
   if (event.target.dataset.wasmOffset == null) {
@@ -242,35 +244,37 @@ const renderInst = (mnemonic, operands) => {
 
 // Render the CLIF.
 
-for (const func of state.clif.functions) {
-  const funcElem = document.createElement("div");
+if (clifElem) {
+  for (const func of state.clif.functions) {
+    const funcElem = document.createElement("div");
 
-  const funcHeader = document.createElement("h3");
-  let func_name =
-    func.name === null ? `function[${func.func_index}]` : func.name;
-  let demangled_name =
-    func.demangled_name !== null ? func.demangled_name : func_name;
-  funcHeader.textContent = `Intermediate Representation of function <${demangled_name}>:`;
-  funcHeader.title = `Function ${func.func_index}: ${func_name}`;
-  funcElem.appendChild(funcHeader);
+    const funcHeader = document.createElement("h3");
+    let func_name =
+      func.name === null ? `function[${func.func_index}]` : func.name;
+    let demangled_name =
+      func.demangled_name !== null ? func.demangled_name : func_name;
+    funcHeader.textContent = `Intermediate Representation of function <${demangled_name}>:`;
+    funcHeader.title = `Function ${func.func_index}: ${func_name}`;
+    funcElem.appendChild(funcHeader);
 
-  const bodyElem = document.createElement("pre");
-  for (const inst of func.instructions) {
-    const instElem = document.createElement("span");
-    instElem.textContent = `${inst.clif}\n`;
-    if (inst.wasm_offset != null) {
-      instElem.setAttribute("data-wasm-offset", inst.wasm_offset);
-      const hue = hueForOffset(inst.wasm_offset);
-      instElem.style.backgroundColor = `hsl(${hue} 50% 90%)`;
-      instElem.addEventListener("mouseenter", onMouseEnter);
-      instElem.addEventListener("mouseleave", onMouseLeave);
-      addClifElem(inst.wasm_offset, instElem);
+    const bodyElem = document.createElement("pre");
+    for (const inst of func.instructions) {
+      const instElem = document.createElement("span");
+      instElem.textContent = `${inst.clif}\n`;
+      if (inst.wasm_offset != null) {
+        instElem.setAttribute("data-wasm-offset", inst.wasm_offset);
+        const hue = hueForOffset(inst.wasm_offset);
+        instElem.style.backgroundColor = `hsl(${hue} 50% 90%)`;
+        instElem.addEventListener("mouseenter", onMouseEnter);
+        instElem.addEventListener("mouseleave", onMouseLeave);
+        addClifElem(inst.wasm_offset, instElem);
+      }
+      bodyElem.appendChild(instElem);
     }
-    bodyElem.appendChild(instElem);
-  }
-  funcElem.appendChild(bodyElem);
+    funcElem.appendChild(bodyElem);
 
-  clifElem.appendChild(funcElem);
+    clifElem.appendChild(funcElem);
+  }
 }
 
 // Render the ASM.

@@ -12,7 +12,7 @@ use wasmtime_environ::demangle_function_name;
 pub fn generate(
     config: &wasmtime::Config,
     target: Option<&str>,
-    clif_dir: &Path,
+    clif_dir: Option<&Path>,
     wasm: &[u8],
     dest: &mut dyn Write,
 ) -> Result<()> {
@@ -25,8 +25,12 @@ pub fn generate(
     let wat_json = serde_json::to_string(&wat)?;
     let asm = annotate_asm(config, &target, wasm)?;
     let asm_json = serde_json::to_string(&asm)?;
-    let clif = annotate_clif(clif_dir, &asm)?;
-    let clif_json = serde_json::to_string(&clif)?;
+    let clif_json = clif_dir
+        .map::<anyhow::Result<String>, _>(|clif_dir| {
+            let clif = annotate_clif(clif_dir, &asm)?;
+            Ok(serde_json::to_string(&clif)?)
+        })
+        .transpose()?;
 
     let index_css = include_str!("./index.css");
     let index_js = include_str!("./index.js");
@@ -44,11 +48,30 @@ pub fn generate(
   </head>
   <body class="hbox">
     <pre id="wat"></pre>
-    <div id="clif"></div>
+        "#
+    )?;
+    if clif_json.is_some() {
+        write!(dest, r#"<div id="clif"></div>"#)?;
+    }
+    write!(
+        dest,
+        r#"
     <div id="asm"></div>
     <script>
       window.WAT = {wat_json};
-      window.CLIF = {clif_json};
+        "#
+    )?;
+    if let Some(clif_json) = clif_json {
+        write!(
+            dest,
+            r#"
+          window.CLIF = {clif_json};
+            "#
+        )?;
+    }
+    write!(
+        dest,
+        r#"
       window.ASM = {asm_json};
     </script>
     <script>
