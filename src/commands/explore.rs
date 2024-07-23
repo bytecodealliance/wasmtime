@@ -3,6 +3,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::{borrow::Cow, path::PathBuf};
+use tempfile::tempdir;
+use wasmtime::Strategy;
 use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.
@@ -30,7 +32,7 @@ impl ExploreCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
-        let config = self.common.config(self.target.as_deref(), None)?;
+        let mut config = self.common.config(self.target.as_deref(), None)?;
 
         let bytes =
             Cow::Owned(std::fs::read(&self.module).with_context(|| {
@@ -50,7 +52,22 @@ impl ExploreCommand {
             .with_context(|| format!("failed to create file: {}", output.display()))?;
         let mut output_file = std::io::BufWriter::new(output_file);
 
-        wasmtime_explorer::generate(&config, self.target.as_deref(), &bytes, &mut output_file)?;
+        let clif_dir = if let Some(Strategy::Cranelift) | None = self.common.codegen.compiler {
+            let clif_dir = tempdir()?;
+            config.emit_clif(clif_dir.path());
+            Some(clif_dir)
+        } else {
+            None
+        };
+
+        wasmtime_explorer::generate(
+            &config,
+            self.target.as_deref(),
+            clif_dir.as_ref().map(|tmp_dir| tmp_dir.path()),
+            &bytes,
+            &mut output_file,
+        )?;
+
         println!("Exploration written to {}", output.display());
         Ok(())
     }

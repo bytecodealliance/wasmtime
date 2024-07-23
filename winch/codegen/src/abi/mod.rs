@@ -51,7 +51,7 @@ use crate::masm::SPOffset;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
-use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmRefType, WasmValType};
+use wasmtime_environ::{WasmFuncType, WasmValType};
 
 pub(crate) mod local;
 pub(crate) use local::*;
@@ -75,7 +75,7 @@ macro_rules! vmctx {
 /// designated scratch register for the given type.
 macro_rules! scratch {
     ($m:ident) => {
-        <$m::ABI as $crate::abi::ABI>::scratch_reg()
+        <$m::ABI as $crate::abi::ABI>::scratch_for(&wasmtime_environ::WasmValType::I64)
     };
     ($m:ident, $wasm_type:expr) => {
         <$m::ABI as $crate::abi::ABI>::scratch_for($wasm_type)
@@ -138,29 +138,8 @@ pub(crate) trait ABI {
         Self::word_bits() / 8
     }
 
-    /// Returns the designated general purpose scratch register.
-    fn scratch_reg() -> Reg;
-
-    /// Returns the designated floating point scratch register.
-    fn float_scratch_reg() -> Reg;
-
-    /// Returns the designated vector scratch register.
-    fn vector_scratch_reg() -> Reg;
-
     /// Returns the designated scratch register for the given [WasmType].
-    fn scratch_for(ty: &WasmValType) -> Reg {
-        match ty {
-            WasmValType::I32
-            | WasmValType::I64
-            | WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func,
-                ..
-            }) => Self::scratch_reg(),
-            WasmValType::F32 | WasmValType::F64 => Self::float_scratch_reg(),
-            WasmValType::V128 => Self::vector_scratch_reg(),
-            _ => unimplemented!(),
-        }
-    }
+    fn scratch_for(ty: &WasmValType) -> Reg;
 
     /// Returns the pinned register used to hold
     /// the `VMContext`.

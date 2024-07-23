@@ -32,7 +32,7 @@ guide](https://bytecodealliance.github.io/wasmtime/examples-rust-embed.html)
 ### C/C++
 
 To install a WASI-enabled C/C++ toolchain, see the [online section of the
-guide](https://bytecodealliance.github.io/wasmtime/examples-c-embed.html)
+guide](https://bytecodealliance.github.io/wasmtime/lang-c.html)
 
 ## How can I run programs that use WASI?
 

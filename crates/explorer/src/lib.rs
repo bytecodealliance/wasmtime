@@ -1,12 +1,18 @@
 use anyhow::Result;
 use capstone::arch::BuildsCapstone;
 use serde_derive::Serialize;
-use std::{io::Write, str::FromStr};
+use std::{
+    fs::File,
+    io::{read_to_string, Write},
+    path::Path,
+    str::FromStr,
+};
 use wasmtime_environ::demangle_function_name;
 
 pub fn generate(
     config: &wasmtime::Config,
     target: Option<&str>,
+    clif_dir: Option<&Path>,
     wasm: &[u8],
     dest: &mut dyn Write,
 ) -> Result<()> {
@@ -19,6 +25,12 @@ pub fn generate(
     let wat_json = serde_json::to_string(&wat)?;
     let asm = annotate_asm(config, &target, wasm)?;
     let asm_json = serde_json::to_string(&asm)?;
+    let clif_json = clif_dir
+        .map::<anyhow::Result<String>, _>(|clif_dir| {
+            let clif = annotate_clif(clif_dir, &asm)?;
+            Ok(serde_json::to_string(&clif)?)
+        })
+        .transpose()?;
 
     let index_css = include_str!("./index.css");
     let index_js = include_str!("./index.js");
@@ -36,9 +48,30 @@ pub fn generate(
   </head>
   <body class="hbox">
     <pre id="wat"></pre>
+        "#
+    )?;
+    if clif_json.is_some() {
+        write!(dest, r#"<div id="clif"></div>"#)?;
+    }
+    write!(
+        dest,
+        r#"
     <div id="asm"></div>
     <script>
       window.WAT = {wat_json};
+        "#
+    )?;
+    if let Some(clif_json) = clif_json {
+        write!(
+            dest,
+            r#"
+          window.CLIF = {clif_json};
+            "#
+        )?;
+    }
+    write!(
+        dest,
+        r#"
       window.ASM = {asm_json};
     </script>
     <script>
@@ -207,4 +240,60 @@ fn annotate_asm(
         .collect::<Result<Vec<_>>>()?;
 
     Ok(AnnotatedAsm { functions })
+}
+
+#[derive(Serialize, Debug)]
+struct AnnotatedClif {
+    functions: Vec<AnnotatedClifFunction>,
+}
+
+#[derive(Serialize, Debug)]
+struct AnnotatedClifFunction {
+    func_index: u32,
+    name: Option<String>,
+    demangled_name: Option<String>,
+    instructions: Vec<AnnotatedClifInstruction>,
+}
+
+#[derive(Serialize, Debug)]
+struct AnnotatedClifInstruction {
+    wasm_offset: Option<WasmOffset>,
+    clif: String,
+}
+
+fn annotate_clif(clif_dir: &Path, asm: &AnnotatedAsm) -> Result<AnnotatedClif> {
+    let mut clif = AnnotatedClif {
+        functions: Vec::new(),
+    };
+    for function in &asm.functions {
+        let function_path = clif_dir.join(format!("wasm_func_{}.clif", function.func_index));
+        if !function_path.exists() {
+            continue;
+        }
+        let mut clif_function = AnnotatedClifFunction {
+            func_index: function.func_index,
+            name: function.name.clone(),
+            demangled_name: function.demangled_name.clone(),
+            instructions: Vec::new(),
+        };
+        let file = File::open(&function_path)?;
+        for mut line in read_to_string(file)?.lines() {
+            if line.is_empty() {
+                continue;
+            }
+            let mut wasm_offset = None;
+            if line.starts_with('@') {
+                wasm_offset = Some(WasmOffset(u32::from_str_radix(&line[1..5], 16)?));
+                line = &line[28..];
+            } else if line.starts_with("     ") {
+                line = &line[28..];
+            }
+            clif_function.instructions.push(AnnotatedClifInstruction {
+                wasm_offset,
+                clif: line.to_string(),
+            });
+        }
+        clif.functions.push(clif_function);
+    }
+    Ok(clif)
 }

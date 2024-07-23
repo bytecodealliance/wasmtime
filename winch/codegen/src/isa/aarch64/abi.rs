@@ -1,7 +1,7 @@
 use super::regs;
 use crate::abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
-use wasmtime_environ::{WasmHeapType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
@@ -113,16 +113,17 @@ impl ABI for Aarch64ABI {
         })
     }
 
-    fn scratch_reg() -> Reg {
-        regs::scratch()
-    }
-
-    fn float_scratch_reg() -> Reg {
-        regs::float_scratch()
-    }
-
-    fn vector_scratch_reg() -> Reg {
-        todo!()
+    fn scratch_for(ty: &WasmValType) -> Reg {
+        match ty {
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func,
+                ..
+            }) => regs::scratch(),
+            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::float_scratch(),
+            _ => unimplemented!(),
+        }
     }
 
     fn vmctx_reg() -> Reg {

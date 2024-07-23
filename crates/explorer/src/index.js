@@ -3,13 +3,14 @@
 /*** State *********************************************************************/
 
 class State {
-  constructor(wat, asm) {
+  constructor(wat, clif, asm) {
     this.wat = wat;
+    this.clif = clif;
     this.asm = asm;
   }
 }
 
-const state = (window.STATE = new State(window.WAT, window.ASM));
+const state = (window.STATE = new State(window.WAT, window.CLIF, window.ASM));
 
 /*** Hues for Offsets **********************************************************/
 
@@ -54,6 +55,9 @@ const watByOffset = new Map();
 // Get asm instruction elements by Wasm offset.
 const asmByOffset = new Map();
 
+// Get clif instruction elements by Wasm offset.
+const clifByOffset = new Map();
+
 // Get all (WAT chunk or asm instruction) elements by offset.
 const anyByOffset = new Map();
 
@@ -81,6 +85,18 @@ const addAsmElem = (offset, elem) => {
   anyByOffset.get(offset).push(elem);
 };
 
+const addClifElem = (offset, elem) => {
+  if (!clifByOffset.has(offset)) {
+    clifByOffset.set(offset, []);
+  }
+  clifByOffset.get(offset).push(elem);
+
+  if (!anyByOffset.has(offset)) {
+    anyByOffset.set(offset, []);
+  }
+  anyByOffset.get(offset).push(elem);
+};
+
 /*** Event Handlers ************************************************************/
 
 const watElem = document.getElementById("wat");
@@ -96,6 +112,12 @@ watElem.addEventListener(
       return;
     }
 
+    const firstClifElem = clifByOffset.get(offset)[0];
+    firstClifElem.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
     const firstAsmElem = asmByOffset.get(offset)[0];
     firstAsmElem.scrollIntoView({
       behavior: "smooth",
@@ -125,9 +147,45 @@ asmElem.addEventListener(
       block: "center",
       inline: "nearest",
     });
+    const firstClifElem = clifByOffset.get(offset)[0];
+    firstClifElem.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
   },
   { passive: true },
 );
+const clifElem = document.getElementById("clif");
+if (clifElem) {
+  clifElem.addEventListener(
+    "click",
+    event => {
+      if (event.target.dataset.wasmOffset == null) {
+        return;
+      }
+
+      const offset = parseInt(event.target.dataset.wasmOffset);
+      if (!watByOffset.get(offset)) {
+        return;
+      }
+
+      const firstWatElem = watByOffset.get(offset)[0];
+      firstWatElem.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+      const firstAsmElem = asmByOffset.get(offset)[0];
+      firstAsmElem.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    },
+    { passive: true },
+  );
+}
 
 const onMouseEnter = event => {
   if (event.target.dataset.wasmOffset == null) {
@@ -183,6 +241,41 @@ const renderInst = (mnemonic, operands) => {
     return mnemonic + " " + operands;
   }
 };
+
+// Render the CLIF.
+
+if (clifElem) {
+  for (const func of state.clif.functions) {
+    const funcElem = document.createElement("div");
+
+    const funcHeader = document.createElement("h3");
+    let func_name =
+      func.name === null ? `function[${func.func_index}]` : func.name;
+    let demangled_name =
+      func.demangled_name !== null ? func.demangled_name : func_name;
+    funcHeader.textContent = `Intermediate Representation of function <${demangled_name}>:`;
+    funcHeader.title = `Function ${func.func_index}: ${func_name}`;
+    funcElem.appendChild(funcHeader);
+
+    const bodyElem = document.createElement("pre");
+    for (const inst of func.instructions) {
+      const instElem = document.createElement("span");
+      instElem.textContent = `${inst.clif}\n`;
+      if (inst.wasm_offset != null) {
+        instElem.setAttribute("data-wasm-offset", inst.wasm_offset);
+        const hue = hueForOffset(inst.wasm_offset);
+        instElem.style.backgroundColor = `hsl(${hue} 50% 90%)`;
+        instElem.addEventListener("mouseenter", onMouseEnter);
+        instElem.addEventListener("mouseleave", onMouseLeave);
+        addClifElem(inst.wasm_offset, instElem);
+      }
+      bodyElem.appendChild(instElem);
+    }
+    funcElem.appendChild(bodyElem);
+
+    clifElem.appendChild(funcElem);
+  }
+}
 
 // Render the ASM.
 
