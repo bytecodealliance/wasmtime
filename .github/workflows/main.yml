@@ -431,11 +431,8 @@ jobs:
     # Checks for no_std support, ensure that crates can build on a no_std
     # target
     - run: rustup target add x86_64-unknown-none
-    - run: |
-        cargo check -p wasmtime --no-default-features --features runtime,gc,component-model
-        cargo check -p cranelift-control --no-default-features
-      env:
-        CARGO_BUILD_TARGET: x86_64-unknown-none
+    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
+    - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
 
     # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
     # for specifically panic=abort there.
