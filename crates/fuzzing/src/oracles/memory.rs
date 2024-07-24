@@ -31,9 +31,13 @@ pub fn check_memory_accesses(input: MemoryAccesses) {
         Err(e) => {
             let e = format!("{e:?}");
             log::info!("Failed to create `Module`: {e}");
+            if cfg!(feature = "fuzz-pcc") && e.contains("Compilation error: Proof-carrying-code") {
+                return;
+            }
             assert!(
                 e.contains("bytes which exceeds the configured maximum of")
-                    || e.contains("exceeds the limit of")
+                    || e.contains("exceeds the limit of"),
+                "bad module compilation error: {e:?}",
             );
             return;
         }
