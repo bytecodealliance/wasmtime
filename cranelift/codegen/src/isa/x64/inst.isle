@@ -1629,10 +1629,22 @@
 
 ;; Put a value into a GPR.
 ;;
-;; Asserts that the value goes into a GPR.
+;; Moves the value into a GPR if it is a type that would naturally go into an
+;; XMM register.
 (decl put_in_gpr (Value) Gpr)
+
+;; Case for when the value naturally lives in a GPR.
 (rule (put_in_gpr val)
+      (if-let (value_type ty) val)
+      (if-let (type_register_class (RegisterClass.Gpr _)) ty)
       (gpr_new (put_in_reg val)))
+
+;; Case for when the value naturally lives in an XMM register and we must
+;; bitcast it from an XMM into a GPR.
+(rule (put_in_gpr val)
+      (if-let (value_type ty) val)
+      (if-let (type_register_class (RegisterClass.Xmm)) ty)
+      (bitcast_xmm_to_gpr ty (xmm_new (put_in_reg val))))
 
 ;; Put a value into a `GprMem`.
 ;;

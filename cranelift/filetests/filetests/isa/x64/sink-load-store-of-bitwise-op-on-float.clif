@@ -1,0 +1,177 @@
+test compile precise-output
+target x86_64
+
+function %bor0(i64, f32) {
+block0(v0: i64, v1: f32):
+    v2 = load.f32 v0
+    v3 = bor v1, v2
+    store v3, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %xmm0, %ecx
+;   orl     %ecx, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %xmm0, %ecx
+;   orl %ecx, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bor1(i64, f32) {
+block0(v0: i64, v1: f32):
+    v2 = load.f32 v0
+    v3 = bor v2, v1
+    store v3, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %xmm0, %ecx
+;   orl     %ecx, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %xmm0, %ecx
+;   orl %ecx, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %band0(i64, f32) {
+block0(v0: i64, v1: f32):
+    v2 = load.f32 v0
+    v3 = band v1, v2
+    store v3, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %xmm0, %ecx
+;   andl    %ecx, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %xmm0, %ecx
+;   andl %ecx, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %band1(i64, f32) {
+block0(v0: i64, v1: f32):
+    v2 = load.f32 v0
+    v3 = band v2, v1
+    store v3, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %xmm0, %ecx
+;   andl    %ecx, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %xmm0, %ecx
+;   andl %ecx, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bxor0(i64, f32) {
+block0(v0: i64, v1: f32):
+    v2 = load.f32 v0
+    v3 = bxor v1, v2
+    store v3, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %xmm0, %ecx
+;   xorl    %ecx, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %xmm0, %ecx
+;   xorl %ecx, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bxor1(i64, f32) {
+block0(v0: i64, v1: f32):
+    v2 = load.f32 v0
+    v3 = bxor v2, v1
+    store v3, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %xmm0, %ecx
+;   xorl    %ecx, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %xmm0, %ecx
+;   xorl %ecx, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
