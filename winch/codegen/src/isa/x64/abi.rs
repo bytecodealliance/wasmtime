@@ -208,7 +208,7 @@ impl X64ABI {
             let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size as u32);
             let slot_size = Self::stack_slot_size();
             // Stack slots for parameters are aligned to a fixed slot size,
-            // in the case of x64, 8 bytes.
+            // in the case of x64, 16 bytes.
             // Stack slots for returns are type-size aligned.
             let next_stack = if params_or_returns == ParamsOrReturns::Params {
                 align_to(stack_offset, slot_size as u32) + (slot_size as u32)
@@ -360,7 +360,7 @@ mod tests {
         match_reg_arg(params.get(4).unwrap(), I32, regs::r8());
         match_reg_arg(params.get(5).unwrap(), I32, regs::r9());
         match_stack_arg(params.get(6).unwrap(), I64, 0);
-        match_stack_arg(params.get(7).unwrap(), I32, 8);
+        match_stack_arg(params.get(7).unwrap(), I32, 16);
     }
 
     #[test]
@@ -381,7 +381,7 @@ mod tests {
         match_reg_arg(params.get(4).unwrap(), I32, regs::r8());
         match_reg_arg(params.get(5).unwrap(), I32, regs::r9());
         match_stack_arg(params.get(6).unwrap(), I64, 0);
-        match_stack_arg(params.get(7).unwrap(), I32, 8);
+        match_stack_arg(params.get(7).unwrap(), I32, 16);
 
         match_stack_arg(results.get(0).unwrap(), I32, 4);
         match_stack_arg(results.get(1).unwrap(), I32, 0);
@@ -466,7 +466,7 @@ mod tests {
         match_reg_arg(params.get(2).unwrap(), I64, regs::r8());
         match_reg_arg(params.get(3).unwrap(), F64, regs::xmm3());
         match_stack_arg(params.get(4).unwrap(), I32, 32);
-        match_stack_arg(params.get(5).unwrap(), F32, 40);
+        match_stack_arg(params.get(5).unwrap(), F32, 48);
     }
 
     #[test]
@@ -484,9 +484,9 @@ mod tests {
         match_reg_arg(params.get(1).unwrap(), I32, regs::rdx());
         match_reg_arg(params.get(2).unwrap(), I64, regs::r8());
         match_reg_arg(params.get(3).unwrap(), F64, regs::xmm3());
-        // Each argument stack slot is 8 bytes.
+        // Each argument stack slot is 16 bytes.
         match_stack_arg(params.get(4).unwrap(), I32, 32);
-        match_stack_arg(params.get(5).unwrap(), F32, 40);
+        match_stack_arg(params.get(5).unwrap(), F32, 48);
 
         match_reg_arg(results.get(0).unwrap(), I32, regs::rax());
 
