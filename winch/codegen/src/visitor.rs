@@ -241,6 +241,8 @@ macro_rules! def_unsupported {
     (emit I64TruncSatF32U $($rest:tt)*) => {};
     (emit I64TruncSatF64S $($rest:tt)*) => {};
     (emit I64TruncSatF64U $($rest:tt)*) => {};
+    (emit V128Load $($rest:tt)*) => {};
+    (emit V128Store $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2013,6 +2015,14 @@ where
 
     fn visit_f64_store(&mut self, memarg: MemArg) {
         self.emit_wasm_store(&memarg, OperandSize::S64)
+    }
+
+    fn visit_v128_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::V128, OperandSize::S128, None)
+    }
+
+    fn visit_v128_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S128)
     }
 
     fn visit_i32_trunc_sat_f32_s(&mut self) {
