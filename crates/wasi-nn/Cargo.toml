@@ -44,7 +44,7 @@ features = [
     "AI_MachineLearning",
     "Storage_Streams",
     "Foundation_Collections",
-    # For Int64 input support.
+    # For getting IVectorView<i64> from tensor.dimensions.
     "implement",
 ]
 optional = true

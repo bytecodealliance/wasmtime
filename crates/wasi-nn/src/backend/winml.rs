@@ -142,8 +142,7 @@ impl BackendExecutionContext for WinMLExecutionContext {
         let index = self.find(id, &input_features)?;
         let input = input_features.GetAt(index)?;
 
-        let inspectable =
-            to_inspectable(tensor, input.cast::<TensorFeatureDescriptor>()?.Shape()?)?;
+        let inspectable = to_inspectable(tensor)?;
         self.binding.Bind(&input.Name()?, &inspectable)?;
 
         Ok(())
@@ -209,7 +208,14 @@ fn convert_i64(i: i64) -> Result<u32, BackendError> {
 }
 
 // Convert from wasi-nn tensor to WinML tensor.
-fn to_inspectable(tensor: &Tensor, shape: IVectorView<i64>) -> Result<IInspectable, Error> {
+fn to_inspectable(tensor: &Tensor) -> Result<IInspectable, Error> {
+    let shape = IVectorView::<i64>::try_from(
+        tensor
+            .dimensions
+            .iter()
+            .map(|&x| x as i64)
+            .collect::<Vec<i64>>(),
+    )?;
     match tensor.ty {
         TensorType::Fp16 => unsafe {
             let data = std::slice::from_raw_parts(
@@ -244,10 +250,7 @@ fn to_tensor(inspectable: IInspectable, tensor_kind: TensorKind) -> Result<Tenso
             let dimensions = dimensions_as_u32(&output_tensor.Shape()?)?;
             let view = output_tensor.GetAsVectorView()?;
             // TODO: Move to f16 when it's available in stable.
-            let mut data = Vec::with_capacity(view.Size()? as usize * size_of::<f32>());
-            for f in view.into_iter() {
-                data.extend(f.to_le_bytes());
-            }
+            let data = view.into_iter().flat_map(f32::to_le_bytes).collect();
             Tensor {
                 ty: TensorType::Fp16,
                 dimensions,
@@ -258,10 +261,7 @@ fn to_tensor(inspectable: IInspectable, tensor_kind: TensorKind) -> Result<Tenso
             let output_tensor = inspectable.cast::<TensorFloat>()?;
             let dimensions = dimensions_as_u32(&output_tensor.Shape()?)?;
             let view = output_tensor.GetAsVectorView()?;
-            let mut data = Vec::with_capacity(view.Size()? as usize * size_of::<f32>());
-            for f in view.into_iter() {
-                data.extend(f.to_le_bytes());
-            }
+            let data = view.into_iter().flat_map(f32::to_le_bytes).collect();
             Tensor {
                 ty: TensorType::Fp32,
                 dimensions,
@@ -272,10 +272,7 @@ fn to_tensor(inspectable: IInspectable, tensor_kind: TensorKind) -> Result<Tenso
             let output_tensor = inspectable.cast::<TensorInt64Bit>()?;
             let dimensions = dimensions_as_u32(&output_tensor.Shape()?)?;
             let view = output_tensor.GetAsVectorView()?;
-            let mut data = Vec::with_capacity(view.Size()? as usize * size_of::<i64>());
-            for f in view.into_iter() {
-                data.extend(f.to_le_bytes());
-            }
+            let data = view.into_iter().flat_map(i64::to_le_bytes).collect();
             Tensor {
                 ty: TensorType::I64,
                 dimensions,
@@ -320,8 +317,7 @@ mod tests {
             dimensions: vec![2, 3],
             data: buffer_copy,
         };
-        let shape = IVectorView::<i64>::try_from(vec![2i64, 3]).unwrap();
-        let inspectable = to_inspectable(&tensor, shape);
+        let inspectable = to_inspectable(&tensor);
         assert!(inspectable.is_ok());
         let winml_tensor = inspectable
             .as_ref()
@@ -349,8 +345,7 @@ mod tests {
             dimensions: vec![2, 3],
             data: buffer_copy,
         };
-        let shape = IVectorView::<i64>::try_from(vec![2i64, 3]).unwrap();
-        let inspectable = to_inspectable(&tensor, shape);
+        let inspectable = to_inspectable(&tensor);
         assert!(inspectable.is_ok());
         let winml_tensor = inspectable.as_ref().unwrap().cast::<TensorFloat>().unwrap();
         let view = winml_tensor.GetAsVectorView().unwrap();
@@ -374,8 +369,7 @@ mod tests {
             dimensions: vec![1, 6],
             data: buffer_copy,
         };
-        let shape = IVectorView::<i64>::try_from(vec![1i64, 6]).unwrap();
-        let inspectable = to_inspectable(&tensor, shape);
+        let inspectable = to_inspectable(&tensor);
         assert!(inspectable.is_ok());
         let winml_tensor = inspectable
             .as_ref()
