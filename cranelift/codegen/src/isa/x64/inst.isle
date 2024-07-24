@@ -1636,7 +1636,7 @@
 ;; Case for when the value naturally lives in a GPR.
 (rule (put_in_gpr val)
       (if-let (value_type ty) val)
-      (if-let (type_register_class (RegisterClass.Gpr $true)) ty)
+      (if-let (type_register_class (RegisterClass.Gpr _)) ty)
       (gpr_new (put_in_reg val)))
 
 ;; Case for when the value naturally lives in an XMM register and we must
