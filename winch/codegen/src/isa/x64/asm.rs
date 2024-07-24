@@ -835,7 +835,7 @@ impl Assembler {
             DivKind::Signed => {
                 self.emit(Inst::CmpRmiR {
                     size: size.into(),
-                    src1: divisor.unwrap_into(),
+                    src1: divisor.into(),
                     src2: GprMemImm::unwrap_new(RegMemImm::imm(0)),
                     opcode: CmpOpcode::Cmp,
                 });
