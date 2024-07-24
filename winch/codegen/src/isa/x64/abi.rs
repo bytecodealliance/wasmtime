@@ -158,7 +158,13 @@ impl ABI for X64ABI {
     }
 
     fn stack_slot_size() -> u8 {
-        Self::word_bytes() * 2
+        // Winch default calling convention follows SysV calling convention so
+        // we use one 8 byte slot for values that are smaller or equal to 8
+        // bytes in size and 2 8 byte slots for values that are 128 bits.
+        // See Section 3.2.3 in
+        // https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf for further
+        // details.
+        Self::word_bytes()
     }
 
     fn sizeof(ty: &WasmValType) -> u8 {
