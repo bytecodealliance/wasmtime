@@ -552,8 +552,8 @@ mod tests {
                 regs::xmm9(),
                 Amode::ImmRegRegShift {
                     simm32: 0,
-                    base: Gpr::new(regs::rbx()).unwrap(),
-                    index: Gpr::new(regs::rsi()).unwrap(),
+                    base: Gpr::unwrap_new(regs::rbx()),
+                    index: Gpr::unwrap_new(regs::rsi()),
                     shift: 3,
                     flags: MemFlags::trusted(),
                 }
@@ -565,8 +565,8 @@ mod tests {
                 regs::xmm13(),
                 Amode::ImmRegRegShift {
                     simm32: 1,
-                    base: Gpr::new(regs::r11()).unwrap(),
-                    index: Gpr::new(regs::rdi()).unwrap(),
+                    base: Gpr::unwrap_new(regs::r11()),
+                    index: Gpr::unwrap_new(regs::rdi()),
                     shift: 2,
                     flags: MemFlags::trusted(),
                 }
@@ -580,8 +580,8 @@ mod tests {
                 regs::xmm5(),
                 Amode::ImmRegRegShift {
                     simm32: 128,
-                    base: Gpr::new(regs::rsp()).unwrap(),
-                    index: Gpr::new(regs::r10()).unwrap(),
+                    base: Gpr::unwrap_new(regs::rsp()),
+                    index: Gpr::unwrap_new(regs::r10()),
                     shift: 1,
                     flags: MemFlags::trusted(),
                 }
@@ -593,8 +593,8 @@ mod tests {
                 regs::xmm6(),
                 Amode::ImmRegRegShift {
                     simm32: 112,
-                    base: Gpr::new(regs::rbp()).unwrap(),
-                    index: Gpr::new(regs::r13()).unwrap(),
+                    base: Gpr::unwrap_new(regs::rbp()),
+                    index: Gpr::unwrap_new(regs::r13()),
                     shift: 0,
                     flags: MemFlags::trusted(),
                 }
@@ -606,8 +606,8 @@ mod tests {
                 regs::xmm7(),
                 Amode::ImmRegRegShift {
                     simm32: 0,
-                    base: Gpr::new(regs::rbp()).unwrap(),
-                    index: Gpr::new(regs::r13()).unwrap(),
+                    base: Gpr::unwrap_new(regs::rbp()),
+                    index: Gpr::unwrap_new(regs::r13()),
                     shift: 0,
                     flags: MemFlags::trusted(),
                 }
