@@ -62,9 +62,8 @@ impl RegIndexEnv {
 pub(crate) struct X64ABI;
 
 impl ABI for X64ABI {
-    // TODO: change to 16 once SIMD is supported
     fn stack_align() -> u8 {
-        8
+        16
     }
 
     fn call_stack_align() -> u8 {
@@ -149,7 +148,7 @@ impl ABI for X64ABI {
                 heap_type: WasmHeapType::Func,
                 ..
             }) => regs::scratch(),
-            WasmValType::F32 | WasmValType::F64 => regs::scratch_xmm(),
+            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::scratch_xmm(),
             _ => unimplemented!(),
         }
     }
@@ -159,6 +158,12 @@ impl ABI for X64ABI {
     }
 
     fn stack_slot_size() -> u8 {
+        // Winch default calling convention follows SysV calling convention so
+        // we use one 8 byte slot for values that are smaller or equal to 8
+        // bytes in size and 2 8 byte slots for values that are 128 bits.
+        // See Section 3.2.3 in
+        // https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf for further
+        // details.
         Self::word_bytes()
     }
 
@@ -170,7 +175,7 @@ impl ABI for X64ABI {
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
             WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
-            ty => unimplemented!("Support for WasmType: {ty}"),
+            WasmValType::V128 => Self::word_bytes() * 2,
         }
     }
 }
@@ -197,12 +202,11 @@ impl X64ABI {
                 ty,
             ),
 
-            ty @ (WasmValType::F32 | WasmValType::F64) => (
+            // v128 also uses an XMM register (that is, an fpr).
+            ty @ (WasmValType::F32 | WasmValType::F64 | WasmValType::V128) => (
                 Self::float_reg_for(index_env.next_fpr(), call_conv, params_or_returns),
                 ty,
             ),
-
-            ty => unimplemented!("Support for argument of WasmType: {ty}"),
         };
 
         let ty_size = <Self as ABI>::sizeof(wasm_arg);
@@ -210,10 +214,16 @@ impl X64ABI {
             let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size as u32);
             let slot_size = Self::stack_slot_size();
             // Stack slots for parameters are aligned to a fixed slot size,
-            // in the case of x64, 8 bytes.
+            // in the case of x64, 8 bytes. Except if they are v128 values,
+            // in which case they use 16 bytes.
             // Stack slots for returns are type-size aligned.
             let next_stack = if params_or_returns == ParamsOrReturns::Params {
-                align_to(stack_offset, slot_size as u32) + (slot_size as u32)
+                let alignment = if *ty == WasmValType::V128 {
+                    ty_size
+                } else {
+                    slot_size
+                };
+                align_to(stack_offset, alignment as u32) + (alignment as u32)
             } else {
                 // For the default calling convention, we don't type-size align,
                 // given that results on the stack must match spills generated
@@ -318,9 +328,7 @@ mod tests {
     use super::{RegIndexEnv, X64ABI};
     use crate::{
         abi::{ABIOperand, ABI},
-        isa::reg::Reg,
-        isa::x64::regs,
-        isa::CallingConvention,
+        isa::{reg::Reg, x64::regs, CallingConvention},
     };
     use wasmtime_environ::{
         WasmFuncType,
@@ -409,6 +417,40 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::xmm6());
         match_reg_arg(params.get(7).unwrap(), F32, regs::xmm7());
         match_stack_arg(params.get(8).unwrap(), F64, 0);
+    }
+
+    #[test]
+    fn vector_abi_sig() {
+        let wasm_sig = WasmFuncType::new(
+            [V128, V128, V128, V128, V128, V128, V128, V128, V128, V128].into(),
+            [].into(),
+        );
+
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let params = sig.params;
+
+        match_reg_arg(params.get(0).unwrap(), V128, regs::xmm0());
+        match_reg_arg(params.get(1).unwrap(), V128, regs::xmm1());
+        match_reg_arg(params.get(2).unwrap(), V128, regs::xmm2());
+        match_reg_arg(params.get(3).unwrap(), V128, regs::xmm3());
+        match_reg_arg(params.get(4).unwrap(), V128, regs::xmm4());
+        match_reg_arg(params.get(5).unwrap(), V128, regs::xmm5());
+        match_reg_arg(params.get(6).unwrap(), V128, regs::xmm6());
+        match_reg_arg(params.get(7).unwrap(), V128, regs::xmm7());
+        match_stack_arg(params.get(8).unwrap(), V128, 0);
+        match_stack_arg(params.get(9).unwrap(), V128, 16);
+    }
+
+    #[test]
+    fn vector_abi_sig_multi_returns() {
+        let wasm_sig = WasmFuncType::new([].into(), [V128, V128, V128].into());
+
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let results = sig.results;
+
+        match_stack_arg(results.get(0).unwrap(), V128, 16);
+        match_stack_arg(results.get(1).unwrap(), V128, 0);
+        match_reg_arg(results.get(2).unwrap(), V128, regs::xmm0());
     }
 
     #[test]

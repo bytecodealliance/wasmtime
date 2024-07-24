@@ -408,12 +408,11 @@ where
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    I32 | I64 | F32 | F64 => self.masm.store(src.into(), addr, ty.into()),
+                    I32 | I64 | F32 | F64 | V128 => self.masm.store(src.into(), addr, ty.into()),
                     Ref(rt) => match rt.heap_type {
                         WasmHeapType::Func => self.masm.store_ptr(src.into(), addr),
                         ht => unimplemented!("Support for WasmHeapType: {ht}"),
                     },
-                    _ => unimplemented!("Support for WasmType {ty}"),
                 }
             });
     }

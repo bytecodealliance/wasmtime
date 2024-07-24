@@ -121,7 +121,7 @@ impl ABI for Aarch64ABI {
                 heap_type: WasmHeapType::Func,
                 ..
             }) => regs::scratch(),
-            WasmValType::F32 | WasmValType::F64 => regs::float_scratch(),
+            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::float_scratch(),
             _ => unimplemented!(),
         }
     }

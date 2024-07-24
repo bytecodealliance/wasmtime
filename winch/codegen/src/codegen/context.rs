@@ -173,7 +173,8 @@ impl<'a> CodeGenContext<'a> {
     /// Pops the value stack top and stores it at the specified address.
     pub fn pop_to_addr<M: MacroAssembler>(&mut self, masm: &mut M, addr: M::Address) {
         let val = self.stack.pop().expect("a value at stack top");
-        let size: OperandSize = val.ty().into();
+        let ty = val.ty();
+        let size: OperandSize = ty.into();
         match val {
             Val::Reg(tr) => {
                 masm.store(tr.reg.into(), addr, size);
@@ -183,6 +184,7 @@ impl<'a> CodeGenContext<'a> {
             Val::I64(v) => masm.store(RegImm::i64(v), addr, size),
             Val::F32(v) => masm.store(RegImm::f32(v.bits()), addr, size),
             Val::F64(v) => masm.store(RegImm::f64(v.bits()), addr, size),
+            Val::V128(v) => masm.store(RegImm::v128(v), addr, size),
             Val::Local(local) => {
                 let slot = self.frame.get_wasm_local(local.index);
                 let scratch = scratch!(M);
@@ -191,7 +193,7 @@ impl<'a> CodeGenContext<'a> {
                 masm.store(scratch.into(), addr, size);
             }
             Val::Memory(_) => {
-                let scratch = scratch!(M);
+                let scratch = scratch!(M, &ty);
                 masm.pop(scratch, size);
                 masm.store(scratch.into(), addr, size);
             }
@@ -207,6 +209,7 @@ impl<'a> CodeGenContext<'a> {
             Val::I64(imm) => masm.mov(RegImm::i64(*imm), dst, size),
             Val::F32(imm) => masm.mov(RegImm::f32(imm.bits()), dst, size),
             Val::F64(imm) => masm.mov(RegImm::f64(imm.bits()), dst, size),
+            Val::V128(imm) => masm.mov(RegImm::v128(*imm), dst, size),
             Val::Local(local) => {
                 let slot = self.frame.get_wasm_local(local.index);
                 let addr = masm.local_address(&slot);

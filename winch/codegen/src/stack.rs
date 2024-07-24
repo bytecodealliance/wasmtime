@@ -87,6 +87,8 @@ pub(crate) enum Val {
     F32(Ieee32),
     /// F64 Constant.
     F64(Ieee64),
+    /// V128 Constant.
+    V128(i128),
     /// A register value.
     Reg(TypedReg),
     /// A local slot.
@@ -140,6 +142,11 @@ impl Val {
         Self::F64(v)
     }
 
+    /// Create a new V128 constant value.
+    pub fn v128(v: i128) -> Self {
+        Self::V128(v)
+    }
+
     /// Create a new Reg value.
     pub fn reg(reg: Reg, ty: WasmValType) -> Self {
         Self::Reg(TypedReg { reg, ty })
@@ -174,7 +181,7 @@ impl Val {
     /// Check whether the value is a constant.
     pub fn is_const(&self) -> bool {
         match *self {
-            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) => true,
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
             _ => false,
         }
     }
@@ -251,6 +258,7 @@ impl Val {
             Val::I64(_) => WasmValType::I64,
             Val::F32(_) => WasmValType::F32,
             Val::F64(_) => WasmValType::F64,
+            Val::V128(_) => WasmValType::V128,
             Val::Reg(r) => r.ty,
             Val::Memory(m) => m.ty,
             Val::Local(l) => l.ty,
