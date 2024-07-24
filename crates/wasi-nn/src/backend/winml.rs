@@ -220,22 +220,25 @@ fn to_inspectable(tensor: &Tensor) -> Result<IInspectable, Error> {
         TensorType::Fp16 => unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr().cast::<f32>(),
-                get_safe_len::<f32>(&tensor.data),
+                tensor.data.len() / size_of::<f32>(),
             );
+            check_alignment::<f32>(data);
             TensorFloat16Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
         TensorType::Fp32 => unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr().cast::<f32>(),
-                get_safe_len::<f32>(&tensor.data),
+                tensor.data.len() / size_of::<f32>(),
             );
+            check_alignment::<f32>(data);
             TensorFloat::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
         TensorType::I64 => unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr().cast::<i64>(),
-                get_safe_len::<i64>(&tensor.data),
+                tensor.data.len() / size_of::<i64>(),
             );
+            check_alignment::<i64>(data);
             TensorInt64Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
         },
         _ => unimplemented!(),
@@ -284,18 +287,13 @@ fn to_tensor(inspectable: IInspectable, tensor_kind: TensorKind) -> Result<Tenso
     Ok(tensor)
 }
 
-/// Convenience function for checking that we can cast `data` to a slice of `T`, returning the
-/// length of that slice.
-fn get_safe_len<T>(data: &[u8]) -> usize {
+fn check_alignment<T>(data: &[T]) {
+    let (prefix, _slice, suffix) = unsafe { data.align_to::<T>() };
     assert!(
-        data.len() % std::mem::size_of::<T>() == 0,
-        "data size is not a multiple of the size of `T`"
+        prefix.is_empty() && suffix.is_empty(),
+        "Data is not aligned to {:?}'s alignment",
+        std::any::type_name::<T>()
     );
-    assert!(
-        data.as_ptr() as usize % std::mem::align_of::<T>() == 0,
-        "raw data is not aligned to `T`'s alignment"
-    );
-    data.len() / std::mem::size_of::<T>()
 }
 
 #[cfg(test)]
