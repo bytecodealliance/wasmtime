@@ -209,7 +209,11 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
             .iter()
             .chain(compilation.untracked_inputs.iter());
 
-        let mut options = isle::codegen::CodegenOptions::default();
+        let mut options = isle::codegen::CodegenOptions {
+            no_std: true,
+            ..Default::default()
+        };
+
         // Because we include!() the generated ISLE source, we cannot
         // put the global pragmas (`#![allow(...)]`) in the ISLE
         // source itself; we have to put them in the source that

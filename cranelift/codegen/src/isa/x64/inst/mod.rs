@@ -11,10 +11,10 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
+use alloc::string::{String, ToString};
+use core::fmt::{self, Write};
 use regalloc2::PRegSet;
 use smallvec::{smallvec, SmallVec};
-use std::fmt::{self, Write};
-use std::string::{String, ToString};
 
 pub mod args;
 mod emit;
@@ -68,7 +68,7 @@ pub struct ReturnCallInfo {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(40, std::mem::size_of::<Inst>());
+    assert_eq!(40, core::mem::size_of::<Inst>());
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -2617,7 +2617,7 @@ impl MachInst for Inst {
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
-        Inst::nop(std::cmp::min(preferred_size, 15) as u8)
+        Inst::nop(core::cmp::min(preferred_size, 15) as u8)
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {

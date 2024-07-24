@@ -4,7 +4,7 @@
 use regalloc2::{PReg, VReg};
 
 use super::{RealReg, Reg, VirtualReg, Writable};
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 const VALUE_REGS_PARTS: usize = 2;
 

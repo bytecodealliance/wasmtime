@@ -1890,7 +1890,7 @@ pub(crate) fn emit(
             // Emit jump table (table of 32-bit offsets).
             sink.bind_label(start_of_jumptable, state.ctrl_plane_mut());
             let jt_off = sink.cur_offset();
-            for &target in targets.iter().chain(std::iter::once(default_target)) {
+            for &target in targets.iter().chain(core::iter::once(default_target)) {
                 let word_off = sink.cur_offset();
                 // off_into_table is an addend here embedded in the label to be later patched at
                 // the end of codegen. The offset is initially relative to this jump table entry;

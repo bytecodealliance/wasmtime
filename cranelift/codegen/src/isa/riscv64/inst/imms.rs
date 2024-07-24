@@ -3,7 +3,7 @@
 // Some variants are never constructed, but we still want them as options in the future.
 use super::Inst;
 #[allow(dead_code)]
-use std::fmt::{Debug, Display, Formatter, Result};
+use core::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Imm12 {

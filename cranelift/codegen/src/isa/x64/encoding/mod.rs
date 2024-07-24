@@ -1,6 +1,6 @@
 //! Contains the encoding machinery for the various x64 instruction formats.
 use crate::{isa::x64, machinst::MachBuffer};
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 pub mod evex;
 pub mod rex;

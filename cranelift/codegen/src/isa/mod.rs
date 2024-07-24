@@ -23,7 +23,7 @@
 //! # #[macro_use] extern crate target_lexicon;
 //! use cranelift_codegen::isa;
 //! use cranelift_codegen::settings::{self, Configurable};
-//! use std::str::FromStr;
+//! use core::str::FromStr;
 //! use target_lexicon::Triple;
 //!
 //! let shared_builder = settings::builder();
@@ -131,6 +131,7 @@ pub enum LookupError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
+#[cfg(feature = "std")]
 impl std::error::Error for LookupError {}
 
 impl fmt::Display for LookupError {

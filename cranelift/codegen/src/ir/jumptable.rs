@@ -31,7 +31,7 @@ impl JumpTableData {
     /// Create a new jump table with the provided blocks.
     pub fn new(def: BlockCall, table: &[BlockCall]) -> Self {
         Self {
-            table: std::iter::once(def).chain(table.iter().copied()).collect(),
+            table: core::iter::once(def).chain(table.iter().copied()).collect(),
         }
     }
 
@@ -114,7 +114,7 @@ mod tests {
     use crate::entity::EntityRef;
     use crate::ir::instructions::ValueListPool;
     use crate::ir::{Block, BlockCall, Value};
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn empty() {

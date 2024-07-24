@@ -1,17 +1,12 @@
 //! `ScopedHashMap`
 //!
-//! This module defines a struct `ScopedHashMap<K, V>` which defines a `FxHashMap`-like
+//! This module defines a struct `ScopedHashMap<K, V>` which defines a `HashMap`-like
 //! container that has a concept of scopes that can be entered and exited, such that
 //! values inserted while inside a scope aren't visible outside the scope.
 
 use core::hash::Hash;
-use rustc_hash::FxHashMap;
+use hashbrown::HashMap;
 use smallvec::{smallvec, SmallVec};
-
-#[cfg(not(feature = "std"))]
-use crate::fx::FxHasher;
-#[cfg(not(feature = "std"))]
-type Hasher = core::hash::BuildHasherDefault<FxHasher>;
 
 struct Val<V> {
     value: V,
@@ -45,7 +40,7 @@ enum InsertLoc<'a, K: 'a, V: 'a> {
     Occupied(super::hash_map::OccupiedEntry<'a, K, Val<V>>),
 }
 
-impl<'a, K, V> VacantEntry<'a, K, V> {
+impl<'a, K: Hash, V> VacantEntry<'a, K, V> {
     /// Sets the value of the entry with the `VacantEntry`'s key.
     pub fn insert(self, value: V) {
         let val = Val {
@@ -72,13 +67,13 @@ pub enum Entry<'a, K: 'a, V: 'a> {
     Vacant(VacantEntry<'a, K, V>),
 }
 
-/// A wrapper around a `FxHashMap` which adds the concept of scopes. Items inserted
+/// A wrapper around a `HashMap` which adds the concept of scopes. Items inserted
 /// within a scope are removed when the scope is exited.
 ///
 /// Shadowing, where one scope has entries with the same keys as a containing scope,
 /// is not supported in this implementation.
 pub struct ScopedHashMap<K, V> {
-    map: FxHashMap<K, Val<V>>,
+    map: HashMap<K, Val<V>>,
     generation_by_depth: SmallVec<[u32; 8]>,
     generation: u32,
 }
@@ -90,7 +85,7 @@ where
     /// Creates an empty `ScopedHashMap`.
     pub fn new() -> Self {
         Self {
-            map: FxHashMap::default(),
+            map: HashMap::default(),
             generation: 0,
             generation_by_depth: smallvec![0],
         }
@@ -98,7 +93,7 @@ where
 
     /// Creates an empty `ScopedHashMap` with some pre-allocated capacity.
     pub fn with_capacity(cap: usize) -> Self {
-        let mut map = FxHashMap::default();
+        let mut map = HashMap::default();
         map.reserve(cap);
         Self {
             map,
@@ -107,7 +102,7 @@ where
         }
     }
 
-    /// Similar to `FxHashMap::entry`, gets the given key's corresponding entry in the map for
+    /// Similar to `HashMap::entry`, gets the given key's corresponding entry in the map for
     /// in-place manipulation.
     pub fn entry<'a>(&'a mut self, key: K) -> Entry<'a, K, V> {
         self.entry_with_depth(key, self.depth())

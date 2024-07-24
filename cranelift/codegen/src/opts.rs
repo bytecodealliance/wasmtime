@@ -13,9 +13,9 @@ pub use crate::ir::{
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
 use crate::trace;
+use core::marker::PhantomData;
 use cranelift_entity::packed_option::ReservedValue;
 use smallvec::{smallvec, SmallVec};
-use std::marker::PhantomData;
 
 #[allow(dead_code)]
 pub type Unit = ();
