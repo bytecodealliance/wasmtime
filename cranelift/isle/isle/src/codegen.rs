@@ -13,6 +13,9 @@ pub struct CodegenOptions {
     /// Do not include the `#![allow(...)]` pragmas in the generated
     /// source. Useful if it must be include!()'d elsewhere.
     pub exclude_global_allow_pragmas: bool,
+
+    /// Use `core` and `alloc` instead of `std`, for `no_std`-compatible code.
+    pub no_std: bool,
 }
 
 /// Emit Rust source code for the given type and term environments.
@@ -144,7 +147,13 @@ impl<'a> Codegen<'a> {
         }
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
-        writeln!(code, "use std::marker::PhantomData;").unwrap();
+
+        if options.no_std {
+            writeln!(code, "use alloc::vec::Vec;").unwrap();
+            writeln!(code, "use core::{{marker::PhantomData, ops}};").unwrap();
+        } else {
+            writeln!(code, "use std::{{marker::PhantomData, ops}};").unwrap();
+        }
     }
 
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
@@ -249,38 +258,38 @@ pub trait Length {{
     fn len(&self) -> usize;
 }}
 
-impl<T> Length for std::vec::Vec<T> {{
+impl<T> Length for Vec<T> {{
     fn len(&self) -> usize {{
-        std::vec::Vec::len(self)
+        Vec::len(self)
     }}
 }}
 
 pub struct ContextIterWrapper<I, C> {{
     iter: I,
-    _ctx: std::marker::PhantomData<C>,
+    _ctx: PhantomData<C>,
 }}
 impl<I: Default, C> Default for ContextIterWrapper<I, C> {{
     fn default() -> Self {{
         ContextIterWrapper {{
             iter: I::default(),
-            _ctx: std::marker::PhantomData
+            _ctx: PhantomData
         }}
     }}
 }}
-impl<I, C> std::ops::Deref for ContextIterWrapper<I, C> {{
+impl<I, C> ops::Deref for ContextIterWrapper<I, C> {{
     type Target = I;
     fn deref(&self) -> &I {{
         &self.iter
     }}
 }}
-impl<I, C> std::ops::DerefMut for ContextIterWrapper<I, C> {{
+impl<I, C> ops::DerefMut for ContextIterWrapper<I, C> {{
     fn deref_mut(&mut self) -> &mut I {{
         &mut self.iter
     }}
 }}
 impl<I: Iterator, C: Context> From<I> for ContextIterWrapper<I, C> {{
     fn from(iter: I) -> Self {{
-        Self {{ iter, _ctx: std::marker::PhantomData }}
+        Self {{ iter, _ctx: PhantomData }}
     }}
 }}
 impl<I: Iterator, C: Context> ContextIter for ContextIterWrapper<I, C> {{
@@ -300,7 +309,7 @@ impl<I: IntoIterator, C: Context> IntoContextIter for ContextIterWrapper<I, C> {
     fn into_context_iter(self) -> Self::IntoIter {{
         ContextIterWrapper {{
             iter: self.iter.into_iter(),
-            _ctx: std::marker::PhantomData
+            _ctx: PhantomData
         }}
     }}
 }}
