@@ -2586,7 +2586,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         }
 
         #[cfg(feature = "wmemcheck")]
-        {
+        if self.wmemcheck {
             let func_name = self.current_func_name(builder);
             if func_name == Some("malloc") {
                 self.check_malloc_start(builder);
