@@ -65,6 +65,21 @@ macro_rules! newtype_of_reg {
                 }
             }
 
+            /// Like `Self::new(r).unwrap()` but with a better panic message on
+            /// failure.
+            pub fn unwrap_new($check_reg: Reg) -> Self {
+                if $check {
+                    Self($check_reg)
+                } else {
+                    panic!(
+                        "cannot construct {} from register {:?} with register class {:?}",
+                        stringify!($newtype_reg),
+                        $check_reg,
+                        $check_reg.class(),
+                    )
+                }
+            }
+
             /// Get this newtype's underlying `Reg`.
             pub fn to_reg(self) -> Reg {
                 self.0
@@ -154,8 +169,26 @@ macro_rules! newtype_of_reg {
                                 None
                             }
                         }
-                        RegMem::Reg { reg: $check_reg } if $check => Some(Self(rm)),
-                        RegMem::Reg { reg: _ } => None,
+                        RegMem::Reg { reg } => Some($newtype_reg::new(reg)?.into()),
+                    }
+                }
+
+                /// Like `Self::new(rm).unwrap()` but with better panic messages
+                /// in case of failure.
+                pub fn unwrap_new(rm: RegMem) -> Self {
+                    match rm {
+                        RegMem::Mem { addr } => {
+                            $(
+                                if $aligned && !addr.aligned() {
+                                    panic!(
+                                        "cannot create {} from an unaligned memory address: {addr:?}",
+                                        stringify!($newtype_reg_mem),
+                                    );
+                                }
+                            )?
+                            Self(RegMem::Mem { addr })
+                        }
+                        RegMem::Reg { reg } => $newtype_reg::unwrap_new(reg).into(),
                     }
                 }
 
@@ -218,8 +251,29 @@ macro_rules! newtype_of_reg {
                                 None
                             }
                         }
-                        RegMemImm::Reg { reg: $check_reg } if $check => Some(Self(rmi)),
-                        RegMemImm::Reg { reg: _ } => None,
+                        RegMemImm::Reg { reg } => Some($newtype_reg::new(reg)?.into()),
+                    }
+                }
+
+                /// Like `Self::new(rmi).unwrap()` but with better panic
+                /// messages in case of failure.
+                pub fn unwrap_new(rmi: RegMemImm) -> Self {
+                    match rmi {
+                        RegMemImm::Imm { .. } => Self(rmi),
+                        RegMemImm::Mem { addr } => {
+                            $(
+                                if $aligned_imm && !addr.aligned() {
+                                    panic!(
+                                        "cannot construct {} from unaligned memory address: {:?}",
+                                        stringify!($newtype_reg_mem_imm),
+                                        addr,
+                                    );
+                                }
+                            )?
+                            Self(RegMemImm::Mem { addr })
+
+                        }
+                        RegMemImm::Reg { reg } => $newtype_reg::unwrap_new(reg).into(),
                     }
                 }
 
@@ -260,8 +314,16 @@ macro_rules! newtype_of_reg {
             pub fn new(imm8_reg: Imm8Reg) -> Option<Self> {
                 match imm8_reg {
                     Imm8Reg::Imm8 { .. } => Some(Self(imm8_reg)),
-                    Imm8Reg::Reg { reg: $check_reg } if $check => Some(Self(imm8_reg)),
-                    Imm8Reg::Reg { reg: _ } => None,
+                    Imm8Reg::Reg { reg } => Some($newtype_reg::new(reg)?.into()),
+                }
+            }
+
+            /// Like `Self::new(imm8_reg).unwrap()` but with better panic
+            /// messages on failure.
+            pub fn unwrap_new(imm8_reg: Imm8Reg) -> Self {
+                match imm8_reg {
+                    Imm8Reg::Imm8 { .. } => Self(imm8_reg),
+                    Imm8Reg::Reg { reg } => $newtype_reg::unwrap_new(reg).into(),
                 }
             }
 

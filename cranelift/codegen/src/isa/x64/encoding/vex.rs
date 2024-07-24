@@ -465,8 +465,8 @@ mod tests {
         let dst = regs::xmm2().to_real_reg().unwrap().hw_enc();
         let src1 = regs::xmm1().to_real_reg().unwrap().hw_enc();
         let src2 = Amode::ImmRegRegShift {
-            base: Gpr::new(regs::rax()).unwrap(),
-            index: Gpr::new(regs::r13()).unwrap(),
+            base: Gpr::unwrap_new(regs::rax()),
+            index: Gpr::unwrap_new(regs::r13()),
             flags: MemFlags::trusted(),
             simm32: 100,
             shift: 2,

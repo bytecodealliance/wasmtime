@@ -291,8 +291,8 @@ fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode 
 
         return Amode::imm_reg_reg_shift(
             offset,
-            Gpr::new(base).unwrap(),
-            Gpr::new(index).unwrap(),
+            Gpr::unwrap_new(base),
+            Gpr::unwrap_new(index),
             shift,
         )
         .with_flags(flags);

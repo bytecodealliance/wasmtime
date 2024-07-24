@@ -32,7 +32,7 @@ fn emit_signed_cvt(
         op,
         dst,
         src1: dst.to_reg(),
-        src2: GprMem::new(RegMem::reg(src)).unwrap(),
+        src2: GprMem::unwrap_new(RegMem::reg(src)),
         src2_size: OperandSize::Size64,
     }
     .emit(sink, info, state);
@@ -788,18 +788,18 @@ pub(crate) fn emit(
                     DivSignedness::Signed,
                     TrapCode::IntegerDivisionByZero,
                     RegMem::reg(divisor),
-                    Gpr::new(regs::rax()).unwrap(),
-                    Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
+                    Gpr::unwrap_new(regs::rax()),
+                    Writable::from_reg(Gpr::unwrap_new(regs::rax())),
                 ),
                 _ => Inst::div(
                     size,
                     DivSignedness::Signed,
                     TrapCode::IntegerDivisionByZero,
                     RegMem::reg(divisor),
-                    Gpr::new(regs::rax()).unwrap(),
-                    Gpr::new(regs::rdx()).unwrap(),
-                    Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
-                    Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
+                    Gpr::unwrap_new(regs::rax()),
+                    Gpr::unwrap_new(regs::rdx()),
+                    Writable::from_reg(Gpr::unwrap_new(regs::rax())),
+                    Writable::from_reg(Gpr::unwrap_new(regs::rdx())),
                 ),
             };
             inst.emit(sink, info, state);
@@ -884,7 +884,7 @@ pub(crate) fn emit(
         Inst::MovFromPReg { src, dst } => {
             let src: Reg = (*src).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));
-            let src = Gpr::new(src).unwrap();
+            let src = Gpr::unwrap_new(src);
             let size = OperandSize::Size64;
             let dst = WritableGpr::from_writable_reg(dst.to_writable_reg()).unwrap();
             Inst::MovRR { size, src, dst }.emit(sink, info, state);
@@ -892,7 +892,7 @@ pub(crate) fn emit(
 
         Inst::MovToPReg { src, dst } => {
             let src = src.to_reg();
-            let src = Gpr::new(src).unwrap();
+            let src = Gpr::unwrap_new(src);
             let dst: Reg = (*dst).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
@@ -1866,8 +1866,8 @@ pub(crate) fn emit(
                 ExtMode::LQ,
                 RegMem::mem(Amode::imm_reg_reg_shift(
                     0,
-                    Gpr::new(tmp1.to_reg()).unwrap(),
-                    Gpr::new(idx).unwrap(),
+                    Gpr::unwrap_new(tmp1.to_reg()),
+                    Gpr::unwrap_new(idx),
                     2,
                 )),
                 tmp2,
@@ -1939,7 +1939,7 @@ pub(crate) fn emit(
             emit(
                 &Inst::XmmUnaryRmRUnaligned {
                     op: *op,
-                    src: XmmMem::new(src.clone().into()).unwrap(),
+                    src: XmmMem::unwrap_new(src.clone().into()),
                     dst: *dst,
                 },
                 sink,
@@ -2097,7 +2097,7 @@ pub(crate) fn emit(
                 op: *op,
                 dst: *dst,
                 src1: *src1,
-                src2: XmmMem::new(src2.clone().to_reg_mem()).unwrap(),
+                src2: XmmMem::unwrap_new(src2.clone().to_reg_mem()),
             },
             sink,
             info,
@@ -3397,7 +3397,7 @@ pub(crate) fn emit(
             let inst = Inst::shift_r(
                 OperandSize::Size64,
                 ShiftKind::ShiftRightLogical,
-                Imm8Gpr::new(Imm8Reg::Imm8 { imm: 1 }).unwrap(),
+                Imm8Gpr::unwrap_new(Imm8Reg::Imm8 { imm: 1 }),
                 tmp_gpr1.to_reg(),
                 tmp_gpr1,
             );

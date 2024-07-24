@@ -215,8 +215,8 @@ impl Inst {
         Self::AluRmiR {
             size,
             op,
-            src1: Gpr::new(dst.to_reg()).unwrap(),
-            src2: GprMemImm::new(src).unwrap(),
+            src1: Gpr::unwrap_new(dst.to_reg()),
+            src2: GprMemImm::unwrap_new(src),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
@@ -238,7 +238,7 @@ impl Inst {
         Self::UnaryRmR {
             size,
             op,
-            src: GprMem::new(src).unwrap(),
+            src: GprMem::unwrap_new(src),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
@@ -247,7 +247,7 @@ impl Inst {
         debug_assert_eq!(src.to_reg().class(), RegClass::Int);
         Inst::Not {
             size,
-            src: Gpr::new(src.to_reg()).unwrap(),
+            src: Gpr::unwrap_new(src.to_reg()),
             dst: WritableGpr::from_writable_reg(src).unwrap(),
         }
     }
@@ -267,7 +267,7 @@ impl Inst {
             size,
             sign,
             trap,
-            divisor: GprMem::new(divisor).unwrap(),
+            divisor: GprMem::unwrap_new(divisor),
             dividend_lo,
             dividend_hi,
             dst_quotient,
@@ -286,7 +286,7 @@ impl Inst {
         Inst::Div8 {
             sign,
             trap,
-            divisor: GprMem::new(divisor).unwrap(),
+            divisor: GprMem::unwrap_new(divisor),
             dividend,
             dst,
         }
@@ -312,7 +312,7 @@ impl Inst {
         debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert!(src.class() == RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = Gpr::new(src).unwrap();
+        let src = Gpr::unwrap_new(src);
         let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::MovRR { size, src, dst }
     }
@@ -323,7 +323,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmUnaryRmR {
             op,
-            src: XmmMemAligned::new(src).unwrap(),
+            src: XmmMemAligned::unwrap_new(src),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -333,8 +333,8 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmRmR {
             op,
-            src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMemAligned::new(src).unwrap(),
+            src1: Xmm::unwrap_new(dst.to_reg()),
+            src2: XmmMemAligned::unwrap_new(src),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -346,9 +346,9 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmRmRVex3 {
             op,
-            src3: XmmMem::new(src3).unwrap(),
-            src2: Xmm::new(src2).unwrap(),
-            src1: Xmm::new(dst.to_reg()).unwrap(),
+            src3: XmmMem::unwrap_new(src3),
+            src2: Xmm::unwrap_new(src2),
+            src1: Xmm::unwrap_new(dst.to_reg()),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -357,7 +357,7 @@ impl Inst {
         debug_assert!(src.class() == RegClass::Float);
         Inst::XmmMovRM {
             op,
-            src: Xmm::new(src).unwrap(),
+            src: Xmm::unwrap_new(src),
             dst: dst.into(),
         }
     }
@@ -373,7 +373,7 @@ impl Inst {
         debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         Inst::XmmToGpr {
             op,
-            src: Xmm::new(src).unwrap(),
+            src: Xmm::unwrap_new(src),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
             dst_size,
         }
@@ -390,7 +390,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::GprToXmm {
             op,
-            src: GprMem::new(src).unwrap(),
+            src: GprMem::unwrap_new(src),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
             src_size,
         }
@@ -399,8 +399,8 @@ impl Inst {
     pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src1: Reg, src2: RegMem) -> Inst {
         src2.assert_regclass_is(RegClass::Float);
         debug_assert!(src1.class() == RegClass::Float);
-        let src2 = XmmMemAligned::new(src2).unwrap();
-        let src1 = Xmm::new(src1).unwrap();
+        let src2 = XmmMemAligned::unwrap_new(src2);
+        let src1 = Xmm::unwrap_new(src1);
         Inst::XmmCmpRmR { op, src1, src2 }
     }
 
@@ -419,8 +419,8 @@ impl Inst {
         Inst::XmmMinMaxSeq {
             size,
             is_min,
-            lhs: Xmm::new(lhs).unwrap(),
-            rhs: Xmm::new(rhs).unwrap(),
+            lhs: Xmm::unwrap_new(lhs),
+            rhs: Xmm::unwrap_new(rhs),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -428,7 +428,7 @@ impl Inst {
     pub(crate) fn movzx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::new(src).unwrap();
+        let src = GprMem::unwrap_new(src);
         let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::MovzxRmR { ext_mode, src, dst }
     }
@@ -436,7 +436,7 @@ impl Inst {
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::new(src).unwrap();
+        let src = GprMem::unwrap_new(src);
         let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::MovsxRmR { ext_mode, src, dst }
     }
@@ -453,7 +453,7 @@ impl Inst {
         debug_assert!(src.class() == RegClass::Int);
         Inst::MovRM {
             size,
-            src: Gpr::new(src).unwrap(),
+            src: Gpr::unwrap_new(src),
             dst: dst.into(),
         }
     }
@@ -481,7 +481,7 @@ impl Inst {
         Inst::ShiftR {
             size,
             kind,
-            src: Gpr::new(src).unwrap(),
+            src: Gpr::unwrap_new(src),
             num_bits,
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
@@ -494,8 +494,8 @@ impl Inst {
         debug_assert_eq!(src1.class(), RegClass::Int);
         Inst::CmpRmiR {
             size,
-            src1: Gpr::new(src1).unwrap(),
-            src2: GprMemImm::new(src2).unwrap(),
+            src1: Gpr::unwrap_new(src1),
+            src2: GprMemImm::unwrap_new(src2),
             opcode: CmpOpcode::Cmp,
         }
     }
@@ -518,15 +518,15 @@ impl Inst {
         Inst::Cmove {
             size,
             cc,
-            consequent: GprMem::new(src).unwrap(),
-            alternative: Gpr::new(dst.to_reg()).unwrap(),
+            consequent: GprMem::unwrap_new(src),
+            alternative: Gpr::unwrap_new(dst.to_reg()),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
 
     pub(crate) fn push64(src: RegMemImm) -> Inst {
         src.assert_regclass_is(RegClass::Int);
-        let src = GprMemImm::new(src).unwrap();
+        let src = GprMemImm::unwrap_new(src);
         Inst::Push64 { src }
     }
 
