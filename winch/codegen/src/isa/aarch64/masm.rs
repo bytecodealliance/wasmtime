@@ -12,7 +12,7 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
+        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
         MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset,
         ShiftKind, StackSlot, TrapCode, TruncKind,
     },
@@ -215,14 +215,20 @@ impl Masm for MacroAssembler {
         src: Self::Address,
         dst: WritableReg,
         size: OperandSize,
-        kind: Option<ExtendKind>,
+        kind: LoadKind,
     ) -> Result<()> {
-        // kind is some if the value is signed
-        // unlike x64, unused bits are set to zero so we don't need to extend
-        if kind.is_some() {
-            self.asm.sload(src, dst, size);
-        } else {
-            self.asm.uload(src, dst, size);
+        match kind {
+            LoadKind::None => self.asm.uload(src, dst, size),
+            LoadKind::Splat => todo!(),
+            LoadKind::ScalarExtend(extend_kind) => {
+                if extend_kind.signed() {
+                    self.asm.sload(src, dst, size);
+                } else {
+                    // unlike x64, unused bits are set to zero so we don't need to extend
+                    self.asm.uload(src, dst, size);
+                }
+            }
+            LoadKind::VectorExtend(_vector_extend_kind) => todo!(),
         }
         Ok(())
     }
