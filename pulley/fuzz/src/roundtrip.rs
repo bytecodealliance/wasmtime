@@ -1,12 +1,9 @@
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
 use pulley_interpreter::{
     decode::{Decoder, SafeBytecodeStream},
     op::{MaterializeOpsVisitor, Op},
 };
 
-fuzz_target!(|ops: Vec<Op>| {
+pub fn roundtrip(ops: Vec<Op>) {
     let _ = env_logger::try_init();
 
     log::trace!("input: {ops:#?}");
@@ -25,4 +22,4 @@ fuzz_target!(|ops: Vec<Op>| {
         decoded, ops,
         "`decode(encode(ops))` should be equal to the original `ops`"
     );
-});
+}

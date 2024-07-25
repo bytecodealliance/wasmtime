@@ -3,6 +3,7 @@
 use crate::decode::*;
 use crate::imms::*;
 use crate::regs::*;
+use crate::ExtendedOpcode;
 use alloc::string::ToString;
 use alloc::{vec, vec::Vec};
 use core::mem;
@@ -151,7 +152,11 @@ impl Vm {
     #[cold]
     #[inline(never)]
     fn trap(&self, pc: *mut u8) -> Result<(), *mut u8> {
-        Err(pc)
+        // We are given the VM's PC upon having executed a trap instruction,
+        // which is actually pointing to the next instruction after the
+        // trap. Back the PC up to point exactly at the trap.
+        let trap_pc = unsafe { pc.byte_sub(ExtendedOpcode::ENCODED_SIZE_OF_TRAP) };
+        Err(trap_pc)
     }
 
     #[cold]

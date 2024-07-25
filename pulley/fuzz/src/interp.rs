@@ -1,14 +1,11 @@
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
 use pulley_interpreter::{
     interp::Vm,
     op::{self, ExtendedOp, Op},
-    ExtendedOpcode, Opcode,
+    *,
 };
 use std::ptr::NonNull;
 
-fuzz_target!(|ops: Vec<Op>| {
+pub fn interp(ops: Vec<Op>) {
     let _ = env_logger::try_init();
 
     log::trace!("input: {ops:#?}");
@@ -41,7 +38,7 @@ fuzz_target!(|ops: Vec<Op>| {
                 let end = encoded.last().unwrap() as *const u8 as usize;
                 assert!(
                     start <= pc && pc < end,
-                    "pc should be in range {start}..{end}, got {pc}"
+                    "pc should be in range {start:#018x}..{end:#018x}, got {pc:#018x}"
                 );
 
                 let index = pc - start;
@@ -52,7 +49,7 @@ fuzz_target!(|ops: Vec<Op>| {
             }
         };
     }
-});
+}
 
 fn op_is_safe_for_fuzzing(op: &Op) -> bool {
     match op {
@@ -91,18 +88,18 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::BitcastFloatFromInt64(_) => true,
         Op::ExtendedOp(op) => extended_op_is_safe_for_fuzzing(op),
         Op::Call(_) => false,
-        Op::Xeq64(_) => true,
-        Op::Xneq64(_) => true,
-        Op::Xslt64(_) => true,
-        Op::Xslteq64(_) => true,
-        Op::Xult64(_) => true,
-        Op::Xulteq64(_) => true,
-        Op::Xeq32(_) => true,
-        Op::Xneq32(_) => true,
-        Op::Xslt32(_) => true,
-        Op::Xslteq32(_) => true,
-        Op::Xult32(_) => true,
-        Op::Xulteq32(_) => true,
+        Op::Xeq64(Xeq64 { dst, .. }) => !dst.is_special(),
+        Op::Xneq64(Xneq64 { dst, .. }) => !dst.is_special(),
+        Op::Xslt64(Xslt64 { dst, .. }) => !dst.is_special(),
+        Op::Xslteq64(Xslteq64 { dst, .. }) => !dst.is_special(),
+        Op::Xult64(Xult64 { dst, .. }) => !dst.is_special(),
+        Op::Xulteq64(Xulteq64 { dst, .. }) => !dst.is_special(),
+        Op::Xeq32(Xeq32 { dst, .. }) => !dst.is_special(),
+        Op::Xneq32(Xneq32 { dst, .. }) => !dst.is_special(),
+        Op::Xslt32(Xslt32 { dst, .. }) => !dst.is_special(),
+        Op::Xslteq32(Xslteq32 { dst, .. }) => !dst.is_special(),
+        Op::Xult32(Xult32 { dst, .. }) => !dst.is_special(),
+        Op::Xulteq32(Xulteq32 { dst, .. }) => !dst.is_special(),
     }
 }
 

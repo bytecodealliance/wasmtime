@@ -17,15 +17,8 @@ libfuzzer-sys = { workspace = true }
 log = { workspace = true }
 
 [[bin]]
-name = "roundtrip"
-path = "fuzz_targets/roundtrip.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "interp"
-path = "fuzz_targets/interp.rs"
+name = "fuzz"
+path = "fuzz_targets/fuzz.rs"
 test = false
 doc = false
 bench = false
