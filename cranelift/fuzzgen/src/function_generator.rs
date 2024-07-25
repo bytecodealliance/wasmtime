@@ -1898,6 +1898,14 @@ where
             let var = Variable::new(id);
             builder.declare_var(var, ty);
             builder.def_var(var, value);
+
+            // Randomly declare variables as needing a stack map.
+            // We limit these to only types that have fewer than 16 bytes
+            // since the stack map mechanism does not support larger types.
+            if ty.bytes() <= 16 && self.u.arbitrary()? {
+                builder.declare_var_needs_stack_map(var);
+            }
+
             self.resources
                 .vars
                 .entry(ty)
