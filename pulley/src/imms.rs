@@ -8,8 +8,11 @@ pub struct PcRelOffset(i32);
 
 #[cfg(feature = "arbitrary")]
 impl<'a> arbitrary::Arbitrary<'a> for PcRelOffset {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self(u.arbitrary()?))
+    fn arbitrary(_u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        // We can't possibly choose valid offsets for jumping to, so just use
+        // zero as the least dangerous option. It is up to whoever is generating
+        // arbitrary ops to clean this up.
+        Ok(Self(0))
     }
 }
 
