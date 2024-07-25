@@ -2,8 +2,6 @@
 
 use crate::imms::*;
 use crate::regs::*;
-#[allow(unused_imports)] // Some `cfg`s don't use this.
-use alloc::vec::Vec;
 
 macro_rules! define_op {
     (
