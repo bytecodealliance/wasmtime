@@ -1,5 +1,6 @@
 //! The pulley bytecode for fast interpreters.
 
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![deny(missing_docs)]
 #![no_std]
 
