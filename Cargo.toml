@@ -147,8 +147,6 @@ members = [
   "examples/min-platform",
   "examples/min-platform/embedding",
   "fuzz",
-  "pulley",
-  "pulley/fuzz",
   "winch/codegen",
 ]
 exclude = [
@@ -212,6 +210,7 @@ wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=24.0.0" }
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=24.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
+pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.111.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.111.0", default-features = false, features = ["std", "unwind", "trace-log"] }

@@ -2155,7 +2155,6 @@ name = "pulley-interpreter-fuzz"
 version = "0.0.0"
 dependencies = [
  "env_logger",
- "libfuzzer-sys",
  "log",
  "pulley-interpreter",
 ]
@@ -3736,6 +3735,7 @@ dependencies = [
  "libfuzzer-sys",
  "once_cell",
  "proc-macro2",
+ "pulley-interpreter-fuzz",
  "quote",
  "rand",
  "smallvec",

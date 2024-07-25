@@ -7,18 +7,7 @@ edition.workspace = true
 [lints]
 workspace = true
 
-[package.metadata]
-cargo-fuzz = true
-
 [dependencies]
 pulley-interpreter = { path = "..", features = ["encode", "decode", "disas", "interp", "arbitrary"] }
 env_logger = { workspace = true }
-libfuzzer-sys = { workspace = true }
 log = { workspace = true }
-
-[[bin]]
-name = "fuzz"
-path = "fuzz_targets/fuzz.rs"
-test = false
-doc = false
-bench = false

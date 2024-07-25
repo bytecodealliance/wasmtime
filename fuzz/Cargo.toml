@@ -24,6 +24,7 @@ cranelift-native = { workspace = true }
 cranelift-control = { workspace = true }
 libfuzzer-sys = { workspace = true, features = ["arbitrary-derive"] }
 target-lexicon = { workspace = true }
+pulley-interpreter-fuzz = { workspace = true }
 smallvec = { workspace = true }
 wasmparser = { workspace = true }
 wasmtime = { workspace = true, features = ["winch"] }
@@ -119,6 +120,13 @@ doc = false
 [[bin]]
 name = "memory_accesses"
 path = "fuzz_targets/memory_accesses.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pulley"
+path = "fuzz_targets/pulley.rs"
 test = false
 doc = false
 bench = false
