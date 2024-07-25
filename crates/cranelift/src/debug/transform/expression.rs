@@ -1179,8 +1179,7 @@ mod tests {
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
         use cranelift_codegen::{LabelValueLoc, ValueLocRange};
         use cranelift_entity::EntityRef;
-        use std::collections::HashMap;
-        let mut value_ranges = HashMap::new();
+        let mut value_ranges = ValueLabelsRanges::new();
         let value_0 = ValueLabel::new(0);
         let value_1 = ValueLabel::new(1);
         let value_2 = ValueLabel::new(2);

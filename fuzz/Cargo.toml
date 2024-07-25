@@ -21,7 +21,7 @@ cranelift-filetests = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-fuzzgen = { workspace = true }
 cranelift-native = { workspace = true }
-cranelift-control = { workspace = true }
+cranelift-control = { workspace = true, features = ["fuzz"] }
 libfuzzer-sys = { workspace = true, features = ["arbitrary-derive"] }
 target-lexicon = { workspace = true }
 smallvec = { workspace = true }

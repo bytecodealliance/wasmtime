@@ -9,11 +9,11 @@ use crate::{settings, CodegenError, CodegenResult};
 
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt::Write;
 use regalloc2::PRegSet;
 use smallvec::{smallvec, SmallVec};
-use std::fmt::Write;
-use std::string::{String, ToString};
 
 pub(crate) mod regs;
 pub(crate) use self::regs::*;
@@ -148,7 +148,7 @@ fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(32, std::mem::size_of::<Inst>());
+    assert_eq!(32, core::mem::size_of::<Inst>());
 }
 
 impl Inst {
@@ -851,41 +851,41 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
         }
         Inst::Args { args } => {
-            for ArgPair { vreg, preg } in args {
-                collector.reg_fixed_def(vreg, *preg);
+            for ArgPair { mut vreg, preg } in args {
+                collector.reg_fixed_def(&mut vreg, *preg);
             }
         }
         Inst::Rets { rets } => {
-            for RetPair { vreg, preg } in rets {
-                collector.reg_fixed_use(vreg, *preg);
+            for RetPair { mut vreg, preg } in rets {
+                collector.reg_fixed_use(&mut vreg, *preg);
             }
         }
         Inst::Ret { .. } | Inst::AuthenticatedRet { .. } => {}
         Inst::Jump { .. } => {}
         Inst::Call { info, .. } => {
             let CallInfo { uses, defs, .. } = &mut **info;
-            for CallArgPair { vreg, preg } in uses {
-                collector.reg_fixed_use(vreg, *preg);
+            for CallArgPair { mut vreg, preg } in uses {
+                collector.reg_fixed_use(&mut vreg, *preg);
             }
-            for CallRetPair { vreg, preg } in defs {
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { mut vreg, preg } in defs {
+                collector.reg_fixed_def(&mut vreg, *preg);
             }
             collector.reg_clobbers(info.clobbers);
         }
         Inst::CallInd { info, .. } => {
             let CallIndInfo { rn, uses, defs, .. } = &mut **info;
             collector.reg_use(rn);
-            for CallArgPair { vreg, preg } in uses {
-                collector.reg_fixed_use(vreg, *preg);
+            for CallArgPair { mut vreg, preg } in uses {
+                collector.reg_fixed_use(&mut vreg, *preg);
             }
-            for CallRetPair { vreg, preg } in defs {
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { mut vreg, preg } in defs {
+                collector.reg_fixed_def(&mut vreg, *preg);
             }
             collector.reg_clobbers(info.clobbers);
         }
         Inst::ReturnCall { info, callee: _ } => {
-            for CallArgPair { vreg, preg } in &mut info.uses {
-                collector.reg_fixed_use(vreg, *preg);
+            for CallArgPair { mut vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(&mut vreg, *preg);
             }
         }
         Inst::ReturnCallInd { info, callee } => {
@@ -894,8 +894,8 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // register that won't be clobbered by the callee-save restore code emitted with a
             // return_call_indirect.
             collector.reg_fixed_use(callee, xreg(1));
-            for CallArgPair { vreg, preg } in &mut info.uses {
-                collector.reg_fixed_use(vreg, *preg);
+            for CallArgPair { mut vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(&mut vreg, *preg);
             }
         }
         Inst::CondBr { kind, .. } => match kind {

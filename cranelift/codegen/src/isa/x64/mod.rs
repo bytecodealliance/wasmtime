@@ -28,6 +28,7 @@ mod lower;
 mod pcc;
 pub mod settings;
 
+#[cfg(feature = "unwind")]
 pub use inst::unwind::systemv::create_cie;
 
 /// An X64 backend.
@@ -184,6 +185,7 @@ impl TargetIsa for X64Backend {
 }
 
 /// Emit unwind info for an x86 target.
+#[cfg(feature = "unwind")]
 pub fn emit_unwind_info(
     buffer: &MachBufferFinalized<Final>,
     kind: crate::isa::unwind::UnwindInfoKind,

@@ -44,7 +44,7 @@ fn const_vector_scale(inst: ir::Inst, func: &mut ir::Function, ty: ir::Type, isa
     assert!(ty.bytes() <= 16);
 
     // Use a minimum of 128-bits for the base type.
-    let base_bytes = std::cmp::max(ty.bytes(), 16);
+    let base_bytes = core::cmp::max(ty.bytes(), 16);
     let scale = (isa.dynamic_vector_bytes(ty) / base_bytes) as i64;
     assert!(scale > 0);
     let pos = FuncCursor::new(func).at_inst(inst);

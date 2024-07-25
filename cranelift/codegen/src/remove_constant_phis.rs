@@ -7,7 +7,7 @@ use crate::ir::{Block, BlockCall, Inst, Value};
 use crate::timing;
 use bumpalo::Bump;
 use cranelift_entity::SecondaryMap;
-use rustc_hash::{FxHashMap, FxHashSet};
+use hashbrown::{HashMap, HashSet};
 use smallvec::SmallVec;
 
 // A note on notation.  For the sake of clarity, this file uses the phrase
@@ -153,7 +153,7 @@ impl<'a> OutEdge<'a> {
 }
 
 /// For some block, a useful bundle of info.  The `Block` itself is not stored
-/// here since it will be the key in the associated `FxHashMap` -- see
+/// here since it will be the key in the associated `HashMap` -- see
 /// `summaries` below.  For the `SmallVec` tuning params: most blocks have
 /// few parameters, hence `4`.  And almost all blocks have either one or two
 /// successors, hence `2`.
@@ -189,13 +189,13 @@ impl<'a> BlockSummary<'a> {
 /// Solver state.  This holds a AbstractValue for each formal parameter, except
 /// for those from the entry block.
 struct SolverState {
-    absvals: FxHashMap<Value /*Group A*/, AbstractValue>,
+    absvals: HashMap<Value /*Group A*/, AbstractValue>,
 }
 
 impl SolverState {
     fn new() -> Self {
         Self {
-            absvals: FxHashMap::default(),
+            absvals: HashMap::default(),
         }
     }
 
@@ -229,7 +229,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     // info.  The solver will iterate over the summaries, rather than having
     // to inspect each instruction in each block.
     let bump =
-        Bump::with_capacity(domtree.cfg_postorder().len() * 4 * std::mem::size_of::<Value>());
+        Bump::with_capacity(domtree.cfg_postorder().len() * 4 * core::mem::size_of::<Value>());
     let mut summaries =
         SecondaryMap::<Block, BlockSummary>::with_capacity(domtree.cfg_postorder().len());
 
@@ -337,7 +337,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     // summaries and the final solver state as a guide.
 
     // Make up a set of blocks that need editing.
-    let mut need_editing = FxHashSet::<Block>::default();
+    let mut need_editing = HashSet::<Block>::default();
     for (block, summary) in summaries.iter() {
         if block == entry_block {
             continue;

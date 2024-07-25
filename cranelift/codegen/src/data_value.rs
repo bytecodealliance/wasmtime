@@ -231,13 +231,13 @@ impl DataValue {
     /// Write a [DataValue] to a memory location in native-endian byte order.
     pub unsafe fn write_value_to(&self, p: *mut u128) {
         let size = self.ty().bytes() as usize;
-        self.write_to_slice_ne(std::slice::from_raw_parts_mut(p as *mut u8, size));
+        self.write_to_slice_ne(core::slice::from_raw_parts_mut(p as *mut u8, size));
     }
 
     /// Read a [DataValue] from a memory location using a given [Type] in native-endian byte order.
     pub unsafe fn read_value_from(p: *const u128, ty: Type) -> Self {
         DataValue::read_from_slice_ne(
-            std::slice::from_raw_parts(p as *const u8, ty.bytes() as usize),
+            core::slice::from_raw_parts(p as *const u8, ty.bytes() as usize),
             ty,
         )
     }
@@ -274,6 +274,7 @@ pub enum DataValueCastFailure {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
+#[cfg(feature = "std")]
 impl std::error::Error for DataValueCastFailure {}
 
 impl Display for DataValueCastFailure {

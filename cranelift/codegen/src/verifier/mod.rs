@@ -100,6 +100,7 @@ pub struct VerifierError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
+#[cfg(feature = "std")]
 impl std::error::Error for VerifierError {}
 
 impl Display for VerifierError {
@@ -179,6 +180,7 @@ pub struct VerifierErrors(pub Vec<VerifierError>);
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
+#[cfg(feature = "std")]
 impl std::error::Error for VerifierErrors {}
 
 impl VerifierErrors {

@@ -13,6 +13,9 @@ use core::{i32, u32};
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
+#[cfg(not(feature = "std"))]
+use core_maths::CoreFloat;
+
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
 pub trait IntoBytes {
@@ -972,7 +975,8 @@ impl Ieee32 {
     /// Returns the nearest integer to `self`. Rounds half-way cases to the number
     /// with an even least significant digit.
     pub fn round_ties_even(self) -> Self {
-        Self::with_float(self.as_f32().round_ties_even())
+        // TODO: find a suitable alternative to std round_ties_even() in no_std
+        Self::with_float(self.as_f32().round())
     }
 }
 
@@ -1189,7 +1193,8 @@ impl Ieee64 {
     /// Returns the nearest integer to `self`. Rounds half-way cases to the number
     /// with an even least significant digit.
     pub fn round_ties_even(self) -> Self {
-        Self::with_float(self.as_f64().round_ties_even())
+        // TODO: find a suitable alternative to std round_ties_even() in no_std
+        Self::with_float(self.as_f64().round())
     }
 }
 
@@ -1828,7 +1833,7 @@ mod tests {
     fn fcvt_to_sint_negative_overflow_ieee32() {
         for n in &[8, 16] {
             assert_eq!(-((1u32 << (n - 1)) as f32) - 1.0, unsafe {
-                mem::transmute(Ieee32::fcvt_to_sint_negative_overflow(*n))
+                mem::transmute::<_, f32>(Ieee32::fcvt_to_sint_negative_overflow(*n))
             });
         }
     }
@@ -1966,7 +1971,7 @@ mod tests {
     fn fcvt_to_sint_negative_overflow_ieee64() {
         for n in &[8, 16, 32] {
             assert_eq!(-((1u64 << (n - 1)) as f64) - 1.0, unsafe {
-                mem::transmute(Ieee64::fcvt_to_sint_negative_overflow(*n))
+                mem::transmute::<_, f64>(Ieee64::fcvt_to_sint_negative_overflow(*n))
             });
         }
     }

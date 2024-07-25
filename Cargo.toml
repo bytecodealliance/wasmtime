@@ -178,6 +178,7 @@ all = 'allow'
 
 [workspace.dependencies]
 arbitrary = { version = "1.3.1" }
+ahash = { version = "0.8", default-features = false }
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=24.0.0" }
 wasmtime = { path = "crates/wasmtime", version = "24.0.0", default-features = false }
 wasmtime-c-api-macros = { path = "crates/c-api-macros", version = "=24.0.0" }
@@ -226,7 +227,7 @@ cranelift-jit = { path = "cranelift/jit", version = "0.111.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.111.0" }
 cranelift-bitset = { path = "cranelift/bitset", version = "0.111.0" }
-cranelift-control = { path = "cranelift/control", version = "0.111.0" }
+cranelift-control = { path = "cranelift/control", version = "0.111.0", default-features = false }
 cranelift = { path = "cranelift/umbrella", version = "0.111.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.22.0" }
@@ -236,7 +237,7 @@ byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-arra
 
 # Bytecode Alliance maintained dependencies:
 # ---------------------------
-regalloc2 = "0.9.3"
+regalloc2 = { version = "0.9.3", default-features = false }
 
 # cap-std family:
 target-lexicon = "0.12.13"
@@ -277,9 +278,9 @@ windows-sys = "0.52.0"
 env_logger = "0.10"
 log = { version = "0.4.8", default-features = false }
 clap = { version = "4.3.12", default-features = false, features = ["std", "derive"] }
-hashbrown = { version = "0.14", default-features = false }
+hashbrown = { version = "0.14" }
 capstone = "0.12.0"
-once_cell = { version = "1.12.0", default-features = false }
+once_cell = { version = "1.12.0", default-features = false, features = ["critical-section"] }
 smallvec = { version = "1.6.1", features = ["union"] }
 tracing = "0.1.26"
 bitflags = "2.0"
@@ -322,7 +323,7 @@ url = "2.3.1"
 humantime = "2.0.0"
 postcard = { version = "1.0.8", default-features = false, features = ['alloc'] }
 criterion = { version = "0.5.0", default-features = false, features = ["html_reports", "rayon"] }
-rustc-hash = "1.1.0"
+rustc-hash = { version = "1.1.0", default-features = false }
 libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
 

@@ -8,7 +8,7 @@ use crate::machinst::{Reg, RegClass, Writable};
 use regalloc2::PReg;
 use regalloc2::VReg;
 
-use std::string::{String, ToString};
+use alloc::string::{String, ToString};
 
 //=============================================================================
 // Registers, the Universe thereof, and printing

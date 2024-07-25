@@ -8,9 +8,9 @@ use crate::ir::MemFlags;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
+use alloc::string::String;
+use core::fmt;
 use smallvec::{smallvec, SmallVec};
-use std::fmt;
-use std::string::String;
 
 pub use crate::isa::x64::lower::isle::generated_code::DivSignedness;
 
@@ -92,7 +92,7 @@ macro_rules! newtype_of_reg {
         // NB: We cannot implement `DerefMut` because that would let people do
         // nasty stuff like `*my_gpr.deref_mut() = some_xmm_reg`, breaking the
         // invariants that `Gpr` provides.
-        impl std::ops::Deref for $newtype_reg {
+        impl core::ops::Deref for $newtype_reg {
             type Target = Reg;
 
             fn deref(&self) -> &Reg {

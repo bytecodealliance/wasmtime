@@ -65,7 +65,7 @@ use crate::entity::SecondaryMap;
 use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
 use crate::{machinst::*, trace};
-use rustc_hash::{FxHashMap, FxHashSet};
+use hashbrown::{HashMap, HashSet};
 
 /// Mapping from CLIF BBs to VCode BBs.
 #[derive(Debug)]
@@ -78,16 +78,16 @@ pub struct BlockLoweringOrder {
     lowered_succ_indices: Vec<BlockIndex>,
     /// Ranges in `lowered_succ_indices` giving the successor lists for each lowered
     /// block. Indexed by lowering-order index (`BlockIndex`).
-    lowered_succ_ranges: Vec<(Option<Inst>, std::ops::Range<usize>)>,
+    lowered_succ_ranges: Vec<(Option<Inst>, core::ops::Range<usize>)>,
     /// Cold blocks. These blocks are not reordered in the
     /// `lowered_order` above; the lowered order must respect RPO
     /// (uses after defs) in order for lowering to be
     /// correct. Instead, this set is used to provide `is_cold()`,
     /// which is used by VCode emission to sink the blocks at the last
     /// moment (when we actually emit bytes into the MachBuffer).
-    cold_blocks: FxHashSet<BlockIndex>,
+    cold_blocks: HashSet<BlockIndex>,
     /// Lowered blocks that are indirect branch targets.
-    indirect_branch_targets: FxHashSet<BlockIndex>,
+    indirect_branch_targets: HashSet<BlockIndex>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -160,7 +160,7 @@ impl BlockLoweringOrder {
         let mut block_succs: SmallVec<[LoweredBlock; 128]> = SmallVec::new();
         let mut block_succ_range = SecondaryMap::with_default(0..0);
 
-        let mut indirect_branch_target_clif_blocks = FxHashSet::default();
+        let mut indirect_branch_target_clif_blocks = HashSet::<Block>::default();
 
         for block in f.layout.blocks() {
             let start = block_succs.len();
@@ -221,7 +221,7 @@ impl BlockLoweringOrder {
             }
         }
 
-        let lb_to_bindex = FxHashMap::from_iter(
+        let lb_to_bindex = HashMap::<LoweredBlock, BlockIndex>::from_iter(
             lowered_order
                 .iter()
                 .enumerate()
@@ -232,8 +232,8 @@ impl BlockLoweringOrder {
         // during the creation of `lowering_order`, as we need `lb_to_bindex` to be fully populated
         // first.
         let mut lowered_succ_indices = Vec::new();
-        let mut cold_blocks = FxHashSet::default();
-        let mut indirect_branch_targets = FxHashSet::default();
+        let mut cold_blocks = HashSet::default();
+        let mut indirect_branch_targets = HashSet::default();
         let lowered_succ_ranges =
             Vec::from_iter(lowered_order.iter().enumerate().map(|(ix, lb)| {
                 let bindex = BlockIndex::new(ix);

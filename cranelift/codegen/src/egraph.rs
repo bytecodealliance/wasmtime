@@ -18,12 +18,12 @@ use crate::settings::Flags;
 use crate::trace;
 use crate::unionfind::UnionFind;
 use core::cmp::Ordering;
+use core::hash::Hasher;
 use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
-use rustc_hash::FxHashSet;
+use hashbrown::HashSet;
 use smallvec::SmallVec;
-use std::hash::Hasher;
 
 mod cost;
 mod elaborate;
@@ -68,7 +68,7 @@ pub struct EgraphPass<'a> {
     ///
     /// (A canonical Value is the *oldest* Value in an eclass,
     /// i.e. tree of union value-nodes).
-    remat_values: FxHashSet<Value>,
+    remat_values: HashSet<Value>,
     /// Stats collected while we run this pass.
     pub(crate) stats: Stats,
     /// Union-find that maps all members of a Union tree (eclass) back
@@ -91,7 +91,7 @@ where
     pub(crate) effectful_gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Value>,
     available_block: &'opt mut SecondaryMap<Value, Block>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
-    pub(crate) remat_values: &'opt mut FxHashSet<Value>,
+    pub(crate) remat_values: &'opt mut HashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
     domtree: &'opt DominatorTreePreorder,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
@@ -100,7 +100,7 @@ where
     ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
-    pub(crate) subsume_values: FxHashSet<Value>,
+    pub(crate) subsume_values: HashSet<Value>,
     optimized_values: SmallVec<[Value; MATCHES_LIMIT]>,
 }
 
@@ -277,7 +277,7 @@ where
         // A pure node always has exactly one result.
         let orig_value = self.func.dfg.first_result(inst);
 
-        let mut optimized_values = std::mem::take(&mut self.optimized_values);
+        let mut optimized_values = core::mem::take(&mut self.optimized_values);
 
         // Limit rewrite depth. When we apply optimization rules, they
         // may create new nodes (values) and those are, recursively,
@@ -522,7 +522,7 @@ impl<'a> EgraphPass<'a> {
             ctrl_plane,
             stats: Stats::default(),
             eclasses: UnionFind::with_capacity(num_values),
-            remat_values: FxHashSet::default(),
+            remat_values: HashSet::default(),
         }
     }
 
@@ -682,7 +682,7 @@ impl<'a> EgraphPass<'a> {
                             available_block: &mut available_block,
                             eclasses: &mut self.eclasses,
                             rewrite_depth: 0,
-                            subsume_values: FxHashSet::default(),
+                            subsume_values: HashSet::default(),
                             remat_values: &mut self.remat_values,
                             stats: &mut self.stats,
                             domtree: &self.domtree,
@@ -805,7 +805,7 @@ impl<'a> CtxEq<(Type, InstructionData), (Type, InstructionData)> for GVNContext<
 
 impl<'a> CtxHash<(Type, InstructionData)> for GVNContext<'a> {
     fn ctx_hash<H: Hasher>(&self, state: &mut H, (ty, inst): &(Type, InstructionData)) {
-        std::hash::Hash::hash(&ty, state);
+        core::hash::Hash::hash(&ty, state);
         inst.hash(state, self.value_lists, |value| self.union_find.find(value));
     }
 }

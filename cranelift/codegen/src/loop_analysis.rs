@@ -62,13 +62,13 @@ impl LoopLevel {
     /// A clamped loop level from a larger-width (usize) depth.
     pub fn clamped(level: usize) -> Self {
         Self(
-            u8::try_from(std::cmp::min(level, (Self::INVALID as usize) - 1))
+            u8::try_from(core::cmp::min(level, (Self::INVALID as usize) - 1))
                 .expect("Clamped value must always convert"),
         )
     }
 }
 
-impl std::default::Default for LoopLevel {
+impl core::default::Default for LoopLevel {
     fn default() -> Self {
         LoopLevel::invalid()
     }

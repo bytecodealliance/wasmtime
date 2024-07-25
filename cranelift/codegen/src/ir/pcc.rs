@@ -77,14 +77,14 @@ use crate::ir::types::*;
 use crate::isa::TargetIsa;
 use crate::machinst::{BlockIndex, LowerBackend, VCode};
 use crate::trace;
+use core::fmt;
 use regalloc2::Function as _;
-use std::fmt;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
 /// The result of checking proof-carrying-code facts.
-pub type PccResult<T> = std::result::Result<T, PccError>;
+pub type PccResult<T> = core::result::Result<T, PccError>;
 
 /// An error or inconsistency discovered when checking proof-carrying
 /// code.
@@ -332,7 +332,7 @@ impl Expr {
         } else {
             Expr {
                 base: BaseExpr::min(&lhs.base, &rhs.base),
-                offset: std::cmp::min(lhs.offset, rhs.offset),
+                offset: core::cmp::min(lhs.offset, rhs.offset),
             }
         }
     }
@@ -347,7 +347,7 @@ impl Expr {
         } else {
             Expr {
                 base: BaseExpr::max(&lhs.base, &rhs.base),
-                offset: std::cmp::max(lhs.offset, rhs.offset),
+                offset: core::cmp::max(lhs.offset, rhs.offset),
             }
         }
     }
@@ -651,8 +651,8 @@ impl Fact {
                 },
             ) if bw_lhs == bw_rhs && max_lhs >= min_rhs && max_rhs >= min_lhs => Fact::Range {
                 bit_width: *bw_lhs,
-                min: std::cmp::max(*min_lhs, *min_rhs),
-                max: std::cmp::min(*max_lhs, *max_rhs),
+                min: core::cmp::max(*min_lhs, *min_rhs),
+                max: core::cmp::min(*max_lhs, *max_rhs),
             },
 
             (
@@ -693,8 +693,8 @@ impl Fact {
             {
                 Fact::Mem {
                     ty: *ty_lhs,
-                    min_offset: std::cmp::max(*min_offset_lhs, *min_offset_rhs),
-                    max_offset: std::cmp::min(*max_offset_lhs, *max_offset_rhs),
+                    min_offset: core::cmp::max(*min_offset_lhs, *min_offset_rhs),
+                    max_offset: core::cmp::min(*max_offset_lhs, *max_offset_rhs),
                     nullable: *nullable_lhs && *nullable_rhs,
                 }
             }
@@ -910,7 +910,7 @@ impl<'a> FactContext<'a> {
             ) if bw_lhs == bw_rhs && add_width >= *bw_lhs => {
                 let computed_min = min_lhs.checked_add(*min_rhs)?;
                 let computed_max = max_lhs.checked_add(*max_rhs)?;
-                let computed_max = std::cmp::min(max_value_for_width(add_width), computed_max);
+                let computed_max = core::cmp::min(max_value_for_width(add_width), computed_max);
                 Some(Fact::Range {
                     bit_width: *bw_lhs,
                     min: computed_min,

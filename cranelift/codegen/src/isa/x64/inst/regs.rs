@@ -6,9 +6,9 @@
 //! Note also that we make use of pinned VRegs to refer to PRegs.
 
 use crate::machinst::{RealReg, Reg};
+use alloc::string::String;
 use alloc::string::ToString;
 use regalloc2::{PReg, RegClass, VReg};
-use std::string::String;
 
 // Hardware encodings (note the special rax, rcx, rdx, rbx order).
 

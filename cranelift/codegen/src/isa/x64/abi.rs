@@ -11,9 +11,9 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
+use once_cell::sync::OnceCell;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::sync::OnceLock;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
@@ -313,7 +313,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     {
                         size
                     } else {
-                        let size = std::cmp::max(size, 8);
+                        let size = core::cmp::max(size, 8);
 
                         // Align.
                         debug_assert!(size.is_power_of_two());
@@ -381,7 +381,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     for slot in slots.iter_mut() {
                         if let ABIArgSlot::Stack { offset, ty, .. } = slot {
                             let size = if uses_extension {
-                                i64::from(std::cmp::max(ty.bytes(), 8))
+                                i64::from(core::cmp::max(ty.bytes(), 8))
                             } else {
                                 i64::from(ty.bytes())
                             };
@@ -912,10 +912,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         if flags.enable_pinned_reg() {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+            static MACHINE_ENV: OnceCell<MachineEnv> = OnceCell::new();
             MACHINE_ENV.get_or_init(|| create_reg_env_systemv(true))
         } else {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+            static MACHINE_ENV: OnceCell<MachineEnv> = OnceCell::new();
             MACHINE_ENV.get_or_init(|| create_reg_env_systemv(false))
         }
     }

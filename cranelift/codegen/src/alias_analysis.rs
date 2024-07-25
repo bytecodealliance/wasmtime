@@ -71,7 +71,7 @@ use crate::{
     trace,
 };
 use cranelift_entity::{packed_option::PackedOption, EntityRef};
-use rustc_hash::{FxHashMap, FxHashSet};
+use hashbrown::{HashMap, HashSet};
 
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.
@@ -179,14 +179,14 @@ pub struct AliasAnalysis<'a> {
     domtree: &'a DominatorTree,
 
     /// Input state to a basic block.
-    block_input: FxHashMap<Block, LastStores>,
+    block_input: HashMap<Block, LastStores>,
 
     /// Known memory-value equivalences. This is the result of the
     /// analysis. This is a mapping from (last store, address
     /// expression, offset, type) to SSA `Value`.
     ///
     /// We keep the defining inst around for quick dominance checks.
-    mem_values: FxHashMap<MemoryLoc, (Inst, Value)>,
+    mem_values: HashMap<MemoryLoc, (Inst, Value)>,
 }
 
 impl<'a> AliasAnalysis<'a> {
@@ -195,8 +195,8 @@ impl<'a> AliasAnalysis<'a> {
         trace!("alias analysis: input is:\n{:?}", func);
         let mut analysis = AliasAnalysis {
             domtree,
-            block_input: FxHashMap::default(),
-            mem_values: FxHashMap::default(),
+            block_input: HashMap::default(),
+            mem_values: HashMap::default(),
         };
 
         analysis.compute_block_input_states(func);
@@ -205,7 +205,7 @@ impl<'a> AliasAnalysis<'a> {
 
     fn compute_block_input_states(&mut self, func: &Function) {
         let mut queue = vec![];
-        let mut queue_set = FxHashSet::default();
+        let mut queue_set = HashSet::<Block>::default();
         let entry = func.layout.entry_block().unwrap();
         queue.push(entry);
         queue_set.insert(entry);

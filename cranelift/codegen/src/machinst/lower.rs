@@ -21,10 +21,10 @@ use crate::machinst::{
 use crate::settings::Flags;
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
+use core::fmt::Debug;
 use cranelift_control::ControlPlane;
-use rustc_hash::{FxHashMap, FxHashSet};
+use hashbrown::{HashMap, HashSet};
 use smallvec::{smallvec, SmallVec};
-use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
 
@@ -192,7 +192,7 @@ pub struct Lower<'func, I: VCodeInst> {
     /// i.e., the version of global state that exists before an instruction
     /// executes.  For each side-effecting instruction, the *exit* color is its
     /// entry color plus one.
-    side_effect_inst_entry_colors: FxHashMap<Inst, InstColor>,
+    side_effect_inst_entry_colors: HashMap<Inst, InstColor>,
 
     /// Current color as we scan during lowering. While we are lowering an
     /// instruction, this is equal to the color *at entry to* the instruction.
@@ -202,7 +202,7 @@ pub struct Lower<'func, I: VCodeInst> {
     cur_inst: Option<Inst>,
 
     /// Instruction constant values, if known.
-    inst_constants: FxHashMap<Inst, u64>,
+    inst_constants: HashMap<Inst, u64>,
 
     /// Use-counts per SSA value, as counted in the input IR. These
     /// are "coarsened", in the abstract-interpretation sense: we only
@@ -217,7 +217,7 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// Effectful instructions that have been sunk; they are not codegen'd at
     /// their original locations.
-    inst_sunk: FxHashSet<Inst>,
+    inst_sunk: HashSet<Inst>,
 
     /// Instructions collected for the CLIF inst in progress, in forward order.
     ir_insts: Vec<I>,
@@ -428,8 +428,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // side-effects, in one combined pass.
         let mut cur_color = 0;
         let mut block_end_colors = SecondaryMap::with_default(InstColor::new(0));
-        let mut side_effect_inst_entry_colors = FxHashMap::default();
-        let mut inst_constants = FxHashMap::default();
+        let mut side_effect_inst_entry_colors = HashMap::default();
+        let mut inst_constants = HashMap::default();
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
@@ -465,7 +465,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             inst_constants,
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
-            inst_sunk: FxHashSet::default(),
+            inst_sunk: HashSet::default(),
             cur_scan_entry_color: None,
             cur_inst: None,
             ir_insts: vec![],
@@ -906,7 +906,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let labels = label_starts
                 .iter()
                 .map(|&ValueLabelStart { label, .. }| label)
-                .collect::<FxHashSet<_>>();
+                .collect::<HashSet<_>>();
             for label in labels {
                 trace!(
                     "value labeling: defines val {:?} -> reg {:?} -> label {:?}",

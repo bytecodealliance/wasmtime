@@ -477,7 +477,7 @@ mod tests {
     use crate::ir::MemFlags;
     use crate::isa::x64::args::Gpr;
     use crate::isa::x64::inst::regs;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
 
     // As a sanity test, we verify that the output of `xed-asmparse-main 'vpabsq xmm0{k0},
     // xmm1'` matches this EVEX encoding machinery.

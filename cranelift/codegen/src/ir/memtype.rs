@@ -108,14 +108,14 @@ pub enum MemoryTypeData {
     Empty,
 }
 
-impl std::default::Default for MemoryTypeData {
+impl core::default::Default for MemoryTypeData {
     fn default() -> Self {
         Self::Empty
     }
 }
 
-impl std::fmt::Display for MemoryTypeData {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for MemoryTypeData {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Self::Struct { size, fields } => {
                 write!(f, "struct {size} {{")?;

@@ -48,7 +48,7 @@ impl core::fmt::Debug for Cost {
 
 impl Ord for Cost {
     #[inline]
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         // We make sure that the high bits are the op cost and the low bits are
         // the depth. This means that we can use normal integer comparison to
         // order by op cost and then depth.
@@ -65,7 +65,7 @@ impl Ord for Cost {
 
 impl PartialOrd for Cost {
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -117,24 +117,24 @@ impl Cost {
     }
 }
 
-impl std::iter::Sum<Cost> for Cost {
+impl core::iter::Sum<Cost> for Cost {
     fn sum<I: Iterator<Item = Cost>>(iter: I) -> Self {
         iter.fold(Self::zero(), |a, b| a + b)
     }
 }
 
-impl std::default::Default for Cost {
+impl core::default::Default for Cost {
     fn default() -> Cost {
         Cost::zero()
     }
 }
 
-impl std::ops::Add<Cost> for Cost {
+impl core::ops::Add<Cost> for Cost {
     type Output = Cost;
 
     fn add(self, other: Cost) -> Cost {
         let op_cost = self.op_cost().saturating_add(other.op_cost());
-        let depth = std::cmp::max(self.depth(), other.depth());
+        let depth = core::cmp::max(self.depth(), other.depth());
         Cost::new(op_cost, depth)
     }
 }

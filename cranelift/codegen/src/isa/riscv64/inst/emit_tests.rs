@@ -1,7 +1,7 @@
 #[allow(unused)]
 use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 fn fa7() -> Reg {
     f_reg(17)
@@ -42,7 +42,7 @@ fn test_riscv64_binemit() {
         }
     }
 
-    let mut insns = Vec::<TestUnit>::with_capacity(500);
+    let mut insns = alloc::vec::Vec::<TestUnit>::with_capacity(500);
 
     insns.push(TestUnit::new(Inst::Ret {}, "ret", 0x00008067));
 

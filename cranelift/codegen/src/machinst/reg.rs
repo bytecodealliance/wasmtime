@@ -80,8 +80,8 @@ impl Reg {
     }
 }
 
-impl std::fmt::Debug for Reg {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for Reg {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if let Some(rreg) = self.to_real_reg() {
             let preg: PReg = rreg.into();
             write!(f, "{}", preg)
@@ -118,8 +118,8 @@ impl RealReg {
     }
 }
 
-impl std::fmt::Debug for RealReg {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for RealReg {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         Reg::from(*self).fmt(f)
     }
 }
@@ -144,8 +144,8 @@ impl VirtualReg {
     }
 }
 
-impl std::fmt::Debug for VirtualReg {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for VirtualReg {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         Reg::from(*self).fmt(f)
     }
 }
@@ -188,20 +188,20 @@ impl<T> Writable<T> {
 // Conversions between regalloc2 types (VReg, PReg) and our types
 // (VirtualReg, RealReg, Reg).
 
-impl std::convert::From<regalloc2::VReg> for Reg {
+impl core::convert::From<regalloc2::VReg> for Reg {
     fn from(vreg: regalloc2::VReg) -> Reg {
         Reg(vreg)
     }
 }
 
-impl std::convert::From<regalloc2::VReg> for VirtualReg {
+impl core::convert::From<regalloc2::VReg> for VirtualReg {
     fn from(vreg: regalloc2::VReg) -> VirtualReg {
         debug_assert!(pinned_vreg_to_preg(vreg).is_none());
         VirtualReg(vreg)
     }
 }
 
-impl std::convert::From<Reg> for regalloc2::VReg {
+impl core::convert::From<Reg> for regalloc2::VReg {
     /// Extract the underlying `regalloc2::VReg`. Note that physical
     /// registers also map to particular (special) VRegs, so this
     /// method can be used either on virtual or physical `Reg`s.
@@ -209,19 +209,19 @@ impl std::convert::From<Reg> for regalloc2::VReg {
         reg.0
     }
 }
-impl std::convert::From<&Reg> for regalloc2::VReg {
+impl core::convert::From<&Reg> for regalloc2::VReg {
     fn from(reg: &Reg) -> regalloc2::VReg {
         reg.0
     }
 }
 
-impl std::convert::From<VirtualReg> for regalloc2::VReg {
+impl core::convert::From<VirtualReg> for regalloc2::VReg {
     fn from(reg: VirtualReg) -> regalloc2::VReg {
         reg.0
     }
 }
 
-impl std::convert::From<RealReg> for regalloc2::VReg {
+impl core::convert::From<RealReg> for regalloc2::VReg {
     fn from(reg: RealReg) -> regalloc2::VReg {
         // This representation is redundant: the class is implied in the vreg
         // index as well as being in the vreg class field.
@@ -229,31 +229,31 @@ impl std::convert::From<RealReg> for regalloc2::VReg {
     }
 }
 
-impl std::convert::From<RealReg> for regalloc2::PReg {
+impl core::convert::From<RealReg> for regalloc2::PReg {
     fn from(reg: RealReg) -> regalloc2::PReg {
         reg.0
     }
 }
 
-impl std::convert::From<regalloc2::PReg> for RealReg {
+impl core::convert::From<regalloc2::PReg> for RealReg {
     fn from(preg: regalloc2::PReg) -> RealReg {
         RealReg(preg)
     }
 }
 
-impl std::convert::From<regalloc2::PReg> for Reg {
+impl core::convert::From<regalloc2::PReg> for Reg {
     fn from(preg: regalloc2::PReg) -> Reg {
         RealReg(preg).into()
     }
 }
 
-impl std::convert::From<RealReg> for Reg {
+impl core::convert::From<RealReg> for Reg {
     fn from(reg: RealReg) -> Reg {
         Reg(reg.into())
     }
 }
 
-impl std::convert::From<VirtualReg> for Reg {
+impl core::convert::From<VirtualReg> for Reg {
     fn from(reg: VirtualReg) -> Reg {
         Reg(reg.0)
     }
