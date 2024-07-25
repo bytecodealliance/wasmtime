@@ -25,7 +25,7 @@ fn main() -> Result<()> {
     let mut store = Store::new(&engine, wasi);
 
     // Instantiate our module with the imports we've created, and run it.
-    let module = Module::from_file(&engine, "target/wasm32-wasi/debug/wasi.wasm")?;
+    let module = Module::from_file(&engine, "target/wasm32-wasip1/debug/wasi.wasm")?;
     linker.module(&mut store, "", &module)?;
     linker
         .get_default(&mut store, "")?

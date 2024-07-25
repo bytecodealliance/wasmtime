@@ -44,10 +44,10 @@ so stay tuned!
 
 ## Development hints
 When testing the crate, you may want to enable and run full wasm32 integration testsuite. This
-requires `wasm32-wasi` target installed which can be done as follows using [rustup]
+requires `wasm32-wasip1` target installed which can be done as follows using [rustup]
 
 ```
-rustup target add wasm32-wasi
+rustup target add wasm32-wasip1
 ```
 
 [rustup]: https://rustup.rs

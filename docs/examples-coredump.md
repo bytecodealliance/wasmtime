@@ -5,7 +5,7 @@ The following steps describe how to debug using Wasm coredump in Wasmtime:
 1. Compile your WebAssembly with debug info enabled; for example:
 
     ```sh
-    $ rustc foo.rs --target=wasm32-wasi -C debuginfo=2
+    $ rustc foo.rs --target=wasm32-wasip1 -C debuginfo=2
     ```
 
 <details>

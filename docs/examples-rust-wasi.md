@@ -14,14 +14,14 @@ WebAssembly module.
 
 ### WebAssembly module source code
 
-For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASI Preview 1 API. 
+For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASI Preview 1 API.
 
 `wasi.rs`
 ```rust
 {{#include ../examples/wasi/wasm/wasi.rs}}
 ```
 
-Building this program generates `target/wasm32-wasi/debug/wasi.wasm`, used below.
+Building this program generates `target/wasm32-wasip1/debug/wasi.wasm`, used below.
 
 ### Invoke the WASM module
 

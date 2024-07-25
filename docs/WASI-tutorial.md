@@ -154,14 +154,14 @@ Let's put this source in the main file of our crate `src/main.rs`.
 In order to build it, we first need to install a WASI-enabled Rust toolchain:
 
 ```
-$ rustup target add wasm32-wasi
-$ cargo build --target wasm32-wasi
+$ rustup target add wasm32-wasip1
+$ cargo build --target wasm32-wasip1
 ```
 
-We should now have the WebAssembly module created in `target/wasm32-wasi/debug`:
+We should now have the WebAssembly module created in `target/wasm32-wasip1/debug`:
 
 ```
-$ file target/wasm32-wasi/debug/demo.wasm
+$ file target/wasm32-wasip1/debug/demo.wasm
 demo.wasm: WebAssembly (wasm) binary module version 0x1 (MVP)
 ```
 

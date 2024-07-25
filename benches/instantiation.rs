@@ -185,7 +185,7 @@ fn build_wasi_example() {
             "-p",
             "example-wasi-wasm",
             "--target",
-            "wasm32-wasi",
+            "wasm32-wasip1",
         ])
         .spawn()
         .expect("failed to run cargo to build WASI example")
@@ -193,11 +193,11 @@ fn build_wasi_example() {
         .expect("failed to wait for cargo to build")
         .success()
     {
-        panic!("failed to build WASI example for target `wasm32-wasi`");
+        panic!("failed to build WASI example for target `wasm32-wasip1`");
     }
 
     std::fs::copy(
-        "target/wasm32-wasi/release/wasi.wasm",
+        "target/wasm32-wasip1/release/wasi.wasm",
         "benches/instantiation/wasi.wasm",
     )
     .expect("failed to copy WASI example module");

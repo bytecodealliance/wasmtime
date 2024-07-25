@@ -35,5 +35,5 @@ To use the WIT-based ABI, compile with `--features component-model` and use `was
 
 An end-to-end example demonstrating ML classification is included in [examples]:
 `examples/classification-example` contains a standalone Rust project that uses
-the [wasi-nn] APIs and is compiled to the `wasm32-wasi` target using the
+the [wasi-nn] APIs and is compiled to the `wasm32-wasip1` target using the
 high-level `wasi-nn` [bindings].
