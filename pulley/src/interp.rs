@@ -6,8 +6,10 @@ use crate::regs::*;
 use crate::ExtendedOpcode;
 use alloc::string::ToString;
 use alloc::{vec, vec::Vec};
+use core::fmt;
 use core::mem;
 use core::ptr::{self, NonNull};
+use sptr::Strict;
 
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 
@@ -192,15 +194,91 @@ pub enum Val {
     VReg(VRegVal),
 }
 
+impl fmt::LowerHex for Val {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Val::XReg(v) => fmt::LowerHex::fmt(v, f),
+            Val::FReg(v) => fmt::LowerHex::fmt(v, f),
+            Val::VReg(v) => fmt::LowerHex::fmt(v, f),
+        }
+    }
+}
+
+impl From<XRegVal> for Val {
+    fn from(value: XRegVal) -> Self {
+        Val::XReg(value)
+    }
+}
+
+impl From<u64> for Val {
+    fn from(value: u64) -> Self {
+        XRegVal::new_u64(value).into()
+    }
+}
+
+impl From<u32> for Val {
+    fn from(value: u32) -> Self {
+        XRegVal::new_u32(value).into()
+    }
+}
+
+impl From<i64> for Val {
+    fn from(value: i64) -> Self {
+        XRegVal::new_i64(value).into()
+    }
+}
+
+impl From<i32> for Val {
+    fn from(value: i32) -> Self {
+        XRegVal::new_i32(value).into()
+    }
+}
+
+impl<T> From<*mut T> for Val {
+    fn from(value: *mut T) -> Self {
+        XRegVal::new_ptr(value).into()
+    }
+}
+
+impl From<FRegVal> for Val {
+    fn from(value: FRegVal) -> Self {
+        Val::FReg(value)
+    }
+}
+
+impl From<f64> for Val {
+    fn from(value: f64) -> Self {
+        FRegVal::new_f64(value).into()
+    }
+}
+
+impl From<f32> for Val {
+    fn from(value: f32) -> Self {
+        FRegVal::new_f32(value).into()
+    }
+}
+
+impl From<VRegVal> for Val {
+    fn from(value: VRegVal) -> Self {
+        Val::VReg(value)
+    }
+}
+
 /// An `x` register value: integers.
 #[derive(Copy, Clone)]
 pub struct XRegVal(XRegUnion);
 
-impl core::fmt::Debug for XRegVal {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Debug for XRegVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("XRegVal")
             .field("as_u64", &self.get_u64())
             .finish()
+    }
+}
+
+impl fmt::LowerHex for XRegVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(&self.get_u64(), f)
     }
 }
 
@@ -212,8 +290,7 @@ union XRegUnion {
     u32: u32,
     i64: i64,
     u64: u64,
-    isize: isize,
-    usize: usize,
+    ptr: *mut u8,
 }
 
 impl Default for XRegVal {
@@ -248,76 +325,55 @@ impl XRegVal {
         val
     }
 
-    pub fn new_isize(x: isize) -> Self {
+    pub fn new_ptr<T>(ptr: *mut T) -> Self {
         let mut val = XRegVal::default();
-        val.set_isize(x);
-        val
-    }
-
-    pub fn new_usize(x: usize) -> Self {
-        let mut val = XRegVal::default();
-        val.set_usize(x);
+        val.set_ptr(ptr);
         val
     }
 
     pub fn get_i32(&self) -> i32 {
         let x = unsafe { self.0.i32 };
-        i32::from_le_bytes(x.to_ne_bytes())
+        i32::from_le(x)
     }
 
     pub fn get_u32(&self) -> u32 {
         let x = unsafe { self.0.u32 };
-        u32::from_le_bytes(x.to_ne_bytes())
+        u32::from_le(x)
     }
 
     pub fn get_i64(&self) -> i64 {
         let x = unsafe { self.0.i64 };
-        i64::from_le_bytes(x.to_ne_bytes())
+        i64::from_le(x)
     }
 
     pub fn get_u64(&self) -> u64 {
         let x = unsafe { self.0.u64 };
-        u64::from_le_bytes(x.to_ne_bytes())
+        u64::from_le(x)
     }
 
-    pub fn get_isize(&self) -> isize {
-        let x = unsafe { self.0.isize };
-        isize::from_le_bytes(x.to_ne_bytes())
-    }
-
-    pub fn get_usize(&self) -> usize {
-        let x = unsafe { self.0.usize };
-        usize::from_le_bytes(x.to_ne_bytes())
+    pub fn get_ptr<T>(&self) -> *mut T {
+        let ptr = unsafe { self.0.ptr };
+        Strict::map_addr(ptr, |p| usize::from_le(p)).cast()
     }
 
     pub fn set_i32(&mut self, x: i32) {
-        let x = i32::from_ne_bytes(x.to_le_bytes());
-        self.0.i32 = x;
+        self.0.i32 = x.to_le();
     }
 
     pub fn set_u32(&mut self, x: u32) {
-        let x = u32::from_ne_bytes(x.to_le_bytes());
-        self.0.u32 = x;
+        self.0.u32 = x.to_le();
     }
 
     pub fn set_i64(&mut self, x: i64) {
-        let x = i64::from_ne_bytes(x.to_le_bytes());
-        self.0.i64 = x;
+        self.0.i64 = x.to_le();
     }
 
     pub fn set_u64(&mut self, x: u64) {
-        let x = u64::from_ne_bytes(x.to_le_bytes());
-        self.0.u64 = x;
+        self.0.u64 = x.to_le();
     }
 
-    pub fn set_isize(&mut self, x: isize) {
-        let x = isize::from_ne_bytes(x.to_le_bytes());
-        self.0.isize = x;
-    }
-
-    pub fn set_usize(&mut self, x: usize) {
-        let x = usize::from_ne_bytes(x.to_le_bytes());
-        self.0.usize = x;
+    pub fn set_ptr<T>(&mut self, ptr: *mut T) {
+        self.0.ptr = Strict::map_addr(ptr, |p| p.to_le()).cast();
     }
 }
 
@@ -325,12 +381,18 @@ impl XRegVal {
 #[derive(Copy, Clone)]
 pub struct FRegVal(FRegUnion);
 
-impl core::fmt::Debug for FRegVal {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Debug for FRegVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FRegVal")
             .field("as_f32", &self.get_f32())
             .field("as_f64", &self.get_f64())
             .finish()
+    }
+}
+
+impl fmt::LowerHex for FRegVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(&self.get_f64().to_bits(), f)
     }
 }
 
@@ -385,11 +447,17 @@ impl FRegVal {
 #[derive(Copy, Clone)]
 pub struct VRegVal(VRegUnion);
 
-impl core::fmt::Debug for VRegVal {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Debug for VRegVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VRegVal")
             .field("as_u128", &unsafe { self.0.u128 })
             .finish()
+    }
+}
+
+impl fmt::LowerHex for VRegVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(unsafe { &self.0.u128 }, f)
     }
 }
 
@@ -418,8 +486,8 @@ pub struct MachineState {
 unsafe impl Send for MachineState {}
 unsafe impl Sync for MachineState {}
 
-impl core::fmt::Debug for MachineState {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Debug for MachineState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let MachineState {
             x_regs,
             f_regs,
@@ -429,8 +497,8 @@ impl core::fmt::Debug for MachineState {
 
         struct RegMap<'a, R>(&'a [R], fn(u8) -> alloc::string::String);
 
-        impl<R: core::fmt::Debug> core::fmt::Debug for RegMap<'_, R> {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        impl<R: fmt::Debug> fmt::Debug for RegMap<'_, R> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let mut f = f.debug_map();
                 for (i, r) in self.0.iter().enumerate() {
                     f.entry(&(self.1)(i as u8), r);
@@ -466,8 +534,13 @@ impl MachineState {
             stack,
         };
 
-        let sp = state.stack.last().unwrap() as *const u8 as usize;
-        state.set_x(XReg::SP, XRegVal::new_usize(sp));
+        // Take care to construct SP such that we preserve pointer provenance
+        // for the whole stack.
+        let len = state.stack.len();
+        let sp = &mut state.stack[..];
+        let sp = sp.as_mut_ptr();
+        let sp = unsafe { sp.add(len) };
+        state.set_x(XReg::SP, XRegVal::new_ptr(sp));
 
         state.set_x(XReg::FP, XRegVal::new_i64(-1));
         state.set_x(XReg::LR, XRegVal::new_i64(-1));
@@ -602,7 +675,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
         if self.state.x(XReg::LR).get_u64() == u64::MAX {
             Continuation::ReturnToHost
         } else {
-            let return_addr = self.state.x(XReg::LR).get_usize() as *mut u8;
+            let return_addr = self.state.x(XReg::LR).get_ptr();
             self.pc = unsafe { UnsafeBytecodeStream::new(return_addr) };
             // log::trace!("returning to {return_addr:#p}");
             Continuation::Continue
@@ -834,62 +907,64 @@ impl OpVisitor for InterpreterVisitor<'_> {
     }
 
     fn load32_u(&mut self, dst: XReg, ptr: XReg) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let ptr = ptr as *mut u32;
-        let val = unsafe { ptr::read(ptr) };
+        let ptr = self.state.x(ptr).get_ptr::<u32>();
+        let val = unsafe { ptr::read_unaligned(ptr) };
         self.state.x_mut(dst).set_u64(u64::from(val));
         Continuation::Continue
     }
 
     fn load32_s(&mut self, dst: XReg, ptr: XReg) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let ptr = ptr as *mut i32;
-        let val = unsafe { ptr::read(ptr) };
+        let ptr = self.state.x(ptr).get_ptr::<i32>();
+        let val = unsafe { ptr::read_unaligned(ptr) };
         self.state.x_mut(dst).set_i64(i64::from(val));
         Continuation::Continue
     }
 
     fn load64(&mut self, dst: XReg, ptr: XReg) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let ptr = ptr as *mut u64;
-        let val = unsafe { ptr::read(ptr) };
+        let ptr = self.state.x(ptr).get_ptr::<u64>();
+        let val = unsafe { ptr::read_unaligned(ptr) };
         self.state.x_mut(dst).set_u64(val);
         Continuation::Continue
     }
 
     fn load32_u_offset8(&mut self, dst: XReg, ptr: XReg, offset: i8) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let offset = isize::from(offset);
-        let ptr = ptr.wrapping_add(offset as usize);
-        let ptr = ptr as *mut u32;
-        let val = unsafe { ptr::read(ptr) };
+        let val = unsafe {
+            self.state
+                .x(ptr)
+                .get_ptr::<u32>()
+                .byte_offset(offset.into())
+                .read_unaligned()
+        };
         self.state.x_mut(dst).set_u64(u64::from(val));
         Continuation::Continue
     }
 
     fn load32_s_offset8(&mut self, dst: XReg, ptr: XReg, offset: i8) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let offset = isize::from(offset);
-        let ptr = ptr.wrapping_add(offset as usize);
-        let ptr = ptr as *mut i32;
-        let val = unsafe { ptr::read(ptr) };
+        let val = unsafe {
+            self.state
+                .x(ptr)
+                .get_ptr::<i32>()
+                .byte_offset(offset.into())
+                .read_unaligned()
+        };
         self.state.x_mut(dst).set_i64(i64::from(val));
         Continuation::Continue
     }
 
     fn load64_offset8(&mut self, dst: XReg, ptr: XReg, offset: i8) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let offset = isize::from(offset);
-        let ptr = ptr.wrapping_add(offset as usize);
-        let ptr = ptr as *mut u64;
-        let val = unsafe { ptr::read(ptr) };
+        let val = unsafe {
+            self.state
+                .x(ptr)
+                .get_ptr::<u64>()
+                .byte_offset(offset.into())
+                .read_unaligned()
+        };
         self.state.x_mut(dst).set_u64(val);
         Continuation::Continue
     }
 
     fn store32(&mut self, ptr: XReg, src: XReg) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let ptr = ptr as *mut u32;
+        let ptr = self.state.x(ptr).get_ptr::<u32>();
         let val = self.state.x(src).get_u32();
         unsafe {
             ptr::write_unaligned(ptr, val);
@@ -898,8 +973,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
     }
 
     fn store64(&mut self, ptr: XReg, src: XReg) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let ptr = ptr as *mut u64;
+        let ptr = self.state.x(ptr).get_ptr::<u64>();
         let val = self.state.x(src).get_u64();
         unsafe {
             ptr::write_unaligned(ptr, val);
@@ -908,25 +982,25 @@ impl OpVisitor for InterpreterVisitor<'_> {
     }
 
     fn store32_offset8(&mut self, ptr: XReg, offset: i8, src: XReg) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let offset = isize::from(offset);
-        let ptr = ptr.wrapping_add(offset as usize);
-        let ptr = ptr as *mut u32;
         let val = self.state.x(src).get_u32();
         unsafe {
-            ptr::write_unaligned(ptr, val);
+            self.state
+                .x(ptr)
+                .get_ptr::<u32>()
+                .byte_offset(offset.into())
+                .write_unaligned(val);
         }
         Continuation::Continue
     }
 
     fn store64_offset8(&mut self, ptr: XReg, offset: i8, src: XReg) -> Self::Return {
-        let ptr = self.state.x(ptr).get_usize();
-        let offset = isize::from(offset);
-        let ptr = ptr.wrapping_add(offset as usize);
-        let ptr = ptr as *mut u64;
         let val = self.state.x(src).get_u64();
         unsafe {
-            ptr::write_unaligned(ptr, val);
+            self.state
+                .x(ptr)
+                .get_ptr::<u64>()
+                .byte_offset(offset.into())
+                .write_unaligned(val);
         }
         Continuation::Continue
     }
