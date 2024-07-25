@@ -27,4 +27,4 @@ disas = ["decode"]
 interp = ["decode"]
 
 [package.metadata.docs.rs]
-features = ["encode", "decode", "disas", "interp"]
+all-features = true
