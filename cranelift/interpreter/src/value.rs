@@ -4,6 +4,7 @@
 #![allow(trivial_numeric_casts)]
 
 use core::fmt::{self, Display, Formatter};
+use core::ops::Neg;
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
 use cranelift_codegen::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64};
 use cranelift_codegen::ir::{types, Type};

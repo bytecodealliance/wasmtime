@@ -1929,7 +1929,7 @@ mod tests {
         // Build instruction "f64const 0.0" (missing one required result)
         let inst = func.dfg.make_inst(InstructionData::UnaryIeee64 {
             opcode: Opcode::F64const,
-            imm: 0.into(),
+            imm: 0.0.into(),
         });
         func.layout.append_inst(inst, block0);
 
