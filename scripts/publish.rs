@@ -18,6 +18,7 @@ use std::time::Duration;
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
     // cranelift
+    "pulley-interpreter",
     "cranelift-bitset",
     "cranelift-isle",
     "cranelift-entity",

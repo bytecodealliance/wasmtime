@@ -1,0 +1,30 @@
+[package]
+authors = ["The Pulley Project Developers"]
+description = "The Pulley interpreter, its bytecode definition, encoder, decoder, and etc..."
+edition.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+name = "pulley-interpreter"
+readme = "./README.md"
+repository = "https://github.com/bytecodealliance/wasmtime/tree/main/pulley"
+version = "0.1.0"
+
+[lints]
+workspace = true
+
+[dependencies]
+arbitrary = { workspace = true, optional = true }
+log = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }
+
+[features]
+std = []
+arbitrary = ["dep:arbitrary", "arbitrary/derive", "std"]
+encode = []
+decode = []
+disas = ["decode"]
+interp = ["decode"]
+
+[package.metadata.docs.rs]
+all-features = true

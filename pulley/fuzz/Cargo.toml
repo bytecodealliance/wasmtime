@@ -1,0 +1,13 @@
+[package]
+name = "pulley-interpreter-fuzz"
+version = "0.0.0"
+publish = false
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+pulley-interpreter = { path = "..", features = ["encode", "decode", "disas", "interp", "arbitrary"] }
+env_logger = { workspace = true }
+log = { workspace = true }

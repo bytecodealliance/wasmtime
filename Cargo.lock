@@ -2142,6 +2142,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulley-interpreter"
+version = "0.1.0"
+dependencies = [
+ "arbitrary",
+ "env_logger",
+ "log",
+]
+
+[[package]]
+name = "pulley-interpreter-fuzz"
+version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "pulley-interpreter",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3717,6 +3735,7 @@ dependencies = [
  "libfuzzer-sys",
  "once_cell",
  "proc-macro2",
+ "pulley-interpreter-fuzz",
  "quote",
  "rand",
  "smallvec",
