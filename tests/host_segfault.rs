@@ -125,11 +125,7 @@ fn main() {
                 let engine = Engine::default();
                 let mut store = Store::new(&engine, ());
                 let module = Module::new(&engine, r#"(import "" "" (func)) (start 0)"#).unwrap();
-                let segfault = Func::wrap(&mut store, || {
-                    if true {
-                        segfault()
-                    }
-                });
+                let segfault = Func::wrap(&mut store, || -> () { segfault() });
                 Instance::new(&mut store, &module, &[segfault.into()]).unwrap();
                 unreachable!();
             },
