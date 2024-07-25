@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use pulley_interpreter::{
-    decode::Decoder,
+    decode::{Decoder, SafeBytecodeStream},
     op::{MaterializeOpsVisitor, Op},
 };
 
@@ -17,9 +17,8 @@ fuzz_target!(|ops: Vec<Op>| {
     }
     log::trace!("encoded: {encoded:?}");
 
-    let visitor = Decoder::decode_all(MaterializeOpsVisitor::default(), &encoded)
-        .expect("should decode okay");
-    let decoded = visitor.finish();
+    let mut materializer = MaterializeOpsVisitor::new(SafeBytecodeStream::new(&encoded));
+    let decoded = Decoder::decode_all(&mut materializer).expect("should decode okay");
     log::trace!("decoded: {decoded:#?}");
 
     assert_eq!(

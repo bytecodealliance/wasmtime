@@ -1,5 +1,7 @@
 //! Decoding support for pulley bytecode.
 
+use alloc::vec::Vec;
+
 use crate::imms::*;
 use crate::opcode::*;
 use crate::regs::*;
@@ -395,17 +397,18 @@ impl Decoder {
     ///
     /// The associated visitor method is invoked after each instruction is
     /// decoded.
-    pub fn decode_all<'a, V>(visitor: &mut V) -> Result<()>
+    pub fn decode_all<'a, V>(visitor: &mut V) -> Result<Vec<V::Return>>
     where
         V: OpVisitor<BytecodeStream = SafeBytecodeStream<'a>> + ExtendedOpVisitor,
     {
         let mut decoder = Decoder::new();
+        let mut results = vec![];
 
         while !visitor.bytecode().as_slice().is_empty() {
-            decoder.decode_one(visitor)?;
+            results.push(decoder.decode_one(visitor)?);
         }
 
-        Ok(())
+        Ok(results)
     }
 }
 
