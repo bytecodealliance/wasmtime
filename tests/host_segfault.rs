@@ -125,7 +125,11 @@ fn main() {
                 let engine = Engine::default();
                 let mut store = Store::new(&engine, ());
                 let module = Module::new(&engine, r#"(import "" "" (func)) (start 0)"#).unwrap();
-                let segfault = Func::wrap(&mut store, || segfault());
+                let segfault = Func::wrap(&mut store, || {
+                    if true {
+                        segfault()
+                    }
+                });
                 Instance::new(&mut store, &module, &[segfault.into()]).unwrap();
                 unreachable!();
             },
@@ -140,7 +144,9 @@ fn main() {
                 let mut store = Store::new(&engine, ());
                 let f = Func::wrap_async(&mut store, |_, _: ()| {
                     Box::new(async {
-                        overrun_the_stack();
+                        if true {
+                            overrun_the_stack();
+                        }
                     })
                 });
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
@@ -172,7 +178,9 @@ fn main() {
                 let mut store = Store::new(&engine, ());
                 let f = Func::wrap_async(&mut store, |_, _: ()| {
                     Box::new(async {
-                        overrun_the_stack();
+                        if true {
+                            overrun_the_stack();
+                        }
                     })
                 });
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
