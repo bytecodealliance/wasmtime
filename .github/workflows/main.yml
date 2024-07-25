@@ -433,6 +433,7 @@ jobs:
     - run: rustup target add x86_64-unknown-none
     - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
     - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
+    - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
 
     # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
     # for specifically panic=abort there.
@@ -817,7 +818,7 @@ jobs:
       if: failure() && github.event_name != 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
-  
+
   build-preview1-component-adapter-provider:
     name: Build wasi-preview1-component-adapter-provider
     needs: build-preview1-component-adapter
@@ -830,7 +831,7 @@ jobs:
     - uses: ./.github/actions/build-adapter-provider
       with:
         run-id: ${{ github.run_id }}
-    
+
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
