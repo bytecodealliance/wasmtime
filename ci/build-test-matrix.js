@@ -121,7 +121,27 @@ const FULL_MATRIX = [
     "name": "Test Linux riscv64",
     "filter": "linux-riscv64",
     "isa": "riscv64",
-  }
+  },
+  {
+    "name": "Test Pulley on i686-unknown-linux-gnu",
+    "32-bit": true,
+    "os": "ubuntu-latest",
+    "target": "i686-unknown-linux-gnu",
+    "gcc_package": "gcc-i686-linux-gnu",
+    "gcc": "i686-linux-gnu-gcc",
+    "filter": "pulley",
+  },
+  {
+    "name": "Test Pulley on armv7-unknown-linux-gnueabihf",
+    "32-bit": true,
+    "os": "ubuntu-latest",
+    "target": "armv7-unknown-linux-gnueabihf",
+    "gcc_package": "gcc-arm-linux-gnueabihf",
+    "gcc": "arm-linux-gnueabihf-gcc",
+    "qemu": "qemu-arm -L /usr/arm-linux-gnueabihf -E LD_LIBRARY_PATH=/usr/arm-linux-gnueabihf/lib",
+    "qemu_target": "arm-linux-user",
+    "filter": "pulley",
+  },
 ];
 
 /// Get the workspace's full list of member crates.
@@ -198,6 +218,20 @@ async function shard(configs) {
   // created above.
   const sharded = [];
   for (const config of configs) {
+    // Special case 32-bit configs. Only Pulley runs on 32-bit targets.
+    if (config["32-bit"] === true) {
+      sharded.push(Object.assign(
+        {},
+        config,
+        {
+          bucket: members
+            .map(c => c.indexOf("pulley") !== -1 ? `--package ${c}` : `--exclude ${c}`)
+            .join(" "),
+        }
+      ));
+      continue;
+    }
+
     for (const bucket of buckets) {
       sharded.push(Object.assign(
         {},
@@ -253,6 +287,11 @@ async function main() {
     // target any backend.
     if (names.includes(`cranelift/filetests/filetests/runtests`)) {
       return config.isa !== undefined;
+    }
+
+    // If any Pulley source file was modified, then run Pulley-specific configs.
+    if (names.includes("pulley") && config.filter == "pulley") {
+      return true;
     }
 
     // If the commit explicitly asks for this test config, then include it.

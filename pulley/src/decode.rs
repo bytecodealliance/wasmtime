@@ -402,7 +402,7 @@ impl Decoder {
         V: OpVisitor<BytecodeStream = SafeBytecodeStream<'a>> + ExtendedOpVisitor,
     {
         let mut decoder = Decoder::new();
-        let mut results = vec![];
+        let mut results = Vec::new();
 
         while !visitor.bytecode().as_slice().is_empty() {
             results.push(decoder.decode_one(visitor)?);

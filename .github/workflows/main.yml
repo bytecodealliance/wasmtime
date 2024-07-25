@@ -433,6 +433,7 @@ jobs:
     - run: rustup target add x86_64-unknown-none
     - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
     - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
+    - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
 
     # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
     # for specifically panic=abort there.
@@ -604,22 +605,30 @@ jobs:
 
     - run: cargo fetch --locked
 
-    - uses: actions/cache@v4
-      with:
-        path: ${{ runner.tool_cache }}/qemu
-        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
-      if: matrix.target != '' && matrix.os == 'ubuntu-latest'
     - name: Install cross-compilation tools
       run: |
         set -ex
+
         sudo apt-get update
         sudo apt-get install -y ${{ matrix.gcc_package }} ninja-build
 
         # Configure Cargo for cross compilation and tell it how it can run
         # cross executables
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
-        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
+      if: matrix.gcc != ''
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ runner.tool_cache }}/qemu
+        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
+      if: matrix.qemu != ''
+    - name: Install qemu
+      run: |
+        set -ex
+
+        upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
+        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
 
         # QEMU emulation is not always the speediest, so total testing time
         # goes down if we build the libs in release mode when running tests.
@@ -643,7 +652,7 @@ jobs:
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
-      if: matrix.gcc != ''
+      if: matrix.qemu != ''
 
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
@@ -817,7 +826,7 @@ jobs:
       if: failure() && github.event_name != 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
-  
+
   build-preview1-component-adapter-provider:
     name: Build wasi-preview1-component-adapter-provider
     needs: build-preview1-component-adapter
@@ -830,7 +839,7 @@ jobs:
     - uses: ./.github/actions/build-adapter-provider
       with:
         run-id: ${{ github.run_id }}
-    
+
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
