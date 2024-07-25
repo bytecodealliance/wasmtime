@@ -690,6 +690,7 @@ fn import_works() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trap_smoke() -> Result<()> {
     let mut store = Store::<()>::default();
     let f = Func::wrap(&mut store, || -> Result<()> { bail!("test") });

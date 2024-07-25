@@ -406,7 +406,7 @@ fn rust_panic_import() -> Result<()> {
     let module = Module::new(store.engine(), &binary)?;
     let sig = FuncType::new(store.engine(), None, None);
     let func = Func::new(&mut store, sig, |_, _, _| panic!("this is a panic"));
-    let func2 = Func::wrap(&mut store, || panic!("this is another panic"));
+    let func2 = Func::wrap(&mut store, || -> () { panic!("this is another panic") });
     let instance = Instance::new(&mut store, &module, &[func.into(), func2.into()])?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     let err =
@@ -501,7 +501,7 @@ fn rust_panic_start_function() -> Result<()> {
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
-    let func = Func::wrap(&mut store, || panic!("this is another panic"));
+    let func = Func::wrap(&mut store, || -> () { panic!("this is another panic") });
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(Instance::new(&mut store, &module, &[func.into()]));
     }))
@@ -1007,7 +1007,7 @@ async fn async_then_sync_trap() -> Result<()> {
     let sync_module = Module::new(sync_store.engine(), wat)?;
 
     let mut sync_linker = Linker::new(sync_store.engine());
-    sync_linker.func_wrap("", "b", |_caller: Caller<_>| unreachable!())?;
+    sync_linker.func_wrap("", "b", |_caller: Caller<_>| -> () { unreachable!() })?;
 
     let sync_instance = sync_linker.instantiate(&mut sync_store, &sync_module)?;
 
@@ -1085,7 +1085,7 @@ async fn sync_then_async_trap() -> Result<()> {
     let async_module = Module::new(async_store.engine(), wat)?;
 
     let mut async_linker = Linker::new(async_store.engine());
-    async_linker.func_wrap("", "b", |_caller: Caller<_>| unreachable!())?;
+    async_linker.func_wrap("", "b", |_caller: Caller<_>| -> () { unreachable!() })?;
 
     let async_instance = async_linker
         .instantiate_async(&mut async_store, &async_module)
@@ -1643,7 +1643,7 @@ fn same_module_multiple_stores() -> Result<()> {
     let instance1 = Instance::new(&mut store1, &module, &[f1.into(), call_ref1.into()])?;
 
     instance1
-        .get_typed_func(&mut store1, "a")?
+        .get_typed_func::<(), ()>(&mut store1, "a")?
         .call(&mut store1, ())?;
 
     let expected_stacks = vec![

@@ -748,7 +748,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
             assert_eq!(*state, 0);
             *state += 1;
             let _dec = Decrement(state);
-            loop {
+            for _ in 0.. {
                 tokio::task::yield_now().await;
             }
         })

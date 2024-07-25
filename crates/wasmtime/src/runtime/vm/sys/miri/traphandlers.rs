@@ -1,12 +1,15 @@
-// For MIRI, set up just enough of a setjmp/longjmp with catching panics
-// to get a few tests working that use this.
+// For MIRI, there's no way to implement longjmp/setjmp. The only possible way
+// to implement this is with panic/catch_panic, but the entrypoint into Rust
+// from wasm is defined as `extern "C"` which isn't allowed to panic. That
+// means that panicking here triggers UB which gets routed to `libc::abort()`.
+//
+// This maens that on MIRI all tests which trap are configured to be skipped at
+// this time.
 //
 // Note that no actual JIT code runs in MIRI so this is purely here for
 // host-to-host calls.
 
 use crate::runtime::vm::VMContext;
-
-struct WasmtimeLongjmp;
 
 pub fn wasmtime_setjmp(
     _jmp_buf: *mut *const u8,
@@ -14,24 +17,14 @@ pub fn wasmtime_setjmp(
     payload: *mut u8,
     callee: *mut VMContext,
 ) -> i32 {
-    use std::panic::{self, AssertUnwindSafe};
-    let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        callback(payload, callee);
-    }));
-    match result {
-        Ok(()) => 1,
-        Err(e) => {
-            if e.is::<WasmtimeLongjmp>() {
-                0
-            } else {
-                panic::resume_unwind(e)
-            }
-        }
-    }
+    callback(payload, callee);
+    1
 }
 
 pub fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
-    std::panic::panic_any(WasmtimeLongjmp)
+    unsafe {
+        libc::abort();
+    }
 }
 
 #[allow(missing_docs)]

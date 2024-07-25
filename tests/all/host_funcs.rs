@@ -454,6 +454,7 @@ fn call_wasm_many_args() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trap_smoke() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);
