@@ -14,6 +14,7 @@ workspace = true
 [dependencies]
 arbitrary = { workspace = true, optional = true }
 log = { workspace = true }
+sptr = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }

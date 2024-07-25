@@ -979,7 +979,11 @@ jobs:
   miri:
     strategy:
       matrix:
-        crate: ["wasmtime", "wasmtime-cli", "wasmtime-environ"]
+        crate:
+          - "wasmtime"
+          - "wasmtime-cli"
+          - "wasmtime-environ"
+          - "pulley-interpreter --all-features"
     needs: determine
     if: needs.determine.outputs.run-full && github.repository == 'bytecodealliance/wasmtime'
     name: Miri

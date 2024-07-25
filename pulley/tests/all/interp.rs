@@ -1,5 +1,6 @@
 //! Interpreter tests.
 
+use interp::Val;
 use pulley_interpreter::{interp::Vm, *};
 use std::{cell::UnsafeCell, fmt::Debug, ptr::NonNull};
 
@@ -15,29 +16,32 @@ fn encoded(ops: &[Op]) -> Vec<u8> {
 unsafe fn run(vm: &mut Vm, ops: &[Op]) -> Result<(), *mut u8> {
     let _ = env_logger::try_init();
     let ops = encoded(ops);
-    let _ = vm.call(NonNull::from(&ops[0]), &[], [])?;
+    let _ = vm.call(NonNull::from(&ops[..]).cast(), &[], [])?;
     Ok(())
 }
 
-unsafe fn assert_one<R0, R1>(
-    xs: impl IntoIterator<Item = (R0, u64)>,
+unsafe fn assert_one<R0, R1, V>(
+    xs: impl IntoIterator<Item = (R0, V)>,
     op: impl Into<Op> + Debug,
     result: R1,
     expected: u64,
 ) where
     R0: Into<AnyReg>,
     R1: Into<AnyReg>,
+    V: Into<Val>,
 {
     eprintln!("=======================================================");
     let mut vm = Vm::new();
 
     for (reg, val) in xs {
         let reg = reg.into();
+        let val = val.into();
         eprintln!("{reg} = {val:#018x}");
-        match reg {
-            AnyReg::X(r) => vm.state_mut().x_mut(r).set_u64(val),
-            AnyReg::F(r) => vm.state_mut().f_mut(r).set_f64(f64::from_bits(val)),
-            AnyReg::V(_) => todo!(),
+        match (reg, val) {
+            (AnyReg::X(r), Val::XReg(v)) => *vm.state_mut().x_mut(r) = v,
+            (AnyReg::F(r), Val::FReg(v)) => *vm.state_mut().f_mut(r) = v,
+            (AnyReg::V(_), Val::VReg(_)) => todo!(),
+            (kind, val) => panic!("register kind and value mismatch: {kind:?} and {val:?}"),
         }
     }
 
@@ -71,7 +75,7 @@ fn xconst8() {
     for (expected, imm) in [(42u64, 42u8), (u64::from(u8::MAX), u8::MAX)] {
         unsafe {
             assert_one(
-                [(x(0), 0x1234567812345678)],
+                [(x(0), 0x1234567812345678u64)],
                 Xconst8 { dst: x(0), imm },
                 x(0),
                 expected,
@@ -85,7 +89,7 @@ fn xconst16() {
     for (expected, imm) in [(42u64, 42u16), (u64::from(u16::MAX), u16::MAX)] {
         unsafe {
             assert_one(
-                [(x(0), 0x1234567812345678)],
+                [(x(0), 0x1234567812345678u64)],
                 Xconst16 { dst: x(0), imm },
                 x(0),
                 expected,
@@ -99,7 +103,7 @@ fn xconst32() {
     for (expected, imm) in [(42u64, 42u32), (u64::from(u32::MAX), u32::MAX)] {
         unsafe {
             assert_one(
-                [(x(0), 0x1234567812345678)],
+                [(x(0), 0x1234567812345678u64)],
                 Xconst32 { dst: x(0), imm },
                 x(0),
                 expected,
@@ -113,7 +117,7 @@ fn xconst64() {
     for (expected, imm) in [(42u64, 42u64), (u64::MAX, u64::MAX)] {
         unsafe {
             assert_one(
-                [(x(0), 0x1234567812345678)],
+                [(x(0), 0x1234567812345678u64)],
                 Xconst64 { dst: x(0), imm },
                 x(0),
                 expected,
@@ -491,19 +495,19 @@ fn load32_u() {
     let a = UnsafeCell::new(11u32);
     let b = UnsafeCell::new(22u32);
     let c = UnsafeCell::new(33u32);
-    let d = UnsafeCell::new(i32::MIN);
+    let d = UnsafeCell::new(i32::MIN as u32);
 
     for (expected, addr) in [
-        (11, a.get() as usize),
-        (22, b.get() as usize),
-        (33, c.get() as usize),
-        (i32::MIN as u32 as u64, d.get() as usize),
+        (11, a.get()),
+        (22, b.get()),
+        (33, c.get()),
+        (i32::MIN as u32 as u64, d.get()),
     ] {
         unsafe {
             assert_one(
                 [
-                    (x(0), 0x1234567812345678),
-                    (x(1), u64::try_from(addr).unwrap()),
+                    (x(0), Val::from(0x1234567812345678u64)),
+                    (x(1), Val::from(addr.cast::<u8>())),
                 ],
                 Load32U {
                     dst: x(0),
@@ -521,19 +525,19 @@ fn load32_s() {
     let a = UnsafeCell::new(11u32);
     let b = UnsafeCell::new(22u32);
     let c = UnsafeCell::new(33u32);
-    let d = UnsafeCell::new(-1i32);
+    let d = UnsafeCell::new(-1i32 as u32);
 
     for (expected, addr) in [
-        (11, a.get() as usize),
-        (22, b.get() as usize),
-        (33, c.get() as usize),
-        (-1i64 as u64, d.get() as usize),
+        (11, a.get()),
+        (22, b.get()),
+        (33, c.get()),
+        (-1i64 as u64, d.get()),
     ] {
         unsafe {
             assert_one(
                 [
-                    (x(0), 0x1234567812345678),
-                    (x(1), u64::try_from(addr).unwrap()),
+                    (x(0), Val::from(0x1234567812345678u64)),
+                    (x(1), Val::from(addr.cast::<u8>())),
                 ],
                 Load32S {
                     dst: x(0),
@@ -551,19 +555,19 @@ fn load64() {
     let a = UnsafeCell::new(11u64);
     let b = UnsafeCell::new(22u64);
     let c = UnsafeCell::new(33u64);
-    let d = UnsafeCell::new(-1i64);
+    let d = UnsafeCell::new(-1i64 as u64);
 
     for (expected, addr) in [
-        (11, a.get() as usize),
-        (22, b.get() as usize),
-        (33, c.get() as usize),
-        (-1i64 as u64, d.get() as usize),
+        (11, a.get()),
+        (22, b.get()),
+        (33, c.get()),
+        (-1i64 as u64, d.get()),
     ] {
         unsafe {
             assert_one(
                 [
-                    (x(0), 0x1234567812345678),
-                    (x(1), u64::try_from(addr).unwrap()),
+                    (x(0), Val::from(0x1234567812345678u64)),
+                    (x(1), Val::from(addr)),
                 ],
                 Load64 {
                     dst: x(0),
@@ -581,23 +585,23 @@ fn load32_u_offset8() {
     let a = UnsafeCell::new([11u32, 22]);
     let b = UnsafeCell::new([33u32, 44]);
     let c = UnsafeCell::new([55u32, 66]);
-    let d = UnsafeCell::new([i32::MIN, i32::MAX]);
+    let d = UnsafeCell::new([i32::MIN as u32, i32::MAX as u32]);
 
     for (expected, addr, offset) in [
-        (11, a.get() as usize, 0),
-        (22, a.get() as usize, 4),
-        (33, b.get() as usize, 0),
-        (44, b.get() as usize, 4),
-        (55, c.get() as usize, 0),
-        (66, c.get() as usize, 4),
-        (i32::MIN as u32 as u64, d.get() as usize, 0),
-        (i32::MAX as u32 as u64, d.get() as usize, 4),
+        (11, a.get(), 0),
+        (22, a.get(), 4),
+        (33, b.get(), 0),
+        (44, b.get(), 4),
+        (55, c.get(), 0),
+        (66, c.get(), 4),
+        (i32::MIN as u32 as u64, d.get(), 0),
+        (i32::MAX as u32 as u64, d.get(), 4),
     ] {
         unsafe {
             assert_one(
                 [
-                    (x(0), 0x1234567812345678),
-                    (x(1), u64::try_from(addr).unwrap()),
+                    (x(0), Val::from(0x1234567812345678u64)),
+                    (x(1), Val::from(addr.cast::<u8>())),
                 ],
                 Load32UOffset8 {
                     dst: x(0),
@@ -616,23 +620,24 @@ fn load32_s_offset8() {
     let a = UnsafeCell::new([11u32, 22]);
     let b = UnsafeCell::new([33u32, 44]);
     let c = UnsafeCell::new([55u32, 66]);
-    let d = UnsafeCell::new([-1i32, i32::MAX]);
+    let d = UnsafeCell::new([-1i32 as u32, i32::MAX as u32]);
 
     for (expected, addr, offset) in [
-        (11, a.get() as usize, 0),
-        (22, a.get() as usize, 4),
-        (33, b.get() as usize, 0),
-        (44, b.get() as usize, 4),
-        (55, c.get() as usize, 0),
-        (66, c.get() as usize, 4),
-        (-1i64 as u64, d.get() as usize, 0),
-        (i32::MAX as u32 as u64, d.get() as usize, 4),
+        (11, a.get(), 0),
+        (22, a.get(), 4),
+        (33, b.get(), 0),
+        (44, b.get(), 4),
+        (55, c.get(), 0),
+        (55, unsafe { c.get().byte_add(4) }, -4),
+        (66, c.get(), 4),
+        (-1i64 as u64, d.get(), 0),
+        (i32::MAX as u32 as u64, d.get(), 4),
     ] {
         unsafe {
             assert_one(
                 [
-                    (x(0), 0x1234567812345678),
-                    (x(1), u64::try_from(addr).unwrap()),
+                    (x(0), Val::from(0x1234567812345678u64)),
+                    (x(1), Val::from(addr.cast::<u8>())),
                 ],
                 Load32SOffset8 {
                     dst: x(0),
@@ -651,23 +656,23 @@ fn load64_offset8() {
     let a = UnsafeCell::new([11u64, 22]);
     let b = UnsafeCell::new([33u64, 44]);
     let c = UnsafeCell::new([55u64, 66]);
-    let d = UnsafeCell::new([-1i64, i64::MAX]);
+    let d = UnsafeCell::new([-1i64 as u64, i64::MAX as u64]);
 
     for (expected, addr, offset) in [
-        (11, a.get() as usize, 0),
-        (22, a.get() as usize, 8),
-        (33, b.get() as usize, 0),
-        (44, b.get() as usize, 8),
-        (55, c.get() as usize, 0),
-        (66, c.get() as usize, 8),
-        (-1i64 as u64, d.get() as usize, 0),
-        (i64::MAX as u64, d.get() as usize, 8),
+        (11, a.get(), 0),
+        (22, a.get(), 8),
+        (33, b.get(), 0),
+        (44, b.get(), 8),
+        (55, c.get(), 0),
+        (66, c.get(), 8),
+        (-1i64 as u64, d.get(), 0),
+        (i64::MAX as u64, d.get(), 8),
     ] {
         unsafe {
             assert_one(
                 [
-                    (x(0), 0x1234567812345678),
-                    (x(1), u64::try_from(addr).unwrap()),
+                    (x(0), Val::from(0x1234567812345678u64)),
+                    (x(1), Val::from(addr)),
                 ],
                 Load64Offset8 {
                     dst: x(0),
@@ -689,13 +694,13 @@ fn store32() {
 
     unsafe {
         for (val, addr) in [
-            (0x11111111u32, a.get() as usize),
-            (0x22222222, b.get().byte_add(4) as usize),
-            (0x33333333, c.get().byte_add(2) as usize),
+            (0x11111111u32, a.get()),
+            (0x22222222, b.get().byte_add(4)),
+            (0x33333333, c.get().byte_add(2)),
         ] {
             let val = val as u64;
             assert_one(
-                [(x(0), u64::try_from(addr).unwrap()), (x(1), val)],
+                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
                 Store32 {
                     ptr: x(0),
                     src: x(1),
@@ -733,12 +738,12 @@ fn store64() {
 
     unsafe {
         for (val, addr) in [
-            (0x1111111111111111u64, a.get() as usize),
-            (0x2222222222222222, b.get() as usize),
-            (0x3333333333333333, c.get() as usize),
+            (0x1111111111111111u64, a.get()),
+            (0x2222222222222222, b.get()),
+            (0x3333333333333333, c.get()),
         ] {
             assert_one(
-                [(x(0), u64::try_from(addr).unwrap()), (x(1), val)],
+                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
                 Store64 {
                     ptr: x(0),
                     src: x(1),
@@ -776,13 +781,13 @@ fn store32_offset8() {
 
     unsafe {
         for (val, addr, offset) in [
-            (0x11111111u32, a.get() as usize, 0),
-            (0x22222222, b.get() as usize, 4),
-            (0x33333333, c.get() as usize, 2),
+            (0x11111111u32, a.get(), 0),
+            (0x22222222, b.get(), 4),
+            (0x33333333, c.get(), 2),
         ] {
             let val = val as u64;
             assert_one(
-                [(x(0), u64::try_from(addr).unwrap()), (x(1), val)],
+                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
                 Store32SOffset8 {
                     ptr: x(0),
                     src: x(1),
@@ -819,12 +824,12 @@ fn store64_offset8() {
 
     unsafe {
         for (val, addr, offset) in [
-            (0x1111111111111111u64, a.get() as usize, 0),
-            (0x2222222222222222, a.get() as usize, 8),
-            (0x3333333333333333, a.get() as usize, 16),
+            (0x1111111111111111u64, a.get(), 0),
+            (0x2222222222222222, a.get(), 8),
+            (0x3333333333333333, a.get(), 16),
         ] {
             assert_one(
-                [(x(0), u64::try_from(addr).unwrap()), (x(1), val)],
+                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
                 Store64Offset8 {
                     ptr: x(0),
                     src: x(1),
@@ -868,7 +873,6 @@ fn bitcast_int_from_float_32() {
         f32::EPSILON,
         f32::MIN_POSITIVE,
     ] {
-        let val = val.to_bits() as u64;
         unsafe {
             assert_one(
                 [(f(0), val)],
@@ -877,7 +881,7 @@ fn bitcast_int_from_float_32() {
                     src: f(0),
                 },
                 x(0),
-                val,
+                val.to_bits() as u64,
             );
         }
     }
@@ -897,7 +901,6 @@ fn bitcast_int_from_float_64() {
         f64::EPSILON,
         f64::MIN_POSITIVE,
     ] {
-        let val = val.to_bits();
         unsafe {
             assert_one(
                 [(f(0), val)],
@@ -906,7 +909,7 @@ fn bitcast_int_from_float_64() {
                     src: f(0),
                 },
                 x(0),
-                val,
+                val.to_bits(),
             );
         }
     }

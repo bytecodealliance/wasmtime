@@ -87,6 +87,7 @@ macro_rules! define_extended_opcode {
 for_each_extended_op!(define_extended_opcode);
 
 impl ExtendedOpcode {
+    #[cfg_attr(not(feature = "interp"), allow(unused))]
     pub(crate) const ENCODED_SIZE_OF_TRAP: usize = 3;
 
     /// Create a new `ExtendedOpcode` from the given bytes.

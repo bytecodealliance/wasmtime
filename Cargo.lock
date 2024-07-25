@@ -2148,6 +2148,7 @@ dependencies = [
  "arbitrary",
  "env_logger",
  "log",
+ "sptr",
 ]
 
 [[package]]
