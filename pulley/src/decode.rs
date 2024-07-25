@@ -106,20 +106,9 @@ pub trait BytecodeStream: Copy {
     /// Create an "invalid register" error at the current position.
     fn invalid_reg(&self, reg: u8) -> Self::Error;
 
-    /// Advance the stream by the given number of bytes.
-    fn advance(&mut self, bytes: usize);
-
-    /// Read a single byte from the stream.
-    fn get1(&mut self) -> Result<u8, Self::Error>;
-
-    /// Read two bytes from the stream.
-    fn get2(&mut self) -> Result<[u8; 2], Self::Error>;
-
-    /// Read four bytes from the stream.
-    fn get4(&mut self) -> Result<[u8; 4], Self::Error>;
-
-    /// Read eight bytes from the stream.
-    fn get8(&mut self) -> Result<[u8; 8], Self::Error>;
+    /// Read `N` bytes from this bytecode stream, advancing the stream's
+    /// position at the same time.
+    fn read<const N: usize>(&mut self) -> Result<[u8; N], Self::Error>;
 }
 
 /// A 100% safe implementation of a bytecode stream.
@@ -153,53 +142,38 @@ impl<'a> SafeBytecodeStream<'a> {
 }
 
 impl BytecodeStream for SafeBytecodeStream<'_> {
-    fn advance(&mut self, bytes: usize) {
-        self.bytecode = &self.bytecode.get(bytes..).unwrap();
-        self.position += bytes;
-    }
-    fn get1(&mut self) -> Result<u8, Self::Error> {
-        let byte = self
+    fn read<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {
+        let bytes = *self
             .bytecode
-            .get(0)
-            .copied()
+            .first_chunk::<N>()
             .ok_or_else(|| self.unexpected_eof())?;
-        self.advance(1);
-        Ok(byte)
-    }
-    fn get2(&mut self) -> Result<[u8; 2], Self::Error> {
-        let a = self.get1()?;
-        let b = self.get1()?;
-        Ok([a, b])
-    }
-    fn get4(&mut self) -> Result<[u8; 4], Self::Error> {
-        let [a, b] = self.get2()?;
-        let [c, d] = self.get2()?;
-        Ok([a, b, c, d])
-    }
-    fn get8(&mut self) -> Result<[u8; 8], Self::Error> {
-        let [a, b, c, d] = self.get4()?;
-        let [e, f, g, h] = self.get4()?;
-        Ok([a, b, c, d, e, f, g, h])
+        self.bytecode = &self.bytecode[N..];
+        self.position += N;
+        Ok(bytes)
     }
 
     type Error = DecodingError;
+
     fn unexpected_eof(&self) -> Self::Error {
         DecodingError::UnexpectedEof {
             position: self.position,
         }
     }
+
     fn invalid_opcode(&self, code: u8) -> Self::Error {
         DecodingError::InvalidOpcode {
             position: self.position - 1,
             code,
         }
     }
+
     fn invalid_extended_opcode(&self, code: u16) -> Self::Error {
         DecodingError::InvalidExtendedOpcode {
             position: self.position,
             code,
         }
     }
+
     fn invalid_reg(&self, reg: u8) -> Self::Error {
         DecodingError::InvalidReg {
             position: self.position,
@@ -254,44 +228,27 @@ impl UnsafeBytecodeStream {
 }
 
 impl BytecodeStream for UnsafeBytecodeStream {
-    fn advance(&mut self, bytes: usize) {
-        self.0 = unsafe { self.0.add(bytes) };
-    }
-    fn get1(&mut self) -> Result<u8, Self::Error> {
+    fn read<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {
         debug_assert!(!self.0.is_null());
-        let ret = unsafe { *self.0 };
-        self.advance(1);
-        Ok(ret)
-    }
-    fn get2(&mut self) -> Result<[u8; 2], Self::Error> {
-        debug_assert!(!self.0.is_null());
-        let ret = unsafe { *self.0.cast() };
-        self.advance(2);
-        Ok(ret)
-    }
-    fn get4(&mut self) -> Result<[u8; 4], Self::Error> {
-        debug_assert!(!self.0.is_null());
-        let ret = unsafe { *self.0.cast() };
-        self.advance(4);
-        Ok(ret)
-    }
-    fn get8(&mut self) -> Result<[u8; 8], Self::Error> {
-        debug_assert!(!self.0.is_null());
-        let ret = unsafe { *self.0.cast() };
-        self.advance(8);
-        Ok(ret)
+        let bytes = unsafe { self.0.cast::<[u8; N]>().read() };
+        self.0 = unsafe { self.0.add(N) };
+        Ok(bytes)
     }
 
     type Error = Uninhabited;
+
     fn unexpected_eof(&self) -> Self::Error {
         unsafe { crate::unreachable_unchecked() }
     }
+
     fn invalid_opcode(&self, _code: u8) -> Self::Error {
         unsafe { crate::unreachable_unchecked() }
     }
+
     fn invalid_extended_opcode(&self, _code: u16) -> Self::Error {
         unsafe { crate::unreachable_unchecked() }
     }
+
     fn invalid_reg(&self, _reg: u8) -> Self::Error {
         unsafe { crate::unreachable_unchecked() }
     }
@@ -310,7 +267,7 @@ impl Decode for u8 {
     where
         T: BytecodeStream,
     {
-        T::get1(bytecode)
+        bytecode.read::<1>().map(|a| a[0])
     }
 }
 
@@ -319,8 +276,7 @@ impl Decode for u16 {
     where
         T: BytecodeStream,
     {
-        let u16_bytes = T::get2(bytecode)?;
-        Ok(u16::from_le_bytes(u16_bytes))
+        Ok(u16::from_le_bytes(bytecode.read()?))
     }
 }
 
@@ -329,8 +285,7 @@ impl Decode for u32 {
     where
         T: BytecodeStream,
     {
-        let u32_bytes = T::get4(bytecode)?;
-        Ok(u32::from_le_bytes(u32_bytes))
+        Ok(u32::from_le_bytes(bytecode.read()?))
     }
 }
 
@@ -339,8 +294,7 @@ impl Decode for u64 {
     where
         T: BytecodeStream,
     {
-        let u64_bytes = T::get8(bytecode)?;
-        Ok(u64::from_le_bytes(u64_bytes))
+        Ok(u64::from_le_bytes(bytecode.read()?))
     }
 }
 
@@ -349,8 +303,7 @@ impl Decode for i8 {
     where
         T: BytecodeStream,
     {
-        let byte = T::get1(bytecode)?;
-        Ok(byte as i8)
+        bytecode.read::<1>().map(|a| a[0] as i8)
     }
 }
 
@@ -359,8 +312,7 @@ impl Decode for i16 {
     where
         T: BytecodeStream,
     {
-        let u16_bytes = T::get2(bytecode)?;
-        Ok(i16::from_le_bytes(u16_bytes))
+        Ok(i16::from_le_bytes(bytecode.read()?))
     }
 }
 
@@ -369,8 +321,7 @@ impl Decode for i32 {
     where
         T: BytecodeStream,
     {
-        let u32_bytes = T::get4(bytecode)?;
-        Ok(i32::from_le_bytes(u32_bytes))
+        Ok(i32::from_le_bytes(bytecode.read()?))
     }
 }
 
@@ -379,8 +330,7 @@ impl Decode for i64 {
     where
         T: BytecodeStream,
     {
-        let u64_bytes = T::get8(bytecode)?;
-        Ok(i64::from_le_bytes(u64_bytes))
+        Ok(i64::from_le_bytes(bytecode.read()?))
     }
 }
 
@@ -503,7 +453,7 @@ macro_rules! define_decoder {
             {
                 visitor.before_visit();
 
-                let byte = visitor.bytecode().get1()?;
+                let byte = u8::decode(visitor.bytecode())?;
                 let opcode = Opcode::new(byte).ok_or_else(|| {
                     visitor.bytecode().invalid_opcode(byte)
                 })?;
