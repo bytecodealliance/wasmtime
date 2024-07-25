@@ -178,3 +178,24 @@ impl fmt::Display for VReg {
         write!(f, "v{}", self.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn special_x_regs() {
+        assert!(XReg::SP.is_special());
+        assert!(XReg::LR.is_special());
+        assert!(XReg::FP.is_special());
+        assert!(XReg::SPILL_TMP_0.is_special());
+        assert!(XReg::SPILL_TMP_1.is_special());
+    }
+
+    #[test]
+    fn not_special_x_regs() {
+        for i in 0..32 {
+            assert!(!XReg::new(i).unwrap().is_special());
+        }
+    }
+}
