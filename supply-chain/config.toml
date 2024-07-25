@@ -79,6 +79,12 @@ audit-as-crates-io = true
 [policy.isle-fuzz]
 criteria = []
 
+[policy.pulley-interpreter]
+audit-as-crates-io = true
+
+[policy.pulley-interpreter-fuzz]
+criteria = []
+
 [policy.wasi-common]
 audit-as-crates-io = true
 
