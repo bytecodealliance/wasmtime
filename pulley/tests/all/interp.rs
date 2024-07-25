@@ -15,7 +15,7 @@ fn encoded(ops: &[Op]) -> Vec<u8> {
 unsafe fn run(vm: &mut Vm, ops: &[Op]) -> Result<(), *mut u8> {
     let _ = env_logger::try_init();
     let ops = encoded(ops);
-    let _ = vm.call(NonNull::from(&ops[0]), &[], [])?;
+    let _ = vm.call(NonNull::from(&ops[..]).cast(), &[], [])?;
     Ok(())
 }
 

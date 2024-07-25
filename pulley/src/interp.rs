@@ -892,7 +892,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
         let ptr = ptr as *mut u32;
         let val = self.state.x(src).get_u32();
         unsafe {
-            ptr::write(ptr, val);
+            ptr::write_unaligned(ptr, val);
         }
         Continuation::Continue
     }
@@ -902,7 +902,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
         let ptr = ptr as *mut u64;
         let val = self.state.x(src).get_u64();
         unsafe {
-            ptr::write(ptr, val);
+            ptr::write_unaligned(ptr, val);
         }
         Continuation::Continue
     }
@@ -914,7 +914,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
         let ptr = ptr as *mut u32;
         let val = self.state.x(src).get_u32();
         unsafe {
-            ptr::write(ptr, val);
+            ptr::write_unaligned(ptr, val);
         }
         Continuation::Continue
     }
@@ -926,7 +926,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
         let ptr = ptr as *mut u64;
         let val = self.state.x(src).get_u64();
         unsafe {
-            ptr::write(ptr, val);
+            ptr::write_unaligned(ptr, val);
         }
         Continuation::Continue
     }
