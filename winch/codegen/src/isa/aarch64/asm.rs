@@ -1,12 +1,12 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::{RoundingMode, ShiftKind};
+use crate::masm::{IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
-    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic,
-    ImmShift, ScalarSize,
+    Cond, FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
+    ImmLogic, ImmShift, ScalarSize,
 };
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
@@ -25,6 +25,23 @@ impl From<OperandSize> for inst::OperandSize {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
             s => panic!("Invalid operand size {:?}", s),
+        }
+    }
+}
+
+impl From<IntCmpKind> for Cond {
+    fn from(value: IntCmpKind) -> Self {
+        match value {
+            IntCmpKind::Eq => Cond::Eq,
+            IntCmpKind::Ne => Cond::Ne,
+            IntCmpKind::LtS => Cond::Lt,
+            IntCmpKind::LtU => Cond::Lo,
+            IntCmpKind::GtS => Cond::Gt,
+            IntCmpKind::GtU => Cond::Hi,
+            IntCmpKind::LeS => Cond::Le,
+            IntCmpKind::LeU => Cond::Ls,
+            IntCmpKind::GeS => Cond::Ge,
+            IntCmpKind::GeU => Cond::Hs,
         }
     }
 }
@@ -228,6 +245,23 @@ impl Assembler {
         }
     }
 
+    /// Subtract with three registers, setting flags.
+    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr_extend(ALUOp::SubS, rm, rn, rd, size);
+    }
+
+    /// Subtract immediate and register, setting flags.
+    pub fn subs_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let alu_op = ALUOp::SubS;
+        if let Some(imm) = Imm12::maybe_from_u64(imm) {
+            self.emit_alu_rri(alu_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr_extend(alu_op, scratch, rn, rd, size);
+        }
+    }
+
     /// Multiply with three registers.
     pub fn mul_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrrr(ALUOp3::MAdd, rm, rn, rd, regs::zero(), size);
@@ -406,6 +440,15 @@ impl Assembler {
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {});
+    }
+
+    /// Conditional Set sets the destination register to 1 if the condition
+    /// is true, and otherwise sets it to 0
+    pub fn cset(&mut self, rd: Reg, cond: Cond) {
+        self.emit(Inst::CSet {
+            rd: Writable::from_reg(rd.into()),
+            cond,
+        });
     }
 
     // Helpers for ALU operations.
