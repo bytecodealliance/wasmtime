@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "addr2line"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a30b2e23b9e17a9f90641c7ab1549cd9b44f296d3ccbf309d2863cfe398a0cb"
+checksum = "6e4503c46a5c0c7844e948c9a4d6acd9f50cccb4de1c48eb9e291ea17470c678"
 dependencies = [
  "gimli",
 ]
@@ -142,16 +142,16 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "backtrace"
-version = "0.3.69"
+version = "0.3.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2089b7e3f35b9dd2d0ed921ead4f6d318c27680d4a5bd167b3ee120edb105837"
+checksum = "5cc23269a4f8976d0a4d2e7109211a419fe30e8d88d677cd60b6bc79c5732e0a"
 dependencies = [
  "addr2line",
  "cc",
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object 0.32.0",
+ "object",
  "rustc-demangle",
 ]
 
@@ -373,9 +373,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.0.83"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1174fb0b6ec23863f8b971027804a42614e347eafb0a95bf0b12cdae21fc4d0"
+checksum = "2aba8f4e9906c7ce3c73463f62a7f0c65183ada1a2d47e397cc8810827f9694f"
 dependencies = [
  "jobserver",
  "libc",
@@ -770,7 +770,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object 0.36.0",
+ "object",
  "target-lexicon",
 ]
 
@@ -1337,9 +1337,9 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.28.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fb8d784f27acf97159b40fc4db5ecd8aa23b9ad5ef69cdd136d3bc80665f0c0"
+checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
 dependencies = [
  "fallible-iterator",
  "indexmap 2.2.6",
@@ -1680,9 +1680,9 @@ dependencies = [
 
 [[package]]
 name = "jobserver"
-version = "0.1.24"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af25a77299a7f711a01975c35a6a424eb6862092cc2d6c72c4ed6cbc56dfc1fa"
+checksum = "48d1dbcbbeb6a7fec7e059840aa538bd62aaccf972c7346c4d9d2059312853d0"
 dependencies = [
  "libc",
 ]
@@ -1851,7 +1851,7 @@ version = "24.0.0"
 dependencies = [
  "anyhow",
  "libloading",
- "object 0.36.0",
+ "object",
  "wasmtime",
 ]
 
@@ -1909,15 +1909,6 @@ name = "number_prefix"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
-
-[[package]]
-name = "object"
-version = "0.32.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77ac5bbd07aea88c60a577a1ce218075ffd59208b2d7ca97adf9bfc5aeb21ebe"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "object"
@@ -2357,9 +2348,9 @@ dependencies = [
 
 [[package]]
 name = "rustc-demangle"
-version = "0.1.21"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef03e0a2b150c7a90d01faf6254c9c48a41e95fb2a8c2ac1c6f0d2b9aefc342"
+checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
 
 [[package]]
 name = "rustc-hash"
@@ -3193,7 +3184,7 @@ version = "24.0.0"
 dependencies = [
  "bitflags 2.4.1",
  "byte-array-literals",
- "object 0.36.0",
+ "object",
  "wasi",
  "wasm-encoder",
  "wit-bindgen-rust-macro",
@@ -3404,7 +3395,7 @@ dependencies = [
  "log",
  "mach2",
  "memfd",
- "object 0.36.0",
+ "object",
  "once_cell",
  "paste",
  "postcard",
@@ -3549,7 +3540,7 @@ dependencies = [
  "log",
  "memchr",
  "num_cpus",
- "object 0.36.0",
+ "object",
  "once_cell",
  "rayon",
  "rustix",
@@ -3637,7 +3628,7 @@ dependencies = [
  "cranelift-wasm",
  "gimli",
  "log",
- "object 0.36.0",
+ "object",
  "target-lexicon",
  "thiserror",
  "wasmparser",
@@ -3658,7 +3649,7 @@ dependencies = [
  "gimli",
  "indexmap 2.2.6",
  "log",
- "object 0.36.0",
+ "object",
  "postcard",
  "rustc-demangle",
  "semver",
@@ -3778,7 +3769,7 @@ dependencies = [
 name = "wasmtime-jit-debug"
 version = "24.0.0"
 dependencies = [
- "object 0.36.0",
+ "object",
  "once_cell",
  "rustix",
  "wasmtime-versioned-export-macros",
@@ -3947,7 +3938,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "gimli",
- "object 0.36.0",
+ "object",
  "target-lexicon",
  "wasmparser",
  "wasmtime-cranelift",
