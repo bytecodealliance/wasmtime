@@ -379,6 +379,7 @@ impl RunCommand {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_traps(module.unwrap_core())?;
                 }
+                #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
                     linker.define_unknown_imports_as_traps(module.unwrap_component())?;
                 }
