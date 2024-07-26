@@ -964,10 +964,9 @@ mod tests {
             if cfg!(any(
                 target_arch = "x86_64",
                 target_arch = "aarch64",
-                target_arch = "riscv64"
+                target_arch = "riscv64",
+                target_arch = "s390x"
             )) {
-                32
-            } else if cfg!(target_arch = "s390x") {
                 24
             } else {
                 panic!("unsupported architecture")

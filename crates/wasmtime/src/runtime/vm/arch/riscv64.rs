@@ -1,12 +1,5 @@
 //! Riscv64-specific definitions of architecture-specific functions in Wasmtime.
 
-/// RISC-V currently always passes all vector arguments indirectly in the
-/// ABI. Currently Rust has no stable means of representing this meaning
-/// that a 128-bit representation is chosen here but it can't be passed
-/// directly to WebAssembly, for example, and must instead be passed
-/// through an array-call trampoline.
-pub type V128Abi = u128;
-
 #[inline]
 #[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {

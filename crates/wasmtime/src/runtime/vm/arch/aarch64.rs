@@ -1,10 +1,5 @@
 //! Arm64-specific definitions of architecture-specific functions in Wasmtime.
 
-/// AArch64 uses vector registered which here is used with a vector type.
-/// Note that the specific type shouldn't matter too much but the choice
-/// of using a vector is the significant part.
-pub type V128Abi = core::arch::aarch64::uint8x16_t;
-
 #[inline]
 #[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {
