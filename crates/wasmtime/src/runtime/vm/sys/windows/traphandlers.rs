@@ -1,5 +1,6 @@
 use crate::runtime::vm::traphandlers::{tls, TrapTest};
 use crate::runtime::vm::VMContext;
+use std::ffi::c_void;
 use std::io;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Diagnostics::Debug::*;
@@ -23,15 +24,43 @@ extern "C" {
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler<'a> = dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync + 'a;
 
-pub unsafe fn platform_init(_macos_use_mach_ports: bool) {
-    // our trap handler needs to go first, so that we can recover from
-    // wasm faults and continue execution, so pass `1` as a true value
-    // here.
-    if AddVectoredExceptionHandler(1, Some(exception_handler)).is_null() {
-        panic!(
-            "failed to add exception handler: {}",
-            io::Error::last_os_error()
-        );
+pub struct TrapHandler {
+    handle: *mut c_void,
+}
+
+unsafe impl Send for TrapHandler {}
+unsafe impl Sync for TrapHandler {}
+
+impl TrapHandler {
+    pub unsafe fn new(_macos_use_mach_ports: bool) -> TrapHandler {
+        // our trap handler needs to go first, so that we can recover from
+        // wasm faults and continue execution, so pass `1` as a true value
+        // here.
+        let handle = AddVectoredExceptionHandler(1, Some(exception_handler));
+        if handle.is_null() {
+            panic!(
+                "failed to add exception handler: {}",
+                io::Error::last_os_error()
+            );
+        }
+        TrapHandler { handle }
+    }
+
+    pub fn validate_config(&self, _macos_use_mach_ports: bool) {}
+}
+
+impl Drop for TrapHandler {
+    fn drop(&mut self) {
+        unsafe {
+            let rc = RemoveVectoredExceptionHandler(self.handle);
+            if rc == 0 {
+                eprintln!(
+                    "failed to remove exception handler: {}",
+                    io::Error::last_os_error()
+                );
+                libc::abort();
+            }
+        }
     }
 }
 

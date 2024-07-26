@@ -699,6 +699,55 @@ impl Engine {
         code.publish()?;
         Ok(Arc::new(code))
     }
+
+    /// Unload process-related trap/signal handlers and destroy this engine.
+    ///
+    /// This method is not safe and is not widely applicable. It is not required
+    /// to be called and is intended for use cases such as unloading a dynamic
+    /// library from a process. It is difficult to invoke this method correctly
+    /// and it requires careful coordination to do so.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if this `Engine` handle is not the last remaining
+    /// engine handle.
+    ///
+    /// # Aborts
+    ///
+    /// This method will abort the process on some platforms in some situations
+    /// where unloading the handler cannot be performed and an unrecoverable
+    /// state is reached. For example on Unix platforms with signal handling
+    /// the process will be aborted if the current signal handlers are now
+    /// Wasmtime's.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is not generally safe to call and has a number of
+    /// preconditions that must be met to even possibly be safe. Even with these
+    /// known preconditions met there may be other unknown invariants to uphold
+    /// as well.
+    ///
+    /// * The must be no other instances of `Engine` anywhere for this Wasmtime
+    ///   DLL elsewhere in the process. Note that it's not just clones of this
+    ///   `Engine`, but any other `Engine` instances at all.
+    ///
+    /// * On Unix platforms no other signal handlers could have been installed
+    ///   after Wasmtime's own signal handlers were installed.
+    ///
+    /// * All existing threads which have used this DLL or copy of Wasmtime may
+    ///   no longer use this copy of Wasmtime. Per-thread state is not iterated
+    ///   and destroyed. Only future threads may use future instances of this
+    ///   Wasmtime itself.
+    ///
+    /// If other crashes are seen from using this method please feel free to
+    /// file an issue to update the documentation here with more preconditions
+    /// that must be met.
+    pub unsafe fn unload_process_handlers(self) {
+        assert_eq!(Arc::weak_count(&self.inner), 0);
+        assert_eq!(Arc::strong_count(&self.inner), 1);
+
+        crate::runtime::vm::deinit_traps();
+    }
 }
 
 /// A weak reference to an [`Engine`].

@@ -20,8 +20,15 @@ pub unsafe fn wasmtime_setjmp(
     capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.cast())
 }
 
-pub unsafe fn platform_init(_macos_use_mach_ports: bool) {
-    capi::wasmtime_init_traps(handle_trap);
+pub struct TrapHandler;
+
+impl TrapHandler {
+    pub unsafe fn new(_macos_use_mach_ports: bool) -> TrapHandler {
+        capi::wasmtime_init_traps(handle_trap);
+        TrapHandler
+    }
+
+    pub fn validate_config(&self, _macos_use_mach_ports: bool) {}
 }
 
 extern "C" fn handle_trap(ip: usize, fp: usize, has_faulting_addr: bool, faulting_addr: usize) {

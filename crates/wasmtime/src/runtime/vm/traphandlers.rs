@@ -14,7 +14,7 @@ use crate::prelude::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
-use crate::sync::OnceLock;
+use crate::sync::RwLock;
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use core::ptr;
@@ -24,6 +24,16 @@ pub use self::coredump::CoreDumpStack;
 pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
+
+/// Platform-specific trap-handler state.
+///
+/// This state is protected by a lock to synchronize access to it. Right now
+/// it's a `RwLock` but it could be a `Mutex`, and `RwLock` is just chosen for
+/// convenience as it's what's implemented in no_std. The performance here
+/// should not be of consequence.
+///
+/// This is initialized to `None` and then set as part of `init_traps`.
+static TRAP_HANDLER: RwLock<Option<traphandlers::TrapHandler>> = RwLock::new(None);
 
 /// This function is required to be called before any WebAssembly is entered.
 /// This will configure global state such as signal handlers to prepare the
@@ -37,18 +47,36 @@ pub use traphandlers::SignalHandler;
 /// This function will also panic if the `std` feature is disabled and it's
 /// called concurrently.
 pub fn init_traps(macos_use_mach_ports: bool) {
-    static INIT: OnceLock<()> = OnceLock::new();
+    let mut lock = TRAP_HANDLER.write();
+    match lock.as_mut() {
+        Some(state) => state.validate_config(macos_use_mach_ports),
+        None => *lock = Some(unsafe { traphandlers::TrapHandler::new(macos_use_mach_ports) }),
+    }
+}
 
-    INIT.get_or_init(|| unsafe {
-        traphandlers::platform_init(macos_use_mach_ports);
-    });
-
-    #[cfg(target_os = "macos")]
-    assert_eq!(
-        traphandlers::using_mach_ports(),
-        macos_use_mach_ports,
-        "cannot configure two different methods of signal handling in the same process"
-    );
+/// De-initializes platform-specific state for trap handling.
+///
+/// # Panics
+///
+/// This function will also panic if the `std` feature is disabled and it's
+/// called concurrently.
+///
+/// # Aborts
+///
+/// This may abort the process on some platforms where trap handling state
+/// cannot be unloaded.
+///
+/// # Unsafety
+///
+/// This is not safe to be called unless all wasm code is unloaded. This is not
+/// safe to be called on some platforms, like Unix, when other libraries
+/// installed their own signal handlers after `init_traps` was called.
+///
+/// There's more reasons for unsafety here than those articulated above,
+/// generally this can only be called "if you know what you're doing".
+pub unsafe fn deinit_traps() {
+    let mut lock = TRAP_HANDLER.write();
+    let _ = lock.take();
 }
 
 fn lazy_per_thread_init() {
