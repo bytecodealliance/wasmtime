@@ -717,7 +717,7 @@ impl Engine {
     /// This method will abort the process on some platforms in some situations
     /// where unloading the handler cannot be performed and an unrecoverable
     /// state is reached. For example on Unix platforms with signal handling
-    /// the process will be aborted if the current signal handlers are now
+    /// the process will be aborted if the current signal handlers are not
     /// Wasmtime's.
     ///
     /// # Unsafety
@@ -727,12 +727,17 @@ impl Engine {
     /// known preconditions met there may be other unknown invariants to uphold
     /// as well.
     ///
-    /// * The must be no other instances of `Engine` anywhere for this Wasmtime
-    ///   DLL elsewhere in the process. Note that it's not just clones of this
-    ///   `Engine`, but any other `Engine` instances at all.
+    /// * There must be no other instances of `Engine` elsewhere in the process.
+    ///   Note that this isn't just copies of this `Engine` but it's any other
+    ///   `Engine` at all. This unloads global state that is used by all
+    ///   `Engine`s so this instance must be the last.
     ///
     /// * On Unix platforms no other signal handlers could have been installed
-    ///   after Wasmtime's own signal handlers were installed.
+    ///   for signals that Wasmtime catches. In this situation Wasmtime won't
+    ///   know how to restore signal handlers that Wasmtime possibly overwrote
+    ///   when Wasmtime was initially loaded. If possible initialize other
+    ///   libraries first and then initialize Wasmtime last (e.g. defer creating
+    ///   an `Engine`).
     ///
     /// * All existing threads which have used this DLL or copy of Wasmtime may
     ///   no longer use this copy of Wasmtime. Per-thread state is not iterated
