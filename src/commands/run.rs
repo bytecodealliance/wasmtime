@@ -375,28 +375,24 @@ impl RunCommand {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.run.common.wasm.unknown_imports_trap == Some(true) {
-            #[cfg(feature = "cranelift")]
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_traps(module.unwrap_core())?;
                 }
-                _ => bail!("cannot use `--trap-unknown-imports` with components"),
+                CliLinker::Component(linker) => {
+                    linker.define_unknown_imports_as_traps(module.unwrap_component())?;
+                }
             }
-            #[cfg(not(feature = "cranelift"))]
-            bail!("support for `unknown-imports-trap` disabled at compile time");
         }
 
         // ...or as default values.
         if self.run.common.wasm.unknown_imports_default == Some(true) {
-            #[cfg(feature = "cranelift")]
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_default_values(module.unwrap_core())?;
                 }
                 _ => bail!("cannot use `--default-values-unknown-imports` with components"),
             }
-            #[cfg(not(feature = "cranelift"))]
-            bail!("support for `unknown-imports-trap` disabled at compile time");
         }
 
         let finish_epoch_handler = self.setup_epoch_handler(store, modules)?;
