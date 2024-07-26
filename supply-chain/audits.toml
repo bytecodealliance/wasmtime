@@ -2424,6 +2424,11 @@ criteria = "safe-to-deploy"
 version = "1.0.17"
 notes = "plenty of unsafe pointer and vec tricks, but in well-structured and commented code that appears to be correct"
 
+[[audits.sha1_smol]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
+
 [[audits.sha2]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
@@ -2475,6 +2480,11 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.4.7 -> 0.4.9"
 notes = "Minor OS compat updates but otherwise nothing major here."
+
+[[audits.socket2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.9 -> 0.4.4"
 
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
