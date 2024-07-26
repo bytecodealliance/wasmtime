@@ -166,9 +166,7 @@ impl Val {
             | (Val::F64(_), ValType::F64)
             | (Val::V128(_), ValType::V128) => true,
 
-            (Val::FuncRef(f), ValType::Ref(ref_ty)) => {
-                Ref::from(f.clone())._matches_ty(store, ref_ty)?
-            }
+            (Val::FuncRef(f), ValType::Ref(ref_ty)) => Ref::from(*f)._matches_ty(store, ref_ty)?,
             (Val::ExternRef(e), ValType::Ref(ref_ty)) => {
                 Ref::from(*e)._matches_ty(store, ref_ty)?
             }

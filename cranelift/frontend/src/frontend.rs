@@ -119,7 +119,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
         // We only insert the Block in the layout when an instruction is added to it
         self.builder.ensure_inserted_block();
 
-        let inst = self.builder.func.dfg.make_inst(data.clone());
+        let inst = self.builder.func.dfg.make_inst(data);
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
         self.builder.func.layout.append_inst(inst, self.block);
         if !self.builder.srcloc.is_default() {

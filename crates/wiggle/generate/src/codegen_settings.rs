@@ -62,7 +62,7 @@ impl ErrorTransform {
                 },
                 ErrorConfField::User(field) => if let Some(abi_type) = doc.typename(&Id::new(ident.to_string())) {
                     if let Some(ident) = field.rich_error.get_ident() {
-                        if let Some(prior_def) = richtype_identifiers.insert(ident.clone(), field.err_loc.clone())
+                        if let Some(prior_def) = richtype_identifiers.insert(ident.clone(), field.err_loc)
                          {
                             return Err(anyhow!(
                                     "duplicate rich type identifier of {:?} not allowed. prior definition at {:?}",

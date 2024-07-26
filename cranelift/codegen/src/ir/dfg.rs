@@ -1028,7 +1028,7 @@ impl DataFlowGraph {
     /// returning them.
     pub fn clone_inst(&mut self, inst: Inst) -> Inst {
         // First, add a clone of the InstructionData.
-        let inst_data = self.insts[inst].clone();
+        let inst_data = self.insts[inst];
         // If the `inst_data` has a reference to a ValueList, clone it
         // as well, because we can't share these (otherwise mutating
         // one would affect the other).

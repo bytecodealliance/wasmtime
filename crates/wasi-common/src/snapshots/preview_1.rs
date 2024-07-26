@@ -628,12 +628,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         &mut self,
         memory: &mut GuestMemory<'_>,
         fd: types::Fd,
-        buf: GuestPtr<u8>,
+        mut buf: GuestPtr<u8>,
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, Error> {
         let mut bufused = 0;
-        let mut buf = buf.clone();
         for entity in self
             .table()
             .get_dir(u32::from(fd))?

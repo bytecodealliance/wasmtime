@@ -1416,7 +1416,7 @@ pub(crate) fn emit(
             let alternative = alternative.to_reg();
             let dst = dst.to_writable_reg();
             debug_assert_eq!(alternative, dst.to_reg());
-            let consequent = consequent.clone().to_reg();
+            let consequent = consequent.to_reg();
 
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
             // this doesn't clobber flags. Make sure to not do so here.

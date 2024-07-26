@@ -108,7 +108,7 @@ unsafe fn test_stdout_stderr_write() {
             panic!("timed out with the following pending subs: {:?}", writable)
         }
         let mut subs = writable_subs(&writable);
-        subs.push(clock.clone());
+        subs.push(clock);
         let out = poll_oneoff_impl(&subs).unwrap();
         for event in out {
             match event.userdata {

@@ -8,7 +8,8 @@
     irrefutable_let_patterns,
     unused_assignments,
     non_camel_case_types,
-    missing_docs
+    missing_docs,
+    clippy::clone_on_copy
 )]
 
 include!(concat!(env!("ISLE_DIR"), "/isle_x64.rs"));

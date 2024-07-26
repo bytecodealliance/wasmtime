@@ -97,7 +97,7 @@ where
                 ValueDef::Result(inst, _) if ctx.ctx.func.dfg.inst_results(inst).len() == 1 => {
                     let ty = ctx.ctx.func.dfg.value_type(value);
                     trace!(" -> value of type {}", ty);
-                    return Some((ty, ctx.ctx.func.dfg.insts[inst].clone()));
+                    return Some((ty, ctx.ctx.func.dfg.insts[inst]));
                 }
                 _ => {}
             }
@@ -196,9 +196,7 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {
-        let value = self
-            .ctx
-            .insert_pure_enode(NewOrExistingInst::New(op.clone(), ty));
+        let value = self.ctx.insert_pure_enode(NewOrExistingInst::New(*op, ty));
         trace!("make_inst_ctor: {:?} -> {}", op, value);
         value
     }

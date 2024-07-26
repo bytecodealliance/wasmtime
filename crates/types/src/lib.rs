@@ -236,7 +236,7 @@ impl WasmValType {
             | WasmValType::I64
             | WasmValType::F32
             | WasmValType::F64
-            | WasmValType::V128 => self.clone(),
+            | WasmValType::V128 => *self,
         }
     }
 }

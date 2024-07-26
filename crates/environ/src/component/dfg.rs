@@ -706,7 +706,7 @@ impl LinearizeDfg<'_> {
         V: EntityRef,
     {
         if let Some(val) = map(self).get(&key) {
-            return val.clone();
+            return *val;
         }
         let tmp = gen(self, key);
         let index = V::new(map(self).len());
