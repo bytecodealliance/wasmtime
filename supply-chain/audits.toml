@@ -874,6 +874,11 @@ criteria = "safe-to-deploy"
 delta = "0.20.0 -> 0.21.0"
 notes = "This version bump updated some dependencies and optimized some internals. All looks good."
 
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.21.0 -> 0.22.0"
+
 [[audits.adler]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1208,6 +1213,11 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "1.0.73"
 notes = "I am the author of this crate."
+
+[[audits.cc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.83 -> 1.1.6"
 
 [[audits.cfg-if]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1581,6 +1591,11 @@ Still looks like a good DWARF-parsing crate, nothing major was added or deleted
 and no `unsafe` code to review here.
 """
 
+[[audits.gimli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.28.0 -> 0.29.0"
+
 [[audits.glob]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1822,6 +1837,11 @@ notes = "Unsafe code is due to auto-generated bindings to a widely-deployed C li
 who = "rahulchaphalkar <rahul.s.chaphalkar@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.3.4 -> 0.4.0"
+
+[[audits.jobserver]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.25 -> 0.1.32"
 
 [[audits.leb128]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -2341,6 +2361,11 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.1.21"
 notes = "I am the author of this crate."
+
+[[audits.rustc-demangle]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.21 -> 0.1.24"
 
 [[audits.rustix]]
 who = "Dan Gohman <dev@sunfishcode.online>"

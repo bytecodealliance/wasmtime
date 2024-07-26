@@ -987,6 +987,13 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
+[[publisher.backtrace]]
+version = "0.3.73"
+when = "2024-06-12"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
 [[publisher.bstr]]
 version = "1.6.0"
 when = "2023-07-05"
@@ -4321,6 +4328,12 @@ aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supp
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.10.3 -> 0.10.5"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.jobserver]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.1.24 -> 0.1.25"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.lazy_static]]
