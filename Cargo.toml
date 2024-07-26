@@ -174,7 +174,8 @@ unused-lifetimes = 'warn'
 # The default set of lints in Clippy is viewed as "too noisy" right now so
 # they're all turned off by default. Selective lints are then enabled below as
 # necessary.
-all = 'allow'
+all = { level = 'allow', priority = -1 }
+clone_on_copy = 'deny'
 
 [workspace.dependencies]
 arbitrary = { version = "1.3.1" }
