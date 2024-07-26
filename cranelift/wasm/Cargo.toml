@@ -35,4 +35,4 @@ target-lexicon = { workspace = true }
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std"]
 core = ["hashbrown", "cranelift-codegen/core", "cranelift-frontend/core"]
-enable-serde = ["serde", "serde_derive"]
+enable-serde = ["serde", "serde_derive", "cranelift-codegen/enable-serde"]
