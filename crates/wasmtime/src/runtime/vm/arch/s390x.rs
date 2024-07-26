@@ -1,9 +1,5 @@
 //! s390x-specific definitions of architecture-specific functions in Wasmtime.
 
-/// Currently Rust has no stable means of representing vector registers
-/// so like RISC-V at this time this uses a bland 128-bit representation.
-pub type V128Abi = u128;
-
 #[inline]
 #[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {

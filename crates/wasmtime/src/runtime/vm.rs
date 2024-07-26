@@ -44,7 +44,7 @@ pub mod mpk;
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
-pub use crate::runtime::vm::arch::{get_stack_pointer, V128Abi};
+pub use crate::runtime::vm::arch::get_stack_pointer;
 pub use crate::runtime::vm::async_yield::*;
 pub use crate::runtime::vm::export::*;
 pub use crate::runtime::vm::gc::*;

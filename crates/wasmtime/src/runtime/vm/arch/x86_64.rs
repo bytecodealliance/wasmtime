@@ -1,10 +1,5 @@
 //! x86_64-specific definitions of architecture-specific functions in Wasmtime.
 
-/// x86 vectors are represented with XMM registers which are represented
-/// with the `__m128i` type. This type is considered a vector type for
-/// ABI purposes which is implemented by Cranelift.
-pub type V128Abi = core::arch::x86_64::__m128i;
-
 #[inline]
 #[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {
