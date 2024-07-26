@@ -1,22 +1,29 @@
 use test_programs::keyvalue::wasi::keyvalue::{atomics, batch, store};
 
 fn main() {
-    let bucket = store::open(std::env::var_os("IDENTIFIER").unwrap().to_str().unwrap()).unwrap();
+    let identifier = std::env::var_os("IDENTIFIER")
+        .unwrap()
+        .into_string()
+        .unwrap();
+    let bucket = store::open(&identifier).unwrap();
+
+    if identifier != "" {
+        // for In-Memory provider, we have preset this data
+        assert_eq!(atomics::increment(&bucket, "atomics_key", 5).unwrap(), 5);
+    }
+    assert_eq!(atomics::increment(&bucket, "atomics_key", 1).unwrap(), 6);
+
+    let resp = bucket.list_keys(None).unwrap();
+    assert_eq!(resp.keys, vec!["atomics_key".to_string()]);
+
     bucket.set("hello", "world".as_bytes()).unwrap();
 
     let v = bucket.get("hello").unwrap();
     assert_eq!(String::from_utf8(v.unwrap()).unwrap(), "world");
 
+    assert_eq!(bucket.exists("hello").unwrap(), true);
     bucket.delete("hello").unwrap();
-    let exists = bucket.exists("hello").unwrap();
-    assert_eq!(exists, false);
-
-    bucket.set("aa", "bb".as_bytes()).unwrap();
-    let resp = bucket.list_keys(None).unwrap();
-    assert_eq!(resp.keys, vec!["aa".to_string()]);
-
-    assert_eq!(atomics::increment(&bucket, "atomics_key", 5).unwrap(), 5);
-    assert_eq!(atomics::increment(&bucket, "atomics_key", 1).unwrap(), 6);
+    assert_eq!(bucket.exists("hello").unwrap(), false);
 
     batch::set_many(
         &bucket,

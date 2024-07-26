@@ -5,7 +5,7 @@ use wasmtime::{
     Store,
 };
 use wasmtime_wasi::{bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx};
+use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
 struct Ctx {
     table: ResourceTable,
@@ -59,8 +59,13 @@ async fn keyvalue_main() -> Result<()> {
         KEYVALUE_MAIN_COMPONENT,
         Ctx {
             table: ResourceTable::new(),
-            wasi_ctx: WasiCtxBuilder::new().env("IDENTIFIER", "").build(),
-            wasi_keyvalue_ctx: WasiKeyValueCtx::builder().build(),
+            wasi_ctx: WasiCtxBuilder::new()
+                .inherit_stderr()
+                .env("IDENTIFIER", "")
+                .build(),
+            wasi_keyvalue_ctx: WasiKeyValueCtxBuilder::new()
+                .in_memory_data([("atomics_key", "5")])
+                .build(),
         },
     )
     .await
@@ -74,10 +79,11 @@ async fn keyvalue_redis() -> Result<()> {
         Ctx {
             table: ResourceTable::new(),
             wasi_ctx: WasiCtxBuilder::new()
+                .inherit_stderr()
                 .env("IDENTIFIER", "redis://127.0.0.1/")
                 .build(),
-            wasi_keyvalue_ctx: WasiKeyValueCtx::builder()
-                .allow_hosts(&["127.0.0.1"])
+            wasi_keyvalue_ctx: WasiKeyValueCtxBuilder::new()
+                .allow_redis_hosts(&["127.0.0.1"])
                 .redis_connection_timeout(std::time::Duration::from_secs(5))
                 .redis_response_timeout(std::time::Duration::from_secs(5))
                 .build(),

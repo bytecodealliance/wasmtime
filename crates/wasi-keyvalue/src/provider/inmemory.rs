@@ -8,6 +8,14 @@ pub(crate) struct InMemory {
     store: Arc<Mutex<HashMap<String, Vec<u8>>>>,
 }
 
+impl InMemory {
+    pub(crate) fn new(data: HashMap<String, Vec<u8>>) -> Self {
+        Self {
+            store: Arc::new(Mutex::new(data)),
+        }
+    }
+}
+
 #[async_trait]
 impl Host for InMemory {
     async fn get(&mut self, key: String) -> Result<Option<Vec<u8>>, Error> {
