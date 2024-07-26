@@ -14,7 +14,7 @@ pub use crate::runtime::vm::ValRaw;
 ///
 /// Note that we inline the `enum Ref { ... }` variants into `enum Val { ... }`
 /// here as a size optimization.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Val {
     // NB: the ordering here is intended to match the ordering in
     // `ValType` to improve codegen when learning the type of a value.
