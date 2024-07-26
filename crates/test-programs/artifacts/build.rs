@@ -77,6 +77,7 @@ fn build_and_generate_tests() {
             s if s.starts_with("piped_") => "piped",
             s if s.starts_with("dwarf_") => "dwarf",
             s if s.starts_with("runtime_config_") => "runtime_config",
+            s if s.starts_with("keyvalue_") => "keyvalue",
             // If you're reading this because you hit this panic, either add it
             // to a test suite above or add a new "suite". The purpose of the
             // categorization above is to have a static assertion that tests

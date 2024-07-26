@@ -218,6 +218,10 @@ criteria = "safe-to-deploy"
 version = "0.2.7"
 criteria = "safe-to-run"
 
+[[exemptions.combine]]
+version = "4.6.7"
+criteria = "safe-to-deploy"
+
 [[exemptions.console]]
 version = "0.15.0"
 criteria = "safe-to-deploy"
@@ -484,6 +488,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand_xorshift]]
 version = "0.3.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.redis]]
+version = "0.25.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]

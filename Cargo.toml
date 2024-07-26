@@ -54,6 +54,7 @@ wasi-common = { workspace = true, default-features = true, features = ["exit"], 
 wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-runtime-config = { workspace = true, optional = true }
+wasmtime-wasi-keyvalue = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
 clap = { workspace = true }
@@ -195,6 +196,7 @@ wasmtime-wasi = { path = "crates/wasi", version = "24.0.0", default-features = f
 wasmtime-wasi-http = { path = "crates/wasi-http", version = "=24.0.0", default-features = false }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "24.0.0" }
 wasmtime-wasi-runtime-config = { path = "crates/wasi-runtime-config", version = "24.0.0" }
+wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "24.0.0" }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "24.0.0" }
 wasmtime-component-util = { path = "crates/component-util", version = "=24.0.0" }
 wasmtime-component-macro = { path = "crates/component-macro", version = "=24.0.0" }
@@ -326,6 +328,7 @@ criterion = { version = "0.5.0", default-features = false, features = ["html_rep
 rustc-hash = "1.1.0"
 libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
+redis = "0.25.4"
 
 # =============================================================================
 #
