@@ -1,7 +1,7 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::{IntCmpKind, RoundingMode, ShiftKind};
+use crate::masm::{FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
@@ -42,6 +42,19 @@ impl From<IntCmpKind> for Cond {
             IntCmpKind::LeU => Cond::Ls,
             IntCmpKind::GeS => Cond::Ge,
             IntCmpKind::GeU => Cond::Hs,
+        }
+    }
+}
+
+impl From<FloatCmpKind> for Cond {
+    fn from(value: FloatCmpKind) -> Self {
+        match value {
+            FloatCmpKind::Eq => Cond::Eq,
+            FloatCmpKind::Ne => Cond::Ne,
+            FloatCmpKind::Lt => Cond::Mi,
+            FloatCmpKind::Gt => Cond::Gt,
+            FloatCmpKind::Le => Cond::Ls,
+            FloatCmpKind::Ge => Cond::Ge,
         }
     }
 }
@@ -435,6 +448,15 @@ impl Assembler {
             _ => unreachable!(),
         };
         self.emit_fpu_rri_mod(sli, ri, rn, rd)
+    }
+
+    /// Float compare.
+    pub fn fcmp(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
+        self.emit(Inst::FpuCmp {
+            size: size.into(),
+            rn: rn.into(),
+            rm: rm.into(),
+        })
     }
 
     /// Return instruction.

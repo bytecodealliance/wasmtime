@@ -531,13 +531,14 @@ impl Masm for MacroAssembler {
 
     fn float_cmp_with_set(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: Reg,
-        _kind: FloatCmpKind,
-        _size: OperandSize,
+        src1: Reg,
+        src2: Reg,
+        dst: Reg,
+        kind: FloatCmpKind,
+        size: OperandSize,
     ) {
-        todo!()
+        self.asm.fcmp(src1, src2, size);
+        self.asm.cset(dst, kind.into());
     }
 
     fn clz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
