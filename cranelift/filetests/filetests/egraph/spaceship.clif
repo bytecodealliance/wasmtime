@@ -425,8 +425,8 @@ block0(v0: i16, v1: i16):
     v5 = iconst.i8 0
     v6 = icmp sle v4, v5
     return v6
-    ; check: v7 = icmp sle v0, v1
-    ; check: return v7
+    ; check: v15 = icmp sle v0, v1
+    ; check: return v15
 }
 
 function %sgt_via_cmp(i32, i32) -> i8 {
