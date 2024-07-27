@@ -509,23 +509,37 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn cmp_with_set(&mut self, _src: RegImm, _dst: Reg, _kind: IntCmpKind, _size: OperandSize) {
-        todo!()
+    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize) {
+        self.cmp(dst, src, size);
+        self.asm.cset(dst, kind.into());
     }
 
-    fn cmp(&mut self, _src1: Reg, _src2: RegImm, _size: OperandSize) {
-        todo!()
+    fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) {
+        match src2 {
+            RegImm::Reg(src2) => {
+                self.asm.subs_rrr(src2, src1, size);
+            }
+            RegImm::Imm(v) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
+                self.asm.subs_ir(imm, src1, size);
+            }
+        }
     }
 
     fn float_cmp_with_set(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: Reg,
-        _kind: FloatCmpKind,
-        _size: OperandSize,
+        src1: Reg,
+        src2: Reg,
+        dst: Reg,
+        kind: FloatCmpKind,
+        size: OperandSize,
     ) {
-        todo!()
+        self.asm.fcmp(src1, src2, size);
+        self.asm.cset(dst, kind.into());
     }
 
     fn clz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
