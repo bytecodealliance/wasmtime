@@ -232,11 +232,11 @@ impl MachInstEmit for Inst {
     fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // Check if we need to update the vector state before emitting this instruction
         if let Some(expected) = self.expected_vstate() {
-            if state.vstate != EmitVState::Known(expected.clone()) {
+            if state.vstate != EmitVState::Known(*expected) {
                 // Update the vector state.
                 Inst::VecSetState {
                     rd: writable_zero_reg(),
-                    vstate: expected.clone(),
+                    vstate: *expected,
                 }
                 .emit(sink, emit_info, state);
             }
@@ -2532,7 +2532,7 @@ impl Inst {
                 ));
 
                 // Update the current vector emit state.
-                state.vstate = EmitVState::Known(vstate.clone());
+                state.vstate = EmitVState::Known(*vstate);
             }
 
             &Inst::VecLoad {
@@ -2557,7 +2557,7 @@ impl Inst {
                             let tmp = writable_spilltmp_reg();
                             Inst::LoadAddr {
                                 rd: tmp,
-                                mem: base.clone(),
+                                mem: *base,
                             }
                             .emit(sink, emit_info, state);
                             tmp.to_reg()
@@ -2604,7 +2604,7 @@ impl Inst {
                             let tmp = writable_spilltmp_reg();
                             Inst::LoadAddr {
                                 rd: tmp,
-                                mem: base.clone(),
+                                mem: *base,
                             }
                             .emit(sink, emit_info, state);
                             tmp.to_reg()

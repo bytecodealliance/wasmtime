@@ -31,7 +31,7 @@ pub fn dummy_func<T>(store: &mut Store<T>, ty: FuncType) -> Result<Func> {
     let dummy_results = ty.results().map(dummy_value).collect::<Result<Vec<_>>>()?;
     Ok(Func::new(store, ty.clone(), move |_, _, results| {
         for (slot, dummy) in results.iter_mut().zip(&dummy_results) {
-            *slot = dummy.clone();
+            *slot = *dummy;
         }
         Ok(())
     }))

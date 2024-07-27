@@ -368,7 +368,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
         Ok(Ok(())) => {
             let results = crate::slice_from_raw_parts_mut(results, nresults);
             for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
-                crate::initialize(slot, wasmtime_val_t::from_val(&mut scope, val.clone()));
+                crate::initialize(slot, wasmtime_val_t::from_val(&mut scope, *val));
             }
             params.truncate(0);
             scope.as_context_mut().data_mut().wasm_val_storage = params;

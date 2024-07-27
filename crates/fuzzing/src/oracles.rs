@@ -570,7 +570,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
                 let funcs = instance
                     .exports(&mut *store)
                     .filter_map(|e| match e.into_extern() {
-                        Extern::Func(f) => Some(f.clone()),
+                        Extern::Func(f) => Some(f),
                         _ => None,
                     })
                     .collect::<Vec<_>>();

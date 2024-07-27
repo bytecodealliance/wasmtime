@@ -25,7 +25,7 @@ impl<'a> DfgInstructionContext<'a> {
 
 impl InstructionContext for DfgInstructionContext<'_> {
     fn data(&self) -> InstructionData {
-        self.1.insts[self.0].clone()
+        self.1.insts[self.0]
     }
 
     fn args(&self) -> &[Value] {

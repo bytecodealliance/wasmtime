@@ -739,7 +739,7 @@ impl MachInst for Inst {
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
-            Inst::Mov { rd, rm, .. } => Some((rd.clone(), rm.clone())),
+            Inst::Mov { rd, rm, .. } => Some((*rd, *rm)),
             _ => None,
         }
     }
@@ -916,7 +916,7 @@ impl Inst {
                 String::default()
             };
             regs.iter().for_each(|i| {
-                x.push_str(format_reg(i.clone()).as_str());
+                x.push_str(format_reg(*i).as_str());
                 if *i != *regs.last().unwrap() {
                     x.push_str(",");
                 }

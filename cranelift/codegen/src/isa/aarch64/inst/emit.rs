@@ -847,7 +847,7 @@ impl MachInstEmit for Inst {
                     _ => unimplemented!("{:?}", alu_op),
                 };
                 let top9 = top9 | size.sf_bit() << 8;
-                let imml = if inv { imml.invert() } else { imml.clone() };
+                let imml = if inv { imml.invert() } else { *imml };
                 sink.put4(enc_arith_rr_imml(top9, imml.enc_bits(), rn, rd));
             }
 
