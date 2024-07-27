@@ -654,7 +654,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             .enumerate()
         {
             let regs = if ret.purpose == ArgumentPurpose::StructReturn {
-                self.sret_reg.unwrap().clone()
+                self.sret_reg.unwrap()
             } else {
                 rets.next().unwrap()
             };

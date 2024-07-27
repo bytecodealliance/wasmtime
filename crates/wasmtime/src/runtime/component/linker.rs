@@ -234,7 +234,7 @@ impl<T> Linker<T> {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
                 Definition::Resource(t, dtor) => RuntimeImport::Resource {
-                    ty: t.clone(),
+                    ty: *t,
                     _dtor: dtor.clone(),
                     dtor_funcref: component.resource_drop_func_ref(dtor),
                 },

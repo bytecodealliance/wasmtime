@@ -252,7 +252,7 @@ impl MemoryPool {
             self.stripes.len() < 2 || self.stripes[index].pkey.is_some(),
             "if we are using stripes, we cannot have an empty protection key"
         );
-        self.stripes[index].pkey.clone()
+        self.stripes[index].pkey
     }
 
     /// Validate whether this memory pool supports the given module.

@@ -1310,7 +1310,7 @@ impl<T> Linker<T> {
     ) -> Result<Func> {
         if let Some(external) = self.get(&mut store, module, "") {
             if let Extern::Func(func) = external {
-                return Ok(func.clone());
+                return Ok(func);
             }
             bail!("default export in '{}' is not a function", module);
         }
@@ -1318,7 +1318,7 @@ impl<T> Linker<T> {
         // For compatibility, also recognize "_start".
         if let Some(external) = self.get(&mut store, module, "_start") {
             if let Extern::Func(func) = external {
-                return Ok(func.clone());
+                return Ok(func);
             }
             bail!("`_start` in '{}' is not a function", module);
         }

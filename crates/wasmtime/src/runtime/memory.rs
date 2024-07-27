@@ -808,7 +808,7 @@ impl SharedMemory {
         debug_assert!(ty.maximum().is_some());
 
         let tunables = engine.tunables();
-        let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
+        let plan = MemoryPlan::for_memory(*ty.wasmtime_memory(), tunables);
         let page_size_log2 = plan.memory.page_size_log2;
         let memory = crate::runtime::vm::SharedMemory::new(plan)?;
 

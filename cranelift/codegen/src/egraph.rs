@@ -432,7 +432,7 @@ where
             let ty = self.func.dfg.ctrl_typevar(inst);
             match self
                 .effectful_gvn_map
-                .entry((ty, self.func.dfg.insts[inst].clone()))
+                .entry((ty, self.func.dfg.insts[inst]))
             {
                 ScopedEntry::Occupied(o) => {
                     let orig_result = *o.get();

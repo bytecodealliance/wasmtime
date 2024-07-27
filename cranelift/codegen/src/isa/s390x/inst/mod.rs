@@ -892,7 +892,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
-            let mut clobbers = clobbers.clone();
+            let mut clobbers = *clobbers;
             clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             for CallRetPair { vreg, preg } in defs {
                 clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
@@ -912,7 +912,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
-            let mut clobbers = clobbers.clone();
+            let mut clobbers = *clobbers;
             clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             for CallRetPair { vreg, preg } in defs {
                 clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));

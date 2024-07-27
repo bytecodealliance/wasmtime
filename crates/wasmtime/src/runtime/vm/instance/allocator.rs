@@ -94,7 +94,7 @@ impl StorePtr {
 
     /// The raw contents of this struct
     pub fn as_raw(&self) -> Option<*mut dyn Store> {
-        self.0.clone()
+        self.0
     }
 
     /// Use the StorePtr as a mut ref to the Store.

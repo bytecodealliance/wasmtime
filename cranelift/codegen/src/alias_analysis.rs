@@ -212,11 +212,10 @@ impl<'a> AliasAnalysis<'a> {
 
         while let Some(block) = queue.pop() {
             queue_set.remove(&block);
-            let mut state = self
+            let mut state = *self
                 .block_input
                 .entry(block)
-                .or_insert_with(|| LastStores::default())
-                .clone();
+                .or_insert_with(|| LastStores::default());
 
             trace!(
                 "alias analysis: input to block{} is {:?}",
@@ -233,12 +232,12 @@ impl<'a> AliasAnalysis<'a> {
                 let succ_first_inst = func.layout.block_insts(succ).into_iter().next().unwrap();
                 let updated = match self.block_input.get_mut(&succ) {
                     Some(succ_state) => {
-                        let old = succ_state.clone();
+                        let old = *succ_state;
                         succ_state.meet_from(&state, succ_first_inst);
                         *succ_state != old
                     }
                     None => {
-                        self.block_input.insert(succ, state.clone());
+                        self.block_input.insert(succ, state);
                         true
                     }
                 };

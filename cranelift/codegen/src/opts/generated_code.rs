@@ -6,6 +6,6 @@
 // mod generated_code;` trick either.
 #![allow(dead_code, unreachable_code, unreachable_patterns)]
 #![allow(unused_imports, unused_variables, non_snake_case, unused_mut)]
-#![allow(irrefutable_let_patterns, non_camel_case_types)]
+#![allow(irrefutable_let_patterns, non_camel_case_types, clippy::clone_on_copy)]
 
 include!(concat!(env!("ISLE_DIR"), "/isle_opt.rs"));

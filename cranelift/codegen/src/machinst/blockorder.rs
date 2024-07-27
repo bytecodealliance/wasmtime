@@ -306,7 +306,7 @@ impl BlockLoweringOrder {
     /// Get the successor indices for a lowered block.
     pub fn succ_indices(&self, block: BlockIndex) -> (Option<Inst>, &[BlockIndex]) {
         let (opt_inst, range) = &self.lowered_succ_ranges[block.index()];
-        (opt_inst.clone(), &self.lowered_succ_indices[range.clone()])
+        (*opt_inst, &self.lowered_succ_indices[range.clone()])
     }
 
     /// Determine whether the given lowered-block index is cold.

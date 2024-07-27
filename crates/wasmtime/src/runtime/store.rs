@@ -2042,7 +2042,7 @@ at https://bytecodealliance.org/security.
     /// Retrieve the store's protection key.
     #[inline]
     pub(crate) fn get_pkey(&self) -> Option<ProtectionKey> {
-        self.pkey.clone()
+        self.pkey
     }
 
     #[inline]

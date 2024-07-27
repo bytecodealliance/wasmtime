@@ -274,7 +274,7 @@ impl StructRef {
                     allocator.layout(),
                     ty.element_type(),
                     index,
-                    val.clone(),
+                    *val,
                 )?;
             }
             Ok(())

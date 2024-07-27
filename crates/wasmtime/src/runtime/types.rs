@@ -2431,7 +2431,7 @@ impl TableType {
         let element = RefType::from_wasm_type(engine, &table.wasm_ty);
         TableType {
             element,
-            ty: table.clone(),
+            ty: *table,
         }
     }
 
@@ -2734,7 +2734,7 @@ impl MemoryType {
     }
 
     pub(crate) fn from_wasmtime_memory(memory: &Memory) -> MemoryType {
-        MemoryType { ty: memory.clone() }
+        MemoryType { ty: *memory }
     }
 
     pub(crate) fn wasmtime_memory(&self) -> &Memory {

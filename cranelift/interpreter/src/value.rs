@@ -801,12 +801,11 @@ impl DataValueExt for DataValue {
             DataValue::I128(a) => DataValue::I128(!a),
             DataValue::F32(a) => DataValue::F32(!a),
             DataValue::F64(a) => DataValue::F64(!a),
-            DataValue::V128(a) => {
-                let mut a2 = a.clone();
-                for a in a2.iter_mut() {
-                    *a = !*a;
+            DataValue::V128(mut a) => {
+                for byte in a.iter_mut() {
+                    *byte = !*byte;
                 }
-                DataValue::V128(a2)
+                DataValue::V128(a)
             }
             _ => unimplemented!(),
         })

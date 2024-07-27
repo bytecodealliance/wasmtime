@@ -38,7 +38,7 @@ pub fn create_memory(
     // constructing a memory with an allocator: instead the memories are either
     // preallocated (i.e., shared memory) or allocated manually below.
     let plan = wasmtime_environ::MemoryPlan::for_memory(
-        memory_ty.wasmtime_memory().clone(),
+        *memory_ty.wasmtime_memory(),
         store.engine().tunables(),
     );
     let memory_id = module.memory_plans.push(plan.clone());

@@ -90,7 +90,7 @@ where
                     .get_current_function()
                     .dfg
                     .constants
-                    .get(constant_handle.clone());
+                    .get(constant_handle);
                 match (ctrl_ty.bytes(), opcode) {
                     (_, Opcode::F128const) => DataValue::F128(buffer.try_into().expect("a 16-byte data buffer")),
                     (16, Opcode::Vconst) => DataValue::V128(buffer.as_slice().try_into().expect("a 16-byte data buffer")),

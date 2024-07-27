@@ -7,7 +7,7 @@ use wasmtime_environ::{EntityIndex, Module, TypeTrace};
 pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<InstanceId> {
     let mut module = Module::new();
 
-    let wasmtime_table = table.wasmtime_table().clone();
+    let wasmtime_table = *table.wasmtime_table();
     let tunables = store.engine().tunables();
 
     debug_assert!(

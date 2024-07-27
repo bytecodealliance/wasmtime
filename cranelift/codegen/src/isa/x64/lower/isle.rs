@@ -691,7 +691,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
-            libcall.clone(),
+            *libcall,
             &[a],
         )
         .expect("Failed to emit LibCall");
@@ -706,7 +706,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
-            libcall.clone(),
+            *libcall,
             &[a, b],
         )
         .expect("Failed to emit LibCall");
@@ -721,7 +721,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
-            libcall.clone(),
+            *libcall,
             &[a, b, c],
         )
         .expect("Failed to emit LibCall");

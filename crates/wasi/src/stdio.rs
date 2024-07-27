@@ -50,7 +50,7 @@ impl StdinStream for pipe::MemoryInputPipe {
 
 impl StdinStream for pipe::ClosedInputStream {
     fn stream(&self) -> Box<dyn HostInputStream> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 
     fn isatty(&self) -> bool {
@@ -160,7 +160,7 @@ impl StdoutStream for pipe::MemoryOutputPipe {
 
 impl StdoutStream for pipe::SinkOutputStream {
     fn stream(&self) -> Box<dyn HostOutputStream> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 
     fn isatty(&self) -> bool {
@@ -170,7 +170,7 @@ impl StdoutStream for pipe::SinkOutputStream {
 
 impl StdoutStream for pipe::ClosedOutputStream {
     fn stream(&self) -> Box<dyn HostOutputStream> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 
     fn isatty(&self) -> bool {
