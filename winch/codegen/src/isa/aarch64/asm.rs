@@ -259,19 +259,19 @@ impl Assembler {
     }
 
     /// Subtract with three registers, setting flags.
-    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
-        self.emit_alu_rrr_extend(ALUOp::SubS, rm, rn, rd, size);
+    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
+        self.emit_alu_rrr_extend(ALUOp::SubS, rm, rn, regs::zero(), size);
     }
 
     /// Subtract immediate and register, setting flags.
-    pub fn subs_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+    pub fn subs_ir(&mut self, imm: u64, rn: Reg, size: OperandSize) {
         let alu_op = ALUOp::SubS;
         if let Some(imm) = Imm12::maybe_from_u64(imm) {
-            self.emit_alu_rri(alu_op, imm, rn, rd, size);
+            self.emit_alu_rri(alu_op, imm, rn, regs::zero(), size);
         } else {
             let scratch = regs::scratch();
             self.load_constant(imm, scratch);
-            self.emit_alu_rrr_extend(alu_op, scratch, rn, rd, size);
+            self.emit_alu_rrr_extend(alu_op, scratch, rn, regs::zero(), size);
         }
     }
 

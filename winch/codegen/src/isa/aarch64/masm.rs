@@ -516,7 +516,7 @@ impl Masm for MacroAssembler {
     fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) {
         match src2 {
             RegImm::Reg(src2) => {
-                self.asm.subs_rrr(src2, src1, regs::zero(), size);
+                self.asm.subs_rrr(src2, src1, size);
             }
             RegImm::Imm(v) => {
                 let imm = match v {
@@ -524,7 +524,7 @@ impl Masm for MacroAssembler {
                     I::I64(v) => v,
                     _ => unreachable!(),
                 };
-                self.asm.subs_ir(imm, src1, regs::zero(), size);
+                self.asm.subs_ir(imm, src1, size);
             }
         }
     }
