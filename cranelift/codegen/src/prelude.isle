@@ -239,6 +239,10 @@
 
 ;; Floating point operations
 
+(decl pure partial f16_min (Ieee16 Ieee16) Ieee16)
+(extern constructor f16_min f16_min)
+(decl pure partial f16_max (Ieee16 Ieee16) Ieee16)
+(extern constructor f16_max f16_max)
 (decl pure f16_neg (Ieee16) Ieee16)
 (extern constructor f16_neg f16_neg)
 (decl pure f16_abs (Ieee16) Ieee16)
@@ -301,6 +305,10 @@
 (extern constructor f64_abs f64_abs)
 (decl pure f64_copysign (Ieee64 Ieee64) Ieee64)
 (extern constructor f64_copysign f64_copysign)
+(decl pure partial f128_min (Ieee128 Ieee128) Ieee128)
+(extern constructor f128_min f128_min)
+(decl pure partial f128_max (Ieee128 Ieee128) Ieee128)
+(extern constructor f128_max f128_max)
 (decl pure f128_neg (Ieee128) Ieee128)
 (extern constructor f128_neg f128_neg)
 (decl pure f128_abs (Ieee128) Ieee128)
