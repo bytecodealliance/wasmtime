@@ -286,7 +286,8 @@ async function main() {
     // If any runtest was modified, include all ISA configs as runtests can
     // target any backend.
     if (names.includes(`cranelift/filetests/filetests/runtests`)) {
-      return config.isa !== undefined;
+      if (config.isa !== undefined)
+        return true;
     }
 
     // If any Pulley source file was modified, then run Pulley-specific configs.
