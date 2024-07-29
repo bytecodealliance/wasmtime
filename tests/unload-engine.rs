@@ -1,7 +1,7 @@
 //! A single-test executable which only tests `Engine::unload_process_handlers`
 //! is possible.
 //!
-//! It's not safe for this test to contain any other tests.
+//! It's not safe for this binary to contain any other tests.
 
 use wasmtime::*;
 
