@@ -40,7 +40,7 @@ impl ComponentTypesBuilder {
         let results = match self.flatten_types(
             &options.options,
             MAX_FLAT_RESULTS,
-            self[ty.results].types.iter().map(|ty| *ty),
+            self[ty.results].types.iter().copied(),
         ) {
             Some(list) => list,
             None => {

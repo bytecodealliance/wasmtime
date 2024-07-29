@@ -176,7 +176,10 @@ unused-lifetimes = 'warn'
 # they're all turned off by default. Selective lints are then enabled below as
 # necessary.
 all = { level = 'allow', priority = -1 }
-clone_on_copy = 'deny'
+clone_on_copy = 'warn'
+map_clone = 'warn'
+unnecessary_to_owned = 'warn'
+manual_strip = 'warn'
 
 [workspace.dependencies]
 arbitrary = { version = "1.3.1" }
