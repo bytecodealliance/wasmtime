@@ -1,6 +1,61 @@
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    let target_pointer_width = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").unwrap();
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let target = std::env::var("TARGET").unwrap();
+
+    // Print a more first-class error for 32-bit platforms as none are currently
+    // supported. Note that if Wasmtime grows support then this error probably
+    // wants to go away entirely. In the meantime the purpose of this is to
+    // help guide users locally rather than requiring deciphering of errors via
+    // issues or zulip questions.
+    if target_pointer_width == "32" {
+        eprintln!(
+            "
+
+Wasmtime does not currently support any 32-bit platforms and will fail to
+compile on these platforms. The current platform being targeted is:
+
+    target: {target}
+      arch: {target_arch}
+
+"
+        );
+        let issue = match target_arch.as_str() {
+            "x86" => Some(1980),
+            "arm" => Some(1173),
+            "riscv" => Some(8768),
+            _ => None,
+        };
+
+        match issue {
+            Some(i) => {
+                eprintln!(
+                    "\
+the tracking issue for supporting this platform is:
+
+    https://github.com/bytecodealliance/wasmtime/issues/{i}
+
+"
+                );
+            }
+            None => {
+                eprintln!(
+                    "\
+there is not tracking issue for this platform but if you would like to see
+Wasmtime support this platform please open an issue at
+
+    https://github.com/bytecodealliance/wasmtime/issues/new
+    //
+"
+                );
+            }
+        }
+
+        std::process::exit(1);
+    }
+
     #[cfg(feature = "runtime")]
     build_c_helpers();
 }
