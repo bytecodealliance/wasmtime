@@ -4,17 +4,28 @@ static mut USE_MACH_PORTS: bool = false;
 
 pub use super::signals::{wasmtime_longjmp, wasmtime_setjmp, SignalHandler};
 
-pub unsafe fn platform_init(macos_use_mach_ports: bool) {
-    USE_MACH_PORTS = macos_use_mach_ports;
-    if macos_use_mach_ports {
-        super::machports::platform_init();
-    } else {
-        super::signals::platform_init(false);
-    }
+pub enum TrapHandler {
+    Signals(super::signals::TrapHandler),
+    #[allow(dead_code)] // used for its drop
+    MachPorts(super::machports::TrapHandler),
 }
 
-pub fn using_mach_ports() -> bool {
-    unsafe { USE_MACH_PORTS }
+impl TrapHandler {
+    pub unsafe fn new(macos_use_mach_ports: bool) -> TrapHandler {
+        USE_MACH_PORTS = macos_use_mach_ports;
+        if macos_use_mach_ports {
+            TrapHandler::MachPorts(super::machports::TrapHandler::new())
+        } else {
+            TrapHandler::Signals(super::signals::TrapHandler::new(false))
+        }
+    }
+
+    pub fn validate_config(&self, macos_use_mach_ports: bool) {
+        match self {
+            TrapHandler::Signals(t) => t.validate_config(macos_use_mach_ports),
+            TrapHandler::MachPorts(_) => assert!(macos_use_mach_ports),
+        }
+    }
 }
 
 pub fn lazy_per_thread_init() {

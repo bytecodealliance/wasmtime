@@ -31,56 +31,112 @@ static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGILL: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGFPE: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
-pub unsafe fn platform_init(macos_use_mach_ports: bool) {
-    // Either mach ports shouldn't be in use or we shouldn't be on macOS,
-    // otherwise the `machports.rs` module should be used instead.
-    assert!(!macos_use_mach_ports || !cfg!(target_os = "macos"));
+pub struct TrapHandler;
 
-    let register = |slot: *mut libc::sigaction, signal: i32| {
-        let mut handler: libc::sigaction = mem::zeroed();
-        // The flags here are relatively careful, and they are...
-        //
-        // SA_SIGINFO gives us access to information like the program
-        // counter from where the fault happened.
-        //
-        // SA_ONSTACK allows us to handle signals on an alternate stack,
-        // so that the handler can run in response to running out of
-        // stack space on the main stack. Rust installs an alternate
-        // stack with sigaltstack, so we rely on that.
-        //
-        // SA_NODEFER allows us to reenter the signal handler if we
-        // crash while handling the signal, and fall through to the
-        // Breakpad handler by testing handlingSegFault.
-        handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
-        handler.sa_sigaction = trap_handler as usize;
-        libc::sigemptyset(&mut handler.sa_mask);
-        if libc::sigaction(signal, &handler, slot) != 0 {
-            panic!(
-                "unable to install signal handler: {}",
-                io::Error::last_os_error(),
-            );
-        }
-    };
+impl TrapHandler {
+    /// Installs all trap handlers.
+    ///
+    /// # Unsafety
+    ///
+    /// This function is unsafe because it's not safe to call concurrently and
+    /// it's not safe to call if the trap handlers have already been initialized
+    /// for this process.
+    pub unsafe fn new(macos_use_mach_ports: bool) -> TrapHandler {
+        // Either mach ports shouldn't be in use or we shouldn't be on macOS,
+        // otherwise the `machports.rs` module should be used instead.
+        assert!(!macos_use_mach_ports || !cfg!(target_os = "macos"));
 
+        foreach_handler(|slot, signal| {
+            let mut handler: libc::sigaction = mem::zeroed();
+            // The flags here are relatively careful, and they are...
+            //
+            // SA_SIGINFO gives us access to information like the program
+            // counter from where the fault happened.
+            //
+            // SA_ONSTACK allows us to handle signals on an alternate stack,
+            // so that the handler can run in response to running out of
+            // stack space on the main stack. Rust installs an alternate
+            // stack with sigaltstack, so we rely on that.
+            //
+            // SA_NODEFER allows us to reenter the signal handler if we
+            // crash while handling the signal, and fall through to the
+            // Breakpad handler by testing handlingSegFault.
+            handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
+            handler.sa_sigaction = trap_handler as usize;
+            libc::sigemptyset(&mut handler.sa_mask);
+            if libc::sigaction(signal, &handler, slot) != 0 {
+                panic!(
+                    "unable to install signal handler: {}",
+                    io::Error::last_os_error(),
+                );
+            }
+        });
+
+        TrapHandler
+    }
+
+    pub fn validate_config(&self, macos_use_mach_ports: bool) {
+        assert!(!macos_use_mach_ports || !cfg!(target_os = "macos"));
+    }
+}
+
+unsafe fn foreach_handler(mut f: impl FnMut(*mut libc::sigaction, i32)) {
     // Allow handling OOB with signals on all architectures
-    register(PREV_SIGSEGV.as_mut_ptr(), libc::SIGSEGV);
+    f(PREV_SIGSEGV.as_mut_ptr(), libc::SIGSEGV);
 
     // Handle `unreachable` instructions which execute `ud2` right now
-    register(PREV_SIGILL.as_mut_ptr(), libc::SIGILL);
+    f(PREV_SIGILL.as_mut_ptr(), libc::SIGILL);
 
     // x86 and s390x use SIGFPE to report division by zero
     if cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
-        register(PREV_SIGFPE.as_mut_ptr(), libc::SIGFPE);
+        f(PREV_SIGFPE.as_mut_ptr(), libc::SIGFPE);
     }
 
     // Sometimes we need to handle SIGBUS too:
     // - On Darwin, guard page accesses are raised as SIGBUS.
     if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
-        register(PREV_SIGBUS.as_mut_ptr(), libc::SIGBUS);
+        f(PREV_SIGBUS.as_mut_ptr(), libc::SIGBUS);
     }
 
     // TODO(#1980): x86-32, if we support it, will also need a SIGFPE handler.
     // TODO(#1173): ARM32, if we support it, will also need a SIGBUS handler.
+}
+
+impl Drop for TrapHandler {
+    fn drop(&mut self) {
+        unsafe {
+            foreach_handler(|slot, signal| {
+                let mut prev: libc::sigaction = mem::zeroed();
+
+                // Restore the previous handler that this signal had.
+                if libc::sigaction(signal, slot, &mut prev) != 0 {
+                    eprintln!(
+                        "unable to reinstall signal handler: {}",
+                        io::Error::last_os_error(),
+                    );
+                    libc::abort();
+                }
+
+                // If our trap handler wasn't currently listed for this process
+                // then that's a problem because we have just corrupted the
+                // signal handler state and don't know how to remove ourselves
+                // from the signal handling state. Inform the user of this and
+                // abort the process.
+                if prev.sa_sigaction != trap_handler as usize {
+                    eprintln!(
+                        "
+Wasmtime's signal handler was not the last signal handler to be installed
+in the process so it's not certain how to unload signal handlers. In this
+situation the Engine::unload_process_handlers API is not applicable and requires
+perhaps initializing libraries in a different order. The process will be aborted
+now.
+"
+                    );
+                    libc::abort();
+                }
+            });
+        }
+    }
 }
 
 unsafe extern "C" fn trap_handler(
