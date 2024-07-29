@@ -512,11 +512,13 @@ macro_rules! ieee_float {
             const SIGN_MASK: $bits_ty = 1 << (Self::EXPONENT_BITS + Self::SIGNIFICAND_BITS);
             const SIGNIFICAND_MASK: $bits_ty = $bits_ty::MAX >> (Self::EXPONENT_BITS + 1);
             const EXPONENT_MASK: $bits_ty = !Self::SIGN_MASK & !Self::SIGNIFICAND_MASK;
+            /// The positive WebAssembly canonical NaN.
+            pub const NAN: Self = Self::with_bits(Self::EXPONENT_MASK | (1 << (Self::SIGNIFICAND_BITS - 1)));
 
             /// Create a new
             #[doc = concat!("`", stringify!($name), "`")]
             /// containing the bits of `bits`.
-            pub fn with_bits(bits: $bits_ty) -> Self {
+            pub const fn with_bits(bits: $bits_ty) -> Self {
                 Self { bits }
             }
 
@@ -550,6 +552,42 @@ macro_rules! ieee_float {
                 Self::with_bits((self.bits() & !Self::SIGN_MASK) | (sign.bits() & Self::SIGN_MASK))
             }
 
+            /// Returns the minimum of `self` and `other`, following the WebAssembly/IEEE 754-2019 definition.
+            pub fn minimum(self, other: Self) -> Self {
+                // FIXME: Replace with Rust float method once it is stabilised.
+                if self.is_nan() || other.is_nan() {
+                    Self::NAN
+                } else if self.is_zero() && other.is_zero() {
+                    if self.is_negative() {
+                        self
+                    } else {
+                        other
+                    }
+                } else if self <= other {
+                    self
+                } else {
+                    other
+                }
+            }
+
+            /// Returns the maximum of `self` and `other`, following the WebAssembly/IEEE 754-2019 definition.
+            pub fn maximum(self, other: Self) -> Self {
+                // FIXME: Replace with Rust float method once it is stabilised.
+                if self.is_nan() || other.is_nan() {
+                    Self::NAN
+                } else if self.is_zero() && other.is_zero() {
+                    if self.is_positive() {
+                        self
+                    } else {
+                        other
+                    }
+                } else if self >= other {
+                    self
+                } else {
+                    other
+                }
+            }
+
             /// Create an
             #[doc = concat!("`", stringify!($name), "`")]
             /// number representing `2.0^n`.
@@ -581,6 +619,11 @@ macro_rules! ieee_float {
             /// this means checking that all the exponent bits are set and the significand is non-zero.
             pub fn is_nan(self) -> bool {
                 self.abs().bits() > Self::EXPONENT_MASK
+            }
+
+            /// Returns true if `self` has a negative sign, including 0.0, NaNs with positive sign bit and positive infinity.
+            pub fn is_positive(self) -> bool {
+                !self.is_negative()
             }
 
             /// Returns true if `self` has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
@@ -641,8 +684,8 @@ macro_rules! ieee_float {
                         // Zeros are always equal regardless of sign.
                         return Some(Ordering::Equal);
                     }
-                    let lhs_positive = !self.is_negative();
-                    let rhs_positive = !rhs.is_negative();
+                    let lhs_positive = self.is_positive();
+                    let rhs_positive = rhs.is_positive();
                     if lhs_positive != rhs_positive {
                         // Different signs: negative < positive
                         return lhs_positive.partial_cmp(&rhs_positive);

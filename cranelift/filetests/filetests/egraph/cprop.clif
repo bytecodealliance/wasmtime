@@ -313,6 +313,72 @@ block0:
 ; check: v2 = iconst.i64 0xf0de_bc9a_7856_3412
 ; nextln: return v2
 
+function %f16_fmin() -> f16 {
+block0:
+    v1 = f16const -0x1.5p6
+    v2 = f16const -0x1.5p7
+    v3 = fmin v2, v1
+    return v3
+}
+
+; check: v4 = f16const -0x1.500p7
+; check: return v4  ; v4 = -0x1.500p7
+
+function %f16_fmin_zero_1() -> f16 {
+block0:
+    v1 = f16const 0.0
+    v2 = f16const -0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: v4 = f16const -0.0
+; check: return v4  ; v4 = -0.0
+
+function %f16_fmin_zero_2() -> f16 {
+block0:
+    v1 = f16const -0.0
+    v2 = f16const 0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: v4 = f16const -0.0
+; check: return v4  ; v4 = -0.0
+
+function %f16_fmax() -> f16 {
+block0:
+    v1 = f16const -0x1.5p6
+    v2 = f16const -0x1.5p7
+    v3 = fmax v2, v1
+    return v3
+}
+
+; check: v4 = f16const -0x1.500p6
+; check: return v4  ; v4 = -0x1.500p6
+
+function %f16_fmax_zero_1() -> f16 {
+block0:
+    v1 = f16const 0.0
+    v2 = f16const -0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: v4 = f16const 0.0
+; check: return v4  ; v4 = 0.0
+
+function %f16_fmax_zero_2() -> f16 {
+block0:
+    v1 = f16const -0.0
+    v2 = f16const 0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: v4 = f16const 0.0
+; check: return v4  ; v4 = 0.0
+
 function %f16_fneg() -> f16 {
 block0:
     v1 = f16const 0.0
@@ -449,6 +515,28 @@ block0:
 ; check: v4 = f32const 0x1.500000p6
 ; check: return v4  ; v4 = 0x1.500000p6
 
+function %f32_fmin_zero_1() -> f32 {
+block0:
+    v1 = f32const 0.0
+    v2 = f32const -0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: v4 = f32const -0.0
+; check: return v4  ; v4 = -0.0
+
+function %f32_fmin_zero_2() -> f32 {
+block0:
+    v1 = f32const -0.0
+    v2 = f32const 0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: v4 = f32const -0.0
+; check: return v4  ; v4 = -0.0
+
 function %f32_fmax() -> f32 {
 block0:
     v1 = f32const 0x1.5p6
@@ -459,6 +547,28 @@ block0:
 
 ; check: v4 = f32const 0x1.500000p7
 ; check: return v4  ; v4 = 0x1.500000p7
+
+function %f32_fmax_zero_1() -> f32 {
+block0:
+    v1 = f32const 0.0
+    v2 = f32const -0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: v4 = f32const 0.0
+; check: return v4  ; v4 = 0.0
+
+function %f32_fmax_zero_2() -> f32 {
+block0:
+    v1 = f32const -0.0
+    v2 = f32const 0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: v4 = f32const 0.0
+; check: return v4  ; v4 = 0.0
 
 function %f32_fneg() -> f32 {
 block0:
@@ -596,6 +706,28 @@ block0:
 ; check: v4 = f64const -0x1.5000000000000p7
 ; check: return v4  ; v4 = -0x1.5000000000000p7
 
+function %f64_fmin_zero_1() -> f64 {
+block0:
+    v1 = f64const 0.0
+    v2 = f64const -0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: v4 = f64const -0.0
+; check: return v4  ; v4 = -0.0
+
+function %f64_fmin_zero_2() -> f64 {
+block0:
+    v1 = f64const -0.0
+    v2 = f64const 0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: v4 = f64const -0.0
+; check: return v4  ; v4 = -0.0
+
 function %f64_fmax() -> f64 {
 block0:
     v1 = f64const -0x1.5p6
@@ -606,6 +738,28 @@ block0:
 
 ; check: v4 = f64const -0x1.5000000000000p6
 ; check: return v4  ; v4 = -0x1.5000000000000p6
+
+function %f64_fmax_zero_1() -> f64 {
+block0:
+    v1 = f64const 0.0
+    v2 = f64const -0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: v4 = f64const 0.0
+; check: return v4  ; v4 = 0.0
+
+function %f64_fmax_zero_2() -> f64 {
+block0:
+    v1 = f64const -0.0
+    v2 = f64const 0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: v4 = f64const 0.0
+; check: return v4  ; v4 = 0.0
 
 function %f64_fneg() -> f64 {
 block0:
@@ -637,6 +791,78 @@ block0:
 
 ; check: v4 = f64const -NaN
 ; check: return v4  ; v4 = -NaN
+
+function %f128_fmin() -> f128 {
+block0:
+    v1 = f128const 0x1.5p6
+    v2 = f128const 0x1.5p7
+    v3 = fmin v2, v1
+    return v3
+}
+
+; check: const0 = 0x40055000000000000000000000000000
+; check: v4 = f128const const0
+; check: return v4  ; v4 = 0x1.5000000000000000000000000000p6
+
+function %f128_fmin_zero_1() -> f128 {
+block0:
+    v1 = f128const 0.0
+    v2 = f128const -0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: const1 = 0x80000000000000000000000000000000
+; check: v4 = f128const const1
+; check: return v4  ; v4 = -0.0
+
+function %f128_fmin_zero_2() -> f128 {
+block0:
+    v1 = f128const -0.0
+    v2 = f128const 0.0
+    v3 = fmin v1, v2
+    return v3
+}
+
+; check: const0 = 0x80000000000000000000000000000000
+; check: v4 = f128const const0
+; check: return v4  ; v4 = -0.0
+
+function %f128_fmax() -> f128 {
+block0:
+    v1 = f128const 0x1.5p6
+    v2 = f128const 0x1.5p7
+    v3 = fmax v2, v1
+    return v3
+}
+
+; check: const1 = 0x40065000000000000000000000000000
+; check: v4 = f128const const1
+; check: return v4  ; v4 = 0x1.5000000000000000000000000000p7
+
+function %f128_fmax_zero_1() -> f128 {
+block0:
+    v1 = f128const 0.0
+    v2 = f128const -0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: const0 = 0x00000000000000000000000000000000
+; check: v4 = f128const const0
+; check: return v4  ; v4 = 0.0
+
+function %f128_fmax_zero_2() -> f128 {
+block0:
+    v1 = f128const -0.0
+    v2 = f128const 0.0
+    v3 = fmax v1, v2
+    return v3
+}
+
+; check: const1 = 0x00000000000000000000000000000000
+; check: v4 = f128const const1
+; check: return v4  ; v4 = 0.0
 
 function %f128_fneg() -> f128 {
 block0:
