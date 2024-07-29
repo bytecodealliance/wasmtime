@@ -320,6 +320,7 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
         }
         else {
             compile_error!("unsupported platform");
+            panic!();
         }
     }
 }
