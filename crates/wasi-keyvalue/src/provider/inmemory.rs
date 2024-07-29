@@ -1,4 +1,4 @@
-use crate::{generated::wasi::keyvalue::store::KeyResponse, to_other_error, Error, Host};
+use crate::{bindings::wasi::keyvalue::store::KeyResponse, to_other_error, Error, Host};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

@@ -1,4 +1,4 @@
-use crate::{generated::wasi::keyvalue::store::KeyResponse, Error, Host};
+use crate::{bindings::wasi::keyvalue::store::KeyResponse, Error, Host};
 use anyhow::Result;
 use async_trait::async_trait;
 use redis::{aio::MultiplexedConnection, AsyncCommands, RedisError};

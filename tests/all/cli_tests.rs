@@ -1886,6 +1886,39 @@ stderr [1] :: after empty
         ])?;
         Ok(())
     }
+
+    #[tokio::test]
+    async fn cli_serve_keyvalue() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_KEYVALUE_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("-Skeyvalue");
+            cmd.arg("-Skeyvalue-in-memory-data=hello=world");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "world");
+        Ok(())
+    }
+
+    #[test]
+    fn cli_keyvalue() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Skeyvalue",
+            "-Skeyvalue-in-memory-data=atomics_key=5",
+            KEYVALUE_MAIN_COMPONENT,
+        ])?;
+        Ok(())
+    }
 }
 
 #[test]

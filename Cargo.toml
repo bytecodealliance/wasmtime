@@ -360,6 +360,7 @@ default = [
   "wasi-threads",
   "wasi-http",
   "wasi-runtime-config",
+  "wasi-keyvalue",
 
   # Most features of Wasmtime are enabled by default.
   "wat",
@@ -406,6 +407,7 @@ wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 wasi-runtime-config = ["dep:wasmtime-wasi-runtime-config"]
+wasi-keyvalue = ["dep:wasmtime-wasi-keyvalue", "wasmtime-wasi-keyvalue/redis"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",

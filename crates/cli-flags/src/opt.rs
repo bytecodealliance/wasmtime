@@ -5,7 +5,7 @@
 //! specifying options in a struct-like syntax where all other boilerplate about
 //! option parsing is contained exclusively within this module.
 
-use crate::{WasiNnGraph, WasiRuntimeConfigVariable};
+use crate::{KeyValuePair, WasiNnGraph};
 use anyhow::{bail, Result};
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 use clap::error::{Error, ErrorKind};
@@ -397,12 +397,12 @@ impl WasmtimeOptionValue for WasiNnGraph {
     }
 }
 
-impl WasmtimeOptionValue for WasiRuntimeConfigVariable {
+impl WasmtimeOptionValue for KeyValuePair {
     const VAL_HELP: &'static str = "=<name>=<val>";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
         let mut parts = val.splitn(2, "=");
-        Ok(WasiRuntimeConfigVariable {
+        Ok(KeyValuePair {
             key: parts.next().unwrap().to_string(),
             value: match parts.next() {
                 Some(part) => part.into(),

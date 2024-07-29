@@ -32,7 +32,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
 
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::add_to_linker_async(&mut linker)?;
-    wasmtime_wasi_keyvalue::add_to_linker(&mut linker, |h: &mut Ctx| {
+    wasmtime_wasi_keyvalue::add_to_linker_async(&mut linker, |h: &mut Ctx| {
         WasiKeyValue::new(&h.wasi_keyvalue_ctx, &mut h.table)
     })?;
 

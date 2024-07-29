@@ -25,6 +25,8 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttpCtx;
+#[cfg(feature = "wasi-keyvalue")]
+use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-runtime-config")]
 use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
@@ -701,6 +703,60 @@ impl RunCommand {
             }
         }
 
+        if self.run.common.wasi.keyvalue == Some(true) {
+            #[cfg(not(feature = "wasi-keyvalue"))]
+            {
+                bail!("Cannot enable wasi-keyvalue when the binary is not compiled with this feature.");
+            }
+            #[cfg(all(feature = "wasi-keyvalue", feature = "component-model"))]
+            {
+                match linker {
+                    CliLinker::Core(_) => {
+                        bail!("Cannot enable wasi-keyvalue for core wasm modules");
+                    }
+                    CliLinker::Component(linker) => {
+                        let ctx = WasiKeyValueCtxBuilder::new()
+                            .in_memory_data(
+                                self.run
+                                    .common
+                                    .wasi
+                                    .keyvalue_in_memory_data
+                                    .iter()
+                                    .map(|v| (v.key.clone(), v.value.clone())),
+                            )
+                            .allow_redis_hosts(&self.run.common.wasi.keyvalue_redis_host)
+                            .redis_connection_timeout(
+                                self.run
+                                    .common
+                                    .wasi
+                                    .keyvalue_redis_connection_timeout
+                                    .unwrap_or(std::time::Duration::MAX),
+                            )
+                            .redis_response_timeout(
+                                self.run
+                                    .common
+                                    .wasi
+                                    .keyvalue_redis_response_timeout
+                                    .unwrap_or(std::time::Duration::MAX),
+                            )
+                            .build();
+
+                        wasmtime_wasi_keyvalue::add_to_linker_sync(linker, |h| {
+                            let preview2_ctx =
+                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
+                            let preview2_ctx =
+                                Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
+                            WasiKeyValue::new(
+                                Arc::get_mut(h.wasi_keyvalue.as_mut().unwrap()).unwrap(),
+                                preview2_ctx.table(),
+                            )
+                        })?;
+                        store.data_mut().wasi_keyvalue = Some(Arc::new(ctx));
+                    }
+                }
+            }
+        }
+
         if self.run.common.wasi.threads == Some(true) {
             #[cfg(not(feature = "wasi-threads"))]
             {
@@ -848,6 +904,8 @@ struct Host {
 
     #[cfg(feature = "wasi-runtime-config")]
     wasi_runtime_config: Option<Arc<WasiRuntimeConfigVariables>>,
+    #[cfg(feature = "wasi-keyvalue")]
+    wasi_keyvalue: Option<Arc<WasiKeyValueCtx>>,
 }
 
 impl Host {

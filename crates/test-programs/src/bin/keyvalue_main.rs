@@ -1,10 +1,7 @@
 use test_programs::keyvalue::wasi::keyvalue::{atomics, batch, store};
 
 fn main() {
-    let identifier = std::env::var_os("IDENTIFIER")
-        .unwrap()
-        .into_string()
-        .unwrap();
+    let identifier = std::env::var("IDENTIFIER").unwrap_or("".to_string());
     let bucket = store::open(&identifier).unwrap();
 
     if identifier != "" {

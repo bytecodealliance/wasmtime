@@ -41,7 +41,7 @@
 //!     let mut linker = Linker::<Ctx>::new(&engine);
 //!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
 //!     // add `wasi-runtime-config` world's interfaces to the linker
-//!     wasmtime_wasi_keyvalue::add_to_linker(&mut linker, |h: &mut Ctx| {
+//!     wasmtime_wasi_keyvalue::add_to_linker_async(&mut linker, |h: &mut Ctx| {
 //!         WasiKeyValue::new(&h.wasi_keyvalue_ctx, &mut h.table)
 //!     })?;
 //!
@@ -68,29 +68,17 @@
 
 #![deny(missing_docs)]
 
+mod bindings;
 mod provider;
-mod generated {
-    wasmtime::component::bindgen!({
-        path: "wit",
-        world: "wasi:keyvalue/imports",
-        trappable_imports: true,
-        async: true,
-        with: {
-            "wasi:keyvalue/store/bucket": crate::Bucket,
-        },
-        trappable_error_type: {
-            "wasi:keyvalue/store/error" => crate::Error,
-        },
-    });
-}
 
-use self::generated::wasi::keyvalue;
+use self::bindings::{sync::wasi::keyvalue as keyvalue_sync, wasi::keyvalue};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Display;
 use url::Url;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
+use wasmtime_wasi::runtime::in_tokio;
 
 #[doc(hidden)]
 pub enum Error {
@@ -411,13 +399,116 @@ impl keyvalue::batch::Host for WasiKeyValue<'_> {
 }
 
 /// Add all the `wasi-keyvalue` world's interfaces to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T: Send>(
+///
+/// This function will add the `async` variant of all interfaces into the
+/// `Linker` provided. By `async` this means that this function is only
+/// compatible with [`Config::async_support(true)`][wasmtime::Config::async_support].
+/// For embeddings with async support disabled see [`add_to_linker_sync`] instead.
+pub fn add_to_linker_async<T: Send>(
     l: &mut wasmtime::component::Linker<T>,
     f: impl Fn(&mut T) -> WasiKeyValue<'_> + Send + Sync + Copy + 'static,
 ) -> Result<()> {
     keyvalue::store::add_to_linker_get_host(l, f)?;
     keyvalue::atomics::add_to_linker_get_host(l, f)?;
     keyvalue::batch::add_to_linker_get_host(l, f)?;
+    Ok(())
+}
+
+impl keyvalue_sync::store::Host for WasiKeyValue<'_> {
+    fn open(&mut self, identifier: String) -> Result<Resource<Bucket>, Error> {
+        in_tokio(async { keyvalue::store::Host::open(self, identifier).await })
+    }
+
+    fn convert_error(&mut self, err: Error) -> Result<keyvalue_sync::store::Error> {
+        match err {
+            Error::NoSuchStore => Ok(keyvalue_sync::store::Error::NoSuchStore),
+            Error::AccessDenied => Ok(keyvalue_sync::store::Error::AccessDenied),
+            Error::Other(e) => Ok(keyvalue_sync::store::Error::Other(e)),
+        }
+    }
+}
+
+impl keyvalue_sync::store::HostBucket for WasiKeyValue<'_> {
+    fn get(&mut self, bucket: Resource<Bucket>, key: String) -> Result<Option<Vec<u8>>, Error> {
+        in_tokio(async { keyvalue::store::HostBucket::get(self, bucket, key).await })
+    }
+
+    fn set(&mut self, bucket: Resource<Bucket>, key: String, value: Vec<u8>) -> Result<(), Error> {
+        in_tokio(async { keyvalue::store::HostBucket::set(self, bucket, key, value).await })
+    }
+
+    fn delete(&mut self, bucket: Resource<Bucket>, key: String) -> Result<(), Error> {
+        in_tokio(async { keyvalue::store::HostBucket::delete(self, bucket, key).await })
+    }
+
+    fn exists(&mut self, bucket: Resource<Bucket>, key: String) -> Result<bool, Error> {
+        in_tokio(async { keyvalue::store::HostBucket::exists(self, bucket, key).await })
+    }
+
+    fn list_keys(
+        &mut self,
+        bucket: Resource<Bucket>,
+        cursor: Option<u64>,
+    ) -> Result<keyvalue_sync::store::KeyResponse, Error> {
+        in_tokio(async {
+            let resp = keyvalue::store::HostBucket::list_keys(self, bucket, cursor).await?;
+            Ok(keyvalue_sync::store::KeyResponse {
+                keys: resp.keys,
+                cursor: resp.cursor,
+            })
+        })
+    }
+
+    fn drop(&mut self, bucket: Resource<Bucket>) -> Result<()> {
+        keyvalue::store::HostBucket::drop(self, bucket)
+    }
+}
+
+impl keyvalue_sync::atomics::Host for WasiKeyValue<'_> {
+    fn increment(
+        &mut self,
+        bucket: Resource<Bucket>,
+        key: String,
+        delta: u64,
+    ) -> Result<u64, Error> {
+        in_tokio(async { keyvalue::atomics::Host::increment(self, bucket, key, delta).await })
+    }
+}
+
+impl keyvalue_sync::batch::Host for WasiKeyValue<'_> {
+    fn get_many(
+        &mut self,
+        bucket: Resource<Bucket>,
+        keys: Vec<String>,
+    ) -> Result<Vec<Option<(String, Vec<u8>)>>, Error> {
+        in_tokio(async { keyvalue::batch::Host::get_many(self, bucket, keys).await })
+    }
+
+    fn set_many(
+        &mut self,
+        bucket: Resource<Bucket>,
+        key_values: Vec<(String, Vec<u8>)>,
+    ) -> Result<(), Error> {
+        in_tokio(async { keyvalue::batch::Host::set_many(self, bucket, key_values).await })
+    }
+
+    fn delete_many(&mut self, bucket: Resource<Bucket>, keys: Vec<String>) -> Result<(), Error> {
+        in_tokio(async { keyvalue::batch::Host::delete_many(self, bucket, keys).await })
+    }
+}
+
+/// Add all the `wasi-keyvalue` world's interfaces to a [`wasmtime::component::Linker`].
+///
+/// This function will add the `sync` variant of all interfaces into the
+/// `Linker` provided. For embeddings with async support see
+/// [`add_to_linker_async`] instead.
+pub fn add_to_linker_sync<T>(
+    l: &mut wasmtime::component::Linker<T>,
+    f: impl Fn(&mut T) -> WasiKeyValue<'_> + Send + Sync + Copy + 'static,
+) -> Result<()> {
+    keyvalue_sync::store::add_to_linker_get_host(l, f)?;
+    keyvalue_sync::atomics::add_to_linker_get_host(l, f)?;
+    keyvalue_sync::batch::add_to_linker_get_host(l, f)?;
     Ok(())
 }
 
