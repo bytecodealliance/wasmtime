@@ -146,6 +146,8 @@ target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime/conf.h.in
   ${WASMTIME_GENERATED_CONF_H})
+add_custom_target(conf_h
+  DEPENDS ${WASMTIME_GENERATED_CONF_H})
 
 include(GNUInstallDirs)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
