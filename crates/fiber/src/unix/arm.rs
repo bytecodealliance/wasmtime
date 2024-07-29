@@ -8,7 +8,7 @@
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
 
-use wasmtime_asm_macros::{asm_func, asm_sym};
+use wasmtime_asm_macros::asm_func;
 
 // fn(top_of_stack(%r0): *mut u8)
 asm_func!(
@@ -36,7 +36,7 @@ asm_func!(
 asm_func!(
     wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
     "
-        adr r3, wasmtime_fiber_start
+        adr r3, {start}
         str r3, [r0, #-0x0c] // => lr
         str r0, [r0, #-0x10] // => r11
         str r1, [r0, #-0x14] // => r10
@@ -46,6 +46,7 @@ asm_func!(
         str r3, [r0, #-0x08]
         bx lr
     ",
+    start = sym super::wasmtime_fiber_start,
 );
 
 asm_func!(
