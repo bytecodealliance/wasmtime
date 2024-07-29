@@ -11,7 +11,7 @@ pub(crate) fn get_fact_or_default<I: VCodeInst>(vcode: &VCode<I>, reg: Reg, widt
     );
     vcode
         .vreg_fact(reg.into())
-        .map(|f| f.clone())
+        .cloned()
         .unwrap_or_else(|| Fact::max_range_for_width(width))
 }
 

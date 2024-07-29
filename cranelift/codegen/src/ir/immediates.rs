@@ -218,9 +218,9 @@ fn parse_u64(s: &str) -> Result<u64, &'static str> {
 
     if s.starts_with("-0x") {
         return Err("Invalid character in hexadecimal number");
-    } else if s.starts_with("0x") {
+    } else if let Some(num) = s.strip_prefix("0x") {
         // Hexadecimal.
-        for ch in s[2..].chars() {
+        for ch in num.chars() {
             match ch.to_digit(16) {
                 Some(digit) => {
                     digits += 1;
@@ -934,10 +934,10 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u128, &'static str> {
     debug_assert!(1 + w + t <= 128, "Too large IEEE format for u128");
     debug_assert!((t + w + 1).is_power_of_two(), "Unexpected IEEE format size");
 
-    let (sign_bit, s2) = if s.starts_with('-') {
-        (1u128 << (t + w), &s[1..])
-    } else if s.starts_with('+') {
-        (0, &s[1..])
+    let (sign_bit, s2) = if let Some(num) = s.strip_prefix('-') {
+        (1u128 << (t + w), num)
+    } else if let Some(num) = s.strip_prefix('+') {
+        (0, num)
     } else {
         (0, s)
     };
@@ -959,18 +959,18 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u128, &'static str> {
             // Canonical quiet NaN: e = max, t = quiet.
             return Ok(sign_bit | max_e_bits | quiet_bit);
         }
-        if s2.starts_with("NaN:0x") {
+        if let Some(nan) = s2.strip_prefix("NaN:0x") {
             // Quiet NaN with payload.
-            return match u128::from_str_radix(&s2[6..], 16) {
+            return match u128::from_str_radix(nan, 16) {
                 Ok(payload) if payload < quiet_bit => {
                     Ok(sign_bit | max_e_bits | quiet_bit | payload)
                 }
                 _ => Err("Invalid NaN payload"),
             };
         }
-        if s2.starts_with("sNaN:0x") {
+        if let Some(nan) = s2.strip_prefix("sNaN:0x") {
             // Signaling NaN with payload.
-            return match u128::from_str_radix(&s2[7..], 16) {
+            return match u128::from_str_radix(nan, 16) {
                 Ok(payload) if 0 < payload && payload < quiet_bit => {
                     Ok(sign_bit | max_e_bits | payload)
                 }

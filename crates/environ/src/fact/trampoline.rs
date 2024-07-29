@@ -432,13 +432,13 @@ impl Compiler<'_, '_> {
         let src_tys = self.types[src_tys]
             .types
             .iter()
-            .map(|ty| *ty)
+            .copied()
             .collect::<Vec<_>>();
         let dst_tys = self.types[adapter.lower.ty].results;
         let dst_tys = self.types[dst_tys]
             .types
             .iter()
-            .map(|ty| *ty)
+            .copied()
             .collect::<Vec<_>>();
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;

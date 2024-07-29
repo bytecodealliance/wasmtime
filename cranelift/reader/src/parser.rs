@@ -788,9 +788,9 @@ impl<'a> Parser<'a> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
-            if text.starts_with("0x") {
+            if let Some(num) = text.strip_prefix("0x") {
                 // Parse it as a u8 in hexadecimal form.
-                u8::from_str_radix(&text[2..], 16)
+                u8::from_str_radix(num, 16)
                     .map_err(|_| self.error("unable to parse u8 as a hexadecimal immediate"))
             } else {
                 // Parse it as a u8 to check for overflow and other issues.
