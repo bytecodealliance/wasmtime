@@ -5,8 +5,8 @@ use crate::masm::{FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
-    Cond, FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
-    ImmLogic, ImmShift, ScalarSize,
+    BitOp, Cond, FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm,
+    FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
@@ -360,6 +360,16 @@ impl Assembler {
         }
     }
 
+    /// Count Leading Zeros.
+    pub fn clz(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_bit_rr(BitOp::Clz, rn, rd, size);
+    }
+
+    /// Reverse Bits reverses the bit order in a register.
+    pub fn rbit(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_bit_rr(BitOp::RBit, rn, rd, size);
+    }
+
     /// Float add with three registers.
     pub fn fadd_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_fpu_rrr(FPUOp2::Add, rm, rn, rd, size);
@@ -590,6 +600,15 @@ impl Assembler {
     fn emit_fpu_round(&mut self, op: FpuRoundMode, rn: Reg, rd: Reg) {
         self.emit(Inst::FpuRound {
             op: op,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
+    fn emit_bit_rr(&mut self, op: BitOp, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::BitRR {
+            op,
+            size: size.into(),
             rd: Writable::from_reg(rd.into()),
             rn: rn.into(),
         });

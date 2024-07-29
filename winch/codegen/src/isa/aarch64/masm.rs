@@ -542,12 +542,14 @@ impl Masm for MacroAssembler {
         self.asm.cset(dst, kind.into());
     }
 
-    fn clz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
-        todo!()
+    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.asm.clz(src, dst, size);
     }
 
-    fn ctz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
-        todo!()
+    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let scratch = regs::scratch();
+        self.asm.rbit(src, scratch, size);
+        self.asm.clz(scratch, dst, size);
     }
 
     fn wrap(&mut self, _src: Reg, _dst: Reg) {
