@@ -3,9 +3,9 @@
 use super::{address::Address, regs};
 use crate::masm::{FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
-use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
+use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{self, UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
-    BitOp, Cond, FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm,
+    BitOp, BranchTarget, Cond, FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRIMod, FPURightShiftImm,
     FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
 use cranelift_codegen::{
@@ -472,6 +472,13 @@ impl Assembler {
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {});
+    }
+
+    /// An unconditional branch.
+    pub fn jmp(&mut self, target: MachLabel) {
+        self.emit(Inst::Jump {
+            dest: BranchTarget::Label(target),
+        });
     }
 
     /// Conditional Set sets the destination register to 1 if the condition

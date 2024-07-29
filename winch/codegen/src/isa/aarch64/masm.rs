@@ -580,8 +580,8 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn jmp(&mut self, _target: MachLabel) {
-        todo!()
+    fn jmp(&mut self, target: MachLabel) {
+        self.asm.jmp(target);
     }
 
     fn unreachable(&mut self) {
