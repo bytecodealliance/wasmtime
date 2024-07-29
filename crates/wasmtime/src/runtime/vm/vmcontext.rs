@@ -1018,7 +1018,7 @@ pub union ValRaw {
 // matched in C.
 const _: () = {
     assert!(mem::size_of::<ValRaw>() == 16);
-    assert!(mem::align_of::<ValRaw>() == 8);
+    assert!(mem::align_of::<ValRaw>() == mem::align_of::<u64>());
 };
 
 // This type is just a bag-of-bits so it's up to the caller to figure out how

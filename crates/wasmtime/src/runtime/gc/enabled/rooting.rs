@@ -200,7 +200,7 @@ pub struct GcRootIndex {
 const _: () = {
     // NB: these match the C API which should also be updated if this changes
     assert!(mem::size_of::<GcRootIndex>() == 16);
-    assert!(mem::align_of::<GcRootIndex>() == 8);
+    assert!(mem::align_of::<GcRootIndex>() == mem::align_of::<u64>());
 };
 
 impl GcRootIndex {
@@ -1302,9 +1302,9 @@ const _: () = {
 
     // NB: these match the C API which should also be updated if this changes
     assert!(mem::size_of::<ManuallyRooted<AnyRef>>() == 16);
-    assert!(mem::align_of::<ManuallyRooted<AnyRef>>() == 8);
+    assert!(mem::align_of::<ManuallyRooted<AnyRef>>() == mem::align_of::<u64>());
     assert!(mem::size_of::<ManuallyRooted<ExternRef>>() == 16);
-    assert!(mem::align_of::<ManuallyRooted<ExternRef>>() == 8);
+    assert!(mem::align_of::<ManuallyRooted<ExternRef>>() == mem::align_of::<u64>());
 };
 
 impl<T: GcRef> Debug for ManuallyRooted<T> {

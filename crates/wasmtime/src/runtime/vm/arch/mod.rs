@@ -10,23 +10,44 @@
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         mod x86_64;
-        pub use x86_64::*;
+        use x86_64 as imp;
     } else if #[cfg(target_arch = "aarch64")] {
         mod aarch64;
-        pub use aarch64::*;
+        use aarch64 as imp;
     } else if #[cfg(target_arch = "s390x")] {
         mod s390x;
-        pub use s390x::*;
+        use s390x as imp;
     } else if #[cfg(target_arch = "riscv64")] {
         mod riscv64;
-        pub use riscv64::*;
+        use riscv64 as imp;
     } else {
-        compile_error!(
-            "Wasmtime is being compiled for an architecture \
-             that it does not support. If this architecture is \
-             one you would like to see supported you may file an \
-             issue on Wasmtime's issue tracker: \
-             https://github.com/bytecodealliance/wasmtime/issues/new\
-        ");
+        mod unsupported;
+        use unsupported as imp;
     }
+}
+
+// Functions defined in this module but all the implementations delegate to each
+// `imp` module. This exists to assert that each module internally provides the
+// same set of functionality with the same types for all architectures.
+
+pub fn get_stack_pointer() -> usize {
+    imp::get_stack_pointer()
+}
+
+pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
+    imp::get_next_older_pc_from_fp(fp)
+}
+
+pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = imp::NEXT_OLDER_FP_FROM_FP_OFFSET;
+
+pub fn reached_entry_sp(fp: usize, entry_sp: usize) -> bool {
+    imp::reached_entry_sp(fp, entry_sp)
+}
+
+pub fn assert_entry_sp_is_aligned(sp: usize) {
+    imp::assert_entry_sp_is_aligned(sp)
+}
+
+pub fn assert_fp_is_aligned(fp: usize) {
+    imp::assert_fp_is_aligned(fp)
 }
