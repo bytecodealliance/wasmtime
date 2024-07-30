@@ -201,10 +201,6 @@ criteria = "safe-to-deploy"
 version = "0.8.11"
 criteria = "safe-to-deploy"
 
-[[exemptions.bincode]]
-version = "1.3.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.bitflags]]
 version = "1.3.2"
 criteria = "safe-to-deploy"
@@ -216,10 +212,6 @@ criteria = "safe-to-deploy"
 [[exemptions.capstone-sys]]
 version = "0.16.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.cast]]
-version = "0.2.7"
-criteria = "safe-to-run"
 
 [[exemptions.combine]]
 version = "4.6.7"
@@ -269,21 +261,9 @@ criteria = "safe-to-deploy"
 version = "2.0.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.dirs-next]]
-version = "2.0.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.dirs-sys-next]]
 version = "0.1.2"
 criteria = "safe-to-deploy"
-
-[[exemptions.downcast-rs]]
-version = "1.2.0"
-criteria = "safe-to-run"
-
-[[exemptions.egg]]
-version = "0.6.0"
-criteria = "safe-to-run"
 
 [[exemptions.encode_unicode]]
 version = "0.3.6"
@@ -296,10 +276,6 @@ criteria = "safe-to-deploy"
 [[exemptions.fallible-iterator]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.fslock]]
-version = "0.1.8"
-criteria = "safe-to-run"
 
 [[exemptions.futures-task]]
 version = "0.3.27"
@@ -322,11 +298,6 @@ criteria = "safe-to-deploy"
 [[exemptions.gimli]]
 version = "0.26.1"
 criteria = "safe-to-deploy"
-
-[[exemptions.h2]]
-version = "0.3.19"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
 
 [[exemptions.h2]]
 version = "0.4.4"
@@ -401,11 +372,6 @@ version = "0.6.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.mio]]
-version = "0.8.6"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
-
-[[exemptions.mio]]
 version = "0.8.11"
 criteria = "safe-to-deploy"
 
@@ -418,24 +384,8 @@ version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.object]]
-version = "0.32.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.object]]
 version = "0.36.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.ocaml-boxroot-sys]]
-version = "0.2.0"
-criteria = "safe-to-run"
-
-[[exemptions.ocaml-interop]]
-version = "0.8.8"
-criteria = "safe-to-run"
-
-[[exemptions.ocaml-sys]]
-version = "0.22.3"
-criteria = "safe-to-run"
 
 [[exemptions.once_cell]]
 version = "1.12.0"
@@ -448,18 +398,6 @@ criteria = "safe-to-deploy"
 [[exemptions.openvino-sys]]
 version = "0.4.1"
 criteria = "safe-to-deploy"
-
-[[exemptions.plotters]]
-version = "0.3.1"
-criteria = "safe-to-run"
-
-[[exemptions.plotters-backend]]
-version = "0.3.2"
-criteria = "safe-to-run"
-
-[[exemptions.plotters-svg]]
-version = "0.3.1"
-criteria = "safe-to-run"
 
 [[exemptions.ppv-lite86]]
 version = "0.2.16"
@@ -510,16 +448,7 @@ version = "2.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.ring]]
-version = "0.16.20"
-criteria = "safe-to-deploy"
-notes = "contains assembly language and object file implementations of crypto primitives for a very large number of platforms"
-
-[[exemptions.ring]]
 version = "0.17.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls]]
-version = "0.22.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls]]
@@ -563,10 +492,6 @@ version = "2.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.spin]]
-version = "0.5.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.spin]]
 version = "0.9.4"
 criteria = "safe-to-deploy"
 
@@ -578,10 +503,6 @@ criteria = "safe-to-deploy"
 version = "0.10.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.symbolic_expressions]]
-version = "5.0.3"
-criteria = "safe-to-run"
-
 [[exemptions.tempfile]]
 version = "3.3.0"
 criteria = "safe-to-deploy"
@@ -589,10 +510,6 @@ criteria = "safe-to-deploy"
 [[exemptions.terminal_size]]
 version = "0.1.17"
 criteria = "safe-to-deploy"
-
-[[exemptions.tinytemplate]]
-version = "1.2.1"
-criteria = "safe-to-run"
 
 [[exemptions.tokio]]
 version = "1.29.1"
@@ -635,10 +552,6 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.v8]]
-version = "0.86.0"
-criteria = "safe-to-run"
-
 [[exemptions.wait-timeout]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
@@ -646,22 +559,6 @@ criteria = "safe-to-deploy"
 [[exemptions.wasi]]
 version = "0.11.0+wasi-snapshot-preview1"
 criteria = "safe-to-deploy"
-
-[[exemptions.wasmi]]
-version = "0.31.1"
-criteria = "safe-to-run"
-
-[[exemptions.wasmi_arena]]
-version = "0.4.1"
-criteria = "safe-to-run"
-
-[[exemptions.wasmi_core]]
-version = "0.13.0"
-criteria = "safe-to-run"
-
-[[exemptions.wasmparser-nostd]]
-version = "0.100.1"
-criteria = "safe-to-run"
 
 [[exemptions.web-sys]]
 version = "0.3.57"
@@ -682,14 +579,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.winapi-x86_64-pc-windows-gnu]]
 version = "0.4.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.zerocopy]]
-version = "0.7.32"
-criteria = "safe-to-deploy"
-
-[[exemptions.zerocopy-derive]]
-version = "0.7.32"
 criteria = "safe-to-deploy"
 
 [[exemptions.zeroize]]
