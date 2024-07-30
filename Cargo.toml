@@ -246,7 +246,7 @@ byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-arra
 regalloc2 = "0.9.3"
 
 # cap-std family:
-target-lexicon = "0.12.13"
+target-lexicon = "0.12.16"
 cap-std = "3.0.0"
 cap-rand = { version = "3.0.0", features = ["small_rng"] }
 cap-fs-ext = "3.0.0"

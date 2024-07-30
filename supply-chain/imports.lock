@@ -41,6 +41,10 @@ audited_as = "0.108.1"
 version = "0.111.0"
 audited_as = "0.109.0"
 
+[[unpublished.cranelift-bitset]]
+version = "0.111.0"
+audited_as = "0.110.1"
+
 [[unpublished.cranelift-codegen]]
 version = "0.107.0"
 audited_as = "0.105.2"
@@ -1159,6 +1163,12 @@ when = "2024-06-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-bitset]]
+version = "0.110.1"
+when = "2024-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-codegen]]
 version = "0.105.2"
 when = "2024-02-28"
@@ -1950,6 +1960,13 @@ when = "2024-01-02"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
+
+[[publisher.target-lexicon]]
+version = "0.12.16"
+when = "2024-07-30"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
 
 [[publisher.termcolor]]
 version = "1.1.3"
