@@ -68,7 +68,7 @@ fn set_up_memory(store: &mut Store<()>, instance: Instance) -> (usize, usize) {
         .unwrap();
     }
 
-    println!("memory: base={:?}, length={}", base, length);
+    println!("memory: base={base:?}, length={length}");
 
     (base as usize, length)
 }
@@ -94,7 +94,7 @@ fn handle_sigsegv(
             )
             .unwrap();
         }
-        println!("signal handled: {}", result);
+        println!("signal handled: {result}");
         result
     } else {
         // Otherwise, we forward to wasmtime's signal handler.

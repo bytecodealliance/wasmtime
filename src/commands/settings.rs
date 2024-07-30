@@ -156,7 +156,7 @@ impl SettingsCommand {
             println!("Settings inferred for the current host:");
 
             for name in inferred {
-                println!("  {}", name);
+                println!("  {name}");
             }
         }
 
@@ -169,7 +169,7 @@ impl SettingsCommand {
         }
 
         println!();
-        println!("{}", header);
+        println!("{header}");
 
         let width = settings.iter().map(|s| s.0.name.len()).max().unwrap_or(0);
 

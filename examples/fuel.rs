@@ -21,12 +21,12 @@ fn main() -> Result<()> {
             Ok(v) => v,
             Err(e) => {
                 assert_eq!(e.downcast::<Trap>()?, Trap::OutOfFuel);
-                println!("Exhausted fuel computing fib({})", n);
+                println!("Exhausted fuel computing fib({n})");
                 break;
             }
         };
         let fuel_consumed = fuel_before - store.get_fuel().unwrap();
-        println!("fib({}) = {} [consumed {} fuel]", n, output, fuel_consumed);
+        println!("fib({n}) = {output} [consumed {fuel_consumed} fuel]");
         store.set_fuel(10_000)?;
     }
     Ok(())

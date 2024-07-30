@@ -40,7 +40,7 @@ fn main() -> Result<()> {
     let (a, b) = g.call(&mut store, (1, 3))?;
 
     println!("Printing result...");
-    println!("> {} {}", a, b);
+    println!("> {a} {b}");
 
     assert_eq!(a, 4);
     assert_eq!(b, 2);
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
     let results = round_trip_many.call(&mut store, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9))?;
 
     println!("Printing result...");
-    println!("> {:?}", results);
+    println!("> {results:?}");
     assert_eq!(results, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
 
     Ok(())

@@ -62,7 +62,7 @@ mod not_for_windows {
         }
 
         fn grow_to(&mut self, new_size: usize) -> wasmtime::Result<()> {
-            println!("grow to {:x}", new_size);
+            println!("grow to {new_size:x}");
             let delta = new_size - self.used_wasm_bytes;
             unsafe {
                 let start = (self.mem as *mut u8).add(self.used_wasm_bytes) as _;

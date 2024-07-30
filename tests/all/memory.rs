@@ -28,12 +28,11 @@ fn module(engine: &Engine) -> Result<Module> {
         {
             for (j, instr) in instr.iter().enumerate() {
                 wat.push_str(&format!(
-                    "(func (export \"{} {} v{}\") (param i32)\n",
-                    width, offset, j
+                    "(func (export \"{width} {offset} v{j}\") (param i32)\n"
                 ));
                 wat.push_str("local.get 0\n");
                 wat.push_str(instr);
-                wat.push_str(&format!(" offset={}\n", offset));
+                wat.push_str(&format!(" offset={offset}\n"));
                 wat.push_str("drop\n)");
             }
         }

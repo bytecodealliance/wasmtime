@@ -55,7 +55,7 @@ fn test_anyhow_error_return() -> Result<()> {
 
     let e = run_func.call(&mut store, ()).unwrap_err();
     assert!(!e.to_string().contains("test 1234"));
-    assert!(format!("{:?}", e).contains("Caused by:\n    test 1234"));
+    assert!(format!("{e:?}").contains("Caused by:\n    test 1234"));
 
     assert!(e.downcast_ref::<Trap>().is_none());
     assert!(e.downcast_ref::<WasmBacktrace>().is_some());
@@ -95,8 +95,8 @@ fn test_trap_return_downcast() -> Result<()> {
         .call(&mut store, ())
         .err()
         .expect("error calling function");
-    let dbg = format!("{:?}", e);
-    println!("{}", dbg);
+    let dbg = format!("{e:?}");
+    println!("{dbg}");
 
     assert!(!e.to_string().contains("my trap"));
     assert!(dbg.contains("Caused by:\n    my trap"));
@@ -107,7 +107,7 @@ fn test_trap_return_downcast() -> Result<()> {
         .downcast_ref::<WasmBacktrace>()
         .expect("error downcasts to WasmBacktrace");
     assert_eq!(bt.frames().len(), 1);
-    println!("{:?}", bt);
+    println!("{bt:?}");
 
     Ok(())
 }
@@ -624,7 +624,7 @@ fn present_after_module_drop() -> Result<()> {
     return Ok(());
 
     fn assert_trap(t: Error) {
-        println!("{:?}", t);
+        println!("{t:?}");
         let trace = t.downcast_ref::<WasmBacktrace>().unwrap().frames();
         assert_eq!(trace.len(), 1);
         assert_eq!(trace[0].func_index(), 0);

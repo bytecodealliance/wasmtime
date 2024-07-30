@@ -508,7 +508,7 @@ impl RunCommand {
             .call(&mut *store, &values, &mut results)
             .with_context(|| {
                 if let Some(name) = &self.invoke {
-                    format!("failed to invoke `{}`", name)
+                    format!("failed to invoke `{name}`")
                 } else {
                     format!("failed to invoke command default")
                 }
@@ -527,8 +527,8 @@ impl RunCommand {
 
         for result in results {
             match result {
-                Val::I32(i) => println!("{}", i),
-                Val::I64(i) => println!("{}", i),
+                Val::I32(i) => println!("{i}"),
+                Val::I64(i) => println!("{i}"),
                 Val::F32(f) => println!("{}", f32::from_bits(f)),
                 Val::F64(f) => println!("{}", f64::from_bits(f)),
                 Val::V128(i) => println!("{}", i.as_u128()),
@@ -558,10 +558,10 @@ impl RunCommand {
             .unwrap_or_else(|| "unknown");
 
         if let Err(coredump_err) = write_core_dump(store, &err, &source_name, coredump_path) {
-            eprintln!("warning: coredump failed to generate: {}", coredump_err);
+            eprintln!("warning: coredump failed to generate: {coredump_err}");
             err
         } else {
-            err.context(format!("core dumped at {}", coredump_path))
+            err.context(format!("core dumped at {coredump_path}"))
         }
     }
 
@@ -847,7 +847,7 @@ impl RunCommand {
 
         for (host, guest) in self.run.dirs.iter() {
             let dir = Dir::open_ambient_dir(host, ambient_authority())
-                .with_context(|| format!("failed to open directory '{}'", host))?;
+                .with_context(|| format!("failed to open directory '{host}'"))?;
             builder.preopened_dir(dir, guest)?;
         }
 
@@ -989,9 +989,9 @@ fn write_core_dump(
     let core_dump = core_dump.serialize(store, name);
 
     let mut core_dump_file =
-        File::create(path).context(format!("failed to create file at `{}`", path))?;
+        File::create(path).context(format!("failed to create file at `{path}`"))?;
     core_dump_file
         .write_all(&core_dump)
-        .with_context(|| format!("failed to write core dump file at `{}`", path))?;
+        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
     Ok(())
 }

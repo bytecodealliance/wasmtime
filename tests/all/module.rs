@@ -10,9 +10,8 @@ fn checks_incompatible_target() -> Result<()> {
     ) {
         Ok(_) => unreachable!(),
         Err(e) => assert!(
-            format!("{:?}", e).contains("configuration does not match the host"),
-            "bad error: {:?}",
-            e
+            format!("{e:?}").contains("configuration does not match the host"),
+            "bad error: {e:?}"
         ),
     }
 
@@ -77,28 +76,28 @@ fn serialize_deterministic() {
         let p1 = engine.precompile_module(wasm.as_bytes()).unwrap();
         let p2 = engine.precompile_module(wasm.as_bytes()).unwrap();
         if p1 != p2 {
-            panic!("precompile_module not deterministic for:\n{}", wasm);
+            panic!("precompile_module not deterministic for:\n{wasm}");
         }
 
         let module1 = Module::new(&engine, wasm).unwrap();
         let a1 = module1.serialize().unwrap();
         let a2 = module1.serialize().unwrap();
         if a1 != a2 {
-            panic!("Module::serialize not deterministic for:\n{}", wasm);
+            panic!("Module::serialize not deterministic for:\n{wasm}");
         }
 
         let module2 = Module::new(&engine, wasm).unwrap();
         let b1 = module2.serialize().unwrap();
         let b2 = module2.serialize().unwrap();
         if b1 != b2 {
-            panic!("Module::serialize not deterministic for:\n{}", wasm);
+            panic!("Module::serialize not deterministic for:\n{wasm}");
         }
 
         if a1 != b2 {
-            panic!("not matching across modules:\n{}", wasm);
+            panic!("not matching across modules:\n{wasm}");
         }
         if b1 != p2 {
-            panic!("not matching across engine/module:\n{}", wasm);
+            panic!("not matching across engine/module:\n{wasm}");
         }
     };
 
@@ -122,7 +121,7 @@ fn serialize_not_overly_massive() -> Result<()> {
     let engine = Engine::new(&config)?;
 
     let assert_smaller_than_1mb = |module: &str| -> Result<()> {
-        println!("{}", module);
+        println!("{module}");
         let bytes = Module::new(&engine, module)?.serialize()?;
         assert!(bytes.len() < (1 << 20));
         Ok(())

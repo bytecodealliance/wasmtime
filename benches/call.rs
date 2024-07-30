@@ -139,7 +139,7 @@ fn bench_host_to_wasm<Params, Results>(
 {
     // Benchmark the "typed" version, which should be faster than the versions
     // below.
-    c.bench_function(&format!("core - host-to-wasm - typed - {}", name), |b| {
+    c.bench_function(&format!("core - host-to-wasm - typed - {name}"), |b| {
         let typed = instance
             .get_typed_func::<Params, Results>(&mut *store, name)
             .unwrap();
@@ -155,7 +155,7 @@ fn bench_host_to_wasm<Params, Results>(
 
     // Benchmark the "untyped" version which should be the slowest of the three
     // here, but not unduly slow.
-    c.bench_function(&format!("core - host-to-wasm - untyped - {}", name), |b| {
+    c.bench_function(&format!("core - host-to-wasm - untyped - {name}"), |b| {
         let untyped = instance.get_func(&mut *store, name).unwrap();
         let params = typed_params.to_vals();
         let expected_results = typed_results.to_vals();
@@ -181,7 +181,7 @@ fn bench_host_to_wasm<Params, Results>(
     // Benchmark the "unchecked" version which should be between the above two,
     // but is unsafe.
     c.bench_function(
-        &format!("core - host-to-wasm - unchecked - {}", name),
+        &format!("core - host-to-wasm - unchecked - {name}"),
         |b| {
             let untyped = instance.get_func(&mut *store, name).unwrap();
             let params = typed_params.to_vals();
@@ -398,7 +398,7 @@ fn wasm_to_host(c: &mut Criterion) {
         desc: &str,
         is_async: IsAsync,
     ) {
-        group.bench_function(&format!("core - wasm-to-host - {} - nop", desc), |b| {
+        group.bench_function(&format!("core - wasm-to-host - {desc} - nop"), |b| {
             let run = instance
                 .get_typed_func::<u64, ()>(&mut *store, "run-nop")
                 .unwrap();
@@ -413,7 +413,7 @@ fn wasm_to_host(c: &mut Criterion) {
             })
         });
         group.bench_function(
-            &format!("core - wasm-to-host - {} - nop-params-and-results", desc),
+            &format!("core - wasm-to-host - {desc} - nop-params-and-results"),
             |b| {
                 let run = instance
                     .get_typed_func::<u64, ()>(&mut *store, "run-nop-params-and-results")
@@ -637,7 +637,7 @@ mod component {
     {
         // Benchmark the "typed" version.
         c.bench_function(
-            &format!("component - host-to-wasm - typed - {}", name),
+            &format!("component - host-to-wasm - typed - {name}"),
             |b| {
                 let typed = instance
                     .get_typed_func::<Params, Results>(&mut *store, name)
@@ -660,7 +660,7 @@ mod component {
 
         // Benchmark the "untyped" version.
         c.bench_function(
-            &format!("component - host-to-wasm - untyped - {}", name),
+            &format!("component - host-to-wasm - untyped - {name}"),
             |b| {
                 let untyped = instance.get_func(&mut *store, name).unwrap();
                 let params = typed_params.to_component_vals();
@@ -864,7 +864,7 @@ mod component {
             desc: &str,
             is_async: IsAsync,
         ) {
-            group.bench_function(&format!("component - wasm-to-host - {} - nop", desc), |b| {
+            group.bench_function(&format!("component - wasm-to-host - {desc} - nop"), |b| {
                 let run = instance
                     .get_typed_func::<(u64,), ()>(&mut *store, "run-nop")
                     .unwrap();
@@ -882,8 +882,7 @@ mod component {
             });
             group.bench_function(
                 &format!(
-                    "component - wasm-to-host - {} - nop-params-and-results",
-                    desc
+                    "component - wasm-to-host - {desc} - nop-params-and-results"
                 ),
                 |b| {
                     let run = instance
