@@ -75,35 +75,37 @@ impl Imm64 {
     }
 
     /// Mask this immediate to the given power-of-two bit width.
-    pub(crate) fn mask_to_width(&mut self, bit_width: u32) {
+    #[must_use]
+    pub(crate) fn mask_to_width(&self, bit_width: u32) -> Self {
         debug_assert!(bit_width.is_power_of_two());
 
         if bit_width >= 64 {
-            return;
+            return *self;
         }
 
         let bit_width = i64::from(bit_width);
         let mask = (1 << bit_width) - 1;
         let masked = self.0 & mask;
-        *self = Imm64(masked);
+        Imm64(masked)
     }
 
     /// Sign extend this immediate as if it were a signed integer of the given
     /// power-of-two width.
-    pub(crate) fn sign_extend_from_width(&mut self, bit_width: u32) {
+    #[must_use]
+    pub(crate) fn sign_extend_from_width(&self, bit_width: u32) -> Self {
         debug_assert!(
             bit_width.is_power_of_two(),
             "{bit_width} is not a power of two"
         );
 
         if bit_width >= 64 {
-            return;
+            return *self;
         }
 
         let bit_width = i64::from(bit_width);
         let delta = 64 - bit_width;
         let sign_extended = (self.0 << delta) >> delta;
-        *self = Imm64(sign_extended);
+        Imm64(sign_extended)
     }
 }
 

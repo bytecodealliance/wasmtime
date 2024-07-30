@@ -400,7 +400,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         UnaryImm { imm, .. } => write!(w, " {}", {
             let mut imm = imm;
             if ctrl_ty.bits() != 0 {
-                imm.sign_extend_from_width(ctrl_ty.bits());
+                imm = imm.sign_extend_from_width(ctrl_ty.bits());
             }
             imm
         }),
@@ -416,7 +416,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         BinaryImm64 { arg, imm, .. } => write!(w, " {}, {}", arg, {
             let mut imm = imm;
             if ctrl_ty.bits() != 0 {
-                imm.sign_extend_from_width(ctrl_ty.bits());
+                imm = imm.sign_extend_from_width(ctrl_ty.bits());
             }
             imm
         }),
@@ -440,7 +440,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, {
             let mut imm = imm;
             if ctrl_ty.bits() != 0 {
-                imm.sign_extend_from_width(ctrl_ty.bits());
+                imm = imm.sign_extend_from_width(ctrl_ty.bits());
             }
             imm
         }),
@@ -517,7 +517,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 UnaryImm { imm, .. } => {
                     let mut imm = imm;
                     if dfg.ctrl_typevar(src).bits() != 0 {
-                        imm.sign_extend_from_width(dfg.ctrl_typevar(src).bits());
+                        imm = imm.sign_extend_from_width(dfg.ctrl_typevar(src).bits());
                     }
                     imm.to_string()
                 }

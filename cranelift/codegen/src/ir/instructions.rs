@@ -459,7 +459,7 @@ impl InstructionData {
 
         match self {
             Self::UnaryImm { opcode: _, imm } => {
-                imm.mask_to_width(bit_width);
+                *imm = imm.mask_to_width(bit_width);
             }
             Self::BinaryImm64 {
                 opcode,
@@ -467,7 +467,7 @@ impl InstructionData {
                 imm,
             } => {
                 if *opcode == Opcode::SdivImm || *opcode == Opcode::SremImm {
-                    imm.mask_to_width(bit_width);
+                    *imm = imm.mask_to_width(bit_width);
                 }
             }
             Self::IntCompareImm {
@@ -478,7 +478,7 @@ impl InstructionData {
             } => {
                 debug_assert_eq!(*opcode, Opcode::IcmpImm);
                 if cond.unsigned() != *cond {
-                    imm.mask_to_width(bit_width);
+                    *imm = imm.mask_to_width(bit_width);
                 }
             }
             _ => {}
