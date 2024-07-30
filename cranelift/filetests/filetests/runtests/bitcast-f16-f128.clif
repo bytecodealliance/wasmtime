@@ -1,4 +1,7 @@
 test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64
 
 function %bitcast_i16_f16(i16) -> f16 fast {
 block0(v0: i16):

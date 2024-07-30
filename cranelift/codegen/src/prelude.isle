@@ -630,7 +630,11 @@
 (decl pure imm64_masked (Type u64) Imm64)
 (extern constructor imm64_masked imm64_masked)
 
-;; Extract a `u64` from an `Ieee32`.
+;; Extract a `u16` from an `Ieee16`.
+(decl u16_from_ieee16 (u16) Ieee16)
+(extern extractor infallible u16_from_ieee16 u16_from_ieee16)
+
+;; Extract a `u32` from an `Ieee32`.
 (decl u32_from_ieee32 (u32) Ieee32)
 (extern extractor infallible u32_from_ieee32 u32_from_ieee32)
 

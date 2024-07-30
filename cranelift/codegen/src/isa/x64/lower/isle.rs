@@ -599,7 +599,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             Some(RegisterClass::Gpr {
                 single_register: ty != I128,
             })
-        } else if ty == F32 || ty == F64 || (ty.is_vector() && ty.bits() == 128) {
+        } else if ty.is_float() || (ty.is_vector() && ty.bits() == 128) {
             Some(RegisterClass::Xmm)
         } else {
             None

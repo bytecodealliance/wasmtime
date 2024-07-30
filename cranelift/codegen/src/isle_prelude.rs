@@ -436,18 +436,19 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
-            match ty {
-                F32 | F64 => Some(ty),
-                _ => None,
+            if ty.is_float() {
+                Some(ty)
+            } else {
+                None
             }
         }
 
         #[inline]
         fn ty_float_or_vec(&mut self, ty: Type) -> Option<Type> {
-            match ty {
-                F32 | F64 => Some(ty),
-                ty if ty.is_vector() => Some(ty),
-                _ => None,
+            if ty.is_float() || ty.is_vector() {
+                Some(ty)
+            } else {
+                None
             }
         }
 
@@ -598,6 +599,10 @@ macro_rules! isle_common_prelude_methods {
             } else {
                 None
             }
+        }
+
+        fn u16_from_ieee16(&mut self, val: Ieee16) -> u16 {
+            val.bits()
         }
 
         fn u32_from_ieee32(&mut self, val: Ieee32) -> u32 {

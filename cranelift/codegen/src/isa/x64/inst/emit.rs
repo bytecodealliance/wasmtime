@@ -1428,10 +1428,11 @@ pub(crate) fn emit(
             let op = match *ty {
                 types::F64 => SseOpcode::Movsd,
                 types::F32 => SseOpcode::Movsd,
+                types::F16 => SseOpcode::Movsd,
                 types::F32X4 => SseOpcode::Movaps,
                 types::F64X2 => SseOpcode::Movapd,
                 ty => {
-                    debug_assert!(ty.is_vector() && ty.bytes() == 16);
+                    debug_assert!((ty.is_float() || ty.is_vector()) && ty.bytes() == 16);
                     SseOpcode::Movdqa
                 }
             };

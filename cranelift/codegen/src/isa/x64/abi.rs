@@ -123,9 +123,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // extension annotations. Additionally, handling extension attributes this way allows clif
         // functions that use them with the Winch calling convention to interact successfully with
         // testing infrastructure.
+        // The results are also not packed if any of the types are `f16`. This is to simplify the
+        // implementation of `Inst::load`/`Inst::store` (which would otherwise require multiple
+        // instructions), and doesn't affect Winch itself as Winch doesn't support `f16` at all.
         let uses_extension = params
             .iter()
-            .any(|p| p.extension != ir::ArgumentExtension::None);
+            .any(|p| p.extension != ir::ArgumentExtension::None || p.value_type == types::F16);
 
         for (ix, param) in params.iter().enumerate() {
             let last_param = ix == params.len() - 1;
@@ -169,11 +172,21 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // https://godbolt.org/z/PhG3ob
 
             if param.value_type.bits() > 64
-                && !param.value_type.is_vector()
+                && !(param.value_type.is_vector() || param.value_type.is_float())
                 && !flags.enable_llvm_abi_extensions()
             {
                 panic!(
                     "i128 args/return values not supported unless LLVM ABI extensions are enabled"
+                );
+            }
+            // As MSVC doesn't support f16/f128 there is no standard way to pass/return them with
+            // the Windows ABI. LLVM passes/returns them in XMM registers.
+            if matches!(param.value_type, types::F16 | types::F128)
+                && is_fastcall
+                && !flags.enable_llvm_abi_extensions()
+            {
+                panic!(
+                    "f16/f128 args/return values not supported for windows_fastcall unless LLVM ABI extensions are enabled"
                 );
             }
 
@@ -410,12 +423,20 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // bits as well -- see `Inst::store()`).
         let ty = match ty {
             types::I8 | types::I16 | types::I32 => types::I64,
+            // Stack slots are always at least 8 bytes, so it's fine to load 4 bytes instead of only
+            // two.
+            types::F16 => types::F32,
             _ => ty,
         };
         Inst::load(ty, mem, into_reg, ExtKind::None)
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
+        let ty = match ty {
+            // See `gen_load_stack`.
+            types::F16 => types::F32,
+            _ => ty,
+        };
         Inst::store(ty, from_reg, mem)
     }
 
@@ -502,6 +523,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
+        let ty = match ty {
+            // See `gen_load_stack`.
+            types::F16 => types::F32,
+            _ => ty,
+        };
         let mem = Amode::imm_reg(offset, base);
         Inst::store(ty, from_reg, mem)
     }

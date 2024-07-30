@@ -1644,7 +1644,7 @@
 (rule (put_in_gpr val)
       (if-let (value_type ty) val)
       (if-let (type_register_class (RegisterClass.Xmm)) ty)
-      (bitcast_xmm_to_gpr ty (xmm_new (put_in_reg val))))
+      (bitcast_xmm_to_gpr (ty_bits ty) (xmm_new (put_in_reg val))))
 
 ;; Put a value into a `GprMem`.
 ;;
@@ -2252,8 +2252,10 @@
 
 ;; Performs an xor operation of the two operands specified.
 (decl x64_xor_vector (Type Xmm XmmMem) Xmm)
+(rule 1 (x64_xor_vector $F16 x y) (x64_xorps x y))
 (rule 1 (x64_xor_vector $F32 x y) (x64_xorps x y))
 (rule 1 (x64_xor_vector $F64 x y) (x64_xorpd x y))
+(rule 1 (x64_xor_vector $F128 x y) (x64_xorps x y))
 (rule 1 (x64_xor_vector $F32X4 x y) (x64_xorps x y))
 (rule 1 (x64_xor_vector $F64X2 x y) (x64_xorpd x y))
 (rule 0 (x64_xor_vector (multi_lane _ _) x y) (x64_pxor x y))
@@ -2303,6 +2305,9 @@
 
 (rule 2 (x64_load $F64 addr _ext_kind)
       (x64_movsd_load addr))
+
+(rule 2 (x64_load $F128 addr _ext_kind)
+      (x64_movdqu_load addr))
 
 (rule 2 (x64_load $F32X4 addr _ext_kind)
       (x64_movups_load addr))
@@ -2719,6 +2724,10 @@
             (_ Unit (emit (MInst.Imm size simm64 dst))))
         dst))
 
+;; `f16` immediates.
+(rule 2 (imm $F16 (u64_nonzero bits))
+        (bitcast_gpr_to_xmm 16 (imm $I16 bits)))
+
 ;; `f32` immediates.
 (rule 2 (imm $F32 (u64_nonzero bits))
         (x64_movd_to_xmm (imm $I32 bits)))
@@ -2745,6 +2754,9 @@
 ;; specific to the vector type.
 (rule 0 (imm ty @ (multi_lane _bits _lanes) 0)
       (xmm_to_reg (xmm_zero ty)))
+
+;; Special case for `f16` zero immediates
+(rule 2 (imm ty @ $F16 (u64_zero)) (xmm_zero ty))
 
 ;; Special case for `f32` zero immediates
 (rule 2 (imm ty @ $F32 (u64_zero)) (xmm_zero ty))
@@ -5022,17 +5034,29 @@
 
 ;;;; Casting ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl bitcast_xmm_to_gpr (Type Xmm) Gpr)
-(rule (bitcast_xmm_to_gpr $F32 src)
+(decl bitcast_xmm_to_gpr (u8 Xmm) Gpr)
+(rule (bitcast_xmm_to_gpr 16 src)
+      (x64_pextrw src 0))
+(rule (bitcast_xmm_to_gpr 32 src)
       (x64_movd_to_gpr src))
-(rule (bitcast_xmm_to_gpr $F64 src)
+(rule (bitcast_xmm_to_gpr 64 src)
       (x64_movq_to_gpr src))
 
-(decl bitcast_gpr_to_xmm (Type Gpr) Xmm)
-(rule (bitcast_gpr_to_xmm $I32 src)
+(decl bitcast_xmm_to_gprs (Xmm) ValueRegs)
+(rule (bitcast_xmm_to_gprs src)
+      (value_regs (x64_movq_to_gpr src) (x64_movq_to_gpr (x64_pshufd src 0b11101110))))
+
+(decl bitcast_gpr_to_xmm (u8 Gpr) Xmm)
+(rule (bitcast_gpr_to_xmm 16 src)
+      (x64_pinsrw (xmm_uninit_value) src 0))
+(rule (bitcast_gpr_to_xmm 32 src)
       (x64_movd_to_xmm src))
-(rule (bitcast_gpr_to_xmm $I64 src)
+(rule (bitcast_gpr_to_xmm 64 src)
       (x64_movq_to_xmm src))
+
+(decl bitcast_gprs_to_xmm (ValueRegs) Xmm)
+(rule (bitcast_gprs_to_xmm src)
+      (x64_punpcklqdq (x64_movq_to_xmm (value_regs_get_gpr src 0)) (x64_movq_to_xmm (value_regs_get_gpr src 1))))
 
 ;;;; Stack Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

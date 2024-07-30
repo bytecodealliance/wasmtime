@@ -1,4 +1,7 @@
 test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64
 
 
 ;; These values are special for RISC-V since it has a dedicated
@@ -51,3 +54,11 @@ block0:
 }
 
 ; run: %f16const_neg_nan() == -NaN
+
+function %f16const_zero() -> f16 {
+block0:
+    v0 = f16const 0.0
+    return v0
+}
+
+; run: %f16const_zero() == 0.0
