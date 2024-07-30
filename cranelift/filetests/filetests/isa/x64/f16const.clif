@@ -1,0 +1,57 @@
+test compile precise-output
+target x86_64
+
+function %ret_0() -> f16 {
+block0():
+  v0 = f16const 0.0
+  return v0
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm0
+;   xorps   %xmm0, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorps %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %ret_1() -> f16 {
+block0():
+  v0 = f16const 0x1.0
+  return v0
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $15360, %esi
+;   uninit  %xmm0
+;   pinsrw  $0, %xmm0, %rsi, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $0x3c00, %esi
+;   pinsrw $0, %esi, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

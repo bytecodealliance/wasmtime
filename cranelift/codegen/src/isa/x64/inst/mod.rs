@@ -630,11 +630,12 @@ impl Inst {
             }
             RegClass::Float => {
                 let opcode = match ty {
+                    types::F16 => panic!("loading a f16 requires multiple instructions"),
                     types::F32 => SseOpcode::Movss,
                     types::F64 => SseOpcode::Movsd,
                     types::F32X4 => SseOpcode::Movups,
                     types::F64X2 => SseOpcode::Movupd,
-                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
                     _ => unimplemented!("unable to load type: {}", ty),
                 };
                 Inst::xmm_unary_rm_r(opcode, RegMem::mem(from_addr), to_reg)
@@ -650,11 +651,12 @@ impl Inst {
             RegClass::Int => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
             RegClass::Float => {
                 let opcode = match ty {
+                    types::F16 => panic!("storing a f16 requires multiple instructions"),
                     types::F32 => SseOpcode::Movss,
                     types::F64 => SseOpcode::Movsd,
                     types::F32X4 => SseOpcode::Movups,
                     types::F64X2 => SseOpcode::Movupd,
-                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
                     _ => unimplemented!("unable to store type: {}", ty),
                 };
                 Inst::xmm_mov_r_m(opcode, from_reg, to_addr)
@@ -1621,6 +1623,7 @@ impl PrettyPrint for Inst {
                 let suffix = match *ty {
                     types::F64 => "sd",
                     types::F32 => "ss",
+                    types::F16 => "ss",
                     types::F32X4 => "aps",
                     types::F64X2 => "apd",
                     _ => "dqa",
@@ -2605,9 +2608,9 @@ impl MachInst for Inst {
                 // those, which may write more lanes that we need, but are specified to have
                 // zero-latency.
                 let opcode = match ty {
-                    types::F32 | types::F64 | types::F32X4 => SseOpcode::Movaps,
+                    types::F16 | types::F32 | types::F64 | types::F32X4 => SseOpcode::Movaps,
                     types::F64X2 => SseOpcode::Movapd,
-                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqa,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqa,
                     _ => unimplemented!("unable to move type: {}", ty),
                 };
                 Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
@@ -2628,8 +2631,10 @@ impl MachInst for Inst {
             types::I64 => Ok((&[RegClass::Int], &[types::I64])),
             types::R32 => panic!("32-bit reftype pointer should never be seen on x86-64"),
             types::R64 => Ok((&[RegClass::Int], &[types::R64])),
+            types::F16 => Ok((&[RegClass::Float], &[types::F16])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
+            types::F128 => Ok((&[RegClass::Float], &[types::F128])),
             types::I128 => Ok((&[RegClass::Int, RegClass::Int], &[types::I64, types::I64])),
             _ if ty.is_vector() => {
                 assert!(ty.bits() <= 128);

@@ -1,0 +1,54 @@
+test compile precise-output
+target x86_64
+
+function %load_f16(i64) -> f16 {
+block0(v0: i64):
+    v1 = load.f16 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm0
+;   pinsrw  $0, %xmm0, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pinsrw $0, (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_f128(i64) -> f128 {
+block0(v0: i64):
+    v1 = load.f128 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqu  0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
