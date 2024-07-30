@@ -313,7 +313,7 @@ tempfile = "3.1.0"
 filecheck = "0.5.0"
 libc = { version = "0.2.112", default-features = true }
 file-per-thread-logger = "0.2.0"
-tokio = { version = "1.26.0", features = [ "rt", "time" ] }
+tokio = { version = "1.30.0", features = [ "rt", "time" ] }
 hyper = "1.0.1"
 http = "1.0.0"
 http-body = "1.0.0"
