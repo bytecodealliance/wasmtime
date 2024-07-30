@@ -74,10 +74,27 @@ impl Imm64 {
         self.0
     }
 
+    /// Mask this immediate to the given power-of-two bit width.
+    pub(crate) fn mask_to_width(&mut self, bit_width: u32) {
+        debug_assert!(bit_width.is_power_of_two());
+
+        if bit_width >= 64 {
+            return;
+        }
+
+        let bit_width = i64::from(bit_width);
+        let mask = (1 << bit_width) - 1;
+        let masked = self.0 & mask;
+        *self = Imm64(masked);
+    }
+
     /// Sign extend this immediate as if it were a signed integer of the given
     /// power-of-two width.
-    pub fn sign_extend_from_width(&mut self, bit_width: u32) {
-        debug_assert!(bit_width.is_power_of_two());
+    pub(crate) fn sign_extend_from_width(&mut self, bit_width: u32) {
+        debug_assert!(
+            bit_width.is_power_of_two(),
+            "{bit_width} is not a power of two"
+        );
 
         if bit_width >= 64 {
             return;
@@ -111,8 +128,8 @@ impl From<i64> for Imm64 {
 impl Display for Imm64 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let x = self.0;
-        if -10_000 < x && x < 10_000 {
-            // Use decimal for small numbers.
+        if x < 10_000 {
+            // Use decimal for small and negative numbers.
             write!(f, "{}", x)
         } else {
             write_hex(x as u64, f)

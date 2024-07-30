@@ -450,7 +450,7 @@ impl InstructionData {
     }
 
     #[inline]
-    pub(crate) fn sign_extend_immediates(&mut self, ctrl_typevar: Type) {
+    pub(crate) fn mask_immediates(&mut self, ctrl_typevar: Type) {
         if ctrl_typevar.is_invalid() {
             return;
         }
@@ -458,13 +458,16 @@ impl InstructionData {
         let bit_width = ctrl_typevar.bits();
 
         match self {
+            Self::UnaryImm { opcode: _, imm } => {
+                imm.mask_to_width(bit_width);
+            }
             Self::BinaryImm64 {
                 opcode,
                 arg: _,
                 imm,
             } => {
                 if *opcode == Opcode::SdivImm || *opcode == Opcode::SremImm {
-                    imm.sign_extend_from_width(bit_width);
+                    imm.mask_to_width(bit_width);
                 }
             }
             Self::IntCompareImm {
@@ -475,7 +478,7 @@ impl InstructionData {
             } => {
                 debug_assert_eq!(*opcode, Opcode::IcmpImm);
                 if cond.unsigned() != *cond {
-                    imm.sign_extend_from_width(bit_width);
+                    imm.mask_to_width(bit_width);
                 }
             }
             _ => {}

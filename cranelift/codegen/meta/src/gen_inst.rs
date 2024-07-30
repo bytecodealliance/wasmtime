@@ -996,7 +996,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         fmtln!(fmt, "};");
 
         if imms_need_sign_extension {
-            fmtln!(fmt, "data.sign_extend_immediates(ctrl_typevar);");
+            fmtln!(fmt, "data.mask_immediates(ctrl_typevar);");
         }
 
         // Assert that this opcode belongs to this format

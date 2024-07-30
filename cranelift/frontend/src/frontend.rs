@@ -1324,7 +1324,9 @@ mod tests {
 
     #[track_caller]
     fn check(func: &Function, expected_ir: &str) {
+        let expected_ir = expected_ir.trim();
         let actual_ir = func.display().to_string();
+        let actual_ir = actual_ir.trim();
         assert!(
             expected_ir == actual_ir,
             "Expected:\n{}\nGot:\n{}",
@@ -1940,5 +1942,35 @@ block0:
                 ))
             );
         }
+    }
+
+    #[test]
+    fn test_builder_with_iconst_and_negative_constant() {
+        let sig = Signature::new(CallConv::SystemV);
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
+
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let block0 = builder.create_block();
+        builder.switch_to_block(block0);
+        builder.ins().iconst(I32, -1);
+        builder.ins().return_(&[]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        let flags = cranelift_codegen::settings::Flags::new(cranelift_codegen::settings::builder());
+        let ctx = cranelift_codegen::Context::for_function(func);
+        ctx.verify(&flags).expect("should be valid");
+
+        check(
+            &ctx.func,
+            "function %sample() system_v {
+block0:
+    v0 = iconst.i32 -1
+    return
+}",
+        );
     }
 }
