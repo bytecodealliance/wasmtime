@@ -91,7 +91,7 @@ impl Host for Redis {
         for (key, value) in key_values {
             pipe.set(key, value).ignore();
         }
-        pipe.query_async(&mut self.conn).await?;
+        let _: () = pipe.query_async(&mut self.conn).await?;
         Ok(())
     }
 
@@ -100,7 +100,7 @@ impl Host for Redis {
         for key in keys {
             pipe.del(key).ignore();
         }
-        pipe.query_async(&mut self.conn).await?;
+        let _: () = pipe.query_async(&mut self.conn).await?;
         Ok(())
     }
 }
