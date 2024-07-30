@@ -17,6 +17,8 @@ use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
+#[cfg(feature = "wasi-keyvalue")]
+use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnCtx;
 #[cfg(feature = "wasi-runtime-config")]
@@ -34,6 +36,9 @@ struct Host {
 
     #[cfg(feature = "wasi-runtime-config")]
     wasi_runtime_config: Option<WasiRuntimeConfigVariables>,
+
+    #[cfg(feature = "wasi-keyvalue")]
+    wasi_keyvalue: Option<WasiKeyValueCtx>,
 }
 
 impl WasiView for Host {
@@ -154,6 +159,8 @@ impl ServeCommand {
             nn: None,
             #[cfg(feature = "wasi-runtime-config")]
             wasi_runtime_config: None,
+            #[cfg(feature = "wasi-keyvalue")]
+            wasi_keyvalue: None,
         };
 
         if self.run.common.wasi.nn == Some(true) {
@@ -184,6 +191,38 @@ impl ServeCommand {
                         .map(|v| (v.key.clone(), v.value.clone())),
                 );
                 host.wasi_runtime_config.replace(vars);
+            }
+        }
+
+        if self.run.common.wasi.keyvalue == Some(true) {
+            #[cfg(feature = "wasi-keyvalue")]
+            {
+                let ctx = WasiKeyValueCtxBuilder::new()
+                    .in_memory_data(
+                        self.run
+                            .common
+                            .wasi
+                            .keyvalue_in_memory_data
+                            .iter()
+                            .map(|v| (v.key.clone(), v.value.clone())),
+                    )
+                    .allow_redis_hosts(&self.run.common.wasi.keyvalue_redis_host)
+                    .redis_connection_timeout(
+                        self.run
+                            .common
+                            .wasi
+                            .keyvalue_redis_connection_timeout
+                            .unwrap_or(std::time::Duration::MAX),
+                    )
+                    .redis_response_timeout(
+                        self.run
+                            .common
+                            .wasi
+                            .keyvalue_redis_response_timeout
+                            .unwrap_or(std::time::Duration::MAX),
+                    )
+                    .build();
+                host.wasi_keyvalue.replace(ctx);
             }
         }
 
@@ -259,6 +298,19 @@ impl ServeCommand {
             {
                 wasmtime_wasi_runtime_config::add_to_linker(linker, |h| {
                     WasiRuntimeConfig::from(h.wasi_runtime_config.as_ref().unwrap())
+                })?;
+            }
+        }
+
+        if self.run.common.wasi.keyvalue == Some(true) {
+            #[cfg(not(feature = "wasi-keyvalue"))]
+            {
+                bail!("support for wasi-keyvalue was disabled at compile time");
+            }
+            #[cfg(feature = "wasi-keyvalue")]
+            {
+                wasmtime_wasi_keyvalue::add_to_linker_async(linker, |h: &mut Host| {
+                    WasiKeyValue::new(h.wasi_keyvalue.as_ref().unwrap(), &mut h.table)
                 })?;
             }
         }

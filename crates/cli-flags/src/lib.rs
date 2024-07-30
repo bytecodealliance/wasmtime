@@ -286,6 +286,8 @@ wasmtime_option_group! {
         pub http: Option<bool>,
         /// Enable support for WASI runtime config API (experimental)
         pub runtime_config: Option<bool>,
+        /// Enable support for WASI key-value API (experimental)
+        pub keyvalue: Option<bool>,
         /// Inherit environment variables and file descriptors following the
         /// systemd listen fd specification (UNIX only)
         pub listenfd: Option<bool>,
@@ -324,7 +326,18 @@ wasmtime_option_group! {
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
         /// Pass a wasi runtime config variable to the program.
-        pub runtime_config_var: Vec<WasiRuntimeConfigVariable>,
+        pub runtime_config_var: Vec<KeyValuePair>,
+        /// Preset data for the In-Memory provider of WASI key-value API.
+        pub keyvalue_in_memory_data: Vec<KeyValuePair>,
+        /// Grant access to the given Redis host for the Redis provider of WASI
+        /// key-value API.
+        pub keyvalue_redis_host: Vec<String>,
+        /// Sets the connection timeout parameter for the Redis provider of WASI
+        /// key-value API.
+        pub keyvalue_redis_connection_timeout: Option<Duration>,
+        /// Sets the response timeout parameter for the Redis provider of WASI
+        /// key-value API.
+        pub keyvalue_redis_response_timeout: Option<Duration>,
     }
 
     enum Wasi {
@@ -339,7 +352,7 @@ pub struct WasiNnGraph {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct WasiRuntimeConfigVariable {
+pub struct KeyValuePair {
     pub key: String,
     pub value: String,
 }
