@@ -145,15 +145,15 @@ target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime/conf.h.in
   ${WASMTIME_GENERATED_CONF_H})
-add_custom_target(conf_h
-  DEPENDS ${WASMTIME_GENERATED_CONF_H})
 
 include(GNUInstallDirs)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        COMPONENT Headers
         FILES_MATCHING REGEX "\\.hh?$")
 install(FILES ${WASMTIME_GENERATED_CONF_H}
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wasmtime)
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wasmtime
+        COMPONENT Headers)
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
@@ -172,3 +172,5 @@ add_custom_target(doc
     COMMAND doxygen ${DOXYGEN_CONF_OUT}
     DEPENDS ${WASMTIME_GENERATED_CONF_H} ${DOXYGEN_CONF_OUT}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+add_custom_target(headers
+    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component Headers)

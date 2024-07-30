@@ -59,7 +59,6 @@ fn main() {
     // Wasm C API headers.
     cfg
         .include(std::env::var("DEP_WASMTIME_C_API_INCLUDE").unwrap());
-        .include(std::env::var("DEP_WASMTIME_C_API_CONF_INCLUDE").unwrap());
 
     // Compile your C code.
     cfg

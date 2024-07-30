@@ -28,7 +28,8 @@ fn main() {
     let mut config = cmake::Config::new(&dir);
     config
         .define("WASMTIME_DISABLE_ALL_FEATURES", "ON")
-        .build_target("conf_h");
+        .always_configure(true)
+        .build_target("headers");
     for f in FEATURES {
         if env::var_os(format!("CARGO_FEATURE_{}", f)).is_some() {
             config.define(format!("WASMTIME_FEATURE_{}", f), "ON");
@@ -36,6 +37,5 @@ fn main() {
     }
     let dst = config.build();
 
-    println!("cargo:conf-include={}/build/include", dst.display());
-    println!("cargo:include={}/include", dir.display());
+    println!("cargo:include={}/include", dst.display());
 }
