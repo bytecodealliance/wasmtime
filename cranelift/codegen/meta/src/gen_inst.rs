@@ -973,7 +973,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         args.join(", ")
     );
 
-    let imms_need_sign_extension = format
+    let imms_need_masking = format
         .imm_fields
         .iter()
         .any(|f| f.kind.rust_type == "ir::immediates::Imm64");
@@ -986,7 +986,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         fmtln!(
             fmt,
             "let{} data = ir::InstructionData::{} {{",
-            if imms_need_sign_extension { " mut" } else { "" },
+            if imms_need_masking { " mut" } else { "" },
             format.name
         );
         fmt.indent(|fmt| {
@@ -995,7 +995,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         });
         fmtln!(fmt, "};");
 
-        if imms_need_sign_extension {
+        if imms_need_masking {
             fmtln!(fmt, "data.mask_immediates(ctrl_typevar);");
         }
 
