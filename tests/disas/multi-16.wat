@@ -26,8 +26,8 @@
 ;; @002d                               jump block3(v7)
 ;;
 ;;                                 block4(v8: i32):
-;; @002e                               v9 = iconst.i32 0xffff_fffe
-;; @0030                               v10 = iadd.i32 v4, v9  ; v4 = 1, v9 = 0xffff_fffe
+;; @002e                               v9 = iconst.i32 -2
+;; @0030                               v10 = iadd.i32 v4, v9  ; v4 = 1, v9 = -2
 ;; @0031                               jump block3(v10)
 ;;
 ;;                                 block3(v5: i32):

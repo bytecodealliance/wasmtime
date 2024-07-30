@@ -1112,7 +1112,7 @@ mod tests {
         assert_eq!(Imm64(9999).to_string(), "9999");
         assert_eq!(Imm64(10000).to_string(), "0x2710");
         assert_eq!(Imm64(-9999).to_string(), "-9999");
-        assert_eq!(Imm64(-10000).to_string(), "0xffff_ffff_ffff_d8f0");
+        assert_eq!(Imm64(-10000).to_string(), "-10000");
         assert_eq!(Imm64(0xffff).to_string(), "0xffff");
         assert_eq!(Imm64(0x10000).to_string(), "0x0001_0000");
     }
@@ -1132,6 +1132,7 @@ mod tests {
     }
 
     // Verify that `text` can be parsed as a `T` into a value that displays as `want`.
+    #[track_caller]
     fn parse_ok<T: FromStr + Display>(text: &str, want: &str)
     where
         <T as FromStr>::Err: Display,
@@ -1165,11 +1166,11 @@ mod tests {
 
         // Probe limits.
         parse_ok::<Imm64>("0xffffffff_ffffffff", "-1");
-        parse_ok::<Imm64>("0x80000000_00000000", "0x8000_0000_0000_0000");
-        parse_ok::<Imm64>("-0x80000000_00000000", "0x8000_0000_0000_0000");
+        parse_ok::<Imm64>("0x80000000_00000000", "-9223372036854775808");
+        parse_ok::<Imm64>("-0x80000000_00000000", "-9223372036854775808");
         parse_err::<Imm64>("-0x80000000_00000001", "Negative number too small");
         parse_ok::<Imm64>("18446744073709551615", "-1");
-        parse_ok::<Imm64>("-9223372036854775808", "0x8000_0000_0000_0000");
+        parse_ok::<Imm64>("-9223372036854775808", "-9223372036854775808");
         // Overflow both the `checked_add` and `checked_mul`.
         parse_err::<Imm64>("18446744073709551616", "Too large decimal number");
         parse_err::<Imm64>("184467440737095516100", "Too large decimal number");
