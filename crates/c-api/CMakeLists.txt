@@ -41,6 +41,7 @@ macro(feature rust_name default)
   endif()
 endmacro()
 
+# WASMTIME_FEATURE_LIST
 feature(profiling ON)
 feature(wat ON)
 feature(cache ON)
@@ -56,10 +57,8 @@ feature(gc ON)
 feature(async ON)
 feature(cranelift ON)
 feature(winch ON)
-# ... if you add a line above this be sure to also change:
-#
-#   crates/c-api/include/wasmtime/conf.h.in
-#   crates/c-api/artifact/Cargo.toml
+# ... if you add a line above this be sure to change the other locations
+# marked WASMTIME_FEATURE_LIST
 
 if(WASMTIME_FASTEST_RUNTIME)
   set(WASMTIME_BUILD_TYPE_FLAG "--profile=fastest-runtime")

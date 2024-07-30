@@ -42,6 +42,7 @@ futures = { workspace = true, optional = true }
 cmake = "0.1"
 
 [features]
+# WASMTIME_FEATURE_LIST
 async = ['wasmtime/async', 'futures']
 profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
@@ -56,6 +57,5 @@ threads = ["wasmtime/threads"]
 gc = ["wasmtime/gc"]
 cranelift = ['wasmtime/cranelift']
 winch = ['wasmtime/winch']
-# ... if you add a line above this be sure to also change:
-#
-#   crates/c-api/artifact/Cargo.toml
+# ... if you add a line above this be sure to change the other locations
+# marked WASMTIME_FEATURE_LIST
