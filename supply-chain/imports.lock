@@ -1602,6 +1602,12 @@ criteria = "safe-to-run"
 version = "0.3.0"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
+[[audits.google.audits.cmake]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-deploy"
+version = "0.1.49"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
 [[audits.google.audits.dirs-next]]
 who = "George Burgess IV <gbiv@google.com>"
 criteria = "safe-to-deploy"
