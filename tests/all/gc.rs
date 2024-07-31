@@ -478,11 +478,7 @@ fn no_gc_middle_of_args() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(any(
-    miri,
-    // TODO(6530): s390x doesn't support tail calls yet.
-    target_arch = "s390x"
-), ignore)]
+#[cfg_attr(miri, ignore)]
 fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
     // Test that GC refs in tail-calls' stack arguments get properly accounted
     // for in stack maps.

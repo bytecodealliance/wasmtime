@@ -46,8 +46,8 @@
 ;;       stg     %r1, 0(%r15)
 ;;       clgfi   %r4, 0xfffffffc
 ;;       jgh     0x94
-;;       lg      %r5, 0x60(%r2)
-;;       lrv     %r2, 0(%r4, %r5)
+;;       lg      %r2, 0x60(%r2)
+;;       lrv     %r2, 0(%r4, %r2)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00

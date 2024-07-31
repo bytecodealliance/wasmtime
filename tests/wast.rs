@@ -99,14 +99,6 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
             }
         }
 
-        // TODO(#6530): These tests require tail calls, but s390x doesn't
-        // support them yet.
-        if cfg!(target_arch = "s390x") {
-            if part == "function-references" || part == "tail-call" {
-                return true;
-            }
-        }
-
         // Disable spec tests for proposals that Winch does not implement yet.
         if strategy == Strategy::Winch {
             let part = part.to_str().unwrap();

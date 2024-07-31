@@ -171,13 +171,7 @@ fn wasm_call_signature(
         // If the tail calls proposal is enabled, we must use the tail calling
         // convention. We don't use it by default yet because of
         // https://github.com/bytecodealliance/wasmtime/issues/6759
-        arch if tunables.tail_callable => {
-            assert_ne!(
-                arch,
-                Architecture::S390x,
-                "https://github.com/bytecodealliance/wasmtime/issues/6530"
-            );
-
+        _ if tunables.tail_callable => {
             assert!(
                 !tunables.winch_callable,
                 "Winch doesn't support the WebAssembly tail call proposal",

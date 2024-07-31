@@ -42,6 +42,7 @@ pub struct CallInfo {
     pub uses: CallArgList,
     pub defs: CallRetList,
     pub clobbers: PRegSet,
+    pub callee_pop_size: u32,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub tls_symbol: Option<SymbolReloc>,
@@ -55,8 +56,27 @@ pub struct CallIndInfo {
     pub uses: CallArgList,
     pub defs: CallRetList,
     pub clobbers: PRegSet,
+    pub callee_pop_size: u32,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
+}
+
+/// Additional information for (direct) ReturnCall instructions, left out of line to lower the size of
+/// the Inst enum.
+#[derive(Clone, Debug)]
+pub struct ReturnCallInfo {
+    pub dest: ExternalName,
+    pub uses: CallArgList,
+    pub callee_pop_size: u32,
+}
+
+/// Additional information for ReturnCallInd instructions, left out of line to lower the size of the Inst
+/// enum.
+#[derive(Clone, Debug)]
+pub struct ReturnCallIndInfo {
+    pub rn: Reg,
+    pub uses: CallArgList,
+    pub callee_pop_size: u32,
 }
 
 #[test]
@@ -227,8 +247,11 @@ impl Inst {
             | Inst::VecExtractLane { .. }
             | Inst::VecInsertLaneImm { .. }
             | Inst::VecReplicateLane { .. }
+            | Inst::AllocateArgs { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
+            | Inst::ReturnCall { .. }
+            | Inst::ReturnCallInd { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::Ret { .. }
@@ -396,7 +419,9 @@ fn memarg_operands(memarg: &mut MemArg, collector: &mut impl OperandVisitor) {
         MemArg::RegOffset { reg, .. } => {
             collector.reg_use(reg);
         }
-        MemArg::InitialSPOffset { .. } | MemArg::SlotOffset { .. } => {}
+        MemArg::InitialSPOffset { .. }
+        | MemArg::NominalSPOffset { .. }
+        | MemArg::SlotOffset { .. } => {}
     }
     // mem_finalize might require %r1 to hold (part of) the address.
     // Conservatively assume this will always be necessary here.
@@ -882,6 +907,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
+        Inst::AllocateArgs { .. } => {}
         Inst::Call { link, info } => {
             let CallInfo {
                 uses,
@@ -919,6 +945,19 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
                 collector.reg_fixed_def(vreg, *preg);
             }
             collector.reg_clobbers(clobbers);
+        }
+        Inst::ReturnCall { info } => {
+            let ReturnCallInfo { uses, .. } = &mut **info;
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
+        }
+        Inst::ReturnCallInd { info } => {
+            let ReturnCallIndInfo { rn, uses, .. } = &mut **info;
+            collector.reg_use(rn);
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
         }
         Inst::Args { args } => {
             for ArgPair { vreg, preg } in args {
@@ -1066,6 +1105,7 @@ impl MachInst for Inst {
     fn is_term(&self) -> MachTerminator {
         match self {
             &Inst::Rets { .. } => MachTerminator::Ret,
+            &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::OneWayCondBr { .. } => {
@@ -3121,6 +3161,13 @@ impl Inst {
                 };
                 format!("{} {}, {}", op, rd, rn)
             }
+            &Inst::AllocateArgs { size } => {
+                if let Ok(size) = i16::try_from(size) {
+                    format!("aghi {}, {}", show_reg(stack_reg()), -size)
+                } else {
+                    format!("slgfi {}, {}", show_reg(stack_reg()), size)
+                }
+            }
             &Inst::Call { link, ref info, .. } => {
                 let link = link.to_reg();
                 let tls_symbol = match &info.tls_symbol {
@@ -3130,19 +3177,47 @@ impl Inst {
                     }
                     _ => unreachable!(),
                 };
+                let callee_pop_size = if info.callee_pop_size > 0 {
+                    format!(" ; callee_pop_size {}", info.callee_pop_size)
+                } else {
+                    "".to_string()
+                };
                 debug_assert_eq!(link, gpr(14));
                 format!(
-                    "brasl {}, {}{}",
+                    "brasl {}, {}{}{}",
                     show_reg(link),
                     info.dest.display(None),
-                    tls_symbol
+                    tls_symbol,
+                    callee_pop_size
                 )
             }
             &Inst::CallInd { link, ref info, .. } => {
                 let link = link.to_reg();
                 let rn = pretty_print_reg(info.rn);
+                let callee_pop_size = if info.callee_pop_size > 0 {
+                    format!(" ; callee_pop_size {}", info.callee_pop_size)
+                } else {
+                    "".to_string()
+                };
                 debug_assert_eq!(link, gpr(14));
-                format!("basr {}, {}", show_reg(link), rn)
+                format!("basr {}, {}{}", show_reg(link), rn, callee_pop_size)
+            }
+            &Inst::ReturnCall { ref info, .. } => {
+                let callee_pop_size = if info.callee_pop_size > 0 {
+                    format!(" ; callee_pop_size {}", info.callee_pop_size)
+                } else {
+                    "".to_string()
+                };
+                format!("return_call {}{}", info.dest.display(None), callee_pop_size)
+            }
+            &Inst::ReturnCallInd { ref info, .. } => {
+                let rn = pretty_print_reg(info.rn);
+                let callee_pop_size = if info.callee_pop_size > 0 {
+                    format!(" ; callee_pop_size {}", info.callee_pop_size)
+                } else {
+                    "".to_string()
+                };
+                format!("return_call_ind {}{}", rn, callee_pop_size)
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();

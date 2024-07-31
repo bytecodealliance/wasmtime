@@ -516,6 +516,10 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
+        fn abi_unwrap_ret_area_ptr(&mut self) -> Reg {
+            self.lower_ctx.abi().ret_area_ptr().unwrap()
+        }
+
         fn abi_stackslot_addr(
             &mut self,
             dst: WritableReg,

@@ -56,10 +56,7 @@ pub(crate) fn ref_types_module(
     let mut config = Config::new();
     config.wasm_reference_types(true);
 
-    if !cfg!(target_arch = "s390x") {
-        // TODO(6530): s390x doesn't support tail calls yet.
-        config.wasm_tail_call(true);
-    }
+    config.wasm_tail_call(true);
 
     if use_epochs {
         config.epoch_interruption(true);
