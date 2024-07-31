@@ -490,6 +490,24 @@ impl Assembler {
         });
     }
 
+    /// Emits a jump table sequence.
+    pub fn jmp_table(
+        &mut self,
+        targets: &[MachLabel],
+        default: MachLabel,
+        index: Reg,
+        tmp1: Reg,
+        tmp2: Reg,
+    ) {
+        self.emit(Inst::JTSequence {
+            default,
+            targets: Box::new(targets.to_vec()),
+            ridx: index.into(),
+            rtmp1: Writable::from_reg(tmp1.into()),
+            rtmp2: Writable::from_reg(tmp2.into()),
+        });
+    }
+
     /// Conditional Set sets the destination register to 1 if the condition
     /// is true, and otherwise sets it to 0.
     pub fn cset(&mut self, rd: Reg, cond: Cond) {

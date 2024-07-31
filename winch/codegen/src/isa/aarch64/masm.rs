@@ -603,8 +603,16 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn jmp_table(&mut self, _targets: &[MachLabel], _index: Reg, _tmp: Reg) {
-        todo!()
+    fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
+        // At least one default target.
+        assert!(targets.len() >= 1);
+        let max = targets.len() as u64 - 1;
+        self.asm.subs_ir(max, index, OperandSize::S64);
+        let default_index = max as usize;
+        let default = targets[default_index];
+        let rest = &targets[..default_index];
+        let tmp1 = regs::scratch();
+        self.asm.jmp_table(rest, default, index, tmp1, tmp);
     }
 
     fn trap(&mut self, _code: TrapCode) {
