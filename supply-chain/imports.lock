@@ -2,920 +2,192 @@
 # cargo-vet imports lock
 
 [[unpublished.cranelift]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift]]
-version = "0.110.0"
-audited_as = "0.108.1"
-
-[[unpublished.cranelift]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-bforest]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-bforest]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-bforest]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-bforest]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-bforest]]
 version = "0.111.0"
-audited_as = "0.109.0"
+audited_as = "0.110.1"
 
-[[unpublished.cranelift-codegen]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-codegen]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-codegen]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-codegen]]
-version = "0.110.0"
-audited_as = "0.108.1"
+[[unpublished.cranelift-bitset]]
+version = "0.111.0"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-codegen]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-codegen-meta]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-codegen-shared]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-control]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-control]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-control]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-control]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-control]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-entity]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-entity]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-entity]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-entity]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-entity]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-frontend]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-frontend]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-frontend]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-frontend]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-frontend]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-interpreter]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-isle]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-isle]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-isle]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-isle]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-isle]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-jit]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-jit]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-jit]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-jit]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-jit]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-module]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-module]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-module]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-module]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-module]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-native]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-native]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-native]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-native]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-native]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-object]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-object]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-object]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-object]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-object]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-reader]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-reader]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-reader]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-reader]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-reader]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-serde]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-serde]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-serde]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-serde]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-serde]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.cranelift-wasm]]
-version = "0.107.0"
-audited_as = "0.105.2"
-
-[[unpublished.cranelift-wasm]]
-version = "0.108.0"
-audited_as = "0.106.1"
-
-[[unpublished.cranelift-wasm]]
-version = "0.109.0"
-audited_as = "0.107.1"
-
-[[unpublished.cranelift-wasm]]
-version = "0.110.0"
-audited_as = "0.108.1"
+audited_as = "0.110.1"
 
 [[unpublished.cranelift-wasm]]
 version = "0.111.0"
-audited_as = "0.109.0"
-
-[[unpublished.wasi-common]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasi-common]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasi-common]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasi-common]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "0.110.1"
 
 [[unpublished.wasi-common]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-asm-macros]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-cache]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-cache]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-cache]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-cache]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-cache]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-cli]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-cli]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-cli]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-cli]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-cli]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-component-macro]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-component-macro]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-component-macro]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-component-macro]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-component-macro]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-component-util]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-component-util]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-component-util]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-component-util]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-component-util]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-cranelift]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-cranelift]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-cranelift]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-cranelift]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-cranelift]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-cranelift-shared]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-environ]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-environ]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-environ]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-environ]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-environ]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-explorer]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-explorer]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-explorer]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-explorer]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-explorer]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-fiber]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-fiber]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-fiber]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-fiber]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-fiber]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-jit-debug]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-runtime]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-runtime]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-slab]]
-version = "20.0.0"
-audited_as = "19.0.0"
-
-[[unpublished.wasmtime-slab]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-slab]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-slab]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-slab]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-types]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-types]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-types]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-types]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-types]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-wasi]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-wasi]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-wasi]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-wasi]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-wasi]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-wasi-http]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-wasi-threads]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-wast]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-wast]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-wast]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-wast]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-wast]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-winch]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-winch]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-winch]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-winch]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-winch]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-wit-bindgen]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wasmtime-wmemcheck]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wiggle]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wiggle]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wiggle]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wiggle]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wiggle]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wiggle-generate]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wiggle-generate]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wiggle-generate]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wiggle-generate]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wiggle-generate]]
 version = "24.0.0"
-audited_as = "22.0.0"
-
-[[unpublished.wiggle-macro]]
-version = "20.0.0"
-audited_as = "18.0.2"
-
-[[unpublished.wiggle-macro]]
-version = "21.0.0"
-audited_as = "19.0.1"
-
-[[unpublished.wiggle-macro]]
-version = "22.0.0"
-audited_as = "20.0.1"
-
-[[unpublished.wiggle-macro]]
-version = "23.0.0"
-audited_as = "21.0.1"
+audited_as = "23.0.1"
 
 [[unpublished.wiggle-macro]]
 version = "24.0.0"
-audited_as = "22.0.0"
+audited_as = "23.0.1"
 
 [[unpublished.wiggle-test]]
 version = "0.0.0"
 audited_as = "0.1.0"
 
 [[unpublished.winch-codegen]]
-version = "0.18.0"
-audited_as = "0.16.2"
-
-[[unpublished.winch-codegen]]
-version = "0.19.0"
-audited_as = "0.17.1"
-
-[[unpublished.winch-codegen]]
-version = "0.20.0"
-audited_as = "0.18.1"
-
-[[unpublished.winch-codegen]]
-version = "0.21.0"
-audited_as = "0.19.1"
-
-[[unpublished.winch-codegen]]
 version = "0.22.0"
-audited_as = "0.20.0"
+audited_as = "0.21.1"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
@@ -979,13 +251,6 @@ when = "2023-07-05"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
-
-[[publisher.backtrace]]
-version = "0.3.69"
-when = "2023-08-22"
-user-id = 2915
-user-login = "Amanieu"
-user-name = "Amanieu d'Antras"
 
 [[publisher.backtrace]]
 version = "0.3.73"
@@ -1100,512 +365,110 @@ user-login = "jrmuizel"
 user-name = "Jeff Muizelaar"
 
 [[publisher.cranelift]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-bforest]]
-version = "0.105.2"
-when = "2024-02-28"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.cranelift-bforest]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-bforest]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-bforest]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-bforest]]
-version = "0.109.0"
-when = "2024-06-20"
+[[publisher.cranelift-bitset]]
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen-meta]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen-shared]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-control]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-control]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-control]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-control]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-control]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-entity]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-entity]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-entity]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-entity]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-entity]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-frontend]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-frontend]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-frontend]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-frontend]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-frontend]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-interpreter]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-interpreter]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-interpreter]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-interpreter]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-interpreter]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-isle]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-isle]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-isle]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-isle]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-isle]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-jit]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-jit]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-jit]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-jit]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-jit]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-module]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-module]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-module]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-module]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-module]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-native]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-native]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-native]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-native]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-native]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-object]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-object]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-object]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-object]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-object]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-reader]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-reader]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-reader]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-reader]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-reader]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-serde]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-serde]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-serde]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-serde]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-serde]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-wasm]]
-version = "0.105.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.106.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.107.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.108.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.109.0"
-when = "2024-06-20"
+version = "0.110.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1673,32 +536,11 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.hashbrown]]
-version = "0.14.0"
-when = "2023-06-05"
-user-id = 2915
-user-login = "Amanieu"
-user-name = "Amanieu d'Antras"
-
-[[publisher.hashbrown]]
 version = "0.14.3"
 when = "2023-11-26"
 user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
-
-[[publisher.indexmap]]
-version = "1.9.1"
-when = "2022-06-21"
-user-id = 539
-user-login = "cuviper"
-user-name = "Josh Stone"
-
-[[publisher.indexmap]]
-version = "2.0.0"
-when = "2023-06-23"
-user-id = 539
-user-login = "cuviper"
-user-name = "Josh Stone"
 
 [[publisher.indexmap]]
 version = "2.2.6"
@@ -1771,13 +613,6 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.prettyplease]]
-version = "0.2.19"
-when = "2024-04-15"
-user-id = 3618
-user-login = "dtolnay"
-user-name = "David Tolnay"
-
-[[publisher.prettyplease]]
 version = "0.2.20"
 when = "2024-05-07"
 user-id = 3618
@@ -1787,13 +622,6 @@ user-name = "David Tolnay"
 [[publisher.proc-macro2]]
 version = "1.0.81"
 when = "2024-04-17"
-user-id = 3618
-user-login = "dtolnay"
-user-name = "David Tolnay"
-
-[[publisher.quote]]
-version = "1.0.29"
-when = "2023-06-29"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1917,13 +745,6 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.syn]]
-version = "2.0.32"
-when = "2023-09-10"
-user-id = 3618
-user-login = "dtolnay"
-user-name = "David Tolnay"
-
-[[publisher.syn]]
 version = "2.0.60"
 when = "2024-04-17"
 user-id = 3618
@@ -1945,18 +766,11 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.target-lexicon]]
-version = "0.12.13"
-when = "2024-01-02"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.termcolor]]
-version = "1.1.3"
-when = "2022-03-02"
-user-id = 189
-user-login = "BurntSushi"
-user-name = "Andrew Gallant"
+version = "0.12.16"
+when = "2024-07-30"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
 
 [[publisher.termcolor]]
 version = "1.4.1"
@@ -2022,32 +836,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.wasi-common]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-common]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-common]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-common]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-common]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -2087,284 +877,14 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-encoder]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.207.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.208.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.209.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.211.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.212.0"
-when = "2024-06-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
 version = "0.214.0"
 when = "2024-07-16"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-metadata]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.207.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.208.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.209.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.211.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.212.0"
-when = "2024-06-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
 version = "0.214.0"
 when = "2024-07-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-mutate]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-mutate]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-mutate]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-mutate]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-mutate]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-mutate]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-smith]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-smith]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-smith]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-smith]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-smith]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-smith]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.207.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.208.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.209.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.211.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.212.0"
-when = "2024-06-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -2375,830 +895,146 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmprinter]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.207.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.208.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.209.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.211.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
-version = "0.212.0"
-when = "2024-06-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmprinter]]
 version = "0.214.0"
 when = "2024-07-16"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-asm-macros]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-asm-macros]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-asm-macros]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-asm-macros]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-asm-macros]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cache]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cli]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cli-flags]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli-flags]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli-flags]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli-flags]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli-flags]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-component-macro]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-macro]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-macro]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-macro]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-macro]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-component-util]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cranelift]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-environ]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-environ]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-environ]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-environ]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-environ]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-explorer]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-fiber]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-jit-debug]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-jit-icache-coherence]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-slab]]
-version = "19.0.0"
-when = "2024-03-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-slab]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-slab]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-slab]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-slab]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-types]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-http]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-http]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-http]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-http]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-http]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-nn]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-nn]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-nn]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-nn]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-nn]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-threads]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-threads]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-threads]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-threads]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-threads]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wast]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wast]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wast]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wast]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wast]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-winch]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wit-bindgen]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wmemcheck]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
-version = "22.0.0"
-when = "2024-06-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "201.0.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "202.0.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "203.0.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "204.0.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "205.0.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "206.0.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "207.0.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "208.0.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "209.0.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "211.0.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wast]]
-version = "212.0.0"
-when = "2024-06-27"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3209,164 +1045,26 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wat]]
-version = "1.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.207.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.208.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.209.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.211.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
-version = "1.212.0"
-when = "2024-06-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wat]]
 version = "1.214.0"
 when = "2024-07-16"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wiggle]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wiggle-generate]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-generate]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-generate]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-generate]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-generate]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wiggle-macro]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-macro]]
-version = "19.0.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-macro]]
-version = "20.0.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-macro]]
-version = "21.0.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-macro]]
-version = "22.0.0"
-when = "2024-06-20"
+version = "23.0.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3385,32 +1083,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.winch-codegen]]
-version = "0.16.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.winch-codegen]]
-version = "0.17.1"
-when = "2024-04-02"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.winch-codegen]]
-version = "0.18.1"
-when = "2024-05-03"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.winch-codegen]]
-version = "0.19.1"
-when = "2024-05-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.winch-codegen]]
-version = "0.20.0"
-when = "2024-06-20"
+version = "0.21.1"
+when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3569,68 +1243,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.20.0"
-when = "2024-02-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen]]
-version = "0.22.0"
-when = "2024-03-11"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen]]
-version = "0.25.0"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen]]
-version = "0.26.0"
-when = "2024-05-30"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen]]
-version = "0.27.0"
-when = "2024-06-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen]]
 version = "0.28.0"
 when = "2024-07-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-core]]
-version = "0.20.0"
-when = "2024-02-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-core]]
-version = "0.22.0"
-when = "2024-03-11"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-core]]
-version = "0.25.0"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-core]]
-version = "0.26.0"
-when = "2024-05-30"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-core]]
-version = "0.27.0"
-when = "2024-06-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3641,62 +1255,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rt]]
-version = "0.22.0"
-when = "2024-03-11"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rt]]
-version = "0.25.0"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rt]]
-version = "0.26.0"
-when = "2024-05-30"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rt]]
-version = "0.27.0"
-when = "2024-06-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rt]]
 version = "0.28.0"
 when = "2024-07-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust]]
-version = "0.20.0"
-when = "2024-02-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust]]
-version = "0.22.0"
-when = "2024-03-11"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust]]
-version = "0.25.0"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust]]
-version = "0.26.0"
-when = "2024-05-30"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust]]
-version = "0.27.0"
-when = "2024-06-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3707,176 +1267,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.20.0"
-when = "2024-02-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust-macro]]
-version = "0.22.0"
-when = "2024-03-11"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust-macro]]
-version = "0.25.0"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust-macro]]
-version = "0.26.0"
-when = "2024-05-30"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust-macro]]
-version = "0.27.0"
-when = "2024-06-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-bindgen-rust-macro]]
 version = "0.28.0"
 when = "2024-07-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.207.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.208.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.209.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.211.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.212.0"
-when = "2024-06-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-component]]
 version = "0.214.0"
 when = "2024-07-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.201.0"
-when = "2024-02-27"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.202.0"
-when = "2024-03-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.203.0"
-when = "2024-04-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.204.0"
-when = "2024-04-16"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.205.0"
-when = "2024-04-18"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.206.0"
-when = "2024-04-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.207.0"
-when = "2024-05-07"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.208.1"
-when = "2024-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.209.1"
-when = "2024-05-29"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.211.1"
-when = "2024-06-19"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.212.0"
-when = "2024-06-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3919,12 +1317,6 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "No unsafe usage or ambient capabilities"
 
-[[audits.embark-studios.audits.cty]]
-who = "Johan Andersson <opensource@embark-studios.com>"
-criteria = "safe-to-deploy"
-version = "0.2.2"
-notes = "Inspected it and is a tiny crate with just type definitions"
-
 [[audits.embark-studios.audits.utf8parse]]
 who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
@@ -3937,22 +1329,22 @@ criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "No unsafe usage or ambient capabilities, sane build script"
 
-[[audits.embark-studios.audits.webpki-roots]]
-who = "Johan Andersson <opensource@embark-studios.com>"
-criteria = "safe-to-deploy"
-version = "0.22.4"
-notes = "Inspected it to confirm that it only contains data definitions and no runtime code"
-
-[[audits.embark-studios.audits.which]]
-who = "Johan Andersson <opensource@embark-studios.com>"
-criteria = "safe-to-run"
-version = "4.4.0"
-notes = "Small build-time crate to find path of binary. Single unsafe usage, file system access, both look sound"
-
 [[audits.fermyon.audits.oorandom]]
 who = "Radu Matei <radu.matei@fermyon.com>"
 criteria = "safe-to-run"
 version = "11.1.3"
+
+[[audits.google.audits.cast]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-run"
+version = "0.3.0"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.google.audits.dirs-next]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-deploy"
+version = "2.0.0"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
 [[audits.google.audits.fastrand]]
 who = "George Burgess IV <gbiv@google.com>"
@@ -3964,28 +1356,10 @@ that the RNG here is not cryptographically secure.
 """
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
-[[audits.google.audits.glob]]
-who = "George Burgess IV <gbiv@google.com>"
-criteria = "safe-to-deploy"
-version = "0.3.1"
-aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
-
-[[audits.google.audits.instant]]
-who = "George Burgess IV <gbiv@google.com>"
-criteria = "safe-to-run"
-version = "0.1.12"
-aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
-
 [[audits.google.audits.itertools]]
 who = "ChromeOS"
 criteria = "safe-to-run"
 version = "0.10.5"
-aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
-
-[[audits.google.audits.libfuzzer-sys]]
-who = "ChromeOS"
-criteria = "safe-to-run"
-version = "0.4.4"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
 [[audits.google.audits.libtest-mimic]]
@@ -4026,6 +1400,12 @@ aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/th
 who = "Dennis Kempin <denniskempin@google.com>"
 criteria = "safe-to-run"
 version = "1.8.1"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.google.audits.tinytemplate]]
+who = "Ying Hsu <yinghsu@chromium.org>"
+criteria = "safe-to-run"
+version = "1.2.1"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
 [[audits.google.audits.version_check]]
@@ -4084,11 +1464,6 @@ who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.10.2"
 
-[[audits.isrg.audits.untrusted]]
-who = "David Cook <dcook@divviup.org>"
-criteria = "safe-to-deploy"
-version = "0.7.1"
-
 [[audits.mozilla.wildcard-audits.core-foundation-sys]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -4097,15 +1472,6 @@ start = "2020-10-14"
 end = "2023-05-04"
 renew = false
 notes = "I've reviewed every source contribution that was neither authored nor reviewed by Mozilla."
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.wildcard-audits.unicode-segmentation]]
-who = "Manish Goregaokar <manishsmail@gmail.com>"
-criteria = "safe-to-deploy"
-user-id = 1139 # Manish Goregaokar (Manishearth)
-start = "2019-05-15"
-end = "2024-05-03"
-notes = "All code written or reviewed by Manish"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.wildcard-audits.unicode-width]]
@@ -4258,13 +1624,6 @@ criteria = "safe-to-deploy"
 delta = "1.9.0 -> 2.0.0"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
-[[audits.mozilla.audits.flagset]]
-who = "Ryan Hunt <rhunt@eqrion.net>"
-criteria = "safe-to-deploy"
-version = "0.4.3"
-notes = "Uses no ambient capabilities, vetted the one instance of unsafe."
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
 [[audits.mozilla.audits.fnv]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -4327,17 +1686,6 @@ criteria = "safe-to-deploy"
 delta = "0.4.0 -> 0.4.1"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
-[[audits.mozilla.audits.home]]
-who = "Nika Layzell <nika@thelayzells.com>"
-criteria = "safe-to-deploy"
-version = "0.5.3"
-notes = """
-Crate with straightforward code for determining the user's HOME directory. Only
-unsafe code is used to invoke the Windows SHGetFolderPathW API to get the
-profile directory when the USERPROFILE environment variable is unavailable.
-"""
-aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
-
 [[audits.mozilla.audits.itertools]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -4381,13 +1729,6 @@ criteria = "safe-to-deploy"
 delta = "0.6.5 -> 0.7.1"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
-[[audits.mozilla.audits.num-traits]]
-who = "Josh Stone <jistone@redhat.com>"
-criteria = "safe-to-deploy"
-version = "0.2.15"
-notes = "All code written or reviewed by Josh Stone."
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
 [[audits.mozilla.audits.num_cpus]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -4423,61 +1764,6 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.25 -> 0.3.26"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.proc-macro2]]
-who = "Nika Layzell <nika@thelayzells.com>"
-criteria = "safe-to-deploy"
-version = "1.0.39"
-notes = """
-`proc-macro2` acts as either a thin(-ish) wrapper around the std-provided
-`proc_macro` crate, or as a fallback implementation of the crate, depending on
-where it is used.
-
-If using this crate on older versions of rustc (1.56 and earlier), it will
-temporarily replace the panic handler while initializing in order to detect if
-it is running within a `proc_macro`, which could lead to surprising behaviour.
-This should not be an issue for more recent compiler versions, which support
-`proc_macro::is_available()`.
-
-The `proc-macro2` crate's fallback behaviour is not identical to the complex
-behaviour of the rustc compiler (e.g. it does not perform unicode normalization
-for identifiers), however it behaves well enough for its intended use-case
-(tests and scripts processing rust code).
-
-`proc-macro2` does not use unsafe code, however exposes one `unsafe` API to
-allow bypassing checks in the fallback implementation when constructing
-`Literal` using `from_str_unchecked`. This was intended to only be used by the
-`quote!` macro, however it has been removed
-(https://github.com/dtolnay/quote/commit/f621fe64a8a501cae8e95ebd6848e637bbc79078),
-and is likely completely unused. Even when used, this API shouldn't be able to
-cause unsoundness.
-"""
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.proc-macro2]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "1.0.39 -> 1.0.43"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.proc-macro2]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "1.0.43 -> 1.0.49"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.proc-macro2]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "1.0.49 -> 1.0.51"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.proc-macro2]]
-who = "Jan-Erik Rediger <jrediger@mozilla.com>"
-criteria = "safe-to-deploy"
-delta = "1.0.57 -> 1.0.59"
-notes = "Enabled on Wasm"
-aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.rayon]]
 who = "Josh Stone <jistone@redhat.com>"
@@ -4589,4 +1875,24 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.1.20 -> 0.1.21"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.zerocopy]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.7.32"
+notes = """
+This crate is `no_std` so doesn't use any side-effectful std functions. It
+contains quite a lot of `unsafe` code, however. I verified portions of this. It
+also has a large, thorough test suite. The project claims to run tests with
+Miri to have stronger soundness checks, and also claims to use formal
+verification tools to prove correctness.
+"""
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.zerocopy-derive]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.7.32"
+notes = "Clean, safe macros for zerocopy."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
