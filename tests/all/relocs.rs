@@ -92,12 +92,12 @@ fn test_many_call_module(mut store: Store<()>) -> Result<()> {
     wat.push_str("(module\n");
     wat.push_str("(func $first (result i32) (i32.const 1))\n");
     for i in 0..N {
-        wat.push_str(&format!("(func (export \"{}\") (result i32 i32)\n", i));
+        wat.push_str(&format!("(func (export \"{i}\") (result i32 i32)\n"));
         wat.push_str("call $first\n");
-        wat.push_str(&format!("i32.const {}\n", i));
+        wat.push_str(&format!("i32.const {i}\n"));
         wat.push_str("i32.add\n");
         wat.push_str("call $last\n");
-        wat.push_str(&format!("i32.const {}\n", i));
+        wat.push_str(&format!("i32.const {i}\n"));
         wat.push_str("i32.add)\n");
     }
     wat.push_str("(func $last (result i32) (i32.const 2))\n");

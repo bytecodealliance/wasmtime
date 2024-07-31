@@ -500,9 +500,8 @@ fn test_invalid_string_encoding(
     let trap = test_raw_when_encoded(engine, src, dst, bytes, len)?.unwrap();
     let src = src.replace("latin1+", "");
     assert!(
-        format!("{:?}", trap).contains(&format!("invalid {src} encoding")),
-        "bad error: {:?}",
-        trap,
+        format!("{trap:?}").contains(&format!("invalid {src} encoding")),
+        "bad error: {trap:?}",
     );
     Ok(())
 }

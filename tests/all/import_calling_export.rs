@@ -78,6 +78,6 @@ fn test_returns_incorrect_type() -> Result<()> {
     let trap = run_func
         .call(&mut store, &[], &mut result)
         .expect_err("the execution should fail");
-    assert!(format!("{:?}", trap).contains("function attempted to return an incompatible value"));
+    assert!(format!("{trap:?}").contains("function attempted to return an incompatible value"));
     Ok(())
 }

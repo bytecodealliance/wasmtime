@@ -74,10 +74,10 @@ fn assert_panics(f: impl FnOnce(), msg: &str) {
         Ok(()) => panic!("expected closure to panic"),
         Err(e) => match e.downcast::<String>() {
             Ok(s) => {
-                assert!(s.contains(msg), "bad panic: {}", s);
+                assert!(s.contains(msg), "bad panic: {s}");
             }
             Err(e) => match e.downcast::<&'static str>() {
-                Ok(s) => assert!(s.contains(msg), "bad panic: {}", s),
+                Ok(s) => assert!(s.contains(msg), "bad panic: {s}"),
                 Err(_) => panic!("bad panic"),
             },
         },

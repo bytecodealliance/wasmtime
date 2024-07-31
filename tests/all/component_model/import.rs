@@ -820,7 +820,7 @@ fn bad_import_alignment() -> Result<()> {
         .call(&mut store, ())
         .unwrap_err();
     assert!(
-        format!("{:?}", trap).contains("pointer not aligned"),
+        format!("{trap:?}").contains("pointer not aligned"),
         "{}",
         trap
     );
@@ -830,7 +830,7 @@ fn bad_import_alignment() -> Result<()> {
         .call(&mut store, ())
         .unwrap_err();
     assert!(
-        format!("{:?}", trap).contains("pointer not aligned"),
+        format!("{trap:?}").contains("pointer not aligned"),
         "{}",
         trap
     );

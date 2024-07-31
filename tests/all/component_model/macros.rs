@@ -307,7 +307,7 @@ fn enum_derive() -> Result<()> {
             &format!(
                 "(enum {})",
                 (0..257)
-                    .map(|index| format!(r#""V{}""#, index))
+                    .map(|index| format!(r#""V{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
@@ -453,7 +453,7 @@ fn flags() -> Result<()> {
             &format!(
                 r#"(flags {})"#,
                 (0..8)
-                    .map(|index| format!(r#""F{}""#, index))
+                    .map(|index| format!(r#""F{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
@@ -502,7 +502,7 @@ fn flags() -> Result<()> {
             &format!(
                 "(flags {})",
                 (0..9)
-                    .map(|index| format!(r#""F{}""#, index))
+                    .map(|index| format!(r#""F{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
@@ -550,7 +550,7 @@ fn flags() -> Result<()> {
             &format!(
                 r#"(flags {})"#,
                 (0..16)
-                    .map(|index| format!(r#""F{}""#, index))
+                    .map(|index| format!(r#""F{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
@@ -589,7 +589,7 @@ fn flags() -> Result<()> {
             &format!(
                 "(flags {})",
                 (0..17)
-                    .map(|index| format!(r#""F{}""#, index))
+                    .map(|index| format!(r#""F{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
@@ -637,7 +637,7 @@ fn flags() -> Result<()> {
             &format!(
                 r#"(flags {})"#,
                 (0..32)
-                    .map(|index| format!(r#""F{}""#, index))
+                    .map(|index| format!(r#""F{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
@@ -676,7 +676,7 @@ fn flags() -> Result<()> {
             &format!(
                 "(flags {})",
                 (0..33)
-                    .map(|index| format!(r#""F{}""#, index))
+                    .map(|index| format!(r#""F{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
@@ -709,7 +709,7 @@ fn flags() -> Result<()> {
             &format!(
                 "(flags {})",
                 (0..65)
-                    .map(|index| format!(r#""F{}""#, index))
+                    .map(|index| format!(r#""F{index}""#))
                     .collect::<Vec<_>>()
                     .join(" ")
             ),

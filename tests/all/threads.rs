@@ -251,7 +251,7 @@ fn test_memory_size_accessibility() -> Result<()> {
     let grow_thread = std::thread::spawn(move || {
         for i in 0..NUM_GROW_OPS {
             if grow_memory.grow(1).is_err() {
-                println!("stopping at grow operation #{}", i);
+                println!("stopping at grow operation #{i}");
                 break;
             }
         }

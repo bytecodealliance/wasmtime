@@ -60,7 +60,7 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
             rlim_max: process_max_memory as u64,
         };
         let res = libc::setrlimit(libc::RLIMIT_DATA, &rlimit);
-        assert_eq!(res, 0, "setrlimit failed: {}", res);
+        assert_eq!(res, 0, "setrlimit failed: {res}");
     };
 
     let context = MemoryGrowFailureDetector::default();
@@ -85,8 +85,7 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
         .to_string();
     assert!(
         err_msg.starts_with("failed to grow memory"),
-        "unexpected error: {}",
-        err_msg
+        "unexpected error: {err_msg}"
     );
 
     assert_eq!(store.data().current, 10 * 64 * 1024);
@@ -98,8 +97,7 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
     let err_msg = store.data().error.as_ref().unwrap();
     assert!(
         err_msg.starts_with("Cannot allocate memory"),
-        "unexpected error: {}",
-        err_msg
+        "unexpected error: {err_msg}"
     );
     Ok(())
 }

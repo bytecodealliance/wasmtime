@@ -1124,8 +1124,7 @@ fn some_traps() -> Result<()> {
         assert!(
             err.to_string()
                 .contains("realloc return: beyond end of memory"),
-            "{:?}",
-            err,
+            "{err:?}",
         );
     }
     let err = instance(&mut store)?

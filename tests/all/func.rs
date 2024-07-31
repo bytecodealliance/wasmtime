@@ -1435,14 +1435,14 @@ fn typed_funcs_count_params_correctly_in_error_messages(config: &mut Config) -> 
     match instance.get_typed_func::<(), ()>(&mut store, "f") {
         Ok(_) => panic!("should be wrong signature"),
         Err(e) => {
-            let msg = format!("{:?}", e);
+            let msg = format!("{e:?}");
             assert!(dbg!(msg).contains("expected 0 types, found 2"))
         }
     }
     match instance.get_typed_func::<(i32,), ()>(&mut store, "f") {
         Ok(_) => panic!("should be wrong signature"),
         Err(e) => {
-            let msg = format!("{:?}", e);
+            let msg = format!("{e:?}");
             assert!(dbg!(msg).contains("expected 1 types, found 2"))
         }
     }
@@ -1451,7 +1451,7 @@ fn typed_funcs_count_params_correctly_in_error_messages(config: &mut Config) -> 
     match instance.get_typed_func::<(i32, i32, i32), ()>(&mut store, "f") {
         Ok(_) => panic!("should be wrong signature"),
         Err(e) => {
-            let msg = format!("{:?}", e);
+            let msg = format!("{e:?}");
             assert!(dbg!(msg).contains("expected 3 types, found 2"))
         }
     }

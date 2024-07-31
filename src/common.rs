@@ -327,7 +327,7 @@ impl RunCommon {
 
         for address in &self.common.wasi.tcplisten {
             let stdlistener = std::net::TcpListener::bind(address)
-                .with_context(|| format!("failed to bind to address '{}'", address))?;
+                .with_context(|| format!("failed to bind to address '{address}'"))?;
 
             let _ = stdlistener.set_nonblocking(true)?;
 

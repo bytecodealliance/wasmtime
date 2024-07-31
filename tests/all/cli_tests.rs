@@ -221,8 +221,7 @@ fn timeout_in_start() -> Result<()> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("wasm trap: interrupt"),
-        "bad stderr: {}",
-        stderr
+        "bad stderr: {stderr}"
     );
     Ok(())
 }
@@ -244,8 +243,7 @@ fn timeout_in_invoke() -> Result<()> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("wasm trap: interrupt"),
-        "bad stderr: {}",
-        stderr
+        "bad stderr: {stderr}"
     );
     Ok(())
 }
@@ -1347,7 +1345,7 @@ mod test_programs {
         )?;
         println!("{}", String::from_utf8_lossy(&output.stderr));
         let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("{}", stdout);
+        println!("{stdout}");
         assert!(stdout.starts_with("Called _start\n"));
         assert!(stdout.ends_with("Done\n"));
         assert!(output.status.success());
