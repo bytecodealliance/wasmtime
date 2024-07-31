@@ -8,7 +8,7 @@ block0(v0: i8):
     v2 = ushr v0, v1
     v3 = ishl v2, v1
     return v3
-    ; check: v4 = iconst.i8 224
+    ; check: v4 = iconst.i8 -32
     ; check: v5 = band v0, v4
     ; check: return v5
 }
@@ -19,7 +19,7 @@ block0(v0: i32):
     v2 = ushr v0, v1
     v3 = ishl v2, v1
     return v3
-    ; check: v4 = iconst.i32 0xffff_ffe0
+    ; check: v4 = iconst.i32 -32
     ; check: v5 = band v0, v4
     ; check: return v5
 }
@@ -41,7 +41,7 @@ block0(v0: i8):
     v2 = sshr v0, v1
     v3 = ishl v2, v1
     return v3
-    ; check: v4 = iconst.i8 224
+    ; check: v4 = iconst.i8 -32
     ; check: v5 = band v0, v4
     ; check: return v5
 }
@@ -52,7 +52,7 @@ block0(v0: i32):
     v2 = sshr v0, v1
     v3 = ishl v2, v1
     return v3
-    ; check: v4 = iconst.i32 0xffff_ffe0
+    ; check: v4 = iconst.i32 -32
     ; check: v5 = band v0, v4
     ; check: return v5
 }
@@ -74,7 +74,7 @@ block0(v0: i8):
     v2 = sshr v0, v1
     v3 = ishl v2, v1
     return v3
-    ; check: v7 = iconst.i8 224
+    ; check: v7 = iconst.i8 -32
     ; check: v8 = band v0, v7
     ; check: return v8
 }

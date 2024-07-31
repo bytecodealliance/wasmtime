@@ -193,9 +193,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn i64_sextend_imm64(&mut self, ty: Type, mut x: Imm64) -> i64 {
-            x.sign_extend_from_width(ty.bits());
-            x.bits()
+        fn i64_sextend_imm64(&mut self, ty: Type, x: Imm64) -> i64 {
+            x.sign_extend_from_width(ty.bits()).bits()
         }
 
         #[inline]

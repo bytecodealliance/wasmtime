@@ -19,7 +19,7 @@ block0:
     return v2
 }
 
-; check: v3 = iconst.i16 0xfffe
+; check: v3 = iconst.i16 -2
 ; nextln: return v3
 
 function %ishl() -> i8 {
@@ -96,7 +96,7 @@ block0:
     return v2
 }
 
-; check: v3 = iconst.i8 252
+; check: v3 = iconst.i8 -4
 ; check: return v3
 
 function %sshr_i8_i16() -> i8 {
@@ -107,7 +107,7 @@ block0:
     return v2
 }
 
-; check: v3 = iconst.i8 252
+; check: v3 = iconst.i8 -4
 ; check: return v3
 
 function %sshr_i16_i8() -> i16 {
@@ -118,7 +118,7 @@ block0:
     return v2
 }
 
-; check: v3 = iconst.i16 0xfffc
+; check: v3 = iconst.i16 -4
 ; check: return v3
 
 function %icmp_eq_i32() -> i8 {
@@ -238,7 +238,7 @@ block0:
     return v2
 }
 
-; check: v3 = iconst.i8 246
+; check: v3 = iconst.i8 -10
 ; nextln: return v3
 
 function %sextend_iconst() -> i32 {
@@ -248,7 +248,7 @@ block0:
     return v2
 }
 
-; check: v3 = iconst.i32 0xffff_fff6
+; check: v3 = iconst.i32 -10
 ; nextln: return v3
 
 function %uextend_iconst() -> i32 {
@@ -310,7 +310,7 @@ block0:
     return v1
 }
 
-; check: v2 = iconst.i64 0xf0de_bc9a_7856_3412
+; check: v2 = iconst.i64 -1090226688147180526
 ; nextln: return v2
 
 function %f16_fmin() -> f16 {

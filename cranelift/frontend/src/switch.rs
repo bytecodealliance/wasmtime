@@ -485,7 +485,7 @@ block12:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 128  ; v0 = 0
+    v1 = icmp_imm eq v0, -128  ; v0 = 0
     brif v1, block1, block3
 
 block3:
@@ -517,7 +517,7 @@ block3:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 255  ; v0 = 0
+    v1 = icmp_imm eq v0, -1  ; v0 = 0
     brif v1, block1, block4
 
 block4:

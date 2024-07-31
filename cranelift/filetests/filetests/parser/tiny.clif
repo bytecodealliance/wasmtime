@@ -46,7 +46,7 @@ block0:
 }
 ; sameln: function %bvalues() fast {
 ; nextln: block0:
-; nextln:     v0 = iconst.i32 0xffff_ffff
+; nextln:     v0 = iconst.i32 -1
 ; nextln:     v1 = iconst.i8 0
 ; nextln:     v2 = sextend.i32 v1
 ; nextln:     v3 = bxor v0, v2
