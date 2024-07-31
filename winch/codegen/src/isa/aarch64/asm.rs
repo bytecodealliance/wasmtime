@@ -3,10 +3,10 @@
 use super::{address::Address, regs};
 use crate::masm::{FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
-use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{self, UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
-    BitOp, BranchTarget, Cond, FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRIMod, FPURightShiftImm,
-    FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
+    BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
+    FPUOpRI::{self, UShr32, UShr64},
+    FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
@@ -481,13 +481,27 @@ impl Assembler {
         });
     }
 
+    /// A conditional branch.
+    pub fn jmp_if(&mut self, kind: Cond, taken: MachLabel) {
+        self.emit(Inst::CondBr {
+            taken: BranchTarget::Label(taken),
+            not_taken: BranchTarget::ResolvedOffset(4),
+            kind: CondBrKind::Cond(kind),
+        });
+    }
+
     /// Conditional Set sets the destination register to 1 if the condition
-    /// is true, and otherwise sets it to 0
+    /// is true, and otherwise sets it to 0.
     pub fn cset(&mut self, rd: Reg, cond: Cond) {
         self.emit(Inst::CSet {
             rd: Writable::from_reg(rd.into()),
             cond,
         });
+    }
+
+    /// Bitwise AND (shifted register), setting flags.
+    pub fn ands_rr(&mut self, rn: Reg, rm: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::AndS, rm, rn, regs::zero(), size);
     }
 
     // Helpers for ALU operations.

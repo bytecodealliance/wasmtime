@@ -571,13 +571,28 @@ impl Masm for MacroAssembler {
 
     fn branch(
         &mut self,
-        _kind: IntCmpKind,
-        _lhs: Reg,
-        _rhs: RegImm,
-        _taken: MachLabel,
-        _size: OperandSize,
+        kind: IntCmpKind,
+        lhs: Reg,
+        rhs: RegImm,
+        taken: MachLabel,
+        size: OperandSize,
     ) {
-        todo!()
+        use IntCmpKind::*;
+
+        match &(lhs, rhs) {
+            (rlhs, RegImm::Reg(rrhs)) => {
+                // If the comparison kind is zero or not zero and both operands
+                // are the same register, emit a ands instruction. Else we emit
+                // a normal comparison.
+                if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
+                    self.asm.ands_rr(*rlhs, *rrhs, size);
+                } else {
+                    self.cmp(lhs, rhs, size);
+                }
+            }
+            _ => self.cmp(lhs, rhs, size),
+        }
+        self.asm.jmp_if(kind.into(), taken);
     }
 
     fn jmp(&mut self, target: MachLabel) {
