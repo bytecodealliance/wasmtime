@@ -665,13 +665,13 @@ impl Subscribe for TcpSocket {
     }
 }
 
-pub(crate) struct TcpReadStream {
+struct TcpReadStream {
     stream: Arc<tokio::net::TcpStream>,
     closed: bool,
 }
 
 impl TcpReadStream {
-    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             closed: false,
@@ -725,7 +725,7 @@ impl Subscribe for TcpReadStream {
 
 const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
-pub(crate) struct TcpWriteStream {
+struct TcpWriteStream {
     stream: Arc<tokio::net::TcpStream>,
     last_write: LastWrite,
 }
@@ -734,14 +734,29 @@ enum LastWrite {
     Waiting(AbortOnDropJoinHandle<Result<()>>),
     Error(Error),
     Done,
+    Closed,
 }
 
 impl TcpWriteStream {
-    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             last_write: LastWrite::Done,
         }
+    }
+
+    fn try_write_portable(stream: &tokio::net::TcpStream, buf: &[u8]) -> io::Result<usize> {
+        stream.try_write(buf).map_err(|error| {
+            match Errno::from_io_error(&error) {
+                // Windows returns `WSAESHUTDOWN` when writing to a shut down socket.
+                // We normalize this to EPIPE, because that is what the other platforms return.
+                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-send#:~:text=WSAESHUTDOWN
+                #[cfg(windows)]
+                Some(Errno::SHUTDOWN) => io::Error::new(io::ErrorKind::BrokenPipe, error),
+
+                _ => error,
+            }
+        })
     }
 
     /// Write `bytes` in a background task, remembering the task handle for use in a future call to
@@ -758,7 +773,7 @@ impl TcpWriteStream {
             // to flush.
             while !bytes.is_empty() {
                 stream.writable().await?;
-                match stream.try_write(&bytes) {
+                match Self::try_write_portable(&stream, &bytes) {
                     Ok(n) => {
                         let _ = bytes.split_to(n);
                     }
@@ -776,14 +791,14 @@ impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
         match self.last_write {
             LastWrite::Done => {}
-            LastWrite::Waiting(_) | LastWrite::Error(_) => {
+            LastWrite::Waiting(_) | LastWrite::Error(_) | LastWrite::Closed => {
                 return Err(StreamError::Trap(anyhow::anyhow!(
                     "unpermitted: must call check_write first"
                 )));
             }
         }
         while !bytes.is_empty() {
-            match self.stream.try_write(&bytes) {
+            match Self::try_write_portable(&self.stream, &bytes) {
                 Ok(n) => {
                     let _ = bytes.split_to(n);
                 }
@@ -794,6 +809,11 @@ impl HostOutputStream for TcpWriteStream {
                     self.background_write(bytes);
 
                     return Ok(());
+                }
+
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                    self.last_write = LastWrite::Closed;
+                    return Err(StreamError::Closed);
                 }
 
                 Err(e) => return Err(StreamError::LastOperationFailed(e.into())),
@@ -807,16 +827,22 @@ impl HostOutputStream for TcpWriteStream {
         // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
         // `write_ready` will join the background write task if it's active, so following `flush`
         // with `write_ready` will have the desired effect.
-        Ok(())
+        match self.last_write {
+            LastWrite::Done | LastWrite::Waiting(_) | LastWrite::Error(_) => Ok(()),
+            LastWrite::Closed => Err(StreamError::Closed),
+        }
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        match mem::replace(&mut self.last_write, LastWrite::Done) {
+        match mem::replace(&mut self.last_write, LastWrite::Closed) {
             LastWrite::Waiting(task) => {
                 self.last_write = LastWrite::Waiting(task);
                 return Ok(0);
             }
-            LastWrite::Done => {}
+            LastWrite::Done => {
+                self.last_write = LastWrite::Done;
+            }
+            LastWrite::Closed => return Err(StreamError::Closed),
             LastWrite::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
         }
 
