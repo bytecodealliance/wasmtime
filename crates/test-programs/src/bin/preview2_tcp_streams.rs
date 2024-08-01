@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use test_programs::wasi::io::streams::StreamError;
 use test_programs::wasi::sockets::network::{IpAddress, IpAddressFamily, IpSocketAddress, Network};
 use test_programs::wasi::sockets::tcp::{ShutdownType, TcpSocket};
@@ -16,21 +14,21 @@ fn test_tcp_read_from_closed_input_stream(net: &Network, family: IpAddressFamily
     let (connected_input, connected_output) = client.blocking_connect(net, bound_address).unwrap();
     let (accepted, accepted_input, accepted_output) = listener.blocking_accept().unwrap();
 
-    // Shut down the connection from the server side and give the kernel a bit
-    // of time to propagate the shutdown signal from the server socket to the
-    // client socket.
+    // Shut down the connection from the server side:
     accepted.shutdown(ShutdownType::Both).unwrap();
     drop(accepted_input);
     drop(accepted_output);
     drop(accepted);
-    std::thread::sleep(Duration::from_millis(50));
+
+    // Wait for the shutdown signal to reach the client:
+    connected_input.subscribe().block();
 
     // And now the actual test:
 
     // The input stream should immediately signal StreamError::Closed.
     // Notably, it should _not_ return an empty list (the wasi-io equivalent of EWOULDBLOCK)
     // See: https://github.com/bytecodealliance/wasmtime/pull/8968
-    assert!(matches!(connected_input.read(10), Err(StreamError::Closed))); // If this randomly fails, try tweaking the timeout above.
+    assert!(matches!(connected_input.read(10), Err(StreamError::Closed)));
 
     // Stream should still be closed, even when requesting 0 bytes:
     assert!(matches!(connected_input.read(0), Err(StreamError::Closed)));
