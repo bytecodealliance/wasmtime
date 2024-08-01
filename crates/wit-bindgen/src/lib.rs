@@ -73,6 +73,9 @@ struct Wasmtime {
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
     used_with_opts: HashSet<String>,
+    // Track the with options that were used. Remapped interfaces provided via `with`
+    // are required to be used.
+    used_trappable_imports_opts: HashSet<String>,
 }
 
 struct ImportFunction {
@@ -894,6 +897,18 @@ pub fn new(
 
         if !unused_keys.is_empty() {
             anyhow::bail!("interfaces were specified in the `with` config option but are not referenced in the target world: {unused_keys:?}");
+        }
+
+        if let TrappableImports::Only(only) = &self.opts.trappable_imports {
+            let mut unused_imports = Vec::from_iter(
+                only.difference(&self.used_trappable_imports_opts)
+                    .map(|s| s.as_str()),
+            );
+
+            if !unused_imports.is_empty() {
+                unused_imports.sort();
+                anyhow::bail!("names specified in the `trappable_imports` config option but are not referenced in the target world: {unused_imports:?}");
+            }
         }
 
         if !self.opts.only_interfaces {
@@ -2412,29 +2427,35 @@ impl<'a> InterfaceGenerator<'a> {
             } else {
                 uwrite!(self.src, "Ok(r)\n");
             }
-        } else if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
-            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
-            let err_name = err.name.as_ref().unwrap();
-            let owner = match err.owner {
-                TypeOwner::Interface(i) => i,
-                _ => unimplemented!(),
-            };
-            let convert_trait = match self.path_to_interface(owner) {
-                Some(path) => format!("{path}::Host"),
-                None => format!("Host"),
-            };
-            let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
-            uwrite!(
-                self.src,
-                "Ok((match r {{
+        } else {
+            self.gen
+                .used_trappable_imports_opts
+                .insert(func.name.clone());
+
+            if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
+                let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
+                let err_name = err.name.as_ref().unwrap();
+                let owner = match err.owner {
+                    TypeOwner::Interface(i) => i,
+                    _ => unimplemented!(),
+                };
+                let convert_trait = match self.path_to_interface(owner) {
+                    Some(path) => format!("{path}::Host"),
+                    None => format!("Host"),
+                };
+                let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
+                uwrite!(
+                    self.src,
+                    "Ok((match r {{
                     Ok(a) => Ok(a),
                     Err(e) => Err({convert}(host, e)?),
                 }},))"
-            );
-        } else if func.results.iter_types().len() == 1 {
-            uwrite!(self.src, "Ok((r?,))\n");
-        } else {
-            uwrite!(self.src, "r\n");
+                );
+            } else if func.results.iter_types().len() == 1 {
+                uwrite!(self.src, "Ok((r?,))\n");
+            } else {
+                uwrite!(self.src, "r\n");
+            }
         }
 
         if self.gen.opts.async_.is_import_async(&func.name) {
@@ -2467,27 +2488,31 @@ impl<'a> InterfaceGenerator<'a> {
 
         if !self.gen.opts.trappable_imports.can_trap(func) {
             self.print_result_ty(&func.results, TypeMode::Owned);
-        } else if let Some((r, _id, error_typename)) =
-            self.special_case_trappable_error(&func.results)
-        {
-            // Functions which have a single result `result<ok,err>` get special
-            // cased to use the host_wasmtime_rust::Error<err>, making it possible
-            // for them to trap or use `?` to propagate their errors
-            self.push_str("Result<");
-            if let Some(ok) = r.ok {
-                self.print_ty(&ok, TypeMode::Owned);
-            } else {
-                self.push_str("()");
-            }
-            self.push_str(",");
-            self.push_str(&error_typename);
-            self.push_str(">");
         } else {
-            // All other functions get their return values wrapped in an wasmtime::Result.
-            // Returning the anyhow::Error case can be used to trap.
-            uwrite!(self.src, "{wt}::Result<");
-            self.print_result_ty(&func.results, TypeMode::Owned);
-            self.push_str(">");
+            self.gen
+                .used_trappable_imports_opts
+                .insert(func.name.clone());
+            if let Some((r, _id, error_typename)) = self.special_case_trappable_error(&func.results)
+            {
+                // Functions which have a single result `result<ok,err>` get special
+                // cased to use the host_wasmtime_rust::Error<err>, making it possible
+                // for them to trap or use `?` to propagate their errors
+                self.push_str("Result<");
+                if let Some(ok) = r.ok {
+                    self.print_ty(&ok, TypeMode::Owned);
+                } else {
+                    self.push_str("()");
+                }
+                self.push_str(",");
+                self.push_str(&error_typename);
+                self.push_str(">");
+            } else {
+                // All other functions get their return values wrapped in an wasmtime::Result.
+                // Returning the anyhow::Error case can be used to trap.
+                uwrite!(self.src, "{wt}::Result<");
+                self.print_result_ty(&func.results, TypeMode::Owned);
+                self.push_str(">");
+            }
         }
     }
 
