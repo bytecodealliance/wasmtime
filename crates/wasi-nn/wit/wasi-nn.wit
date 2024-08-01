@@ -1,4 +1,4 @@
-package wasi:nn;
+package wasi:nn@0.2.0-rc-2024-06-25;
 
 /// `wasi-nn` is a WASI API for performing machine learning (ML) inference. The API is not (yet)
 /// capable of performing ML training. WebAssembly programs that want to use a host's ML
@@ -134,7 +134,7 @@ interface inference {
 
 /// TODO: create function-specific errors (https://github.com/WebAssembly/wasi-nn/issues/42)
 interface errors {
-    enum error {
+    enum error-code {
         // Caller module passed an invalid argument.
         invalid-argument,
         // Invalid encoding.
@@ -148,6 +148,21 @@ interface errors {
         // Graph is too large.
         too-large,
         // Graph not found.
-        not-found
+        not-found,
+        // The operation is insecure or has insufficient privilege to be performed.
+        // e.g., cannot access a hardware feature requested
+        security,
+        // The operation failed for an unspecified reason.
+        unknown
+    }
+
+    resource error {
+        constructor(code: error-code, data: string);
+
+        /// Return the error code.
+        code: func() -> error-code;
+
+        /// Errors can propagated with backend specific status through a string value.
+        data: func() -> string;
     }
 }
