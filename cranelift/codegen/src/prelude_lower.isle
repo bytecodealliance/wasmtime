@@ -1001,6 +1001,10 @@
 (decl abi_sized_stack_ret_space (Sig) i64)
 (extern constructor abi_sized_stack_ret_space abi_sized_stack_ret_space)
 
+;; Incoming return area pointer (must be present).
+(decl abi_unwrap_ret_area_ptr () Reg)
+(extern constructor abi_unwrap_ret_area_ptr abi_unwrap_ret_area_ptr)
+
 ;; StackSlot addr
 (decl abi_stackslot_addr (WritableReg StackSlot Offset32) MInst)
 (extern constructor abi_stackslot_addr abi_stackslot_addr)

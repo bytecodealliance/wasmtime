@@ -23,7 +23,7 @@ fn test_tail_call_default() -> Result<()> {
                 .target("riscv64")?,
         ),
         (
-            false,
+            true,
             Config::new()
                 .strategy(Strategy::Cranelift)
                 .target("s390x")?,

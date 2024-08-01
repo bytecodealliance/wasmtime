@@ -1,0 +1,318 @@
+test compile precise-output
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CALL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %call(i64) -> i64 tail {
+    fn0 = %g(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   bras %r1, 0x16
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r5, 0(%r1)
+;   basr %r14, %r5
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %call_colocated(i64) -> i64 tail {
+    fn0 = colocated %g(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   brasl %r14, %g
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   brasl %r14, 0xa ; reloc_external PLTRel32Dbl %g 2
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %call_indirect(i64, i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+block0(v0: i64, v1: i64):
+    v2 = call_indirect.i64 sig0, v1(v0)
+    return v2
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   basr %r14, %r3
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   basr %r14, %r3
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %incoming_args(i64, i32, i32 uext, i32 sext, i16, i16 uext, i16 sext, i8, i8 uext, i8 sext) -> i64 tail {
+block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8: i8, v9: i8):
+    v10 = uextend.i64 v1
+    v11 = uextend.i64 v2
+    v12 = uextend.i64 v3
+    v13 = uextend.i64 v4
+    v14 = uextend.i64 v5
+    v15 = uextend.i64 v6
+    v16 = uextend.i64 v7
+    v17 = uextend.i64 v8
+    v18 = uextend.i64 v9
+    v19 = iadd v0, v10
+    v20 = iadd v11, v12
+    v21 = iadd v13, v14
+    v22 = iadd v15, v16
+    v23 = iadd v17, v18
+    v24 = iadd v19, v20
+    v25 = iadd v21, v22
+    v26 = iadd v23, v24
+    v27 = iadd v25, v26
+    return v27
+}
+
+; VCode:
+;   stmg %r8, %r15, 256(%r15)
+;   aghi %r15, -8
+; block0:
+;   lgr %r14, %r7
+;   stg %r2, 0(%r15)
+;   lg %r8, 168(%r15)
+;   llgc %r10, 183(%r15)
+;   lg %r7, 184(%r15)
+;   lg %r2, 192(%r15)
+;   llgfr %r11, %r3
+;   llgfr %r9, %r4
+;   llgfr %r12, %r5
+;   llghr %r13, %r6
+;   lgr %r3, %r14
+;   llghr %r6, %r3
+;   llghr %r14, %r8
+;   llgcr %r5, %r10
+;   llgcr %r7, %r7
+;   llgcr %r4, %r2
+;   lg %r2, 0(%r15)
+;   agr %r2, %r11
+;   agrk %r3, %r9, %r12
+;   agrk %r6, %r13, %r6
+;   agrk %r5, %r14, %r5
+;   agrk %r4, %r7, %r4
+;   agrk %r7, %r2, %r3
+;   agrk %r5, %r6, %r5
+;   agr %r4, %r7
+;   agrk %r2, %r5, %r4
+;   aghi %r15, 200
+;   lmg %r8, %r14, 64(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r8, %r15, 0x100(%r15)
+;   aghi %r15, -8
+; block1: ; offset 0xa
+;   lgr %r14, %r7
+;   stg %r2, 0(%r15)
+;   lg %r8, 0xa8(%r15)
+;   llgc %r10, 0xb7(%r15)
+;   lg %r7, 0xb8(%r15)
+;   lg %r2, 0xc0(%r15)
+;   llgfr %r11, %r3
+;   llgfr %r9, %r4
+;   llgfr %r12, %r5
+;   llghr %r13, %r6
+;   lgr %r3, %r14
+;   llghr %r6, %r3
+;   llghr %r14, %r8
+;   llgcr %r5, %r10
+;   llgcr %r7, %r7
+;   llgcr %r4, %r2
+;   lg %r2, 0(%r15)
+;   agr %r2, %r11
+;   agrk %r3, %r9, %r12
+;   agrk %r6, %r13, %r6
+;   agrk %r5, %r14, %r5
+;   agrk %r4, %r7, %r4
+;   agrk %r7, %r2, %r3
+;   agrk %r5, %r6, %r5
+;   agr %r4, %r7
+;   agrk %r2, %r5, %r4
+;   aghi %r15, 0xc8
+;   lmg %r8, %r14, 0x40(%r15)
+;   br %r14
+
+function %outgoing_args(i64) -> i64 tail {
+    fn0 = colocated %g(i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = call fn0(v0, v0, v0, v0, v0, v0, v0, v0)
+    return v1
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   aghi %r15, -176
+;   stg %r2, 160(%r15)
+;   stg %r2, 168(%r15)
+;   lgr %r7, %r2
+;   lgr %r2, %r7
+;   lgr %r3, %r7
+;   lgr %r4, %r7
+;   lgr %r5, %r7
+;   lgr %r6, %r7
+;   brasl %r14, %g ; callee_pop_size 176
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   aghi %r15, -0xb0
+;   stg %r2, 0xa0(%r15)
+;   stg %r2, 0xa8(%r15)
+;   lgr %r7, %r2
+;   lgr %r2, %r7
+;   lgr %r3, %r7
+;   lgr %r4, %r7
+;   lgr %r5, %r7
+;   lgr %r6, %r7
+;   brasl %r14, 0x32 ; reloc_external PLTRel32Dbl %g 2
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %outgoing_args_stack_load(i64) -> i64 tail {
+    fn0 = colocated %f() -> i64 tail
+    fn1 = colocated %g(i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+    ss0 = explicit_slot 8
+
+block0(v0: i64):
+    v1 = call fn0()
+    v2 = call fn0()
+    v3 = call fn0()
+    v4 = call fn0()
+    v5 = call fn0()
+    v6 = call fn0()
+    v7 = call fn0()
+    v8 = call fn0()
+
+    v17 = call fn1(v0, v1, v2, v3, v4, v5, v6, v7)
+
+    return v8
+}
+
+; VCode:
+;   stmg %r8, %r15, 64(%r15)
+;   aghi %r15, -192
+; block0:
+;   lgr %r10, %r2
+;   brasl %r14, %f
+;   lgr %r12, %r2
+;   brasl %r14, %f
+;   lgr %r8, %r2
+;   brasl %r14, %f
+;   lgr %r9, %r2
+;   brasl %r14, %f
+;   lgr %r11, %r2
+;   brasl %r14, %f
+;   lgr %r13, %r2
+;   brasl %r14, %f
+;   stg %r2, 184(%r15)
+;   brasl %r14, %f
+;   stg %r2, 176(%r15)
+;   brasl %r14, %f
+;   stg %r2, 168(%r15)
+;   aghi %r15, -176
+;   lg %r2, 360(%r15)
+;   stg %r2, 160(%r15)
+;   lg %r2, 352(%r15)
+;   stg %r2, 168(%r15)
+;   lgr %r2, %r10
+;   lgr %r3, %r12
+;   lgr %r4, %r8
+;   lgr %r5, %r9
+;   lgr %r6, %r11
+;   lgr %r7, %r13
+;   brasl %r14, %g ; callee_pop_size 176
+;   lg %r2, 168(%r15)
+;   lmg %r8, %r15, 256(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r8, %r15, 0x40(%r15)
+;   aghi %r15, -0xc0
+; block1: ; offset 0xa
+;   lgr %r10, %r2
+;   brasl %r14, 0xe ; reloc_external PLTRel32Dbl %f 2
+;   lgr %r12, %r2
+;   brasl %r14, 0x18 ; reloc_external PLTRel32Dbl %f 2
+;   lgr %r8, %r2
+;   brasl %r14, 0x22 ; reloc_external PLTRel32Dbl %f 2
+;   lgr %r9, %r2
+;   brasl %r14, 0x2c ; reloc_external PLTRel32Dbl %f 2
+;   lgr %r11, %r2
+;   brasl %r14, 0x36 ; reloc_external PLTRel32Dbl %f 2
+;   lgr %r13, %r2
+;   brasl %r14, 0x40 ; reloc_external PLTRel32Dbl %f 2
+;   stg %r2, 0xb8(%r15)
+;   brasl %r14, 0x4c ; reloc_external PLTRel32Dbl %f 2
+;   stg %r2, 0xb0(%r15)
+;   brasl %r14, 0x58 ; reloc_external PLTRel32Dbl %f 2
+;   stg %r2, 0xa8(%r15)
+;   aghi %r15, -0xb0
+;   lg %r2, 0x168(%r15)
+;   stg %r2, 0xa0(%r15)
+;   lg %r2, 0x160(%r15)
+;   stg %r2, 0xa8(%r15)
+;   lgr %r2, %r10
+;   lgr %r3, %r12
+;   lgr %r4, %r8
+;   lgr %r5, %r9
+;   lgr %r6, %r11
+;   lgr %r7, %r13
+;   brasl %r14, 0x98 ; reloc_external PLTRel32Dbl %g 2
+;   lg %r2, 0xa8(%r15)
+;   lmg %r8, %r15, 0x100(%r15)
+;   br %r14
+

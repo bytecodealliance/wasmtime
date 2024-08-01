@@ -49,6 +49,9 @@ pub enum MemArg {
     /// Offset from the stack pointer at function entry.
     InitialSPOffset { off: i64 },
 
+    /// Offset from the (nominal) stack pointer during this function.
+    NominalSPOffset { off: i64 },
+
     /// Offset into the slot area of the stack, which lies just above the
     /// outgoing argument area that's setup by the function prologue.
     /// At emission time, this is converted to `SPOffset` with a fixup added to
@@ -88,6 +91,25 @@ impl MemArg {
         MemArg::RegOffset { reg, off, flags }
     }
 
+    /// Add an offset to a virtual addressing mode.
+    pub fn offset(base: &MemArg, offset: i64) -> MemArg {
+        match base {
+            &MemArg::RegOffset { reg, off, flags } => MemArg::RegOffset {
+                reg,
+                off: off + offset,
+                flags,
+            },
+            &MemArg::InitialSPOffset { off } => MemArg::InitialSPOffset { off: off + offset },
+            &MemArg::NominalSPOffset { off } => MemArg::NominalSPOffset { off: off + offset },
+            &MemArg::SlotOffset { off } => MemArg::SlotOffset { off: off + offset },
+            // This routine is only defined for virtual addressing modes.
+            &MemArg::BXD12 { .. }
+            | &MemArg::BXD20 { .. }
+            | &MemArg::Label { .. }
+            | &MemArg::Symbol { .. } => unreachable!(),
+        }
+    }
+
     pub(crate) fn get_flags(&self) -> MemFlags {
         match self {
             MemArg::BXD12 { flags, .. } => *flags,
@@ -96,6 +118,7 @@ impl MemArg {
             MemArg::Label { .. } => MemFlags::trusted(),
             MemArg::Symbol { flags, .. } => *flags,
             MemArg::InitialSPOffset { .. } => MemFlags::trusted(),
+            MemArg::NominalSPOffset { .. } => MemFlags::trusted(),
             MemArg::SlotOffset { .. } => MemFlags::trusted(),
         }
     }
@@ -266,6 +289,7 @@ impl PrettyPrint for MemArg {
             } => format!("{} + {}", name.display(None), offset),
             // Eliminated by `mem_finalize()`.
             &MemArg::InitialSPOffset { .. }
+            | &MemArg::NominalSPOffset { .. }
             | &MemArg::SlotOffset { .. }
             | &MemArg::RegOffset { .. } => {
                 panic!("Unexpected pseudo mem-arg mode (stack-offset or generic reg-offset)!")

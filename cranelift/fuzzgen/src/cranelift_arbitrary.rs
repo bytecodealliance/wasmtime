@@ -43,7 +43,12 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
 
     fn callconv(&mut self, architecture: Architecture) -> Result<CallConv> {
         // These are implemented and should work on all backends
-        let mut allowed_callconvs = vec![CallConv::Fast, CallConv::Cold, CallConv::SystemV];
+        let mut allowed_callconvs = vec![
+            CallConv::Fast,
+            CallConv::Cold,
+            CallConv::SystemV,
+            CallConv::Tail,
+        ];
 
         // Fastcall is supposed to work on x86 and aarch64
         if matches!(
@@ -56,12 +61,6 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         // AArch64 has a few Apple specific calling conventions
         if matches!(architecture, Architecture::Aarch64(_)) {
             allowed_callconvs.push(CallConv::AppleAarch64);
-        }
-
-        // TODO(#6530): The `tail` calling convention is not supported on s390x
-        // yet.
-        if !matches!(architecture, Architecture::S390x) {
-            allowed_callconvs.push(CallConv::Tail);
         }
 
         // The winch calling convention is supposed to work on x64.

@@ -2288,7 +2288,6 @@
 (rule (lib_call_tls_get_offset got got_offset symbol)
       (let ((tls_offset WritableReg (temp_writable_reg $I64))
             (libcall LibCallInfo (lib_call_info_tls_get_offset tls_offset got got_offset symbol))
-            (_ Unit (lib_accumulate_outgoing_args_size libcall))
             (_ InstOutput (side_effect (lib_call libcall))))
         tls_offset))
 
@@ -3897,7 +3896,6 @@
 ;; Direct call to an in-range function.
 (rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
       (let ((abi Sig (abi_sig sig_ref))
-            (_ Unit (abi_accumulate_outgoing_args_size abi))
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
             (_ InstOutput (side_effect (abi_call abi name uses defs))))
@@ -3907,7 +3905,6 @@
 ;; Direct call to an out-of-range function (implicitly via pointer).
 (rule (lower (call (func_ref_data sig_ref name _) args))
       (let ((abi Sig (abi_sig sig_ref))
-            (_ Unit (abi_accumulate_outgoing_args_size abi))
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
             (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
@@ -3919,7 +3916,6 @@
 (rule (lower (call_indirect sig_ref ptr args))
       (let ((abi Sig (abi_sig sig_ref))
             (target Reg (put_in_reg ptr))
-            (_ Unit (abi_accumulate_outgoing_args_size abi))
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
             (_ InstOutput (side_effect (abi_call_ind abi target uses defs))))
@@ -3930,44 +3926,89 @@
 (decl lower_call_args (Sig Range ValueSlice) CallArgList)
 (rule (lower_call_args abi range args)
       (let ((uses CallArgListBuilder (args_builder_new))
-            (_ InstOutput (lower_call_args_buffer abi range args))
-            (_ InstOutput (lower_call_args_slots abi uses range args))
-            (_ InstOutput (lower_call_ret_arg abi uses)))
+            (stack MemArg (abi_call_stack_args abi))
+            (_ InstOutput (lower_call_args_buffer abi stack range args))
+            (_ InstOutput (lower_call_args_slots abi uses stack range args))
+            (_ InstOutput (lower_call_ret_arg abi uses stack)))
         (args_builder_finish uses)))
-
-;; Lower function arguments (part 1): prepare buffer copies.
-(decl lower_call_args_buffer (Sig Range ValueSlice) InstOutput)
-(rule (lower_call_args_buffer abi (range_empty) _) (output_none))
-(rule (lower_call_args_buffer abi (range_unwrap head tail) args)
-      (let ((_ InstOutput (copy_to_buffer 0 (abi_get_arg abi head)
-                                          (value_slice_get args head))))
-        (lower_call_args_buffer abi tail args)))
-
-;; Lower function arguments (part 2): set up registers / stack slots.
-(decl lower_call_args_slots (Sig CallArgListBuilder Range ValueSlice) InstOutput)
-(rule (lower_call_args_slots abi _ (range_empty) _) (output_none))
-(rule (lower_call_args_slots abi uses (range_unwrap head tail) args)
-      (let ((_ InstOutput (copy_to_arg uses (abi_lane_order abi)
-                                       0 (abi_get_arg abi head)
-                                       (value_slice_get args head))))
-        (lower_call_args_slots abi uses tail args)))
-
-;; Lower function arguments (part 3): implicit return-area pointer.
-(decl lower_call_ret_arg (Sig CallArgListBuilder) InstOutput)
-(rule (lower_call_ret_arg (abi_no_ret_arg) _) (output_none))
-(rule 1 (lower_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)) uses)
-      (let ((mem MemArg (memarg_stack_off (abi_sized_stack_arg_space abi) 0)))
-        (copy_reg_to_arg_slot uses (abi_lane_order abi) 0 slot (load_addr mem))))
 
 ;; Lower function return values by collecting them from registers / stack slots.
 (decl lower_call_rets (Sig CallRetList Range InstOutputBuilder) InstOutput)
 (rule (lower_call_rets abi _ (range_empty) builder) (output_builder_finish builder))
 (rule (lower_call_rets abi defs (range_unwrap head tail) builder)
       (let ((ret ValueRegs (copy_from_arg defs (abi_lane_order abi)
-                                          (abi_sized_stack_arg_space abi)
+                                          (abi_call_stack_rets abi)
                                           (abi_get_ret abi head)))
             (_ Unit (output_builder_push builder ret)))
         (lower_call_rets abi defs tail builder)))
+
+
+;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Direct tail call to an in-range function.
+(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args)))
+        (side_effect (abi_return_call abi name uses))))
+
+;; Direct tail call to an out-of-range function (implicitly via pointer).
+(rule (lower (return_call (func_ref_data sig_ref name _) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args))
+            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0))))
+        (side_effect (abi_return_call_ind abi target uses))))
+
+;; Indirect tail call.
+(rule (lower (return_call_indirect sig_ref ptr args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (target Reg (put_in_reg ptr))
+            (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args)))
+        (side_effect (abi_return_call_ind abi target uses))))
+
+;; Lower tail call function arguments.
+(decl lower_return_call_args (Sig Range ValueSlice) CallArgList)
+(rule (lower_return_call_args abi range args)
+      (let ((uses CallArgListBuilder (args_builder_new))
+            (stack MemArg (abi_return_call_stack_args abi))
+            (_ InstOutput (lower_call_args_buffer abi stack range args))
+            (_ InstOutput (lower_call_args_slots abi uses stack range args))
+            (_ InstOutput (lower_return_call_ret_arg abi uses stack)))
+        (args_builder_finish uses)))
+
+
+;;;; Common helpers for argument lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Lower function arguments (part 1): prepare buffer copies.
+(decl lower_call_args_buffer (Sig MemArg Range ValueSlice) InstOutput)
+(rule (lower_call_args_buffer abi _ (range_empty) _) (output_none))
+(rule (lower_call_args_buffer abi stack (range_unwrap head tail) args)
+      (let ((_ InstOutput (copy_to_buffer stack (abi_get_arg abi head)
+                                          (value_slice_get args head))))
+        (lower_call_args_buffer abi stack tail args)))
+
+;; Lower function arguments (part 2): set up registers / stack slots.
+(decl lower_call_args_slots (Sig CallArgListBuilder MemArg Range ValueSlice) InstOutput)
+(rule (lower_call_args_slots abi _ _ (range_empty) _) (output_none))
+(rule (lower_call_args_slots abi uses stack (range_unwrap head tail) args)
+      (let ((_ InstOutput (copy_to_arg uses (abi_lane_order abi)
+                                       stack (abi_get_arg abi head)
+                                       (value_slice_get args head))))
+        (lower_call_args_slots abi uses stack tail args)))
+
+;; Lower function arguments (part 3): implicit return-area pointer (call).
+(decl lower_call_ret_arg (Sig CallArgListBuilder MemArg) InstOutput)
+(rule (lower_call_ret_arg (abi_no_ret_arg) _ _) (output_none))
+(rule 1 (lower_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)) uses stack)
+      (copy_reg_to_arg_slot uses (abi_lane_order abi)
+                            stack slot (load_addr (abi_call_stack_rets abi))))
+
+;; Lower function arguments (part 3): implicit return-area pointer (return call).
+(decl lower_return_call_ret_arg (Sig CallArgListBuilder MemArg) InstOutput)
+(rule (lower_return_call_ret_arg (abi_no_ret_arg) _ _) (output_none))
+(rule 1 (lower_return_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)) uses stack)
+      (copy_reg_to_arg_slot uses (abi_lane_order abi)
+                            stack slot (abi_unwrap_ret_area_ptr)))
+
 
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;
 
@@ -3975,9 +4016,7 @@
       (sp))
 
 (rule (lower (get_frame_pointer))
-      (load64 (memarg_stack_off 0 0)))
+      (load64 (memarg_frame_pointer_offset)))
 
 (rule (lower (get_return_address))
-      ;; The return address is 14 pointer-sized slots above the initial SP. So
-      ;; our offset is `14 * 8 = 112`.
-      (load64 (memarg_initial_sp_offset 112)))
+      (load64 (memarg_return_address_offset)))

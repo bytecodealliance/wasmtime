@@ -887,6 +887,10 @@
       (rn Reg)
       (lane_imm u8))
 
+    ;; Allocate stack space for outgoing tail-call arguments.
+    (AllocateArgs
+      (size u32))
+
     ;; A machine call instruction.
     (Call
       (link WritableReg)
@@ -896,6 +900,14 @@
     (CallInd
       (link WritableReg)
       (info BoxCallIndInfo))
+
+    ;; A machine tail call instruction.
+    (ReturnCall
+      (info BoxReturnCallInfo))
+
+    ;; A machine indirect tail call instruction.
+    (ReturnCallInd
+      (info BoxReturnCallIndInfo))
 
     ;; A pseudo-instruction that captures register arguments in vregs.
     (Args
@@ -1008,6 +1020,8 @@
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type BoxReturnCallInfo (primitive BoxReturnCallInfo))
+(type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type VecMachLabel extern (enum))
 
@@ -1768,14 +1782,9 @@
 (decl memarg_got () MemArg)
 (extern constructor memarg_got memarg_got)
 
-;; Create a MemArg referring to a stack address formed by
-;; adding a base (relative to SP) and an offset.
-(decl memarg_stack_off (i64 i64) MemArg)
-(extern constructor memarg_stack_off memarg_stack_off)
-
-;; Create a `MemArg` referring to an offset from the initial SP.
-(decl memarg_initial_sp_offset (i64) MemArg)
-(extern constructor memarg_initial_sp_offset memarg_initial_sp_offset)
+;; Add an offset to a virtual MemArg.
+(decl memarg_offset (MemArg i64) MemArg)
+(extern constructor memarg_offset memarg_offset)
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
@@ -1786,6 +1795,14 @@
 (decl pure partial memarg_symbol_offset (i64) i32)
 (rule (memarg_symbol_offset x)
       (memarg_symbol_offset_sum x 0))
+
+;; Create a MemArg referring to the saved frame pointer location.
+(decl memarg_frame_pointer_offset () MemArg)
+(extern constructor memarg_frame_pointer_offset memarg_frame_pointer_offset)
+
+;; Create a MemArg referring to the saved return address location.
+(decl memarg_return_address_offset () MemArg)
+(extern constructor memarg_return_address_offset memarg_return_address_offset)
 
 ;; Lower an address into a `MemArg`.
 
@@ -2682,6 +2699,16 @@
 (rule (call_ind_impl reg info)
       (SideEffectNoResult.Inst (MInst.CallInd reg info)))
 
+;; Helper for emitting `MInst.ReturnCall` instructions.
+(decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)
+(rule (return_call_impl info)
+      (SideEffectNoResult.Inst (MInst.ReturnCall info)))
+
+;; Helper for emitting `MInst.ReturnCallInd` instructions.
+(decl return_call_ind_impl (BoxReturnCallIndInfo) SideEffectNoResult)
+(rule (return_call_ind_impl info)
+      (SideEffectNoResult.Inst (MInst.ReturnCallInd info)))
+
 ;; Helper for emitting `MInst.Jump` instructions.
 (decl jump_impl (MachLabel) SideEffectNoResult)
 (rule (jump_impl target)
@@ -2886,35 +2913,33 @@
 (rule 1 (memcpy dst src (len_minus_one len))
       (mvc (memarg_pair dst) (memarg_pair src) len))
 (rule (memcpy dst src len)
-      (let ((libcall LibCallInfo (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len)))
-            (_ Unit (lib_accumulate_outgoing_args_size libcall)))
-        (lib_call libcall)))
+      (lib_call (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len))))
 
 ;; Prepare a stack copy of a single (oversized) argument.
-(decl copy_to_buffer (i64 ABIArg Value) InstOutput)
+(decl copy_to_buffer (MemArg ABIArg Value) InstOutput)
 (rule 2 (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
 (rule 1 (copy_to_buffer base (abi_arg_struct_pointer _ offset size) val)
-      (let ((dst MemArg (memarg_stack_off base offset))
+      (let ((dst MemArg (memarg_offset base offset))
             (src MemArg (memarg_reg_plus_off val 0 0 (memflags_trusted))))
         (side_effect (memcpy dst src size))))
 (rule 0 (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
                       val @ (value_type ty))
-      (side_effect (arg_store ty val (memarg_stack_off base offset))))
+      (side_effect (arg_store ty val (memarg_offset base offset))))
 
 ;; Copy a single argument/return value to its slots.
 ;; For oversized arguments, set the slot to the buffer address.
-(decl copy_to_arg (CallArgListBuilder LaneOrder i64 ABIArg Value) InstOutput)
+(decl copy_to_arg (CallArgListBuilder LaneOrder MemArg ABIArg Value) InstOutput)
 (rule 2 (copy_to_arg uses lo base (abi_arg_only_slot slot) val)
       (copy_reg_to_arg_slot uses lo base slot (prepare_arg_val slot val)))
 (rule 1 (copy_to_arg uses lo base (abi_arg_struct_pointer slot offset _) _)
-      (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
+      (let ((ptr Reg (load_addr (memarg_offset base offset))))
         (copy_reg_to_arg_slot uses lo base slot ptr)))
 (rule 0 (copy_to_arg uses lo base (abi_arg_implicit_pointer slot offset _) _)
-      (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
+      (let ((ptr Reg (load_addr (memarg_offset base offset))))
         (copy_reg_to_arg_slot uses lo base slot ptr)))
 
 ;; Copy a single argument/return value from its slots.
-(decl copy_from_arg (CallRetList LaneOrder i64 ABIArg) ValueRegs)
+(decl copy_from_arg (CallRetList LaneOrder MemArg ABIArg) ValueRegs)
 (rule (copy_from_arg defs lo base (abi_arg_only_slot slot))
       (value_reg (copy_reg_from_arg_slot defs lo base slot)))
 
@@ -2939,21 +2964,21 @@
 
 ;; Copy one component of an argument/return value to its slot, where the
 ;; value is already extended and present in a register.
-(decl copy_reg_to_arg_slot (CallArgListBuilder LaneOrder i64 ABIArgSlot Reg) InstOutput)
+(decl copy_reg_to_arg_slot (CallArgListBuilder LaneOrder MemArg ABIArgSlot Reg) InstOutput)
 (rule (copy_reg_to_arg_slot uses lo _ (ABIArgSlot.Reg reg ty ext) src)
       (let ((_ Unit (args_builder_push uses (abi_vec_elt_rev lo ty src) reg)))
         (output_none)))
 (rule (copy_reg_to_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext) src)
       (side_effect (arg_store (abi_ext_ty ext ty) (abi_vec_elt_rev lo ty src)
-                              (memarg_stack_off base offset))))
+                              (memarg_offset base offset))))
 
 ;; Copy one component of an argument/return value from its slot.
-(decl copy_reg_from_arg_slot (CallRetList LaneOrder i64 ABIArgSlot) Reg)
+(decl copy_reg_from_arg_slot (CallRetList LaneOrder MemArg ABIArgSlot) Reg)
 (rule (copy_reg_from_arg_slot defs lo _ (ABIArgSlot.Reg reg ty ext))
       (abi_vec_elt_rev lo ty (defs_lookup defs reg)))
 (rule (copy_reg_from_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext))
       (abi_vec_elt_rev lo ty (arg_load (abi_ext_ty ext ty)
-                                       (memarg_stack_off base offset))))
+                                       (memarg_offset base offset))))
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
 (decl abi_ext_ty (ArgumentExtension Type) Type)
@@ -3541,6 +3566,21 @@
 (decl abi_call_ind_info (Sig Reg CallArgList CallRetList) BoxCallIndInfo)
 (extern constructor abi_call_ind_info abi_call_ind_info)
 
+(decl abi_return_call_info (Sig ExternalName CallArgList) BoxReturnCallInfo)
+(extern constructor abi_return_call_info abi_return_call_info)
+
+(decl abi_return_call_ind_info (Sig Reg CallArgList) BoxReturnCallIndInfo)
+(extern constructor abi_return_call_ind_info abi_return_call_ind_info)
+
+(decl abi_call_stack_args (Sig) MemArg)
+(extern constructor abi_call_stack_args abi_call_stack_args)
+
+(decl abi_call_stack_rets (Sig) MemArg)
+(extern constructor abi_call_stack_rets abi_call_stack_rets)
+
+(decl abi_return_call_stack_args (Sig) MemArg)
+(extern constructor abi_return_call_stack_args abi_return_call_stack_args)
+
 (decl writable_link_reg () WritableReg)
 (rule (writable_link_reg) (writable_gpr 14))
 
@@ -3552,8 +3592,13 @@
 (rule (abi_call_ind abi target uses defs)
       (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target uses defs)))
 
-(decl abi_accumulate_outgoing_args_size (Sig) Unit)
-(extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
+(decl abi_return_call (Sig ExternalName CallArgList) SideEffectNoResult)
+(rule (abi_return_call abi name uses)
+      (return_call_impl (abi_return_call_info abi name uses)))
+
+(decl abi_return_call_ind (Sig Reg CallArgList) SideEffectNoResult)
+(rule (abi_return_call_ind abi target uses)
+      (return_call_ind_impl (abi_return_call_ind_info abi target uses)))
 
 (decl abi_lane_order (Sig) LaneOrder)
 (extern constructor abi_lane_order abi_lane_order)
@@ -3575,9 +3620,6 @@
 (decl lib_call (LibCallInfo) SideEffectNoResult)
 (rule (lib_call libcall)
       (call_impl (writable_link_reg) (lib_call_info libcall)))
-
-(decl lib_accumulate_outgoing_args_size (LibCallInfo) Unit)
-(extern constructor lib_accumulate_outgoing_args_size lib_accumulate_outgoing_args_size)
 
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;

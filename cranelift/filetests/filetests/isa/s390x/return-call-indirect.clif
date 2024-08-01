@@ -1,0 +1,457 @@
+test compile precise-output
+set preserve_frame_pointers=true
+target s390x
+
+;;;; Test passing `i64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i64(i64) -> i64 tail {
+block0(v0: i64):
+    v1 = iadd_imm.i64 v0, 10
+    return v1
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -160
+;   stg %r1, 0(%r15)
+; block0:
+;   aghi %r2, 10
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   aghi %r2, 0xa
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %call_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -160
+;   stg %r1, 0(%r15)
+; block0:
+;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r4, 0(%r1)
+;   return_call_ind %r4
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   bras %r1, 0x20
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r4
+
+;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %colocated_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = colocated %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -160
+;   stg %r1, 0(%r15)
+; block0:
+;   larl %r4, %callee_i64 + 0
+;   return_call_ind %r4
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   larl %r4, 0x14 ; reloc_external PCRel32Dbl %callee_i64 2
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r4
+
+;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_f64(f64) -> f64 tail {
+block0(v0: f64):
+    v1 = f64const 0x10.0
+    v2 = fadd.f64 v0, v1
+    return v2
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -160
+;   stg %r1, 0(%r15)
+; block0:
+;   bras %r1, 12 ; data.f64 16 ; ld %f3, 0(%r1)
+;   adbr %f0, %f3
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   bras %r1, 0x20
+;   sth %r3, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f3, 0(%r1)
+;   adbr %f0, %f3
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %call_f64(f64) -> f64 tail {
+    sig0 = (f64) -> f64 tail
+    fn0 = %callee_f64(f64) -> f64 tail
+
+block0(v0: f64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -160
+;   stg %r1, 0(%r15)
+; block0:
+;   bras %r1, 12 ; data %callee_f64 + 0 ; lg %r4, 0(%r1)
+;   return_call_ind %r4
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   bras %r1, 0x20
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r4
+
+;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i8(i8) -> i8 tail {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -160
+;   stg %r1, 0(%r15)
+; block0:
+;   llcr %r4, %r2
+;   clfi %r4, 0
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   llcr %r4, %r2
+;   clfi %r4, 0
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %call_i8(i8) -> i8 tail {
+    sig0 = (i8) -> i8 tail
+    fn0 = %callee_i8(i8) -> i8 tail
+
+block0(v0: i8):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -160
+;   stg %r1, 0(%r15)
+; block0:
+;   bras %r1, 12 ; data %callee_i8 + 0 ; lg %r4, 0(%r1)
+;   return_call_ind %r4
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   bras %r1, 0x20
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r4
+
+;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %tail_caller_stack_args() -> i64 tail {
+    fn0 = %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    v26 = func_addr.i64 fn0
+    return_call_indirect sig0, v26(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25)
+}
+
+; VCode:
+;   stmg %r8, %r15, 64(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -600
+;   stg %r1, 0(%r15)
+; block0:
+;   lghi %r2, 10
+;   stg %r2, 272(%r15)
+;   lghi %r3, 15
+;   stg %r3, 264(%r15)
+;   lghi %r4, 20
+;   stg %r4, 256(%r15)
+;   lghi %r5, 25
+;   stg %r5, 248(%r15)
+;   lghi %r6, 30
+;   stg %r6, 240(%r15)
+;   lghi %r7, 35
+;   stg %r7, 232(%r15)
+;   lghi %r14, 40
+;   lghi %r8, 45
+;   lghi %r9, 50
+;   lghi %r10, 55
+;   lghi %r11, 60
+;   lghi %r12, 65
+;   lghi %r13, 70
+;   lghi %r2, 75
+;   lghi %r3, 80
+;   lghi %r4, 85
+;   lghi %r6, 90
+;   stg %r6, 224(%r15)
+;   lghi %r6, 95
+;   lghi %r7, 100
+;   lghi %r5, 105
+;   stg %r5, 216(%r15)
+;   lghi %r5, 110
+;   stg %r5, 208(%r15)
+;   lghi %r5, 115
+;   stg %r5, 200(%r15)
+;   lghi %r5, 120
+;   stg %r5, 192(%r15)
+;   lghi %r5, 125
+;   stg %r5, 184(%r15)
+;   lghi %r5, 130
+;   stg %r5, 176(%r15)
+;   lghi %r5, 135
+;   stg %r5, 168(%r15)
+;   bras %r1, 12 ; data %tail_callee_stack_args + 0 ; lg %r5, 0(%r1)
+;   stg %r5, 160(%r15)
+;   lg %r5, 600(%r15)
+;   stg %r5, 280(%r15)
+;   stg %r14, 440(%r15)
+;   stg %r8, 448(%r15)
+;   stg %r9, 456(%r15)
+;   stg %r10, 464(%r15)
+;   stg %r11, 472(%r15)
+;   stg %r12, 480(%r15)
+;   stg %r13, 488(%r15)
+;   stg %r2, 496(%r15)
+;   stg %r3, 504(%r15)
+;   stg %r4, 512(%r15)
+;   lg %r2, 224(%r15)
+;   stg %r2, 520(%r15)
+;   stg %r6, 528(%r15)
+;   stg %r7, 536(%r15)
+;   lg %r5, 216(%r15)
+;   stg %r5, 544(%r15)
+;   lg %r5, 208(%r15)
+;   stg %r5, 552(%r15)
+;   lg %r5, 200(%r15)
+;   stg %r5, 560(%r15)
+;   lg %r5, 192(%r15)
+;   stg %r5, 568(%r15)
+;   lg %r5, 184(%r15)
+;   stg %r5, 576(%r15)
+;   lg %r5, 176(%r15)
+;   stg %r5, 584(%r15)
+;   lg %r5, 168(%r15)
+;   stg %r5, 592(%r15)
+;   lg %r2, 272(%r15)
+;   lg %r3, 264(%r15)
+;   lg %r4, 256(%r15)
+;   lg %r5, 248(%r15)
+;   lg %r6, 240(%r15)
+;   lg %r7, 232(%r15)
+;   lg %r13, 160(%r15)
+;   return_call_ind %r13 ; callee_pop_size 320
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r8, %r15, 0x40(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0x258
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   lghi %r2, 0xa
+;   stg %r2, 0x110(%r15)
+;   lghi %r3, 0xf
+;   stg %r3, 0x108(%r15)
+;   lghi %r4, 0x14
+;   stg %r4, 0x100(%r15)
+;   lghi %r5, 0x19
+;   stg %r5, 0xf8(%r15)
+;   lghi %r6, 0x1e
+;   stg %r6, 0xf0(%r15)
+;   lghi %r7, 0x23
+;   stg %r7, 0xe8(%r15)
+;   lghi %r14, 0x28
+;   lghi %r8, 0x2d
+;   lghi %r9, 0x32
+;   lghi %r10, 0x37
+;   lghi %r11, 0x3c
+;   lghi %r12, 0x41
+;   lghi %r13, 0x46
+;   lghi %r2, 0x4b
+;   lghi %r3, 0x50
+;   lghi %r4, 0x55
+;   lghi %r6, 0x5a
+;   stg %r6, 0xe0(%r15)
+;   lghi %r6, 0x5f
+;   lghi %r7, 0x64
+;   lghi %r5, 0x69
+;   stg %r5, 0xd8(%r15)
+;   lghi %r5, 0x6e
+;   stg %r5, 0xd0(%r15)
+;   lghi %r5, 0x73
+;   stg %r5, 0xc8(%r15)
+;   lghi %r5, 0x78
+;   stg %r5, 0xc0(%r15)
+;   lghi %r5, 0x7d
+;   stg %r5, 0xb8(%r15)
+;   lghi %r5, 0x82
+;   stg %r5, 0xb0(%r15)
+;   lghi %r5, 0x87
+;   stg %r5, 0xa8(%r15)
+;   bras %r1, 0xdc
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r5, 0(%r1)
+;   stg %r5, 0xa0(%r15)
+;   lg %r5, 0x258(%r15)
+;   stg %r5, 0x118(%r15)
+;   stg %r14, 0x1b8(%r15)
+;   stg %r8, 0x1c0(%r15)
+;   stg %r9, 0x1c8(%r15)
+;   stg %r10, 0x1d0(%r15)
+;   stg %r11, 0x1d8(%r15)
+;   stg %r12, 0x1e0(%r15)
+;   stg %r13, 0x1e8(%r15)
+;   stg %r2, 0x1f0(%r15)
+;   stg %r3, 0x1f8(%r15)
+;   stg %r4, 0x200(%r15)
+;   lg %r2, 0xe0(%r15)
+;   stg %r2, 0x208(%r15)
+;   stg %r6, 0x210(%r15)
+;   stg %r7, 0x218(%r15)
+;   lg %r5, 0xd8(%r15)
+;   stg %r5, 0x220(%r15)
+;   lg %r5, 0xd0(%r15)
+;   stg %r5, 0x228(%r15)
+;   lg %r5, 0xc8(%r15)
+;   stg %r5, 0x230(%r15)
+;   lg %r5, 0xc0(%r15)
+;   stg %r5, 0x238(%r15)
+;   lg %r5, 0xb8(%r15)
+;   stg %r5, 0x240(%r15)
+;   lg %r5, 0xb0(%r15)
+;   stg %r5, 0x248(%r15)
+;   lg %r5, 0xa8(%r15)
+;   stg %r5, 0x250(%r15)
+;   lg %r2, 0x110(%r15)
+;   lg %r3, 0x108(%r15)
+;   lg %r4, 0x100(%r15)
+;   lg %r5, 0xf8(%r15)
+;   lg %r6, 0xf0(%r15)
+;   lg %r7, 0xe8(%r15)
+;   lg %r13, 0xa0(%r15)
+;   lgr %r1, %r13
+;   aghi %r15, 0x118
+;   lmg %r8, %r14, 0x180(%r15)
+;   br %r1
+

@@ -716,8 +716,7 @@ impl Config {
     /// programs to implement some recursive algorithms with *O(1)* stack space
     /// usage.
     ///
-    /// This is `true` by default except on s390x or when the Winch compiler is
-    /// enabled.
+    /// This is `true` by default except when the Winch compiler is enabled.
     ///
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
@@ -1733,14 +1732,10 @@ impl Config {
     pub(crate) fn conditionally_enable_defaults(&mut self) {
         // If tail calls were not explicitly enabled/disabled (i.e. tail_callable is None), enable
         // them if we are targeting a backend that supports them. Currently the Cranelift
-        // compilation strategy is the only one that supports tail calls, but not targeting s390x.
+        // compilation strategy is the only one that supports tail calls.
         if self.tunables.tail_callable.is_none() {
             #[cfg(feature = "cranelift")]
-            let default_tail_calls = self.compiler_config.strategy == Some(Strategy::Cranelift)
-                && self.compiler_config.target.as_ref().map_or_else(
-                    || target_lexicon::Triple::host().architecture,
-                    |triple| triple.architecture,
-                ) != Architecture::S390x;
+            let default_tail_calls = self.compiler_config.strategy == Some(Strategy::Cranelift);
             #[cfg(not(feature = "cranelift"))]
             let default_tail_calls = false;
 
@@ -1942,14 +1937,6 @@ impl Config {
             self.compiler_config
                 .flags
                 .insert("enable_probestack".into());
-        }
-
-        if self.features.contains(WasmFeatures::TAIL_CALL) {
-            ensure!(
-                target.architecture != Architecture::S390x,
-                "Tail calls are not supported on s390x yet: \
-                 https://github.com/bytecodealliance/wasmtime/issues/6530"
-            );
         }
 
         if let Some(unwind_requested) = self.native_unwind_info {

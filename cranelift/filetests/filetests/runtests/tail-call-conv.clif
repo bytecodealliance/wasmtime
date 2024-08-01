@@ -8,10 +8,7 @@ target aarch64 sign_return_address
 target aarch64 has_pauth sign_return_address
 target riscv64
 target riscv64 has_c has_zcb
-
-;; TODO(#6530): s390x doesn't support the `tail` calling convention yet.
-;;
-;; target s390x
+target s390x
 
 ;; Test the `tail` calling convention with non-tail calls.
 

@@ -253,20 +253,15 @@ fn compile_a_component() -> Result<()> {
 #[test]
 fn tail_call_defaults() -> Result<()> {
     let wasm_with_tail_calls = "(module (func $a return_call $a))";
-    if cfg!(target_arch = "s390x") {
-        // off by default on s390x
-        let res = Module::new(&Engine::default(), wasm_with_tail_calls);
-        assert!(res.is_err());
-    } else {
-        // on by default
-        Module::new(&Engine::default(), wasm_with_tail_calls)?;
 
-        // on by default for cranelift
-        Module::new(
-            &Engine::new(Config::new().strategy(Strategy::Cranelift))?,
-            wasm_with_tail_calls,
-        )?;
-    }
+    // on by default
+    Module::new(&Engine::default(), wasm_with_tail_calls)?;
+
+    // on by default for cranelift
+    Module::new(
+        &Engine::new(Config::new().strategy(Strategy::Cranelift))?,
+        wasm_with_tail_calls,
+    )?;
 
     if cfg!(target_arch = "x86_64") {
         // off by default for winch

@@ -23,25 +23,23 @@
 ;;       lg      %r1, 0(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgrtle %r15, %r1
-;;       stmg    %r10, %r15, 0x50(%r15)
+;;       stmg    %r14, %r15, 0x70(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lgr     %r10, %r2
 ;;       llgfr   %r3, %r4
-;;       llilf   %r2, 0xffff0004
-;;       algfr   %r2, %r4
-;;       jgnle   0x3c
-;;       lgr     %r14, %r10
-;;       lg      %r10, 0x68(%r14)
+;;       llilf   %r7, 0xffff0004
+;;       algfr   %r7, %r4
+;;       jgnle   0x38
+;;       lg      %r6, 0x68(%r2)
 ;;       lghi    %r4, 0
-;;       ag      %r3, 0x60(%r14)
-;;       llilh   %r11, 0xffff
-;;       agr     %r3, %r11
-;;       clgr    %r2, %r10
-;;       locgrh  %r3, %r4
-;;       strv    %r5, 0(%r3)
-;;       lmg     %r10, %r15, 0xf0(%r15)
+;;       ag      %r3, 0x60(%r2)
+;;       llilh   %r2, 0xffff
+;;       agrk    %r2, %r3, %r2
+;;       clgr    %r7, %r6
+;;       locgrh  %r2, %r4
+;;       strv    %r5, 0(%r2)
+;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;
 ;; wasm[0]::function[1]:
@@ -49,23 +47,21 @@
 ;;       lg      %r1, 0(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgrtle %r15, %r1
-;;       stmg    %r10, %r15, 0x50(%r15)
+;;       stmg    %r14, %r15, 0x70(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lgr     %r3, %r2
-;;       llgfr   %r2, %r4
-;;       llilf   %r5, 0xffff0004
-;;       algfr   %r5, %r4
-;;       jgnle   0xb0
-;;       lgr     %r14, %r3
-;;       lg      %r4, 0x68(%r14)
-;;       lghi    %r3, 0
-;;       ag      %r2, 0x60(%r14)
-;;       llilh   %r10, 0xffff
-;;       agr     %r2, %r10
-;;       clgr    %r5, %r4
-;;       locgrh  %r2, %r3
+;;       llgfr   %r3, %r4
+;;       llilf   %r7, 0xffff0004
+;;       algfr   %r7, %r4
+;;       jgnle   0xa4
+;;       lg      %r5, 0x68(%r2)
+;;       lghi    %r4, 0
+;;       ag      %r3, 0x60(%r2)
+;;       llilh   %r6, 0xffff
+;;       agrk    %r2, %r3, %r6
+;;       clgr    %r7, %r5
+;;       locgrh  %r2, %r4
 ;;       lrv     %r2, 0(%r2)
-;;       lmg     %r10, %r15, 0xf0(%r15)
+;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

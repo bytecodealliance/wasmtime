@@ -1335,6 +1335,11 @@ impl<M: ABIMachineSpec> Callee<M> {
         Ok(())
     }
 
+    /// Get the return area pointer register, if any.
+    pub fn ret_area_ptr(&self) -> Option<Reg> {
+        self.ret_area_ptr
+    }
+
     /// Accumulate outgoing arguments.
     ///
     /// This ensures that at least `size` bytes are allocated in the prologue to
