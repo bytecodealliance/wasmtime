@@ -8,7 +8,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
 links = "wasmtime-c-api"
-include = ["include", "src", "build.rs"]
+include = ["include", "src", "build.rs", "CMakeLists.txt", "doxygen.conf.in"]
 
 [lints]
 workspace = true

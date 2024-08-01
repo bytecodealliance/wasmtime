@@ -99,6 +99,9 @@ find_program(WASMTIME_CARGO_BINARY cargo)
 if(NOT WASMTIME_CARGO_BINARY)
     message(FATAL_ERROR [["cargo" was not found. Ensure "cargo" is in PATH. Aborting...]])
 endif()
+# Note: this line will *always* create ${CMAKE_CURRENT_SOURCE_DIR}/artifact
+# during the configure stage of cmake, and there does not seem to be a way to
+# disable this behavior. This prevents cargo package from verifying the package.
 ExternalProject_Add(
     wasmtime-crate
     DOWNLOAD_COMMAND ""

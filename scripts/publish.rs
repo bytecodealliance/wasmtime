@@ -522,6 +522,8 @@ fn verify(crates: &[Crate]) {
             .env("CARGO_TARGET_DIR", "./target");
         if krate.name.contains("wasi-nn") {
             cmd.arg("--no-verify");
+        } else if krate.name == "wasmtime-c-api-impl" {
+            cmd.arg("--no-verify");
         }
         run_cmd(&mut cmd);
         run_cmd(
