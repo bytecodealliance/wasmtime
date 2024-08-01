@@ -25,11 +25,43 @@ fn test_tcp_input_stream_should_be_closed_by_remote_shutdown(
     });
 }
 
+/// OutputStream should return `StreamError::Closed` after the connection has been locally shut down for sending.
+fn test_tcp_output_stream_should_be_closed_by_local_shutdown(
+    net: &Network,
+    family: IpAddressFamily,
+) {
+    setup(net, family, |_server, client| {
+        let message = b"Hi!";
+
+        // The stream should be writable:
+        assert!(client.output.check_write().unwrap() as usize >= message.len());
+
+        // Perform the shutdown
+        client.socket.shutdown(ShutdownType::Send).unwrap();
+
+        // Stream should be closed:
+        assert!(matches!(
+            client.output.write(message),
+            Err(StreamError::Closed)
+        ));
+
+        // The stream should remain closed:
+        assert!(matches!(
+            client.output.check_write(),
+            Err(StreamError::Closed)
+        ));
+        assert!(matches!(client.output.flush(), Err(StreamError::Closed)));
+    });
+}
+
 fn main() {
     let net = Network::default();
 
     test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv6);
+
+    test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
+    test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
 }
 
 struct Connection {
