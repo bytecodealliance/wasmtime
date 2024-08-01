@@ -397,7 +397,11 @@ impl Parse for Opt {
                 syn::bracketed!(contents in input);
                 let fields: Punctuated<syn::LitStr, Token![,]> =
                     contents.parse_terminated(Parse::parse, Token![,])?;
-                TrappableImports::Only(fields.iter().map(|s| s.value()).collect())
+                let fields = fields
+                    .iter()
+                    .map(validate_trappable_import)
+                    .collect::<Result<_>>()?;
+                TrappableImports::Only(fields)
             };
             Ok(Opt::TrappableImports(config))
         } else if l.peek(kw::additional_derives) {
@@ -444,6 +448,44 @@ impl Parse for Opt {
             Err(l.error())
         }
     }
+}
+
+fn validate_trappable_import(field: &syn::LitStr) -> Result<String> {
+    let val = field.value();
+    let mut chunk = val.as_str();
+
+    let validate = |s| {
+        if wit_parser::validate_id(s).is_err() {
+            return Err(Error::new(
+                field.span(),
+                format!("`{}` is not a valid wit identifier", val),
+            ));
+        }
+        Ok(())
+    };
+
+    if chunk.starts_with("[constructor]") {
+        chunk = &chunk["[constructor]".len()..];
+        validate(chunk)?;
+    } else if chunk.starts_with("[method]") || chunk.starts_with("[static]") {
+        // "[method]" and "[static]" are both 8 characters long
+        chunk = &chunk[8..];
+
+        let dot = chunk.find('.').ok_or_else(|| {
+            Error::new(
+                field.span(),
+                format!("`{}` is not a valid wit identifier", val),
+            )
+        })?;
+
+        let (resource, method) = chunk.split_at(dot);
+        validate(resource)?;
+        validate(&method[1..])?;
+    } else {
+        validate(chunk)?;
+    }
+
+    Ok(val)
 }
 
 fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<TrappableError> {
