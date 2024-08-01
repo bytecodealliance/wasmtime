@@ -150,7 +150,6 @@ struct ConfigTunables {
     generate_address_map: Option<bool>,
     debug_adapter_modules: Option<bool>,
     relaxed_simd_deterministic: Option<bool>,
-    tail_callable: Option<bool>,
 }
 
 /// User-provided configuration for the compiler.
@@ -287,10 +286,6 @@ impl Config {
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
-
-        // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
-        // but it's not implemented in Wasmtime yet so disable it.
-        ret.features.set(WasmFeatures::TAIL_CALL, false);
 
         ret
     }
@@ -721,7 +716,6 @@ impl Config {
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::TAIL_CALL, enable);
-        self.tunables.tail_callable = Some(enable);
         self
     }
 
@@ -1729,20 +1723,6 @@ impl Config {
         self
     }
 
-    pub(crate) fn conditionally_enable_defaults(&mut self) {
-        // If tail calls were not explicitly enabled/disabled (i.e. tail_callable is None), enable
-        // them if we are targeting a backend that supports them. Currently the Cranelift
-        // compilation strategy is the only one that supports tail calls.
-        if self.tunables.tail_callable.is_none() {
-            #[cfg(feature = "cranelift")]
-            let default_tail_calls = self.compiler_config.strategy == Some(Strategy::Cranelift);
-            #[cfg(not(feature = "cranelift"))]
-            let default_tail_calls = false;
-
-            self.wasm_tail_call(default_tail_calls);
-        }
-    }
-
     pub(crate) fn validate(&self) -> Result<Tunables> {
         if self.features.contains(WasmFeatures::REFERENCE_TYPES)
             && !self.features.contains(WasmFeatures::BULK_MEMORY)
@@ -1813,17 +1793,12 @@ impl Config {
             generate_address_map
             debug_adapter_modules
             relaxed_simd_deterministic
-            tail_callable
         }
 
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             tunables.winch_callable = self.compiler_config.strategy == Some(Strategy::Winch);
-
-            if tunables.winch_callable && tunables.tail_callable {
-                bail!("Winch does not support the WebAssembly tail call proposal");
-            }
 
             if tunables.winch_callable && !tunables.table_lazy_init {
                 bail!("Winch requires the table-lazy-init configuration option");

@@ -36,7 +36,8 @@ macro_rules! def_unsupported {
 
                 fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                     $($(let _ = $arg;)*)?
-                        todo!(stringify!($op))
+
+                    self.found_unsupported_instruction = Some(stringify!($op));
                 }
             );
         )*
