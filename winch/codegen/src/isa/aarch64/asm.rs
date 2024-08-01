@@ -8,6 +8,7 @@ use cranelift_codegen::isa::aarch64::inst::{
     FPUOpRI::{self, UShr32, UShr64},
     FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
+use cranelift_codegen::MachInst;
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
@@ -103,6 +104,21 @@ impl Assembler {
     }
 
     fn emit(&mut self, inst: Inst) {
+        self.emit_with_island(inst, Inst::worst_case_size());
+    }
+
+    fn emit_with_island(&mut self, inst: Inst, needed_space: u32) {
+        if self.buffer.island_needed(needed_space) {
+            let label = self.buffer.get_label();
+            let jmp = Inst::Jump {
+                dest: BranchTarget::Label(label),
+            };
+            jmp.emit(&mut self.buffer, &mut self.emit_info, &mut self.emit_state);
+            self.buffer
+                .emit_island(needed_space, self.emit_state.ctrl_plane_mut());
+            self.buffer
+                .bind_label(label, self.emit_state.ctrl_plane_mut());
+        }
         inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
@@ -499,13 +515,19 @@ impl Assembler {
         tmp1: Reg,
         tmp2: Reg,
     ) {
-        self.emit(Inst::JTSequence {
-            default,
-            targets: Box::new(targets.to_vec()),
-            ridx: index.into(),
-            rtmp1: Writable::from_reg(tmp1.into()),
-            rtmp2: Writable::from_reg(tmp2.into()),
-        });
+        self.emit_with_island(
+            Inst::JTSequence {
+                default,
+                targets: Box::new(targets.to_vec()),
+                ridx: index.into(),
+                rtmp1: Writable::from_reg(tmp1.into()),
+                rtmp2: Writable::from_reg(tmp2.into()),
+            },
+            // number of bytes needed for the jumptable sequence:
+            // 4 bytes per instruction, with 8 instructions base + the size of
+            // the jumptable more.
+            (4 * (8 + targets.len())).try_into().unwrap(),
+        );
     }
 
     /// Conditional Set sets the destination register to 1 if the condition
