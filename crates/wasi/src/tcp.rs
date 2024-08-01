@@ -665,13 +665,13 @@ impl Subscribe for TcpSocket {
     }
 }
 
-pub(crate) struct TcpReadStream {
+struct TcpReadStream {
     stream: Arc<tokio::net::TcpStream>,
     closed: bool,
 }
 
 impl TcpReadStream {
-    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             closed: false,
@@ -725,7 +725,7 @@ impl Subscribe for TcpReadStream {
 
 const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
-pub(crate) struct TcpWriteStream {
+struct TcpWriteStream {
     stream: Arc<tokio::net::TcpStream>,
     last_write: LastWrite,
 }
@@ -737,7 +737,7 @@ enum LastWrite {
 }
 
 impl TcpWriteStream {
-    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             last_write: LastWrite::Done,
