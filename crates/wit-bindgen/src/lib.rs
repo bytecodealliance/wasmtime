@@ -73,6 +73,8 @@ struct Wasmtime {
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
     used_with_opts: HashSet<String>,
+    // Track the imports that matched the `trappable_imports` spec.
+    used_trappable_imports_opts: HashSet<String>,
 }
 
 struct ImportFunction {
@@ -894,6 +896,18 @@ pub fn new(
 
         if !unused_keys.is_empty() {
             anyhow::bail!("interfaces were specified in the `with` config option but are not referenced in the target world: {unused_keys:?}");
+        }
+
+        if let TrappableImports::Only(only) = &self.opts.trappable_imports {
+            let mut unused_imports = Vec::from_iter(
+                only.difference(&self.used_trappable_imports_opts)
+                    .map(|s| s.as_str()),
+            );
+
+            if !unused_imports.is_empty() {
+                unused_imports.sort();
+                anyhow::bail!("names specified in the `trappable_imports` config option but are not referenced in the target world: {unused_imports:?}");
+            }
         }
 
         if !self.opts.only_interfaces {
@@ -2057,9 +2071,15 @@ impl<'a> InterfaceGenerator<'a> {
     }
 
     fn special_case_trappable_error(
-        &self,
-        results: &Results,
+        &mut self,
+        func: &Function,
     ) -> Option<(&'a Result_, TypeId, String)> {
+        let results = &func.results;
+
+        self.gen
+            .used_trappable_imports_opts
+            .insert(func.name.clone());
+
         // We fillin a special trappable error type in the case when a function has just one
         // result, which is itself a `result<a, e>`, and the `e` is *not* a primitive
         // (i.e. defined in std) type, and matches the typename given by the user.
@@ -2124,18 +2144,21 @@ impl<'a> InterfaceGenerator<'a> {
         // into the representation required by Wasmtime's component API.
         let mut required_conversion_traits = IndexSet::new();
         let mut errors_converted = IndexMap::new();
-        let my_error_types = iface
+        let mut my_error_types = iface
             .types
             .iter()
             .filter(|(_, id)| self.gen.trappable_errors.contains_key(*id))
-            .map(|(_, id)| *id);
-        let used_error_types = iface
-            .functions
-            .iter()
-            .filter_map(|(_, func)| self.special_case_trappable_error(&func.results))
-            .map(|(_, id, _)| id);
+            .map(|(_, id)| *id)
+            .collect::<Vec<_>>();
+        my_error_types.extend(
+            iface
+                .functions
+                .iter()
+                .filter_map(|(_, func)| self.special_case_trappable_error(func))
+                .map(|(_, id, _)| id),
+        );
         let root = self.path_to_root();
-        for err_id in my_error_types.chain(used_error_types).collect::<Vec<_>>() {
+        for err_id in my_error_types {
             let custom_name = &self.gen.trappable_errors[&err_id];
             let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err_id)];
             let err_name = err.name.as_ref().unwrap();
@@ -2412,7 +2435,7 @@ impl<'a> InterfaceGenerator<'a> {
             } else {
                 uwrite!(self.src, "Ok(r)\n");
             }
-        } else if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
+        } else if let Some((_, err, _)) = self.special_case_trappable_error(func) {
             let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
             let err_name = err.name.as_ref().unwrap();
             let owner = match err.owner {
@@ -2467,9 +2490,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         if !self.gen.opts.trappable_imports.can_trap(func) {
             self.print_result_ty(&func.results, TypeMode::Owned);
-        } else if let Some((r, _id, error_typename)) =
-            self.special_case_trappable_error(&func.results)
-        {
+        } else if let Some((r, _id, error_typename)) = self.special_case_trappable_error(func) {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propagate their errors
