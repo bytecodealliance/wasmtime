@@ -1039,16 +1039,6 @@ jobs:
     - run: |
         rustup component add rust-src
         rustup target add ${{ matrix.target }}
-    # Without these two, cmake -G "MSYS Makefiles" will select MSVC as the compiler.
-    - run: C:/msys64/usr/bin/pacman.exe -S --needed mingw-w64-x86_64-gcc --noconfirm
-      if: matrix.target == 'x86_64-pc-windows-gnu'
-    - shell: pwsh
-      run: |
-        echo "C:\msys64\mingw64\bin" >> $Env:GITHUB_PATH
-        echo "CC=gcc" >> $Env:GITHUB_ENV
-        echo "CXX=g++" >> $Env:GITHUB_ENV
-      if: matrix.target == 'x86_64-pc-windows-gnu'
-
 
     # On one builder produce the source tarball since there's no need to produce
     # it everywhere

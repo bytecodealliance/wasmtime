@@ -14,51 +14,7 @@ if(WASMTIME_TARGET STREQUAL "")
   set(WASMTIME_TARGET ${RUSTC_HOST_TARGET})
 endif()
 
-set(WASMTIME_FEATURES "--no-default-features")
-
-option(WASMTIME_DISABLE_ALL_FEATURES
-       "disable all features by default instead of enabling them"
-       OFF)
-
-macro(feature rust_name default)
-  string(TOUPPER "wasmtime_feature_${rust_name}" cmake_name)
-  string(REPLACE "-" "_" cmake_name ${cmake_name})
-  if(${default})
-    if(${WASMTIME_DISABLE_ALL_FEATURES})
-      set(feature_default OFF)
-    else()
-      set(feature_default ON)
-    endif()
-  else()
-    set(feature_default OFF)
-  endif()
-
-  option(${cmake_name} "enable the Cargo feature ${rust_name}" ${feature_default})
-
-  if(${cmake_name})
-    list(APPEND WASMTIME_FEATURES "--features=${rust_name}")
-    message(STATUS "Enabling feature ${rust_name}")
-  endif()
-endmacro()
-
-# WASMTIME_FEATURE_LIST
-feature(profiling ON)
-feature(wat ON)
-feature(cache ON)
-feature(parallel-compilation ON)
-feature(wasi ON)
-feature(logging ON)
-feature(disable-logging OFF)
-feature(coredump ON)
-feature(addr2line ON)
-feature(demangle ON)
-feature(threads ON)
-feature(gc ON)
-feature(async ON)
-feature(cranelift ON)
-feature(winch ON)
-# ... if you add a line above this be sure to change the other locations
-# marked WASMTIME_FEATURE_LIST
+include(cmake/features.cmake)
 
 if(WASMTIME_FASTEST_RUNTIME)
   set(WASMTIME_BUILD_TYPE_FLAG "--profile=fastest-runtime")
@@ -142,21 +98,18 @@ endif()
 
 target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-set(WASMTIME_GENERATED_CONF_H ${CMAKE_BINARY_DIR}/include/wasmtime/conf.h)
 target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
 
-configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime/conf.h.in
-  ${WASMTIME_GENERATED_CONF_H})
+execute_process(
+  COMMAND
+    ${CMAKE_COMMAND}
+      -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/include
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake
+  OUTPUT_QUIET
+  COMMAND_ERROR_IS_FATAL ANY)
 
 include(GNUInstallDirs)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        COMPONENT Headers
-        FILES_MATCHING REGEX "\\.hh?$")
-install(FILES ${WASMTIME_GENERATED_CONF_H}
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wasmtime
-        COMPONENT Headers)
+install(SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake)
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
@@ -175,5 +128,3 @@ add_custom_target(doc
     COMMAND doxygen ${DOXYGEN_CONF_OUT}
     DEPENDS ${WASMTIME_GENERATED_CONF_H} ${DOXYGEN_CONF_OUT}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-add_custom_target(headers
-    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component Headers)

@@ -1240,12 +1240,6 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.2.0"
 
-[[audits.cmake]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-delta = "0.1.49 -> 0.1.50"
-notes = "Only minor changes made"
-
 [[audits.cobs]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3653,12 +3647,6 @@ criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2022-04-15"
 end = "2024-07-06"
-
-[[trusted.cmake]]
-criteria = "safe-to-deploy"
-user-id = 1 # Alex Crichton (alexcrichton)
-start = "2019-03-26"
-end = "2025-07-30"
 
 [[trusted.cpp_demangle]]
 criteria = "safe-to-deploy"

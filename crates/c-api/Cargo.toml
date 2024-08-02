@@ -38,9 +38,6 @@ wasmtime-wasi = { workspace = true, optional = true, features = ["preview1"] }
 # Optional dependencies for the `async` feature
 futures = { workspace = true, optional = true }
 
-[build-dependencies]
-cmake = "0.1"
-
 [features]
 # WASMTIME_FEATURE_LIST
 async = ['wasmtime/async', 'futures']
