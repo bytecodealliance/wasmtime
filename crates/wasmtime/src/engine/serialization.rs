@@ -366,7 +366,6 @@ impl Metadata<'_> {
             guard_before_linear_memory,
             table_lazy_init,
             relaxed_simd_deterministic,
-            tail_callable,
             winch_callable,
 
             // This doesn't affect compilation, it's just a runtime setting.
@@ -429,7 +428,6 @@ impl Metadata<'_> {
             other.relaxed_simd_deterministic,
             "relaxed simd deterministic semantics",
         )?;
-        Self::check_bool(tail_callable, other.tail_callable, "WebAssembly tail calls")?;
         Self::check_bool(
             winch_callable,
             other.winch_callable,

@@ -158,47 +158,26 @@ fn wasm_call_signature(
     wasm_func_ty: &WasmFuncType,
     tunables: &Tunables,
 ) -> ir::Signature {
-    // NB: this calling convention in the near future is expected to be
-    // unconditionally switched to the "tail" calling convention once all
-    // platforms have support for tail calls.
+    // The default calling convention is `CallConv::Tail` to enable the use of
+    // tail calls in modules when needed. Note that this is used even if the
+    // tail call proposal is disabled in wasm. This is not interacted with on
+    // the host so it's purely an internal detail of wasm itself.
     //
-    // Also note that the calling convention for wasm functions is purely an
-    // internal implementation detail of cranelift and Wasmtime. Native Rust
-    // code does not interact with raw wasm functions and instead always
-    // operates through trampolines either using the `array_call_signature` or
-    // `native_call_signature` where the default platform ABI is used.
-    let call_conv = match isa.triple().architecture {
-        // If the tail calls proposal is enabled, we must use the tail calling
-        // convention. We don't use it by default yet because of
-        // https://github.com/bytecodealliance/wasmtime/issues/6759
-        _ if tunables.tail_callable => {
-            assert!(
-                !tunables.winch_callable,
-                "Winch doesn't support the WebAssembly tail call proposal",
-            );
-
-            CallConv::Tail
-        }
-
-        // The winch calling convention is only implemented for x64 and aarch64
-        arch if tunables.winch_callable => {
-            assert!(
-                matches!(arch, Architecture::X86_64 | Architecture::Aarch64(_)),
-                "The Winch calling convention is only implemented for x86_64 and aarch64"
-            );
-            CallConv::Winch
-        }
-
-        // On s390x the "wasmtime" calling convention is used to give vectors
-        // little-endian lane order at the ABI layer which should reduce the
-        // need for conversion when operating on vector function arguments. By
-        // default vectors on s390x are otherwise in big-endian lane order which
-        // would require conversions.
-        Architecture::S390x => CallConv::WasmtimeSystemV,
-
-        // All other platforms pick "fast" as the calling convention since it's
-        // presumably, well, the fastest.
-        _ => CallConv::Fast,
+    // The Winch calling convention is used instead when generating trampolines
+    // which call Winch-generated functions. The winch calling convention is
+    // only implemented for x64 and aarch64, so assert that here and panic on
+    // other architectures.
+    let call_conv = if tunables.winch_callable {
+        assert!(
+            matches!(
+                isa.triple().architecture,
+                Architecture::X86_64 | Architecture::Aarch64(_)
+            ),
+            "The Winch calling convention is only implemented for x86_64 and aarch64"
+        );
+        CallConv::Winch
+    } else {
+        CallConv::Tail
     };
     let mut sig = blank_sig(isa, call_conv);
     let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));

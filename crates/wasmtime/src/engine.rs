@@ -98,12 +98,7 @@ impl Engine {
             crate::runtime::vm::debug_builtins::ensure_exported();
         }
 
-        let config = {
-            let mut config = config.clone();
-            config.conditionally_enable_defaults();
-            config
-        };
-
+        let config = config.clone();
         let tunables = config.validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]

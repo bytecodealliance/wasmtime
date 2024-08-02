@@ -72,6 +72,10 @@ where
 
     /// Information about the source code location.
     pub source_location: SourceLocation,
+
+    /// Flag indicating whether during translation an unsupported instruction
+    /// was found.
+    pub found_unsupported_instruction: Option<&'static str>,
 }
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
@@ -91,6 +95,7 @@ where
             env,
             source_location: Default::default(),
             control_frames: Default::default(),
+            found_unsupported_instruction: None,
         }
     }
 
@@ -226,6 +231,10 @@ where
                 self,
                 offset,
             ))??;
+
+            if let Some(insn) = self.found_unsupported_instruction {
+                anyhow::bail!("unsupported instruction in Winch: {insn}")
+            }
         }
         validator.finish(body.original_position())?;
         return Ok(());

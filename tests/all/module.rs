@@ -270,10 +270,6 @@ fn tail_call_defaults() -> Result<()> {
             wasm_with_tail_calls,
         );
         assert!(err.is_err());
-
-        // can't enable with winch
-        let err = Engine::new(Config::new().strategy(Strategy::Winch).wasm_tail_call(true));
-        assert!(err.is_err());
     }
     Ok(())
 }
