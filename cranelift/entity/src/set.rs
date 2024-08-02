@@ -27,6 +27,14 @@ impl<K: EntityRef> Default for EntitySet<K> {
     }
 }
 
+impl<K: EntityRef> Extend<K> for EntitySet<K> {
+    fn extend<T: IntoIterator<Item = K>>(&mut self, iter: T) {
+        for k in iter {
+            self.insert(k);
+        }
+    }
+}
+
 /// Shared `EntitySet` implementation for all value types.
 impl<K> EntitySet<K>
 where
