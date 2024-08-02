@@ -99,6 +99,9 @@ impl<T> SlotSizeMap<T> {
 }
 
 /// A set of live values.
+///
+/// Make sure to copy to a vec and sort, or something, before iterating over the
+/// values to ensure deterministic output.
 type LiveSet = HashSet<ir::Value>;
 
 /// A worklist of blocks' post-order indices that we need to process.
@@ -107,14 +110,16 @@ struct Worklist {
     /// Stack of blocks to process.
     stack: Vec<u32>,
 
-    /// The set of blocks that need to be updated. This is a subset of the
-    /// elements present in `self.stack` because `self.stack` is allowed to have
-    /// duplicates, and once we pop the first occurrence of a duplicate, we
-    /// remove it from this set, since it no longer needs updates at that
-    /// point. This potentially uses more stack space than necessary, but
-    /// prefers processing immediate predecessors, and therefore inner loop
-    /// bodies before continuing to process outer loop bodies. This ultimately
-    /// results in fewer iterations required to reach a fixed point.
+    /// The set of blocks that need to be updated.
+    ///
+    /// This is a subset of the elements present in `self.stack`, *not* the
+    /// exact same elements. `self.stack` is allowed to have duplicates, and
+    /// once we pop the first occurrence of a duplicate, we remove it from this
+    /// set, since it no longer needs updates at that point. This potentially
+    /// uses more stack space than necessary, but prefers processing immediate
+    /// predecessors, and therefore inner loop bodies before continuing to
+    /// process outer loop bodies. This ultimately results in fewer iterations
+    /// required to reach a fixed point.
     need_updates: HashSet<u32>,
 }
 
@@ -149,7 +154,10 @@ impl Worklist {
     }
 
     fn push(&mut self, block_index: u32) {
-        // Mark this block as needing an update, since we have (re?) pushed it.
+        // Mark this block as needing an update. If it wasn't in `self.stack`,
+        // now it is and it needs an update. If it was already in `self.stack`,
+        // then pushing this copy logically hoists it to the top of the
+        // stack. See the above note about processing inner-most loops first.
         self.need_updates.insert(block_index);
         self.stack.push(block_index);
     }
@@ -157,7 +165,10 @@ impl Worklist {
     fn pop(&mut self) -> Option<u32> {
         while let Some(block_index) = self.stack.pop() {
             // If this block was pushed multiple times, we only need to update
-            // it once, so remove it from the need-updates set.
+            // it once, so remove it from the need-updates set. In other words
+            // it was logically hoisted up to the top of the stack, while this
+            // entry was left behind, and we already popped the hoisted
+            // copy. See the above note about processing inner-most loops first.
             if self.need_updates.remove(&block_index) {
                 return Some(block_index);
             }
@@ -183,9 +194,9 @@ impl Worklist {
 /// 2. The live-out set, which is the set of values that are live when control
 ///    exits the block.
 ///
-/// A block's live-out set is the union of its successors' live-in sets
-/// successors. A block's live-in set is the set of values that are still live
-/// after the block's instructions have been processed.
+/// A block's live-out set is the union of its successors' live-in sets. A
+/// block's live-in set is the set of values that are still live after the
+/// block's instructions have been processed.
 ///
 /// ```text
 /// live_in(block) = union(live_out(s) for s in successors(block))
