@@ -73,8 +73,7 @@ struct Wasmtime {
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
     used_with_opts: HashSet<String>,
-    // Track the with options that were used. Remapped interfaces provided via `with`
-    // are required to be used.
+    // Track the imports that matched the `trappable_imports` spec.
     used_trappable_imports_opts: HashSet<String>,
 }
 
