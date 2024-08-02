@@ -29,4 +29,6 @@ runs:
         echo CC_${cc_target}=$linker >> $GITHUB_ENV
         echo RANLIB_${cc_target}=$ndk_bin/llvm-ranlib >> $GITHUB_ENV
         echo AR_${cc_target}=$ndk_bin/llvm-ar >> $GITHUB_ENV
+        echo CMAKE_MAKE_PROGRAM=make >> $GITHUB_ENV
+        echo "$ndk_bin" >> $GITHUB_PATH
       shell: bash
