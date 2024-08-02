@@ -100,14 +100,6 @@ target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/includ
 
 target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
 
-execute_process(
-  COMMAND
-    ${CMAKE_COMMAND}
-      -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/include
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake
-  OUTPUT_QUIET
-  COMMAND_ERROR_IS_FATAL ANY)
-
 include(GNUInstallDirs)
 install(SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake)
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
@@ -128,3 +120,12 @@ add_custom_target(doc
     COMMAND doxygen ${DOXYGEN_CONF_OUT}
     DEPENDS ${WASMTIME_GENERATED_CONF_H} ${DOXYGEN_CONF_OUT}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+add_dependencies(doc headers-to-doc)
+
+file(GLOB headers "include/*.h")
+add_custom_target(headers-to-doc
+  COMMAND
+    ${CMAKE_COMMAND}
+      -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/include
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake
+  DEPENDS ${headers})
