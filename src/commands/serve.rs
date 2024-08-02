@@ -206,21 +206,6 @@ impl ServeCommand {
                             .iter()
                             .map(|v| (v.key.clone(), v.value.clone())),
                     )
-                    .allow_redis_hosts(&self.run.common.wasi.keyvalue_redis_host)
-                    .redis_connection_timeout(
-                        self.run
-                            .common
-                            .wasi
-                            .keyvalue_redis_connection_timeout
-                            .unwrap_or(std::time::Duration::MAX),
-                    )
-                    .redis_response_timeout(
-                        self.run
-                            .common
-                            .wasi
-                            .keyvalue_redis_response_timeout
-                            .unwrap_or(std::time::Duration::MAX),
-                    )
                     .build();
                 host.wasi_keyvalue.replace(ctx);
             }
@@ -309,7 +294,7 @@ impl ServeCommand {
             }
             #[cfg(feature = "wasi-keyvalue")]
             {
-                wasmtime_wasi_keyvalue::add_to_linker_async(linker, |h: &mut Host| {
+                wasmtime_wasi_keyvalue::add_to_linker(linker, |h: &mut Host| {
                     WasiKeyValue::new(h.wasi_keyvalue.as_ref().unwrap(), &mut h.table)
                 })?;
             }

@@ -329,15 +329,6 @@ wasmtime_option_group! {
         pub runtime_config_var: Vec<KeyValuePair>,
         /// Preset data for the In-Memory provider of WASI key-value API.
         pub keyvalue_in_memory_data: Vec<KeyValuePair>,
-        /// Grant access to the given Redis host for the Redis provider of WASI
-        /// key-value API.
-        pub keyvalue_redis_host: Vec<String>,
-        /// Sets the connection timeout parameter for the Redis provider of WASI
-        /// key-value API.
-        pub keyvalue_redis_connection_timeout: Option<Duration>,
-        /// Sets the response timeout parameter for the Redis provider of WASI
-        /// key-value API.
-        pub keyvalue_redis_response_timeout: Option<Duration>,
     }
 
     enum Wasi {

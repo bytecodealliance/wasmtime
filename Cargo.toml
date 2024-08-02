@@ -332,7 +332,6 @@ criterion = { version = "0.5.0", default-features = false, features = ["html_rep
 rustc-hash = "1.1.0"
 libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
-redis = "0.25.4"
 
 # =============================================================================
 #
@@ -407,7 +406,7 @@ wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 wasi-runtime-config = ["dep:wasmtime-wasi-runtime-config"]
-wasi-keyvalue = ["dep:wasmtime-wasi-keyvalue", "wasmtime-wasi-keyvalue/redis"]
+wasi-keyvalue = ["dep:wasmtime-wasi-keyvalue"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",
