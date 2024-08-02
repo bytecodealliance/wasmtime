@@ -112,6 +112,9 @@ ExternalProject_Add(
           ${WASMTIME_FEATURES}
           ${WASMTIME_USER_CARGO_BUILD_OPTIONS}
     USES_TERMINAL_BUILD TRUE
+    # Note that this is used as the cwd for the cargo invocation itself, build
+    # byproducts go in the `target` directory at the top-level.
+    BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
     BUILD_ALWAYS ${WASMTIME_ALWAYS_BUILD}
     BUILD_BYPRODUCTS ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES})
 add_library(wasmtime INTERFACE)
