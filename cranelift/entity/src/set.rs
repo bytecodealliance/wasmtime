@@ -53,6 +53,12 @@ where
         }
     }
 
+    /// Ensure that the set has enough capacity to hold `capacity` total
+    /// elements.
+    pub fn ensure_capacity(&mut self, capacity: usize) {
+        self.bitset.ensure_capacity(capacity);
+    }
+
     /// Get the element at `k` if it exists.
     pub fn contains(&self, k: K) -> bool {
         let index = k.index();
