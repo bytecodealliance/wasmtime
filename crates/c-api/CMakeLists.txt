@@ -99,9 +99,6 @@ find_program(WASMTIME_CARGO_BINARY cargo)
 if(NOT WASMTIME_CARGO_BINARY)
     message(FATAL_ERROR [["cargo" was not found. Ensure "cargo" is in PATH. Aborting...]])
 endif()
-# Note: this line will *always* create ${CMAKE_CURRENT_SOURCE_DIR}/artifact
-# during the configure stage of cmake, and there does not seem to be a way to
-# disable this behavior. This prevents cargo package from verifying the package.
 ExternalProject_Add(
     wasmtime-crate
     DOWNLOAD_COMMAND ""
@@ -115,7 +112,6 @@ ExternalProject_Add(
           ${WASMTIME_FEATURES}
           ${WASMTIME_USER_CARGO_BUILD_OPTIONS}
     USES_TERMINAL_BUILD TRUE
-    BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/artifact
     BUILD_ALWAYS ${WASMTIME_ALWAYS_BUILD}
     BUILD_BYPRODUCTS ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES})
 add_library(wasmtime INTERFACE)
