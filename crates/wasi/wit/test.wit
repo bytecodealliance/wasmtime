@@ -1,6 +1,3 @@
-package wasmtime:wasi;
-
-// only used as part of `test-programs`
 world test-reactor {
   include wasi:cli/imports@0.2.1;
 
@@ -13,10 +10,4 @@ world test-reactor {
 
   use wasi:filesystem/types@0.2.1.{descriptor-stat};
   export pass-an-imported-record: func(d: descriptor-stat) -> string;
-}
-
-world test-command {
-  include wasi:cli/imports@0.2.1;
-  import wasi:http/types@0.2.1;
-  import wasi:http/outgoing-handler@0.2.1;
 }

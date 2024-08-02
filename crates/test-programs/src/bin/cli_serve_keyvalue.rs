@@ -1,7 +1,7 @@
-use test_programs::keyvalue::wasi::keyvalue;
 use test_programs::proxy;
-use test_programs::wasi::http::types::{
-    Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
+use test_programs::wasi::{
+    http::types::{Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam},
+    keyvalue,
 };
 
 struct T;
