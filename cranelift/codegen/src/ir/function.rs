@@ -313,6 +313,16 @@ impl FunctionStencil {
         Ok(())
     }
 
+    /// Returns an iterator over the blocks succeeding the given block.
+    pub fn block_successors(&self, block: Block) -> impl DoubleEndedIterator<Item = Block> + '_ {
+        self.layout.last_inst(block).into_iter().flat_map(|inst| {
+            self.dfg.insts[inst]
+                .branch_destination(&self.dfg.jump_tables)
+                .iter()
+                .map(|block| block.block(&self.dfg.value_lists))
+        })
+    }
+
     /// Returns true if the function is function that doesn't call any other functions. This is not
     /// to be confused with a "leaf function" in Windows terminology.
     pub fn is_leaf(&self) -> bool {
