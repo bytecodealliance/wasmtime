@@ -371,19 +371,6 @@ mod tests {
         }};
     }
 
-    macro_rules! assert_eq_output {
-        ($actual:ident, $expected:literal) => {
-            assert_eq!(
-                $actual,
-                $expected,
-                "\n{}",
-                similar::TextDiff::from_lines($expected, &$actual)
-                    .unified_diff()
-                    .header("expected", "actual")
-            )
-        };
-    }
-
     #[test]
     fn switch_empty() {
         let func = setup!(42, []);
