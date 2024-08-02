@@ -4771,6 +4771,30 @@
 (rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
 
+;; Trap if zero/not zero
+(type ZeroCond
+      (enum
+       Zero
+       NonZero))
+
+(decl zero_cond_to_cc (ZeroCond) CC)
+(rule (zero_cond_to_cc (ZeroCond.Zero)) (CC.Z))
+(rule (zero_cond_to_cc (ZeroCond.NonZero)) (CC.NZ))
+
+(decl trap_if_val (ZeroCond Value TrapCode) SideEffectNoResult)
+(rule (trap_if_val zero_cond a @ (value_type (fits_in_64 ty)) tc)
+  (let ((size OperandSize (raw_operand_size_of_type ty))
+        (a Gpr (put_in_reg a))
+        (producer ProducesFlags (x64_test size a a)))
+        (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
+
+(rule 1 (trap_if_val zero_cond a @ (value_type $I128) tc)
+  (let ((a_lo Gpr (value_regs_get_gpr a 0))
+        (a_hi Gpr (value_regs_get_gpr a 1))
+        (a_or Gpr (x64_or $I64 a_hi a_lo))
+        (producer ProducesFlags (x64_test (OperandSize.Size64) a_or a_or)))
+        (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
+
 ;; Helper for creating `movddup` instructions
 (decl x64_movddup (XmmMem) Xmm)
 (rule (x64_movddup src)

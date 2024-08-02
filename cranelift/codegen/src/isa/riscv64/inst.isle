@@ -2986,6 +2986,24 @@
 (rule (gen_trapz test trap_code)
   (gen_trapif (IntCC.Equal) test (zero_reg) trap_code))
 
+;; Converts bool to the corresponding {in,}equality condition
+(type ZeroCond
+      (enum
+       Zero
+       NonZero))
+
+(decl zero_cond_to_cc (ZeroCond) IntCC)
+(rule (zero_cond_to_cc (ZeroCond.Zero)) (IntCC.Equal))
+(rule (zero_cond_to_cc (ZeroCond.NonZero)) (IntCC.NotEqual))
+
+;; Builds an instruction sequence for wide trapz/nz
+(decl gen_trapif_val_i128 (ZeroCond ValueRegs TrapCode) InstOutput)
+(rule (gen_trapif_val_i128 zero_cond value trap_code)
+  (let ((lo XReg (value_regs_get value 0))
+        (hi XReg (value_regs_get value 1))
+        (test XReg (rv_or hi lo)))
+      (gen_trapif (zero_cond_to_cc zero_cond) test (zero_reg) trap_code)))
+
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)

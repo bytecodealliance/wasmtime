@@ -2050,6 +2050,32 @@
   (lower (trap code))
   (udf code))
 
+;;;;;  Rules for `trapz`;;;;;;;;;
+(rule
+  (lower (trapz value @ (value_type (fits_in_64 _)) code))
+  (gen_trapz value code))
+
+(rule 1
+  (lower (trapz value @ (value_type $I128) code))
+    (gen_trapif_val_i128 (ZeroCond.Zero) value code))
+
+; fold icmp + trapz
+(rule 2 (lower (trapz (icmp cc x @ (value_type (fits_in_64 _)) y) code))
+  (gen_trapif (intcc_complement cc) x y code))
+
+;;;;;  Rules for `trapnz`;;;;;;;;;
+(rule
+  (lower (trapnz value @ (value_type (fits_in_64 _)) code))
+    (gen_trapnz value code))
+
+(rule 1
+  (lower (trapnz value @ (value_type $I128) code))
+    (gen_trapif_val_i128 (ZeroCond.NonZero) value code))
+
+; fold icmp + trapnz
+(rule 2 (lower (trapnz (icmp cc x @ (value_type (fits_in_64 _)) y) code))
+  (gen_trapif cc x y code))
+
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))
   (gen_load (amode addr offset) (LoadOP.Lbu) flags))
