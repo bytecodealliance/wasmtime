@@ -1,7 +1,6 @@
 //! A frontend for building Cranelift IR from other languages.
 use crate::ssa::{SSABuilder, SideEffects};
 use crate::variable::Variable;
-use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::fmt::{self, Debug};
 use cranelift_codegen::cursor::{Cursor, CursorPosition, FuncCursor};
@@ -34,7 +33,7 @@ pub struct FunctionBuilderContext {
     types: SecondaryMap<Variable, Type>,
     stack_map_vars: EntitySet<Variable>,
     stack_map_values: EntitySet<Value>,
-    dfs: Dfs,
+    safepoints: safepoints::SafepointSpiller,
 }
 
 /// Temporary object used to build a single Cranelift IR [`Function`].
@@ -75,14 +74,14 @@ impl FunctionBuilderContext {
             types,
             stack_map_vars,
             stack_map_values,
-            dfs,
+            safepoints,
         } = self;
         ssa.clear();
         status.clear();
         types.clear();
         stack_map_values.clear();
         stack_map_vars.clear();
-        dfs.clear();
+        safepoints.clear();
     }
 
     fn is_empty(&self) -> bool {
@@ -732,7 +731,9 @@ impl<'a> FunctionBuilder<'a> {
         }
 
         if !self.func_ctx.stack_map_values.is_empty() {
-            self.insert_safepoint_spills();
+            self.func_ctx
+                .safepoints
+                .run(&mut self.func, &self.func_ctx.stack_map_values);
         }
 
         // Clear the state (but preserve the allocated buffers) in preparation
