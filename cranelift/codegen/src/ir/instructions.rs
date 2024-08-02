@@ -193,6 +193,14 @@ impl Opcode {
     pub fn constraints(self) -> OpcodeConstraints {
         OPCODE_CONSTRAINTS[self as usize - 1]
     }
+
+    /// Is this instruction a GC safepoint?
+    ///
+    /// Safepoints are all kinds of calls, except for tail calls.
+    #[inline]
+    pub fn is_safepoint(self) -> bool {
+        self.is_call() && !self.is_return()
+    }
 }
 
 // This trait really belongs in cranelift-reader where it is used by the `.clif` file parser, but since

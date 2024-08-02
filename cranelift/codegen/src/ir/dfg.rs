@@ -587,7 +587,7 @@ impl DataFlowGraph {
     /// Panics if the given instruction is not a (non-tail) call instruction.
     pub fn append_user_stack_map_entry(&mut self, inst: Inst, entry: UserStackMapEntry) {
         let opcode = self.insts[inst].opcode();
-        assert!(opcode.is_call() && !opcode.is_return());
+        assert!(opcode.is_safepoint());
         self.user_stack_maps.entry(inst).or_default().push(entry);
     }
 }
