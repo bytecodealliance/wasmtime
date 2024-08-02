@@ -1039,7 +1039,7 @@ jobs:
     - run: |
         rustup component add rust-src
         rustup target add ${{ matrix.target }}
-    # Update binutils if MinGW due to https://github.com/rust-lang/rust/issues/112368
+    # Without these two, cmake -G "MSYS Makefiles" will select MSVC as the compiler.
     - run: C:/msys64/usr/bin/pacman.exe -S --needed mingw-w64-x86_64-gcc --noconfirm
       if: matrix.target == 'x86_64-pc-windows-gnu'
     - shell: pwsh
