@@ -2,8 +2,11 @@ cmake_minimum_required(VERSION 3.12)
 
 include(${CMAKE_CURRENT_LIST_DIR}/features.cmake)
 
-set(dst "${CMAKE_INSTALL_PREFIX}/include")
-message(STATUS "dst: ${dst}")
+if(WASMTIME_HEADER_DST)
+  set(dst "${WASMTIME_HEADER_DST}")
+else()
+  set(dst "${CMAKE_INSTALL_PREFIX}/include")
+endif()
 set(include_src "${CMAKE_CURRENT_LIST_DIR}/../include")
 
 message(STATUS "Installing: ${dst}/wasmtime/conf.h")

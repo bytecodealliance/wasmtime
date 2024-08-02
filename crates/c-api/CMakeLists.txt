@@ -96,9 +96,9 @@ else()
     endif()
 endif()
 
-target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
 target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
+set(WASMTIME_HEADER_DST ${CMAKE_BINARY_DIR}/include)
+include(cmake/install-headers.cmake)
 
 include(GNUInstallDirs)
 install(SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake)
