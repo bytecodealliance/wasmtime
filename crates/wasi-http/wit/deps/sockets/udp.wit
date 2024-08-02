@@ -1,9 +1,12 @@
-
+@since(version = 0.2.0)
 interface udp {
-    use wasi:io/poll@0.2.0.{pollable};
+    @since(version = 0.2.0)
+    use wasi:io/poll@0.2.1.{pollable};
+    @since(version = 0.2.0)
     use network.{network, error-code, ip-socket-address, ip-address-family};
 
     /// A received datagram.
+    @since(version = 0.2.0)
     record incoming-datagram {
         /// The payload.
         /// 
@@ -19,6 +22,7 @@ interface udp {
     }
 
     /// A datagram to be sent out.
+    @since(version = 0.2.0)
     record outgoing-datagram {
         /// The payload.
         data: list<u8>,
@@ -33,9 +37,8 @@ interface udp {
         remote-address: option<ip-socket-address>,
     }
 
-
-
     /// A UDP socket handle.
+    @since(version = 0.2.0)
     resource udp-socket {
         /// Bind the socket to a specific network on the provided IP address and port.
         ///
@@ -63,7 +66,9 @@ interface udp {
         /// - <https://man7.org/linux/man-pages/man2/bind.2.html>
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=bind&sektion=2&format=html>
+        @since(version = 0.2.0)
         start-bind: func(network: borrow<network>, local-address: ip-socket-address) -> result<_, error-code>;
+        @since(version = 0.2.0)
         finish-bind: func() -> result<_, error-code>;
 
         /// Set up inbound & outbound communication channels, optionally to a specific peer.
@@ -106,6 +111,7 @@ interface udp {
         /// - <https://man7.org/linux/man-pages/man2/connect.2.html>
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
         /// - <https://man.freebsd.org/cgi/man.cgi?connect>
+        @since(version = 0.2.0)
         %stream: func(remote-address: option<ip-socket-address>) -> result<tuple<incoming-datagram-stream, outgoing-datagram-stream>, error-code>;
 
         /// Get the current bound address.
@@ -124,6 +130,7 @@ interface udp {
         /// - <https://man7.org/linux/man-pages/man2/getsockname.2.html>
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getsockname>
         /// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
+        @since(version = 0.2.0)
         local-address: func() -> result<ip-socket-address, error-code>;
 
         /// Get the address the socket is currently streaming to.
@@ -136,11 +143,13 @@ interface udp {
         /// - <https://man7.org/linux/man-pages/man2/getpeername.2.html>
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getpeername>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=getpeername&sektion=2&n=1>
+        @since(version = 0.2.0)
         remote-address: func() -> result<ip-socket-address, error-code>;
 
         /// Whether this is a IPv4 or IPv6 socket.
         ///
         /// Equivalent to the SO_DOMAIN socket option.
+        @since(version = 0.2.0)
         address-family: func() -> ip-address-family;
 
         /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
@@ -149,7 +158,9 @@ interface udp {
         ///
         /// # Typical errors
         /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
+        @since(version = 0.2.0)
         unicast-hop-limit: func() -> result<u8, error-code>;
+        @since(version = 0.2.0)
         set-unicast-hop-limit: func(value: u8) -> result<_, error-code>;
 
         /// The kernel buffer space reserved for sends/receives on this socket.
@@ -162,18 +173,24 @@ interface udp {
         ///
         /// # Typical errors
         /// - `invalid-argument`:     (set) The provided value was 0.
+        @since(version = 0.2.0)
         receive-buffer-size: func() -> result<u64, error-code>;
+        @since(version = 0.2.0)
         set-receive-buffer-size: func(value: u64) -> result<_, error-code>;
+        @since(version = 0.2.0)
         send-buffer-size: func() -> result<u64, error-code>;
+        @since(version = 0.2.0)
         set-send-buffer-size: func(value: u64) -> result<_, error-code>;
 
         /// Create a `pollable` which will resolve once the socket is ready for I/O.
         ///
         /// Note: this function is here for WASI Preview2 only.
         /// It's planned to be removed when `future` is natively supported in Preview3.
+        @since(version = 0.2.0)
         subscribe: func() -> pollable;
     }
 
+    @since(version = 0.2.0)
     resource incoming-datagram-stream {
         /// Receive messages on the socket.
         ///
@@ -198,15 +215,18 @@ interface udp {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recvfrom>
         /// - <https://learn.microsoft.com/en-us/previous-versions/windows/desktop/legacy/ms741687(v=vs.85)>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=recv&sektion=2>
+        @since(version = 0.2.0)
         receive: func(max-results: u64) -> result<list<incoming-datagram>, error-code>;
 
         /// Create a `pollable` which will resolve once the stream is ready to receive again.
         ///
         /// Note: this function is here for WASI Preview2 only.
         /// It's planned to be removed when `future` is natively supported in Preview3.
+        @since(version = 0.2.0)
         subscribe: func() -> pollable;
     }
 
+    @since(version = 0.2.0)
     resource outgoing-datagram-stream {
         /// Check readiness for sending. This function never blocks.
         ///
@@ -255,12 +275,14 @@ interface udp {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-sendto>
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasendmsg>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=send&sektion=2>
+        @since(version = 0.2.0)
         send: func(datagrams: list<outgoing-datagram>) -> result<u64, error-code>;
         
         /// Create a `pollable` which will resolve once the stream is ready to send again.
         ///
         /// Note: this function is here for WASI Preview2 only.
         /// It's planned to be removed when `future` is natively supported in Preview3.
+        @since(version = 0.2.0)
         subscribe: func() -> pollable;
     }
 }

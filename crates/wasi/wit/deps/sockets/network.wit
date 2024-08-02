@@ -1,8 +1,9 @@
-
+@since(version = 0.2.0)
 interface network {
     /// An opaque resource that represents access to (a subset of) the network.
     /// This enables context-based security for networking.
     /// There is no need for this to map 1:1 to a physical network interface.
+    @since(version = 0.2.0)
     resource network;
 
     /// Error codes.
@@ -17,6 +18,7 @@ interface network {
     /// - `concurrency-conflict`
     ///
     /// See each individual API for what the POSIX equivalents are. They sometimes differ per API.
+    @since(version = 0.2.0)
     enum error-code {
         /// Unknown error
         unknown,
@@ -103,6 +105,7 @@ interface network {
         permanent-resolver-failure,
     }
 
+    @since(version = 0.2.0)
     enum ip-address-family {
         /// Similar to `AF_INET` in POSIX.
         ipv4,
@@ -111,14 +114,18 @@ interface network {
         ipv6,
     }
 
+    @since(version = 0.2.0)
     type ipv4-address = tuple<u8, u8, u8, u8>;
+    @since(version = 0.2.0)
     type ipv6-address = tuple<u16, u16, u16, u16, u16, u16, u16, u16>;
 
+    @since(version = 0.2.0)
     variant ip-address {
         ipv4(ipv4-address),
         ipv6(ipv6-address),
     }
 
+    @since(version = 0.2.0)
     record ipv4-socket-address {
         /// sin_port
         port: u16,
@@ -126,6 +133,7 @@ interface network {
         address: ipv4-address,
     }
 
+    @since(version = 0.2.0)
     record ipv6-socket-address {
         /// sin6_port
         port: u16,
@@ -137,9 +145,9 @@ interface network {
         scope-id: u32,
     }
 
+    @since(version = 0.2.0)
     variant ip-socket-address {
         ipv4(ipv4-socket-address),
         ipv6(ipv6-socket-address),
     }
-
 }
