@@ -108,6 +108,7 @@ ExternalProject_Add(
         ${CMAKE_COMMAND} -E env ${CARGO_PROFILE_PANIC}=abort
         ${WASMTIME_CARGO_BINARY} build
           --target ${WASMTIME_TARGET}
+          --package wasmtime-c-api
           ${WASMTIME_BUILD_TYPE_FLAG}
           ${WASMTIME_FEATURES}
           ${WASMTIME_USER_CARGO_BUILD_OPTIONS}
