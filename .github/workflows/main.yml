@@ -143,6 +143,11 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
     - uses: ./.github/actions/install-cargo-vet
+    - name: Check if we need to prune
+      run: |
+        cargo vet prune
+        git diff --exit-code
+      continue-on-error: ${{ github.event_name == 'pull_request' }}
     - id: vet
       run: cargo vet --locked
       continue-on-error: ${{ github.event_name == 'pull_request' }}
