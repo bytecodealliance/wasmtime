@@ -72,7 +72,7 @@ fn f(f: u8) -> FReg {
 
 #[test]
 fn xconst8() {
-    for (expected, imm) in [(42u64, 42u8), (u64::from(u8::MAX), u8::MAX)] {
+    for (expected, imm) in [(42u64, 42i8), (u64::MAX, -1i8)] {
         unsafe {
             assert_one(
                 [(x(0), 0x1234567812345678u64)],
@@ -86,7 +86,7 @@ fn xconst8() {
 
 #[test]
 fn xconst16() {
-    for (expected, imm) in [(42u64, 42u16), (u64::from(u16::MAX), u16::MAX)] {
+    for (expected, imm) in [(42u64, 42i16), (u64::MAX, -1i16)] {
         unsafe {
             assert_one(
                 [(x(0), 0x1234567812345678u64)],
@@ -100,7 +100,7 @@ fn xconst16() {
 
 #[test]
 fn xconst32() {
-    for (expected, imm) in [(42u64, 42u32), (u64::from(u32::MAX), u32::MAX)] {
+    for (expected, imm) in [(42u64, 42i32), (u64::MAX, -1i32)] {
         unsafe {
             assert_one(
                 [(x(0), 0x1234567812345678u64)],
@@ -114,7 +114,7 @@ fn xconst32() {
 
 #[test]
 fn xconst64() {
-    for (expected, imm) in [(42u64, 42u64), (u64::MAX, u64::MAX)] {
+    for (expected, imm) in [(42u64, 42i64), (u64::MAX, -1i64)] {
         unsafe {
             assert_one(
                 [(x(0), 0x1234567812345678u64)],

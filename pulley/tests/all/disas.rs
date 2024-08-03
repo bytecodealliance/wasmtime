@@ -33,9 +33,9 @@ fn simple() {
     assert_disas(
         &[
             // Prologue.
-            Op::Xconst64(Xconst64 {
+            Op::Xconst8(Xconst8 {
                 dst: x31,
-                imm: -16i64 as u64,
+                imm: -16i8,
             }),
             Op::Xadd32(Xadd32 {
                 dst: XReg::SP,
@@ -84,18 +84,18 @@ fn simple() {
             Op::Ret(Ret {}),
         ],
         r#"
-       0: 11 1f f0 ff ff ff ff ff ff ff   xconst64 x31, 18446744073709551600
-       a: 12 20 20 1f                     xadd32 sp, sp, x31
-       e: 29 20 08 21                     store64_offset8 sp, 8, lr
-      12: 27 20 22                        store64 sp, fp
-      15: 0b 22 20                        xmov fp, sp
-      18: 12 00 00 01                     xadd32 x0, x0, x1
-      1c: 0b 20 22                        xmov sp, fp
-      1f: 25 21 20 08                     load64_offset8 lr, sp, 8
-      23: 22 22 20                        load64 fp, sp
-      26: 0e 1f 10                        xconst8 x31, 16
-      29: 12 20 20 1f                     xadd32 sp, sp, x31
-      2d: 00                              ret
+       0: 0e 1f f0                        xconst8 x31, -16
+       3: 12 20 20 1f                     xadd32 sp, sp, x31
+       7: 29 20 08 21                     store64_offset8 sp, 8, lr
+       b: 27 20 22                        store64 sp, fp
+       e: 0b 22 20                        xmov fp, sp
+      11: 12 00 00 01                     xadd32 x0, x0, x1
+      15: 0b 20 22                        xmov sp, fp
+      18: 25 21 20 08                     load64_offset8 lr, sp, 8
+      1c: 22 22 20                        load64 fp, sp
+      1f: 0e 1f 10                        xconst8 x31, 16
+      22: 12 20 20 1f                     xadd32 sp, sp, x31
+      26: 00                              ret
         "#,
     );
 }
