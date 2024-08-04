@@ -149,6 +149,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
     }
 
+    fn use_fp16(&mut self) -> bool {
+        self.backend.isa_flags.has_fp16()
+    }
+
     fn move_wide_const_from_u64(&mut self, ty: Type, n: u64) -> Option<MoveWideConst> {
         let bits = ty.bits();
         let n = if bits < 64 {
