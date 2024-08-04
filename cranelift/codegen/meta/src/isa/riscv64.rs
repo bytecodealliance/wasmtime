@@ -64,6 +64,13 @@ pub(crate) fn define() -> TargetIsa {
         false,
     );
 
+    let _has_zfh = setting.add_bool(
+        "has_zfh",
+        "has extension Zfh?",
+        "Zfh: Half-Precision Floating-Point Instructions",
+        false,
+    );
+
     let _has_v = setting.add_bool(
         "has_v",
         "has extension V?",

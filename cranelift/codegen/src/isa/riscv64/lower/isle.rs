@@ -194,6 +194,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             // So are references
             ty if ty.is_ref() => true,
             // Floating point types depend on certain extensions
+            F16 => self.backend.isa_flags.has_zfh(),
+            // F32 depends on the F extension
             F32 => self.backend.isa_flags.has_f(),
             // F64 depends on the D extension
             F64 => self.backend.isa_flags.has_d(),
@@ -453,6 +455,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn has_zfa(&mut self) -> bool {
         self.backend.isa_flags.has_zfa()
+    }
+
+    fn has_zfh(&mut self) -> bool {
+        self.backend.isa_flags.has_zfh()
     }
 
     fn has_zbkb(&mut self) -> bool {

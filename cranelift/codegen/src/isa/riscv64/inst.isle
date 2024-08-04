@@ -1004,6 +1004,9 @@
 (decl pure has_zfa () bool)
 (extern constructor has_zfa has_zfa)
 
+(decl pure has_zfh () bool)
+(extern constructor has_zfh has_zfh)
+
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
 
