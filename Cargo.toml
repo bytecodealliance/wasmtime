@@ -178,6 +178,7 @@ unused-lifetimes = 'warn'
 all = { level = 'allow', priority = -1 }
 clone_on_copy = 'warn'
 map_clone = 'warn'
+uninlined_format_args = 'warn'
 unnecessary_to_owned = 'warn'
 manual_strip = 'warn'
 
