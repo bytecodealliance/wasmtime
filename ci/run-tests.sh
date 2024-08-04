@@ -12,9 +12,6 @@
 #
 # - wasm-spec-interpreter: brings in OCaml which is a pain to configure for all
 #   targets, tested as part of the wastime-fuzzing CI job.
-#
-# - wasmtime-wasi-keyvalue: additional database service dependencies, needs its
-#   own CI job.
 
 cargo test \
       --workspace \
@@ -23,5 +20,4 @@ cargo test \
       --exclude wasmtime-wasi-nn \
       --exclude wasmtime-fuzzing \
       --exclude wasm-spec-interpreter \
-      --exclude wasmtime-wasi-keyvalue \
       $@

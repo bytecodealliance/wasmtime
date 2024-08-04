@@ -1,13 +1,9 @@
 use test_programs::keyvalue::wasi::keyvalue::{atomics, batch, store};
 
 fn main() {
-    let identifier = std::env::var("IDENTIFIER").unwrap_or("".to_string());
-    let bucket = store::open(&identifier).unwrap();
+    let bucket = store::open("").unwrap();
 
-    if identifier != "" {
-        // for In-Memory provider, we have preset this data
-        assert_eq!(atomics::increment(&bucket, "atomics_key", 5).unwrap(), 5);
-    }
+    // we have preset this `atomics_key` with value 5
     assert_eq!(atomics::increment(&bucket, "atomics_key", 1).unwrap(), 6);
 
     let resp = bucket.list_keys(None).unwrap();

@@ -724,24 +724,9 @@ impl RunCommand {
                                     .iter()
                                     .map(|v| (v.key.clone(), v.value.clone())),
                             )
-                            .allow_redis_hosts(&self.run.common.wasi.keyvalue_redis_host)
-                            .redis_connection_timeout(
-                                self.run
-                                    .common
-                                    .wasi
-                                    .keyvalue_redis_connection_timeout
-                                    .unwrap_or(std::time::Duration::MAX),
-                            )
-                            .redis_response_timeout(
-                                self.run
-                                    .common
-                                    .wasi
-                                    .keyvalue_redis_response_timeout
-                                    .unwrap_or(std::time::Duration::MAX),
-                            )
                             .build();
 
-                        wasmtime_wasi_keyvalue::add_to_linker_sync(linker, |h| {
+                        wasmtime_wasi_keyvalue::add_to_linker(linker, |h| {
                             let preview2_ctx =
                                 h.preview2_ctx.as_mut().expect("wasip2 is not configured");
                             let preview2_ctx =

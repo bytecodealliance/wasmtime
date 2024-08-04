@@ -12,15 +12,9 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-wasmtime = { workspace = true, features = ["runtime", "async", "component-model"] }
-wasmtime-wasi = { workspace = true }
-async-trait = { workspace = true }
-url = { workspace = true }
-redis = { workspace = true, optional = true, features = ["tokio-comp"] }
+wasmtime = { workspace = true, features = ["runtime", "component-model", "std"] }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }
+wasmtime-wasi = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
-
-[features]
-redis = ["dep:redis"]
