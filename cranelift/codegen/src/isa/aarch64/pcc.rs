@@ -65,7 +65,8 @@ pub(crate) fn check(
             let access_ty = inst.mem_type().unwrap();
             check_load(ctx, Some(rd.to_reg()), flags, mem, vcode, access_ty)
         }
-        Inst::FpuLoad32 { ref mem, flags, .. }
+        Inst::FpuLoad16 { ref mem, flags, .. }
+        | Inst::FpuLoad32 { ref mem, flags, .. }
         | Inst::FpuLoad64 { ref mem, flags, .. }
         | Inst::FpuLoad128 { ref mem, flags, .. } => {
             let access_ty = inst.mem_type().unwrap();
@@ -91,7 +92,8 @@ pub(crate) fn check(
             let access_ty = inst.mem_type().unwrap();
             check_store(ctx, Some(rd), flags, mem, vcode, access_ty)
         }
-        Inst::FpuStore32 { ref mem, flags, .. }
+        Inst::FpuStore16 { ref mem, flags, .. }
+        | Inst::FpuStore32 { ref mem, flags, .. }
         | Inst::FpuStore64 { ref mem, flags, .. }
         | Inst::FpuStore128 { ref mem, flags, .. } => {
             let access_ty = inst.mem_type().unwrap();

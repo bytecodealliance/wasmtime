@@ -1,0 +1,70 @@
+test compile precise-output
+set unwind_info=false
+target aarch64 has_fp16
+
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   fmov h0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov h0, #1.00000000
+;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz w0, #21056
+;   fmov h0, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #0x5240
+;   fmov h0, w0
+;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movi v0.2s, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.2s, #0
+;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   fmov h0, #-16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov h0, #-16.00000000
+;   ret
+

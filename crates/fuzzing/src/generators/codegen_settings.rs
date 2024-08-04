@@ -123,6 +123,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
 
                     std: "bti" => clif: "use_bti",
                     std: "lse" => clif: "has_lse",
+                    std: "fp16" => clif: "has_fp16",
                     // even though the natural correspondence seems to be
                     // between "paca" and "has_pauth", the latter has no effect
                     // in isolation, so we actually use the setting that affects

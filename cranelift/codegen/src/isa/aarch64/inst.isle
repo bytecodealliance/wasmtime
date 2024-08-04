@@ -407,6 +407,18 @@
         (rn Reg)
         (rm Reg))
 
+       ;; Floating-point load, half-precision (16 bit).
+       (FpuLoad16
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
+
+       ;; Floating-point store, half-precision (16 bit).
+       (FpuStore16
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
+
        ;; Floating-point load, single-precision (32 bit).
        (FpuLoad32
         (rd WritableReg)
@@ -483,6 +495,14 @@
         (rd WritableReg)
         (rn Reg))
 
+       ;; FP conditional select, 16 bit.
+       ;; Requires FEAT_FP16.
+       (FpuCSel16
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (cond Cond))
+
        ;; FP conditional select, 32 bit.
        (FpuCSel32
         (rd WritableReg)
@@ -504,8 +524,8 @@
         (rn Reg))
 
        ;; Move from a GPR to a vector register.  The scalar value is parked in the lowest lane
-       ;; of the destination, and all other lanes are zeroed out.  Currently only 32- and 64-bit
-       ;; transactions are supported.
+       ;; of the destination, and all other lanes are zeroed out. Currently 16-, 32- and 64-bit
+       ;; transactions are supported. 16-bit moves require FEAT_FP16.
        (MovToFpu
         (rd WritableReg)
         (rn Reg)
@@ -1701,6 +1721,9 @@
 (decl use_lse () Inst)
 (extern extractor use_lse use_lse)
 
+(decl pure use_fp16 () bool)
+(extern constructor use_fp16 use_fp16)
+
 ;; Extractor helpers for various immediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)
@@ -2221,9 +2244,19 @@
             (_ Unit (emit (MInst.VecRRLong op dst src high_half))))
         dst))
 
-;; Helper for emitting `MInst.FpuCSel32` / `MInst.FpuCSel64`
+;; Helper for emitting `MInst.FpuCSel16` / `MInst.FpuCSel32` / `MInst.FpuCSel64`
 ;; instructions.
 (decl fpu_csel (Type Cond Reg Reg) ConsumesFlags)
+(rule (fpu_csel $F16 cond if_true if_false)
+        (fpu_csel $F32 cond if_true if_false))
+
+(rule 1 (fpu_csel $F16 cond if_true if_false)
+        (if-let $true (use_fp16))
+        (let ((dst WritableReg (temp_writable_reg $F16)))
+          (ConsumesFlags.ConsumesFlagsReturnsReg
+           (MInst.FpuCSel16 dst if_true if_false cond)
+           dst)))
+
 (rule (fpu_csel $F32 cond if_true if_false)
       (let ((dst WritableReg (temp_writable_reg $F32)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -2268,6 +2301,9 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.MovToFpu dst x size))))
         dst))
+(rule 1 (mov_to_fpu x (ScalarSize.Size16))
+        (if-let $false (use_fp16))
+        (mov_to_fpu x (ScalarSize.Size32)))
 
 ;; Helper for emitting `MInst.FpuMoveFPImm` instructions.
 (decl fpu_move_fp_imm (ASIMDFPModImm ScalarSize) Reg)
@@ -2849,6 +2885,11 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ULoad64 dst amode flags))))
         dst))
+(decl aarch64_fpuload16 (AMode MemFlags) Reg)
+(rule (aarch64_fpuload16 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuLoad16 dst amode flags))))
+        dst))
 (decl aarch64_fpuload32 (AMode MemFlags) Reg)
 (rule (aarch64_fpuload32 amode flags)
       (let ((dst WritableReg (temp_writable_reg $F64))
@@ -2885,6 +2926,9 @@
 (decl aarch64_store64 (AMode MemFlags Reg) SideEffectNoResult)
 (rule (aarch64_store64 amode flags val)
       (SideEffectNoResult.Inst (MInst.Store64 val amode flags)))
+(decl aarch64_fpustore16 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_fpustore16 amode flags val)
+      (SideEffectNoResult.Inst (MInst.FpuStore16 val amode flags)))
 (decl aarch64_fpustore32 (AMode MemFlags Reg) SideEffectNoResult)
 (rule (aarch64_fpustore32 amode flags val)
       (SideEffectNoResult.Inst (MInst.FpuStore32 val amode flags)))
@@ -3229,19 +3273,41 @@
 (rule 1 (add_imm_to_addr val (imm12_from_u64 imm)) (add_imm $I64 val imm))
 (rule 0 (add_imm_to_addr val offset) (add $I64 val (imm $I64 (ImmExtend.Zero) offset)))
 
+;; Lower a constant f16.
+;;
+;; Note that we must make sure that all bits outside the lowest 16 are set to 0
+;; because this function is also used to load wider constants (that have zeros
+;; in their most significant bits).
+(decl constant_f16 (u16) Reg)
+(rule 3 (constant_f16 n)
+        (if-let $false (use_fp16))
+        (constant_f32 n))
+(rule 2 (constant_f16 0)
+        (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
+                     $false
+                     (VectorSize.Size32x2)))
+(rule 1 (constant_f16 n)
+        (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size16)))
+        (fpu_move_fp_imm imm (ScalarSize.Size16)))
+(rule (constant_f16 n)
+      (mov_to_fpu (imm $I16 (ImmExtend.Zero) n) (ScalarSize.Size16)))
+
 ;; Lower a constant f32.
 ;;
 ;; Note that we must make sure that all bits outside the lowest 32 are set to 0
 ;; because this function is also used to load wider constants (that have zeros
 ;; in their most significant bits).
 (decl constant_f32 (u32) Reg)
-(rule 2 (constant_f32 0)
+(rule 3 (constant_f32 0)
         (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
                      $false
                      (VectorSize.Size32x2)))
-(rule 1 (constant_f32 n)
+(rule 2 (constant_f32 n)
         (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size32)))
         (fpu_move_fp_imm imm (ScalarSize.Size32)))
+(rule 1 (constant_f32 (u32_as_u16 n))
+        (if-let $true (use_fp16))
+        (constant_f16 n))
 (rule (constant_f32 n)
       (mov_to_fpu (imm $I32 (ImmExtend.Zero) n) (ScalarSize.Size32)))
 
@@ -4063,8 +4129,10 @@
 
 ;; Helpers for generating select instruction sequences.
 (decl lower_select (ProducesFlags Cond Type Value Value) ValueRegs)
-(rule 2 (lower_select flags cond (ty_scalar_float ty) rn rm)
+(rule 2 (lower_select flags cond (ty_scalar_float (fits_in_64 ty)) rn rm)
       (with_flags flags (fpu_csel ty cond rn rm)))
+(rule 4 (lower_select flags cond $F128 rn rm)
+      (with_flags flags (vec_csel cond rn rm)))
 (rule 3 (lower_select flags cond (ty_vec128 ty) rn rm)
       (with_flags flags (vec_csel cond rn rm)))
 (rule (lower_select flags cond ty rn rm)

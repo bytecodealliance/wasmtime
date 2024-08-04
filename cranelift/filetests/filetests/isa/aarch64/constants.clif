@@ -316,6 +316,28 @@ block0:
 ;   mov x0, #-9
 ;   ret
 
+function %f() -> f128 {
+block0:
+  v0 = f128const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   ldr q0, [const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr q0, #0x10
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0xff, 0x3f
+
 function %f() -> f64 {
 block0:
   v0 = f64const 0x1.0
@@ -347,6 +369,46 @@ block0:
 ; block0: ; offset 0x0
 ;   fmov s0, #5.00000000
 ;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz w0, #15360
+;   fmov s0, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #0x3c00
+;   fmov s0, w0
+;   ret
+
+function %f() -> f128 {
+block0:
+  v0 = f128const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   ldr q0, [const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr q0, #0x10
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x90, 0x04, 0x40
 
 function %f() -> f64 {
 block0:
@@ -384,6 +446,40 @@ block0:
 ;   fmov s0, w0
 ;   ret
 
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz w0, #21056
+;   fmov s0, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #0x5240
+;   fmov s0, w0
+;   ret
+
+function %f() -> f128 {
+block0:
+  v0 = f128const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movi v0.16b, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.16b, #0
+;   ret
+
 function %f() -> f64 {
 block0:
   v0 = f64const 0x0.0
@@ -416,6 +512,44 @@ block0:
 ;   movi v0.2s, #0
 ;   ret
 
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movi v0.2s, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.2s, #0
+;   ret
+
+function %f() -> f128 {
+block0:
+  v0 = f128const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   ldr q0, [const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr q0, #0x10
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x03, 0xc0
+
 function %f() -> f64 {
 block0:
   v0 = f64const -0x10.0
@@ -446,5 +580,23 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s0, #-16.00000000
+;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz w0, #52224
+;   fmov s0, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #0xcc00
+;   fmov s0, w0
 ;   ret
 

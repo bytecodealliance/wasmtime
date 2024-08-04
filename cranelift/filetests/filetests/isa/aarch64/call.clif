@@ -1,6 +1,7 @@
 test compile precise-output
 set unwind_info=false
 set enable_probestack=false
+set enable_llvm_abi_extensions
 target aarch64
 
 function %f1(i64) -> i64 {
@@ -931,5 +932,65 @@ block0:
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x0
 ;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %second_f16(f16, f16) -> f16 system_v {
+block0(v0: f16, v1: f16):
+    return v1
+}
+
+; VCode:
+; block0:
+;   mov v0.16b, v1.16b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v0.16b, v1.16b
+;   ret
+
+function %second_f128(f128, f128) -> f128 system_v {
+block0(v0: f128, v1: f128):
+    return v1
+}
+
+; VCode:
+; block0:
+;   mov v0.16b, v1.16b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v0.16b, v1.16b
+;   ret
+
+function %second_f16_apple(f16, f16) -> f16 apple_aarch64 {
+block0(v0: f16, v1: f16):
+    return v1
+}
+
+; VCode:
+; block0:
+;   mov v0.16b, v1.16b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v0.16b, v1.16b
+;   ret
+
+function %second_f128_apple(f128, f128) -> f128 apple_aarch64 {
+block0(v0: f128, v1: f128):
+    return v1
+}
+
+; VCode:
+; block0:
+;   mov v0.16b, v1.16b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v0.16b, v1.16b
 ;   ret
 

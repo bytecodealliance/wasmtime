@@ -2,6 +2,8 @@ test interpret
 test run
 set enable_llvm_abi_extensions
 target x86_64
+target aarch64
+target aarch64 has_fp16
 
 
 ;; These values are special for RISC-V since it has a dedicated
