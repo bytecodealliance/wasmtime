@@ -557,6 +557,12 @@
        ;; Return.
        (Ret (stack_bytes_to_pop u32))
 
+       ;; Stack switching
+       (StackSwitch (store_context_ptr Gpr)
+                    (load_context_ptr Gpr)
+                    (in_payload0 Gpr)
+                    (out_payload0 WritableGpr))
+
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
 
@@ -2287,6 +2293,17 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
+
+;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl x64_stack_switch (Gpr Gpr Gpr) Gpr)
+(rule (x64_stack_switch store_context_ptr load_context_ptr in_payload0)
+      (let ((out_payload0 WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.StackSwitch store_context_ptr
+                                             load_context_ptr
+                                             in_payload0
+                                             out_payload0))))
+        out_payload0))
 
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

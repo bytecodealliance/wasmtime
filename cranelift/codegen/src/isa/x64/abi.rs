@@ -1257,7 +1257,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
-const ALL_CLOBBERS: PRegSet = all_clobbers();
+pub(crate) const ALL_CLOBBERS: PRegSet = all_clobbers();
 
 const fn windows_clobbers() -> PRegSet {
     PRegSet::empty()

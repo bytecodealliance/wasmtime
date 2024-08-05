@@ -3356,6 +3356,14 @@
 (rule (lower (return_call_indirect sig_ref callee args))
       (gen_return_call_indirect sig_ref callee args))
 
+;; Rules for `stack_switch` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (stack_switch store_context_ptr load_context_ptr in_payload0))
+       (let ((store_context_ptr Gpr (put_in_gpr store_context_ptr))
+             (load_context_ptr Gpr (put_in_gpr load_context_ptr))
+             (in_payload0 Gpr (put_in_gpr in_payload0)))
+         (x64_stack_switch store_context_ptr load_context_ptr in_payload0)))
+
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;
 
 (rule (lower (get_frame_pointer))

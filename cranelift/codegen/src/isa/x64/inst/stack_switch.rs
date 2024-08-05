@@ -1,0 +1,45 @@
+use crate::{isa::x64::inst::regs, machinst::Reg};
+
+/// The `stack_switch` instruction loads information about the stack to switch
+/// to and stores information about the current stack by receiving pointers to
+/// memory laid out as in the struct `ControlContext` below.
+///
+/// The instruction is only supported on x64 Linux at the moment.
+///
+/// ```
+/// #[repr(C)]
+/// pub struct ControlContext {
+///     pub stack_pointer: *mut u8,
+///     pub frame_pointer: *mut u8,
+///     pub instruction_pointer: *mut u8,
+/// }
+/// ```
+///
+/// Note that this layout is deliberately chosen to make frame pointer walking
+/// possible, if desired: The layout enables stack layouts where a
+/// `ControlContext` is part of a frame pointer chain, putting the frame pointer
+/// next to the corresponding IP.
+///
+/// We never actually interact with values of that type in Cranelift, but are
+/// only interested in its layout for the purposes of generating code.
+#[allow(dead_code)]
+pub struct ControlContextLayout {
+    pub size: usize,
+    pub stack_pointer_offset: usize,
+    pub frame_pointer_offset: usize,
+    pub ip_offset: usize,
+}
+
+pub fn control_context_layout() -> ControlContextLayout {
+    ControlContextLayout {
+        size: 24,
+        stack_pointer_offset: 0,
+        frame_pointer_offset: 8,
+        ip_offset: 16,
+    }
+}
+
+/// The register used for handing over the payload when switching stacks.
+pub fn payload_register() -> Reg {
+    regs::rdi()
+}
