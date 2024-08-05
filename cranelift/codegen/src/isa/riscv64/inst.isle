@@ -1066,6 +1066,10 @@
 (decl ty_supported_float (Type) Type)
 (extern extractor ty_supported_float ty_supported_float)
 
+;; Helper that matches any supported vector type
+(decl ty_supported_vec (Type) Type)
+(extern extractor ty_supported_vec ty_supported_vec)
+
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2942,10 +2946,10 @@
 ;; Generates a bitcast instruction.
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
-(rule 5 (gen_bitcast r (ty_supported_float src_ty) (ty_vec_fits_in_register _)) (rv_vfmv_sf r src_ty))
-(rule 4 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_vec_fits_in_register _)) (rv_vmv_sx r src_ty))
-(rule 3 (gen_bitcast r (ty_vec_fits_in_register _) (ty_supported_float dst_ty)) (rv_vfmv_fs r dst_ty))
-(rule 2 (gen_bitcast r (ty_vec_fits_in_register _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
+(rule 5 (gen_bitcast r (ty_supported_float src_ty) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
+(rule 4 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
+(rule 3 (gen_bitcast r (ty_supported_vec _) (ty_supported_float dst_ty)) (rv_vfmv_fs r dst_ty))
+(rule 2 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
 (rule 1 (gen_bitcast r $F32 $I32) (rv_fmvxw r))
 (rule 1 (gen_bitcast r $F64 $I64) (rv_fmvxd r))
 (rule 1 (gen_bitcast r $I32 $F32) (rv_fmvwx r))
