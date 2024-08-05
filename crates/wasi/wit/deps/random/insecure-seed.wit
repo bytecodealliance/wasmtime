@@ -1,8 +1,9 @@
-package wasi:random@0.2.0;
+package wasi:random@0.2.1;
 /// The insecure-seed interface for seeding hash-map DoS resistance.
 ///
 /// It is intended to be portable at least between Unix-family platforms and
 /// Windows.
+@since(version = 0.2.0)
 interface insecure-seed {
     /// Return a 128-bit value that may contain a pseudo-random value.
     ///
@@ -21,5 +22,6 @@ interface insecure-seed {
     /// This will likely be changed to a value import, to prevent it from being
     /// called multiple times and potentially used for purposes other than DoS
     /// protection.
+    @since(version = 0.2.0)
     insecure-seed: func() -> tuple<u64, u64>;
 }
