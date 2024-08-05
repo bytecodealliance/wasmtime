@@ -1,6 +1,6 @@
 //! Trap handling on Unix based on POSIX signals.
 
-use crate::runtime::vm::traphandlers::{tls, TrapTest};
+use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
 use std::cell::RefCell;
 use std::io;
@@ -166,23 +166,24 @@ unsafe extern "C" fn trap_handler(
         // Otherwise flag ourselves as handling a trap, do the trap
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
-        let (pc, fp) = get_pc_and_fp(context, signum);
-        let test = info.test_if_trap(pc, |handler| handler(signum, siginfo, context));
+        let faulting_addr = match signum {
+            libc::SIGSEGV | libc::SIGBUS => Some((*siginfo).si_addr() as usize),
+            _ => None,
+        };
+        let regs = get_trap_registers(context, signum);
+        let test = info.test_if_trap(regs, faulting_addr, |handler| {
+            handler(signum, siginfo, context)
+        });
 
         // Figure out what to do based on the result of this handling of
         // the trap. Note that our sentinel value of 1 means that the
         // exception was handled by a custom exception handler, so we
         // keep executing.
-        let (jmp_buf, trap) = match test {
+        let jmp_buf = match test {
             TrapTest::NotWasm => return false,
             TrapTest::HandledByEmbedder => return true,
-            TrapTest::Trap { jmp_buf, trap } => (jmp_buf, trap),
+            TrapTest::Trap { jmp_buf } => jmp_buf,
         };
-        let faulting_addr = match signum {
-            libc::SIGSEGV | libc::SIGBUS => Some((*siginfo).si_addr() as usize),
-            _ => None,
-        };
-        info.set_jit_trap(pc, fp, faulting_addr, trap);
         // On macOS this is a bit special, unfortunately. If we were to
         // `siglongjmp` out of the signal handler that notably does
         // *not* reset the sigaltstack state of our signal handler. This
@@ -247,20 +248,20 @@ unsafe extern "C" fn trap_handler(
     }
 }
 
-unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const u8, usize) {
+unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
     cfg_if::cfg_if! {
         if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                cx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8,
-                cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize
-            )
+            TrapRegisters {
+                pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
+                fp: cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize,
+            }
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                cx.uc_mcontext.pc as *const u8,
-                cx.uc_mcontext.regs[29] as usize,
-            )
+            TrapRegisters {
+                pc: cx.uc_mcontext.pc as usize,
+                fp: cx.uc_mcontext.regs[29] as usize,
+            }
         } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address
             // pointing *after* the faulting instruction, while SIGSEGV and
@@ -277,46 +278,46 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 _ => 0,
             };
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                (cx.uc_mcontext.psw.addr - trap_offset) as *const u8,
-                *(cx.uc_mcontext.gregs[15] as *const usize),
-            )
+            TrapRegisters {
+                pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
+                fp: *(cx.uc_mcontext.gregs[15] as *const usize),
+            }
         } else if #[cfg(all(target_os = "macos", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                (*cx.uc_mcontext).__ss.__rip as *const u8,
-                (*cx.uc_mcontext).__ss.__rbp as usize,
-            )
+            TrapRegisters {
+                pc: (*cx.uc_mcontext).__ss.__rip as usize,
+                fp: (*cx.uc_mcontext).__ss.__rbp as usize,
+            }
         } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                (*cx.uc_mcontext).__ss.__pc as *const u8,
-                (*cx.uc_mcontext).__ss.__fp as usize,
-            )
+            TrapRegisters {
+                pc: (*cx.uc_mcontext).__ss.__pc as usize,
+                fp: (*cx.uc_mcontext).__ss.__fp as usize,
+            }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                cx.uc_mcontext.mc_rip as *const u8,
-                cx.uc_mcontext.mc_rbp as usize,
-            )
+            TrapRegisters {
+                pc: cx.uc_mcontext.mc_rip as usize,
+                fp: cx.uc_mcontext.mc_rbp as usize,
+            }
         } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                cx.uc_mcontext.__gregs[libc::REG_PC] as *const u8,
-                cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
-            )
+            TrapRegisters {
+                pc: cx.uc_mcontext.__gregs[libc::REG_PC] as usize,
+                fp: cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
+            }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::mcontext_t);
-            (
-                cx.mc_gpregs.gp_elr as *const u8,
-                cx.mc_gpregs.gp_x[29] as usize,
-            )
+            TrapRegisters {
+                pc: cx.mc_gpregs.gp_elr as usize,
+                fp: cx.mc_gpregs.gp_x[29] as usize,
+            }
         } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (
-                cx.sc_rip as *const u8,
-                cx.sc_rbp as usize,
-            )
+            TrapRegisters {
+                pc: cx.sc_rip as usize,
+                fp: cx.sc_rbp as usize,
+            }
         }
         else {
             compile_error!("unsupported platform");

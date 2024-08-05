@@ -984,8 +984,8 @@ impl Func {
     /// # Panics
     ///
     /// This function will panic if called on a function belonging to an async
-    /// store. Asynchronous stores must always use `call_async`.
-    /// initiates a panic. Also panics if `store` does not own this function.
+    /// store. Asynchronous stores must always use `call_async`. Also panics if
+    /// `store` does not own this function.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn call(

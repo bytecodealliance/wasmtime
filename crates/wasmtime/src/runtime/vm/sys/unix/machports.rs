@@ -35,7 +35,7 @@
 
 use crate::runtime::module::lookup_code;
 use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
-use crate::runtime::vm::traphandlers::tls;
+use crate::runtime::vm::traphandlers::{tls, TrapRegisters};
 use mach2::exc::*;
 use mach2::exception_types::*;
 use mach2::kern_return::*;
@@ -384,21 +384,16 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 /// a native backtrace once we've switched back to the thread itself. After
 /// the backtrace is captured we can do the usual `longjmp` back to the source
 /// of the wasm code.
-unsafe extern "C" fn unwind(
-    wasm_pc: *const u8,
-    wasm_fp: usize,
-    fault1: usize,
-    fault2: usize,
-    trap: u8,
-) -> ! {
+unsafe extern "C" fn unwind(pc: usize, fp: usize, fault1: usize, fault2: usize, trap: u8) -> ! {
     let jmp_buf = tls::with(|state| {
         let state = state.unwrap();
+        let regs = TrapRegisters { pc, fp };
         let faulting_addr = match fault1 {
             0 => None,
             _ => Some(fault2),
         };
         let trap = Trap::from_u8(trap).unwrap();
-        state.set_jit_trap(wasm_pc, wasm_fp, faulting_addr, trap);
+        state.set_jit_trap(regs, faulting_addr, trap);
         state.take_jmp_buf()
     });
     debug_assert!(!jmp_buf.is_null());

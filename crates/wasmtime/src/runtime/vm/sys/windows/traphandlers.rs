@@ -1,4 +1,4 @@
-use crate::runtime::vm::traphandlers::{tls, TrapTest};
+use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
 use std::ffi::c_void;
 use std::io;
@@ -96,13 +96,18 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             Some(info) => info,
             None => return ExceptionContinueSearch,
         };
+        let context = &*(*exception_info).ContextRecord;
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
-                let ip = (*(*exception_info).ContextRecord).Rip as *const u8;
-                let fp = (*(*exception_info).ContextRecord).Rbp as usize;
+                let regs = TrapRegisters {
+                    pc: context.Rip as usize,
+                    fp: context.Rbp as usize,
+                };
             } else if #[cfg(target_arch = "aarch64")] {
-                let ip = (*(*exception_info).ContextRecord).Pc as *const u8;
-                let fp = (*(*exception_info).ContextRecord).Anonymous.Anonymous.Fp as usize;
+                let regs = TrapRegisters {
+                    pc: context.Pc as usize,
+                    fp: context.Anonymous.Anonymous.Fp as usize,
+                };
             } else {
                 compile_error!("unsupported platform");
             }
@@ -117,13 +122,10 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
         } else {
             None
         };
-        match info.test_if_trap(ip, |handler| handler(exception_info)) {
+        match info.test_if_trap(regs, faulting_addr, |handler| handler(exception_info)) {
             TrapTest::NotWasm => ExceptionContinueSearch,
             TrapTest::HandledByEmbedder => ExceptionContinueExecution,
-            TrapTest::Trap { jmp_buf, trap } => {
-                info.set_jit_trap(ip, fp, faulting_addr, trap);
-                wasmtime_longjmp(jmp_buf)
-            }
+            TrapTest::Trap { jmp_buf } => wasmtime_longjmp(jmp_buf),
         }
     })
 }
