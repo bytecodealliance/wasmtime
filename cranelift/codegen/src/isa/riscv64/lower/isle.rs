@@ -163,6 +163,50 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         *arg0
     }
 
+    fn ty_supported(&mut self, ty: Type) -> Option<Type> {
+        let supported = match ty {
+            // Scalar integers are always supported
+            ty if ty.is_int() => true,
+            // So are references
+            ty if ty.is_ref() => true,
+            // Floating point types depend on certain extensions
+            F32 => self.backend.isa_flags.has_f(),
+            // F64 depends on the D extension
+            F64 => self.backend.isa_flags.has_d(),
+
+            // The base vector extension supports all integer types, up to 64 bits
+            // as long as they fit in a register
+            ty if self.ty_vec_fits_in_register(ty).is_some()
+                && ty.lane_type().is_int()
+                && ty.lane_type().bits() <= 64 =>
+            {
+                true
+            }
+
+            // If the vector type has floating point lanes, then we only support it for
+            // 32 or 64 bit lanes with the base extension
+            ty if self.ty_vec_fits_in_register(ty).is_some()
+                && ty.lane_type().is_float()
+                && (ty.lane_type().bits() == 32 || ty.lane_type().bits() == 64) =>
+            {
+                true
+            }
+
+            // Otherwise do not match
+            _ => false,
+        };
+
+        if supported {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
+    fn ty_supported_float(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported(ty).filter(|ty| ty.is_float())
+    }
+
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
             let tmp = self.temp_writable_reg(I64);

@@ -1055,6 +1055,18 @@
 (extern constructor has_zicond has_zicond)
 
 
+;;;; Type Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Helper that matches any supported type. This extractor checks the ISA flags
+;; to determine if the type is supported.
+(decl ty_supported (Type) Type)
+(extern extractor ty_supported ty_supported)
+
+;; Helper that matches any scalar floating point type
+(decl ty_supported_float (Type) Type)
+(extern extractor ty_supported_float ty_supported_float)
+
+
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; RV32I Base Integer Instruction Set
@@ -1869,7 +1881,7 @@
 (rule 8 (imm $F64 0) (gen_bitcast (zero_reg) $I64 $F64))
 
 ;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
-(rule 7 (imm (ty_scalar_float ty) imm)
+(rule 7 (imm (ty_supported_float ty) imm)
   (if-let $true (has_zfa))
   (if-let const (fli_constant_from_u64 ty imm))
   (rv_fli ty const))
@@ -1879,7 +1891,7 @@
 ;;
 ;; For f64's this saves one instruction, and for f32's it avoids
 ;; having to allocate an integer register, reducing integer register pressure.
-(rule 6 (imm (ty_scalar_float ty) imm)
+(rule 6 (imm (ty_supported_float ty) imm)
   (if-let $true (has_zfa))
   (if-let const (fli_constant_from_negated_u64 ty imm))
   (rv_fneg ty (rv_fli ty const)))
@@ -2930,9 +2942,9 @@
 ;; Generates a bitcast instruction.
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
-(rule 5 (gen_bitcast r (ty_scalar_float src_ty) (ty_vec_fits_in_register _)) (rv_vfmv_sf r src_ty))
+(rule 5 (gen_bitcast r (ty_supported_float src_ty) (ty_vec_fits_in_register _)) (rv_vfmv_sf r src_ty))
 (rule 4 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_vec_fits_in_register _)) (rv_vmv_sx r src_ty))
-(rule 3 (gen_bitcast r (ty_vec_fits_in_register _) (ty_scalar_float dst_ty)) (rv_vfmv_fs r dst_ty))
+(rule 3 (gen_bitcast r (ty_vec_fits_in_register _) (ty_supported_float dst_ty)) (rv_vfmv_fs r dst_ty))
 (rule 2 (gen_bitcast r (ty_vec_fits_in_register _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
 (rule 1 (gen_bitcast r $F32 $I32) (rv_fmvxw r))
 (rule 1 (gen_bitcast r $F64 $I64) (rv_fmvxd r))
