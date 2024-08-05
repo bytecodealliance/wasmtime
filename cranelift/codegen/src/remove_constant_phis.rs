@@ -80,25 +80,6 @@ enum AbstractValue {
 }
 
 impl AbstractValue {
-    fn join(self, other: AbstractValue) -> AbstractValue {
-        match (self, other) {
-            // Joining with `None` has no effect
-            (AbstractValue::None, p2) => p2,
-            (p1, AbstractValue::None) => p1,
-            // Joining with `Many` produces `Many`
-            (AbstractValue::Many, _p2) => AbstractValue::Many,
-            (_p1, AbstractValue::Many) => AbstractValue::Many,
-            // The only interesting case
-            (AbstractValue::One(v1), AbstractValue::One(v2)) => {
-                if v1 == v2 {
-                    AbstractValue::One(v1)
-                } else {
-                    AbstractValue::Many
-                }
-            }
-        }
-    }
-
     fn is_one(self) -> bool {
         matches!(self, AbstractValue::One(_))
     }
@@ -200,14 +181,12 @@ impl SolverState {
     }
 
     fn get(&self, actual: Value) -> AbstractValue {
-        *self
-            .absvals
-            .get(&actual)
+        self.maybe_get(actual)
             .unwrap_or_else(|| panic!("SolverState::get: formal param {:?} is untracked?!", actual))
     }
 
-    fn maybe_get(&self, actual: Value) -> Option<&AbstractValue> {
-        self.absvals.get(&actual)
+    fn maybe_get(&self, actual: Value) -> Option<AbstractValue> {
+        self.absvals.get(&actual).copied()
     }
 
     fn set(&mut self, actual: Value, lp: AbstractValue) {
@@ -292,30 +271,50 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
             let src_summary = &summaries[src];
             for edge in &src_summary.dests {
                 assert!(edge.block != entry_block);
-                // By contrast, the dst block must have a summary.  Phase 1
-                // will have only included an entry in `src_summary.dests` if
-                // that branch/jump carried at least one parameter.  So the
-                // dst block does take parameters, so it must have a summary.
+                // Phase 1 will have only saved an edge if that branch/jump
+                // carried at least one parameter. Therefore the dst block does
+                // take parameters, and it must have a summary.
                 let dst_summary = &summaries[edge.block];
                 let dst_formals = &dst_summary.formals;
                 assert_eq!(edge.args.len(), dst_formals.len());
-                for (formal, actual) in dst_formals.iter().zip(edge.args) {
-                    // Find the abstract value for `actual`.  If it is a block
-                    // formal parameter then the most recent abstract value is
-                    // to be found in the solver state.  If not, then it's a
-                    // real value defining point (not a phi), in which case
-                    // return it itself.
-                    let actual_absval = match state.maybe_get(*actual) {
-                        Some(pt) => *pt,
-                        None => AbstractValue::One(*actual),
+                for (&formal, &actual) in dst_formals.iter().zip(edge.args) {
+                    // In case `actual` is itself defined by a block formal
+                    // parameter, look up our current abstract value for that
+                    // formal's definition.
+                    let replacement = match state.maybe_get(actual) {
+                        // If `actual` isn't one of the formal parameters we're
+                        // considering, or we've already proven that there is no
+                        // one value we can substitute for it, then use `actual`
+                        // itself.
+                        None | Some(AbstractValue::Many) => actual,
+
+                        // Otherwise, the evidence we've found so far says
+                        // we can replace `actual` with some other value.
+                        // Assume that hypothesis is true and propagate the
+                        // replacement. We may later prove this false, but we'll
+                        // fix it on later fix-point iterations.
+                        Some(AbstractValue::One(replacement)) => replacement,
+
+                        // Since we visit blocks in reverse post-order, we must
+                        // have visited at least one predecessor of the block
+                        // that defines this formal parameter, and gotten at
+                        // least one actual value for it.
+                        Some(AbstractValue::None) => unreachable!(),
                     };
 
-                    // And `join` the new value with the old.
-                    let formal_absval_old = state.get(*formal);
-                    let formal_absval_new = formal_absval_old.join(actual_absval);
+                    // We have one value for this formal; join it with any
+                    // others we've found previously.
+                    let formal_absval_old = state.get(formal);
+                    let formal_absval_new = match formal_absval_old {
+                        AbstractValue::Many => AbstractValue::Many,
+                        // If the value is different, there are many values.
+                        AbstractValue::One(v) if v != replacement => AbstractValue::Many,
+                        // Otherwise no previous value or it was the same value.
+                        _ => AbstractValue::One(replacement),
+                    };
                     if formal_absval_new != formal_absval_old {
                         changed = true;
-                        state.set(*formal, formal_absval_new);
+                        state.set(formal, formal_absval_new);
                     }
                 }
             }
