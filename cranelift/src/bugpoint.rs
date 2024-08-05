@@ -272,11 +272,7 @@ impl Mutator for ReplaceInstWithTrap {
                     func.dfg.replace(prev_inst).trap(TrapCode::User(0));
                     ProgressStatus::Changed
                 };
-                (
-                    func,
-                    format!("Replace inst {prev_inst} with trap"),
-                    status,
-                )
+                (func, format!("Replace inst {prev_inst} with trap"), status)
             },
         )
     }

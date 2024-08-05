@@ -1023,11 +1023,7 @@ fn pass_cross_store_arg(config: &mut Config) -> anyhow::Result<()> {
 
     // Using regular `.call` fails with cross-Store arguments.
     assert!(store1_func
-        .call(
-            &mut store1,
-            &[Val::FuncRef(Some(store2_func))],
-            &mut []
-        )
+        .call(&mut store1, &[Val::FuncRef(Some(store2_func))], &mut [])
         .is_err());
 
     // And using `.get` followed by a function call also fails with cross-Store
@@ -1549,10 +1545,7 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     assert!(b.is_none());
     untyped.call(
         &mut store,
-        &[
-            Val::FuncRef(None),
-            Val::ExternRef(Some(my_externref)),
-        ],
+        &[Val::FuncRef(None), Val::ExternRef(Some(my_externref))],
         &mut results,
     )?;
     assert_my_externref(&store, results[0].unwrap_externref().copied());

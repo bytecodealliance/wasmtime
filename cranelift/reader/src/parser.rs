@@ -1129,9 +1129,7 @@ impl<'a> Parser<'a> {
                             .finish(settings::Flags::new(flag_builder.clone()))
                             .map_err(|e| ParseError {
                                 location: loc,
-                                message: format!(
-                                    "invalid ISA flags for '{target_name}': {e:?}"
-                                ),
+                                message: format!("invalid ISA flags for '{target_name}': {e:?}"),
                                 is_warning: false,
                             })?,
                     );

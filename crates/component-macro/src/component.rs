@@ -209,9 +209,7 @@ fn expand_variant(
     } else {
         return Err(Error::new(
             name.span(),
-            format!(
-                "`{style}` component types can only be derived for Rust `enum`s"
-            ),
+            format!("`{style}` component types can only be derived for Rust `enum`s"),
         ));
     };
 

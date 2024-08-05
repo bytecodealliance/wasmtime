@@ -483,9 +483,7 @@ impl<'a> FunctionBuilder<'a> {
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
         self.try_use_var(var).unwrap_or_else(|_| {
-            panic!(
-                "variable {var:?} is used but its type has not been declared"
-            )
+            panic!("variable {var:?} is used but its type has not been declared")
         })
     }
 
@@ -517,14 +515,10 @@ impl<'a> FunctionBuilder<'a> {
         self.try_def_var(var, val)
             .unwrap_or_else(|error| match error {
                 DefVariableError::TypeMismatch(var, val) => {
-                    panic!(
-                        "declared type of variable {var:?} doesn't match type of value {val}"
-                    );
+                    panic!("declared type of variable {var:?} doesn't match type of value {val}");
                 }
                 DefVariableError::DefinedBeforeDeclared(var) => {
-                    panic!(
-                        "variable {var:?} is used but its type has not been declared"
-                    );
+                    panic!("variable {var:?} is used but its type has not been declared");
                 }
             })
     }
@@ -716,9 +710,7 @@ impl<'a> FunctionBuilder<'a> {
             for block in self.func_ctx.status.keys() {
                 if let Err((inst, msg)) = self.func.is_block_basic(block) {
                     let inst_str = self.func.dfg.display_inst(inst);
-                    panic!(
-                        "{block} failed basic block invariants on {inst_str}: {msg}"
-                    );
+                    panic!("{block} failed basic block invariants on {inst_str}: {msg}");
                 }
             }
         }

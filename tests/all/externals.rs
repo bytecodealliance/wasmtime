@@ -505,11 +505,7 @@ fn new_global_func_subtyping() {
         // a <: c, b <: c, c <: c
         (c_ty, true, true, true),
     ] {
-        for (val, expected) in [
-            (a, a_expected),
-            (b, b_expected),
-            (c, c_expected),
-        ] {
+        for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
             for mutability in [Mutability::Var, Mutability::Const] {
                 match Global::new(
                     &mut store,

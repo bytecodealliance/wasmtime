@@ -2143,9 +2143,7 @@ impl MachInstEmit for Inst {
                         template | (rm_enc << 16) | ((imm4 as u32) << 11) | (rn_enc << 5) | rd_enc,
                     );
                 } else {
-                    panic!(
-                        "aarch64: Inst::VecExtract: emit: invalid extract index {imm4}"
-                    );
+                    panic!("aarch64: Inst::VecExtract: emit: invalid extract index {imm4}");
                 }
             }
             &Inst::VecTbl { rd, rn, rm } => {

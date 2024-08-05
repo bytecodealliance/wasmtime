@@ -2674,9 +2674,7 @@ impl Inst {
                 let tmp = pretty_print_reg(tmp.to_reg());
                 let rn = pretty_print_reg(rn);
                 let rm = pretty_print_reg(rm);
-                format!(
-                    "{op} {rm}, {rn} ; jne 10 ; vchlgs {tmp}, {rn}, {rm}"
-                )
+                format!("{op} {rm}, {rn} ; jne 10 ; vchlgs {tmp}, {rn}, {rm}")
             }
             &Inst::VecLoad { rd, ref mem }
             | &Inst::VecLoadRev { rd, ref mem }
@@ -2799,9 +2797,7 @@ impl Inst {
             &Inst::VecLoadConst { rd, const_data } => {
                 let rd = pretty_print_reg(rd.to_reg());
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
-                format!(
-                    "bras {tmp}, 20 ; data.u128 0x{const_data:032x} ; vl {rd}, 0({tmp})"
-                )
+                format!("bras {tmp}, 20 ; data.u128 0x{const_data:032x} ; vl {rd}, 0({tmp})")
             }
             &Inst::VecLoadConstReplicate {
                 size,

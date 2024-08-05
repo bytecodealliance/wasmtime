@@ -342,11 +342,8 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     // Generate the `derive`s.
                     let debug_derive = if is_nodebug { "" } else { ", Debug" };
                     if variants.iter().all(|v| v.fields.is_empty()) {
-                        writeln!(
-                            code,
-                            "#[derive(Copy, Clone, PartialEq, Eq{debug_derive})]"
-                        )
-                        .unwrap();
+                        writeln!(code, "#[derive(Copy, Clone, PartialEq, Eq{debug_derive})]")
+                            .unwrap();
                     } else {
                         writeln!(code, "#[derive(Clone{debug_derive})]").unwrap();
                     }

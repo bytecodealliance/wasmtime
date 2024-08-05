@@ -54,10 +54,7 @@ impl Switch {
     /// Set a switch entry
     pub fn set_entry(&mut self, index: EntryIndex, block: Block) {
         let prev = self.cases.insert(index, block);
-        assert!(
-            prev.is_none(),
-            "Tried to set the same entry {index} twice"
-        );
+        assert!(prev.is_none(), "Tried to set the same entry {index} twice");
     }
 
     /// Get a reference to all existing entries
@@ -276,9 +273,7 @@ impl Switch {
         let val_ty = bx.func.dfg.value_type(val);
         let val_ty_max = val_ty.bounds(false).1;
         if max > val_ty_max {
-            panic!(
-                "The index type {val_ty} does not fit the maximum switch entry of {max}"
-            );
+            panic!("The index type {val_ty} does not fit the maximum switch entry of {max}");
         }
 
         let contiguous_case_ranges = self.collect_contiguous_case_ranges();

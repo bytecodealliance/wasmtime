@@ -220,9 +220,7 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
     };
 
     let code = rustfmt(&code).unwrap_or_else(|e| {
-        println!(
-            "cargo:warning=Failed to run `rustfmt` on ISLE-generated code: {e:?}"
-        );
+        println!("cargo:warning=Failed to run `rustfmt` on ISLE-generated code: {e:?}");
         code
     });
 

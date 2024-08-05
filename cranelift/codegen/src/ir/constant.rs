@@ -107,9 +107,7 @@ impl ConstantData {
     /// in the high-order byte slots.
     pub fn expand_to(mut self, expected_size: usize) -> Self {
         if self.len() > expected_size {
-            panic!(
-                "The constant data is already expanded beyond {expected_size} bytes"
-            )
+            panic!("The constant data is already expanded beyond {expected_size} bytes")
         }
         self.0.resize(expected_size, 0);
         self

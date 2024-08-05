@@ -97,12 +97,8 @@ mod windowsx64 {
             writeln!(text, "                 info: {}", code.info).unwrap();
             match code.value {
                 UnwindValue::None => {}
-                UnwindValue::U16(v) => {
-                    writeln!(text, "                value: {v} (u16)").unwrap()
-                }
-                UnwindValue::U32(v) => {
-                    writeln!(text, "                value: {v} (u32)").unwrap()
-                }
+                UnwindValue::U16(v) => writeln!(text, "                value: {v} (u16)").unwrap(),
+                UnwindValue::U32(v) => writeln!(text, "                value: {v} (u32)").unwrap(),
             };
         }
     }

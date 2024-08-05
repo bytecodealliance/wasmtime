@@ -23,11 +23,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
     // Pass in a non-null funcref.
     {
         let mut results = [Val::I32(0)];
-        func.call(
-            &mut store,
-            &[Val::FuncRef(Some(func))],
-            &mut results,
-        )?;
+        func.call(&mut store, &[Val::FuncRef(Some(func))], &mut results)?;
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();

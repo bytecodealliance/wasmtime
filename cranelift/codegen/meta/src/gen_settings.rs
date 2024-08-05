@@ -415,10 +415,7 @@ fn gen_template(group: &SettingGroup, fmt: &mut Formatter) {
         *default_bytes.get_mut(setting.byte_offset as usize).unwrap() |= setting.default_byte();
     }
 
-    let default_bytes: Vec<String> = default_bytes
-        .iter()
-        .map(|x| format!("{x:#04x}"))
-        .collect();
+    let default_bytes: Vec<String> = default_bytes.iter().map(|x| format!("{x:#04x}")).collect();
     let default_bytes_str = default_bytes.join(", ");
 
     fmtln!(

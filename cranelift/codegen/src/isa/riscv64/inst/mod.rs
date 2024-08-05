@@ -994,9 +994,7 @@ impl Inst {
                 let x = format_reg(x);
                 let t0 = format_reg(t0.to_reg());
                 let dst = format_reg(dst.to_reg());
-                format!(
-                    "atomic_rmw.{ty} {op} {dst},{x},({p})##t0={t0} offset={offset}"
-                )
+                format!("atomic_rmw.{ty} {op} {dst},{x},({p})##t0={t0} offset={offset}")
             }
 
             &Inst::RawData { ref data } => match data.len() {
@@ -1034,9 +1032,7 @@ impl Inst {
                 let tmp = format_reg(tmp.to_reg());
                 let tmp2 = format_reg(tmp2.to_reg());
                 let rd = format_reg(rd.to_reg());
-                format!(
-                    "brev8 {rd},{rs}##tmp={tmp} tmp2={tmp2} step={step} ty={ty}"
-                )
+                format!("brev8 {rd},{rs}##tmp={tmp} tmp2={tmp2} step={step} ty={ty}")
             }
             &Inst::Popcnt {
                 sum,
@@ -1088,9 +1084,7 @@ impl Inst {
                 let v = format_reg(v);
                 let t0 = format_reg(t0.to_reg());
                 let dst = format_reg(dst.to_reg());
-                format!(
-                    "atomic_cas.{ty} {dst},{e},{v},({addr})##t0={t0} offset={offset}",
-                )
+                format!("atomic_cas.{ty} {dst},{e},{v},({addr})##t0={t0} offset={offset}",)
             }
             &Inst::BrTable {
                 index,

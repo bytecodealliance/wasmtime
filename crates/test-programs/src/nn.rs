@@ -42,9 +42,7 @@ pub mod wit {
     /// single output).
     pub fn classify(graph: Graph, input: (&str, Vec<u8>), output: &str) -> Result<Vec<f32>> {
         let context = graph.init_execution_context().map_err(err_as_anyhow)?;
-        println!(
-            "[nn] created wasi-nn execution context with ID: {context:?}"
-        );
+        println!("[nn] created wasi-nn execution context with ID: {context:?}");
 
         // Many classifiers have a single input; currently, this test suite also
         // uses tensors of the same shape, though this is not usually the case.
@@ -112,9 +110,7 @@ pub mod witx {
     /// single output).
     pub fn classify(graph: Graph, tensor: Vec<u8>) -> Result<Vec<f32>> {
         let mut context = graph.init_execution_context()?;
-        println!(
-            "[nn] created wasi-nn execution context with ID: {context}"
-        );
+        println!("[nn] created wasi-nn execution context with ID: {context}");
 
         // Many classifiers have a single input; currently, this test suite also
         // uses tensors of the same shape, though this is not usually the case.

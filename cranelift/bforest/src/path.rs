@@ -651,10 +651,7 @@ impl<F: Forest> Path<F> {
         for level in 0..self.size {
             match pool[self.node[level]] {
                 NodeData::Inner { size, tree, .. } => {
-                    assert!(
-                        level < self.size - 1,
-                        "Expected leaf node at level {level}"
-                    );
+                    assert!(level < self.size - 1, "Expected leaf node at level {level}");
                     assert!(
                         self.entry[level] <= size,
                         "OOB inner entry {}/{} at level {}",

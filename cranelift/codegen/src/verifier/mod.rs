@@ -478,9 +478,7 @@ impl<'a> Verifier<'a> {
             return errors.fatal((
                 inst,
                 self.context(inst),
-                format!(
-                    "a terminator instruction was encountered before the end of {block}"
-                ),
+                format!("a terminator instruction was encountered before the end of {block}"),
             ));
         }
         if is_last_inst && !is_terminator {
@@ -764,11 +762,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
         if !self.func.sized_stack_slots.is_valid(ss) {
-            errors.nonfatal((
-                inst,
-                self.context(inst),
-                format!("invalid stack slot {ss}"),
-            ))
+            errors.nonfatal((inst, self.context(inst), format!("invalid stack slot {ss}")))
         } else {
             Ok(())
         }
@@ -1068,9 +1062,7 @@ impl<'a> Verifier<'a> {
             if got != expected {
                 return errors.fatal((
                     block,
-                    format!(
-                        "invalid domtree, expected idom({block}) = {expected:?}, got {got:?}"
-                    ),
+                    format!("invalid domtree, expected idom({block}) = {expected:?}, got {got:?}"),
                 ));
             }
         }
@@ -1536,9 +1528,7 @@ impl<'a> Verifier<'a> {
             if !missing_preds.is_empty() {
                 errors.report((
                     block,
-                    format!(
-                        "cfg lacked the following predecessor(s) {missing_preds:?}"
-                    ),
+                    format!("cfg lacked the following predecessor(s) {missing_preds:?}"),
                 ));
                 continue;
             }

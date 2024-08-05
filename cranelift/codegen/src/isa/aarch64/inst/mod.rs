@@ -2492,9 +2492,7 @@ impl Inst {
                 let rn = pretty_print_vreg_vector(rn, VectorSize::Size8x16);
                 let rm = pretty_print_vreg_vector(rm, VectorSize::Size8x16);
                 let cond = cond.pretty_print(0);
-                format!(
-                    "vcsel {rd}, {rn}, {rm}, {cond} (if-then-else diamond)"
-                )
+                format!("vcsel {rd}, {rn}, {rm}, {cond} (if-then-else diamond)")
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = pretty_print_reg(rn);

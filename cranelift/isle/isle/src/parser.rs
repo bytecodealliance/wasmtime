@@ -184,9 +184,7 @@ impl<'a> Parser<'a> {
         {
             return Err(self.error(
                 pos,
-                format!(
-                    "Identifier '{s}' contains invalid character (not a-z, A-Z, 0-9, _, ., $)"
-                ),
+                format!("Identifier '{s}' contains invalid character (not a-z, A-Z, 0-9, _, ., $)"),
             ));
         }
         Ok(Ident(s.to_string(), pos))
