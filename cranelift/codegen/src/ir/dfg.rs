@@ -285,7 +285,7 @@ fn resolve_aliases(values: &PrimaryMap<Value, ValueDataPacked>, value: Value) ->
     if let Some(v) = maybe_resolve_aliases(values, value) {
         v
     } else {
-        panic!("Value alias loop detected for {}", value);
+        panic!("Value alias loop detected for {value}");
     }
 }
 
@@ -511,8 +511,7 @@ impl DataFlowGraph {
         let original = self.resolve_aliases(src);
         debug_assert_ne!(
             dest, original,
-            "Aliasing {} to {} would create a loop",
-            dest, src
+            "Aliasing {dest} to {src} would create a loop"
         );
         let ty = self.value_type(original);
         debug_assert_eq!(
@@ -541,8 +540,7 @@ impl DataFlowGraph {
     pub fn replace_with_aliases(&mut self, dest_inst: Inst, original_inst: Inst) {
         debug_assert_ne!(
             dest_inst, original_inst,
-            "Replacing {} with itself would create a loop",
-            dest_inst
+            "Replacing {dest_inst} with itself would create a loop"
         );
 
         let dest_results = self.results[dest_inst].as_slice(&self.value_lists);
@@ -551,9 +549,7 @@ impl DataFlowGraph {
         debug_assert_eq!(
             dest_results.len(),
             original_results.len(),
-            "Replacing {} with {} would produce a different number of results.",
-            dest_inst,
-            original_inst
+            "Replacing {dest_inst} with {original_inst} would produce a different number of results."
         );
 
         for (&dest, &original) in dest_results.iter().zip(original_results) {
@@ -963,7 +959,7 @@ impl DataFlowGraph {
             let num = u16::try_from(expected).expect("Result value index should fit in u16");
             let value_data = ValueData::Inst { ty, num, inst };
             let v = if let Some(Some(v)) = reuse.next() {
-                debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
+                debug_assert_eq!(self.value_type(v), ty, "Reused {ty} is wrong type");
                 debug_assert!(!self.value_is_attached(v));
                 self.values[v] = value_data.into();
                 v
@@ -1000,7 +996,7 @@ impl DataFlowGraph {
     pub fn replace_result(&mut self, old_value: Value, new_type: Type) -> Value {
         let (num, inst) = match ValueData::from(self.values[old_value]) {
             ValueData::Inst { num, inst, .. } => (num, inst),
-            _ => panic!("{} is not an instruction result value", old_value),
+            _ => panic!("{old_value} is not an instruction result value"),
         };
         let new_value = self.make_value(ValueData::Inst {
             ty: new_type,
@@ -1255,7 +1251,7 @@ impl DataFlowGraph {
             if let ValueData::Param { num, block, .. } = ValueData::from(self.values[val]) {
                 (block, num)
             } else {
-                panic!("{} must be a block parameter", val);
+                panic!("{val} must be a block parameter");
             };
         self.blocks[block]
             .params
@@ -1274,7 +1270,7 @@ impl DataFlowGraph {
                 *old_num = num;
                 self.values[last_arg_val] = last_arg_data.into();
             } else {
-                panic!("{} should be a Block parameter", last_arg_val);
+                panic!("{last_arg_val} should be a Block parameter");
             }
         }
         num as usize
@@ -1287,7 +1283,7 @@ impl DataFlowGraph {
             if let ValueData::Param { num, block, .. } = ValueData::from(self.values[val]) {
                 (block, num)
             } else {
-                panic!("{} must be a block parameter", val);
+                panic!("{val} must be a block parameter");
             };
         self.blocks[block]
             .params
@@ -1347,7 +1343,7 @@ impl DataFlowGraph {
             if let ValueData::Param { num, block, .. } = ValueData::from(self.values[old_value]) {
                 (block, num)
             } else {
-                panic!("{} must be a block parameter", old_value);
+                panic!("{old_value} must be a block parameter");
             };
         let new_arg = self.make_value(ValueData::Param {
             ty: new_type,
@@ -1437,9 +1433,9 @@ impl<'a> fmt::Display for DisplayInst<'a> {
         let inst = self.1;
 
         if let Some((first, rest)) = dfg.inst_results(inst).split_first() {
-            write!(f, "{}", first)?;
+            write!(f, "{first}")?;
             for v in rest {
-                write!(f, ", {}", v)?;
+                write!(f, ", {v}")?;
             }
             write!(f, " = ")?;
         }
@@ -1497,7 +1493,7 @@ impl DataFlowGraph {
         for ty in result_tys {
             if ty.is_dynamic_vector() {
                 self.check_dynamic_type(ty)
-                    .unwrap_or_else(|| panic!("Use of undeclared dynamic type: {}", ty));
+                    .unwrap_or_else(|| panic!("Use of undeclared dynamic type: {ty}"));
             }
             if let Some(v) = reuse_iter.next() {
                 self.set_value_type_for_parser(v, ty);

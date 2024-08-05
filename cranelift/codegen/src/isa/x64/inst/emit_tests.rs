@@ -5132,6 +5132,6 @@ fn test_x64_emit() {
 
         let buffer = buffer.finish(&constants, ctrl_plane);
         let actual_encoding = &buffer.stringify_code_bytes();
-        assert_eq!(expected_encoding, actual_encoding, "{}", expected_printing);
+        assert_eq!(expected_encoding, actual_encoding, "{expected_printing}");
     }
 }

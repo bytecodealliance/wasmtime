@@ -22,7 +22,7 @@ mod unique_table;
 
 /// Generate an ISA from an architecture string (e.g. "x86_64").
 pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
-    isa::Isa::from_arch(arch).ok_or_else(|| format!("no supported isa found for arch `{}`", arch))
+    isa::Isa::from_arch(arch).ok_or_else(|| format!("no supported isa found for arch `{arch}`"))
 }
 
 /// Generates all the Rust source files used in Cranelift from the meta-language.

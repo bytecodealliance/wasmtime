@@ -1089,7 +1089,7 @@ impl MachInstEmit for Inst {
                     | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
-                        panic!("Should not see {:?} here!", mem)
+                        panic!("Should not see {mem:?} here!")
                     }
                 }
             }
@@ -1183,7 +1183,7 @@ impl MachInstEmit for Inst {
                     | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
-                        panic!("Should not see {:?} here!", mem)
+                        panic!("Should not see {mem:?} here!")
                     }
                 }
             }
@@ -1637,7 +1637,7 @@ impl MachInstEmit for Inst {
                     I16 => 0b01,
                     I32 => 0b10,
                     I64 => 0b11,
-                    _ => panic!("Unsupported type: {}", ty),
+                    _ => panic!("Unsupported type: {ty}"),
                 };
 
                 if let Some(trap_code) = flags.trap_code() {
@@ -2083,8 +2083,7 @@ impl MachInstEmit for Inst {
                     (ScalarSize::Size16, false) if imm <= 15 => 0b_0010_000_u32 | imm,
                     (ScalarSize::Size8, false) if imm <= 7 => 0b_0001_000_u32 | imm,
                     _ => panic!(
-                        "aarch64: Inst::VecShiftImm: emit: invalid op/size/imm {:?}, {:?}, {:?}",
-                        op, size, imm
+                        "aarch64: Inst::VecShiftImm: emit: invalid op/size/imm {op:?}, {size:?}, {imm:?}"
                     ),
                 };
                 let rn_enc = machreg_to_vec(rn);
@@ -2127,8 +2126,7 @@ impl MachInstEmit for Inst {
                     (ScalarSize::Size16, false) if imm <= 15 => 0b_0010_000_u32 | imm,
                     (ScalarSize::Size8, false) if imm <= 7 => 0b_0001_000_u32 | imm,
                     _ => panic!(
-                        "aarch64: Inst::VecShiftImmMod: emit: invalid op/size/imm {:?}, {:?}, {:?}",
-                        op, size, imm
+                        "aarch64: Inst::VecShiftImmMod: emit: invalid op/size/imm {op:?}, {size:?}, {imm:?}"
                     ),
                 };
                 let rn_enc = machreg_to_vec(rn);
@@ -2146,8 +2144,7 @@ impl MachInstEmit for Inst {
                     );
                 } else {
                     panic!(
-                        "aarch64: Inst::VecExtract: emit: invalid extract index {}",
-                        imm4
+                        "aarch64: Inst::VecExtract: emit: invalid extract index {imm4}"
                     );
                 }
             }
@@ -2288,7 +2285,7 @@ impl MachInstEmit for Inst {
                     ScalarSize::Size16 => (0b0, 0b00010, 2, 0b0111),
                     ScalarSize::Size32 => (0b0, 0b00100, 3, 0b0011),
                     ScalarSize::Size64 => (0b1, 0b01000, 4, 0b0001),
-                    _ => panic!("Unexpected scalar FP operand size: {:?}", size),
+                    _ => panic!("Unexpected scalar FP operand size: {size:?}"),
                 };
                 debug_assert_eq!(idx & mask, idx);
                 let imm5 = imm5 | ((idx as u32) << shift);
@@ -2447,7 +2444,7 @@ impl MachInstEmit for Inst {
                     ScalarSize::Size16 => 0b001,
                     ScalarSize::Size32 => 0b010,
                     ScalarSize::Size64 => 0b100,
-                    _ => panic!("Unexpected VecExtend to lane size of {:?}", lane_size),
+                    _ => panic!("Unexpected VecExtend to lane size of {lane_size:?}"),
                 };
                 let u = match t {
                     VecExtendOp::Sxtl => 0b0,
@@ -2507,7 +2504,7 @@ impl MachInstEmit for Inst {
                     ScalarSize::Size8 => 0b00,
                     ScalarSize::Size16 => 0b01,
                     ScalarSize::Size32 => 0b10,
-                    _ => panic!("unsupported size: {:?}", lane_size),
+                    _ => panic!("unsupported size: {lane_size:?}"),
                 };
 
                 // Floats use a single bit, to encode either half or single.
@@ -3247,7 +3244,7 @@ impl MachInstEmit for Inst {
                         let r = rn;
                         (r, None, uimm12.value() as i32)
                     }
-                    _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
+                    _ => panic!("Unsupported case for LoadAddr: {mem:?}"),
                 };
                 let abs_offset = if offset < 0 {
                     -offset as u64

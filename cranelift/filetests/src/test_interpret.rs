@@ -104,13 +104,13 @@ fn run_test(func_store: &FunctionStore, func: &Function, details: &Details) -> a
                     args.extend_from_slice(run_args);
 
                     // Because we have stored function names with a leading %, we need to re-add it.
-                    let func_name = &format!("%{}", func_name);
+                    let func_name = &format!("%{func_name}");
                     match Interpreter::new(state).call_by_name(func_name, &args) {
                         Ok(ControlFlow::Return(results)) => Ok(results.to_vec()),
                         Ok(e) => {
-                            panic!("Unexpected returned control flow: {:?}", e)
+                            panic!("Unexpected returned control flow: {e:?}")
                         }
-                        Err(t) => Err(format!("unexpected trap: {:?}", t)),
+                        Err(t) => Err(format!("unexpected trap: {t:?}")),
                     }
                 })
                 .map_err(|e| anyhow::anyhow!("{}", e))?;

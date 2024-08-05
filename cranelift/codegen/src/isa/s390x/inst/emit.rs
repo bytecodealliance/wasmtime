@@ -1423,8 +1423,7 @@ impl Inst {
         let isa_requirements = self.available_in_isa();
         if !matches_isa_flags(&isa_requirements) {
             panic!(
-                "Cannot emit inst '{:?}' for target; failed to match ISA requirements: {:?}",
-                self, isa_requirements
+                "Cannot emit inst '{self:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
             )
         }
 
@@ -1895,8 +1894,7 @@ impl Inst {
                     (false, 32, 64) => 0xb916, // LLGFR
                     (true, 32, 64) => 0xb914,  // LGFR
                     _ => panic!(
-                        "Unsupported extend combination: signed = {}, from_bits = {}, to_bits = {}",
-                        signed, from_bits, to_bits
+                        "Unsupported extend combination: signed = {signed}, from_bits = {from_bits}, to_bits = {to_bits}"
                     ),
                 };
                 put(sink, &enc_rre(opcode, rd.to_reg(), rn));

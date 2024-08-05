@@ -227,7 +227,7 @@ impl OperandSize {
             4 => S32,
             8 => S64,
             16 => S128,
-            _ => panic!("Invalid bytes {} for OperandSize", bytes),
+            _ => panic!("Invalid bytes {bytes} for OperandSize"),
         }
     }
 }

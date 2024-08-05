@@ -34,7 +34,7 @@ impl std::fmt::Display for RegisterMappingError {
                 "register mapping is currently only implemented for x86_64"
             ),
             RegisterMappingError::UnsupportedRegisterBank(bank) => {
-                write!(f, "unsupported register bank: {}", bank)
+                write!(f, "unsupported register bank: {bank}")
             }
         }
     }

@@ -663,7 +663,7 @@ and for re-adding support for interface types you can see this issue:
             // that's a bug in Wasmtime as we forgot to implement something.
             other => {
                 self.validator.payload(&other)?;
-                panic!("unimplemented section in wasm file {:?}", other);
+                panic!("unimplemented section in wasm file {other:?}");
             }
         }
         Ok(())

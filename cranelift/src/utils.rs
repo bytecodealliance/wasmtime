@@ -37,7 +37,7 @@ pub fn iterate_files<'a>(files: &'a [PathBuf]) -> impl Iterator<Item = PathBuf> 
                     && !d.file_type().is_dir()
             }
             Err(e) => {
-                println!("Unable to read file: {}", e);
+                println!("Unable to read file: {e}");
                 false
             }
         })

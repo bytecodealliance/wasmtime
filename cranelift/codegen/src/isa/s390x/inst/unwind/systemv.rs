@@ -133,7 +133,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 10, lsda: None, instructions: [(4, CfaOffset(224))] }");
+        assert_eq!(format!("{fde:?}"), "FrameDescriptionEntry { address: Constant(1234), length: 10, lsda: None, instructions: [(4, CfaOffset(224))] }");
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
@@ -177,7 +177,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 26, lsda: None, instructions: [(4, CfaOffset(224))] }");
+        assert_eq!(format!("{fde:?}"), "FrameDescriptionEntry { address: Constant(4321), length: 26, lsda: None, instructions: [(4, CfaOffset(224))] }");
     }
 
     fn create_multi_return_function(

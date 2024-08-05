@@ -17,43 +17,43 @@ impl<'a> pointers::Pointers for WasiCtx<'a> {
         input3_ptr: GuestPtr<types::Excuse>,
         input4_ptr_ptr: GuestPtr<GuestPtr<types::Excuse>>,
     ) -> Result<(), types::Errno> {
-        println!("BAZ input1 {:?}", input1);
+        println!("BAZ input1 {input1:?}");
         let input2: types::Excuse = memory.read(input2_ptr).map_err(|e| {
-            eprintln!("input2_ptr error: {}", e);
+            eprintln!("input2_ptr error: {e}");
             types::Errno::InvalidArg
         })?;
-        println!("input2 {:?}", input2);
+        println!("input2 {input2:?}");
 
         // Read enum value from immutable ptr:
         let input3 = memory.read(input3_ptr).map_err(|e| {
-            eprintln!("input3_ptr error: {}", e);
+            eprintln!("input3_ptr error: {e}");
             types::Errno::InvalidArg
         })?;
-        println!("input3 {:?}", input3);
+        println!("input3 {input3:?}");
 
         // Write enum to mutable ptr:
         memory.write(input2_ptr, input3).map_err(|e| {
-            eprintln!("input2_ptr error: {}", e);
+            eprintln!("input2_ptr error: {e}");
             types::Errno::InvalidArg
         })?;
-        println!("wrote to input2_ref {:?}", input3);
+        println!("wrote to input2_ref {input3:?}");
 
         // Read ptr value from mutable ptr:
         let input4_ptr: GuestPtr<types::Excuse> = memory.read(input4_ptr_ptr).map_err(|e| {
-            eprintln!("input4_ptr_ptr error: {}", e);
+            eprintln!("input4_ptr_ptr error: {e}");
             types::Errno::InvalidArg
         })?;
 
         // Read enum value from that ptr:
         let input4: types::Excuse = memory.read(input4_ptr).map_err(|e| {
-            eprintln!("input4_ptr error: {}", e);
+            eprintln!("input4_ptr error: {e}");
             types::Errno::InvalidArg
         })?;
-        println!("input4 {:?}", input4);
+        println!("input4 {input4:?}");
 
         // Write ptr value to mutable ptr:
         memory.write(input4_ptr_ptr, input2_ptr).map_err(|e| {
-            eprintln!("input4_ptr_ptr error: {}", e);
+            eprintln!("input4_ptr_ptr error: {e}");
             types::Errno::InvalidArg
         })?;
 

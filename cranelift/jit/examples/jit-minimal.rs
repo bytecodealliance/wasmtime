@@ -10,7 +10,7 @@ fn main() {
     // FIXME set back to true once the x64 backend supports it.
     flag_builder.set("is_pic", "false").unwrap();
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
-        panic!("host machine is not supported: {}", msg);
+        panic!("host machine is not supported: {msg}");
     });
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
@@ -67,7 +67,7 @@ fn main() {
         let value = {
             let results = bcx.inst_results(call);
             assert_eq!(results.len(), 1);
-            results[0].clone()
+            results[0]
         };
         bcx.ins().return_(&[value]);
         bcx.seal_all_blocks();

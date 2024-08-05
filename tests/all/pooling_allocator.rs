@@ -398,7 +398,7 @@ fn table_zeroed() -> Result<()> {
                 _ => panic!("expected a funcref"),
             }
             table
-                .set(&mut store, i, Ref::Func(Some(f.clone())))
+                .set(&mut store, i, Ref::Func(Some(f)))
                 .unwrap();
         }
     }

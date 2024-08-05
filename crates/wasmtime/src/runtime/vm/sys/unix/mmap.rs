@@ -70,7 +70,7 @@ impl Mmap {
                 0,
             )
             .err2anyhow()
-            .context(format!("mmap failed to allocate {:#x} bytes", len))?
+            .context(format!("mmap failed to allocate {len:#x} bytes"))?
         };
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());

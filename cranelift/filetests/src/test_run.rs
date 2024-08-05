@@ -63,8 +63,7 @@ fn is_isa_compatible(
         (Architecture::Riscv64(_), Architecture::Riscv64(_)) => {}
         _ => {
             return Err(format!(
-                "skipped {}: host can't run {:?} programs",
-                file_path, requested_arch
+                "skipped {file_path}: host can't run {requested_arch:?} programs"
             ))
         }
     }

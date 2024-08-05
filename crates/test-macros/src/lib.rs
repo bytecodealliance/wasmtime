@@ -227,7 +227,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         );
 
         let config_setup = test_config.wasm_features.iter().map(|f| {
-            let method_name = Ident::new(&format!("wasm_{}", f), f.span());
+            let method_name = Ident::new(&format!("wasm_{f}"), f.span());
             quote! {
                 config.#method_name(true);
             }

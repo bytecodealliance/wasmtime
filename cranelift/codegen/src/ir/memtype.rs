@@ -131,7 +131,7 @@ impl std::fmt::Display for MemoryTypeData {
                         write!(f, " readonly")?;
                     }
                     if let Some(fact) = &field.fact {
-                        write!(f, " ! {}", fact)?;
+                        write!(f, " ! {fact}")?;
                     }
                 }
                 write!(f, " }}")?;
@@ -141,7 +141,7 @@ impl std::fmt::Display for MemoryTypeData {
                 write!(f, "memory {size:#x}")
             }
             Self::DynamicMemory { size, gv } => {
-                write!(f, "dynamic_memory {}+{:#x}", gv, size)
+                write!(f, "dynamic_memory {gv}+{size:#x}")
             }
             Self::Empty => {
                 write!(f, "empty")

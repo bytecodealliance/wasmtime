@@ -58,7 +58,7 @@ pub fn parse_sets_and_triple(flag_set: &[String], flag_triple: &str) -> Result<O
                 unknown_settings.push(name);
             }
             Err(ParseOptionError::UnknownValue { name, value, .. }) => {
-                unknown_settings.push(format!("{}={}", name, value));
+                unknown_settings.push(format!("{name}={value}"));
             }
             Err(ParseOptionError::Generic(err)) => return Err(err.into()),
             Ok(()) => {}

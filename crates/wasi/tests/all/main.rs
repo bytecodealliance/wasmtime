@@ -25,7 +25,7 @@ impl WasiView for Ctx {
 }
 
 fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
-    let prefix = format!("wasi_components_{}_", exe_name);
+    let prefix = format!("wasi_components_{exe_name}_");
     let tempdir = tempfile::Builder::new().prefix(&prefix).tempdir()?;
     Ok(tempdir)
 }
@@ -47,7 +47,7 @@ fn store(
         .args(&[name, "."])
         .inherit_network()
         .allow_ip_name_lookup(true);
-    println!("preopen: {:?}", workspace);
+    println!("preopen: {workspace:?}");
     builder.preopened_dir(workspace.path(), ".", DirPerms::all(), FilePerms::all())?;
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
         builder.env(var, val);

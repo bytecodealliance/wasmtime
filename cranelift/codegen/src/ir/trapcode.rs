@@ -93,7 +93,7 @@ impl Display for TrapCode {
             BadConversionToInteger => "bad_toint",
             UnreachableCodeReached => "unreachable",
             Interrupt => "interrupt",
-            User(x) => return write!(f, "user{}", x),
+            User(x) => return write!(f, "user{x}"),
             NullReference => "null_reference",
             NullI31Ref => "null_i31ref",
         };

@@ -33,7 +33,7 @@ fn main() {
         println!("cargo:rerun-if-changed=build.rs");
         return;
     }
-    build.define(&format!("CFG_TARGET_OS_{}", os), None);
-    build.define(&format!("CFG_TARGET_ARCH_{}", arch), None);
+    build.define(&format!("CFG_TARGET_OS_{os}"), None);
+    build.define(&format!("CFG_TARGET_ARCH_{arch}"), None);
     build.compile("wasmtime-fiber");
 }

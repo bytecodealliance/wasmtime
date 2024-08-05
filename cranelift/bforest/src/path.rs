@@ -653,8 +653,7 @@ impl<F: Forest> Path<F> {
                 NodeData::Inner { size, tree, .. } => {
                     assert!(
                         level < self.size - 1,
-                        "Expected leaf node at level {}",
-                        level
+                        "Expected leaf node at level {level}"
                     );
                     assert!(
                         self.entry[level] <= size,
@@ -666,8 +665,7 @@ impl<F: Forest> Path<F> {
                     assert_eq!(
                         self.node[level + 1],
                         tree[usize::from(self.entry[level])],
-                        "Node mismatch at level {}",
-                        level
+                        "Node mismatch at level {level}"
                     );
                 }
                 NodeData::Leaf { size, .. } => {

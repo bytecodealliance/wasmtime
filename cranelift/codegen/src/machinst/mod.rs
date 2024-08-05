@@ -416,7 +416,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
             .zip(block_starts.iter().skip(1))
             .enumerate()
         {
-            writeln!(buf, "block{}: ; offset 0x{:x}", n, start)?;
+            writeln!(buf, "block{n}: ; offset 0x{start:x}")?;
 
             let buffer = &self.buffer.data()[start as usize..end as usize];
             let insns = cs.disasm_all(buffer, start as u64).map_err(map_caperr)?;
@@ -425,13 +425,13 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
 
                 let op_str = i.op_str().unwrap_or("");
                 if let Some(s) = i.mnemonic() {
-                    write!(buf, "{}", s)?;
+                    write!(buf, "{s}")?;
                     if !op_str.is_empty() {
                         write!(buf, " ")?;
                     }
                 }
 
-                write!(buf, "{}", op_str)?;
+                write!(buf, "{op_str}")?;
 
                 let end = i.address() + i.bytes().len() as u64;
                 let contains = |off| i.address() <= off && off < end;

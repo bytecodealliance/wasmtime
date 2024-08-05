@@ -55,36 +55,36 @@ fn link_twice_bad() -> Result<()> {
     // globals
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let global = Global::new(&mut store, ty, Val::I32(0))?;
-    linker.define(&mut store, "g", "1", global.clone())?;
-    assert!(linker.define(&mut store, "g", "1", global.clone()).is_err());
+    linker.define(&mut store, "g", "1", global)?;
+    assert!(linker.define(&mut store, "g", "1", global).is_err());
 
     let ty = GlobalType::new(ValType::I32, Mutability::Var);
     let global = Global::new(&mut store, ty, Val::I32(0))?;
-    linker.define(&mut store, "g", "2", global.clone())?;
-    assert!(linker.define(&mut store, "g", "2", global.clone()).is_err());
+    linker.define(&mut store, "g", "2", global)?;
+    assert!(linker.define(&mut store, "g", "2", global).is_err());
 
     let ty = GlobalType::new(ValType::I64, Mutability::Const);
     let global = Global::new(&mut store, ty, Val::I64(0))?;
-    linker.define(&mut store, "g", "3", global.clone())?;
-    assert!(linker.define(&mut store, "g", "3", global.clone()).is_err());
+    linker.define(&mut store, "g", "3", global)?;
+    assert!(linker.define(&mut store, "g", "3", global).is_err());
 
     // memories
     let ty = MemoryType::new(1, None);
     let memory = Memory::new(&mut store, ty)?;
-    linker.define(&mut store, "m", "", memory.clone())?;
-    assert!(linker.define(&mut store, "m", "", memory.clone()).is_err());
+    linker.define(&mut store, "m", "", memory)?;
+    assert!(linker.define(&mut store, "m", "", memory).is_err());
     let ty = MemoryType::new(2, None);
     let memory = Memory::new(&mut store, ty)?;
-    assert!(linker.define(&mut store, "m", "", memory.clone()).is_err());
+    assert!(linker.define(&mut store, "m", "", memory).is_err());
 
     // tables
     let ty = TableType::new(RefType::FUNCREF, 1, None);
     let table = Table::new(&mut store, ty, Ref::Func(None))?;
-    linker.define(&mut store, "t", "", table.clone())?;
-    assert!(linker.define(&mut store, "t", "", table.clone()).is_err());
+    linker.define(&mut store, "t", "", table)?;
+    assert!(linker.define(&mut store, "t", "", table).is_err());
     let ty = TableType::new(RefType::FUNCREF, 2, None);
     let table = Table::new(&mut store, ty, Ref::Func(None))?;
-    assert!(linker.define(&mut store, "t", "", table.clone()).is_err());
+    assert!(linker.define(&mut store, "t", "", table).is_err());
     Ok(())
 }
 
@@ -476,12 +476,12 @@ fn linker_instantiate_with_concrete_func_refs() -> Result<()> {
     });
 
     let b_func = Func::new(&mut store, b, move |_caller, _args, results| {
-        results[0] = Val::FuncRef(Some(a_func.clone()));
+        results[0] = Val::FuncRef(Some(a_func));
         Ok(())
     });
 
     let c_func = Func::new(&mut store, c, move |_caller, _args, results| {
-        results[0] = Val::FuncRef(Some(b_func.clone()));
+        results[0] = Val::FuncRef(Some(b_func));
         Ok(())
     });
 
@@ -491,7 +491,7 @@ fn linker_instantiate_with_concrete_func_refs() -> Result<()> {
         "f",
         FuncType::new(&engine, None, Some(ref_null_c)),
         move |_caller, _args, results| {
-            results[0] = Val::FuncRef(Some(c_func.clone()));
+            results[0] = Val::FuncRef(Some(c_func));
             Ok(())
         },
     )?;

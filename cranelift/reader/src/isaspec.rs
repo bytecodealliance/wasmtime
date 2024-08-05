@@ -64,12 +64,12 @@ impl From<ParseOptionError> for ParseError {
             ParseOptionError::Generic(err) => err,
             ParseOptionError::UnknownFlag { loc, name } => Self {
                 location: loc,
-                message: format!("unknown setting '{}'", name),
+                message: format!("unknown setting '{name}'"),
                 is_warning: false,
             },
             ParseOptionError::UnknownValue { loc, name, value } => Self {
                 location: loc,
-                message: format!("unknown setting '{}={}'", name, value),
+                message: format!("unknown setting '{name}={value}'"),
                 is_warning: false,
             },
         }

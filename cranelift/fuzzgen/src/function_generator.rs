@@ -1101,8 +1101,7 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         | InstructionFormat::Jump
         | InstructionFormat::MultiAry => {
             panic!(
-                "Control-flow instructions should be handled by 'insert_terminator': {:?}",
-                fmt
+                "Control-flow instructions should be handled by 'insert_terminator': {fmt:?}"
             )
         }
     }

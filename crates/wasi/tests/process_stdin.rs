@@ -61,7 +61,7 @@ fn main() {
                             // We can't effectively test for the case where stdin was closed, so panic if it is...
                             let bytes = stdin.read(1024).unwrap();
 
-                            println!("child got: {:?}", bytes);
+                            println!("child got: {bytes:?}");
 
                             buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
                             if let Some((line, rest)) = buffer.split_once('\n') {
@@ -79,7 +79,7 @@ fn main() {
                                     println!("child: restarting task...");
                                     continue 'task;
                                 } else {
-                                    writeln!(&mut result_write, "{}", line).unwrap();
+                                    writeln!(&mut result_write, "{line}").unwrap();
                                 }
 
                                 buffer = rest.to_owned();
@@ -116,7 +116,7 @@ fn parent_process() {
     assert_eq!(line, "start\n");
 
     for i in 0..5 {
-        let message = format!("some bytes {}\n", i);
+        let message = format!("some bytes {i}\n");
         stdin_write.write_all(message.as_bytes()).unwrap();
         line.clear();
         result_read.read_line(&mut line).unwrap();
@@ -133,7 +133,7 @@ fn parent_process() {
     assert_eq!(line, "start\n");
 
     for i in 0..10 {
-        let message = format!("more bytes {}\n", i);
+        let message = format!("more bytes {i}\n");
         stdin_write.write_all(message.as_bytes()).unwrap();
         line.clear();
         result_read.read_line(&mut line).unwrap();
@@ -150,7 +150,7 @@ fn parent_process() {
     assert_eq!(line, "start\n");
 
     for i in 0..17 {
-        let message = format!("even more bytes {}\n", i);
+        let message = format!("even more bytes {i}\n");
         stdin_write.write_all(message.as_bytes()).unwrap();
         line.clear();
         result_read.read_line(&mut line).unwrap();

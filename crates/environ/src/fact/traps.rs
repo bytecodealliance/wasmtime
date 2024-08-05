@@ -110,7 +110,7 @@ impl fmt::Display for Trap {
             Trap::ListByteLengthOverflow => "byte size of list too large for i32".fmt(f),
             Trap::StringLengthTooBig => "string byte size exceeds maximum".fmt(f),
             Trap::StringLengthOverflow => "string byte size overflows i32".fmt(f),
-            Trap::AssertFailed(s) => write!(f, "assertion failure: {}", s),
+            Trap::AssertFailed(s) => write!(f, "assertion failure: {s}"),
         }
     }
 }

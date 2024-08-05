@@ -280,7 +280,7 @@ mod tests {
                 assert_eq!(reg, expected_reg);
                 assert_eq!(ty, expected_ty);
             }
-            stack => panic!("Expected reg argument, got {:?}", stack),
+            stack => panic!("Expected reg argument, got {stack:?}"),
         }
     }
 
@@ -290,7 +290,7 @@ mod tests {
                 assert_eq!(offset, expected_offset);
                 assert_eq!(ty, expected_ty);
             }
-            reg => panic!("Expected stack argument, got {:?}", reg),
+            reg => panic!("Expected stack argument, got {reg:?}"),
         }
     }
 }

@@ -48,7 +48,7 @@ pub fn run(options: &Options) -> anyhow::Result<()> {
         match total {
             0 => println!("0 files"),
             1 => println!("1 file"),
-            n => println!("{} files", n),
+            n => println!("{n} files"),
         }
     }
 
@@ -122,7 +122,7 @@ impl FileInterpreter {
             command
                 .run(|func_name, args| {
                     // Because we have stored function names with a leading %, we need to re-add it.
-                    let func_name = &format!("%{}", func_name);
+                    let func_name = &format!("%{func_name}");
                     let state = InterpreterState::default().with_function_store(env.clone());
                     match Interpreter::new(state).call_by_name(func_name, args) {
                         Ok(ControlFlow::Return(results)) => Ok(results.to_vec()),

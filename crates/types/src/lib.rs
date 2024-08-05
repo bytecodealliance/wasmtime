@@ -1662,8 +1662,7 @@ impl From<wasmparser::MemoryType> for Memory {
         let page_size_log2 = u8::try_from(ty.page_size_log2.unwrap_or(16)).unwrap();
         debug_assert!(
             page_size_log2 == 16 || page_size_log2 == 0,
-            "invalid page_size_log2: {}; must be 16 or 0",
-            page_size_log2
+            "invalid page_size_log2: {page_size_log2}; must be 16 or 0"
         );
         Memory {
             minimum: ty.initial,

@@ -2212,7 +2212,7 @@ fn riscv64_worst_case_instruction_size() {
             let length = buffer.data().len() as u32;
             max = (length, i.clone());
         }
-        println!("insn:{:?}  length: {}", i, length);
+        println!("insn:{i:?}  length: {length}");
     }
     println!("calculate max size is {} , inst is {:?}", max.0, max.1);
     assert!(max.0 <= Inst::worst_case_size());

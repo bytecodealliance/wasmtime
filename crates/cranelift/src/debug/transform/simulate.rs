@@ -109,7 +109,7 @@ fn autogenerate_dwarf_wasm_path(di: &DebugInfoData) -> PathBuf {
         .and_then(check_invalid_chars_in_name)
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("<gen-{}>", NEXT_ID.fetch_add(1, SeqCst)));
-    let path = format!("/<wasm-module>/{}.wasm", module_name);
+    let path = format!("/<wasm-module>/{module_name}.wasm");
     PathBuf::from(path)
 }
 
@@ -259,7 +259,7 @@ fn generate_vars(
                 .and_then(|s| check_invalid_chars_in_name(s))
             {
                 Some(n) => out_strings.add(assert_dwarf_str!(n)),
-                None => out_strings.add(format!("var{}", var_index)),
+                None => out_strings.add(format!("var{var_index}")),
             };
 
             var.set(gimli::DW_AT_name, write::AttributeValue::StringRef(name_id));

@@ -105,7 +105,7 @@ unsafe fn test_stdout_stderr_write() {
     let mut timed_out = false;
     while !writable.is_empty() {
         if timed_out {
-            panic!("timed out with the following pending subs: {:?}", writable)
+            panic!("timed out with the following pending subs: {writable:?}")
         }
         let mut subs = writable_subs(&writable);
         subs.push(clock);
@@ -118,7 +118,7 @@ unsafe fn test_stdout_stderr_write() {
                         assert_eq!(event.type_, wasi::EVENTTYPE_FD_WRITE);
                         assert_errno!(event.error, wasi::ERRNO_SUCCESS);
                     } else {
-                        panic!("Unknown userdata {}, pending sub: {:?}", ud, writable)
+                        panic!("Unknown userdata {ud}, pending sub: {writable:?}")
                     }
                 }
             }

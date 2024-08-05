@@ -1290,7 +1290,7 @@ impl TermEnv {
                             let variant_name = tyenv.syms[variant.fullname.index()].clone();
                             tyenv.report_error(
                                 pos,
-                                format!("Duplicate enum variant constructor: '{}'", variant_name,),
+                                format!("Duplicate enum variant constructor: '{variant_name}'",),
                             );
                             continue 'types;
                         }
@@ -2497,7 +2497,7 @@ mod test {
 
         assert_eq!(tyenv.types.len(), expected_types.len());
         for (i, (actual, expected)) in tyenv.types.iter().zip(&expected_types).enumerate() {
-            assert_eq!(expected, actual, "`{}`th type is not equal!", i);
+            assert_eq!(expected, actual, "`{i}`th type is not equal!");
         }
     }
 }

@@ -632,7 +632,7 @@ mod test {
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(format!("{:?}", e).starts_with(
+            Err(e) => assert!(format!("{e:?}").starts_with(
                 "\
 compilation settings of module incompatible with native host
 

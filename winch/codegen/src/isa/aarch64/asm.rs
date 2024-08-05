@@ -25,7 +25,7 @@ impl From<OperandSize> for inst::OperandSize {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
-            s => panic!("Invalid operand size {:?}", s),
+            s => panic!("Invalid operand size {s:?}"),
         }
     }
 }
@@ -442,7 +442,7 @@ impl Assembler {
             (RoundingMode::Up, OperandSize::S64) => FpuRoundMode::Plus64,
             (RoundingMode::Down, OperandSize::S64) => FpuRoundMode::Minus64,
             (RoundingMode::Zero, OperandSize::S64) => FpuRoundMode::Zero64,
-            (m, o) => panic!("Invalid rounding mode or operand size {:?}, {:?}", m, o),
+            (m, o) => panic!("Invalid rounding mode or operand size {m:?}, {o:?}"),
         };
         self.emit_fpu_round(fpu_mode, rn, rd)
     }

@@ -619,7 +619,7 @@ mod exported_resources {
             mem::take(&mut store.data_mut().hostcalls),
             [Hostcall::DropAX(5), Hostcall::NewA]
         );
-        b.x().call_foo(&mut store, b_x.clone())?;
+        b.x().call_foo(&mut store, b_x)?;
         assert_eq!(mem::take(&mut store.data_mut().hostcalls), []);
         b_x.resource_drop(&mut store)?;
         assert_eq!(

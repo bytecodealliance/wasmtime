@@ -98,10 +98,10 @@ mod windowsx64 {
             match code.value {
                 UnwindValue::None => {}
                 UnwindValue::U16(v) => {
-                    writeln!(text, "                value: {} (u16)", v).unwrap()
+                    writeln!(text, "                value: {v} (u16)").unwrap()
                 }
                 UnwindValue::U32(v) => {
-                    writeln!(text, "                value: {} (u32)", v).unwrap()
+                    writeln!(text, "                value: {v} (u32)").unwrap()
                 }
             };
         }
@@ -369,10 +369,10 @@ mod systemv {
     fn dump_pointer<W: Write>(w: &mut W, p: gimli::Pointer) -> Result<()> {
         match p {
             gimli::Pointer::Direct(p) => {
-                write!(w, "{:#018x}", p)?;
+                write!(w, "{p:#018x}")?;
             }
             gimli::Pointer::Indirect(p) => {
-                write!(w, "({:#018x})", p)?;
+                write!(w, "({p:#018x})")?;
             }
         }
         Ok(())
@@ -400,7 +400,7 @@ mod systemv {
         loop {
             match insns.next() {
                 Err(e) => {
-                    writeln!(w, "Failed to decode CFI instruction: {}", e)?;
+                    writeln!(w, "Failed to decode CFI instruction: {e}")?;
                     return Ok(());
                 }
                 Ok(None) => {
@@ -411,10 +411,10 @@ mod systemv {
                 }
                 Ok(Some(op)) => match op {
                     SetLoc { address } => {
-                        writeln!(w, "                DW_CFA_set_loc ({:#x})", address)?;
+                        writeln!(w, "                DW_CFA_set_loc ({address:#x})")?;
                     }
                     AdvanceLoc { delta } => {
-                        writeln!(w, "                DW_CFA_advance_loc ({})", delta)?;
+                        writeln!(w, "                DW_CFA_advance_loc ({delta})")?;
                     }
                     DefCfa { register, offset } => {
                         writeln!(
@@ -443,13 +443,12 @@ mod systemv {
                         )?;
                     }
                     DefCfaOffset { offset } => {
-                        writeln!(w, "                DW_CFA_def_cfa_offset ({})", offset)?;
+                        writeln!(w, "                DW_CFA_def_cfa_offset ({offset})")?;
                     }
                     DefCfaOffsetSf { factored_offset } => {
                         writeln!(
                             w,
-                            "                DW_CFA_def_cfa_offset_sf ({})",
-                            factored_offset
+                            "                DW_CFA_def_cfa_offset_sf ({factored_offset})"
                         )?;
                     }
                     DefCfaExpression { expression: _ } => {
@@ -558,7 +557,7 @@ mod systemv {
                         writeln!(w, "                DW_CFA_restore_state")?;
                     }
                     ArgsSize { size } => {
-                        writeln!(w, "                DW_CFA_GNU_args_size ({})", size)?;
+                        writeln!(w, "                DW_CFA_GNU_args_size ({size})")?;
                     }
                     NegateRaState => {
                         writeln!(w, "                DW_CFA_AARCH64_negate_ra_state")?;

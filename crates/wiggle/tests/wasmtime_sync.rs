@@ -25,7 +25,7 @@ impl atoms::Atoms for Ctx {
         an_int: u32,
         an_float: f32,
     ) -> Result<(), types::Errno> {
-        println!("INT FLOAT ARGS: {} {}", an_int, an_float);
+        println!("INT FLOAT ARGS: {an_int} {an_float}");
         Ok(())
     }
     async fn double_int_return_float(
@@ -139,9 +139,8 @@ fn test_async_host_func_pending() {
         )
         .unwrap_err();
     assert!(
-        format!("{:?}", trap).contains("Cannot wait on pending future"),
-        "expected get a pending future Trap from dummy executor, got: {}",
-        trap
+        format!("{trap:?}").contains("Cannot wait on pending future"),
+        "expected get a pending future Trap from dummy executor, got: {trap}"
     );
 }
 

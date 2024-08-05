@@ -619,8 +619,7 @@ impl Inst {
                             Inst::movzx_rm_r(ext_mode, RegMem::mem(from_addr), to_reg)
                         }
                         ExtKind::None => panic!(
-                            "expected an extension kind for extension mode: {:?}",
-                            ext_mode
+                            "expected an extension kind for extension mode: {ext_mode:?}"
                         ),
                     }
                 } else {
@@ -2641,8 +2640,7 @@ impl MachInst for Inst {
                 Ok((&[RegClass::Float], &[types::I8X16]))
             }
             _ => Err(CodegenError::Unsupported(format!(
-                "Unexpected SSA-value type: {}",
-                ty
+                "Unexpected SSA-value type: {ty}"
             ))),
         }
     }

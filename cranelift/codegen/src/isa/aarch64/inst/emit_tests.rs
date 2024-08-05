@@ -7882,8 +7882,7 @@ fn test_aarch64_binemit() {
     let emit_info = EmitInfo::new(flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
-            "AArch64: {:?}, {}, {}",
-            insn, expected_encoding, expected_printing
+            "AArch64: {insn:?}, {expected_encoding}, {expected_printing}"
         );
 
         // Check the printed text is as expected.

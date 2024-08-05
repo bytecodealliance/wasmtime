@@ -86,14 +86,14 @@ fn cross_store() -> anyhow::Result<()> {
     eprintln!("============ Cross-store globals ==============");
 
     let store1val = Val::FuncRef(Some(Func::wrap(&mut store1, || {})));
-    let store1ref = store1val.clone().ref_().unwrap();
+    let store1ref = store1val.ref_().unwrap();
     let store2val = Val::FuncRef(Some(Func::wrap(&mut store2, || {})));
-    let store2ref = store2val.clone().ref_().unwrap();
+    let store2ref = store2val.ref_().unwrap();
 
     let ty = GlobalType::new(ValType::FUNCREF, Mutability::Var);
-    assert!(Global::new(&mut store2, ty.clone(), store1val.clone()).is_err());
-    if let Ok(g) = Global::new(&mut store2, ty.clone(), store2val.clone()) {
-        assert!(g.set(&mut store2, store1val.clone()).is_err());
+    assert!(Global::new(&mut store2, ty.clone(), store1val).is_err());
+    if let Ok(g) = Global::new(&mut store2, ty.clone(), store2val) {
+        assert!(g.set(&mut store2, store1val).is_err());
     }
 
     eprintln!("============ Cross-store tables ==============");
@@ -120,16 +120,16 @@ fn cross_store() -> anyhow::Result<()> {
         .call(&mut store2, &[Val::FuncRef(None)], &mut [])
         .is_ok());
     assert!(s1_f
-        .call(&mut store1, &[Some(s1_f.clone()).into()], &mut [])
+        .call(&mut store1, &[Some(s1_f).into()], &mut [])
         .is_ok());
     assert!(s1_f
-        .call(&mut store1, &[Some(s2_f.clone()).into()], &mut [])
+        .call(&mut store1, &[Some(s2_f).into()], &mut [])
         .is_err());
     assert!(s2_f
-        .call(&mut store2, &[Some(s1_f.clone()).into()], &mut [])
+        .call(&mut store2, &[Some(s1_f).into()], &mut [])
         .is_err());
     assert!(s2_f
-        .call(&mut store2, &[Some(s2_f.clone()).into()], &mut [])
+        .call(&mut store2, &[Some(s2_f).into()], &mut [])
         .is_ok());
 
     let s1_f_t = s1_f.typed::<Option<Func>, ()>(&store1)?;
@@ -137,10 +137,10 @@ fn cross_store() -> anyhow::Result<()> {
 
     assert!(s1_f_t.call(&mut store1, None).is_ok());
     assert!(s2_f_t.call(&mut store2, None).is_ok());
-    assert!(s1_f_t.call(&mut store1, Some(s1_f.clone())).is_ok());
-    assert!(s1_f_t.call(&mut store1, Some(s2_f.clone())).is_err());
-    assert!(s2_f_t.call(&mut store2, Some(s1_f.clone())).is_err());
-    assert!(s2_f_t.call(&mut store2, Some(s2_f.clone())).is_ok());
+    assert!(s1_f_t.call(&mut store1, Some(s1_f)).is_ok());
+    assert!(s1_f_t.call(&mut store1, Some(s2_f)).is_err());
+    assert!(s2_f_t.call(&mut store2, Some(s1_f)).is_err());
+    assert!(s2_f_t.call(&mut store2, Some(s2_f)).is_ok());
 
     Ok(())
 }
@@ -200,7 +200,7 @@ fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
     )?;
     assert!(global.get(&mut store).unwrap_funcref().is_none());
 
-    global.set(&mut store, Val::FuncRef(Some(f.clone())))?;
+    global.set(&mut store, Val::FuncRef(Some(f)))?;
     let f2 = global.get(&mut store).unwrap_funcref().cloned().unwrap();
     assert!(FuncType::eq(&f.ty(&store), &f2.ty(&store)));
 
@@ -209,7 +209,7 @@ fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
     let global = Global::new(
         &mut store,
         GlobalType::new(ValType::FUNCREF, Mutability::Var),
-        Val::FuncRef(Some(f.clone())),
+        Val::FuncRef(Some(f)),
     )?;
     let f2 = global.get(&mut store).unwrap_funcref().cloned().unwrap();
     assert!(FuncType::eq(&f.ty(&store), &f2.ty(&store)));
@@ -506,9 +506,9 @@ fn new_global_func_subtyping() {
         (c_ty, true, true, true),
     ] {
         for (val, expected) in [
-            (a.clone(), a_expected),
-            (b.clone(), b_expected),
-            (c.clone(), c_expected),
+            (a, a_expected),
+            (b, b_expected),
+            (c, c_expected),
         ] {
             for mutability in [Mutability::Var, Mutability::Const] {
                 match Global::new(

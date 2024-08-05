@@ -181,16 +181,16 @@ impl Display for AMode {
                 write!(f, "{}({})", offset, reg_name(r))
             }
             &AMode::SPOffset(offset, ..) => {
-                write!(f, "{}(sp)", offset)
+                write!(f, "{offset}(sp)")
             }
             &AMode::SlotOffset(offset, ..) => {
-                write!(f, "{}(slot)", offset)
+                write!(f, "{offset}(slot)")
             }
             &AMode::IncomingArg(offset) => {
-                write!(f, "-{}(incoming_arg)", offset)
+                write!(f, "-{offset}(incoming_arg)")
             }
             &AMode::FPOffset(offset, ..) => {
-                write!(f, "{}(fp)", offset)
+                write!(f, "{offset}(fp)")
             }
             &AMode::Const(addr, ..) => {
                 write!(f, "[const({})]", addr.as_u32())
@@ -321,7 +321,7 @@ pub struct FliConstant(u8);
 
 impl FliConstant {
     pub(crate) fn new(value: u8) -> Self {
-        debug_assert!(value <= 31, "Invalid FliConstant: {}", value);
+        debug_assert!(value <= 31, "Invalid FliConstant: {value}");
         Self(value)
     }
 

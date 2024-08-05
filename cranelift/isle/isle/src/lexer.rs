@@ -301,7 +301,7 @@ impl<'a> Lexer<'a> {
                 };
                 Ok(Some((start_pos, tok)))
             }
-            c => Err(self.error(self.pos, format!("Unexpected character '{}'", c))),
+            c => Err(self.error(self.pos, format!("Unexpected character '{c}'"))),
         }
     }
 

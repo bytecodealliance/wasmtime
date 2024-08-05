@@ -94,7 +94,7 @@ impl From<OperandSize> for args::OperandSize {
             OperandSize::S16 => Self::Size16,
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
-            s => panic!("Invalid operand size {:?}", s),
+            s => panic!("Invalid operand size {s:?}"),
         }
     }
 }

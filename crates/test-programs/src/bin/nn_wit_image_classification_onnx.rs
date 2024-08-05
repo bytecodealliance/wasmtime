@@ -17,6 +17,6 @@ pub fn main() -> Result<()> {
     // 963 is "meat loaf, meatloaf."
     // https://github.com/onnx/models/blob/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/synset.txt#L963
     assert_eq!(top_five[0].class_id(), 963);
-    println!("found results, sorted top 5: {:?}", top_five);
+    println!("found results, sorted top 5: {top_five:?}");
     Ok(())
 }

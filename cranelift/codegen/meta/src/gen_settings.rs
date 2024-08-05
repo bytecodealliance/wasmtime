@@ -172,7 +172,7 @@ fn gen_enum_types(group: &SettingGroup, fmt: &mut Formatter) {
         fmtln!(fmt, "pub enum {} {{", name);
         fmt.indent(|fmt| {
             for v in values.iter() {
-                fmt.doc_comment(format!("`{}`.", v));
+                fmt.doc_comment(format!("`{v}`."));
                 fmtln!(fmt, "{},", camel_case(v));
             }
         });
@@ -207,7 +207,7 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
             fmt.indent(|fmt| {
                 let mut m = Match::new(format!("self.bytes[{}]", setting.byte_offset));
                 for (i, v) in values.iter().enumerate() {
-                    m.arm_no_fields(format!("{}", i), format!("{}::{}", ty, camel_case(v)));
+                    m.arm_no_fields(format!("{i}"), format!("{}::{}", ty, camel_case(v)));
                 }
                 m.arm_no_fields("_", "panic!(\"Invalid enum value\")");
                 fmt.add_match(m);
@@ -417,7 +417,7 @@ fn gen_template(group: &SettingGroup, fmt: &mut Formatter) {
 
     let default_bytes: Vec<String> = default_bytes
         .iter()
-        .map(|x| format!("{:#04x}", x))
+        .map(|x| format!("{x:#04x}"))
         .collect();
     let default_bytes_str = default_bytes.join(", ");
 

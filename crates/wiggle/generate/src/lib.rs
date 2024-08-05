@@ -88,7 +88,7 @@ pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream
 }
 
 pub fn generate_metadata(doc: &witx::Document) -> TokenStream {
-    let doc_text = &format!("{}", doc);
+    let doc_text = &format!("{doc}");
     quote! {
         pub mod metadata {
             pub const DOC_TEXT: &str = #doc_text;

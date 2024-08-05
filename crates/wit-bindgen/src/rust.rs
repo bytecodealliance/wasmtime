@@ -300,7 +300,7 @@ pub trait RustGenerator<'a> {
             .unwrap()
             .to_upper_camel_case();
         if self.uses_two_names(&info) {
-            format!("{}Param", name)
+            format!("{name}Param")
         } else {
             name
         }
@@ -314,7 +314,7 @@ pub trait RustGenerator<'a> {
             .unwrap()
             .to_upper_camel_case();
         if self.uses_two_names(&info) {
-            format!("{}Result", name)
+            format!("{name}Result")
         } else {
             name
         }

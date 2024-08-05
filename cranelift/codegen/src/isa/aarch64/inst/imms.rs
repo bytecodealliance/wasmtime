@@ -849,7 +849,7 @@ impl PrettyPrint for Imm12 {
     fn pretty_print(&self, _: u8) -> String {
         let shift = if self.shift12 { 12 } else { 0 };
         let value = u32::from(self.bits) << shift;
-        format!("#{}", value)
+        format!("#{value}")
     }
 }
 
@@ -919,7 +919,7 @@ impl PrettyPrint for ASIMDMovModImm {
                 imm |= (-b as u8 as u64) << (i * 8);
             }
 
-            format!("#{}", imm)
+            format!("#{imm}")
         } else if self.shift == 0 {
             format!("#{}", self.imm)
         } else {

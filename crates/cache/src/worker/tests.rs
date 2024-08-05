@@ -521,8 +521,8 @@ fn test_on_update_cleanup_lru_policy() {
         let filenames = (0..mods.len())
             .map(|i| {
                 (
-                    mods_files_dir.join(format!("mod-{}", i)),
-                    mods_files_dir.join(format!("mod-{}.stats", i)),
+                    mods_files_dir.join(format!("mod-{i}")),
+                    mods_files_dir.join(format!("mod-{i}.stats")),
                 )
             })
             .collect::<Vec<_>>();
@@ -646,8 +646,8 @@ fn test_on_update_cleanup_future_files() {
         let filenames = (0..mods.len())
             .map(|i| {
                 (
-                    mods_files_dir.join(format!("mod-{}", i)),
-                    mods_files_dir.join(format!("mod-{}.stats", i)),
+                    mods_files_dir.join(format!("mod-{i}")),
+                    mods_files_dir.join(format!("mod-{i}.stats")),
                 )
             })
             .collect::<Vec<_>>();

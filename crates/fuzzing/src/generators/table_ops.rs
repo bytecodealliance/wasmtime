@@ -357,15 +357,15 @@ mod tests {
   (export "run" (func 3))
 )
 "#;
-        eprintln!("expected WAT = {}", expected);
+        eprintln!("expected WAT = {expected}");
 
         let actual = ops.to_wasm_binary();
         if let Err(e) = wasmparser::validate(&actual) {
-            panic!("TableOps should generate valid Wasm; got error: {}", e);
+            panic!("TableOps should generate valid Wasm; got error: {e}");
         }
 
         let actual = wasmprinter::print_bytes(&actual).unwrap();
-        eprintln!("actual WAT = {}", actual);
+        eprintln!("actual WAT = {actual}");
 
         assert_eq!(actual.trim(), expected.trim());
     }

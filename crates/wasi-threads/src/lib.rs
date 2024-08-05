@@ -54,7 +54,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
         let wasi_thread_id = wasi_thread_id.unwrap();
 
         // Start a Rust thread running a new instance of the current module.
-        let builder = thread::Builder::new().name(format!("wasi-thread-{}", wasi_thread_id));
+        let builder = thread::Builder::new().name(format!("wasi-thread-{wasi_thread_id}"));
         builder.spawn(move || {
             // Catch any panic failures in host code; e.g., if a WASI module
             // were to crash, we want all threads to exit, not just this one.
@@ -82,14 +82,14 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                     Err(e) => {
                         log::trace!("exiting thread id = {} due to error", wasi_thread_id);
                         let e = wasi_common::maybe_exit_on_error(e);
-                        eprintln!("Error: {:?}", e);
+                        eprintln!("Error: {e:?}");
                         std::process::exit(1);
                     }
                 }
             }));
 
             if let Err(e) = result {
-                eprintln!("wasi-thread-{} panicked: {:?}", wasi_thread_id, e);
+                eprintln!("wasi-thread-{wasi_thread_id} panicked: {e:?}");
                 std::process::exit(1);
             }
         })?;
@@ -135,7 +135,7 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
             let ctx = get_cx(caller.data_mut());
             match ctx.spawn(host, start_arg) {
                 Ok(thread_id) => {
-                    assert!(thread_id >= 0, "thread_id = {}", thread_id);
+                    assert!(thread_id >= 0, "thread_id = {thread_id}");
                     thread_id
                 }
                 Err(e) => {

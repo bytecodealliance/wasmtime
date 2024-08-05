@@ -12,6 +12,6 @@ pub fn main() -> Result<()> {
         "MobilenetV2/Predictions/Reshape_1",
     )?;
     let top_five = &sort_results(&results)[..5];
-    println!("found results, sorted top 5: {:?}", top_five);
+    println!("found results, sorted top 5: {top_five:?}");
     Ok(())
 }

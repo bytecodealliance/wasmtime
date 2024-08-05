@@ -52,7 +52,7 @@ impl<F: Forest> NodePool<F> {
     /// Free a node.
     pub fn free_node(&mut self, node: Node) {
         // Quick check for a double free.
-        debug_assert!(!self.nodes[node].is_free(), "{} is already free", node);
+        debug_assert!(!self.nodes[node].is_free(), "{node} is already free");
         self.nodes[node] = NodeData::Free {
             next: self.freelist,
         };
@@ -162,7 +162,7 @@ impl<F: Forest> NodePool<F> {
 
                     // Verify occupancy.
                     // Right-most nodes can be small, but others must be at least half full.
-                    assert!(size > 0, "Leaf {} is empty", node);
+                    assert!(size > 0, "Leaf {node} is empty");
                     assert!(
                         rkey.is_none() || size * 2 >= capacity,
                         "Only {}/{} entries in {}:{}, upper={}",

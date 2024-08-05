@@ -1019,7 +1019,7 @@ impl<T> Linker<T> {
             Entry::Occupied(_) if !self.allow_shadowing => {
                 let module = &self.strings[key.module];
                 let desc = match self.strings.get(key.name) {
-                    Some(name) => format!("{}::{}", module, name),
+                    Some(name) => format!("{module}::{name}"),
                     None => module.to_string(),
                 };
                 bail!("import of `{}` defined twice", desc)

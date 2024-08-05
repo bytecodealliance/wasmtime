@@ -20,7 +20,7 @@ impl<'a> atoms::Atoms for WasiCtx<'a> {
         an_int: u32,
         an_float: f32,
     ) -> Result<(), types::Errno> {
-        println!("INT FLOAT ARGS: {} {}", an_int, an_float);
+        println!("INT FLOAT ARGS: {an_int} {an_float}");
         Ok(())
     }
     async fn double_int_return_float(

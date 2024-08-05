@@ -19,7 +19,7 @@ fn call_ser(file: &str, pretty: bool) -> Result<(), String> {
             } else {
                 serde_json::to_string(&funcs).unwrap()
             };
-            println!("{}", ser_str);
+            println!("{ser_str}");
             Ok(())
         }
         Err(_pe) => Err("There was a parsing error".to_string()),
@@ -31,7 +31,7 @@ fn call_de(file: &File) -> Result<(), String> {
         Result::Ok(val) => val,
         Result::Err(err) => panic!("{}", err),
     };
-    println!("{:?}", de);
+    println!("{de:?}");
     Ok(())
 }
 

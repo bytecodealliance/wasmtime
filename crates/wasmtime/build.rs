@@ -29,8 +29,8 @@ fn build_c_helpers() {
     build.warnings(true);
     let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
-    build.define(&format!("CFG_TARGET_OS_{}", os), None);
-    build.define(&format!("CFG_TARGET_ARCH_{}", arch), None);
+    build.define(&format!("CFG_TARGET_OS_{os}"), None);
+    build.define(&format!("CFG_TARGET_ARCH_{arch}"), None);
     build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
     println!("cargo:rerun-if-changed=src/runtime/vm/helpers.c");
     build.file("src/runtime/vm/helpers.c");

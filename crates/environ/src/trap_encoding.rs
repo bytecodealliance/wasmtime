@@ -184,6 +184,6 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
     let byte = *traps.get(index)?;
 
     let trap = Trap::from_u8(byte);
-    debug_assert!(trap.is_some(), "missing mapping for {}", byte);
+    debug_assert!(trap.is_some(), "missing mapping for {byte}");
     trap
 }

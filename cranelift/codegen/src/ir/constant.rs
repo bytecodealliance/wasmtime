@@ -108,8 +108,7 @@ impl ConstantData {
     pub fn expand_to(mut self, expected_size: usize) -> Self {
         if self.len() > expected_size {
             panic!(
-                "The constant data is already expanded beyond {} bytes",
-                expected_size
+                "The constant data is already expanded beyond {expected_size} bytes"
             )
         }
         self.0.resize(expected_size, 0);
@@ -131,7 +130,7 @@ impl fmt::Display for ConstantData {
         if !self.is_empty() {
             write!(f, "0x")?;
             for b in self.0.iter().rev() {
-                write!(f, "{:02x}", b)?;
+                write!(f, "{b:02x}")?;
             }
         }
         Ok(())
@@ -414,8 +413,7 @@ mod tests {
             let parsed = from.parse::<ConstantData>();
             assert!(
                 parsed.is_err(),
-                "Expected a parse error but parsing succeeded: {}",
-                from
+                "Expected a parse error but parsing succeeded: {from}"
             );
             assert_eq!(parsed.err().unwrap(), error_msg);
         }

@@ -289,7 +289,7 @@ impl wasmtime_val_t {
                 Val::ExternRef(self.of.externref.as_wasmtime().map(|e| e.to_rooted(cx)))
             }
             crate::WASMTIME_FUNCREF => Val::FuncRef(self.of.funcref.as_wasmtime()),
-            other => panic!("unknown wasmtime_valkind_t: {}", other),
+            other => panic!("unknown wasmtime_valkind_t: {other}"),
         }
     }
 }

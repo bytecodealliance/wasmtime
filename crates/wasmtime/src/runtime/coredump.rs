@@ -312,17 +312,17 @@ impl fmt::Display for WasmCoreDump {
 
         writeln!(f, "instances:")?;
         for instance in self.instances.iter() {
-            writeln!(f, "  {:?}", instance)?;
+            writeln!(f, "  {instance:?}")?;
         }
 
         writeln!(f, "memories:")?;
         for memory in self.memories.iter() {
-            writeln!(f, "  {:?}", memory)?;
+            writeln!(f, "  {memory:?}")?;
         }
 
         writeln!(f, "globals:")?;
         for global in self.globals.iter() {
-            writeln!(f, "  {:?}", global)?;
+            writeln!(f, "  {global:?}")?;
         }
 
         writeln!(f, "backtrace:")?;

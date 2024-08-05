@@ -76,7 +76,7 @@ impl DiffInstance for SpecInstance {
         if let Ok(Global(g)) = export(&self.instance, name) {
             Some(g.into())
         } else {
-            panic!("expected an exported global value at name `{}`", name)
+            panic!("expected an exported global value at name `{name}`")
         }
     }
 
@@ -85,7 +85,7 @@ impl DiffInstance for SpecInstance {
         if let Ok(Memory(m)) = export(&self.instance, name) {
             Some(m)
         } else {
-            panic!("expected an exported memory at name `{}`", name)
+            panic!("expected an exported memory at name `{name}`")
         }
     }
 }

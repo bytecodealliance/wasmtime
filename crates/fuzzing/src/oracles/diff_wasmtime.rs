@@ -57,8 +57,8 @@ impl DiffEngine for WasmtimeEngine {
     fn assert_error_match(&self, trap: &Trap, err: &Error) {
         let trap2 = err
             .downcast_ref::<Trap>()
-            .expect(&format!("not a trap: {:?}", err));
-        assert_eq!(trap, trap2, "{}\nis not equal to\n{}", trap, trap2);
+            .expect(&format!("not a trap: {err:?}"));
+        assert_eq!(trap, trap2, "{trap}\nis not equal to\n{trap2}");
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {

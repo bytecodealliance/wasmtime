@@ -391,8 +391,7 @@ mod test {
         assert_eq!(
             entities.len(),
             2,
-            "should just be . and .. in empty dir: {:?}",
-            entities
+            "should just be . and .. in empty dir: {entities:?}"
         );
         assert!(entities.get(".").is_some());
         assert!(entities.get("..").is_some());
@@ -408,7 +407,7 @@ mod test {
         .expect("create file1");
 
         let entities = readdir_into_map(&preopen_dir);
-        assert_eq!(entities.len(), 3, "should be ., .., file1 {:?}", entities);
+        assert_eq!(entities.len(), 3, "should be ., .., file1 {entities:?}");
         assert_eq!(
             entities.get(".").expect(". entry").filetype,
             FileType::Directory

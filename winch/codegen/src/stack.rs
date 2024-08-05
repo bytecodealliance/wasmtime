@@ -201,7 +201,7 @@ impl Val {
     pub fn unwrap_reg(&self) -> TypedReg {
         match self {
             Self::Reg(tr) => *tr,
-            v => panic!("expected value {:?} to be a register", v),
+            v => panic!("expected value {v:?} to be a register"),
         }
     }
 
@@ -212,7 +212,7 @@ impl Val {
     pub fn unwrap_i32(&self) -> i32 {
         match self {
             Self::I32(v) => *v,
-            v => panic!("expected value {:?} to be i32", v),
+            v => panic!("expected value {v:?} to be i32"),
         }
     }
 
@@ -223,7 +223,7 @@ impl Val {
     pub fn unwrap_i64(&self) -> i64 {
         match self {
             Self::I64(v) => *v,
-            v => panic!("expected value {:?} to be i64", v),
+            v => panic!("expected value {v:?} to be i64"),
         }
     }
 
@@ -231,7 +231,7 @@ impl Val {
     pub fn unwrap_mem(&self) -> Memory {
         match self {
             Self::Memory(m) => *m,
-            v => panic!("expected value {:?} to be a Memory", v),
+            v => panic!("expected value {v:?} to be a Memory"),
         }
     }
 

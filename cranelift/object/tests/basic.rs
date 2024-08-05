@@ -91,7 +91,7 @@ fn switch_error() {
         let bb1 = bcx.create_block();
         let bb2 = bcx.create_block();
         let bb3 = bcx.create_block();
-        println!("{} {} {} {} {}", start, bb0, bb1, bb2, bb3);
+        println!("{start} {bb0} {bb1} {bb2} {bb3}");
 
         bcx.declare_var(Variable::new(0), types::I32);
         bcx.declare_var(Variable::new(1), types::I32);
@@ -139,7 +139,7 @@ fn switch_error() {
         Err(err) => {
             let pretty_error =
                 cranelift_codegen::print_errors::pretty_verifier_error(&func, None, err);
-            panic!("pretty_error:\n{}", pretty_error);
+            panic!("pretty_error:\n{pretty_error}");
         }
     }
 }

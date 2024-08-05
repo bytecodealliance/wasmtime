@@ -632,8 +632,8 @@ mod test {
             &function.signature,
             compiler.module.isa(),
         );
-        println!("{}", trampoline);
-        assert!(format!("{}", trampoline).ends_with(
+        println!("{trampoline}");
+        assert!(format!("{trampoline}").ends_with(
             "sig0 = (f32, i8, i64x2, i8) -> f32x4, i64 fast
 
 block0(v0: i64, v1: i64):

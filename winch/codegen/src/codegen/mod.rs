@@ -876,5 +876,5 @@ where
 pub fn control_index(depth: u32, control_length: usize) -> usize {
     (control_length - 1)
         .checked_sub(depth as usize)
-        .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth))
+        .unwrap_or_else(|| panic!("expected valid control stack frame at index: {depth}"))
 }

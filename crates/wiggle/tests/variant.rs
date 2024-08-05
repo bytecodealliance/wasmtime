@@ -36,7 +36,7 @@ impl<'a> variant_example::VariantExample for WasiCtx<'a> {
         _memory: &mut GuestMemory<'_>,
         u: &types::Reason,
     ) -> Result<types::Excuse, types::Errno> {
-        println!("GET TAG: {:?}", u);
+        println!("GET TAG: {u:?}");
         match u {
             types::Reason::DogAte { .. } => Ok(types::Excuse::DogAte),
             types::Reason::Traffic { .. } => Ok(types::Excuse::Traffic),
@@ -52,14 +52,14 @@ impl<'a> variant_example::VariantExample for WasiCtx<'a> {
         match u {
             types::ReasonMut::DogAte(fptr) => {
                 let val = memory.read(*fptr).expect("valid pointer");
-                println!("REASON MULT DogAte({})", val);
+                println!("REASON MULT DogAte({val})");
                 memory
                     .write(*fptr, mult_zero_nan(val, multiply_by))
                     .expect("valid pointer");
             }
             types::ReasonMut::Traffic(iptr) => {
                 let val = memory.read(*iptr).expect("valid pointer");
-                println!("REASON MULT Traffic({})", val);
+                println!("REASON MULT Traffic({val})");
                 memory
                     .write(*iptr, mult_lose_overflow(val, multiply_by))
                     .expect("valid pointer");

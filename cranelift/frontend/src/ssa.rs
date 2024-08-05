@@ -160,10 +160,10 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
             let scalar = cur.ins().f64const(Ieee64::with_bits(0));
             cur.ins().splat(ty, scalar)
         } else {
-            panic!("unimplemented scalar type: {:?}", ty)
+            panic!("unimplemented scalar type: {ty:?}")
         }
     } else {
-        panic!("unimplemented type: {:?}", ty)
+        panic!("unimplemented type: {ty:?}")
     }
 }
 
@@ -380,8 +380,7 @@ impl SSABuilder {
     pub fn seal_block(&mut self, block: Block, func: &mut Function) -> SideEffects {
         debug_assert!(
             !self.is_sealed(block),
-            "Attempting to seal {} which is already sealed.",
-            block
+            "Attempting to seal {block} which is already sealed."
         );
         self.seal_one_block(block, func);
         mem::take(&mut self.side_effects)

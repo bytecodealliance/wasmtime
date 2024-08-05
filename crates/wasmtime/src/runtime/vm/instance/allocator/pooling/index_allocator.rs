@@ -624,8 +624,7 @@ mod test {
         // affinity is occurring.
         assert!(
             hits > (amt / 5),
-            "expected at least 20000 (20%) ID-reuses but got {}",
-            hits
+            "expected at least 20000 (20%) ID-reuses but got {hits}"
         );
     }
 

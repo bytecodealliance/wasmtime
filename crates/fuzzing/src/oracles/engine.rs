@@ -133,8 +133,7 @@ pub fn build_allowed_env_list<'a>(
         for c in configured {
             if !defaults.contains(&&c[start..]) {
                 panic!(
-                    "invalid environment configuration `{}`; must be one of: {:?}",
-                    c, defaults
+                    "invalid environment configuration `{c}`; must be one of: {defaults:?}"
                 );
             }
         }
@@ -185,7 +184,7 @@ pub fn smoke_test_engine<T>(
         let mut engine = match mk_engine(&mut u, &mut config) {
             Ok(engine) => engine,
             Err(e) => {
-                println!("skip {:?}", e);
+                println!("skip {e:?}");
                 continue;
             }
         };

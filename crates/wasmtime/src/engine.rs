@@ -247,8 +247,7 @@ impl Engine {
             let target = compiler.triple();
             if *target != target_lexicon::Triple::host() {
                 return Err(format!(
-                    "target '{}' specified in the configuration does not match the host",
-                    target
+                    "target '{target}' specified in the configuration does not match the host"
                 ));
             }
 
@@ -350,14 +349,13 @@ impl Engine {
             // Everything else is unknown and needs to be added somewhere to
             // this list if encountered.
             _ => {
-                return Err(format!("unknown shared setting {:?} configured to {:?}", flag, value))
+                return Err(format!("unknown shared setting {flag:?} configured to {value:?}"))
             }
         };
 
         if !ok {
             return Err(format!(
-                "setting {:?} is configured to {:?} which is not supported",
-                flag, value,
+                "setting {flag:?} is configured to {value:?} which is not supported",
             ));
         }
         Ok(())
@@ -384,8 +382,7 @@ impl Engine {
             // need more support here.
             _ => {
                 return Err(format!(
-                    "isa-specific feature {:?} configured to unknown value {:?}",
-                    flag, value
+                    "isa-specific feature {flag:?} configured to unknown value {value:?}"
                 ))
             }
         }

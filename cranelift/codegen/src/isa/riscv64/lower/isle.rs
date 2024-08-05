@@ -332,7 +332,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         if let Some(res) = Imm12::maybe_from_i64(val as i64) {
             res
         } else {
-            panic!("Unable to make an Imm12 value from {}", val)
+            panic!("Unable to make an Imm12 value from {val}")
         }
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {

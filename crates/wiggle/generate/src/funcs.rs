@@ -35,7 +35,7 @@ fn _define_func(
 
     let (wasm_params, wasm_results) = func.wasm_signature();
     let param_names = (0..wasm_params.len())
-        .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
+        .map(|i| Ident::new(&format!("arg{i}"), Span::call_site()))
         .collect::<Vec<_>>();
     let abi_params = wasm_params.iter().zip(&param_names).map(|(arg, name)| {
         let wasm = names::wasm_type(*arg);
@@ -208,7 +208,7 @@ impl witx::Bindgen for Rust<'_> {
 
         let mut try_from = |ty: TokenStream| {
             let val = operands.pop().unwrap();
-            let wrap_err = wrap_err(&format!("convert {}", ty));
+            let wrap_err = wrap_err(&format!("convert {ty}"));
             results.push(quote!(#ty::try_from(#val).map_err(#wrap_err)?));
         };
 
@@ -353,7 +353,7 @@ impl witx::Bindgen for Rust<'_> {
 
             Instruction::TupleLower { amt } => {
                 let names = (0..*amt)
-                    .map(|i| Ident::new(&format!("t{}", i), Span::call_site()))
+                    .map(|i| Ident::new(&format!("t{i}"), Span::call_site()))
                     .collect::<Vec<_>>();
                 let val = operands.pop().unwrap();
                 self.src.extend(quote!( let (#(#names,)*) = #val;));
@@ -428,7 +428,7 @@ impl witx::Bindgen for Rust<'_> {
             // There's a number of other instructions we could implement but
             // they're not exercised by WASI at this time. As necessary we can
             // add code to implement them.
-            other => panic!("no implementation for {:?}", other),
+            other => panic!("no implementation for {other:?}"),
         }
     }
 }

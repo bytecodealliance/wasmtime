@@ -122,7 +122,7 @@ impl Formatter {
                 if l.is_empty() {
                     "///".into()
                 } else {
-                    format!("/// {}", l)
+                    format!("/// {l}")
                 }
             })
             .for_each(|s| self.line(s.as_str()));
@@ -308,7 +308,7 @@ mod srcgen_tests {
             .trim()
             .split("\n")
             .into_iter()
-            .map(|x| format!("{}\n", x))
+            .map(|x| format!("{x}\n"))
             .collect()
     }
 

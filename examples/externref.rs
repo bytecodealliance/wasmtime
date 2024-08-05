@@ -30,7 +30,7 @@ fn main() -> Result<()> {
 
     println!("Touching `externref` table...");
     let table = instance.get_table(&mut store, "table").unwrap();
-    table.set(&mut store, 3, Some(externref.clone()).into())?;
+    table.set(&mut store, 3, Some(externref).into())?;
     let elem = table
         .get(&mut store, 3)
         .unwrap() // assert in bounds
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
 
     println!("Touching `externref` global...");
     let global = instance.get_global(&mut store, "global").unwrap();
-    global.set(&mut store, Some(externref.clone()).into())?;
+    global.set(&mut store, Some(externref).into())?;
     let global_val = global.get(&mut store).unwrap_externref().copied().unwrap();
     assert!(Rooted::ref_eq(&store, &global_val, &externref)?);
 

@@ -149,7 +149,7 @@ unsafe extern "C" fn trap_handler(
         libc::SIGBUS => PREV_SIGBUS.as_ptr(),
         libc::SIGFPE => PREV_SIGFPE.as_ptr(),
         libc::SIGILL => PREV_SIGILL.as_ptr(),
-        _ => panic!("unknown signal: {}", signum),
+        _ => panic!("unknown signal: {signum}"),
     };
     let handled = tls::with(|info| {
         // If no wasm code is executing, we don't handle this as a wasm

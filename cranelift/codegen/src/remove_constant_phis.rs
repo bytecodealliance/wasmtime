@@ -203,7 +203,7 @@ impl SolverState {
         *self
             .absvals
             .get(&actual)
-            .unwrap_or_else(|| panic!("SolverState::get: formal param {:?} is untracked?!", actual))
+            .unwrap_or_else(|| panic!("SolverState::get: formal param {actual:?} is untracked?!"))
     }
 
     fn maybe_get(&self, actual: Value) -> Option<&AbstractValue> {
@@ -213,7 +213,7 @@ impl SolverState {
     fn set(&mut self, actual: Value, lp: AbstractValue) {
         match self.absvals.insert(actual, lp) {
             Some(_old_lp) => {}
-            None => panic!("SolverState::set: formal param {:?} is untracked?!", actual),
+            None => panic!("SolverState::set: formal param {actual:?} is untracked?!"),
         }
     }
 }

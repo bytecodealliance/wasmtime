@@ -392,7 +392,7 @@ fn to_exit_code<T>(result: impl Into<Result<T>>) -> ExitCode {
     match result.into() {
         Ok(_) => OK,
         Err(error) => {
-            eprintln!("{:?}", error);
+            eprintln!("{error:?}");
             ERR
         }
     }

@@ -377,17 +377,17 @@ impl fmt::Display for WasmBacktrace {
                 needs_newline = true;
             }
             let name = frame.module().name().unwrap_or("<unknown>");
-            write!(f, "  {:>3}: ", i)?;
+            write!(f, "  {i:>3}: ")?;
 
             if let Some(offset) = frame.module_offset() {
-                write!(f, "{:#6x} - ", offset)?;
+                write!(f, "{offset:#6x} - ")?;
             }
 
             let write_raw_func_name = |f: &mut fmt::Formatter<'_>| {
                 demangle_function_name_or_index(f, frame.func_name(), frame.func_index() as usize)
             };
             if frame.symbols().is_empty() {
-                write!(f, "{}!", name)?;
+                write!(f, "{name}!")?;
                 write_raw_func_name(f)?;
             } else {
                 for (i, symbol) in frame.symbols().iter().enumerate() {
@@ -403,11 +403,11 @@ impl fmt::Display for WasmBacktrace {
                     }
                     if let Some(file) = symbol.file() {
                         writeln!(f, "")?;
-                        write!(f, "                    at {}", file)?;
+                        write!(f, "                    at {file}")?;
                         if let Some(line) = symbol.line() {
-                            write!(f, ":{}", line)?;
+                            write!(f, ":{line}")?;
                             if let Some(col) = symbol.column() {
-                                write!(f, ":{}", col)?;
+                                write!(f, ":{col}")?;
                             }
                         }
                     }
@@ -463,8 +463,7 @@ impl FrameInfo {
         // compilation settings then it's expected that `instr` is `None`.
         debug_assert!(
             instr.is_some() || !compiled_module.has_address_map(),
-            "failed to find instruction for {:#x}",
-            text_offset
+            "failed to find instruction for {text_offset:#x}"
         );
 
         // Use our wasm-relative pc to symbolize this frame. If there's a

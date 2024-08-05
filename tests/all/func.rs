@@ -146,9 +146,9 @@ fn call_native_to_array() -> Result<()> {
         [ValType::I32, ValType::I32, ValType::I32],
     );
     let func = Func::new(&mut store, func_ty, |_caller, params, results| {
-        results[0] = params[2].clone();
-        results[1] = params[0].clone();
-        results[2] = params[1].clone();
+        results[0] = params[2];
+        results[1] = params[0];
+        results[2] = params[1];
         Ok(())
     });
     let func = func.typed::<(i32, i32, i32), (i32, i32, i32)>(&store)?;
@@ -216,9 +216,9 @@ fn call_array_to_array() -> Result<()> {
         [ValType::I32, ValType::I32, ValType::I32],
     );
     let func = Func::new(&mut store, func_ty, |_caller, params, results| {
-        results[0] = params[2].clone();
-        results[1] = params[0].clone();
-        results[2] = params[1].clone();
+        results[0] = params[2];
+        results[1] = params[0];
+        results[2] = params[1];
         Ok(())
     });
     let mut results = [Val::I32(0), Val::I32(0), Val::I32(0)];
@@ -999,7 +999,7 @@ fn return_cross_store_value(config: &mut Config) -> anyhow::Result<()> {
     let mut store2 = Store::new(&engine, ());
 
     let store2_func = Func::wrap(&mut store2, || {});
-    let return_cross_store_func = Func::wrap(&mut store1, move || Some(store2_func.clone()));
+    let return_cross_store_func = Func::wrap(&mut store1, move || Some(store2_func));
 
     let instance = Instance::new(&mut store1, &module, &[return_cross_store_func.into()])?;
 
@@ -1025,7 +1025,7 @@ fn pass_cross_store_arg(config: &mut Config) -> anyhow::Result<()> {
     assert!(store1_func
         .call(
             &mut store1,
-            &[Val::FuncRef(Some(store2_func.clone()))],
+            &[Val::FuncRef(Some(store2_func))],
             &mut []
         )
         .is_err());
@@ -1544,14 +1544,14 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     assert_my_funcref(&mut store, results[1].unwrap_funcref())?;
 
     // funcref=null, externref=Some
-    let (a, b) = typed.call(&mut store, (None, Some(my_externref.clone())))?;
+    let (a, b) = typed.call(&mut store, (None, Some(my_externref)))?;
     assert_my_externref(&store, a);
     assert!(b.is_none());
     untyped.call(
         &mut store,
         &[
             Val::FuncRef(None),
-            Val::ExternRef(Some(my_externref.clone())),
+            Val::ExternRef(Some(my_externref)),
         ],
         &mut results,
     )?;
@@ -1559,14 +1559,14 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     assert!(results[1].unwrap_funcref().is_none());
 
     // funcref=Some, externref=Some
-    let (a, b) = typed.call(&mut store, (Some(my_funcref), Some(my_externref.clone())))?;
+    let (a, b) = typed.call(&mut store, (Some(my_funcref), Some(my_externref)))?;
     assert_my_externref(&store, a);
     assert_my_funcref(&mut store, b.as_ref())?;
     untyped.call(
         &mut store,
         &[
             Val::FuncRef(Some(my_funcref)),
-            Val::ExternRef(Some(my_externref.clone())),
+            Val::ExternRef(Some(my_externref)),
         ],
         &mut results,
     )?;
@@ -1610,8 +1610,8 @@ fn typed_concrete_param(config: &mut Config) -> anyhow::Result<()> {
     // each call.
     let a = f.typed::<Option<Func>, ()>(&store)?;
     a.call(&mut store, None)?;
-    a.call(&mut store, Some(nop.clone()))?;
-    let e = a.call(&mut store, Some(f.clone())).expect_err(
+    a.call(&mut store, Some(nop))?;
+    let e = a.call(&mut store, Some(f)).expect_err(
         "should return an error because while we did pass an instance of \
          `Option<Func>`, it was not an instance of `(ref null $t)`",
     );
@@ -1624,8 +1624,8 @@ fn typed_concrete_param(config: &mut Config) -> anyhow::Result<()> {
 
     // And dynamic checks also work with a non-nullable super type.
     let a = f.typed::<Func, ()>(&store)?;
-    a.call(&mut store, nop.clone())?;
-    let e = a.call(&mut store, f.clone()).expect_err(
+    a.call(&mut store, nop)?;
+    let e = a.call(&mut store, f).expect_err(
         "should return an error because while we did pass an instance of \
          `Func`, it was not an instance of `(ref null $t)`",
     );
@@ -1713,7 +1713,7 @@ fn wrap_subtype_param() -> anyhow::Result<()> {
     // Precise type.
     let a = f.typed::<Option<Func>, ()>(&store)?;
     a.call(&mut store, None)?;
-    a.call(&mut store, Some(f.clone()))?;
+    a.call(&mut store, Some(f))?;
 
     // Subtype via heap type.
     let a = f.typed::<Option<NoFunc>, ()>(&store)?;
@@ -1721,7 +1721,7 @@ fn wrap_subtype_param() -> anyhow::Result<()> {
 
     // Subtype via non-null.
     let a = f.typed::<Func, ()>(&store)?;
-    a.call(&mut store, f.clone())?;
+    a.call(&mut store, f)?;
 
     Ok(())
 }
@@ -1795,7 +1795,7 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> anyhow::Result<(
         ))),
     );
     let h = Func::new(&mut store, h_ty, move |_caller, _params, results| {
-        results[0] = Val::FuncRef(Some(g.clone()));
+        results[0] = Val::FuncRef(Some(g));
         Ok(())
     });
 
@@ -1805,8 +1805,8 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> anyhow::Result<(
     f.call(&mut store, &[Val::null_func_ref()], &mut results)?;
     assert!(results[0].unwrap_func_ref().is_none());
 
-    f.call(&mut store, &[h.clone().into()], &mut results)?;
-    let g = results[0].clone();
+    f.call(&mut store, &[h.into()], &mut results)?;
+    let g = results[0];
     let g = g.unwrap_func_ref().unwrap();
     g.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i32(), 0x1234_5678);
@@ -1873,10 +1873,10 @@ fn call_wasm_getting_subtype_func_return(config: &mut Config) -> anyhow::Result<
     assert!(results[0].unwrap_func_ref().is_none());
 
     f.call(&mut store, &[Val::I32(1)], &mut results)?;
-    let b = results[0].clone();
+    let b = results[0];
     let b = b.unwrap_func_ref().unwrap();
     b.call(&mut store, &[], &mut results)?;
-    let a = results[0].clone();
+    let a = results[0];
     let a = a.unwrap_func_ref().unwrap();
     a.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i32(), 0x1234_5678);
@@ -2220,7 +2220,7 @@ fn wasm_to_host_trampolines_and_subtyping(config: &mut Config) -> Result<()> {
             &mut store,
             return_func_ty.clone(),
             move |_caller, _args, results| {
-                results[0] = returned_func.clone().into();
+                results[0] = returned_func.into();
                 Ok(())
             },
         );

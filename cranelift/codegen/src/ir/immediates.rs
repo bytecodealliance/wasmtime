@@ -132,7 +132,7 @@ impl Display for Imm64 {
         let x = self.0;
         if x < 10_000 {
             // Use decimal for small and negative numbers.
-            write!(f, "{}", x)
+            write!(f, "{x}")
         } else {
             write_hex(x as u64, f)
         }
@@ -223,7 +223,7 @@ impl Display for Uimm64 {
         let x = self.0;
         if x < 10_000 {
             // Use decimal for small numbers.
-            write!(f, "{}", x)
+            write!(f, "{x}")
         } else {
             write_hex(x, f)
         }
@@ -462,7 +462,7 @@ impl Display for Offset32 {
 
         let val = i64::from(self.0).abs();
         if val < 10_000 {
-            write!(f, "{}", val)
+            write!(f, "{val}")
         } else {
             write_hex(val as u64, f)
         }
@@ -926,13 +926,13 @@ fn format_float(bits: u128, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
             if t_bits & (1 << (t - 1)) != 0 {
                 // Quiet NaN.
                 if payload != 0 {
-                    write!(f, "NaN:0x{:x}", payload)
+                    write!(f, "NaN:0x{payload:x}")
                 } else {
                     write!(f, "NaN")
                 }
             } else {
                 // Signaling NaN.
-                write!(f, "sNaN:0x{:x}", payload)
+                write!(f, "sNaN:0x{payload:x}")
             }
         }
     } else {
@@ -1138,7 +1138,7 @@ mod tests {
         <T as FromStr>::Err: Display,
     {
         match text.parse::<T>() {
-            Err(s) => panic!("\"{}\".parse() error: {}", text, s),
+            Err(s) => panic!("\"{text}\".parse() error: {s}"),
             Ok(x) => assert_eq!(x.to_string(), want),
         }
     }
@@ -1150,7 +1150,7 @@ mod tests {
     {
         match text.parse::<T>() {
             Err(s) => assert_eq!(s.to_string(), msg),
-            Ok(x) => panic!("Wanted Err({}), but got {}", msg, x),
+            Ok(x) => panic!("Wanted Err({msg}), but got {x}"),
         }
     }
 

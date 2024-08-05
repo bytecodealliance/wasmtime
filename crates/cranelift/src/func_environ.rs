@@ -247,7 +247,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.builtin_functions.memory_atomic_wait64(func),
                 memory_index.index(),
             ),
-            x => panic!("get_memory_atomic_wait unsupported type: {:?}", x),
+            x => panic!("get_memory_atomic_wait unsupported type: {x:?}"),
         }
     }
 

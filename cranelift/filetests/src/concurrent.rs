@@ -85,7 +85,7 @@ impl ConcurrentRunner {
         for h in self.handles.drain(..) {
             match h.join() {
                 Ok(t) => pass_times.add(&t),
-                Err(e) => println!("worker panicked: {:?}", e),
+                Err(e) => println!("worker panicked: {e:?}"),
             }
         }
         pass_times
@@ -132,7 +132,7 @@ fn worker_thread(
     replies: Sender<Reply>,
 ) -> thread::JoinHandle<timing::PassTimes> {
     thread::Builder::new()
-        .name(format!("worker #{}", thread_num))
+        .name(format!("worker #{thread_num}"))
         .spawn(move || {
             file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
             loop {

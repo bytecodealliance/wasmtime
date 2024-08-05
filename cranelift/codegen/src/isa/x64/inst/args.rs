@@ -420,7 +420,7 @@ impl Amode {
                 shift,
                 flags,
             },
-            _ => panic!("Amode {:?} cannot take memflags", self),
+            _ => panic!("Amode {self:?} cannot take memflags"),
         }
     }
 
@@ -475,7 +475,7 @@ impl Amode {
         match &mut ret {
             &mut Amode::ImmReg { ref mut simm32, .. } => *simm32 += offset,
             &mut Amode::ImmRegRegShift { ref mut simm32, .. } => *simm32 += offset,
-            _ => panic!("Cannot offset amode: {:?}", self),
+            _ => panic!("Cannot offset amode: {self:?}"),
         }
         ret
     }
@@ -837,7 +837,7 @@ impl fmt::Debug for AluRmiROpcode {
             AluRmiROpcode::Or => "or",
             AluRmiROpcode::Xor => "xor",
         };
-        write!(fmt, "{}", name)
+        write!(fmt, "{name}")
     }
 }
 
@@ -1596,7 +1596,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movddup => "movddup",
             SseOpcode::Unpcklpd => "unpcklpd",
         };
-        write!(fmt, "{}", name)
+        write!(fmt, "{name}")
     }
 }
 
@@ -2008,7 +2008,7 @@ impl fmt::Debug for ExtMode {
             ExtMode::WQ => "wq",
             ExtMode::LQ => "lq",
         };
-        write!(fmt, "{}", name)
+        write!(fmt, "{name}")
     }
 }
 
@@ -2042,7 +2042,7 @@ impl fmt::Debug for ShiftKind {
             ShiftKind::RotateLeft => "rol",
             ShiftKind::RotateRight => "ror",
         };
-        write!(fmt, "{}", name)
+        write!(fmt, "{name}")
     }
 }
 
@@ -2168,7 +2168,7 @@ impl fmt::Debug for CC {
             CC::P => "p",
             CC::NP => "np",
         };
-        write!(fmt, "{}", name)
+        write!(fmt, "{name}")
     }
 }
 
@@ -2218,7 +2218,7 @@ impl From<FloatCC> for FcmpImm {
             FloatCC::UnorderedOrGreaterThanOrEqual => FcmpImm::UnorderedOrGreaterThanOrEqual,
             FloatCC::UnorderedOrGreaterThan => FcmpImm::UnorderedOrGreaterThan,
             FloatCC::Ordered => FcmpImm::Ordered,
-            _ => panic!("unable to create comparison predicate for {}", cond),
+            _ => panic!("unable to create comparison predicate for {cond}"),
         }
     }
 }

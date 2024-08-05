@@ -25,7 +25,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
         let mut results = [Val::I32(0)];
         func.call(
             &mut store,
-            &[Val::FuncRef(Some(func.clone()))],
+            &[Val::FuncRef(Some(func))],
             &mut results,
         )?;
 
@@ -50,7 +50,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
         let mut results = [Val::I32(0)];
         func.call(
             &mut store,
-            &[Val::FuncRef(Some(other_instance_func.clone()))],
+            &[Val::FuncRef(Some(other_instance_func))],
             &mut results,
         )?;
         assert_eq!(results.len(), 1);
@@ -116,7 +116,7 @@ fn wrong_store() -> anyhow::Result<()> {
         let f1 = Func::wrap(&mut store1, move || {
             let _ = &set;
         });
-        let f2 = Func::wrap(&mut store2, move || Some(f1.clone()));
+        let f2 = Func::wrap(&mut store2, move || Some(f1));
         assert!(f2.call(&mut store2, &[], &mut []).is_err());
     }
     assert!(dropped.load(SeqCst));
@@ -146,7 +146,7 @@ fn func_new_returns_wrong_store() -> anyhow::Result<()> {
         });
         let func_ty = FuncType::new(store2.engine(), None, Some(ValType::FUNCREF));
         let f2 = Func::new(&mut store2, func_ty, move |_, _, results| {
-            results[0] = f1.clone().into();
+            results[0] = f1.into();
             Ok(())
         });
         assert!(f2.call(&mut store2, &[], &mut [Val::I32(0)]).is_err());

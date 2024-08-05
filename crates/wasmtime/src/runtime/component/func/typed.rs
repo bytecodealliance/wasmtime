@@ -1765,7 +1765,7 @@ pub fn typecheck_record(
 
             for (field, &(name, check)) in fields.iter().zip(expected) {
                 check(&field.ty, types)
-                    .with_context(|| format!("type mismatch for field {}", name))?;
+                    .with_context(|| format!("type mismatch for field {name}"))?;
 
                 if field.name != name {
                     bail!("expected record field named {}, found {}", name, field.name);

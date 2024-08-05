@@ -89,7 +89,7 @@ fn pretty_block_header_error(
 ) -> fmt::Result {
     let mut s = String::new();
     func_w.write_block_header(&mut s, func, cur_block, indent)?;
-    write!(w, "{}", s)?;
+    write!(w, "{s}")?;
 
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;
@@ -127,7 +127,7 @@ fn pretty_instruction_error(
 ) -> fmt::Result {
     let mut s = String::new();
     func_w.write_instruction(&mut s, func, aliases, cur_inst, indent)?;
-    write!(w, "{}", s)?;
+    write!(w, "{s}")?;
 
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;
@@ -164,7 +164,7 @@ fn pretty_preamble_error(
 ) -> fmt::Result {
     let mut s = String::new();
     func_w.write_entity_definition(&mut s, func, entity, value, maybe_fact)?;
-    write!(w, "{}", s)?;
+    write!(w, "{s}")?;
 
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;

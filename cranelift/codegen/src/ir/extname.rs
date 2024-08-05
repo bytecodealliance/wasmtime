@@ -105,7 +105,7 @@ impl fmt::Display for TestcaseName {
 
 impl fmt::Debug for TestcaseName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -204,8 +204,8 @@ impl<'a> fmt::Display for DisplayableExternalName<'a> {
                 }
             }
             ExternalName::TestCase(testcase) => testcase.fmt(f),
-            ExternalName::LibCall(lc) => write!(f, "%{}", lc),
-            ExternalName::KnownSymbol(ks) => write!(f, "%{}", ks),
+            ExternalName::LibCall(lc) => write!(f, "%{lc}"),
+            ExternalName::KnownSymbol(ks) => write!(f, "%{ks}"),
         }
     }
 }

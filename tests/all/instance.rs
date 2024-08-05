@@ -7,7 +7,7 @@ fn wrong_import_numbers() -> Result<()> {
 
     assert!(Instance::new(&mut store, &module, &[]).is_err());
     let func = Func::wrap(&mut store, || {});
-    assert!(Instance::new(&mut store, &module, &[func.clone().into(), func.into()]).is_err());
+    assert!(Instance::new(&mut store, &module, &[func.into(), func.into()]).is_err());
     Ok(())
 }
 

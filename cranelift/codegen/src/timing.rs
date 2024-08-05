@@ -190,7 +190,7 @@ impl fmt::Display for PassTimes {
             if let Some(s) = time.total.checked_sub(time.child) {
                 fmtdur(s, f)?;
             }
-            writeln!(f, " {}", desc)?;
+            writeln!(f, " {desc}")?;
         }
         writeln!(f, "======== ========  ==================================")
     }
