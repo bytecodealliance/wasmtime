@@ -85,7 +85,7 @@ impl<'a> records::Records for WasiCtx<'a> {
         match aux(memory, record_of_list) {
             Ok(s) => Ok(s),
             Err(guest_err) => {
-                eprintln!("guest error summing array: {:?}", guest_err);
+                eprintln!("guest error summing array: {guest_err:?}");
                 Err(types::Errno::PicketLine)
             }
         }
@@ -490,7 +490,7 @@ impl SumArrayExercise {
             .prop_filter(
                 "non-overlapping input struct and output pointers",
                 |(_inputs, input_struct_loc, output_loc)| {
-                    MemArea::non_overlapping_set(&[input_struct_loc.clone(), output_loc.clone()])
+                    MemArea::non_overlapping_set(&[*input_struct_loc, *output_loc])
                 },
             )
             .prop_flat_map(|(inputs, input_struct_loc, output_loc)| {
@@ -501,8 +501,8 @@ impl SumArrayExercise {
                         1,
                         &MemAreas::from([input_struct_loc, output_loc]),
                     ),
-                    Just(input_struct_loc.clone()),
-                    Just(output_loc.clone()),
+                    Just(input_struct_loc),
+                    Just(output_loc),
                 )
             })
             .prop_map(

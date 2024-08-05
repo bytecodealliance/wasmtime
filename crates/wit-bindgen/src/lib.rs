@@ -1590,7 +1590,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(")]\n")
             }
 
-            self.push_str(&format!("pub struct {}", name));
+            self.push_str(&format!("pub struct {name}"));
             self.print_generics(lt);
             self.push_str(" {\n");
             for field in record.fields.iter() {
@@ -1613,7 +1613,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(
                 "fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n",
             );
-            self.push_str(&format!("f.debug_struct(\"{}\")", name));
+            self.push_str(&format!("f.debug_struct(\"{name}\")"));
             for field in record.fields.iter() {
                 self.push_str(&format!(
                     ".field(\"{}\", &self.{})",
@@ -1654,7 +1654,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             let lt = self.lifetime_for(&info, mode);
             self.rustdoc(docs);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str(" = (");
             for ty in tuple.types.iter() {
@@ -1708,7 +1708,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
             let lt = self.lifetime_for(&info, mode);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str("= Option<");
             self.print_ty(payload, mode);
@@ -1768,7 +1768,7 @@ impl<'a> InterfaceGenerator<'a> {
                 uwriteln!(self.src, "#[derive({wt}::component::Lift)]");
             }
             uwriteln!(self.src, "#[derive({wt}::component::Lower)]");
-            self.push_str(&format!("#[component({})]\n", derive_component));
+            self.push_str(&format!("#[component({derive_component})]\n"));
             if let Some(path) = &self.gen.opts.wasmtime_crate {
                 uwriteln!(self.src, "#[component(wasmtime_crate = {path})]\n");
             }
@@ -1790,7 +1790,7 @@ impl<'a> InterfaceGenerator<'a> {
             for (case_name, component_name, docs, payload) in cases.clone() {
                 self.rustdoc(docs);
                 if let Some(n) = component_name {
-                    self.push_str(&format!("#[component(name = \"{}\")] ", n));
+                    self.push_str(&format!("#[component(name = \"{n}\")] "));
                 }
                 self.push_str(&case_name);
                 if let Some(ty) = payload {
@@ -1868,7 +1868,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("(e)");
             }
             self.push_str(" => {\n");
-            self.push_str(&format!("f.debug_tuple(\"{}::{}\")", name, case_name));
+            self.push_str(&format!("f.debug_tuple(\"{name}::{case_name}\")"));
             if payload.is_some() {
                 self.push_str(".field(e)");
             }
@@ -1886,7 +1886,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
             let lt = self.lifetime_for(&info, mode);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str("= Result<");
             self.print_optional_ty(result.ok.as_ref(), mode);
@@ -1930,7 +1930,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(&derives.into_iter().collect::<Vec<_>>().join(", "));
         self.push_str(")]\n");
 
-        self.push_str(&format!("pub enum {} {{\n", name));
+        self.push_str(&format!("pub enum {name} {{\n"));
         for case in enum_.cases.iter() {
             self.rustdoc(&case.docs);
             self.push_str(&format!("#[component(name = \"{}\")]", case.name));
@@ -2023,7 +2023,7 @@ impl<'a> InterfaceGenerator<'a> {
         let info = self.info(id);
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             let lt = self.lifetime_for(&info, mode);
             self.print_generics(lt);
             self.push_str(" = ");
@@ -2041,7 +2041,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             let lt = self.lifetime_for(&info, mode);
             self.rustdoc(docs);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str(" = ");
             self.print_list(ty, mode);

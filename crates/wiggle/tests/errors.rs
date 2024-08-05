@@ -50,7 +50,7 @@ mod convert_just_errno {
             match strike {
                 0 => Ok(()),
                 1 => Err(RichError::PicketLine(format!("I'm not a scab")))?,
-                _ => Err(RichError::InvalidArg(format!("out-of-bounds: {}", strike)))?,
+                _ => Err(RichError::InvalidArg(format!("out-of-bounds: {strike}")))?,
             }
         }
     }

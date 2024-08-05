@@ -17,9 +17,9 @@ where
         match self.0.split_first() {
             None => write!(f, "[]"),
             Some((first, rest)) => {
-                write!(f, "[{}", first)?;
+                write!(f, "[{first}")?;
                 for x in rest {
-                    write!(f, ", {}", x)?;
+                    write!(f, ", {x}")?;
                 }
                 write!(f, "]")
             }

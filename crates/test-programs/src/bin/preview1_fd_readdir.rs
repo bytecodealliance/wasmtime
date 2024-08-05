@@ -173,7 +173,7 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
         let file_fd = wasi::path_open(
             dir_fd,
             0,
-            &format!("file.{}", count),
+            &format!("file.{count}"),
             wasi::OFLAGS_CREAT,
             wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
             0,
@@ -201,7 +201,7 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
     assert_eq!(total, 1002, "expected 1000 entries plus . and ..");
 
     for count in 0..1000 {
-        wasi::path_unlink_file(dir_fd, &format!("file.{}", count)).expect("removing a file");
+        wasi::path_unlink_file(dir_fd, &format!("file.{count}")).expect("removing a file");
     }
 }
 
@@ -245,7 +245,7 @@ fn main() {
     let arg = if let Some(arg) = args.next() {
         arg
     } else {
-        eprintln!("usage: {} <scratch directory>", prog);
+        eprintln!("usage: {prog} <scratch directory>");
         process::exit(1);
     };
 
@@ -253,7 +253,7 @@ fn main() {
     let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
             process::exit(1)
         }
     };

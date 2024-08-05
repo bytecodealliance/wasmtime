@@ -26,13 +26,13 @@ fn build() {
     let out_dir = &env::var("OUT_DIR").unwrap();
 
     // Re-run if changed.
-    println!("cargo:rerun-if-changed={}/{}.ml", OCAML_DIR, LIB_NAME);
-    println!("cargo:rerun-if-changed={}/Makefile", OCAML_DIR);
+    println!("cargo:rerun-if-changed={OCAML_DIR}/{LIB_NAME}.ml");
+    println!("cargo:rerun-if-changed={OCAML_DIR}/Makefile");
 
     if let Some(other_dir) = env::var_os("FFI_LIB_DIR") {
         // Link with a library provided in the `FFI_LIB_DIR`.
         println!("cargo:rustc-link-search={}", other_dir.to_str().unwrap());
-        println!("cargo:rustc-link-lib=static={}", LIB_NAME);
+        println!("cargo:rustc-link-lib=static={LIB_NAME}");
     } else {
         // Ensure the spec repository is present.
         if is_spec_repository_empty(SPEC_DIR) {
@@ -41,8 +41,8 @@ fn build() {
 
         // Build the library to link to.
         build_lib(out_dir, OCAML_DIR);
-        println!("cargo:rustc-link-search={}", out_dir);
-        println!("cargo:rustc-link-lib=static={}", LIB_NAME);
+        println!("cargo:rustc-link-search={out_dir}");
+        println!("cargo:rustc-link-lib=static={LIB_NAME}");
     }
 
     // Enabling this feature alerts the compiler to use the `with_library`
@@ -53,7 +53,7 @@ fn build() {
 // Build the OCaml library into Cargo's `out` directory.
 fn build_lib(out_dir: &str, ocaml_dir: &str) {
     let status = Command::new("make")
-        .arg(format!("BUILD_DIR={}", out_dir))
+        .arg(format!("BUILD_DIR={out_dir}"))
         .current_dir(ocaml_dir)
         .status()
         .expect("Failed to execute 'make' command to build OCaml library");

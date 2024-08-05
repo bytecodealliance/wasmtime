@@ -92,7 +92,7 @@ fn gen_instruction_data(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) 
                         "blocks: [ir::BlockCall; {}],",
                         format.num_block_operands
                     ),
-                    n => panic!("Too many block operands in instruction: {}", n),
+                    n => panic!("Too many block operands in instruction: {n}"),
                 }
 
                 for field in &format.imm_fields {
@@ -137,7 +137,7 @@ fn gen_arguments_method(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter, 
                 m.arm(
                     name,
                     vec![format!("ref {}args", mut_), "..".to_string()],
-                    format!("args.{}(pool)", as_slice),
+                    format!("args.{as_slice}(pool)"),
                 );
                 continue;
             }
@@ -145,13 +145,13 @@ fn gen_arguments_method(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter, 
             // Fixed args.
             let mut fields = Vec::new();
             let arg = if format.num_value_operands == 0 {
-                format!("&{}[]", mut_)
+                format!("&{mut_}[]")
             } else if format.num_value_operands == 1 {
-                fields.push(format!("ref {}arg", mut_));
-                format!("{}(arg)", rslice)
+                fields.push(format!("ref {mut_}arg"));
+                format!("{rslice}(arg)")
             } else {
                 let arg = format!("args_arity{}", format.num_value_operands);
-                fields.push(format!("args: ref {}{}", mut_, arg));
+                fields.push(format!("args: ref {mut_}{arg}"));
                 arg
             };
             fields.push("..".into());
@@ -277,8 +277,8 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         members.push(field.member);
                     }
 
-                    let pat1 = members.iter().map(|x| format!("{}: ref {}1", x, x)).collect::<Vec<_>>().join(", ");
-                    let pat2 = members.iter().map(|x| format!("{}: ref {}2", x, x)).collect::<Vec<_>>().join(", ");
+                    let pat1 = members.iter().map(|x| format!("{x}: ref {x}1")).collect::<Vec<_>>().join(", ");
+                    let pat2 = members.iter().map(|x| format!("{x}: ref {x}2")).collect::<Vec<_>>().join(", ");
                     fmtln!(fmt, "({} {{ {} }}, {} {{ {} }}) => {{", name, pat1, name, pat2);
                     fmt.indent(|fmt| {
                         fmt.line("opcode1 == opcode2");
@@ -734,7 +734,7 @@ fn iterable_to_string<I: fmt::Display, T: IntoIterator<Item = I>>(iterable: T) -
         .map(|x| x.to_string())
         .collect::<Vec<_>>()
         .join(", ");
-    format!("{{{}}}", elems)
+    format!("{{{elems}}}")
 }
 
 fn typeset_to_string(ts: &TypeSet) -> String {
@@ -853,7 +853,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
             );
             fmt.comment(format!("Constraints=[{}]", constraints
                 .iter()
-                .map(|x| format!("'{}'", x))
+                .map(|x| format!("'{x}'"))
                 .collect::<Vec<_>>()
                 .join(", ")));
             if let Some(poly) = &inst.polymorphic_info {
@@ -916,7 +916,7 @@ fn gen_member_inits(format: &InstructionFormat, fmt: &mut Formatter) {
     } else if format.num_value_operands > 1 {
         let mut args = Vec::new();
         for i in 0..format.num_value_operands {
-            args.push(format!("arg{}", i));
+            args.push(format!("arg{i}"));
         }
         fmtln!(fmt, "args: [{}],", args.join(", "));
     }
@@ -928,7 +928,7 @@ fn gen_member_inits(format: &InstructionFormat, fmt: &mut Formatter) {
         n => {
             let mut blocks = Vec::new();
             for i in 0..n {
-                blocks.push(format!("block{}", i));
+                blocks.push(format!("block{i}"));
             }
             fmtln!(fmt, "blocks: [{}],", blocks.join(", "));
         }
@@ -953,7 +953,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
     }
 
     // Then the block operands.
-    args.extend((0..format.num_block_operands).map(|i| format!("block{}: ir::BlockCall", i)));
+    args.extend((0..format.num_block_operands).map(|i| format!("block{i}: ir::BlockCall")));
 
     // Then the value operands.
     if format.has_value_list {
@@ -963,7 +963,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
     } else {
         // Take a fixed number of value operands.
         for i in 0..format.num_value_operands {
-            args.push(format!("arg{}: Value", i));
+            args.push(format!("arg{i}: Value"));
         }
     }
 
@@ -1000,7 +1000,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         }
 
         // Assert that this opcode belongs to this format
-        fmtln!(fmt, "debug_assert_eq!(opcode.format(), InstructionFormat::from(&data), \"Wrong InstructionFormat for Opcode: {}\", opcode);");
+        fmtln!(fmt, "debug_assert_eq!(opcode.format(), InstructionFormat::from(&data), \"Wrong InstructionFormat for Opcode: {opcode}\");");
 
         fmt.line("self.build(data, ctrl_typevar)");
     });
@@ -1202,7 +1202,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
                 inst.value_results
                     .iter()
                     .enumerate()
-                    .map(|(i, _)| format!("results[{}]", i))
+                    .map(|(i, _)| format!("results[{i}]"))
                     .collect::<Vec<_>>()
                     .join(", ")
             );

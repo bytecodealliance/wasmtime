@@ -151,7 +151,7 @@ impl<'a> Display for DisplayBlockCall<'a> {
                 if ix > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{}", arg)?;
+                write!(f, "{arg}")?;
             }
             write!(f, ")")?;
         }
@@ -282,9 +282,9 @@ impl Display for VariableArgs {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         for (i, val) in self.0.iter().enumerate() {
             if i == 0 {
-                write!(fmt, "{}", val)?;
+                write!(fmt, "{val}")?;
             } else {
-                write!(fmt, ", {}", val)?;
+                write!(fmt, ", {val}")?;
             }
         }
         Ok(())
@@ -600,7 +600,7 @@ impl OpcodeConstraints {
         debug_assert!(n < self.num_fixed_results(), "Invalid result index");
         match OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type) {
             ResolvedConstraint::Bound(t) => t,
-            ResolvedConstraint::Free(ts) => panic!("Result constraints can't be free: {:?}", ts),
+            ResolvedConstraint::Free(ts) => panic!("Result constraints can't be free: {ts:?}"),
         }
     }
 

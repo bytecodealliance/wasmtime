@@ -111,7 +111,7 @@ pub fn translate_module<'data>(
 
             other => {
                 validator.payload(&other)?;
-                panic!("unimplemented section {:?}", other);
+                panic!("unimplemented section {other:?}");
             }
         }
     }

@@ -544,8 +544,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         trace!("MachBuffer: align to {}", align_to);
         assert!(
             align_to.is_power_of_two(),
-            "{} is not a power of two",
-            align_to
+            "{align_to} is not a power of two"
         );
         while self.cur_offset() & (align_to - 1) != 0 {
             self.put1(0);
@@ -1447,8 +1446,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         // backend because we need to implement support for such a veneer.
         assert!(
             kind.supports_veneer(),
-            "jump beyond the range of {:?} but a veneer isn't supported",
-            kind,
+            "jump beyond the range of {kind:?} but a veneer isn't supported",
         );
 
         // Allocate space for a veneer in the island.
@@ -1725,7 +1723,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         use std::fmt::Write;
         let mut s = String::with_capacity(self.data.len() * 2);
         for b in &self.data {
-            write!(&mut s, "{:02X}", b).unwrap();
+            write!(&mut s, "{b:02X}").unwrap();
         }
         s
     }

@@ -34,9 +34,9 @@ impl RegAlloc {
     {
         self.regset.reg_for_class(class).unwrap_or_else(|| {
             spill(self);
-            self.regset.reg_for_class(class).unwrap_or_else(|| {
-                panic!("expected register for class {:?}, to be available", class)
-            })
+            self.regset
+                .reg_for_class(class)
+                .unwrap_or_else(|| panic!("expected register for class {class:?}, to be available"))
         })
     }
 
@@ -54,7 +54,7 @@ impl RegAlloc {
             spill(self);
             self.regset
                 .reg(named)
-                .unwrap_or_else(|| panic!("Expected register {:?} to be available", named))
+                .unwrap_or_else(|| panic!("Expected register {named:?} to be available"))
         })
     }
 

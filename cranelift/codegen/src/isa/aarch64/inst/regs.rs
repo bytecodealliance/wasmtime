@@ -154,7 +154,7 @@ fn show_ireg(reg: RealReg) -> String {
         63 => "sp".to_string(),
         x => {
             debug_assert!(x < 29);
-            format!("x{}", x)
+            format!("x{x}")
         }
     }
 }
@@ -171,7 +171,7 @@ fn show_reg(reg: Reg) -> String {
             RegClass::Vector => unreachable!(),
         }
     } else {
-        format!("%{:?}", reg)
+        format!("%{reg:?}")
     }
 }
 
@@ -247,9 +247,9 @@ pub fn show_vreg_element(reg: Reg, idx: u8, size: ScalarSize) -> String {
         ScalarSize::Size16 => ".h",
         ScalarSize::Size32 => ".s",
         ScalarSize::Size64 => ".d",
-        _ => panic!("Unexpected vector element size: {:?}", size),
+        _ => panic!("Unexpected vector element size: {size:?}"),
     };
-    format!("{}{}[{}]", s, suffix, idx)
+    format!("{s}{suffix}[{idx}]")
 }
 
 pub fn pretty_print_ireg(reg: Reg, size: OperandSize) -> String {

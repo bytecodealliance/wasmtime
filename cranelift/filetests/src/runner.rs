@@ -47,8 +47,8 @@ impl Display for QueueEntry {
         let p = self.path.to_string_lossy();
         match self.state {
             State::Done(Ok(dur)) => write!(f, "{}.{:03} {}", dur.as_secs(), dur.subsec_millis(), p),
-            State::Done(Err(ref e)) => write!(f, "FAIL {}: {:?}", p, e),
-            _ => write!(f, "{}", p),
+            State::Done(Err(ref e)) => write!(f, "FAIL {p}: {e:?}"),
+            _ => write!(f, "{p}"),
         }
     }
 }
@@ -299,7 +299,7 @@ impl TestRunner {
             }
             let pass_times = conc.join();
             if self.report_times {
-                println!("{}", pass_times);
+                println!("{pass_times}");
             }
         }
     }
@@ -349,7 +349,7 @@ impl TestRunner {
             } => dur > cut,
             _ => false,
         }) {
-            println!("slow: {}", t)
+            println!("slow: {t}")
         }
     }
 

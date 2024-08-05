@@ -242,8 +242,8 @@ impl fmt::Debug for LaneType {
             f,
             "{}",
             match *self {
-                LaneType::Float(_) => format!("FloatType({})", inner_msg),
-                LaneType::Int(_) => format!("IntType({})", inner_msg),
+                LaneType::Float(_) => format!("FloatType({inner_msg})"),
+                LaneType::Int(_) => format!("IntType({inner_msg})"),
             }
         )
     }

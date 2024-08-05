@@ -120,9 +120,9 @@ pub trait FuncWriter {
         maybe_fact: Option<&Fact>,
     ) -> fmt::Result {
         if let Some(fact) = maybe_fact {
-            writeln!(w, "    {} ! {} = {}", entity, fact, value)
+            writeln!(w, "    {entity} ! {fact} = {value}")
         } else {
-            writeln!(w, "    {} = {}", entity, value)
+            writeln!(w, "    {entity} = {value}")
         }
     }
 }
@@ -209,9 +209,9 @@ fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
 fn write_arg(w: &mut dyn Write, func: &Function, arg: Value) -> fmt::Result {
     let ty = func.dfg.value_type(arg);
     if let Some(f) = &func.dfg.facts[arg] {
-        write!(w, "{} ! {}: {}", arg, f, ty)
+        write!(w, "{arg} ! {f}: {ty}")
     } else {
-        write!(w, "{}: {}", arg, ty)
+        write!(w, "{arg}: {ty}")
     }
 }
 
@@ -238,7 +238,7 @@ pub fn write_block_header(
 
     let mut args = func.dfg.block_params(block).iter().cloned();
     match args.next() {
-        None => return writeln!(w, "{}:", cold),
+        None => return writeln!(w, "{cold}:"),
         Some(arg) => {
             write!(w, "(")?;
             write_arg(w, func, arg)?;
@@ -249,7 +249,7 @@ pub fn write_block_header(
         write!(w, ", ")?;
         write_arg(w, func, arg)?;
     }
-    writeln!(w, "){}:", cold)
+    writeln!(w, "){cold}:")
 }
 
 fn decorate_block<FW: FuncWriter>(
@@ -344,23 +344,23 @@ fn write_instruction(
     // Source location goes first.
     let srcloc = func.srcloc(inst);
     if !srcloc.is_default() {
-        write!(s, "{} ", srcloc)?;
+        write!(s, "{srcloc} ")?;
     }
 
     // Write out prefix and indent the instruction.
-    write!(w, "{1:0$}", indent, s)?;
+    write!(w, "{s:indent$}")?;
 
     // Write out the result values, if any.
     let mut has_results = false;
     for r in func.dfg.inst_results(inst) {
         if !has_results {
             has_results = true;
-            write!(w, "{}", r)?;
+            write!(w, "{r}")?;
         } else {
-            write!(w, ", {}", r)?;
+            write!(w, ", {r}")?;
         }
         if let Some(f) = &func.dfg.facts[*r] {
-            write!(w, " ! {}", f)?;
+            write!(w, " ! {f}")?;
         }
     }
     if has_results {
@@ -371,8 +371,8 @@ fn write_instruction(
     let opcode = func.dfg.insts[inst].opcode();
 
     match type_suffix(func, inst) {
-        Some(suf) => write!(w, "{}.{}", opcode, suf)?,
-        None => write!(w, "{}", opcode)?,
+        Some(suf) => write!(w, "{opcode}.{suf}")?,
+        None => write!(w, "{opcode}")?,
     }
 
     write_operands(w, &func.dfg, inst)?;
@@ -394,9 +394,9 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     match dfg.insts[inst] {
         AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, args[0], args[1]),
         AtomicCas { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
-        LoadNoOffset { flags, arg, .. } => write!(w, "{} {}", flags, arg),
+        LoadNoOffset { flags, arg, .. } => write!(w, "{flags} {arg}"),
         StoreNoOffset { flags, args, .. } => write!(w, "{} {}, {}", flags, args[0], args[1]),
-        Unary { arg, .. } => write!(w, " {}", arg),
+        Unary { arg, .. } => write!(w, " {arg}"),
         UnaryImm { imm, .. } => write!(w, " {}", {
             let mut imm = imm;
             if ctrl_ty.bits() != 0 {
@@ -404,15 +404,15 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             }
             imm
         }),
-        UnaryIeee16 { imm, .. } => write!(w, " {}", imm),
-        UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
-        UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
-        UnaryGlobalValue { global_value, .. } => write!(w, " {}", global_value),
+        UnaryIeee16 { imm, .. } => write!(w, " {imm}"),
+        UnaryIeee32 { imm, .. } => write!(w, " {imm}"),
+        UnaryIeee64 { imm, .. } => write!(w, " {imm}"),
+        UnaryGlobalValue { global_value, .. } => write!(w, " {global_value}"),
         UnaryConst {
             constant_handle, ..
-        } => write!(w, " {}", constant_handle),
+        } => write!(w, " {constant_handle}"),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
-        BinaryImm8 { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
+        BinaryImm8 { arg, imm, .. } => write!(w, " {arg}, {imm}"),
         BinaryImm64 { arg, imm, .. } => write!(w, " {}, {}", arg, {
             let mut imm = imm;
             if ctrl_ty.bits() != 0 {
@@ -479,35 +479,35 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             )?;
             write_user_stack_map_entries(w, dfg, inst)
         }
-        FuncAddr { func_ref, .. } => write!(w, " {}", func_ref),
+        FuncAddr { func_ref, .. } => write!(w, " {func_ref}"),
         StackLoad {
             stack_slot, offset, ..
-        } => write!(w, " {}{}", stack_slot, offset),
+        } => write!(w, " {stack_slot}{offset}"),
         StackStore {
             arg,
             stack_slot,
             offset,
             ..
-        } => write!(w, " {}, {}{}", arg, stack_slot, offset),
+        } => write!(w, " {arg}, {stack_slot}{offset}"),
         DynamicStackLoad {
             dynamic_stack_slot, ..
-        } => write!(w, " {}", dynamic_stack_slot),
+        } => write!(w, " {dynamic_stack_slot}"),
         DynamicStackStore {
             arg,
             dynamic_stack_slot,
             ..
-        } => write!(w, " {}, {}", arg, dynamic_stack_slot),
+        } => write!(w, " {arg}, {dynamic_stack_slot}"),
         Load {
             flags, arg, offset, ..
-        } => write!(w, "{} {}{}", flags, arg, offset),
+        } => write!(w, "{flags} {arg}{offset}"),
         Store {
             flags,
             args,
             offset,
             ..
         } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
-        Trap { code, .. } => write!(w, " {}", code),
-        CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
+        Trap { code, .. } => write!(w, " {code}"),
+        CondTrap { arg, code, .. } => write!(w, " {arg}, {code}"),
     }?;
 
     let mut sep = "  ; ";
@@ -535,7 +535,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 } => constant_handle.to_string(),
                 _ => continue,
             };
-            write!(w, "{}{} = {}", sep, arg, imm)?;
+            write!(w, "{sep}{arg} = {imm}")?;
             sep = ", ";
         }
     }
@@ -567,9 +567,9 @@ impl<'a> fmt::Display for DisplayValues<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, val) in self.0.iter().enumerate() {
             if i == 0 {
-                write!(f, "{}", val)?;
+                write!(f, "{val}")?;
             } else {
-                write!(f, ", {}", val)?;
+                write!(f, ", {val}")?;
             }
         }
         Ok(())

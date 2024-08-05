@@ -35,7 +35,7 @@ fn main() {
     entries.sort();
     for path in entries {
         let path = path.to_str().expect("path is not valid utf-8");
-        code.push_str(&format!("({:?}, include_str!({0:?})),\n", path));
+        code.push_str(&format!("({path:?}, include_str!({path:?})),\n"));
     }
     code.push_str("];\n");
     std::fs::write(out_dir.join("wasttests.rs"), code).unwrap();

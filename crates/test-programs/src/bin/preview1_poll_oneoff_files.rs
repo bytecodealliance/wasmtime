@@ -152,7 +152,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
         },
     ];
     let out = poll_oneoff_with_retry(&r#in).unwrap();
-    assert_eq!(out.len(), 2, "should return 2 events, got: {:?}", out);
+    assert_eq!(out.len(), 2, "should return 2 events, got: {out:?}");
 
     let (read, write) = if out[0].userdata == 1 {
         (&out[0], &out[1])
@@ -275,7 +275,7 @@ fn main() {
     let arg = if let Some(arg) = args.next() {
         arg
     } else {
-        eprintln!("usage: {} <scratch directory>", prog);
+        eprintln!("usage: {prog} <scratch directory>");
         process::exit(1);
     };
 
@@ -283,7 +283,7 @@ fn main() {
     let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
             process::exit(1)
         }
     };

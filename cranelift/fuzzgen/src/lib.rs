@@ -175,7 +175,7 @@ where
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
-        builder.set("opt_level", &format!("{}", opt)[..])?;
+        builder.set("opt_level", &format!("{opt}")[..])?;
 
         // Boolean flags
         // TODO: enable_pinned_reg does not work with our current trampolines. See: #4376
@@ -202,7 +202,7 @@ where
                 .map(|&(num, denum)| self.u.ratio(num, denum))
                 .unwrap_or_else(|| bool::arbitrary(self.u))?;
 
-            let value = format!("{}", enabled);
+            let value = format!("{enabled}");
             builder.set(flag_name, value.as_str())?;
         }
 
@@ -222,14 +222,14 @@ where
             let size = self
                 .u
                 .int_in_range(self.config.stack_probe_size_log2.clone())?;
-            builder.set("probestack_size_log2", &format!("{}", size))?;
+            builder.set("probestack_size_log2", &format!("{size}"))?;
         }
 
         // Generate random basic block padding
         let bb_padding = self
             .u
             .int_in_range(self.config.bb_padding_log2_size.clone())?;
-        builder.set("bb_padding_log2_minus_one", &format!("{}", bb_padding))?;
+        builder.set("bb_padding_log2_minus_one", &format!("{bb_padding}"))?;
 
         // Fixed settings
 

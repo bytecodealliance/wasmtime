@@ -23,7 +23,7 @@ impl ProgramPoint {
     pub fn unwrap_inst(self) -> Inst {
         match self {
             Self::Inst(x) => x,
-            Self::Block(x) => panic!("expected inst: {}", x),
+            Self::Block(x) => panic!("expected inst: {x}"),
         }
     }
 }
@@ -43,15 +43,15 @@ impl From<Block> for ProgramPoint {
 impl fmt::Display for ProgramPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::Inst(x) => write!(f, "{}", x),
-            Self::Block(x) => write!(f, "{}", x),
+            Self::Inst(x) => write!(f, "{x}"),
+            Self::Block(x) => write!(f, "{x}"),
         }
     }
 }
 
 impl fmt::Debug for ProgramPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ProgramPoint({})", self)
+        write!(f, "ProgramPoint({self})")
     }
 }
 

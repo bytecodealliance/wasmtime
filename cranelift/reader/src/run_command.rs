@@ -42,7 +42,7 @@ impl RunCommand {
                 let matched = Self::compare_results(compare, &actual, expected);
                 if !matched {
                     let actual = DisplayDataValues(&actual);
-                    return Err(format!("Failed test: {}, actual: {}", self, actual));
+                    return Err(format!("Failed test: {self}, actual: {actual}"));
                 }
             }
         }
@@ -70,10 +70,10 @@ impl RunCommand {
 impl Display for RunCommand {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            RunCommand::Print(invocation) => write!(f, "print: {}", invocation),
+            RunCommand::Print(invocation) => write!(f, "print: {invocation}"),
             RunCommand::Run(invocation, comparison, expected) => {
                 let expected = DisplayDataValues(expected);
-                write!(f, "run: {} {} {}", invocation, comparison, expected)
+                write!(f, "run: {invocation} {comparison} {expected}")
             }
         }
     }

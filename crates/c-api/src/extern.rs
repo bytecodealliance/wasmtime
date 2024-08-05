@@ -111,7 +111,7 @@ impl wasmtime_extern_t {
             WASMTIME_EXTERN_TABLE => Extern::Table(self.of.table),
             WASMTIME_EXTERN_MEMORY => Extern::Memory(self.of.memory),
             WASMTIME_EXTERN_SHAREDMEMORY => Extern::SharedMemory((**self.of.sharedmemory).clone()),
-            other => panic!("unknown wasmtime_extern_kind_t: {}", other),
+            other => panic!("unknown wasmtime_extern_kind_t: {other}"),
         }
     }
 }

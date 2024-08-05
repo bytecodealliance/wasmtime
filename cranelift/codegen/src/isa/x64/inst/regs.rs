@@ -176,7 +176,7 @@ pub fn realreg_name(reg: RealReg) -> &'static str {
             ENC_R13 => "%r13",
             ENC_R14 => "%r14",
             ENC_R15 => "%r15",
-            _ => panic!("Invalid PReg: {:?}", preg),
+            _ => panic!("Invalid PReg: {preg:?}"),
         },
         RegClass::Float => match preg.hw_enc() {
             0 => "%xmm0",
@@ -195,7 +195,7 @@ pub fn realreg_name(reg: RealReg) -> &'static str {
             13 => "%xmm13",
             14 => "%xmm14",
             15 => "%xmm15",
-            _ => panic!("Invalid PReg: {:?}", preg),
+            _ => panic!("Invalid PReg: {preg:?}"),
         },
         RegClass::Vector => unreachable!(),
     }
@@ -205,7 +205,7 @@ pub fn show_reg(reg: Reg) -> String {
     if let Some(rreg) = reg.to_real_reg() {
         realreg_name(rreg).to_string()
     } else {
-        format!("%{:?}", reg)
+        format!("%{reg:?}")
     }
 }
 

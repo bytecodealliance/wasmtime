@@ -67,7 +67,7 @@ impl JITBuilder {
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
         flag_builder.set("is_pic", "true").unwrap();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
-            panic!("host machine is not supported: {}", msg);
+            panic!("host machine is not supported: {msg}");
         });
         let isa = isa_builder.finish(settings::Flags::new(flag_builder))?;
         Ok(Self::with_isa(isa, libcall_names))
@@ -342,13 +342,13 @@ impl JITModule {
                 } else if linkage == Linkage::Preemptible {
                     0 as *const u8
                 } else {
-                    panic!("can't resolve symbol {}", name);
+                    panic!("can't resolve symbol {name}");
                 }
             }
             ModuleRelocTarget::LibCall(ref libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.lookup_symbol(&sym)
-                    .unwrap_or_else(|| panic!("can't resolve libcall {}", sym))
+                    .unwrap_or_else(|| panic!("can't resolve libcall {sym}"))
             }
             _ => panic!("invalid name"),
         }
@@ -376,7 +376,7 @@ impl JITModule {
             ModuleRelocTarget::LibCall(ref libcall) => {
                 self.libcall_got_entries
                     .get(libcall)
-                    .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
+                    .unwrap_or_else(|| panic!("can't resolve libcall {libcall}"))
                     .0
             }
             _ => panic!("invalid name"),
@@ -400,7 +400,7 @@ impl JITModule {
             ModuleRelocTarget::LibCall(ref libcall) => self
                 .libcall_plt_entries
                 .get(libcall)
-                .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
+                .unwrap_or_else(|| panic!("can't resolve libcall {libcall}"))
                 .0
                 .as_ptr()
                 .cast::<u8>(),
@@ -753,7 +753,7 @@ impl Module for JITModule {
                         ModuleRelocTarget::LibCall(ref libcall) => self
                             .libcall_plt_entries
                             .get(libcall)
-                            .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
+                            .unwrap_or_else(|| panic!("can't resolve libcall {libcall}"))
                             .0
                             .as_ptr()
                             .cast::<u8>(),

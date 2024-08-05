@@ -77,7 +77,7 @@ impl<'a> fmt::Debug for PrintableTestCase<'a> {
         // Print the functions backwards, so that the main function is printed last
         // and near the test inputs for run test cases.
         for func in self.functions.iter().rev() {
-            writeln!(f, "{}\n", func)?;
+            writeln!(f, "{func}\n")?;
         }
 
         if !self.inputs.is_empty() {
@@ -93,20 +93,20 @@ impl<'a> fmt::Debug for PrintableTestCase<'a> {
             let placeholder_output = returns
                 .iter()
                 .map(|param| DataValue::read_from_slice_ne(&[0; 16][..], param.value_type))
-                .map(|val| format!("{}", val))
+                .map(|val| format!("{val}"))
                 .collect::<Vec<_>>()
                 .join(", ");
 
             // If we have no output, we don't need the == condition
             let test_condition = match returns.len() {
                 0 => String::new(),
-                1 => format!(" == {}", placeholder_output),
-                _ => format!(" == [{}]", placeholder_output),
+                1 => format!(" == {placeholder_output}"),
+                _ => format!(" == [{placeholder_output}]"),
             };
 
             let args = input
                 .iter()
-                .map(|val| format!("{}", val))
+                .map(|val| format!("{val}"))
                 .collect::<Vec<_>>()
                 .join(", ");
 

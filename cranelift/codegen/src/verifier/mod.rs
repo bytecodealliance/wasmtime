@@ -254,7 +254,7 @@ impl Into<VerifierResult<()>> for VerifierErrors {
 impl Display for VerifierErrors {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for err in &self.0 {
-            writeln!(f, "- {}", err)?;
+            writeln!(f, "- {err}")?;
         }
         Ok(())
     }
@@ -363,7 +363,7 @@ impl<'a> Verifier<'a> {
                         .special_param(ir::ArgumentPurpose::VMContext)
                         .is_none()
                     {
-                        errors.report((gv, format!("undeclared vmctx reference {}", gv)));
+                        errors.report((gv, format!("undeclared vmctx reference {gv}")));
                     }
                 }
                 ir::GlobalValueData::IAddImm {
@@ -372,7 +372,7 @@ impl<'a> Verifier<'a> {
                     if !global_type.is_int() {
                         errors.report((
                             gv,
-                            format!("iadd_imm global value with non-int type {}", global_type),
+                            format!("iadd_imm global value with non-int type {global_type}"),
                         ));
                     } else if let Some(isa) = self.isa {
                         let base_type = self.func.global_values[base].global_type(isa);
@@ -380,8 +380,7 @@ impl<'a> Verifier<'a> {
                             errors.report((
                                 gv,
                                 format!(
-                                    "iadd_imm type {} differs from operand type {}",
-                                    global_type, base_type
+                                    "iadd_imm type {global_type} differs from operand type {base_type}"
                                 ),
                             ));
                         }
@@ -395,8 +394,7 @@ impl<'a> Verifier<'a> {
                             errors.report((
                                 gv,
                                 format!(
-                                    "base {} has type {}, which is not the pointer type {}",
-                                    base, base_type, pointer_type
+                                    "base {base} has type {base_type}, which is not the pointer type {pointer_type}"
                                 ),
                             ));
                         }
@@ -480,10 +478,7 @@ impl<'a> Verifier<'a> {
             return errors.fatal((
                 inst,
                 self.context(inst),
-                format!(
-                    "a terminator instruction was encountered before the end of {}",
-                    block
-                ),
+                format!("a terminator instruction was encountered before the end of {block}"),
             ));
         }
         if is_last_inst && !is_terminator {
@@ -496,7 +491,7 @@ impl<'a> Verifier<'a> {
             return errors.fatal((
                 inst,
                 self.context(inst),
-                format!("should belong to {} not {:?}", block, inst_block),
+                format!("should belong to {block} not {inst_block:?}"),
             ));
         }
 
@@ -505,7 +500,7 @@ impl<'a> Verifier<'a> {
             match self.func.dfg.value_def(arg) {
                 ValueDef::Param(arg_block, _) => {
                     if block != arg_block {
-                        return errors.fatal((arg, format!("does not belong to {}", block)));
+                        return errors.fatal((arg, format!("does not belong to {block}")));
                     }
                 }
                 _ => {
@@ -561,7 +556,7 @@ impl<'a> Verifier<'a> {
                 errors.report((
                     inst,
                     self.context(inst),
-                    format!("argument {} -> {} is not attached", arg, original),
+                    format!("argument {arg} -> {original} is not attached"),
                 ));
             }
         }
@@ -716,11 +711,11 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
         if !self.func.dfg.block_is_valid(e) || !self.func.layout.is_block_inserted(e) {
-            return errors.fatal((loc, format!("invalid block reference {}", e)));
+            return errors.fatal((loc, format!("invalid block reference {e}")));
         }
         if let Some(entry_block) = self.func.layout.entry_block() {
             if e == entry_block {
-                return errors.fatal((loc, format!("invalid reference to entry block {}", e)));
+                return errors.fatal((loc, format!("invalid reference to entry block {e}")));
             }
         }
         Ok(())
@@ -736,7 +731,7 @@ impl<'a> Verifier<'a> {
             errors.fatal((
                 inst,
                 self.context(inst),
-                format!("invalid signature reference {}", s),
+                format!("invalid signature reference {s}"),
             ))
         } else {
             Ok(())
@@ -753,7 +748,7 @@ impl<'a> Verifier<'a> {
             errors.nonfatal((
                 inst,
                 self.context(inst),
-                format!("invalid function reference {}", f),
+                format!("invalid function reference {f}"),
             ))
         } else {
             Ok(())
@@ -767,11 +762,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
         if !self.func.sized_stack_slots.is_valid(ss) {
-            errors.nonfatal((
-                inst,
-                self.context(inst),
-                format!("invalid stack slot {}", ss),
-            ))
+            errors.nonfatal((inst, self.context(inst), format!("invalid stack slot {ss}")))
         } else {
             Ok(())
         }
@@ -787,7 +778,7 @@ impl<'a> Verifier<'a> {
             errors.nonfatal((
                 inst,
                 self.context(inst),
-                format!("invalid dynamic stack slot {}", ss),
+                format!("invalid dynamic stack slot {ss}"),
             ))
         } else {
             Ok(())
@@ -804,7 +795,7 @@ impl<'a> Verifier<'a> {
             errors.nonfatal((
                 inst,
                 self.context(inst),
-                format!("invalid global value {}", gv),
+                format!("invalid global value {gv}"),
             ))
         } else {
             Ok(())
@@ -821,7 +812,7 @@ impl<'a> Verifier<'a> {
             errors.nonfatal((
                 inst,
                 self.context(inst),
-                format!("invalid value list reference {:?}", l),
+                format!("invalid value list reference {l:?}"),
             ))
         } else {
             Ok(())
@@ -838,7 +829,7 @@ impl<'a> Verifier<'a> {
             errors.nonfatal((
                 inst,
                 self.context(inst),
-                format!("invalid jump table reference {}", j),
+                format!("invalid jump table reference {j}"),
             ))
         } else {
             let pool = &self.func.stencil.dfg.value_lists;
@@ -860,7 +851,7 @@ impl<'a> Verifier<'a> {
             errors.nonfatal((
                 loc_inst,
                 self.context(loc_inst),
-                format!("invalid value reference {}", v),
+                format!("invalid value reference {v}"),
             ))
         } else {
             Ok(())
@@ -891,7 +882,7 @@ impl<'a> Verifier<'a> {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by invalid instruction {}", v, def_inst),
+                        format!("{v} is defined by invalid instruction {def_inst}"),
                     ));
                 }
                 // Defining instruction is inserted in a block.
@@ -899,7 +890,7 @@ impl<'a> Verifier<'a> {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by {} which has no block", v, def_inst),
+                        format!("{v} is defined by {def_inst} which has no block"),
                     ));
                 }
                 // Defining instruction dominates the instruction that uses the value.
@@ -911,14 +902,14 @@ impl<'a> Verifier<'a> {
                         return errors.fatal((
                             loc_inst,
                             self.context(loc_inst),
-                            format!("uses value {} from non-dominating {}", v, def_inst),
+                            format!("uses value {v} from non-dominating {def_inst}"),
                         ));
                     }
                     if def_inst == loc_inst {
                         return errors.fatal((
                             loc_inst,
                             self.context(loc_inst),
-                            format!("uses value {} from itself", v),
+                            format!("uses value {v} from itself"),
                         ));
                     }
                 }
@@ -929,7 +920,7 @@ impl<'a> Verifier<'a> {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by invalid block {}", v, block),
+                        format!("{v} is defined by invalid block {block}"),
                     ));
                 }
                 // Defining block is inserted in the layout
@@ -937,7 +928,7 @@ impl<'a> Verifier<'a> {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by {} which is not in the layout", v, block),
+                        format!("{v} is defined by {block} which is not in the layout"),
                     ));
                 }
                 // The defining block dominates the instruction using this value.
@@ -949,7 +940,7 @@ impl<'a> Verifier<'a> {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("uses value arg from non-dominating {}", block),
+                        format!("uses value arg from non-dominating {block}"),
                     ));
                 }
             }
@@ -975,7 +966,7 @@ impl<'a> Verifier<'a> {
                     errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("instruction result {} is not defined by the instruction", v),
+                        format!("instruction result {v} is not defined by the instruction"),
                     ))
                 } else {
                     Ok(())
@@ -984,12 +975,12 @@ impl<'a> Verifier<'a> {
             ValueDef::Param(_, _) => errors.fatal((
                 loc_inst,
                 self.context(loc_inst),
-                format!("instruction result {} is not defined by the instruction", v),
+                format!("instruction result {v} is not defined by the instruction"),
             )),
             ValueDef::Union(_, _) => errors.fatal((
                 loc_inst,
                 self.context(loc_inst),
-                format!("instruction result {} is a union node", v),
+                format!("instruction result {v} is a union node"),
             )),
         }
     }
@@ -1049,8 +1040,7 @@ impl<'a> Verifier<'a> {
             errors.fatal((
                 inst,
                 format!(
-                    "The instruction expects {} to have a size of {} bytes but it has {}",
-                    constant, type_size, constant_size
+                    "The instruction expects {constant} to have a size of {type_size} bytes but it has {constant_size}"
                 ),
             ))
         } else {
@@ -1072,10 +1062,7 @@ impl<'a> Verifier<'a> {
             if got != expected {
                 return errors.fatal((
                     block,
-                    format!(
-                        "invalid domtree, expected idom({}) = {:?}, got {:?}",
-                        block, expected, got
-                    ),
+                    format!("invalid domtree, expected idom({block}) = {expected:?}, got {got:?}"),
                 ));
             }
         }
@@ -1096,8 +1083,7 @@ impl<'a> Verifier<'a> {
                 return errors.fatal((
                     test_block,
                     format!(
-                        "invalid domtree, postorder block number {} should be {}, got {}",
-                        index, true_block, test_block
+                        "invalid domtree, postorder block number {index} should be {true_block}, got {test_block}"
                     ),
                 ));
             }
@@ -1173,8 +1159,7 @@ impl<'a> Verifier<'a> {
                     inst,
                     self.context(inst),
                     format!(
-                        "has an invalid controlling type {} (allowed set is {:?})",
-                        ctrl_type, value_typeset
+                        "has an invalid controlling type {ctrl_type} (allowed set is {value_typeset:?})"
                     ),
                 ));
             }
@@ -1212,8 +1197,7 @@ impl<'a> Verifier<'a> {
                         inst,
                         self.context(inst),
                         format!(
-                            "expected result {} ({}) to have type {}, found {}",
-                            i, result, expected_type, result_type
+                            "expected result {i} ({result}) to have type {expected_type}, found {result_type}"
                         ),
                     ));
                 }
@@ -1255,8 +1239,7 @@ impl<'a> Verifier<'a> {
                             inst,
                             self.context(inst),
                             format!(
-                                "arg {} ({}) has type {}, expected {}",
-                                i, arg, arg_type, expected_type
+                                "arg {i} ({arg}) has type {arg_type}, expected {expected_type}"
                             ),
                         ));
                     }
@@ -1267,8 +1250,7 @@ impl<'a> Verifier<'a> {
                             inst,
                             self.context(inst),
                             format!(
-                                "arg {} ({}) with type {} failed to satisfy type set {:?}",
-                                i, arg, arg_type, type_set
+                                "arg {i} ({arg}) with type {arg_type} failed to satisfy type set {type_set:?}"
                             ),
                         ));
                     }
@@ -1488,8 +1470,7 @@ impl<'a> Verifier<'a> {
                         return errors.nonfatal((
                             inst, self.context(inst),
                             format!(
-                                "global_value instruction with type {} references global value with type {}",
-                                inst_type, global_type
+                                "global_value instruction with type {inst_type} references global value with type {global_type}"
                             )),
                         );
                     }
@@ -1519,7 +1500,7 @@ impl<'a> Verifier<'a> {
             if !missing_succs.is_empty() {
                 errors.report((
                     block,
-                    format!("cfg lacked the following successor(s) {:?}", missing_succs),
+                    format!("cfg lacked the following successor(s) {missing_succs:?}"),
                 ));
                 continue;
             }
@@ -1528,7 +1509,7 @@ impl<'a> Verifier<'a> {
             if !excess_succs.is_empty() {
                 errors.report((
                     block,
-                    format!("cfg had unexpected successor(s) {:?}", excess_succs),
+                    format!("cfg had unexpected successor(s) {excess_succs:?}"),
                 ));
                 continue;
             }
@@ -1547,10 +1528,7 @@ impl<'a> Verifier<'a> {
             if !missing_preds.is_empty() {
                 errors.report((
                     block,
-                    format!(
-                        "cfg lacked the following predecessor(s) {:?}",
-                        missing_preds
-                    ),
+                    format!("cfg lacked the following predecessor(s) {missing_preds:?}"),
                 ));
                 continue;
             }
@@ -1559,7 +1537,7 @@ impl<'a> Verifier<'a> {
             if !excess_preds.is_empty() {
                 errors.report((
                     block,
-                    format!("cfg had unexpected predecessor(s) {:?}", excess_preds),
+                    format!("cfg had unexpected predecessor(s) {excess_preds:?}"),
                 ));
                 continue;
             }
@@ -1606,7 +1584,7 @@ impl<'a> Verifier<'a> {
                     errors.fatal((
                         inst,
                         self.context(inst),
-                        format!("The lane {} does not index into the type {}", lane, ty,),
+                        format!("The lane {lane} does not index into the type {ty}",),
                     ))
                 } else {
                     Ok(())
@@ -1740,7 +1718,7 @@ impl<'a> Verifier<'a> {
 
         for block in self.func.layout.blocks() {
             if self.func.layout.first_inst(block).is_none() {
-                return errors.fatal((block, format!("{} cannot be empty", block)));
+                return errors.fatal((block, format!("{block} cannot be empty")));
             }
             for inst in self.func.layout.block_insts(block) {
                 self.block_integrity(block, inst, errors)?;

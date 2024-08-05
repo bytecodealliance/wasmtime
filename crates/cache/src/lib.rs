@@ -221,7 +221,7 @@ impl Hasher for Sha256Hasher {
 // Then, we don't have to use sound OS-specific exclusive file access.
 // Note: there's no need to remove temporary file here - cleanup task will do it later.
 fn fs_write_atomic(path: &Path, reason: &str, contents: &[u8]) -> io::Result<()> {
-    let lock_path = path.with_extension(format!("wip-atomic-write-{}", reason));
+    let lock_path = path.with_extension(format!("wip-atomic-write-{reason}"));
     fs::OpenOptions::new()
         .create_new(true) // atomic file creation (assumption: no one will open it without this flag)
         .write(true)

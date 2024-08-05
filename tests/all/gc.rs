@@ -62,7 +62,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
         let r = ExternRef::new(&mut scope, SetFlagOnDrop(inner_dropped.clone()))?;
         {
-            let args = [Val::I32(5), Val::ExternRef(Some(r.clone()))];
+            let args = [Val::I32(5), Val::ExternRef(Some(r))];
             func.call(&mut scope, &args, &mut [Val::I32(0)])?;
         }
 
@@ -393,7 +393,7 @@ fn global_init_no_leak() -> Result<()> {
     let global = Global::new(
         &mut store,
         GlobalType::new(ValType::EXTERNREF, Mutability::Const),
-        externref.clone().into(),
+        externref.into(),
     )?;
     Instance::new(&mut store, &module, &[global.into()])?;
     drop(store);

@@ -177,7 +177,7 @@ impl fmt::UpperHex for VMGcRef {
 
 impl fmt::Pointer for VMGcRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
+        write!(f, "{self:#x}")
     }
 }
 

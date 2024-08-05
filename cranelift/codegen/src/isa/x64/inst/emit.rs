@@ -138,8 +138,7 @@ pub(crate) fn emit(
     let isa_requirements = inst.available_in_any_isa();
     if !isa_requirements.is_empty() && !isa_requirements.iter().all(matches_isa_flags) {
         panic!(
-            "Cannot emit inst '{:?}' for target; failed to match ISA requirements: {:?}",
-            inst, isa_requirements
+            "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
         )
     }
 
@@ -1232,7 +1231,7 @@ pub(crate) fn emit(
                     SseOpcode::Psrlw => (0x0F71, 2),
                     SseOpcode::Psrld => (0x0F72, 2),
                     SseOpcode::Psrlq => (0x0F73, 2),
-                    _ => panic!("invalid opcode: {}", opcode),
+                    _ => panic!("invalid opcode: {opcode}"),
                 };
                 let dst_enc = reg_enc(dst);
                 emit_std_enc_enc(sink, prefix, opcode_bytes, 2, reg_digit, dst_enc, rex);
@@ -1250,7 +1249,7 @@ pub(crate) fn emit(
                     SseOpcode::Psrlw => 0x0FD1,
                     SseOpcode::Psrld => 0x0FD2,
                     SseOpcode::Psrlq => 0x0FD3,
-                    _ => panic!("invalid opcode: {}", opcode),
+                    _ => panic!("invalid opcode: {opcode}"),
                 };
 
                 match src2 {
@@ -3179,7 +3178,7 @@ pub(crate) fn emit(
                 SseOpcode::Movmskps => (LegacyPrefixes::None, 0x0F50, true),
                 SseOpcode::Movmskpd => (LegacyPrefixes::_66, 0x0F50, true),
                 SseOpcode::Pmovmskb => (LegacyPrefixes::_66, 0x0FD7, true),
-                _ => panic!("unexpected opcode {:?}", op),
+                _ => panic!("unexpected opcode {op:?}"),
             };
             let rex = RexFlags::from(*dst_size);
             let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
@@ -3198,7 +3197,7 @@ pub(crate) fn emit(
                 SseOpcode::Pextrw => (LegacyPrefixes::_66, 0x0FC5, 2, OS::Size32, true),
                 SseOpcode::Pextrd => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size32, false),
                 SseOpcode::Pextrq => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size64, false),
-                _ => panic!("unexpected opcode {:?}", op),
+                _ => panic!("unexpected opcode {op:?}"),
             };
             let rex = RexFlags::from(dst_size);
             let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
@@ -3220,7 +3219,7 @@ pub(crate) fn emit(
                 // Movd and movq use the same opcode; the presence of the REX prefix (set below)
                 // actually determines which is used.
                 SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F6E),
-                _ => panic!("unexpected opcode {:?}", op),
+                _ => panic!("unexpected opcode {op:?}"),
             };
             let rex = RexFlags::from(*src_size);
             match src_e {
@@ -3272,7 +3271,7 @@ pub(crate) fn emit(
             let (prefix, opcode) = match op {
                 SseOpcode::Cvtsi2ss => (LegacyPrefixes::_F3, 0x0F2A),
                 SseOpcode::Cvtsi2sd => (LegacyPrefixes::_F2, 0x0F2A),
-                _ => panic!("unexpected opcode {:?}", op),
+                _ => panic!("unexpected opcode {op:?}"),
             };
             let rex = RexFlags::from(*src2_size);
             match src2 {

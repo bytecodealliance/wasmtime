@@ -1107,9 +1107,7 @@ impl MacroAssembler {
     fn ensure_two_argument_form(dst: &Reg, lhs: &Reg) {
         assert!(
             dst == lhs,
-            "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-            dst,
-            lhs
+            "the destination and first source argument must be the same, dst={dst:?}, lhs={lhs:?}"
         );
     }
 }

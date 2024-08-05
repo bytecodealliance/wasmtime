@@ -325,7 +325,7 @@ impl<T> Linker<T> {
             match item_def {
                 TypeDef::ComponentFunc(_) => {
                     let fully_qualified_name = parent_instance
-                        .map(|parent| format!("{}#{}", parent, item_name))
+                        .map(|parent| format!("{parent}#{item_name}"))
                         .unwrap_or_else(|| item_name.to_owned());
                     linker.func_new(&item_name, move |_, _, _| {
                         bail!("unknown import: `{fully_qualified_name}` has not been defined")

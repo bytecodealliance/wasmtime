@@ -295,12 +295,12 @@ impl std::error::Error for SetError {}
 impl fmt::Display for SetError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SetError::BadName(name) => write!(f, "No existing setting named '{}'", name),
+            SetError::BadName(name) => write!(f, "No existing setting named '{name}'"),
             SetError::BadType => {
                 write!(f, "Trying to set a setting with the wrong type")
             }
             SetError::BadValue(value) => {
-                write!(f, "Unexpected value for a setting, expected {}", value)
+                write!(f, "Unexpected value for a setting, expected {value}")
             }
         }
     }
@@ -375,13 +375,13 @@ pub mod detail {
         ) -> fmt::Result {
             match detail {
                 Detail::Bool { bit } => write!(f, "{}", (byte & (1 << bit)) != 0),
-                Detail::Num => write!(f, "{}", byte),
+                Detail::Num => write!(f, "{byte}"),
                 Detail::Enum { last, enumerators } => {
                     if byte <= last {
                         let tags = self.enums(last, enumerators);
                         write!(f, "\"{}\"", tags[usize::from(byte)])
                     } else {
-                        write!(f, "{}", byte)
+                        write!(f, "{byte}")
                     }
                 }
                 // Presets aren't printed. They are reflected in the other settings.

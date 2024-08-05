@@ -19,14 +19,13 @@ fn test_invoke_func_via_table() -> Result<()> {
     let instance =
         Instance::new(&mut store, &module, &[]).context("> Error instantiating module!")?;
 
-    let f = instance
+    let f = *instance
         .get_table(&mut store, "table")
         .unwrap()
         .get(&mut store, 0)
         .unwrap()
         .unwrap_func()
-        .unwrap()
-        .clone();
+        .unwrap();
     let mut results = [Val::I32(0)];
     f.call(&mut store, &[], &mut results).unwrap();
     assert_eq!(results[0].unwrap_i64(), 42);

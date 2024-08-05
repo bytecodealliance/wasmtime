@@ -16,7 +16,7 @@ impl<'a> flags::Flags for WasiCtx<'a> {
         other_config_ptr: GuestPtr<types::CarConfig>,
     ) -> Result<types::CarConfig, types::Errno> {
         let other_config = memory.read(other_config_ptr).map_err(|e| {
-            eprintln!("old_config_ptr error: {}", e);
+            eprintln!("old_config_ptr error: {e}");
             types::Errno::InvalidArg
         })?;
         Ok(old_config ^ other_config)

@@ -271,7 +271,7 @@ mod tests {
         }
         fn assert_contains_host() {
             let trace = backtrace::Backtrace::new();
-            println!("{:?}", trace);
+            println!("{trace:?}");
             assert!(
                 trace
                 .frames()

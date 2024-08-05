@@ -265,7 +265,7 @@ impl WorkerThread {
 
         // construct .stats file path
         let filename = path.file_name().unwrap().to_str().unwrap();
-        let stats_path = path.with_file_name(format!("{}.stats", filename));
+        let stats_path = path.with_file_name(format!("{filename}.stats"));
 
         // load .stats file (default if none or error)
         let mut stats = read_stats_file(stats_path.as_ref())
@@ -399,7 +399,7 @@ impl WorkerThread {
             .expect("Expected valid cache file name")
             .to_str()
             .expect("Expected valid cache file name");
-        let stats_path = path.with_file_name(format!("{}.stats", filename));
+        let stats_path = path.with_file_name(format!("{filename}.stats"));
 
         // create and write stats file
         let mut stats = ModuleCacheStatistics::default(&self.cache_config);

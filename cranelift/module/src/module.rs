@@ -325,36 +325,34 @@ impl std::fmt::Display for ModuleError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Undeclared(name) => {
-                write!(f, "Undeclared identifier: {}", name)
+                write!(f, "Undeclared identifier: {name}")
             }
             Self::IncompatibleDeclaration(name) => {
-                write!(f, "Incompatible declaration of identifier: {}", name,)
+                write!(f, "Incompatible declaration of identifier: {name}",)
             }
             Self::IncompatibleSignature(name, prev_sig, new_sig) => {
                 write!(
                     f,
-                    "Function {} signature {:?} is incompatible with previous declaration {:?}",
-                    name, new_sig, prev_sig,
+                    "Function {name} signature {new_sig:?} is incompatible with previous declaration {prev_sig:?}",
                 )
             }
             Self::DuplicateDefinition(name) => {
-                write!(f, "Duplicate definition of identifier: {}", name)
+                write!(f, "Duplicate definition of identifier: {name}")
             }
             Self::InvalidImportDefinition(name) => {
                 write!(
                     f,
-                    "Invalid to define identifier declared as an import: {}",
-                    name,
+                    "Invalid to define identifier declared as an import: {name}",
                 )
             }
             Self::Compilation(err) => {
-                write!(f, "Compilation error: {}", err)
+                write!(f, "Compilation error: {err}")
             }
             Self::Allocation { message, err } => {
-                write!(f, "Allocation error: {}: {}", message, err)
+                write!(f, "Allocation error: {message}: {err}")
             }
-            Self::Backend(err) => write!(f, "Backend error: {}", err),
-            Self::Flag(err) => write!(f, "Flag error: {}", err),
+            Self::Backend(err) => write!(f, "Backend error: {err}"),
+            Self::Flag(err) => write!(f, "Flag error: {err}"),
         }
     }
 }
@@ -447,9 +445,9 @@ impl ModuleRelocTarget {
 impl Display for ModuleRelocTarget {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::User { namespace, index } => write!(f, "u{}:{}", namespace, index),
-            Self::LibCall(lc) => write!(f, "%{}", lc),
-            Self::KnownSymbol(ks) => write!(f, "{}", ks),
+            Self::User { namespace, index } => write!(f, "u{namespace}:{index}"),
+            Self::LibCall(lc) => write!(f, "%{lc}"),
+            Self::KnownSymbol(ks) => write!(f, "{ks}"),
             Self::FunctionOffset(fname, offset) => write!(f, "{fname}+{offset}"),
         }
     }

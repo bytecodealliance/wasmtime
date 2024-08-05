@@ -42,10 +42,7 @@ pub mod wit {
     /// single output).
     pub fn classify(graph: Graph, input: (&str, Vec<u8>), output: &str) -> Result<Vec<f32>> {
         let context = graph.init_execution_context().map_err(err_as_anyhow)?;
-        println!(
-            "[nn] created wasi-nn execution context with ID: {:?}",
-            context
-        );
+        println!("[nn] created wasi-nn execution context with ID: {context:?}");
 
         // Many classifiers have a single input; currently, this test suite also
         // uses tensors of the same shape, though this is not usually the case.
@@ -113,10 +110,7 @@ pub mod witx {
     /// single output).
     pub fn classify(graph: Graph, tensor: Vec<u8>) -> Result<Vec<f32>> {
         let mut context = graph.init_execution_context()?;
-        println!(
-            "[nn] created wasi-nn execution context with ID: {}",
-            context
-        );
+        println!("[nn] created wasi-nn execution context with ID: {context}");
 
         // Many classifiers have a single input; currently, this test suite also
         // uses tensors of the same shape, though this is not usually the case.
@@ -135,7 +129,7 @@ pub mod witx {
         // type.
         let mut output_buffer = vec![0u8; 1001 * std::mem::size_of::<f32>()];
         let num_bytes = context.get_output(0, &mut output_buffer)?;
-        println!("[nn] retrieved output tensor: {} bytes", num_bytes);
+        println!("[nn] retrieved output tensor: {num_bytes} bytes");
         let output: Vec<f32> = output_buffer[..num_bytes]
             .chunks(4)
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))

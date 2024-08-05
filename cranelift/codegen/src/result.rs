@@ -73,14 +73,14 @@ impl std::fmt::Display for CodegenError {
             CodegenError::Verifier(_) => write!(f, "Verifier errors"),
             CodegenError::ImplLimitExceeded => write!(f, "Implementation limit exceeded"),
             CodegenError::CodeTooLarge => write!(f, "Code for function is too large"),
-            CodegenError::Unsupported(feature) => write!(f, "Unsupported feature: {}", feature),
+            CodegenError::Unsupported(feature) => write!(f, "Unsupported feature: {feature}"),
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError(_0) => write!(f, "Register mapping error"),
-            CodegenError::Regalloc(errors) => write!(f, "Regalloc validation errors: {:?}", errors),
+            CodegenError::Regalloc(errors) => write!(f, "Regalloc validation errors: {errors:?}"),
 
             // NOTE: if this is changed, please update the `is_pcc_error` function defined in
             // `wasmtime/crates/fuzzing/src/oracles.rs`
-            CodegenError::Pcc(e) => write!(f, "Proof-carrying-code validation error: {:?}", e),
+            CodegenError::Pcc(e) => write!(f, "Proof-carrying-code validation error: {e:?}"),
         }
     }
 }

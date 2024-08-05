@@ -170,7 +170,7 @@ fn snake_typename(tref: &TypeRef) -> String {
         TypeRef::Name(nt) => nt.name.as_str().to_snake_case(),
         TypeRef::Value(ty) => match &**ty {
             Type::Builtin(b) => builtin_name(&b).to_owned(),
-            _ => panic!("unexpected anonymous type: {:?}", ty),
+            _ => panic!("unexpected anonymous type: {ty:?}"),
         },
     }
 }

@@ -81,7 +81,7 @@ fn generate_func(
     let (params, results) = func.wasm_signature();
 
     let arg_names = (0..params.len())
-        .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
+        .map(|i| Ident::new(&format!("arg{i}"), Span::call_site()))
         .collect::<Vec<_>>();
     let arg_tys = params
         .iter()

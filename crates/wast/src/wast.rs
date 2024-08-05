@@ -320,7 +320,7 @@ where
                         }
                     };
                     core::match_val(&self.store, v, e)
-                        .with_context(|| format!("result {} didn't match", i))?;
+                        .with_context(|| format!("result {i} didn't match"))?;
                 }
             }
             #[cfg(feature = "component-model")]
@@ -336,7 +336,7 @@ where
                         WastRet::Component(val) => val,
                     };
                     component::match_val(e, v)
-                        .with_context(|| format!("result {} didn't match", i))?;
+                        .with_context(|| format!("result {i} didn't match"))?;
                 }
             }
         }
@@ -472,7 +472,7 @@ where
                     Ok(()) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
-                let error_message = format!("{:?}", err);
+                let error_message = format!("{err:?}");
                 if !is_matching_assert_invalid_error_message(&message, &error_message) {
                     bail!(
                         "assert_invalid: expected \"{}\", got \"{}\"",
@@ -499,7 +499,7 @@ where
                     Ok(()) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };
-                let error_message = format!("{:?}", err);
+                let error_message = format!("{err:?}");
                 if !error_message.contains(&message) {
                     bail!(
                         "assert_unlinkable: expected {}, got {}",

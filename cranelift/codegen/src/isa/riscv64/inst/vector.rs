@@ -44,7 +44,7 @@ impl PartialEq for VecAvl {
 impl fmt::Display for VecAvl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            VecAvl::Static { size } => write!(f, "{}", size),
+            VecAvl::Static { size } => write!(f, "{size}"),
         }
     }
 }
@@ -60,7 +60,7 @@ impl VecElementWidth {
             16 => VecElementWidth::E16,
             32 => VecElementWidth::E32,
             64 => VecElementWidth::E64,
-            _ => panic!("Invalid number of bits for VecElementWidth: {}", bits),
+            _ => panic!("Invalid number of bits for VecElementWidth: {bits}"),
         }
     }
 

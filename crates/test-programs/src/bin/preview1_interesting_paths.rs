@@ -78,7 +78,7 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     wasi::fd_close(file_fd).expect("closing a file");
 
     // Now open it with a path containing too many ".."s.
-    let bad_path = format!("dir/nested/../../../{}/dir/nested/file", arg);
+    let bad_path = format!("dir/nested/../../../{arg}/dir/nested/file");
     assert_errno!(
         wasi::path_open(dir_fd, 0, &bad_path, 0, 0, 0, 0)
             .expect_err("opening a file with too many \"..\"s in the path should fail"),
@@ -98,7 +98,7 @@ fn main() {
     let arg = if let Some(arg) = args.next() {
         arg
     } else {
-        eprintln!("usage: {} <scratch directory>", prog);
+        eprintln!("usage: {prog} <scratch directory>");
         process::exit(1);
     };
 
@@ -106,7 +106,7 @@ fn main() {
     let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
             process::exit(1)
         }
     };

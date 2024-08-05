@@ -36,7 +36,7 @@ fn cat_one(path: &Path) -> Result<()> {
         if idx != 0 {
             println!();
         }
-        print!("{}", func);
+        print!("{func}");
     }
 
     Ok(())

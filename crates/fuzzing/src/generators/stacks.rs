@@ -365,6 +365,6 @@ mod tests {
         if let Ok(text) = wasmprinter::print_bytes(wasm) {
             drop(std::fs::write("test.wat", &text));
         }
-        panic!("wasm failed to validate: {}", err);
+        panic!("wasm failed to validate: {err}");
     }
 }

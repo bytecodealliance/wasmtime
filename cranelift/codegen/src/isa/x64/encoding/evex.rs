@@ -265,8 +265,7 @@ impl EvexInstruction {
         let mask: u32 = (1 << size) - 1; // Generate a bit mask.
         debug_assert!(
             value <= mask,
-            "The written value should have fewer than {} bits.",
-            size
+            "The written value should have fewer than {size} bits."
         );
         let mask_complement = !(mask << *range.start()); // Create the bitwise complement for the clear mask.
         self.bits &= mask_complement; // Clear the bits in `range`; otherwise the OR below may allow previously-set bits to slip through.

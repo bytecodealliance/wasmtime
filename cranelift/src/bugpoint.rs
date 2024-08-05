@@ -62,8 +62,8 @@ pub fn run(options: &Options) -> Result<()> {
 
         match reduce(isa, func, options.verbose) {
             Ok((func, crash_msg)) => {
-                println!("Crash message: {}", crash_msg);
-                println!("\n{}", func);
+                println!("Crash message: {crash_msg}");
+                println!("\n{func}");
                 println!(
                     "{} blocks {} insts -> {} blocks {} insts",
                     orig_block_count,
@@ -72,7 +72,7 @@ pub fn run(options: &Options) -> Result<()> {
                     inst_count(&func)
                 );
             }
-            Err(err) => println!("Warning: {}", err),
+            Err(err) => println!("Warning: {err}"),
         }
     }
 
@@ -134,9 +134,9 @@ impl Mutator for RemoveInst {
             let msg = if func.layout.block_insts(prev_block).next().is_none() {
                 // Make sure empty blocks are removed, as `next_inst_ret_prev` depends on non empty blocks
                 func.layout.remove_block(prev_block);
-                format!("Remove inst {} and empty block {}", prev_inst, prev_block)
+                format!("Remove inst {prev_inst} and empty block {prev_block}")
             } else {
-                format!("Remove inst {}", prev_inst)
+                format!("Remove inst {prev_inst}")
             };
             (func, msg, ProgressStatus::ExpandedOrShrinked)
         })
@@ -272,11 +272,7 @@ impl Mutator for ReplaceInstWithTrap {
                     func.dfg.replace(prev_inst).trap(TrapCode::User(0));
                     ProgressStatus::Changed
                 };
-                (
-                    func,
-                    format!("Replace inst {} with trap", prev_inst),
-                    status,
-                )
+                (func, format!("Replace inst {prev_inst} with trap"), status)
             },
         )
     }
@@ -316,7 +312,7 @@ impl Mutator for MoveInstToEntryBlock {
             if first_block == prev_block || self.block != prev_block {
                 return (
                     func,
-                    format!("did nothing for {}", prev_inst),
+                    format!("did nothing for {prev_inst}"),
                     ProgressStatus::Skip,
                 );
             }
@@ -327,7 +323,7 @@ impl Mutator for MoveInstToEntryBlock {
 
             (
                 func,
-                format!("Move inst {} to entry block", prev_inst),
+                format!("Move inst {prev_inst} to entry block"),
                 ProgressStatus::ExpandedOrShrinked,
             )
         })
@@ -365,7 +361,7 @@ impl Mutator for RemoveBlock {
             func.layout.remove_block(self.block);
             (
                 func,
-                format!("Remove block {}", next_block),
+                format!("Remove block {next_block}"),
                 ProgressStatus::ExpandedOrShrinked,
             )
         })
@@ -701,7 +697,7 @@ impl Mutator for MergeBlocks {
         if cfg.pred_iter(block).count() != 1 {
             return Some((
                 func,
-                format!("did nothing for {}", block),
+                format!("did nothing for {block}"),
                 ProgressStatus::Skip,
             ));
         }
@@ -714,7 +710,7 @@ impl Mutator for MergeBlocks {
         if branch_dests.len() != 1 {
             return Some((
                 func,
-                format!("did nothing for {}", block),
+                format!("did nothing for {block}"),
                 ProgressStatus::Skip,
             ));
         }
@@ -918,7 +914,7 @@ fn reduce(isa: &dyn TargetIsa, mut func: Function, verbose: bool) -> Result<(Fun
                             ProgressStatus::Skip => unreachable!(),
                         };
                         if verbose {
-                            progress_bar.println(format!("{}: {}", msg, verb));
+                            progress_bar.println(format!("{msg}: {verb}"));
                         }
                     }
                 }
@@ -1089,13 +1085,11 @@ mod tests {
                 "reduction wasn't maximal for insts"
             );
 
-            let actual_ir = format!("{}", reduced_func);
+            let actual_ir = format!("{reduced_func}");
             let expected_ir = expected_str.replace("\r\n", "\n");
             assert!(
                 expected_ir == actual_ir,
-                "Expected:\n{}\nGot:\n{}",
-                expected_ir,
-                actual_ir,
+                "Expected:\n{expected_ir}\nGot:\n{actual_ir}",
             );
         }
     }

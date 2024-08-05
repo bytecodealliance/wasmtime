@@ -87,7 +87,7 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     let mut builder = WasiCtxBuilder::new();
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
-    builder.env("HTTP_SERVER", server.addr().to_string());
+    builder.env("HTTP_SERVER", &server.addr());
     let ctx = Ctx {
         table: ResourceTable::new(),
         wasi: builder.build(),
@@ -396,7 +396,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
     let body = response.into_body().to_bytes();
     let body = str::from_utf8(&body).unwrap();
     for line in body.lines() {
-        println!("{}", line);
+        println!("{line}");
         if line.contains("forbidden.com") {
             assert!(line.contains("HttpRequestDenied"));
         }

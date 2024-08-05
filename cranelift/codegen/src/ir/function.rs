@@ -260,7 +260,7 @@ impl FunctionStencil {
         self.dfg
             .dynamic_types
             .get(ty)
-            .unwrap_or_else(|| panic!("Undeclared dynamic vector type: {}", ty))
+            .unwrap_or_else(|| panic!("Undeclared dynamic vector type: {ty}"))
             .concrete()
     }
 

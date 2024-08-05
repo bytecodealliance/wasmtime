@@ -19,7 +19,7 @@ impl<'a> handle_examples::HandleExamples for WasiCtx<'a> {
         _memory: &mut GuestMemory<'_>,
         fd: types::Fd,
     ) -> Result<(), types::Errno> {
-        println!("FD_CONSUME {}", fd);
+        println!("FD_CONSUME {fd}");
         if fd == types::Fd::from(FD_VAL) {
             Ok(())
         } else {

@@ -57,7 +57,7 @@ fn main() -> Result<()> {
             println!("> ignoring {program}: {}", check.reason());
         }
         let trial = Trial::test(program, move || {
-            run_test().map_err(|e| format!("{:?}", e).into())
+            run_test().map_err(|e| format!("{e:?}").into())
         })
         .with_ignored_flag(should_ignore);
         trials.push(trial);
@@ -103,7 +103,7 @@ fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
             nn_wit_image_classification_winml_named,
             IgnoreCheck::for_winml(),
         ),
-        _ => panic!("unknown test program: {} (add to this `match`)", name),
+        _ => panic!("unknown test program: {name} (add to this `match`)"),
     }
 }
 

@@ -61,7 +61,7 @@ pub fn run(options: &Options) -> Result<()> {
         match total {
             0 => println!("0 files"),
             1 => println!("1 file"),
-            n => println!("{} files", n),
+            n => println!("{n} files"),
         }
     }
 

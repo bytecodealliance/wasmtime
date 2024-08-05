@@ -123,7 +123,7 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fm
 
     write!(s, "cfg_postorder:")?;
     for &block in domtree.cfg_postorder() {
-        write!(s, " {}", block)?;
+        write!(s, " {block}")?;
     }
     writeln!(s)?;
 
@@ -134,10 +134,10 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fm
     let mut stack = Vec::new();
     stack.extend(func.layout.entry_block());
     while let Some(block) = stack.pop() {
-        write!(s, "    {}:", block)?;
+        write!(s, "    {block}:")?;
         let i = stack.len();
         for ch in dtpo.children(block) {
-            write!(s, " {}", ch)?;
+            write!(s, " {ch}")?;
             stack.push(ch);
         }
         writeln!(s)?;

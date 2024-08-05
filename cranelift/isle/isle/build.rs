@@ -28,8 +28,8 @@ fn emit_tests(out: &mut String, dir_name: &str, runner_func: &str) {
         let test_file_base = test_file.replace(".isle", "");
 
         writeln!(out, "#[test]").unwrap();
-        writeln!(out, "fn test_{}_{}() {{", runner_func, test_file_base).unwrap();
-        writeln!(out, "    {}(\"{}/{}\");", runner_func, dir_name, test_file).unwrap();
+        writeln!(out, "fn test_{runner_func}_{test_file_base}() {{").unwrap();
+        writeln!(out, "    {runner_func}(\"{dir_name}/{test_file}\");").unwrap();
         writeln!(out, "}}").unwrap();
     }
 }

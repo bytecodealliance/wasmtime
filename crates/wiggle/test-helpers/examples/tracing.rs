@@ -68,7 +68,7 @@ impl<'a> one_error_conversion::OneErrorConversion for WasiCtx<'a> {
                 f2: 456.78,
             }),
             1 => Err(RichError::PicketLine(format!("I'm not a scab"))),
-            _ => Err(RichError::InvalidArg(format!("out-of-bounds: {}", strike))),
+            _ => Err(RichError::InvalidArg(format!("out-of-bounds: {strike}"))),
         }
     }
 }

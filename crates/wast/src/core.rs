@@ -365,14 +365,14 @@ fn match_v128(actual: u128, expected: &V128Pattern) -> Result<()> {
         V128Pattern::F32x4(expected) => {
             for (i, expected) in expected.iter().enumerate() {
                 let a = extract_lane_as_i32(actual, i) as u32;
-                match_f32(a, expected).with_context(|| format!("difference in lane {}", i))?;
+                match_f32(a, expected).with_context(|| format!("difference in lane {i}"))?;
             }
             Ok(())
         }
         V128Pattern::F64x2(expected) => {
             for (i, expected) in expected.iter().enumerate() {
                 let a = extract_lane_as_i64(actual, i) as u64;
-                match_f64(a, expected).with_context(|| format!("difference in lane {}", i))?;
+                match_f64(a, expected).with_context(|| format!("difference in lane {i}"))?;
             }
             Ok(())
         }

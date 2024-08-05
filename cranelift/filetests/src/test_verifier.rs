@@ -79,7 +79,7 @@ impl SubTest for TestVerifier {
 
                 // Report remaining errors.
                 for err in errors {
-                    writeln!(msg, "unexpected error {}", err).unwrap();
+                    writeln!(msg, "unexpected error {err}").unwrap();
                 }
 
                 if msg.is_empty() {

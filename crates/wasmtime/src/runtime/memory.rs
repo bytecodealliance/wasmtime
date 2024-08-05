@@ -1058,7 +1058,7 @@ mod tests {
         assert_eq!(store[mem.0].memory.offset_guard_size, 0);
         match &store[mem.0].memory.style {
             wasmtime_environ::MemoryStyle::Dynamic { .. } => {}
-            other => panic!("unexpected style {:?}", other),
+            other => panic!("unexpected style {other:?}"),
         }
     }
 

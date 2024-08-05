@@ -280,18 +280,10 @@ impl Display for DataValueCastFailure {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             DataValueCastFailure::TryInto(from, to) => {
-                write!(
-                    f,
-                    "unable to cast data value of type {} to type {}",
-                    from, to
-                )
+                write!(f, "unable to cast data value of type {from} to type {to}")
             }
             DataValueCastFailure::FromInteger(val, to) => {
-                write!(
-                    f,
-                    "unable to cast i64({}) to a data value of type {}",
-                    val, to
-                )
+                write!(f, "unable to cast i64({val}) to a data value of type {to}")
             }
         }
     }
@@ -341,16 +333,16 @@ impl From<Offset32> for DataValue {
 impl Display for DataValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            DataValue::I8(dv) => write!(f, "{}", dv),
-            DataValue::I16(dv) => write!(f, "{}", dv),
-            DataValue::I32(dv) => write!(f, "{}", dv),
-            DataValue::I64(dv) => write!(f, "{}", dv),
-            DataValue::I128(dv) => write!(f, "{}", dv),
+            DataValue::I8(dv) => write!(f, "{dv}"),
+            DataValue::I16(dv) => write!(f, "{dv}"),
+            DataValue::I32(dv) => write!(f, "{dv}"),
+            DataValue::I64(dv) => write!(f, "{dv}"),
+            DataValue::I128(dv) => write!(f, "{dv}"),
             // The Ieee* wrappers here print the expected syntax.
-            DataValue::F16(dv) => write!(f, "{}", dv),
-            DataValue::F32(dv) => write!(f, "{}", dv),
-            DataValue::F64(dv) => write!(f, "{}", dv),
-            DataValue::F128(dv) => write!(f, "{}", dv),
+            DataValue::F16(dv) => write!(f, "{dv}"),
+            DataValue::F32(dv) => write!(f, "{dv}"),
+            DataValue::F64(dv) => write!(f, "{dv}"),
+            DataValue::F128(dv) => write!(f, "{dv}"),
             // Again, for syntax consistency, use ConstantData, which in this case displays as hex.
             DataValue::V128(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
             DataValue::V64(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
@@ -384,7 +376,7 @@ pub fn write_data_value_list(f: &mut Formatter<'_>, list: &[DataValue]) -> fmt::
         _ => {
             write!(f, "{}", list[0])?;
             for dv in list.iter().skip(1) {
-                write!(f, ", {}", dv)?;
+                write!(f, ", {dv}")?;
             }
             Ok(())
         }

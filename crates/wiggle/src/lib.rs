@@ -550,7 +550,7 @@ pub trait Pointee: private::Sealed {
 impl<T> Pointee for T {
     type Pointer = u32;
     fn debug(pointer: Self::Pointer, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "*guest {:#x}", pointer)
+        write!(f, "*guest {pointer:#x}")
     }
 }
 

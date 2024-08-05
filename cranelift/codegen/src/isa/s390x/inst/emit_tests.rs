@@ -13359,10 +13359,7 @@ fn test_s390x_binemit() {
 
     let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
-        println!(
-            "S390x: {:?}, {}, {}",
-            insn, expected_encoding, expected_printing
-        );
+        println!("S390x: {insn:?}, {expected_encoding}, {expected_printing}");
 
         // Check the printed text is as expected.
         let actual_printing = insn.print_with_state(&mut EmitState::default());

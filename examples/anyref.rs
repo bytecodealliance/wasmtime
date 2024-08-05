@@ -38,7 +38,7 @@ fn main() -> Result<()> {
 
     println!("Touching `anyref` global...");
     let global = instance.get_global(&mut store, "global").unwrap();
-    global.set(&mut store, Some(anyref.clone()).into())?;
+    global.set(&mut store, Some(anyref).into())?;
     let global_val = global.get(&mut store).unwrap_anyref().copied().unwrap();
     assert!(Rooted::ref_eq(&store, &global_val, &anyref)?);
 

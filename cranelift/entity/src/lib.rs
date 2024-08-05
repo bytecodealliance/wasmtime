@@ -344,7 +344,7 @@ mod tests {
         #[test]
         fn display_prefix_works() {
             let e = PrefixEntity::new(0);
-            assert_eq!(alloc::format!("{}", e), "prefix-0");
+            assert_eq!(alloc::format!("{e}"), "prefix-0");
         }
     }
 
@@ -375,7 +375,7 @@ mod tests {
         #[test]
         fn display_prefix_works() {
             let e = InnerEntity::new(0);
-            assert_eq!(alloc::format!("{}", e), "inner-0");
+            assert_eq!(alloc::format!("{e}"), "inner-0");
         }
     }
 }

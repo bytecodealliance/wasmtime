@@ -1083,8 +1083,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                 || call_conv == isa::CallConv::WasmtimeSystemV
                 || call_conv == isa::CallConv::AppleAarch64
                 || call_conv == isa::CallConv::Winch,
-            "Unsupported calling convention: {:?}",
-            call_conv
+            "Unsupported calling convention: {call_conv:?}"
         );
 
         // Compute sized stackslot locations and total stackslot size.
@@ -1129,7 +1128,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         for (dyn_ty, _data) in f.dfg.dynamic_types.iter() {
             let ty = f
                 .get_concrete_dynamic_ty(dyn_ty)
-                .unwrap_or_else(|| panic!("invalid dynamic vector type: {}", dyn_ty));
+                .unwrap_or_else(|| panic!("invalid dynamic vector type: {dyn_ty}"));
             let size = isa.dynamic_vector_bytes(ty);
             dynamic_type_sizes.insert(ty, size);
         }
@@ -1284,7 +1283,7 @@ fn generate_gv<M: ABIMachineSpec>(
             ));
             return into_reg.to_reg();
         }
-        ref other => panic!("global value for stack limit not supported: {}", other),
+        ref other => panic!("global value for stack limit not supported: {other}"),
     }
 }
 
@@ -2310,7 +2309,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         let value_regs = match *into_regs {
             [a] => ValueRegs::one(a),
             [a, b] => ValueRegs::two(a, b),
-            _ => panic!("Expected to see one or two slots only from {:?}", ret),
+            _ => panic!("Expected to see one or two slots only from {ret:?}"),
         };
         (insts, value_regs)
     }

@@ -37,7 +37,7 @@ pub(crate) fn into_valtype(kind: wasm_valkind_t) -> ValType {
         WASM_EXTERNREF => ValType::EXTERNREF,
         WASM_FUNCREF => ValType::FUNCREF,
         WASMTIME_V128 => ValType::V128,
-        _ => panic!("unexpected kind: {}", kind),
+        _ => panic!("unexpected kind: {kind}"),
     }
 }
 

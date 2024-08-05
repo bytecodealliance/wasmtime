@@ -154,7 +154,7 @@ pub extern "C" fn wasmtime_store_epoch_deadline_callback(
             }
             #[cfg(feature = "async")]
             None if kind == WASMTIME_UPDATE_DEADLINE_YIELD => Ok(UpdateDeadline::Yield(delta)),
-            _ => panic!("unknown wasmtime_update_deadline_kind_t: {}", kind),
+            _ => panic!("unknown wasmtime_update_deadline_kind_t: {kind}"),
         }
     });
 }

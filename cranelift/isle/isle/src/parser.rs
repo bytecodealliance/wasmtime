@@ -48,7 +48,7 @@ impl<'a> Parser<'a> {
     fn expect<F: Fn(&Token) -> bool>(&mut self, f: F) -> Result<Token> {
         if let Some(&(pos, ref peek)) = self.lexer.peek() {
             if !f(peek) {
-                return Err(self.error(pos, format!("Unexpected token {:?}", peek)));
+                return Err(self.error(pos, format!("Unexpected token {peek:?}")));
             }
             Ok(self.lexer.next()?.unwrap().1)
         } else {
@@ -160,7 +160,7 @@ impl<'a> Parser<'a> {
             "extern" => Def::Extern(self.parse_extern()?),
             "convert" => Def::Converter(self.parse_converter()?),
             s => {
-                return Err(self.error(pos, format!("Unexpected identifier: {}", s)));
+                return Err(self.error(pos, format!("Unexpected identifier: {s}")));
             }
         };
         self.expect_rparen()?;
@@ -175,7 +175,7 @@ impl<'a> Parser<'a> {
         if !first.is_alphabetic() && first != '_' && first != '$' {
             return Err(self.error(
                 pos,
-                format!("Identifier '{}' does not start with letter or _ or $", s),
+                format!("Identifier '{s}' does not start with letter or _ or $"),
             ));
         }
         if s.chars()
@@ -184,10 +184,7 @@ impl<'a> Parser<'a> {
         {
             return Err(self.error(
                 pos,
-                format!(
-                    "Identifier '{}' contains invalid character (not a-z, A-Z, 0-9, _, ., $)",
-                    s
-                ),
+                format!("Identifier '{s}' contains invalid character (not a-z, A-Z, 0-9, _, ., $)"),
             ));
         }
         Ok(Ident(s.to_string(), pos))
@@ -216,7 +213,7 @@ impl<'a> Parser<'a> {
         let ident = self.parse_ident()?;
         // currently, no pragmas are defined, but the infrastructure is useful to keep around
         let pragma = ident.0.as_str();
-        Err(self.error(ident.1, format!("Unknown pragma '{}'", pragma)))
+        Err(self.error(ident.1, format!("Unknown pragma '{pragma}'")))
     }
 
     fn parse_type(&mut self) -> Result<Type> {
@@ -235,7 +232,7 @@ impl<'a> Parser<'a> {
             } else {
                 return Err(self.error(
                     self.pos(),
-                    format!("unknown type declaration modifier: {}", sym),
+                    format!("unknown type declaration modifier: {sym}"),
                 ));
             }
         }
@@ -385,7 +382,7 @@ impl<'a> Parser<'a> {
         let prio = if self.is_int() {
             Some(
                 i64::try_from(self.expect_int()?)
-                    .map_err(|err| self.error(pos, format!("Invalid rule priority: {}", err)))?,
+                    .map_err(|err| self.error(pos, format!("Invalid rule priority: {err}")))?,
             )
         } else {
             None

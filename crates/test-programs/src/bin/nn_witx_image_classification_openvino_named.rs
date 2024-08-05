@@ -12,6 +12,6 @@ pub fn main() -> Result<()> {
         .context("the tensor file to be mapped to the fixture directory")?;
     let results = witx::classify(graph, tensor)?;
     let top_five = &sort_results(&results)[..5];
-    println!("found results, sorted top 5: {:?}", top_five);
+    println!("found results, sorted top 5: {top_five:?}");
     Ok(())
 }

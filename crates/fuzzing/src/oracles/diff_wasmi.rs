@@ -81,11 +81,11 @@ impl DiffEngine for WasmiEngine {
                 return;
             }
 
-            Some(other) => panic!("unexpected wasmi error: {}", other),
+            Some(other) => panic!("unexpected wasmi error: {other}"),
 
             None => err
                 .downcast_ref::<wasmi::core::Trap>()
-                .expect(&format!("not a trap: {:?}", err)),
+                .expect(&format!("not a trap: {err:?}")),
         };
         assert!(wasmi.trap_code().is_some());
         assert_eq!(

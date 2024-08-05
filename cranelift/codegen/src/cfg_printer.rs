@@ -35,7 +35,7 @@ impl<'a> CFGPrinter<'a> {
     fn header(&self, w: &mut dyn Write) -> Result {
         writeln!(w, "digraph \"{}\" {{", self.func.name)?;
         if let Some(entry) = self.func.layout.entry_block() {
-            writeln!(w, "    {{rank=min; {}}}", entry)?;
+            writeln!(w, "    {{rank=min; {entry}}}")?;
         }
         Ok(())
     }
@@ -50,11 +50,11 @@ impl<'a> CFGPrinter<'a> {
         }
 
         for block in &self.func.layout {
-            write!(w, "    {} [shape=record, label=\"{{", block)?;
+            write!(w, "    {block} [shape=record, label=\"{{")?;
             crate::write::write_block_header(w, self.func, block, 4)?;
             // Add all outgoing branch instructions to the label.
             if let Some(inst) = self.func.layout.last_inst(block) {
-                write!(w, " | <{}>", inst)?;
+                write!(w, " | <{inst}>")?;
                 PlainWriter.write_instruction(w, self.func, &aliases, inst, 0)?;
             }
             writeln!(w, "}}\"]")?
@@ -69,7 +69,7 @@ impl<'a> CFGPrinter<'a> {
                 inst,
             } in self.cfg.pred_iter(block)
             {
-                writeln!(w, "    {}:{} -> {}", parent, inst, block)?;
+                writeln!(w, "    {parent}:{inst} -> {block}")?;
             }
         }
         Ok(())

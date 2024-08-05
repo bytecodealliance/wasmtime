@@ -220,8 +220,7 @@ fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
                     Operator::RefFunc { function_index } => FuncIndex::from_u32(function_index),
                     s => {
                         return Err(WasmError::Unsupported(format!(
-                            "unsupported init expr in element section: {:?}",
-                            s
+                            "unsupported init expr in element section: {s:?}"
                         )));
                     }
                 };

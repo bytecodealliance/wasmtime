@@ -38,7 +38,7 @@ impl<'a> Frame<'a> {
         &self
             .registers
             .get(name.index())
-            .unwrap_or_else(|| panic!("unknown value: {}", name))
+            .unwrap_or_else(|| panic!("unknown value: {name}"))
             .as_ref()
             .or_else(|| {
                 // We couldn't find the `name` value directly in `registers`, but it is still
@@ -53,10 +53,10 @@ impl<'a> Frame<'a> {
                 let alias = self.function.dfg.resolve_aliases(name);
                 self.registers
                     .get(alias.index())
-                    .unwrap_or_else(|| panic!("unknown value: {}", alias))
+                    .unwrap_or_else(|| panic!("unknown value: {alias}"))
                     .as_ref()
             })
-            .unwrap_or_else(|| panic!("empty slot: {}", name))
+            .unwrap_or_else(|| panic!("empty slot: {name}"))
     }
 
     /// Retrieve multiple SSA references; see `get`.

@@ -182,7 +182,7 @@ fn gen_common_isle(
                 match format.num_block_operands {
                     0 => (),
                     1 => write!(&mut s, " (destination BlockCall)").unwrap(),
-                    n => write!(&mut s, " (blocks BlockArray{})", n).unwrap(),
+                    n => write!(&mut s, " (blocks BlockArray{n})").unwrap(),
                 }
 
                 for field in &format.imm_fields {
@@ -289,7 +289,7 @@ fn gen_common_isle(
                     .unwrap()
                     .name;
                 if values.is_empty() {
-                    write!(&mut s, " (value_list_slice {})", varargs).unwrap();
+                    write!(&mut s, " (value_list_slice {varargs})").unwrap();
                 } else {
                     write!(
                         &mut s,
@@ -481,7 +481,7 @@ fn gen_lower_isle(
 /// Generate an `enum` immediate in ISLE.
 fn gen_isle_enum(name: &str, mut variants: Vec<&str>, fmt: &mut Formatter) {
     variants.sort();
-    let prefix = format!(";;;; Enumerated Immediate: {} ", name);
+    let prefix = format!(";;;; Enumerated Immediate: {name} ");
     fmtln!(fmt, "{:;<80}", prefix);
     fmt.empty_line();
     fmtln!(fmt, "(type {} extern", name);

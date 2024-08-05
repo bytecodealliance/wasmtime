@@ -108,9 +108,9 @@ fn write_list(f: &mut fmt::Formatter, args: &[AbiParam]) -> fmt::Result {
     match args.split_first() {
         None => {}
         Some((first, rest)) => {
-            write!(f, "{}", first)?;
+            write!(f, "{first}")?;
             for arg in rest {
-                write!(f, ", {}", arg)?;
+                write!(f, ", {arg}")?;
             }
         }
     }
@@ -262,7 +262,7 @@ impl fmt::Display for ArgumentPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
             Self::Normal => "normal",
-            Self::StructArgument(size) => return write!(f, "sarg({})", size),
+            Self::StructArgument(size) => return write!(f, "sarg({size})"),
             Self::StructReturn => "sret",
             Self::VMContext => "vmctx",
         })

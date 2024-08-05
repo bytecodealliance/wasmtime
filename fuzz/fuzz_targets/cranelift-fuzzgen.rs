@@ -62,13 +62,13 @@ impl Statistics {
         let run_result_timeout = self.run_result_timeout.load(Ordering::SeqCst);
 
         println!("== FuzzGen Statistics  ====================");
-        println!("Valid Inputs: {}", valid_inputs);
+        println!("Valid Inputs: {valid_inputs}");
         println!(
             "Invalid Inputs: {} ({:.1}% of Total Inputs)",
             invalid_inputs,
             (invalid_inputs as f64 / (valid_inputs + invalid_inputs) as f64) * 100.0
         );
-        println!("Total Runs: {}", total_runs);
+        println!("Total Runs: {total_runs}");
         println!(
             "Successful Runs: {} ({:.1}% of Total Runs)",
             run_result_success,
@@ -271,7 +271,7 @@ fn run_in_interpreter(interpreter: &mut Interpreter, args: &[DataValue]) -> RunR
     match res {
         Ok(ControlFlow::Return(results)) => RunResult::Success(results.to_vec()),
         Ok(ControlFlow::Trap(trap)) => RunResult::Trap(trap),
-        Ok(cf) => RunResult::Error(format!("Unrecognized exit ControlFlow: {:?}", cf).into()),
+        Ok(cf) => RunResult::Error(format!("Unrecognized exit ControlFlow: {cf:?}").into()),
         Err(InterpreterError::FuelExhausted) => RunResult::Timeout,
         Err(e) => RunResult::Error(e.into()),
     }

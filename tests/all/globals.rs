@@ -145,7 +145,7 @@ fn i31ref_global_get() -> Result<()> {
             let global = Global::new(
                 &mut store,
                 GlobalType::new(ValType::I31REF, mutability),
-                val.clone(),
+                val,
             )?;
 
             let got = global.get(&mut store);
@@ -187,7 +187,7 @@ fn i31ref_global_set() -> Result<()> {
             )?;
 
             let new_val = Val::from(new_val);
-            global.set(&mut store, new_val.clone())?;
+            global.set(&mut store, new_val)?;
             let got = global.get(&mut store);
 
             let new_val = new_val
@@ -269,7 +269,7 @@ fn i31ref_as_anyref_global_get() -> Result<()> {
             let global = Global::new(
                 &mut store,
                 GlobalType::new(ValType::ANYREF, mutability),
-                val.clone(),
+                val,
             )?;
 
             let got = global.get(&mut store);
@@ -311,7 +311,7 @@ fn i31ref_as_anyref_global_set() -> Result<()> {
             )?;
 
             let new_val = Val::from(new_val);
-            global.set(&mut store, new_val.clone())?;
+            global.set(&mut store, new_val)?;
             let got = global.get(&mut store);
 
             let new_val = new_val

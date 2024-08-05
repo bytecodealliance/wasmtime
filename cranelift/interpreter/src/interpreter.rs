@@ -126,7 +126,7 @@ impl<'a> Interpreter<'a> {
                         }
                         ControlFlow::Trap(trap) => return Ok(ControlFlow::Trap(trap)),
                         cf => {
-                            panic!("invalid control flow after call: {:?}", cf)
+                            panic!("invalid control flow after call: {cf:?}")
                         }
                     }
                 }
@@ -137,7 +137,7 @@ impl<'a> Interpreter<'a> {
                         ControlFlow::Return(rets) => Ok(ControlFlow::Return(rets)),
                         ControlFlow::Trap(trap) => Ok(ControlFlow::Trap(trap)),
                         cf => {
-                            panic!("invalid control flow after return_call: {:?}", cf)
+                            panic!("invalid control flow after return_call: {cf:?}")
                         }
                     };
                 }
@@ -628,7 +628,7 @@ mod tests {
 
         match result {
             ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerOverflow)) => {}
-            _ => panic!("Unexpected ControlFlow: {:?}", result),
+            _ => panic!("Unexpected ControlFlow: {result:?}"),
         }
     }
 
@@ -692,7 +692,7 @@ mod tests {
             .call_by_name("%test", &[]);
         match result {
             Err(InterpreterError::FuelExhausted) => {}
-            _ => panic!("Expected Err(FuelExhausted), but got {:?}", result),
+            _ => panic!("Expected Err(FuelExhausted), but got {result:?}"),
         }
 
         // With 3 fuel, we should be able to execute the return instruction, and complete the test

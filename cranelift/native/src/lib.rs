@@ -151,6 +151,9 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
     Ok(())
 }
 
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[cfg(test)]
 mod tests {
     use super::builder;
@@ -183,6 +186,3 @@ mod tests {
         }
     }
 }
-
-/// Version number of this crate.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");

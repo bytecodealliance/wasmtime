@@ -5,7 +5,7 @@ use wasi_common::tokio::{add_to_linker, WasiCtxBuilder};
 foreach_preview1!(assert_test_exists);
 
 pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
-    let prefix = format!("wasi_tokio_{}_", exe_name);
+    let prefix = format!("wasi_tokio_{exe_name}_");
     let tempdir = tempfile::Builder::new().prefix(&prefix).tempdir()?;
     Ok(tempdir)
 }
@@ -35,7 +35,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
                 .stderr(Box::new(stderr.clone()));
         }
         builder.arg(name)?.arg(".")?;
-        println!("preopen: {:?}", workspace);
+        println!("preopen: {workspace:?}");
         let preopen_dir =
             cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
         builder.preopened_dir(preopen_dir, ".")?;
@@ -67,8 +67,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
             println!("guest stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
         }
         trap.context(format!(
-            "error while testing wasi-tests {} with cap-std-sync",
-            name
+            "error while testing wasi-tests {name} with cap-std-sync"
         ))
     })?;
     Ok(())

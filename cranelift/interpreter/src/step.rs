@@ -58,7 +58,7 @@ where
         if ctrl_ty.is_invalid() {
             String::new()
         } else {
-            format!(".{}", ctrl_ty)
+            format!(".{ctrl_ty}")
         }
     );
 

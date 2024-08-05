@@ -189,7 +189,7 @@ impl PredicateNode {
                 group.name, group.settings[bool_setting_index.0].name
             ),
             PredicateNode::SharedBool(ref group_name, ref bool_name) => {
-                format!("{}.{}()", group_name, bool_name)
+                format!("{group_name}.{bool_name}()")
             }
             PredicateNode::And(ref lhs, ref rhs) => {
                 format!("{} && {}", lhs.render(group), rhs.render(group))

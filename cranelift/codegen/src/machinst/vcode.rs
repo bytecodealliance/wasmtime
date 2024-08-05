@@ -521,8 +521,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                 // instructions.
                 assert!(
                     src.is_virtual(),
-                    "the real register {:?} was used as the source of a move instruction",
-                    src
+                    "the real register {src:?} was used as the source of a move instruction"
                 );
                 assert!(
                     dst.to_reg().is_virtual(),
@@ -1431,7 +1430,7 @@ impl<I: VCodeInst> Debug for VRegAllocator<I> {
 
         for (vreg, fact) in self.facts.iter().enumerate() {
             if let Some(fact) = fact {
-                writeln!(f, "  v{} ! {}", vreg, fact)?;
+                writeln!(f, "  v{vreg} ! {fact}")?;
             }
         }
 
@@ -1455,7 +1454,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
                 self.block_params(block)
             )?;
             if let Some(bb) = self.bindex_to_bb(block) {
-                writeln!(f, "    (original IR block: {})", bb)?;
+                writeln!(f, "    (original IR block: {bb})")?;
             }
             for (succ_idx, succ) in self.block_succs(block).iter().enumerate() {
                 writeln!(

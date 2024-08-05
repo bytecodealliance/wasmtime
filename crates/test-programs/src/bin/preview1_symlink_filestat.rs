@@ -99,7 +99,7 @@ fn main() {
     let arg = if let Some(arg) = args.next() {
         arg
     } else {
-        eprintln!("usage: {} <scratch directory>", prog);
+        eprintln!("usage: {prog} <scratch directory>");
         process::exit(1);
     };
 
@@ -107,7 +107,7 @@ fn main() {
     let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
             process::exit(1)
         }
     };

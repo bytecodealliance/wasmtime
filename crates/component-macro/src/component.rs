@@ -209,17 +209,14 @@ fn expand_variant(
     } else {
         return Err(Error::new(
             name.span(),
-            format!(
-                "`{}` component types can only be derived for Rust `enum`s",
-                style
-            ),
+            format!("`{style}` component types can only be derived for Rust `enum`s"),
         ));
     };
 
     if body.variants.is_empty() {
         return Err(Error::new(
             name.span(),
-            format!("`{}` component types can only be derived for Rust `enum`s with at least one variant", style),
+            format!("`{style}` component types can only be derived for Rust `enum`s with at least one variant"),
         ));
     }
 

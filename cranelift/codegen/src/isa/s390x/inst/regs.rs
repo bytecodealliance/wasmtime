@@ -86,7 +86,7 @@ pub fn show_reg(reg: Reg) -> String {
             RegClass::Vector => unreachable!(),
         }
     } else {
-        format!("%{:?}", reg)
+        format!("%{reg:?}")
     }
 }
 

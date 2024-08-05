@@ -9,16 +9,16 @@ fn build(filename: &str) -> Result<String, Errors> {
 
 pub fn run_pass(filename: &str) {
     if let Err(err) = build(filename) {
-        panic!("pass test failed:\n{:?}", err);
+        panic!("pass test failed:\n{err:?}");
     }
 }
 
 pub fn run_fail(filename: &str) {
     match build(filename) {
-        Ok(_) => panic!("test {} passed unexpectedly", filename),
+        Ok(_) => panic!("test {filename} passed unexpectedly"),
         Err(err) => {
             // Log the actual errors for use with `cargo test -- --nocapture`
-            println!("failed, as expected:\n{:?}", err);
+            println!("failed, as expected:\n{err:?}");
         }
     }
 }
@@ -42,7 +42,7 @@ fn build_and_link_isle(isle_filename: &str) -> (tempfile::TempDir, std::path::Pa
     let rust_filename = isle_filename.replace(".isle", "").to_string() + "_main.rs";
     let rust_filename_base = std::path::Path::new(&rust_filename).file_name().unwrap();
     let rust_driver = tempdir.path().to_path_buf().join(&rust_filename_base);
-    println!("copying {} to {:?}", rust_filename, rust_driver);
+    println!("copying {rust_filename} to {rust_driver:?}");
     std::fs::copy(&rust_filename, &rust_driver).unwrap();
 
     let output = tempdir.path().to_path_buf().join("out");
