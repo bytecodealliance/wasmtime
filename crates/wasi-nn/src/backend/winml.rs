@@ -217,6 +217,8 @@ fn to_inspectable(tensor: &Tensor) -> Result<IInspectable, Error> {
             .collect::<Vec<i64>>(),
     )?;
     match tensor.ty {
+        // f16 is not official supported by stable version of Rust. https://github.com/rust-lang/rust/issues/116909
+        // Therefore we create TensorFloat16Bit from f32 array. https://microsoft.github.io/windows-docs-rs/doc/windows/AI/MachineLearning/struct.TensorFloat16Bit.html#method.CreateFromArray
         TensorType::Fp16 => unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr().cast::<f32>(),
