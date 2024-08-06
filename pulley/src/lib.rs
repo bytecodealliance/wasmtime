@@ -57,14 +57,14 @@ macro_rules! for_each_op {
             /// Move between `v` registers.
             vmov = Vmov { dst: VReg, src: VReg };
 
-            /// Set `dst = zero_extend(imm8)`.
-            xconst8 = Xconst8 { dst: XReg, imm: u8 };
-            /// Set `dst = zero_extend(imm16)`.
-            xconst16 = Xconst16 { dst: XReg, imm: u16 };
-            /// Set `dst = zero_extend(imm32)`.
-            xconst32 = Xconst32 { dst: XReg, imm: u32 };
+            /// Set `dst = sign_extend(imm8)`.
+            xconst8 = Xconst8 { dst: XReg, imm: i8 };
+            /// Set `dst = sign_extend(imm16)`.
+            xconst16 = Xconst16 { dst: XReg, imm: i16 };
+            /// Set `dst = sign_extend(imm32)`.
+            xconst32 = Xconst32 { dst: XReg, imm: i32 };
             /// Set `dst = imm64`.
-            xconst64 = Xconst64 { dst: XReg, imm: u64 };
+            xconst64 = Xconst64 { dst: XReg, imm: i64 };
 
             /// 32-bit wrapping addition: `low32(dst) = low32(src1) + low32(src2)`.
             ///

@@ -788,23 +788,23 @@ impl OpVisitor for InterpreterVisitor<'_> {
         Continuation::Continue
     }
 
-    fn xconst8(&mut self, dst: XReg, imm: u8) -> Self::Return {
-        self.state.x_mut(dst).set_u64(u64::from(imm));
+    fn xconst8(&mut self, dst: XReg, imm: i8) -> Self::Return {
+        self.state.x_mut(dst).set_i64(i64::from(imm));
         Continuation::Continue
     }
 
-    fn xconst16(&mut self, dst: XReg, imm: u16) -> Self::Return {
-        self.state.x_mut(dst).set_u64(u64::from(imm));
+    fn xconst16(&mut self, dst: XReg, imm: i16) -> Self::Return {
+        self.state.x_mut(dst).set_i64(i64::from(imm));
         Continuation::Continue
     }
 
-    fn xconst32(&mut self, dst: XReg, imm: u32) -> Self::Return {
-        self.state.x_mut(dst).set_u64(u64::from(imm));
+    fn xconst32(&mut self, dst: XReg, imm: i32) -> Self::Return {
+        self.state.x_mut(dst).set_i64(i64::from(imm));
         Continuation::Continue
     }
 
-    fn xconst64(&mut self, dst: XReg, imm: u64) -> Self::Return {
-        self.state.x_mut(dst).set_u64(imm);
+    fn xconst64(&mut self, dst: XReg, imm: i64) -> Self::Return {
+        self.state.x_mut(dst).set_i64(imm);
         Continuation::Continue
     }
 

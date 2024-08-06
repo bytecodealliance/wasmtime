@@ -47,26 +47,24 @@ to change, instructions to appear and disappear, and APIs to be overhauled.
 Here is the disassembly of `f(a, b) = a + b` in Pulley today:
 
 ```
-       0: 11 1f f0 ff ff ff ff ff ff ff   xconst64 x31, 18446744073709551600
-       a: 12 20 20 1f                     xadd32 sp, sp, x31
-       e: 32 20 08 21                     store64_offset8 sp, 8, lr
-      12: 30 20 22                        store64 sp, fp
-      15: 0b 22 20                        xmov fp, sp
-      18: 12 00 00 01                     xadd32 x0, x0, x1
-      1c: 0b 20 22                        xmov sp, fp
-      1f: 25 21 20 08                     load64_offset8 lr, sp, 8
-      23: 22 22 20                        load64 fp, sp
-      26: 0e 1f 10                        xconst8 x31, 16
-      29: 12 20 20 1f                     xadd32 sp, sp, x31
-      2d: 00                              ret
+       0: 0e 1f f0                        xconst8 x31, -16
+       3: 12 20 20 1f                     xadd32 sp, sp, x31
+       7: 29 20 08 21                     store64_offset8 sp, 8, lr
+       b: 27 20 22                        store64 sp, fp
+       e: 0b 22 20                        xmov fp, sp
+      11: 12 00 00 01                     xadd32 x0, x0, x1
+      15: 0b 20 22                        xmov sp, fp
+      18: 25 21 20 08                     load64_offset8 lr, sp, 8
+      1c: 22 22 20                        load64 fp, sp
+      1f: 0e 1f 10                        xconst8 x31, 16
+      22: 12 20 20 1f                     xadd32 sp, sp, x31
+      26: 00                              ret
 ```
 
 Note that there are a number of things that could be improved here:
 
-* We could avoid allocating a deallocating a stack frame because this function's
+* We could avoid allocating and deallocating a stack frame because this function's
   body doesn't use any stack slots.
-* We could sign-extend, rather than zero-extend, constants so that `-16` has a
-  single-byte encoding instead of an eight-byte encoding.
 * We could collapse the whole prologue and epilogue instruction sequences into
   super-instructions, since they are identical (modulo the frame size immediate)
   for all functions.

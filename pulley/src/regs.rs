@@ -156,12 +156,12 @@ impl XReg {
 
 impl fmt::Display for XReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            x if *x == Self::SP => write!(f, "sp"),
-            x if *x == Self::LR => write!(f, "lr"),
-            x if *x == Self::FP => write!(f, "fp"),
-            x if *x == Self::SPILL_TMP_0 => write!(f, "spilltmp0"),
-            x if *x == Self::SPILL_TMP_1 => write!(f, "spilltmp1"),
+        match *self {
+            Self::SP => write!(f, "sp"),
+            Self::LR => write!(f, "lr"),
+            Self::FP => write!(f, "fp"),
+            Self::SPILL_TMP_0 => write!(f, "spilltmp0"),
+            Self::SPILL_TMP_1 => write!(f, "spilltmp1"),
             Self(x) => write!(f, "x{x}"),
         }
     }
