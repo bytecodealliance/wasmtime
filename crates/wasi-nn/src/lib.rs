@@ -68,7 +68,7 @@ impl std::ops::Deref for Graph {
 /// Eventually, this may be defined in each backend as they gain the ability to
 /// hold tensors on various devices (TODO:
 /// https://github.com/WebAssembly/wasi-nn/pull/70).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Tensor {
     dimensions: Vec<u32>,
     ty: wit::TensorType,
@@ -81,12 +81,6 @@ impl fmt::Debug for Tensor {
             .field("ty", &self.ty)
             .field("data (bytes)", &self.data.len())
             .finish()
-    }
-}
-
-impl PartialEq for Tensor {
-    fn eq(&self, other: &Self) -> bool {
-        self.dimensions == other.dimensions && self.ty == other.ty && self.data == other.data
     }
 }
 
