@@ -1,4 +1,4 @@
-use test_programs::config::wasi::config::runtime;
+use test_programs::wasi::config::runtime;
 
 fn main() {
     let v = runtime::get("hello").unwrap().unwrap();

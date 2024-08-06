@@ -1,7 +1,7 @@
-use test_programs::config::wasi::config::runtime;
 use test_programs::proxy;
-use test_programs::wasi::http::types::{
-    Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
+use test_programs::wasi::{
+    config::runtime,
+    http::types::{Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam},
 };
 
 struct T;

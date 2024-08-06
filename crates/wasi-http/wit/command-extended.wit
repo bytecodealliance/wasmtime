@@ -1,6 +1,0 @@
-// All of the same imports and exports available in the wasi:cli/command world
-// with addition of HTTP proxy related imports:
-world command-extended {
-  include wasi:cli/command@0.2.1;
-  import wasi:http/outgoing-handler@0.2.1;
-}

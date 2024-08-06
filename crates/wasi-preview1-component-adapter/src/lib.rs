@@ -97,6 +97,7 @@ pub mod bindings {
                 import wasi:cli/stdin@0.2.1;
             }
         "#,
+        world: "wasmtime:adapter/adapter",
         std_feature,
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",

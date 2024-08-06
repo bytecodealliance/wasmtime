@@ -4,8 +4,23 @@ pub mod preview1;
 pub mod sockets;
 
 wit_bindgen::generate!({
-    world: "test-command",
-    path: "../wasi/wit",
+    inline: "
+        package wasmtime:test;
+
+        world test {
+            include wasi:cli/imports@0.2.1;
+            include wasi:config/imports@0.2.0-draft;
+            include wasi:keyvalue/imports@0.2.0-draft;
+            import wasi:http/types@0.2.1;
+            import wasi:http/outgoing-handler@0.2.1;
+        }
+    ",
+    path: [
+        "../wasi-http/wit",
+        "../wasi-runtime-config/wit",
+        "../wasi-keyvalue/wit",
+    ],
+    world: "wasmtime:test/test",
     generate_all,
 });
 
@@ -28,20 +43,5 @@ pub mod proxy {
             "wasi:clocks/monotonic-clock@0.2.1": crate::wasi::clocks::monotonic_clock,
             "wasi:clocks/wall-clock@0.2.1": crate::wasi::clocks::wall_clock,
         },
-    });
-}
-
-pub mod config {
-    wit_bindgen::generate!({
-        path: "../wasi-runtime-config/wit",
-        world: "wasi:config/imports",
-    });
-}
-
-pub mod keyvalue {
-    wit_bindgen::generate!({
-        path: "../wasi-keyvalue/wit",
-        world: "wasi:keyvalue/imports",
-        type_section_suffix: "keyvalue",
     });
 }

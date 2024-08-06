@@ -43,7 +43,6 @@ make_vendor "wasi" "
   io@v0.2.1
   random@v0.2.1
   sockets@v0.2.1
-  http@v0.2.1
 "
 
 make_vendor "wasi-http" "

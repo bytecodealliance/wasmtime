@@ -1,4 +1,4 @@
-use test_programs::keyvalue::wasi::keyvalue::{atomics, batch, store};
+use test_programs::wasi::keyvalue::{atomics, batch, store};
 
 fn main() {
     let bucket = store::open("").unwrap();
