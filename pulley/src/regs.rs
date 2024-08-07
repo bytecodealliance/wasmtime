@@ -1,118 +1,18 @@
 //! Pulley registers.
 
+use core::hash::Hash;
 use core::{fmt, ops::Range};
 
-macro_rules! define_registers {
-    (
-        $(
-            $( #[$attr:meta] )*
-            pub struct $name:ident = $range:expr;
-        )*
-) => {
-        $(
-            $( #[ $attr ] )*
-            #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-            pub struct $name(u8);
+/// Trait for common register operations.
+pub trait Reg: Sized + Copy + Eq + Ord + Hash + Into<AnyReg> + fmt::Debug + fmt::Display {
+    /// Range of valid register indices.
+    const RANGE: Range<u8>;
 
-            impl fmt::Debug for $name {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> core::fmt::Result {
-                    fmt::Display::fmt(self, f)
-                }
-            }
+    /// Convert a register index to a register, without bounds checking.
+    unsafe fn new_unchecked(index: u8) -> Self;
 
-            impl $name {
-                /// The valid register range for this register class.
-                pub const RANGE: Range<u8> = $range;
-
-                /// Construct a new register of this class.
-                #[inline]
-                pub fn new(index: u8) -> Option<Self> {
-                    if Self::RANGE.start <= index && index < Self::RANGE.end {
-                        Some(unsafe { Self::unchecked_new(index) })
-                    } else {
-                        None
-                    }
-                }
-
-                /// Construct a new register of this class without checking that
-                /// `index` is a valid register index.
-                #[inline]
-                pub unsafe fn unchecked_new(index: u8) -> Self {
-                    debug_assert!(Self::RANGE.start <= index && index < Self::RANGE.end);
-                    Self(index)
-                }
-
-                /// Get this register's index.
-                #[inline]
-                pub fn index(&self) -> usize {
-                    usize::from(self.0)
-                }
-            }
-
-            #[cfg(feature = "arbitrary")]
-            impl<'a> arbitrary::Arbitrary<'a> for $name {
-                fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-                    let index = u.int_in_range(Self::RANGE.start..=Self::RANGE.end - 1)?;
-                    Ok(Self(index))
-                }
-            }
-        )*
-    }
-}
-
-define_registers! {
-    /// An `x` register: integers.
-    pub struct XReg = 0..32;
-
-    /// An `f` register: floats.
-    pub struct FReg = 0..32;
-
-    /// A `v` register: vectors.
-    pub struct VReg = 0..32;
-}
-
-/// An `s` register: integers.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(non_camel_case_types)]
-pub enum SReg {
-    /// The special `sp` stack pointer register.
-    SP,
-
-    /// The special `lr` link register.
-    LR,
-
-    /// The special `fp` frame pointer register.
-    FP,
-
-    /// The special `spilltmp0` scratch register.
-    SPILL_TMP_0,
-
-    /// The special `spilltmp1` scratch register.
-    SPILL_TMP_1,
-}
-
-/// Any register, regardless of class.
-///
-/// Never appears inside an instruction -- instructions always name a particular
-/// class of register -- but this is useful for testing and things like that.
-#[allow(missing_docs)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AnyReg {
-    S(SReg),
-    X(XReg),
-    F(FReg),
-    V(VReg),
-}
-
-#[allow(missing_docs)]
-impl SReg {
-    pub const RANGE: Range<u8> = 0..(Self::SPILL_TMP_1 as u8 + 1);
-
-    pub fn index(self) -> usize {
-        usize::from(self as u8)
-    }
-
-    pub fn new(index: u8) -> Option<Self> {
+    /// Convert a register index to a register, with bounds checking.
+    fn new(index: u8) -> Option<Self> {
         if Self::RANGE.contains(&index) {
             Some(unsafe { Self::new_unchecked(index) })
         } else {
@@ -120,99 +20,137 @@ impl SReg {
         }
     }
 
-    pub unsafe fn new_unchecked(index: u8) -> Self {
-        core::mem::transmute(index)
+    /// Convert a register to its index.
+    fn to_u8(self) -> u8;
+
+    /// Convert a register to its index.
+    fn index(self) -> usize {
+        self.to_u8().into()
     }
 }
 
-impl fmt::Debug for SReg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
-}
-
-impl fmt::Display for SReg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::SP => write!(f, "sp"),
-            Self::LR => write!(f, "lr"),
-            Self::FP => write!(f, "fp"),
-            Self::SPILL_TMP_0 => write!(f, "spilltmp0"),
-            Self::SPILL_TMP_1 => write!(f, "spilltmp1"),
+macro_rules! impl_reg {
+    ($reg_ty:ty, $any:ident, $range:expr) => {
+        impl From<$reg_ty> for AnyReg {
+            fn from(r: $reg_ty) -> Self {
+                AnyReg::$any(r)
+            }
         }
-    }
+
+        impl fmt::Display for $reg_ty {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Debug::fmt(&self, f)
+            }
+        }
+
+        impl Reg for $reg_ty {
+            const RANGE: Range<u8> = $range;
+
+            unsafe fn new_unchecked(index: u8) -> Self {
+                core::mem::transmute(index)
+            }
+
+            fn to_u8(self) -> u8 {
+                self as u8
+            }
+        }
+    };
 }
 
-impl From<XReg> for AnyReg {
-    fn from(x: XReg) -> Self {
-        Self::X(x)
-    }
+/// An `s` register: integers.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[allow(non_camel_case_types)]
+pub enum SReg {
+    /// The special `sp` stack pointer register.
+    sp,
+
+    /// The special `lr` link register.
+    lr,
+
+    /// The special `fp` frame pointer register.
+    fp,
+
+    /// The special `spilltmp0` scratch register.
+    spilltmp0,
+
+    /// The special `spilltmp1` scratch register.
+    spilltmp1,
 }
 
-impl From<SReg> for AnyReg {
-    fn from(s: SReg) -> Self {
-        Self::S(s)
-    }
+/// An `x` register: integers.
+#[repr(u8)]
+#[derive(Debug,Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[allow(non_camel_case_types, missing_docs)]
+#[rustfmt::skip]
+pub enum XReg {
+    x0,  x1,  x2,  x3,  x4,  x5,  x6,  x7,  x8,  x9,
+    x10, x11, x12, x13, x14, x15, x16, x17, x18, x19,
+    x20, x21, x22, x23, x24, x25, x26, x27, x28, x29,
+    x30, x31,
 }
 
-impl From<FReg> for AnyReg {
-    fn from(f: FReg) -> Self {
-        Self::F(f)
-    }
+/// An `f` register: floats.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[allow(non_camel_case_types, missing_docs)]
+#[rustfmt::skip]
+pub enum FReg {
+    f0,  f1,  f2,  f3,  f4,  f5,  f6,  f7,  f8,  f9,
+    f10, f11, f12, f13, f14, f15, f16, f17, f18, f19,
+    f20, f21, f22, f23, f24, f25, f26, f27, f28, f29,
+    f30, f31,
 }
 
-impl From<VReg> for AnyReg {
-    fn from(v: VReg) -> Self {
-        Self::V(v)
-    }
+/// A `v` register: vectors.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[allow(non_camel_case_types, missing_docs)]
+#[rustfmt::skip]
+pub enum VReg {
+    v0,  v1,  v2,  v3,  v4,  v5,  v6,  v7,  v8,  v9,
+    v10, v11, v12, v13, v14, v15, v16, v17, v18, v19,
+    v20, v21, v22, v23, v24, v25, v26, v27, v28, v29,
+    v30, v31,
+}
+
+impl_reg!(SReg, S, 0..(Self::spilltmp1 as u8 + 1));
+impl_reg!(XReg, X, 0..32);
+impl_reg!(FReg, F, 0..32);
+impl_reg!(VReg, V, 0..32);
+
+/// Any register, regardless of class.
+///
+/// Never appears inside an instruction -- instructions always name a particular
+/// class of register -- but this is useful for testing and things like that.
+#[allow(missing_docs)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub enum AnyReg {
+    S(SReg),
+    X(XReg),
+    F(FReg),
+    V(VReg),
 }
 
 impl fmt::Display for AnyReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AnyReg::X(r) => fmt::Display::fmt(r, f),
-            AnyReg::S(r) => fmt::Display::fmt(r, f),
-            AnyReg::F(r) => fmt::Display::fmt(r, f),
-            AnyReg::V(r) => fmt::Display::fmt(r, f),
-        }
+        fmt::Debug::fmt(self, f)
     }
 }
 
 impl fmt::Debug for AnyReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> core::fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
-}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for AnyReg {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        match u.int_in_range(0..=2)? {
-            0 => Ok(AnyReg::X(u.arbitrary()?)),
-            1 => Ok(AnyReg::F(u.arbitrary()?)),
-            2 => Ok(AnyReg::V(u.arbitrary()?)),
-            _ => unreachable!(),
+        match self {
+            AnyReg::X(r) => fmt::Debug::fmt(r, f),
+            AnyReg::S(r) => fmt::Debug::fmt(r, f),
+            AnyReg::F(r) => fmt::Debug::fmt(r, f),
+            AnyReg::V(r) => fmt::Debug::fmt(r, f),
         }
-    }
-}
-
-impl fmt::Display for XReg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self(x) => write!(f, "x{x}"),
-        }
-    }
-}
-
-impl fmt::Display for FReg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "f{}", self.0)
-    }
-}
-
-impl fmt::Display for VReg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "v{}", self.0)
     }
 }
 
