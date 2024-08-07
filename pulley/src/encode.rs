@@ -118,6 +118,15 @@ impl Encode for PcRelOffset {
     }
 }
 
+impl<R: Reg> Encode for BinaryOperands<R> {
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.to_bits().encode(sink);
+    }
+}
+
 macro_rules! impl_encoders {
     (
         $(

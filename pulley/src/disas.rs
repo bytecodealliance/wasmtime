@@ -127,6 +127,16 @@ impl Disas for PcRelOffset {
     }
 }
 
+impl<R: Disas> Disas for BinaryOperands<R> {
+    fn disas(&self, position: usize, disas: &mut String) {
+        self.dst.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src1.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src2.disas(position, disas);
+    }
+}
+
 macro_rules! impl_disas {
     (
         $(

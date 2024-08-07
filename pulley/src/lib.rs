@@ -11,10 +11,6 @@ extern crate std;
 #[allow(unused_extern_crates)] // Some cfg's don't use this.
 extern crate alloc;
 
-// TODO: make `struct BinaryOpRegs<T> { dst: T, src1: T, src2: T }` or something
-// and pack it into 2 bytes (5 bits for each operand; 2**5 = 32 possible
-// registers, and then only special isntructions to access special x registers)
-
 /// Calls the given macro with each opcode.
 macro_rules! for_each_op {
     ( $macro:ident ) => {
@@ -69,35 +65,35 @@ macro_rules! for_each_op {
             /// 32-bit wrapping addition: `low32(dst) = low32(src1) + low32(src2)`.
             ///
             /// The upper 32-bits of `dst` are unmodified.
-            xadd32 = Xadd32 { dst: XReg, src1: XReg, src2: XReg };
+            xadd32 = Xadd32 { operands: BinaryOperands<XReg> };
 
             /// 64-bit wrapping addition: `dst = src1 + src2`.
-            xadd64 = Xadd64 { dst: XReg, src1: XReg, src2: XReg };
+            xadd64 = Xadd64 { operands: BinaryOperands<XReg> };
 
             /// 64-bit equality.
-            xeq64 = Xeq64 { dst: XReg, src1: XReg, src2: XReg };
+            xeq64 = Xeq64 { operands: BinaryOperands<XReg> };
             /// 64-bit inequality.
-            xneq64 = Xneq64 { dst: XReg, src1: XReg, src2: XReg };
+            xneq64 = Xneq64 { operands: BinaryOperands<XReg> };
             /// 64-bit signed less-than.
-            xslt64 = Xslt64 { dst: XReg, src1: XReg, src2: XReg };
+            xslt64 = Xslt64 { operands: BinaryOperands<XReg> };
             /// 64-bit signed less-than-equal.
-            xslteq64 = Xslteq64 { dst: XReg, src1: XReg, src2: XReg };
+            xslteq64 = Xslteq64 { operands: BinaryOperands<XReg> };
             /// 64-bit unsigned less-than.
-            xult64 = Xult64 { dst: XReg, src1: XReg, src2: XReg };
+            xult64 = Xult64 { operands: BinaryOperands<XReg> };
             /// 64-bit unsigned less-than-equal.
-            xulteq64 = Xulteq64 { dst: XReg, src1: XReg, src2: XReg };
+            xulteq64 = Xulteq64 { operands: BinaryOperands<XReg> };
             /// 32-bit equality.
-            xeq32 = Xeq32 { dst: XReg, src1: XReg, src2: XReg };
+            xeq32 = Xeq32 { operands: BinaryOperands<XReg> };
             /// 32-bit inequality.
-            xneq32 = Xneq32 { dst: XReg, src1: XReg, src2: XReg };
+            xneq32 = Xneq32 { operands: BinaryOperands<XReg> };
             /// 32-bit signed less-than.
-            xslt32 = Xslt32 { dst: XReg, src1: XReg, src2: XReg };
+            xslt32 = Xslt32 { operands: BinaryOperands<XReg> };
             /// 32-bit signed less-than-equal.
-            xslteq32 = Xslteq32 { dst: XReg, src1: XReg, src2: XReg };
+            xslteq32 = Xslteq32 { operands: BinaryOperands<XReg> };
             /// 32-bit unsigned less-than.
-            xult32 = Xult32 { dst: XReg, src1: XReg, src2: XReg };
+            xult32 = Xult32 { operands: BinaryOperands<XReg> };
             /// 32-bit unsigned less-than-equal.
-            xulteq32 = Xulteq32 { dst: XReg, src1: XReg, src2: XReg };
+            xulteq32 = Xulteq32 { operands: BinaryOperands<XReg> };
 
             /// `dst = zero_extend(load32(ptr))`
             load32_u = Load32U { dst: XReg, ptr: XReg };

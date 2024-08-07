@@ -34,9 +34,11 @@ fn simple() {
                 imm: -16i8,
             }),
             Op::Xadd32(Xadd32 {
-                dst: XReg::x0,
-                src1: XReg::x1,
-                src2: XReg::x31,
+                operands: BinaryOperands {
+                    dst: XReg::x0,
+                    src1: XReg::x1,
+                    src2: XReg::x31,
+                },
             }),
             Op::Store64Offset8(Store64Offset8 {
                 ptr: XReg::x0,
@@ -53,9 +55,11 @@ fn simple() {
             }),
             // Function body.
             Op::Xadd32(Xadd32 {
-                dst: XReg::x0,
-                src1: XReg::x0,
-                src2: XReg::x1,
+                operands: BinaryOperands {
+                    dst: XReg::x0,
+                    src1: XReg::x0,
+                    src2: XReg::x1,
+                },
             }),
             // Epilogue.
             Op::Xmov(Xmov {
@@ -76,25 +80,27 @@ fn simple() {
                 imm: 16,
             }),
             Op::Xadd32(Xadd32 {
-                dst: XReg::x0,
-                src1: XReg::x1,
-                src2: XReg::x31,
+                operands: BinaryOperands {
+                    dst: XReg::x0,
+                    src1: XReg::x1,
+                    src2: XReg::x31,
+                },
             }),
             Op::Ret(Ret {}),
         ],
         r#"
        0: 0e 1f f0                        xconst8 x31, -16
-       3: 12 00 01 1f                     xadd32 x0, x1, x31
-       7: 29 00 08 1f                     store64_offset8 x0, 8, x31
-       b: 27 00 01                        store64 x0, x1
-       e: 0b 00 01                        xmov x0, x1
-      11: 12 00 00 01                     xadd32 x0, x0, x1
-      15: 0b 00 01                        xmov x0, x1
-      18: 25 00 01 08                     load64_offset8 x0, x1, 8
-      1c: 22 00 01                        load64 x0, x1
-      1f: 0e 1f 10                        xconst8 x31, 16
-      22: 12 00 01 1f                     xadd32 x0, x1, x31
-      26: 00                              ret
+       3: 12 20 7c                        xadd32 x0, x1, x31
+       6: 29 00 08 1f                     store64_offset8 x0, 8, x31
+       a: 27 00 01                        store64 x0, x1
+       d: 0b 00 01                        xmov x0, x1
+      10: 12 00 04                        xadd32 x0, x0, x1
+      13: 0b 00 01                        xmov x0, x1
+      16: 25 00 01 08                     load64_offset8 x0, x1, 8
+      1a: 22 00 01                        load64 x0, x1
+      1d: 0e 1f 10                        xconst8 x31, 16
+      20: 12 20 7c                        xadd32 x0, x1, x31
+      23: 00                              ret
         "#,
     );
 }
