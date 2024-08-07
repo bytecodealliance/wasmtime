@@ -682,7 +682,14 @@ pub fn encode_fp_rr(op: FpuOPRR, width: FpuOPWidth, frm: FRM, rd: WritableReg, r
     )
 }
 
-pub fn encode_fp_rrr(op: FpuOPRRR, width: FpuOPWidth, frm: FRM, rd: WritableReg, rs1: Reg, rs2: Reg) -> u32 {
+pub fn encode_fp_rrr(
+    op: FpuOPRRR,
+    width: FpuOPWidth,
+    frm: FRM,
+    rd: WritableReg,
+    rs1: Reg,
+    rs2: Reg,
+) -> u32 {
     encode_r_type_bits(
         op.opcode(),
         reg_to_gpr_num(rd.to_reg()),
@@ -693,8 +700,15 @@ pub fn encode_fp_rrr(op: FpuOPRRR, width: FpuOPWidth, frm: FRM, rd: WritableReg,
     )
 }
 
-
-pub fn encode_fp_rrrr(op: FpuOPRRRR, width: FpuOPWidth, frm: FRM, rd: WritableReg, rs1: Reg, rs2: Reg, rs3: Reg) -> u32 {
+pub fn encode_fp_rrrr(
+    op: FpuOPRRRR,
+    width: FpuOPWidth,
+    frm: FRM,
+    rd: WritableReg,
+    rs1: Reg,
+    rs2: Reg,
+    rs3: Reg,
+) -> u32 {
     let funct7 = (reg_to_gpr_num(rs3) << 2) | width.as_u32();
     encode_r_type_bits(
         op.opcode(),

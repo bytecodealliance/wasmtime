@@ -565,7 +565,6 @@ impl FpuOPRRR {
         }
     }
 
-
     pub(crate) fn opcode(self) -> u32 {
         // OP-FP Major opcode
         0b1010011
@@ -590,12 +589,10 @@ impl FpuOPRRR {
         }
     }
 
-
     pub(crate) fn funct7(self, width: FpuOPWidth) -> u32 {
         (self.funct5() << 2) | width.as_u32()
     }
 
-    
     pub(crate) fn has_frm(self) -> bool {
         match self {
             FpuOPRRR::Fsgnj
