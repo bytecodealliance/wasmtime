@@ -1198,20 +1198,15 @@ impl Inst {
                 rs2,
                 rs3,
                 frm,
+                width,
             } => {
                 let rs1 = format_reg(rs1);
                 let rs2 = format_reg(rs2);
                 let rs3 = format_reg(rs3);
                 let rd = format_reg(rd.to_reg());
-                format!(
-                    "{} {},{},{},{}{}",
-                    alu_op.op_name(),
-                    rd,
-                    rs1,
-                    rs2,
-                    rs3,
-                    format_frm(frm)
-                )
+                let frm = format_frm(frm);
+                let op_name = alu_op.op_name(width);
+                format!("{op_name} {rd},{rs1},{rs2},{rs3}{frm}")
             }
             &Inst::AluRRImm12 {
                 alu_op,

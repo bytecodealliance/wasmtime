@@ -52,6 +52,7 @@
     ;; An ALU operation with three register sources and a register destination.
     (FpuRRRR
       (alu_op FpuOPRRRR)
+      (width FpuOPWidth)
       (frm FRM)
       (rd WritableReg)
       (rs1 Reg)
@@ -378,16 +379,10 @@
 ))
 
 (type FpuOPRRRR (enum
-  ;; float32
-  (FmaddS)
-  (FmsubS)
-  (FnmsubS)
-  (FnmaddS)
-  ;; float64
-  (FmaddD)
-  (FmsubD)
-  (FnmsubD)
-  (FnmaddD)
+  (Fmadd)
+  (Fmsub)
+  (Fnmsub)
+  (Fnmadd)
 ))
 
 (type FClassResult (enum
@@ -1355,23 +1350,19 @@
 
 ;; Helper for emitting the `fmadd` instruction.
 (decl rv_fmadd (Type FRM FReg FReg FReg) FReg)
-(rule (rv_fmadd $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddS) $F32 frm rs1 rs2 rs3))
-(rule (rv_fmadd $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 frm rs1 rs2 rs3))
+(rule (rv_fmadd ty frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.Fmadd) ty frm rs1 rs2 rs3))
 
 ;; Helper for emitting the `fmsub` instruction.
 (decl rv_fmsub (Type FRM FReg FReg FReg) FReg)
-(rule (rv_fmsub $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmsubS) $F32 frm rs1 rs2 rs3))
-(rule (rv_fmsub $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmsubD) $F64 frm rs1 rs2 rs3))
+(rule (rv_fmsub ty frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.Fmsub) ty frm rs1 rs2 rs3))
 
 ;; Helper for emitting the `fnmadd` instruction.
 (decl rv_fnmadd (Type FRM FReg FReg FReg) FReg)
-(rule (rv_fnmadd $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmaddS) $F32 frm rs1 rs2 rs3))
-(rule (rv_fnmadd $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmaddD) $F64 frm rs1 rs2 rs3))
+(rule (rv_fnmadd ty frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.Fnmadd) ty frm rs1 rs2 rs3))
 
 ;; Helper for emitting the `fnmsub` instruction.
 (decl rv_fnmsub (Type FRM FReg FReg FReg) FReg)
-(rule (rv_fnmsub $F32 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmsubS) $F32 frm rs1 rs2 rs3))
-(rule (rv_fnmsub $F64 frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FnmsubD) $F64 frm rs1 rs2 rs3))
+(rule (rv_fnmsub ty frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.Fnmsub) ty frm rs1 rs2 rs3))
 
 ;; Helper for emitting the `fmv.x.w` instruction.
 (decl rv_fmvxw (FReg) XReg)
@@ -2096,10 +2087,10 @@
         dst))
 
 ;; Helper for emitting `MInst.FpuRRRR` instructions.
-(decl fpu_rrrr (FpuOPRRRR Type FRM Reg Reg Reg) Reg)
+(decl fpu_rrrr (FpuOPRRRR Type FRM Reg Reg Reg) FReg)
 (rule (fpu_rrrr op ty frm src1 src2 src3)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.FpuRRRR op frm dst src1 src2 src3))))
+      (let ((dst WritableFReg (temp_writable_freg))
+            (_ Unit (emit (MInst.FpuRRRR op ty frm dst src1 src2 src3))))
         dst))
 
 

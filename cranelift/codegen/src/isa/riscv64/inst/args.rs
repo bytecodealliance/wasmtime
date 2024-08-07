@@ -427,36 +427,21 @@ impl FliConstant {
 }
 
 impl FpuOPRRRR {
-    pub(crate) fn op_name(self) -> &'static str {
+    pub(crate) fn op_name(self, width: FpuOPWidth) -> String {
         match self {
-            Self::FmaddS => "fmadd.s",
-            Self::FmsubS => "fmsub.s",
-            Self::FnmsubS => "fnmsub.s",
-            Self::FnmaddS => "fnmadd.s",
-            Self::FmaddD => "fmadd.d",
-            Self::FmsubD => "fmsub.d",
-            Self::FnmsubD => "fnmsub.d",
-            Self::FnmaddD => "fnmadd.d",
+            Self::Fmadd => format!("fmadd.{width}"),
+            Self::Fmsub => format!("fmsub.{width}"),
+            Self::Fnmsub => format!("fnmsub.{width}"),
+            Self::Fnmadd => format!("fnmadd.{width}"),
         }
     }
 
-    pub(crate) fn funct2(self) -> u32 {
+    pub(crate) fn opcode(self) -> u32 {
         match self {
-            FpuOPRRRR::FmaddS | FpuOPRRRR::FmsubS | FpuOPRRRR::FnmsubS | FpuOPRRRR::FnmaddS => 0,
-            FpuOPRRRR::FmaddD | FpuOPRRRR::FmsubD | FpuOPRRRR::FnmsubD | FpuOPRRRR::FnmaddD => 1,
-        }
-    }
-
-    pub(crate) fn op_code(self) -> u32 {
-        match self {
-            FpuOPRRRR::FmaddS => 0b1000011,
-            FpuOPRRRR::FmsubS => 0b1000111,
-            FpuOPRRRR::FnmsubS => 0b1001011,
-            FpuOPRRRR::FnmaddS => 0b1001111,
-            FpuOPRRRR::FmaddD => 0b1000011,
-            FpuOPRRRR::FmsubD => 0b1000111,
-            FpuOPRRRR::FnmsubD => 0b1001011,
-            FpuOPRRRR::FnmaddD => 0b1001111,
+            Self::Fmadd => 0b1000011,
+            Self::Fmsub => 0b1000111,
+            Self::Fnmsub => 0b1001011,
+            Self::Fnmadd => 0b1001111,
         }
     }
 }

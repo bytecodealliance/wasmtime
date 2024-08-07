@@ -926,16 +926,9 @@ impl Inst {
                 rs2,
                 rs3,
                 frm,
+                width,
             } => {
-                let x = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct2() << 25
-                    | reg_to_gpr_num(rs3) << 27;
-
-                sink.put4(x);
+                sink.put4(encode_fp_rrrr(alu_op, width, frm, rd, rs1, rs2, rs3));
             }
             &Inst::FpuRRR {
                 alu_op,
