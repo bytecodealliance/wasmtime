@@ -37,6 +37,7 @@ pub use traphandlers::SignalHandler;
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
+    pub sp: usize,
 }
 
 /// Return value from `test_if_trap`.
