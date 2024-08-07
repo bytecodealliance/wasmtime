@@ -3,7 +3,7 @@
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
+use crate::ir::types::{self, F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 
 pub use crate::ir::{ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
@@ -1151,25 +1151,20 @@ impl Inst {
                 }
             }
             &Inst::FpuRR {
-                frm,
                 alu_op,
+                width,
+                frm,
                 rd,
                 rs,
             } => {
                 let rs = format_reg(rs);
                 let rd = format_reg(rd.to_reg());
-                let frm = match alu_op {
-                    FpuOPRR::FmvXW
-                    | FpuOPRR::FmvWX
-                    | FpuOPRR::FmvXD
-                    | FpuOPRR::FmvDX
-                    | FpuOPRR::FclassS
-                    | FpuOPRR::FclassD
-                    | FpuOPRR::FcvtDW
-                    | FpuOPRR::FcvtDWU => String::new(),
-                    _ => format_frm(frm),
+                let frm = if alu_op.has_frm() {
+                    format_frm(frm)
+                } else {
+                    String::new()
                 };
-                format!("{} {rd},{rs}{frm}", alu_op.op_name())
+                format!("{} {rd},{rs}{frm}", alu_op.op_name(width))
             }
             &Inst::FpuRRR {
                 alu_op,

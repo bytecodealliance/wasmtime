@@ -908,21 +908,16 @@ impl Inst {
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::FpuRR {
-                frm,
                 alu_op,
+                width,
+                frm,
                 rd,
                 rs,
             } => {
-                let x = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs) << 15
-                    | alu_op.rs2_funct5() << 20
-                    | alu_op.funct7() << 25;
                 if alu_op.is_convert_to_int() {
                     sink.add_trap(TrapCode::BadConversionToInteger);
                 }
-                sink.put4(x);
+                sink.put4(encode_fp_rr(alu_op, width, frm, rd, rs));
             }
             &Inst::FpuRRRR {
                 alu_op,

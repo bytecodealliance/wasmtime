@@ -27,6 +27,7 @@
     ;; An ALU operation with one register sources and a register destination.
     (FpuRR
       (alu_op FpuOPRR)
+      (width FpuOPWidth)
       (frm FRM)
       (rd WritableReg)
       (rs Reg))
@@ -413,46 +414,35 @@
 
 (type FliConstant (primitive FliConstant))
 
+(type FpuOPWidth (enum
+  (S)
+  (D)
+  (H)
+  (Q)
+))
+
+(decl pure fpu_op_width_from_ty (Type) FpuOPWidth)
+(extern constructor fpu_op_width_from_ty fpu_op_width_from_ty)
+(convert Type FpuOPWidth fpu_op_width_from_ty)
+
 (type FpuOPRR (enum
-  ;; RV32F Standard Extension
-  (FsqrtS)
-  (FcvtWS)
-  (FcvtWuS)
-  (FmvXW)
-  (FclassS)
-  (FcvtSw)
-  (FcvtSwU)
-  (FmvWX)
-
-
-  ;; RV64F Standard Extension (in addition to RV32F)
-  (FcvtLS)
-  (FcvtLuS)
-  (FcvtSL)
-  (FcvtSLU)
-
-
-  ;; RV64D Standard Extension (in addition to RV32D)
-  (FcvtLD)
-  (FcvtLuD)
-  (FmvXD)
-  (FcvtDL)
-  (FcvtDLu)
-  (FmvDX)
-
-  ;; RV32D Standard Extension
-  (FsqrtD)
-  (FcvtSD)
-  (FcvtDS)
-  (FclassD)
-  (FcvtWD)
-  (FcvtWuD)
-  (FcvtDW)
-  (FcvtDWU)
+  (Fsqrt) ;; fsqrt.{fmt}
+  (Fclass) ;; fclass.{fmt}
+  (FcvtWFmt) ;; fcvt.w.{fmt}
+  (FcvtWuFmt) ;; fcvt.wu.{fmt}
+  (FcvtLFmt) ;; fcvt.l.{fmt}
+  (FcvtLuFmt) ;; fcvt.lu.{fmt}
+  (FcvtFmtW) ;; fcvt.{fmt}.w
+  (FcvtFmtWu) ;; fcvt.{fmt}.wu
+  (FcvtFmtL) ;; fcvt.{fmt}.l
+  (FcvtFmtLu) ;; fcvt.{fmt}.lu
+  (FmvXFmt) ;; fmv.x.{fmt}
+  (FmvFmtX) ;; fmv.{fmt}.x
+  (FcvtSD) ;; fcvt.s.d
+  (FcvtDS) ;; fcvt.d.s
 
   ;; Zfa Extension
-  (FroundS)
-  (FroundD)
+  (Fround) ;; fround.{fmt}
 ))
 
 (type LoadOP (enum
@@ -1382,8 +1372,7 @@
 
 ;; Helper for emitting the `fsqrt` instruction.
 (decl rv_fsqrt (Type FRM FReg) FReg)
-(rule (rv_fsqrt $F32 frm rs1) (fpu_rr (FpuOPRR.FsqrtS) $F32 frm rs1))
-(rule (rv_fsqrt $F64 frm rs1) (fpu_rr (FpuOPRR.FsqrtD) $F64 frm rs1))
+(rule (rv_fsqrt ty frm rs1) (fpu_rr (FpuOPRR.Fsqrt) ty frm rs1))
 
 ;; Helper for emitting the `fmadd` instruction.
 (decl rv_fmadd (Type FRM FReg FReg FReg) FReg)
@@ -1407,91 +1396,91 @@
 
 ;; Helper for emitting the `fmv.x.w` instruction.
 (decl rv_fmvxw (FReg) XReg)
-(rule (rv_fmvxw r) (fpu_rr (FpuOPRR.FmvXW) $I32 (FRM.RNE) r))
+(rule (rv_fmvxw r) (fpu_rr_int (FpuOPRR.FmvXFmt) $F32 (FRM.RNE) r))
 
 ;; Helper for emitting the `fmv.x.d` instruction.
 (decl rv_fmvxd (FReg) XReg)
-(rule (rv_fmvxd r) (fpu_rr (FpuOPRR.FmvXD) $I64 (FRM.RNE) r))
+(rule (rv_fmvxd r) (fpu_rr_int (FpuOPRR.FmvXFmt) $F64 (FRM.RNE) r))
 
 ;; Helper for emitting the `fmv.w.x` instruction.
 (decl rv_fmvwx (XReg) FReg)
-(rule (rv_fmvwx r) (fpu_rr (FpuOPRR.FmvWX) $F32 (FRM.RNE) r))
+(rule (rv_fmvwx r) (fpu_rr (FpuOPRR.FmvFmtX) $F32 (FRM.RNE) r))
 
 ;; Helper for emitting the `fmv.d.x` instruction.
 (decl rv_fmvdx (XReg) FReg)
-(rule (rv_fmvdx r) (fpu_rr (FpuOPRR.FmvDX) $F64 (FRM.RNE) r))
+(rule (rv_fmvdx r) (fpu_rr (FpuOPRR.FmvFmtX) $F64 (FRM.RNE) r))
 
 ;; Helper for emitting the `fcvt.d.s` ("Float Convert Double to Single") instruction.
 (decl rv_fcvtds (FReg) FReg)
-(rule (rv_fcvtds rs1) (fpu_rr (FpuOPRR.FcvtDS) $F32 (FRM.RNE) rs1))
+(rule (rv_fcvtds rs1) (fpu_rr (FpuOPRR.FcvtDS) $F64 (FRM.RNE) rs1))
 
 ;; Helper for emitting the `fcvt.s.d` ("Float Convert Single to Double") instruction.
 (decl rv_fcvtsd (FRM FReg) FReg)
-(rule (rv_fcvtsd frm rs1) (fpu_rr (FpuOPRR.FcvtSD) $F64 frm rs1))
+(rule (rv_fcvtsd frm rs1) (fpu_rr (FpuOPRR.FcvtSD) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.s.w` instruction.
 (decl rv_fcvtsw (FRM XReg) FReg)
-(rule (rv_fcvtsw frm rs1) (fpu_rr (FpuOPRR.FcvtSw) $F32 frm rs1))
+(rule (rv_fcvtsw frm rs1) (fpu_rr (FpuOPRR.FcvtFmtW) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.s.wu` instruction.
 (decl rv_fcvtswu (FRM XReg) FReg)
-(rule (rv_fcvtswu frm rs1) (fpu_rr (FpuOPRR.FcvtSwU) $F32 frm rs1))
+(rule (rv_fcvtswu frm rs1) (fpu_rr (FpuOPRR.FcvtFmtWu) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.d.w` instruction.
 (decl rv_fcvtdw (XReg) FReg)
-(rule (rv_fcvtdw rs1) (fpu_rr (FpuOPRR.FcvtDW) $F32 (FRM.RNE) rs1))
+(rule (rv_fcvtdw rs1) (fpu_rr (FpuOPRR.FcvtFmtW) $F64 (FRM.RNE) rs1))
 
 ;; Helper for emitting the `fcvt.d.wu` instruction.
 (decl rv_fcvtdwu (XReg) FReg)
-(rule (rv_fcvtdwu rs1) (fpu_rr (FpuOPRR.FcvtDWU) $F32 (FRM.RNE) rs1))
+(rule (rv_fcvtdwu rs1) (fpu_rr (FpuOPRR.FcvtFmtWu) $F64 (FRM.RNE) rs1))
 
 ;; Helper for emitting the `fcvt.s.l` instruction.
 (decl rv_fcvtsl (FRM XReg) FReg)
-(rule (rv_fcvtsl frm rs1) (fpu_rr (FpuOPRR.FcvtSL) $F32 frm rs1))
+(rule (rv_fcvtsl frm rs1) (fpu_rr (FpuOPRR.FcvtFmtL) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.s.lu` instruction.
 (decl rv_fcvtslu (FRM XReg) FReg)
-(rule (rv_fcvtslu frm rs1) (fpu_rr (FpuOPRR.FcvtSLU) $F32 frm rs1))
+(rule (rv_fcvtslu frm rs1) (fpu_rr (FpuOPRR.FcvtFmtLu) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.d.l` instruction.
 (decl rv_fcvtdl (FRM XReg) FReg)
-(rule (rv_fcvtdl frm rs1) (fpu_rr (FpuOPRR.FcvtDL) $F32 frm rs1))
+(rule (rv_fcvtdl frm rs1) (fpu_rr (FpuOPRR.FcvtFmtL) $F64 frm rs1))
 
 ;; Helper for emitting the `fcvt.d.lu` instruction.
 (decl rv_fcvtdlu (FRM XReg) FReg)
-(rule (rv_fcvtdlu frm rs1) (fpu_rr (FpuOPRR.FcvtDLu) $F32 frm rs1))
+(rule (rv_fcvtdlu frm rs1) (fpu_rr (FpuOPRR.FcvtFmtLu) $F64 frm rs1))
 
 ;; Helper for emitting the `fcvt.w.s` instruction.
 (decl rv_fcvtws (FRM FReg) XReg)
-(rule (rv_fcvtws frm rs1) (fpu_rr (FpuOPRR.FcvtWS) $I64 frm rs1))
+(rule (rv_fcvtws frm rs1) (fpu_rr_int (FpuOPRR.FcvtWFmt) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.l.s` instruction.
 (decl rv_fcvtls (FRM FReg) XReg)
-(rule (rv_fcvtls frm rs1) (fpu_rr (FpuOPRR.FcvtLS) $I64 frm rs1))
+(rule (rv_fcvtls frm rs1) (fpu_rr_int (FpuOPRR.FcvtLFmt) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.wu.s` instruction.
 (decl rv_fcvtwus (FRM FReg) XReg)
-(rule (rv_fcvtwus frm rs1) (fpu_rr (FpuOPRR.FcvtWuS) $I64 frm rs1))
+(rule (rv_fcvtwus frm rs1) (fpu_rr_int (FpuOPRR.FcvtWuFmt) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.lu.s` instruction.
 (decl rv_fcvtlus (FRM FReg) XReg)
-(rule (rv_fcvtlus frm rs1) (fpu_rr (FpuOPRR.FcvtLuS) $I64 frm rs1))
+(rule (rv_fcvtlus frm rs1) (fpu_rr_int (FpuOPRR.FcvtLuFmt) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.w.d` instruction.
 (decl rv_fcvtwd (FRM FReg) XReg)
-(rule (rv_fcvtwd frm rs1) (fpu_rr (FpuOPRR.FcvtWD) $I64 frm rs1))
+(rule (rv_fcvtwd frm rs1) (fpu_rr_int (FpuOPRR.FcvtWFmt) $F64 frm rs1))
 
 ;; Helper for emitting the `fcvt.l.d` instruction.
 (decl rv_fcvtld (FRM FReg) XReg)
-(rule (rv_fcvtld frm rs1) (fpu_rr (FpuOPRR.FcvtLD) $I64 frm rs1))
+(rule (rv_fcvtld frm rs1) (fpu_rr_int (FpuOPRR.FcvtLFmt) $F64 frm rs1))
 
 ;; Helper for emitting the `fcvt.wu.d` instruction.
 (decl rv_fcvtwud (FRM FReg) XReg)
-(rule (rv_fcvtwud frm rs1) (fpu_rr (FpuOPRR.FcvtWuD) $I64 frm rs1))
+(rule (rv_fcvtwud frm rs1) (fpu_rr_int (FpuOPRR.FcvtWuFmt) $F64 frm rs1))
 
 ;; Helper for emitting the `fcvt.lu.d` instruction.
 (decl rv_fcvtlud (FRM FReg) XReg)
-(rule (rv_fcvtlud frm rs1) (fpu_rr (FpuOPRR.FcvtLuD) $I64 frm rs1))
+(rule (rv_fcvtlud frm rs1) (fpu_rr_int (FpuOPRR.FcvtLuFmt) $F64 frm rs1))
 
 ;; Helper for emitting the `fcvt.w.*` instructions.
 (decl rv_fcvtw (Type FRM FReg) XReg)
@@ -1593,8 +1582,7 @@
 
 ;; Helper for emitting the `fround` instruction.
 (decl rv_fround (Type FRM FReg) FReg)
-(rule (rv_fround $F32 frm rs) (fpu_rr (FpuOPRR.FroundS) $F32 frm rs))
-(rule (rv_fround $F64 frm rs) (fpu_rr (FpuOPRR.FroundD) $F64 frm rs))
+(rule (rv_fround ty frm rs) (fpu_rr (FpuOPRR.Fround) ty frm rs))
 
 ;; Helper for emitting the `fli` instruction.
 (decl rv_fli (Type FliConstant) FReg)
@@ -2104,10 +2092,17 @@
 (rule (canonical_nan_u64 $F64) 0x7ff8000000000000)
 
 ;; Helper for emitting `MInst.FpuRR` instructions.
-(decl fpu_rr (FpuOPRR Type FRM Reg) Reg)
+(decl fpu_rr (FpuOPRR Type FRM Reg) FReg)
 (rule (fpu_rr op ty frm src)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.FpuRR op frm dst src))))
+      (let ((dst WritableFReg (temp_writable_freg))
+            (_ Unit (emit (MInst.FpuRR op ty frm dst src))))
+        dst))
+
+;; Similar to fpu_rr but with an integer destination register
+(decl fpu_rr_int (FpuOPRR Type FRM Reg) XReg)
+(rule (fpu_rr_int op ty frm src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.FpuRR op ty frm dst src))))
         dst))
 
 ;; Helper for emitting `MInst.AluRRR` instructions.

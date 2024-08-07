@@ -4,7 +4,7 @@ use super::*;
 use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::lower::isle::generated_code::{
-    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, FpuOPWidth, ZcbMemOp,
 };
 use crate::machinst::isle::WritableReg;
 
@@ -462,147 +462,101 @@ impl FpuOPRRRR {
 }
 
 impl FpuOPRR {
-    pub(crate) fn op_name(self) -> &'static str {
+    pub(crate) fn op_name(self, width: FpuOPWidth) -> String {
+        let fmv_width = match width {
+            FpuOPWidth::H => "h",
+            FpuOPWidth::S => "w",
+            FpuOPWidth::D => "d",
+            FpuOPWidth::Q => "q",
+        };
         match self {
-            Self::FsqrtS => "fsqrt.s",
-            Self::FcvtWS => "fcvt.w.s",
-            Self::FcvtWuS => "fcvt.wu.s",
-            Self::FmvXW => "fmv.x.w",
-            Self::FclassS => "fclass.s",
-            Self::FcvtSw => "fcvt.s.w",
-            Self::FcvtSwU => "fcvt.s.wu",
-            Self::FmvWX => "fmv.w.x",
-            Self::FcvtLS => "fcvt.l.s",
-            Self::FcvtLuS => "fcvt.lu.s",
-            Self::FcvtSL => "fcvt.s.l",
-            Self::FcvtSLU => "fcvt.s.lu",
-            Self::FcvtLD => "fcvt.l.d",
-            Self::FcvtLuD => "fcvt.lu.d",
-            Self::FmvXD => "fmv.x.d",
-            Self::FcvtDL => "fcvt.d.l",
-            Self::FcvtDLu => "fcvt.d.lu",
-            Self::FmvDX => "fmv.d.x",
-            Self::FsqrtD => "fsqrt.d",
-            Self::FcvtSD => "fcvt.s.d",
-            Self::FcvtDS => "fcvt.d.s",
-            Self::FclassD => "fclass.d",
-            Self::FcvtWD => "fcvt.w.d",
-            Self::FcvtWuD => "fcvt.wu.d",
-            Self::FcvtDW => "fcvt.d.w",
-            Self::FcvtDWU => "fcvt.d.wu",
-            Self::FroundS => "fround.s",
-            Self::FroundD => "fround.d",
+            Self::Fsqrt => format!("fsqrt.{width}"),
+            Self::Fround => format!("fround.{width}"),
+            Self::Fclass => format!("fclass.{width}"),
+            Self::FcvtWFmt => format!("fcvt.w.{width}"),
+            Self::FcvtWuFmt => format!("fcvt.wu.{width}"),
+            Self::FcvtLFmt => format!("fcvt.l.{width}"),
+            Self::FcvtLuFmt => format!("fcvt.lu.{width}"),
+            Self::FcvtFmtW => format!("fcvt.{width}.w"),
+            Self::FcvtFmtWu => format!("fcvt.{width}.wu"),
+            Self::FcvtFmtL => format!("fcvt.{width}.l"),
+            Self::FcvtFmtLu => format!("fcvt.{width}.lu"),
+
+            // fmv instructions deviate from the normal encoding and instead
+            // encode the width as "w" instead of "s". The ISA manual gives this rationale:
+            //
+            // Instructions FMV.S.X and FMV.X.S were renamed to FMV.W.X and FMV.X.W respectively
+            // to be more consistent with their semantics, which did not change. The old names will continue
+            // to be supported in the tools.
+            Self::FmvXFmt => format!("fmv.x.{fmv_width}"),
+            Self::FmvFmtX => format!("fmv.{fmv_width}.x"),
+
+            Self::FcvtSD => "fcvt.s.d".to_string(),
+            Self::FcvtDS => "fcvt.d.s".to_string(),
         }
     }
 
     pub(crate) fn is_convert_to_int(self) -> bool {
         match self {
-            Self::FcvtWS
-            | Self::FcvtWuS
-            | Self::FcvtLS
-            | Self::FcvtLuS
-            | Self::FcvtWD
-            | Self::FcvtWuD
-            | Self::FcvtLD
-            | Self::FcvtLuD => true,
+            Self::FcvtWFmt | Self::FcvtWuFmt | Self::FcvtLFmt | Self::FcvtLuFmt => true,
             _ => false,
         }
     }
 
-    pub(crate) fn op_code(self) -> u32 {
+    pub(crate) fn has_frm(self) -> bool {
         match self {
-            FpuOPRR::FsqrtS
-            | FpuOPRR::FcvtWS
-            | FpuOPRR::FcvtWuS
-            | FpuOPRR::FmvXW
-            | FpuOPRR::FclassS
-            | FpuOPRR::FcvtSw
-            | FpuOPRR::FcvtSwU
-            | FpuOPRR::FmvWX => 0b1010011,
-
-            FpuOPRR::FcvtLS | FpuOPRR::FcvtLuS | FpuOPRR::FcvtSL | FpuOPRR::FcvtSLU => 0b1010011,
-
-            FpuOPRR::FcvtLD
-            | FpuOPRR::FcvtLuD
-            | FpuOPRR::FmvXD
-            | FpuOPRR::FcvtDL
-            | FpuOPRR::FcvtDLu
-            | FpuOPRR::FmvDX => 0b1010011,
-
-            FpuOPRR::FsqrtD
-            | FpuOPRR::FcvtSD
-            | FpuOPRR::FcvtDS
-            | FpuOPRR::FclassD
-            | FpuOPRR::FcvtWD
-            | FpuOPRR::FcvtWuD
-            | FpuOPRR::FcvtDW
-            | FpuOPRR::FcvtDWU
-            | FpuOPRR::FroundS
-            | FpuOPRR::FroundD => 0b1010011,
+            FpuOPRR::FmvXFmt | FpuOPRR::FmvFmtX | FpuOPRR::Fclass => false,
+            _ => true,
         }
     }
 
-    pub(crate) fn rs2_funct5(self) -> u32 {
+    pub(crate) fn opcode(self) -> u32 {
+        // OP-FP Major opcode
+        0b1010011
+    }
+
+    pub(crate) fn rs2(self) -> u32 {
         match self {
-            FpuOPRR::FsqrtS => 0b00000,
-            FpuOPRR::FcvtWS => 0b00000,
-            FpuOPRR::FcvtWuS => 0b00001,
-            FpuOPRR::FmvXW => 0b00000,
-            FpuOPRR::FclassS => 0b00000,
-            FpuOPRR::FcvtSw => 0b00000,
-            FpuOPRR::FcvtSwU => 0b00001,
-            FpuOPRR::FmvWX => 0b00000,
-            FpuOPRR::FcvtLS => 0b00010,
-            FpuOPRR::FcvtLuS => 0b00011,
-            FpuOPRR::FcvtSL => 0b00010,
-            FpuOPRR::FcvtSLU => 0b00011,
-            FpuOPRR::FcvtLD => 0b00010,
-            FpuOPRR::FcvtLuD => 0b00011,
-            FpuOPRR::FmvXD => 0b00000,
-            FpuOPRR::FcvtDL => 0b00010,
-            FpuOPRR::FcvtDLu => 0b00011,
-            FpuOPRR::FmvDX => 0b00000,
-            FpuOPRR::FcvtSD => 0b00001,
-            FpuOPRR::FcvtDS => 0b00000,
-            FpuOPRR::FclassD => 0b00000,
-            FpuOPRR::FcvtWD => 0b00000,
-            FpuOPRR::FcvtWuD => 0b00001,
-            FpuOPRR::FcvtDW => 0b00000,
-            FpuOPRR::FcvtDWU => 0b00001,
-            FpuOPRR::FsqrtD => 0b00000,
-            FpuOPRR::FroundS => 0b00100,
-            FpuOPRR::FroundD => 0b00100,
+            Self::Fsqrt => 0b00000,
+            Self::Fround => 0b00100,
+            Self::Fclass => 0b00000,
+            Self::FcvtWFmt => 0b00000,
+            Self::FcvtWuFmt => 0b00001,
+            Self::FcvtLFmt => 0b00010,
+            Self::FcvtLuFmt => 0b00011,
+            Self::FcvtFmtW => 0b00000,
+            Self::FcvtFmtWu => 0b00001,
+            Self::FcvtFmtL => 0b00010,
+            Self::FcvtFmtLu => 0b00011,
+            Self::FmvXFmt => 0b00000,
+            Self::FmvFmtX => 0b00000,
+            Self::FcvtSD => 0b00001,
+            Self::FcvtDS => 0b00000,
         }
     }
-    pub(crate) fn funct7(self) -> u32 {
+
+    pub(crate) fn funct5(self) -> u32 {
         match self {
-            FpuOPRR::FsqrtS => 0b0101100,
-            FpuOPRR::FcvtWS => 0b1100000,
-            FpuOPRR::FcvtWuS => 0b1100000,
-            FpuOPRR::FmvXW => 0b1110000,
-            FpuOPRR::FclassS => 0b1110000,
-            FpuOPRR::FcvtSw => 0b1101000,
-            FpuOPRR::FcvtSwU => 0b1101000,
-            FpuOPRR::FmvWX => 0b1111000,
-            FpuOPRR::FcvtLS => 0b1100000,
-            FpuOPRR::FcvtLuS => 0b1100000,
-            FpuOPRR::FcvtSL => 0b1101000,
-            FpuOPRR::FcvtSLU => 0b1101000,
-            FpuOPRR::FcvtLD => 0b1100001,
-            FpuOPRR::FcvtLuD => 0b1100001,
-            FpuOPRR::FmvXD => 0b1110001,
-            FpuOPRR::FcvtDL => 0b1101001,
-            FpuOPRR::FcvtDLu => 0b1101001,
-            FpuOPRR::FmvDX => 0b1111001,
-            FpuOPRR::FcvtSD | FpuOPRR::FroundS => 0b0100000,
-            FpuOPRR::FcvtDS | FpuOPRR::FroundD => 0b0100001,
-            FpuOPRR::FclassD => 0b1110001,
-            FpuOPRR::FcvtWD => 0b1100001,
-            FpuOPRR::FcvtWuD => 0b1100001,
-            FpuOPRR::FcvtDW => 0b1101001,
-            FpuOPRR::FcvtDWU => 0b1101001,
-            FpuOPRR::FsqrtD => 0b0101101,
+            Self::Fsqrt => 0b01011,
+            Self::Fround => 0b01000,
+            Self::Fclass => 0b11100,
+            Self::FcvtWFmt => 0b11000,
+            Self::FcvtWuFmt => 0b11000,
+            Self::FcvtLFmt => 0b11000,
+            Self::FcvtLuFmt => 0b11000,
+            Self::FcvtFmtW => 0b11010,
+            Self::FcvtFmtWu => 0b11010,
+            Self::FcvtFmtL => 0b11010,
+            Self::FcvtFmtLu => 0b11010,
+            Self::FmvXFmt => 0b11100,
+            Self::FmvFmtX => 0b11110,
+            Self::FcvtSD => 0b01000,
+            Self::FcvtDS => 0b01000,
         }
+    }
+
+    pub(crate) fn funct7(self, width: FpuOPWidth) -> u32 {
+        (self.funct5() << 2) | width.as_u32()
     }
 }
 
@@ -747,6 +701,47 @@ impl FpuOPRRR {
         }
     }
 }
+
+impl Display for FpuOPWidth {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FpuOPWidth::H => "h",
+                FpuOPWidth::S => "s",
+                FpuOPWidth::D => "d",
+                FpuOPWidth::Q => "q",
+            }
+        )
+    }
+}
+
+impl TryFrom<Type> for FpuOPWidth {
+    type Error = &'static str;
+
+    fn try_from(value: Type) -> std::result::Result<Self, Self::Error> {
+        match value {
+            F16 => Ok(FpuOPWidth::H),
+            F32 => Ok(FpuOPWidth::S),
+            F64 => Ok(FpuOPWidth::D),
+            F128 => Ok(FpuOPWidth::Q),
+            _ => Err("Invalid type for FpuOPWidth"),
+        }
+    }
+}
+
+impl FpuOPWidth {
+    pub(crate) fn as_u32(&self) -> u32 {
+        match self {
+            FpuOPWidth::S => 0b00,
+            FpuOPWidth::D => 0b01,
+            FpuOPWidth::H => 0b10,
+            FpuOPWidth::Q => 0b11,
+        }
+    }
+}
+
 impl AluOPRRR {
     pub(crate) const fn op_name(self) -> &'static str {
         match self {
