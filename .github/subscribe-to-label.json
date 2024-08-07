@@ -1,5 +1,5 @@
 {
   "cfallin": ["isle"],
-  "fitzgen": ["fuzzing", "isle", "wasmtime:ref-types"],
+  "fitzgen": ["fuzzing", "isle", "pulley", "wasmtime:ref-types"],
   "saulecabrera": ["winch"]
 }
