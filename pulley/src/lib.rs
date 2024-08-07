@@ -113,6 +113,13 @@ macro_rules! for_each_op {
             /// `dst = load64(ptr + offset8)`
             load64_offset8 = Load64Offset8 { dst: XReg, ptr: XReg, offset: i8 };
 
+            /// `dst = zero_extend(load32(ptr + offset64))`
+            load32_u_offset64 = Load32UOffset64 { dst: XReg, ptr: XReg, offset: i64 };
+            /// `dst = sign_extend(load32(ptr + offset64))`
+            load32_s_offset64 = Load32SOffset64 { dst: XReg, ptr: XReg, offset: i64 };
+            /// `dst = load64(ptr + offset64)`
+            load64_offset64 = Load64Offset64 { dst: XReg, ptr: XReg, offset: i64 };
+
             /// `*ptr = low32(src)`
             store32 = Store32 { ptr: XReg, src: XReg };
             /// `*ptr = src`
@@ -122,6 +129,11 @@ macro_rules! for_each_op {
             store32_offset8 = Store32SOffset8 { ptr: XReg, offset: i8, src: XReg };
             /// `*(ptr + sign_extend(offset8)) = src`
             store64_offset8 = Store64Offset8 { ptr: XReg, offset: i8, src: XReg };
+
+            /// `*(ptr + sign_extend(offset64)) = low32(src)`
+            store32_offset64 = Store32SOffset64 { ptr: XReg, offset: i64, src: XReg };
+            /// `*(ptr + sign_extend(offset64)) = src`
+            store64_offset64 = Store64Offset64 { ptr: XReg, offset: i64, src: XReg };
 
             /// `low32(dst) = bitcast low32(src) as i32`
             bitcast_int_from_float_32 = BitcastIntFromFloat32 { dst: XReg, src: FReg };
