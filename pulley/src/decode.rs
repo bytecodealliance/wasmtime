@@ -336,6 +336,16 @@ impl Decode for i64 {
     }
 }
 
+impl Decode for SReg {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        let byte = u8::decode(bytecode)?;
+        SReg::new(byte).ok_or_else(|| bytecode.invalid_reg(byte))
+    }
+}
+
 impl Decode for XReg {
     fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
     where

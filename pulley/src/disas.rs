@@ -53,6 +53,12 @@ trait Disas {
     fn disas(&self, position: usize, disas: &mut String);
 }
 
+impl Disas for SReg {
+    fn disas(&self, _position: usize, disas: &mut String) {
+        write!(disas, "{self}").unwrap();
+    }
+}
+
 impl Disas for XReg {
     fn disas(&self, _position: usize, disas: &mut String) {
         write!(disas, "{self}").unwrap();

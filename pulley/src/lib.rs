@@ -46,12 +46,14 @@ macro_rules! for_each_op {
             /// Branch if unsigned `a <= b`.
             br_if_xulteq32 = BrIfXulteq32 { a: XReg, b: XReg, offset: PcRelOffset };
 
+
             /// Move between `x` registers.
             xmov = Xmov { dst: XReg, src: XReg };
             /// Move between `f` registers.
             fmov = Fmov { dst: FReg, src: FReg };
             /// Move between `v` registers.
             vmov = Vmov { dst: VReg, src: VReg };
+
 
             /// Set `dst = sign_extend(imm8)`.
             xconst8 = Xconst8 { dst: XReg, imm: i8 };
@@ -118,6 +120,21 @@ macro_rules! for_each_op {
             store32_offset8 = Store32SOffset8 { ptr: XReg, offset: i8, src: XReg };
             /// `*(ptr + sign_extend(offset8)) = src`
             store64_offset8 = Store64Offset8 { ptr: XReg, offset: i8, src: XReg };
+
+            /// `push lr; push fp; fp = sp; sp += frame_size * 8`
+            enter_frame = EnterFrame { frame_size: u8 };
+            /// `pop fp; pop lr; sp = fp; sp -= frame_size * 8`
+            exit_frame = ExitFrame { frame_size: u8 };
+
+            /// `*sp = low32(src); sp += 4`
+            xpush32 = XPush32 { src: XReg };
+            /// `*sp = src; sp += 8`
+            xpush64 = XPush64 { src: XReg };
+
+            /// `*dst = *sp; sp -= 4`
+            xpop32 = XPop32 { dst: XReg };
+            /// `*dst = *sp; sp -= 8`
+            xpop64 = XPop64 { dst: XReg };
 
             /// `low32(dst) = bitcast low32(src) as i32`
             bitcast_int_from_float_32 = BitcastIntFromFloat32 { dst: XReg, src: FReg };

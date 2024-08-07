@@ -577,6 +577,21 @@ impl MachineState {
 
         state
     }
+
+    /// `*sp = val; sp += size_of::<T>()`
+    fn push<T>(&mut self, val: T) {
+        let sp = self[SReg::sp].get_ptr::<T>();
+        unsafe { sp.write_unaligned(val) }
+        self[SReg::sp].set_ptr(sp.wrapping_add(1));
+    }
+
+    /// `ret = *sp; sp -= size_of::<T>()`
+    fn pop<T>(&mut self) -> T {
+        let sp = self[SReg::sp].get_ptr::<T>();
+        let val = unsafe { sp.read_unaligned() };
+        self[SReg::sp].set_ptr(sp.wrapping_sub(1));
+        val
+    }
 }
 
 enum Continuation {
@@ -938,6 +953,56 @@ impl OpVisitor for InterpreterVisitor<'_> {
                 .byte_offset(offset.into())
                 .write_unaligned(val);
         }
+        Continuation::Continue
+    }
+
+    fn xpush32(&mut self, src: XReg) -> Self::Return {
+        self.state.push(self.state[src].get_u32());
+        Continuation::Continue
+    }
+
+    fn xpush64(&mut self, src: XReg) -> Self::Return {
+        self.state.push(self.state[src].get_u64());
+        Continuation::Continue
+    }
+
+    fn xpop32(&mut self, dst: XReg) -> Self::Return {
+        let val = self.state.pop();
+        self.state[dst].set_u32(val);
+        Continuation::Continue
+    }
+
+    fn xpop64(&mut self, dst: XReg) -> Self::Return {
+        let val = self.state.pop();
+        self.state[dst].set_u64(val);
+        Continuation::Continue
+    }
+
+    /// `push lr; push fp; fp = sp; sp += frame_size * 8`
+    fn enter_frame(&mut self, frame_size: u8) -> Self::Return {
+        self.state.push(self.state[SReg::lr].get_ptr::<u8>());
+        self.state.push(self.state[SReg::fp].get_ptr::<u8>());
+
+        self.state[SReg::fp] = self.state[SReg::sp];
+        let sp = self.state[SReg::sp].get_ptr::<u8>();
+        let sp = sp.wrapping_add(usize::from(frame_size) * 8);
+        self.state[SReg::sp].set_ptr(sp);
+
+        Continuation::Continue
+    }
+
+    /// `pop fp; pop lr; sp = fp; sp -= frame_size * 8`
+    fn exit_frame(&mut self, frame_size: u8) -> Self::Return {
+        let sp = self.state.pop();
+        let fp = self.state.pop();
+        self.state[SReg::sp].set_ptr::<u8>(sp);
+        self.state[SReg::fp].set_ptr::<u8>(fp);
+
+        self.state[SReg::sp] = self.state[SReg::fp];
+        let sp = self.state[SReg::sp].get_ptr::<u8>();
+        let sp = sp.wrapping_sub(usize::from(frame_size) * 8);
+        self.state[SReg::sp].set_ptr(sp);
+
         Continuation::Continue
     }
 

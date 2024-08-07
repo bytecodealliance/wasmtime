@@ -63,7 +63,7 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::BrIfXulteq32(_) => false,
         Op::BrIfXslt32(_) => false,
         Op::BrIfXslteq32(_) => false,
-        Op::Xmov(op::Xmov { .. }) => true,
+        Op::Xmov(_) => true,
         Op::Fmov(_) => true,
         Op::Vmov(_) => true,
         Op::Xconst8(op::Xconst8 { .. })
@@ -82,6 +82,10 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::Store64(_) => false,
         Op::Store32SOffset8(_) => false,
         Op::Store64Offset8(_) => false,
+        Op::XPush32(_) | Op::XPush64(_) => true,
+        Op::XPop32(_) | Op::XPop64(_) => true,
+        Op::EnterFrame(_) => false,
+        Op::ExitFrame(_) => false,
         Op::BitcastIntFromFloat32(op::BitcastIntFromFloat32 { .. })
         | Op::BitcastIntFromFloat64(op::BitcastIntFromFloat64 { .. }) => true,
         Op::BitcastFloatFromInt32(_) => true,
