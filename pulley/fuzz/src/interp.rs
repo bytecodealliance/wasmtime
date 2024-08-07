@@ -63,15 +63,15 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::BrIfXulteq32(_) => false,
         Op::BrIfXslt32(_) => false,
         Op::BrIfXslteq32(_) => false,
-        Op::Xmov(op::Xmov { dst, .. }) => !dst.is_special(),
+        Op::Xmov(op::Xmov { .. }) => true,
         Op::Fmov(_) => true,
         Op::Vmov(_) => true,
-        Op::Xconst8(op::Xconst8 { dst, .. }) => !dst.is_special(),
-        Op::Xconst16(op::Xconst16 { dst, .. }) => !dst.is_special(),
-        Op::Xconst32(op::Xconst32 { dst, .. }) => !dst.is_special(),
-        Op::Xconst64(op::Xconst64 { dst, .. }) => !dst.is_special(),
-        Op::Xadd32(op::Xadd32 { dst, .. }) => !dst.is_special(),
-        Op::Xadd64(op::Xadd64 { dst, .. }) => !dst.is_special(),
+        Op::Xconst8(op::Xconst8 { .. })
+        | Op::Xconst16(op::Xconst16 { .. })
+        | Op::Xconst32(op::Xconst32 { .. })
+        | Op::Xconst64(op::Xconst64 { .. })
+        | Op::Xadd32(op::Xadd32 { .. })
+        | Op::Xadd64(op::Xadd64 { .. }) => true,
         Op::Load32U(_) => false,
         Op::Load32S(_) => false,
         Op::Load64(_) => false,
@@ -82,24 +82,24 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::Store64(_) => false,
         Op::Store32SOffset8(_) => false,
         Op::Store64Offset8(_) => false,
-        Op::BitcastIntFromFloat32(op::BitcastIntFromFloat32 { dst, .. }) => !dst.is_special(),
-        Op::BitcastIntFromFloat64(op::BitcastIntFromFloat64 { dst, .. }) => !dst.is_special(),
+        Op::BitcastIntFromFloat32(op::BitcastIntFromFloat32 { .. })
+        | Op::BitcastIntFromFloat64(op::BitcastIntFromFloat64 { .. }) => true,
         Op::BitcastFloatFromInt32(_) => true,
         Op::BitcastFloatFromInt64(_) => true,
         Op::ExtendedOp(op) => extended_op_is_safe_for_fuzzing(op),
         Op::Call(_) => false,
-        Op::Xeq64(Xeq64 { dst, .. }) => !dst.is_special(),
-        Op::Xneq64(Xneq64 { dst, .. }) => !dst.is_special(),
-        Op::Xslt64(Xslt64 { dst, .. }) => !dst.is_special(),
-        Op::Xslteq64(Xslteq64 { dst, .. }) => !dst.is_special(),
-        Op::Xult64(Xult64 { dst, .. }) => !dst.is_special(),
-        Op::Xulteq64(Xulteq64 { dst, .. }) => !dst.is_special(),
-        Op::Xeq32(Xeq32 { dst, .. }) => !dst.is_special(),
-        Op::Xneq32(Xneq32 { dst, .. }) => !dst.is_special(),
-        Op::Xslt32(Xslt32 { dst, .. }) => !dst.is_special(),
-        Op::Xslteq32(Xslteq32 { dst, .. }) => !dst.is_special(),
-        Op::Xult32(Xult32 { dst, .. }) => !dst.is_special(),
-        Op::Xulteq32(Xulteq32 { dst, .. }) => !dst.is_special(),
+        Op::Xeq64(Xeq64 { .. })
+        | Op::Xneq64(Xneq64 { .. })
+        | Op::Xslt64(Xslt64 { .. })
+        | Op::Xslteq64(Xslteq64 { .. })
+        | Op::Xult64(Xult64 { .. })
+        | Op::Xulteq64(Xulteq64 { .. })
+        | Op::Xeq32(Xeq32 { .. })
+        | Op::Xneq32(Xneq32 { .. })
+        | Op::Xslt32(Xslt32 { .. })
+        | Op::Xslteq32(Xslteq32 { .. })
+        | Op::Xult32(Xult32 { .. })
+        | Op::Xulteq32(Xulteq32 { .. }) => true,
     }
 }
 
@@ -107,6 +107,6 @@ fn extended_op_is_safe_for_fuzzing(op: &ExtendedOp) -> bool {
     match op {
         ExtendedOp::Trap(_) => true,
         ExtendedOp::Nop(_) => true,
-        ExtendedOp::GetSp(GetSp { dst, .. }) => !dst.is_special(),
+        ExtendedOp::GetSp(GetSp { .. }) => true,
     }
 }

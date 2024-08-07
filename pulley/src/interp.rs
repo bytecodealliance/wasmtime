@@ -478,6 +478,7 @@ impl Default for VRegVal {
 /// The machine state for a Pulley virtual machine: the various registers and
 /// stack.
 pub struct MachineState {
+    s_regs: [XRegVal; SReg::RANGE.end as usize],
     x_regs: [XRegVal; XReg::RANGE.end as usize],
     f_regs: [FRegVal; FReg::RANGE.end as usize],
     v_regs: [VRegVal; VReg::RANGE.end as usize],
@@ -490,6 +491,7 @@ unsafe impl Sync for MachineState {}
 impl fmt::Debug for MachineState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let MachineState {
+            s_regs,
             x_regs,
             f_regs,
             v_regs,
@@ -509,6 +511,10 @@ impl fmt::Debug for MachineState {
         }
 
         f.debug_struct("MachineState")
+            .field(
+                "s_regs",
+                &RegMap(s_regs, |i| SReg::new(i).unwrap().to_string()),
+            )
             .field(
                 "x_regs",
                 &RegMap(x_regs, |i| XReg::new(i).unwrap().to_string()),
@@ -543,6 +549,7 @@ macro_rules! index_reg {
     };
 }
 
+index_reg!(SReg, XRegVal, s_regs);
 index_reg!(XReg, XRegVal, x_regs);
 index_reg!(FReg, FRegVal, f_regs);
 index_reg!(VReg, VRegVal, v_regs);
@@ -554,6 +561,7 @@ impl MachineState {
             x_regs: [Default::default(); XReg::RANGE.end as usize],
             f_regs: Default::default(),
             v_regs: Default::default(),
+            s_regs: Default::default(),
             stack,
         };
 
@@ -563,10 +571,9 @@ impl MachineState {
         let sp = &mut state.stack[..];
         let sp = sp.as_mut_ptr();
         let sp = unsafe { sp.add(len) };
-        state[XReg::SP] = XRegVal::new_ptr(sp);
-
-        state[XReg::FP] = XRegVal::new_i64(-1);
-        state[XReg::LR] = XRegVal::new_i64(-1);
+        state[SReg::SP] = XRegVal::new_ptr(sp);
+        state[SReg::FP] = XRegVal::new_i64(-1);
+        state[SReg::LR] = XRegVal::new_i64(-1);
 
         state
     }
@@ -606,10 +613,10 @@ impl OpVisitor for InterpreterVisitor<'_> {
     type Return = Continuation;
 
     fn ret(&mut self) -> Self::Return {
-        if self.state[XReg::LR].get_u64() == u64::MAX {
+        if self.state[SReg::LR].get_u64() == u64::MAX {
             Continuation::ReturnToHost
         } else {
-            let return_addr = self.state[XReg::LR].get_ptr();
+            let return_addr = self.state[SReg::LR].get_ptr();
             self.pc = unsafe { UnsafeBytecodeStream::new(return_addr) };
             // log::trace!("returning to {return_addr:#p}");
             Continuation::Continue
@@ -618,7 +625,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
 
     fn call(&mut self, offset: PcRelOffset) -> Self::Return {
         let return_addr = u64::try_from(self.pc.as_ptr() as usize).unwrap();
-        self.state[XReg::LR].set_u64(return_addr);
+        self.state[SReg::LR].set_u64(return_addr);
         self.pc_rel_jump(offset, 5)
     }
 
@@ -969,7 +976,7 @@ impl ExtendedOpVisitor for InterpreterVisitor<'_> {
     }
 
     fn get_sp(&mut self, dst: XReg) -> Self::Return {
-        let sp = self.state[XReg::SP].get_u64();
+        let sp = self.state[SReg::SP].get_u64();
         self.state[dst].set_u64(sp);
         Continuation::Continue
     }

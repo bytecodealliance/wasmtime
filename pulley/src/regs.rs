@@ -62,13 +62,33 @@ macro_rules! define_registers {
 
 define_registers! {
     /// An `x` register: integers.
-    pub struct XReg = 0..37;
+    pub struct XReg = 0..32;
 
     /// An `f` register: floats.
     pub struct FReg = 0..32;
 
     /// A `v` register: vectors.
     pub struct VReg = 0..32;
+}
+
+/// An `s` register: integers.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(non_camel_case_types)]
+pub enum SReg {
+    /// The special `sp` stack pointer register.
+    SP,
+
+    /// The special `lr` link register.
+    LR,
+
+    /// The special `fp` frame pointer register.
+    FP,
+
+    /// The special `spilltmp0` scratch register.
+    SPILL_TMP_0,
+
+    /// The special `spilltmp1` scratch register.
+    SPILL_TMP_1,
 }
 
 /// Any register, regardless of class.
@@ -78,14 +98,60 @@ define_registers! {
 #[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AnyReg {
+    S(SReg),
     X(XReg),
     F(FReg),
     V(VReg),
 }
 
+#[allow(missing_docs)]
+impl SReg {
+    pub const RANGE: Range<u8> = 0..(Self::SPILL_TMP_1 as u8 + 1);
+
+    pub fn index(self) -> usize {
+        usize::from(self as u8)
+    }
+
+    pub fn new(index: u8) -> Option<Self> {
+        if Self::RANGE.contains(&index) {
+            Some(unsafe { Self::new_unchecked(index) })
+        } else {
+            None
+        }
+    }
+
+    pub unsafe fn new_unchecked(index: u8) -> Self {
+        core::mem::transmute(index)
+    }
+}
+
+impl fmt::Debug for SReg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+impl fmt::Display for SReg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::SP => write!(f, "sp"),
+            Self::LR => write!(f, "lr"),
+            Self::FP => write!(f, "fp"),
+            Self::SPILL_TMP_0 => write!(f, "spilltmp0"),
+            Self::SPILL_TMP_1 => write!(f, "spilltmp1"),
+        }
+    }
+}
+
 impl From<XReg> for AnyReg {
     fn from(x: XReg) -> Self {
         Self::X(x)
+    }
+}
+
+impl From<SReg> for AnyReg {
+    fn from(s: SReg) -> Self {
+        Self::S(s)
     }
 }
 
@@ -105,6 +171,7 @@ impl fmt::Display for AnyReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AnyReg::X(r) => fmt::Display::fmt(r, f),
+            AnyReg::S(r) => fmt::Display::fmt(r, f),
             AnyReg::F(r) => fmt::Display::fmt(r, f),
             AnyReg::V(r) => fmt::Display::fmt(r, f),
         }
@@ -129,39 +196,9 @@ impl<'a> arbitrary::Arbitrary<'a> for AnyReg {
     }
 }
 
-impl XReg {
-    /// The valid special register range.
-    pub const SPECIAL_RANGE: Range<u8> = 32..37;
-
-    /// The special `sp` stack pointer register.
-    pub const SP: Self = Self(32);
-
-    /// The special `lr` link register.
-    pub const LR: Self = Self(33);
-
-    /// The special `fp` frame pointer register.
-    pub const FP: Self = Self(34);
-
-    /// The special `spilltmp0` scratch register.
-    pub const SPILL_TMP_0: Self = Self(35);
-
-    /// The special `spilltmp1` scratch register.
-    pub const SPILL_TMP_1: Self = Self(36);
-
-    /// Is this `x` register a special register?
-    pub fn is_special(&self) -> bool {
-        self.0 >= Self::SPECIAL_RANGE.start
-    }
-}
-
 impl fmt::Display for XReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Self::SP => write!(f, "sp"),
-            Self::LR => write!(f, "lr"),
-            Self::FP => write!(f, "fp"),
-            Self::SPILL_TMP_0 => write!(f, "spilltmp0"),
-            Self::SPILL_TMP_1 => write!(f, "spilltmp1"),
             Self(x) => write!(f, "x{x}"),
         }
     }
@@ -180,22 +217,4 @@ impl fmt::Display for VReg {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn special_x_regs() {
-        assert!(XReg::SP.is_special());
-        assert!(XReg::LR.is_special());
-        assert!(XReg::FP.is_special());
-        assert!(XReg::SPILL_TMP_0.is_special());
-        assert!(XReg::SPILL_TMP_1.is_special());
-    }
-
-    #[test]
-    fn not_special_x_regs() {
-        for i in 0..32 {
-            assert!(!XReg::new(i).unwrap().is_special());
-        }
-    }
-}
+mod tests {}

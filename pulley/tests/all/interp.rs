@@ -54,6 +54,7 @@ unsafe fn assert_one<R0, R1, V>(
 
     let actual = match result.into() {
         AnyReg::X(r) => vm.state_mut()[r].get_u64(),
+        AnyReg::S(r) => vm.state_mut()[r].get_u64(),
         AnyReg::F(r) => vm.state_mut()[r].get_f64().to_bits(),
         AnyReg::V(_) => todo!(),
     };
