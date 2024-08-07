@@ -153,6 +153,37 @@ impl fmt::Debug for AnyReg {
     }
 }
 
+/// Operands to a binary operation, packed into a 16-bit word (5 bits per register).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct BinaryOperands<R> {
+    /// The destination register, packed in bits 0..5.
+    pub dst: R,
+    /// The frist source register, packed in bits 5..10.
+    pub src1: R,
+    /// The frist source register, packed in bits 10..15.
+    pub src2: R,
+}
+
+impl<R: Reg> BinaryOperands<R> {
+    /// Convert to dense 16 bit encoding.
+    pub fn to_bits(self) -> u16 {
+        let dst = self.dst.to_u8();
+        let src1 = self.src1.to_u8();
+        let src2 = self.src2.to_u8();
+        (dst as u16) | ((src1 as u16) << 5) | ((src2 as u16) << 10)
+    }
+
+    /// Convert from dense 16 bit encoding. The topmost bit is ignored.
+    pub fn from_bits(bits: u16) -> Self {
+        Self {
+            dst: R::new((bits & 0b11111) as u8).unwrap(),
+            src1: R::new(((bits >> 5) & 0b11111) as u8).unwrap(),
+            src2: R::new(((bits >> 10) & 0b11111) as u8).unwrap(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,6 +201,26 @@ mod tests {
     fn not_special_x_regs() {
         for i in 0..27 {
             assert!(!XReg::new(i).unwrap().is_special());
+        }
+    }
+
+    #[test]
+    fn binary_operands() {
+        let mut i = 0;
+        for src2 in XReg::RANGE {
+            for src1 in XReg::RANGE {
+                for dst in XReg::RANGE {
+                    let operands = BinaryOperands {
+                        dst: XReg::new(dst).unwrap(),
+                        src1: XReg::new(src1).unwrap(),
+                        src2: XReg::new(src2).unwrap(),
+                    };
+                    assert_eq!(operands.to_bits(), i);
+                    assert_eq!(BinaryOperands::from_bits(i), operands);
+                    assert_eq!(BinaryOperands::from_bits(0x8000 | i), operands);
+                    i += 1;
+                }
+            }
         }
     }
 }
