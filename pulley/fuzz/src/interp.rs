@@ -70,8 +70,6 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::Xconst16(op::Xconst16 { dst, .. }) => !dst.is_special(),
         Op::Xconst32(op::Xconst32 { dst, .. }) => !dst.is_special(),
         Op::Xconst64(op::Xconst64 { dst, .. }) => !dst.is_special(),
-        Op::Xadd32(op::Xadd32 { dst, .. }) => !dst.is_special(),
-        Op::Xadd64(op::Xadd64 { dst, .. }) => !dst.is_special(),
         Op::Load32U(_) => false,
         Op::Load32S(_) => false,
         Op::Load64(_) => false,
@@ -93,18 +91,20 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::BitcastFloatFromInt64(_) => true,
         Op::ExtendedOp(op) => extended_op_is_safe_for_fuzzing(op),
         Op::Call(_) => false,
-        Op::Xeq64(Xeq64 { dst, .. }) => !dst.is_special(),
-        Op::Xneq64(Xneq64 { dst, .. }) => !dst.is_special(),
-        Op::Xslt64(Xslt64 { dst, .. }) => !dst.is_special(),
-        Op::Xslteq64(Xslteq64 { dst, .. }) => !dst.is_special(),
-        Op::Xult64(Xult64 { dst, .. }) => !dst.is_special(),
-        Op::Xulteq64(Xulteq64 { dst, .. }) => !dst.is_special(),
-        Op::Xeq32(Xeq32 { dst, .. }) => !dst.is_special(),
-        Op::Xneq32(Xneq32 { dst, .. }) => !dst.is_special(),
-        Op::Xslt32(Xslt32 { dst, .. }) => !dst.is_special(),
-        Op::Xslteq32(Xslteq32 { dst, .. }) => !dst.is_special(),
-        Op::Xult32(Xult32 { dst, .. }) => !dst.is_special(),
-        Op::Xulteq32(Xulteq32 { dst, .. }) => !dst.is_special(),
+        Op::Xadd32(Xadd32 { operands, .. })
+        | Op::Xadd64(Xadd64 { operands, .. })
+        | Op::Xeq64(Xeq64 { operands, .. })
+        | Op::Xneq64(Xneq64 { operands, .. })
+        | Op::Xslt64(Xslt64 { operands, .. })
+        | Op::Xslteq64(Xslteq64 { operands, .. })
+        | Op::Xult64(Xult64 { operands, .. })
+        | Op::Xulteq64(Xulteq64 { operands, .. })
+        | Op::Xeq32(Xeq32 { operands, .. })
+        | Op::Xneq32(Xneq32 { operands, .. })
+        | Op::Xslt32(Xslt32 { operands, .. })
+        | Op::Xslteq32(Xslteq32 { operands, .. })
+        | Op::Xult32(Xult32 { operands, .. })
+        | Op::Xulteq32(Xulteq32 { operands, .. }) => !operands.dst.is_special(),
     }
 }
 

@@ -9,6 +9,7 @@ use crate::trace;
 use core::marker::PhantomData;
 use cranelift_control::ControlPlane;
 use pulley_interpreter::encode as enc;
+use pulley_interpreter::regs::BinaryOperands;
 use pulley_interpreter::regs::Reg as _;
 
 pub struct EmitInfo {
@@ -334,48 +335,28 @@ fn pulley_emit<P>(
         Inst::Xconst32 { dst, imm } => enc::xconst32(sink, dst, *imm),
         Inst::Xconst64 { dst, imm } => enc::xconst64(sink, dst, *imm),
 
-        Inst::Xadd32 { dst, src1, src2 } => {
-            enc::xadd32(sink, dst, src1, src2);
+        Inst::Xadd32 { dst, src1, src2 } => enc::xadd32(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xadd64 { dst, src1, src2 } => enc::xadd64(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xeq64 { dst, src1, src2 } => enc::xeq64(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xneq64 { dst, src1, src2 } => enc::xneq64(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xslt64 { dst, src1, src2 } => enc::xslt64(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xslteq64 { dst, src1, src2 } => {
+            enc::xslteq64(sink, BinaryOperands::new(dst, src1, src2))
         }
-        Inst::Xadd64 { dst, src1, src2 } => {
-            enc::xadd64(sink, dst, src1, src2);
+        Inst::Xult64 { dst, src1, src2 } => enc::xult64(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xulteq64 { dst, src1, src2 } => {
+            enc::xulteq64(sink, BinaryOperands::new(dst, src1, src2))
         }
 
-        Inst::Xeq64 { dst, src1, src2 } => {
-            enc::xeq64(sink, dst, src1, src2);
-        }
-        Inst::Xneq64 { dst, src1, src2 } => {
-            enc::xneq64(sink, dst, src1, src2);
-        }
-        Inst::Xslt64 { dst, src1, src2 } => {
-            enc::xslt64(sink, dst, src1, src2);
-        }
-        Inst::Xslteq64 { dst, src1, src2 } => {
-            enc::xslteq64(sink, dst, src1, src2);
-        }
-        Inst::Xult64 { dst, src1, src2 } => {
-            enc::xult64(sink, dst, src1, src2);
-        }
-        Inst::Xulteq64 { dst, src1, src2 } => {
-            enc::xulteq64(sink, dst, src1, src2);
-        }
-        Inst::Xeq32 { dst, src1, src2 } => {
-            enc::xeq32(sink, dst, src1, src2);
-        }
-        Inst::Xneq32 { dst, src1, src2 } => {
-            enc::xneq32(sink, dst, src1, src2);
-        }
-        Inst::Xslt32 { dst, src1, src2 } => {
-            enc::xslt32(sink, dst, src1, src2);
-        }
+        Inst::Xeq32 { dst, src1, src2 } => enc::xeq32(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xneq32 { dst, src1, src2 } => enc::xneq32(sink, BinaryOperands::new(dst, src1, src2)),
+        Inst::Xslt32 { dst, src1, src2 } => enc::xslt32(sink, BinaryOperands::new(dst, src1, src2)),
         Inst::Xslteq32 { dst, src1, src2 } => {
-            enc::xslteq32(sink, dst, src1, src2);
+            enc::xslteq32(sink, BinaryOperands::new(dst, src1, src2))
         }
-        Inst::Xult32 { dst, src1, src2 } => {
-            enc::xult32(sink, dst, src1, src2);
-        }
+        Inst::Xult32 { dst, src1, src2 } => enc::xult32(sink, BinaryOperands::new(dst, src1, src2)),
         Inst::Xulteq32 { dst, src1, src2 } => {
-            enc::xulteq32(sink, dst, src1, src2);
+            enc::xulteq32(sink, BinaryOperands::new(dst, src1, src2))
         }
 
         Inst::LoadAddr { dst, mem } => {
@@ -399,8 +380,12 @@ fn pulley_emit<P>(
                     }
 
                     match P::pointer_width() {
-                        PointerWidth::PointerWidth32 => enc::xadd32(sink, dst, base, dst),
-                        PointerWidth::PointerWidth64 => enc::xadd64(sink, dst, base, dst),
+                        PointerWidth::PointerWidth32 => {
+                            enc::xadd32(sink, BinaryOperands::new(dst, base, dst))
+                        }
+                        PointerWidth::PointerWidth64 => {
+                            enc::xadd64(sink, BinaryOperands::new(dst, base, dst))
+                        }
                     }
                 }
             } else {

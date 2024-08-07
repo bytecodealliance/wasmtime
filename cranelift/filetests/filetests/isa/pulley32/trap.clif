@@ -33,10 +33,10 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ;        0: 0e 03 2a                        xconst8 x3, 42
-;        3: 14 03 00 03                     xeq64 x3, x0, x3
-;        7: 03 03 07 00 00 00               br_if x3, 0x7    // target = 0xe
-;        d: 00                              ret
-;        e: 33 00 00                        trap
+;        3: 14 03 0c                        xeq64 x3, x0, x3
+;        6: 03 03 07 00 00 00               br_if x3, 0x7    // target = 0xd
+;        c: 00                              ret
+;        d: 33 00 00                        trap
 
 function %trapz(i64) {
 block0(v0: i64):
@@ -58,8 +58,8 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ;        0: 0e 03 2a                        xconst8 x3, 42
-;        3: 14 03 00 03                     xeq64 x3, x0, x3
-;        7: 04 03 07 00 00 00               br_if_not x3, 0x7    // target = 0xe
-;        d: 00                              ret
-;        e: 33 00 00                        trap
+;        3: 14 03 0c                        xeq64 x3, x0, x3
+;        6: 04 03 07 00 00 00               br_if_not x3, 0x7    // target = 0xd
+;        c: 00                              ret
+;        d: 33 00 00                        trap
 

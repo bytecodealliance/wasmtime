@@ -166,6 +166,15 @@ pub struct BinaryOperands<R> {
 }
 
 impl<R: Reg> BinaryOperands<R> {
+    /// Convenience constructor for applying `Into`
+    pub fn new(dst: impl Into<R>, src1: impl Into<R>, src2: impl Into<R>) -> Self {
+        Self {
+            dst: dst.into(),
+            src1: src1.into(),
+            src2: src2.into(),
+        }
+    }
+
     /// Convert to dense 16 bit encoding.
     pub fn to_bits(self) -> u16 {
         let dst = self.dst.to_u8();

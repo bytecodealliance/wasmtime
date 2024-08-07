@@ -741,101 +741,101 @@ impl OpVisitor for InterpreterVisitor<'_> {
         Continuation::Continue
     }
 
-    fn xadd32(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u32();
-        let b = self.state[src2].get_u32();
-        self.state[dst].set_u32(a.wrapping_add(b));
+    fn xadd32(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.wrapping_add(b));
         Continuation::Continue
     }
 
-    fn xadd64(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u64();
-        let b = self.state[src2].get_u64();
-        self.state[dst].set_u64(a.wrapping_add(b));
+    fn xadd64(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(a.wrapping_add(b));
         Continuation::Continue
     }
 
-    fn xeq64(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u64();
-        let b = self.state[src2].get_u64();
-        self.state[dst].set_u64(u64::from(a == b));
+    fn xeq64(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(u64::from(a == b));
         Continuation::Continue
     }
 
-    fn xneq64(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u64();
-        let b = self.state[src2].get_u64();
-        self.state[dst].set_u64(u64::from(a != b));
+    fn xneq64(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(u64::from(a != b));
         Continuation::Continue
     }
 
-    fn xslt64(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_i64();
-        let b = self.state[src2].get_i64();
-        self.state[dst].set_u64(u64::from(a < b));
+    fn xslt64(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_i64();
+        self.state[operands.dst].set_u64(u64::from(a < b));
         Continuation::Continue
     }
 
-    fn xslteq64(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_i64();
-        let b = self.state[src2].get_i64();
-        self.state[dst].set_u64(u64::from(a <= b));
+    fn xslteq64(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_i64();
+        self.state[operands.dst].set_u64(u64::from(a <= b));
         Continuation::Continue
     }
 
-    fn xult64(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u64();
-        let b = self.state[src2].get_u64();
-        self.state[dst].set_u64(u64::from(a < b));
+    fn xult64(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(u64::from(a < b));
         Continuation::Continue
     }
 
-    fn xulteq64(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u64();
-        let b = self.state[src2].get_u64();
-        self.state[dst].set_u64(u64::from(a <= b));
+    fn xulteq64(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(u64::from(a <= b));
         Continuation::Continue
     }
 
-    fn xeq32(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u32();
-        let b = self.state[src2].get_u32();
-        self.state[dst].set_u64(u64::from(a == b));
+    fn xeq32(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(u64::from(a == b));
         Continuation::Continue
     }
 
-    fn xneq32(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u32();
-        let b = self.state[src2].get_u32();
-        self.state[dst].set_u64(u64::from(a != b));
+    fn xneq32(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(u64::from(a != b));
         Continuation::Continue
     }
 
-    fn xslt32(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_i32();
-        let b = self.state[src2].get_i32();
-        self.state[dst].set_u64(u64::from(a < b));
+    fn xslt32(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_i32();
+        self.state[operands.dst].set_u64(u64::from(a < b));
         Continuation::Continue
     }
 
-    fn xslteq32(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_i32();
-        let b = self.state[src2].get_i32();
-        self.state[dst].set_u64(u64::from(a <= b));
+    fn xslteq32(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_i32();
+        self.state[operands.dst].set_u64(u64::from(a <= b));
         Continuation::Continue
     }
 
-    fn xult32(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u32();
-        let b = self.state[src2].get_u32();
-        self.state[dst].set_u64(u64::from(a < b));
+    fn xult32(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(u64::from(a < b));
         Continuation::Continue
     }
 
-    fn xulteq32(&mut self, dst: XReg, src1: XReg, src2: XReg) -> Self::Return {
-        let a = self.state[src1].get_u32();
-        let b = self.state[src2].get_u32();
-        self.state[dst].set_u64(u64::from(a <= b));
+    fn xulteq32(&mut self, operands: BinaryOperands<XReg>) -> Self::Return {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(u64::from(a <= b));
         Continuation::Continue
     }
 
