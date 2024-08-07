@@ -13,6 +13,6 @@ block0:
 ;   ret
 ;
 ; Disassembled:
-;        0: 33 02 00 00                     get_sp x0
+;        0: 39 02 00 00                     get_sp x0
 ;        4: 00                              ret
 

@@ -87,7 +87,7 @@ impl Encode for XReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -96,7 +96,7 @@ impl Encode for FReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -105,7 +105,7 @@ impl Encode for VReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
