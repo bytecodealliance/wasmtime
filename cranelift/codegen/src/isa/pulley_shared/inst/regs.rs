@@ -89,17 +89,12 @@ define_registers! {
     x_reg(24) => x24, writable_x24;
     x_reg(25) => x25, writable_x25;
     x_reg(26) => x26, writable_x26;
-    x_reg(27) => x27, writable_x27;
-    x_reg(28) => x28, writable_x28;
-    x_reg(29) => x29, writable_x29;
-    x_reg(30) => x30, writable_x30;
-    x_reg(31) => x31, writable_x31;
 
-    x_reg(32) => stack_reg, writable_stack_reg;
-    x_reg(33) => link_reg, writable_link_reg;
-    x_reg(34) => fp_reg, writable_fp_reg;
-    x_reg(35) => spilltmp_reg, writable_spilltmp_reg;
-    x_reg(36) => spilltmp2_reg, writable_spilltmp2_reg;
+    x_reg(27) => stack_reg, writable_stack_reg;
+    x_reg(28) => link_reg, writable_link_reg;
+    x_reg(29) => fp_reg, writable_fp_reg;
+    x_reg(30) => spilltmp_reg, writable_spilltmp_reg;
+    x_reg(31) => spilltmp2_reg, writable_spilltmp2_reg;
 
     f_reg(0) => f0, writable_f0;
     f_reg(1) => f1, writable_f1;

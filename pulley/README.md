@@ -47,17 +47,17 @@ to change, instructions to appear and disappear, and APIs to be overhauled.
 Here is the disassembly of `f(a, b) = a + b` in Pulley today:
 
 ```
-       0: 0e 1f f0                        xconst8 x31, -16
-       3: 12 20 20 1f                     xadd32 sp, sp, x31
-       7: 29 20 08 21                     store64_offset8 sp, 8, lr
-       b: 27 20 22                        store64 sp, fp
-       e: 0b 22 20                        xmov fp, sp
+       0: 0e 1a f0                        xconst8 x26, -16
+       3: 12 1b 1b 1a                     xadd32 sp, sp, x26
+       7: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
+       b: 2a 1b 1d                        store64 sp, fp
+       e: 0b 1d 1b                        xmov fp, sp
       11: 12 00 00 01                     xadd32 x0, x0, x1
-      15: 0b 20 22                        xmov sp, fp
-      18: 25 21 20 08                     load64_offset8 lr, sp, 8
-      1c: 22 22 20                        load64 fp, sp
-      1f: 0e 1f 10                        xconst8 x31, 16
-      22: 12 20 20 1f                     xadd32 sp, sp, x31
+      15: 0b 1b 1d                        xmov sp, fp
+      18: 25 1c 1b 08                     load64_offset8 lr, sp, 8
+      1c: 22 1d 1b                        load64 fp, sp
+      1f: 0e 1a 10                        xconst8 x26, 16
+      22: 12 1b 1b 1a                     xadd32 sp, sp, x26
       26: 00                              ret
 ```
 

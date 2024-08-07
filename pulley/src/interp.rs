@@ -76,9 +76,9 @@ impl Vm {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
-        let mut x_args = (0..16).map(|x| XReg::unchecked_new(x));
-        let mut f_args = (0..16).map(|f| FReg::unchecked_new(f));
-        let mut v_args = (0..16).map(|v| VReg::unchecked_new(v));
+        let mut x_args = (0..16).map(|x| XReg::new_unchecked(x));
+        let mut f_args = (0..16).map(|f| FReg::new_unchecked(f));
+        let mut v_args = (0..16).map(|v| VReg::new_unchecked(v));
 
         for arg in args {
             match arg {
@@ -99,9 +99,9 @@ impl Vm {
 
         self.run(func.as_ptr())?;
 
-        let mut x_rets = (0..16).map(|x| XReg::unchecked_new(x));
-        let mut f_rets = (0..16).map(|f| FReg::unchecked_new(f));
-        let mut v_rets = (0..16).map(|v| VReg::unchecked_new(v));
+        let mut x_rets = (0..16).map(|x| XReg::new_unchecked(x));
+        let mut f_rets = (0..16).map(|f| FReg::new_unchecked(f));
+        let mut v_rets = (0..16).map(|v| VReg::new_unchecked(v));
 
         Ok(rets.into_iter().map(move |ty| match ty {
             RegType::XReg => match x_rets.next() {
@@ -563,10 +563,9 @@ impl MachineState {
         let sp = &mut state.stack[..];
         let sp = sp.as_mut_ptr();
         let sp = unsafe { sp.add(len) };
-        state[XReg::SP] = XRegVal::new_ptr(sp);
-
-        state[XReg::FP] = XRegVal::new_i64(-1);
-        state[XReg::LR] = XRegVal::new_i64(-1);
+        state[XReg::sp] = XRegVal::new_ptr(sp);
+        state[XReg::fp] = XRegVal::new_i64(-1);
+        state[XReg::lr] = XRegVal::new_i64(-1);
 
         state
     }
@@ -606,10 +605,10 @@ impl OpVisitor for InterpreterVisitor<'_> {
     type Return = Continuation;
 
     fn ret(&mut self) -> Self::Return {
-        if self.state[XReg::LR].get_u64() == u64::MAX {
+        if self.state[XReg::lr].get_u64() == u64::MAX {
             Continuation::ReturnToHost
         } else {
-            let return_addr = self.state[XReg::LR].get_ptr();
+            let return_addr = self.state[XReg::lr].get_ptr();
             self.pc = unsafe { UnsafeBytecodeStream::new(return_addr) };
             // log::trace!("returning to {return_addr:#p}");
             Continuation::Continue
@@ -618,7 +617,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
 
     fn call(&mut self, offset: PcRelOffset) -> Self::Return {
         let return_addr = u64::try_from(self.pc.as_ptr() as usize).unwrap();
-        self.state[XReg::LR].set_u64(return_addr);
+        self.state[XReg::lr].set_u64(return_addr);
         self.pc_rel_jump(offset, 5)
     }
 
@@ -1024,7 +1023,7 @@ impl ExtendedOpVisitor for InterpreterVisitor<'_> {
     }
 
     fn get_sp(&mut self, dst: XReg) -> Self::Return {
-        let sp = self.state[XReg::SP].get_u64();
+        let sp = self.state[XReg::sp].get_u64();
         self.state[dst].set_u64(sp);
         Continuation::Continue
     }

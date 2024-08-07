@@ -9,6 +9,7 @@ use crate::trace;
 use core::marker::PhantomData;
 use cranelift_control::ControlPlane;
 use pulley_interpreter::encode as enc;
+use pulley_interpreter::regs::Reg as _;
 
 pub struct EmitInfo {
     #[allow(dead_code)] // Will get used as we fill out this backend.
