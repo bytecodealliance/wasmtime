@@ -55,11 +55,13 @@ impl<T: ReservedValue> PackedOption<T> {
     }
 
     /// Unwrap a packed `Some` value or panic.
+    #[track_caller]
     pub fn unwrap(self) -> T {
         self.expand().unwrap()
     }
 
     /// Unwrap a packed `Some` value or panic.
+    #[track_caller]
     pub fn expect(self, msg: &str) -> T {
         self.expand().expect(msg)
     }
