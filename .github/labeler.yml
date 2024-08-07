@@ -56,6 +56,9 @@
   - "cranelift/codegen/src/isa/*/lower/isle/**"
   - "cranelift/codegen/src/opts/*"
 
+"pulley":
+  - "pulley/**"
+
 "wasi":
   - "crates/wasi/**"
   - "crates/wasi-common/**"
