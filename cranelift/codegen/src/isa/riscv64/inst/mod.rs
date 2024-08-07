@@ -1168,6 +1168,7 @@ impl Inst {
             }
             &Inst::FpuRRR {
                 alu_op,
+                width,
                 rd,
                 rs1,
                 rs2,
@@ -1176,35 +1177,18 @@ impl Inst {
                 let rs1 = format_reg(rs1);
                 let rs2 = format_reg(rs2);
                 let rd = format_reg(rd.to_reg());
-                let rs1_is_rs2 = rs1 == rs2;
-                if rs1_is_rs2 && alu_op.is_copy_sign() {
-                    // this is move instruction.
-                    format!("fmv.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
-                } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
-                    format!("fneg.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
-                } else if rs1_is_rs2 && alu_op.is_copy_xor_sign() {
-                    format!("fabs.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
+                let frm = if alu_op.has_frm() {
+                    format_frm(frm)
                 } else {
-                    let frm = match alu_op {
-                        FpuOPRRR::FsgnjS
-                        | FpuOPRRR::FsgnjnS
-                        | FpuOPRRR::FsgnjxS
-                        | FpuOPRRR::FsgnjD
-                        | FpuOPRRR::FsgnjnD
-                        | FpuOPRRR::FsgnjxD
-                        | FpuOPRRR::FminS
-                        | FpuOPRRR::FminD
-                        | FpuOPRRR::FmaxS
-                        | FpuOPRRR::FmaxD
-                        | FpuOPRRR::FeqS
-                        | FpuOPRRR::FeqD
-                        | FpuOPRRR::FltS
-                        | FpuOPRRR::FltD
-                        | FpuOPRRR::FleS
-                        | FpuOPRRR::FleD => String::new(),
-                        _ => format_frm(frm),
-                    };
-                    format!("{} {rd},{rs1},{rs2}{frm}", alu_op.op_name())
+                    String::new()
+                };
+
+                let rs1_is_rs2 = rs1 == rs2;
+                match alu_op {
+                    FpuOPRRR::Fsgnj if rs1_is_rs2 => format!("fmv.{width} {rd},{rs1}"),
+                    FpuOPRRR::Fsgnjn if rs1_is_rs2 => format!("fneg.{width} {rd},{rs1}"),
+                    FpuOPRRR::Fsgnjx if rs1_is_rs2 => format!("fabs.{width} {rd},{rs1}"),
+                    _ => format!("{} {rd},{rs1},{rs2}{frm}", alu_op.op_name(width)),
                 }
             }
             &Inst::FpuRRRR {

@@ -561,143 +561,67 @@ impl FpuOPRR {
 }
 
 impl FpuOPRRR {
-    pub(crate) const fn op_name(self) -> &'static str {
+    pub(crate) fn op_name(self, width: FpuOPWidth) -> String {
         match self {
-            Self::FaddS => "fadd.s",
-            Self::FsubS => "fsub.s",
-            Self::FmulS => "fmul.s",
-            Self::FdivS => "fdiv.s",
-            Self::FsgnjS => "fsgnj.s",
-            Self::FsgnjnS => "fsgnjn.s",
-            Self::FsgnjxS => "fsgnjx.s",
-            Self::FminS => "fmin.s",
-            Self::FmaxS => "fmax.s",
-            Self::FeqS => "feq.s",
-            Self::FltS => "flt.s",
-            Self::FleS => "fle.s",
-            Self::FaddD => "fadd.d",
-            Self::FsubD => "fsub.d",
-            Self::FmulD => "fmul.d",
-            Self::FdivD => "fdiv.d",
-            Self::FsgnjD => "fsgnj.d",
-            Self::FsgnjnD => "fsgnjn.d",
-            Self::FsgnjxD => "fsgnjx.d",
-            Self::FminD => "fmin.d",
-            Self::FmaxD => "fmax.d",
-            Self::FeqD => "feq.d",
-            Self::FltD => "flt.d",
-            Self::FleD => "fle.d",
-            Self::FminmS => "fminm.s",
-            Self::FmaxmS => "fmaxm.s",
-            Self::FminmD => "fminm.d",
-            Self::FmaxmD => "fmaxm.d",
+            Self::Fadd => format!("fadd.{width}"),
+            Self::Fsub => format!("fsub.{width}"),
+            Self::Fmul => format!("fmul.{width}"),
+            Self::Fdiv => format!("fdiv.{width}"),
+            Self::Fsgnj => format!("fsgnj.{width}"),
+            Self::Fsgnjn => format!("fsgnjn.{width}"),
+            Self::Fsgnjx => format!("fsgnjx.{width}"),
+            Self::Fmin => format!("fmin.{width}"),
+            Self::Fmax => format!("fmax.{width}"),
+            Self::Feq => format!("feq.{width}"),
+            Self::Flt => format!("flt.{width}"),
+            Self::Fle => format!("fle.{width}"),
+            Self::Fminm => format!("fminm.{width}"),
+            Self::Fmaxm => format!("fmaxm.{width}"),
         }
     }
 
-    pub fn op_code(self) -> u32 {
-        match self {
-            Self::FaddS
-            | Self::FsubS
-            | Self::FmulS
-            | Self::FdivS
-            | Self::FsgnjS
-            | Self::FsgnjnS
-            | Self::FsgnjxS
-            | Self::FminS
-            | Self::FmaxS
-            | Self::FeqS
-            | Self::FltS
-            | Self::FleS
-            | Self::FminmS
-            | Self::FmaxmS => 0b1010011,
 
-            Self::FaddD
-            | Self::FsubD
-            | Self::FmulD
-            | Self::FdivD
-            | Self::FsgnjD
-            | Self::FsgnjnD
-            | Self::FsgnjxD
-            | Self::FminD
-            | Self::FmaxD
-            | Self::FeqD
-            | Self::FltD
-            | Self::FleD
-            | Self::FminmD
-            | Self::FmaxmD => 0b1010011,
+    pub(crate) fn opcode(self) -> u32 {
+        // OP-FP Major opcode
+        0b1010011
+    }
+
+    pub(crate) const fn funct5(self) -> u32 {
+        match self {
+            Self::Fadd => 0b00000,
+            Self::Fsub => 0b00001,
+            Self::Fmul => 0b00010,
+            Self::Fdiv => 0b00011,
+            Self::Fsgnj => 0b00100,
+            Self::Fsgnjn => 0b00100,
+            Self::Fsgnjx => 0b00100,
+            Self::Fmin => 0b00101,
+            Self::Fmax => 0b00101,
+            Self::Feq => 0b10100,
+            Self::Flt => 0b10100,
+            Self::Fle => 0b10100,
+            Self::Fminm => 0b00101,
+            Self::Fmaxm => 0b00101,
         }
     }
 
-    pub const fn funct7(self) -> u32 {
-        match self {
-            Self::FaddS => 0b0000000,
-            Self::FsubS => 0b0000100,
-            Self::FmulS => 0b0001000,
-            Self::FdivS => 0b0001100,
 
-            Self::FsgnjS => 0b0010000,
-            Self::FsgnjnS => 0b0010000,
-            Self::FsgnjxS => 0b0010000,
-            Self::FminS => 0b0010100,
-            Self::FmaxS => 0b0010100,
-            Self::FeqS => 0b1010000,
-            Self::FltS => 0b1010000,
-            Self::FleS => 0b1010000,
-
-            Self::FaddD => 0b0000001,
-            Self::FsubD => 0b0000101,
-            Self::FmulD => 0b0001001,
-            Self::FdivD => 0b0001101,
-            Self::FsgnjD => 0b0010001,
-            Self::FsgnjnD => 0b0010001,
-            Self::FsgnjxD => 0b0010001,
-            Self::FminD => 0b0010101,
-            Self::FmaxD => 0b0010101,
-            Self::FeqD => 0b1010001,
-            Self::FltD => 0b1010001,
-            Self::FleD => 0b1010001,
-
-            Self::FminmS => 0b0010100,
-            Self::FmaxmS => 0b0010100,
-            Self::FminmD => 0b0010101,
-            Self::FmaxmD => 0b0010101,
-        }
-    }
-    pub fn is_32(self) -> bool {
-        match self {
-            Self::FaddS
-            | Self::FsubS
-            | Self::FmulS
-            | Self::FdivS
-            | Self::FsgnjS
-            | Self::FsgnjnS
-            | Self::FsgnjxS
-            | Self::FminS
-            | Self::FmaxS
-            | Self::FeqS
-            | Self::FltS
-            | Self::FleS => true,
-            _ => false,
-        }
+    pub(crate) fn funct7(self, width: FpuOPWidth) -> u32 {
+        (self.funct5() << 2) | width.as_u32()
     }
 
-    pub fn is_copy_sign(self) -> bool {
+    
+    pub(crate) fn has_frm(self) -> bool {
         match self {
-            Self::FsgnjD | Self::FsgnjS => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_copy_neg_sign(self) -> bool {
-        match self {
-            Self::FsgnjnD | Self::FsgnjnS => true,
-            _ => false,
-        }
-    }
-    pub fn is_copy_xor_sign(self) -> bool {
-        match self {
-            Self::FsgnjxS | Self::FsgnjxD => true,
-            _ => false,
+            FpuOPRRR::Fsgnj
+            | FpuOPRRR::Fsgnjn
+            | FpuOPRRR::Fsgnjx
+            | FpuOPRRR::Fmin
+            | FpuOPRRR::Fmax
+            | FpuOPRRR::Feq
+            | FpuOPRRR::Flt
+            | FpuOPRRR::Fle => false,
+            _ => true,
         }
     }
 }

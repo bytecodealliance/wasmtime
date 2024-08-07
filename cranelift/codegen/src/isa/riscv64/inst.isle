@@ -43,6 +43,7 @@
     ;; An ALU operation with two register sources and a register destination.
     (FpuRRR
       (alu_op FpuOPRRR)
+      (width FpuOPWidth)
       (frm FRM)
       (rd WritableReg)
       (rs1 Reg)
@@ -551,40 +552,22 @@
 
 
 (type FpuOPRRR (enum
-  ;; RV32F Standard Extension
-  (FaddS)
-  (FsubS)
-  (FmulS)
-  (FdivS)
-
-  (FsgnjS)
-  (FsgnjnS)
-  (FsgnjxS)
-  (FminS)
-  (FmaxS)
-  (FeqS)
-  (FltS)
-  (FleS)
-
-  ;; RV32D Standard Extension
-  (FaddD)
-  (FsubD)
-  (FmulD)
-  (FdivD)
-  (FsgnjD)
-  (FsgnjnD)
-  (FsgnjxD)
-  (FminD)
-  (FmaxD)
-  (FeqD)
-  (FltD)
-  (FleD)
+  (Fadd)
+  (Fsub)
+  (Fmul)
+  (Fdiv)
+  (Fsgnj)
+  (Fsgnjn)
+  (Fsgnjx)
+  (Fmin)
+  (Fmax)
+  (Feq)
+  (Flt)
+  (Fle)
 
   ;; Zfa Extension
-  (FminmS)
-  (FmaxmS)
-  (FminmD)
-  (FmaxmD)
+  (Fminm)
+  (Fmaxm)
 ))
 
 
@@ -1352,23 +1335,19 @@
 
 ;; Helper for emitting the `fadd` instruction.
 (decl rv_fadd (Type FRM FReg FReg) FReg)
-(rule (rv_fadd $F32 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FaddS) $F32 frm rs1 rs2))
-(rule (rv_fadd $F64 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FaddD) $F64 frm rs1 rs2))
+(rule (rv_fadd ty frm rs1 rs2) (fpu_rrr (FpuOPRRR.Fadd) ty frm rs1 rs2))
 
 ;; Helper for emitting the `fsub` instruction.
 (decl rv_fsub (Type FRM FReg FReg) FReg)
-(rule (rv_fsub $F32 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FsubS) $F32 frm rs1 rs2))
-(rule (rv_fsub $F64 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FsubD) $F64 frm rs1 rs2))
+(rule (rv_fsub ty frm rs1 rs2) (fpu_rrr (FpuOPRRR.Fsub) ty frm rs1 rs2))
 
 ;; Helper for emitting the `fmul` instruction.
 (decl rv_fmul (Type FRM FReg FReg) FReg)
-(rule (rv_fmul $F32 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FmulS) $F32 frm rs1 rs2))
-(rule (rv_fmul $F64 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FmulD) $F64 frm rs1 rs2))
+(rule (rv_fmul ty frm rs1 rs2) (fpu_rrr (FpuOPRRR.Fmul) ty frm rs1 rs2))
 
 ;; Helper for emitting the `fdiv` instruction.
 (decl rv_fdiv (Type FRM FReg FReg) FReg)
-(rule (rv_fdiv $F32 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FdivS) $F32 frm rs1 rs2))
-(rule (rv_fdiv $F64 frm rs1 rs2) (fpu_rrr (FpuOPRRR.FdivD) $F64 frm rs1 rs2))
+(rule (rv_fdiv ty frm rs1 rs2) (fpu_rrr (FpuOPRRR.Fdiv) ty frm rs1 rs2))
 
 ;; Helper for emitting the `fsqrt` instruction.
 (decl rv_fsqrt (Type FRM FReg) FReg)
@@ -1506,15 +1485,13 @@
 ;; The output of this instruction is `rs1` with the sign bit from `rs2`
 ;; This implements the `copysign` operation
 (decl rv_fsgnj (Type FReg FReg) FReg)
-(rule (rv_fsgnj $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjS) $F32 (FRM.RNE) rs1 rs2))
-(rule (rv_fsgnj $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjD) $F64 (FRM.RNE) rs1 rs2))
+(rule (rv_fsgnj ty rs1 rs2) (fpu_rrr (FpuOPRRR.Fsgnj) ty (FRM.RNE) rs1 rs2))
 
 ;; Helper for emitting the `fsgnjn` ("Floating Point Sign Injection Negated") instruction.
 ;; The output of this instruction is `rs1` with the negated sign bit from `rs2`
 ;; When `rs1 == rs2` this implements the `neg` operation
 (decl rv_fsgnjn (Type FReg FReg) FReg)
-(rule (rv_fsgnjn $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnS) $F32 (FRM.RTZ) rs1 rs2))
-(rule (rv_fsgnjn $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnD) $F64 (FRM.RTZ) rs1 rs2))
+(rule (rv_fsgnjn ty rs1 rs2) (fpu_rrr (FpuOPRRR.Fsgnjn) ty (FRM.RTZ) rs1 rs2))
 
 ;; Helper for emitting the `fneg` ("Floating Point Negate") instruction.
 ;; This instruction is a mnemonic for `fsgnjn rd, rs1, rs1`
@@ -1525,8 +1502,7 @@
 ;; The output of this instruction is `rs1` with the XOR of the sign bits from `rs1` and `rs2`.
 ;; When `rs1 == rs2` this implements `fabs`
 (decl rv_fsgnjx (Type FReg FReg) FReg)
-(rule (rv_fsgnjx $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxS) $F32 (FRM.RDN) rs1 rs2))
-(rule (rv_fsgnjx $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxD) $F64 (FRM.RDN) rs1 rs2))
+(rule (rv_fsgnjx ty rs1 rs2) (fpu_rrr (FpuOPRRR.Fsgnjx) ty (FRM.RDN) rs1 rs2))
 
 ;; Helper for emitting the `fabs` ("Floating Point Absolute") instruction.
 ;; This instruction is a mnemonic for `fsgnjx rd, rs1, rs1`
@@ -1535,18 +1511,15 @@
 
 ;; Helper for emitting the `feq` ("Float Equal") instruction.
 (decl rv_feq (Type FReg FReg) XReg)
-(rule (rv_feq $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FeqS) $I64 (FRM.RDN) rs1 rs2))
-(rule (rv_feq $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FeqD) $I64 (FRM.RDN) rs1 rs2))
+(rule (rv_feq ty rs1 rs2) (fpu_rrr_int (FpuOPRRR.Feq) ty (FRM.RDN) rs1 rs2))
 
 ;; Helper for emitting the `flt` ("Float Less Than") instruction.
 (decl rv_flt (Type FReg FReg) XReg)
-(rule (rv_flt $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FltS) $I64 (FRM.RTZ) rs1 rs2))
-(rule (rv_flt $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FltD) $I64 (FRM.RTZ) rs1 rs2))
+(rule (rv_flt ty rs1 rs2) (fpu_rrr_int (FpuOPRRR.Flt) ty (FRM.RTZ) rs1 rs2))
 
 ;; Helper for emitting the `fle` ("Float Less Than or Equal") instruction.
 (decl rv_fle (Type FReg FReg) XReg)
-(rule (rv_fle $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FleS) $I64 (FRM.RNE) rs1 rs2))
-(rule (rv_fle $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FleD) $I64 (FRM.RNE) rs1 rs2))
+(rule (rv_fle ty rs1 rs2) (fpu_rrr_int (FpuOPRRR.Fle) ty (FRM.RNE) rs1 rs2))
 
 ;; Helper for emitting the `fgt` ("Float Greater Than") instruction.
 ;; Note: The arguments are reversed
@@ -1560,25 +1533,21 @@
 
 ;; Helper for emitting the `fmin` instruction.
 (decl rv_fmin (Type FReg FReg) FReg)
-(rule (rv_fmin $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FminS) $F32 (FRM.RNE) rs1 rs2))
-(rule (rv_fmin $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FminD) $F64 (FRM.RNE) rs1 rs2))
+(rule (rv_fmin ty rs1 rs2) (fpu_rrr (FpuOPRRR.Fmin) ty (FRM.RNE) rs1 rs2))
 
 ;; Helper for emitting the `fmax` instruction.
 (decl rv_fmax (Type FReg FReg) FReg)
-(rule (rv_fmax $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxS) $F32 (FRM.RTZ) rs1 rs2))
-(rule (rv_fmax $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxD) $F64 (FRM.RTZ) rs1 rs2))
+(rule (rv_fmax ty rs1 rs2) (fpu_rrr (FpuOPRRR.Fmax) ty (FRM.RTZ) rs1 rs2))
 
 ;; `Zfa` Extension Instructions
 
 ;; Helper for emitting the `fminm` instruction.
 (decl rv_fminm (Type FReg FReg) FReg)
-(rule (rv_fminm $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FminmS) $F32 (FRM.RDN) rs1 rs2))
-(rule (rv_fminm $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FminmD) $F64 (FRM.RDN) rs1 rs2))
+(rule (rv_fminm ty rs1 rs2) (fpu_rrr (FpuOPRRR.Fminm) ty (FRM.RDN) rs1 rs2))
 
 ;; Helper for emitting the `fmaxm` instruction.
 (decl rv_fmaxm (Type FReg FReg) FReg)
-(rule (rv_fmaxm $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxmS) $F32 (FRM.RUP) rs1 rs2))
-(rule (rv_fmaxm $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxmD) $F64 (FRM.RUP) rs1 rs2))
+(rule (rv_fmaxm ty rs1 rs2) (fpu_rrr (FpuOPRRR.Fmaxm) ty (FRM.RUP) rs1 rs2))
 
 ;; Helper for emitting the `fround` instruction.
 (decl rv_fround (Type FRM FReg) FReg)
@@ -2112,11 +2081,18 @@
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
-;; Helper for emitting `MInst.AluRRR` instructions.
-(decl fpu_rrr (FpuOPRRR Type FRM Reg Reg) Reg)
+;; Helper for emitting `MInst.FpuRRR` instructions.
+(decl fpu_rrr (FpuOPRRR Type FRM Reg Reg) FReg)
 (rule (fpu_rrr op ty frm src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.FpuRRR op frm dst src1 src2))))
+      (let ((dst WritableFReg (temp_writable_freg))
+            (_ Unit (emit (MInst.FpuRRR op ty frm dst src1 src2))))
+        dst))
+
+;; Similar to fpu_rrr but with an integer destination register
+(decl fpu_rrr_int (FpuOPRRR Type FRM Reg Reg) XReg)
+(rule (fpu_rrr_int op ty frm src1 src2)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.FpuRRR op ty frm dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.FpuRRRR` instructions.

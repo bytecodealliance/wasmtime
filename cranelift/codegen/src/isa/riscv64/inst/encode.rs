@@ -681,3 +681,14 @@ pub fn encode_fp_rr(op: FpuOPRR, width: FpuOPWidth, frm: FRM, rd: WritableReg, r
         op.funct7(width),
     )
 }
+
+pub fn encode_fp_rrr(op: FpuOPRRR, width: FpuOPWidth, frm: FRM, rd: WritableReg, rs1: Reg, rs2: Reg) -> u32 {
+    encode_r_type_bits(
+        op.opcode(),
+        reg_to_gpr_num(rd.to_reg()),
+        frm.as_u32(),
+        reg_to_gpr_num(rs1),
+        reg_to_gpr_num(rs2),
+        op.funct7(width),
+    )
+}
