@@ -270,18 +270,21 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize,
+                sp: cx.uc_mcontext.gregs[libc::REG_RSP as usize] as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_EIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
+                sp: cx.uc_mcontext.gregs[libc::REG_ESP as usize] as usize,
             }
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: cx.uc_mcontext.pc as usize,
                 fp: cx.uc_mcontext.regs[29] as usize,
+                sp: cx.uc_mcontext.sp as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address
@@ -302,48 +305,56 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
                 fp: *(cx.uc_mcontext.gregs[15] as *const usize),
+                sp: *(cx.uc_mcontext.gregs[15] as *const usize),
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: (*cx.uc_mcontext).__ss.__rip as usize,
                 fp: (*cx.uc_mcontext).__ss.__rbp as usize,
+                sp: (*cx.uc_mcontext).__ss.__rsp as usize,
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: (*cx.uc_mcontext).__ss.__pc as usize,
                 fp: (*cx.uc_mcontext).__ss.__fp as usize,
+                sp: (*cx.uc_mcontext).__ss.__sp as usize,
             }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: cx.uc_mcontext.mc_rip as usize,
                 fp: cx.uc_mcontext.mc_rbp as usize,
+                sp: cx.uc_mcontext.mc_rsp as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: cx.uc_mcontext.__gregs[libc::REG_PC] as usize,
                 fp: cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
+                sp: cx.uc_mcontext.__gregs[libc::REG_SP] as usize,
             }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::mcontext_t);
             TrapRegisters {
                 pc: cx.mc_gpregs.gp_elr as usize,
                 fp: cx.mc_gpregs.gp_x[29] as usize,
+                sp: cx.mc_gpregs.sp as usize,
             }
         } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: cx.sc_rip as usize,
                 fp: cx.sc_rbp as usize,
+                sp: cx.sc_rsp as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "arm"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: cx.uc_mcontext.arm_pc as usize,
                 fp: cx.uc_mcontext.arm_fp as usize,
+                sp: cx.uc_mcontext.arm_sp as usize,
             }
         } else {
             compile_error!("unsupported platform");

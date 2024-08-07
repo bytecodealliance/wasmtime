@@ -19,6 +19,7 @@ use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{f32x4, f64x2, i8x16, InterpreterRef, VMContext, VMStoreContext};
+use crate::runtime::vm::sys::vm::get_page_size;
 use crate::{prelude::*, EntryStoreContext};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
@@ -37,6 +38,7 @@ pub use traphandlers::SignalHandler;
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
+    pub sp: usize,
 }
 
 /// Return value from `test_if_trap`.
@@ -726,11 +728,29 @@ impl CallThreadState {
             return TrapTest::NotWasm;
         };
 
+        // Test whether the trapping address is within the most recent stack
+        // frame, which indicates a stack overflow. To account for the redzone
+        // used on some platforms, we consider the frame to start 512 bytes
+        // below the stack pointer, which is greater than any known platform
+        // redzone while still being smaller than the stack guard region on
+        // any known platform.
+        //
+        // The largest known redzone of any platform is 232 bytes, on PowerPC
+        // on Windows:
+        // <https://devblogs.microsoft.com/oldnewthing/20190111-00/?p=100685>
+        let page_size = get_page_size();
+        let stack_overflow_trap = if let Some(faulting_address) = faulting_addr {
+            (regs.sp - 512 <= faulting_address && faulting_address <= regs.sp + page_size)
+                .then_some(wasmtime_environ::Trap::StackOverflow)
+        } else {
+            None
+        };
+
         // If the fault was at a location that was not marked as potentially
         // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
         // catch the trap and pretend this isn't wasm so the program likely
         // aborts.
-        let Some(trap) = code.lookup_trap_code(text_offset) else {
+        let Some(trap) = stack_overflow_trap.or_else(|| code.lookup_trap_code(text_offset)) else {
             return TrapTest::NotWasm;
         };
 
