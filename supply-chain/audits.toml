@@ -995,6 +995,11 @@ criteria = "safe-to-run"
 version = "0.21.0"
 notes = "This crate has no dependencies, no build.rs, and contains no unsafe code."
 
+[[audits.base64]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.21.3 -> 0.22.1"
+
 [[audits.bitflags]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2408,6 +2413,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.21.0 -> 0.21.6"
 
+[[audits.rustls]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.22.4 -> 0.23.7"
+notes = "No new unsafe code."
+
 [[audits.rustls-webpki]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2726,6 +2737,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 version = "2.9.1"
 notes = "As advertised, the crate is a blocking HTTP client library; it uses no `unsafe`. Security-conscious users might want to audit its dependencies for crypto-related functionality (e.g., TLS)."
+
+[[audits.ureq]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "2.9.6 -> 2.10.0"
+notes = "No `unsafe` changes; this audit observed mainly license and documentation changes."
 
 [[audits.url]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3419,6 +3436,12 @@ criteria = "safe-to-run"
 delta = "4.4.0 -> 5.0.0"
 notes = "Only one `unsafe` block, it's what a `which` crate is expected to be."
 
+[[audits.windows-implement]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.52.0"
+notes = "Procedural macros for accessing COM interfaces; necessarily `unsafe` but safety rationale is clearly documented."
+
 [[audits.winx]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -3490,6 +3513,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 version = "1.2.0"
 notes = "This crate contains `unsafe` calls to libc `extattr_*` functions as one would expect from the crate's purpose."
+
+[[audits.xattr]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "1.2.0 -> 1.3.1"
+notes = "Minor changes to MacOS-specific code."
 
 [[audits.zstd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -4001,6 +4030,12 @@ criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-11-15"
 end = "2025-01-02"
+
+[[trusted.windows-interface]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2022-02-18"
+end = "2025-08-07"
 
 [[trusted.windows-sys]]
 criteria = "safe-to-deploy"
