@@ -77,9 +77,9 @@ block0(v0: i16):
 
 ; function %slt_one(i16) -> i8 fast {
 ; block0(v0: i16):
-;     v3 = iconst.i16 0
-;     v4 = icmp sle v0, v3  ; v3 = 0
-;     return v4
+;     v1 = iconst.i16 1
+;     v9 = icmp slt v0, v1  ; v1 = 1
+;     return v9
 ; }
 
 function %uge_one(i32) -> i8 {
@@ -92,8 +92,8 @@ block0(v0: i32):
 ; function %uge_one(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v3 = iconst.i32 0
-;     v4 = icmp ne v0, v3  ; v3 = 0
-;     return v4
+;     v5 = icmp ne v0, v3  ; v3 = 0
+;     return v5
 ; }
 
 function %ult_one(i8) -> i8 {

@@ -1,0 +1,25 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+;; Regression test for issue #6185
+
+function %f1(i32) -> i32 {
+block0(v1: i32):
+    v4 = iconst.i64 0
+    v5 = iconst.i32 0xffff_ffff
+    v6 = icmp ule v1, v5  ; v5 = 0xffff_ffff
+    v7 = uextend.i32 v6
+    jump block1(v7)
+
+block1(v3: i32):
+    return v3
+}
+
+; sameln: function %f1(i32) -> i32 fast {
+; nextln: block0(v1: i32):
+; nextln:    jump block1
+
+; check: block1:
+; nextln: v9 = iconst.i32 1
+; nextln: return v9

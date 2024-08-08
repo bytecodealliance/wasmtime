@@ -43,15 +43,15 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0031                               v3 = iconst.i32 2
-;; @0031                               v4 = icmp uge v2, v3  ; v3 = 2
+;;                                     v27 = iconst.i32 1
+;;                                     v28 = icmp ugt v2, v27  ; v27 = 1
 ;; @0031                               v9 = iconst.i64 0
 ;; @0031                               v6 = load.i64 notrap aligned readonly v0+88
 ;; @0031                               v5 = uextend.i64 v2
 ;;                                     v25 = iconst.i64 3
 ;; @0031                               v7 = ishl v5, v25  ; v25 = 3
 ;; @0031                               v8 = iadd v6, v7
-;; @0031                               v10 = select_spectre_guard v4, v9, v8  ; v9 = 0
+;; @0031                               v10 = select_spectre_guard v28, v9, v8  ; v9 = 0
 ;; @0031                               v11 = load.i64 table_oob aligned table v10
 ;;                                     v26 = iconst.i64 -2
 ;; @0031                               v12 = band v11, v26  ; v26 = -2
