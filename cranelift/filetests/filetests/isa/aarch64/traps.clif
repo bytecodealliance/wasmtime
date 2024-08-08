@@ -33,3 +33,74 @@ block0(v0: i64, v1: i64):
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
+function %trapz(i64) {
+block0(v0: i64):
+  trapz v0, user0
+  return
+}
+
+; VCode:
+; block0:
+;   cbz x0, #trap=user0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cbz x0, #8
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+
+function %trapnz(i64) {
+block0(v0: i64):
+  trapnz v0, user0
+  return
+}
+
+; VCode:
+; block0:
+;   cbnz x0, #trap=user0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cbnz x0, #8
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+
+function %trapz_i128(i128) {
+block0(v0: i128):
+  trapz v0, user0
+  return
+}
+
+; VCode:
+; block0:
+;   orr x3, x0, x1
+;   cbz x3, #trap=user0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+;   cbz x3, #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+
+function %trapnz_i128(i128) {
+block0(v0: i128):
+  trapnz v0, user0
+  return
+}
+
+; VCode:
+; block0:
+;   orr x3, x0, x1
+;   cbnz x3, #trap=user0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+;   cbnz x3, #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
