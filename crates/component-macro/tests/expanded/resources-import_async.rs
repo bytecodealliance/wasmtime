@@ -4,7 +4,7 @@ pub trait HostWorldResource {
     async fn new(&mut self) -> wasmtime::component::Resource<WorldResource>;
     async fn foo(&mut self, self_: wasmtime::component::Resource<WorldResource>) -> ();
     async fn static_foo(&mut self) -> ();
-    fn drop(
+    async fn drop(
         &mut self,
         rep: wasmtime::component::Resource<WorldResource>,
     ) -> wasmtime::Result<()>;
@@ -20,11 +20,11 @@ impl<_T: HostWorldResource + ?Sized + Send> HostWorldResource for &mut _T {
     async fn static_foo(&mut self) -> () {
         HostWorldResource::static_foo(*self).await
     }
-    fn drop(
+    async fn drop(
         &mut self,
         rep: wasmtime::component::Resource<WorldResource>,
     ) -> wasmtime::Result<()> {
-        HostWorldResource::drop(*self, rep)
+        HostWorldResource::drop(*self, rep).await
     }
 }
 /// Auto-generated bindings for a pre-instantiated version of a
@@ -166,14 +166,17 @@ const _: () = {
         {
             let mut linker = linker.root();
             linker
-                .resource(
+                .resource_async(
                     "world-resource",
                     wasmtime::component::ResourceType::host::<WorldResource>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostWorldResource::drop(
-                            &mut host_getter(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
+                    move |mut store, rep| {
+                        std::boxed::Box::new(async move {
+                            HostWorldResource::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                                .await
+                        })
                     },
                 )?;
             linker
@@ -277,7 +280,7 @@ pub mod foo {
                     &mut self,
                     self_: wasmtime::component::Resource<Bar>,
                 ) -> u32;
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> wasmtime::Result<()>;
@@ -296,11 +299,11 @@ pub mod foo {
                 ) -> u32 {
                     HostBar::method_a(*self, self_).await
                 }
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> wasmtime::Result<()> {
-                    HostBar::drop(*self, rep)
+                    HostBar::drop(*self, rep).await
                 }
             }
             #[derive(wasmtime::component::ComponentType)]
@@ -444,14 +447,17 @@ pub mod foo {
                 T: Send,
             {
                 let mut inst = linker.instance("foo:foo/resources")?;
-                inst.resource(
+                inst.resource_async(
                     "bar",
                     wasmtime::component::ResourceType::host::<Bar>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostBar::drop(
-                            &mut host_getter(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
+                    move |mut store, rep| {
+                        std::boxed::Box::new(async move {
+                            HostBar::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                                .await
+                        })
                     },
                 )?;
                 inst.func_wrap_async(
@@ -808,18 +814,18 @@ pub mod foo {
             pub enum A {}
             #[wasmtime::component::__internal::async_trait]
             pub trait HostA {
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<A>,
                 ) -> wasmtime::Result<()>;
             }
             #[wasmtime::component::__internal::async_trait]
             impl<_T: HostA + ?Sized + Send> HostA for &mut _T {
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<A>,
                 ) -> wasmtime::Result<()> {
-                    HostA::drop(*self, rep)
+                    HostA::drop(*self, rep).await
                 }
             }
             #[wasmtime::component::__internal::async_trait]
@@ -844,14 +850,17 @@ pub mod foo {
                 T: Send,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
-                inst.resource(
+                inst.resource_async(
                     "a",
                     wasmtime::component::ResourceType::host::<A>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostA::drop(
-                            &mut host_getter(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
+                    move |mut store, rep| {
+                        std::boxed::Box::new(async move {
+                            HostA::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                                .await
+                        })
                     },
                 )?;
                 Ok(())
@@ -1016,18 +1025,18 @@ pub mod foo {
             pub enum Foo {}
             #[wasmtime::component::__internal::async_trait]
             pub trait HostFoo {
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Foo>,
                 ) -> wasmtime::Result<()>;
             }
             #[wasmtime::component::__internal::async_trait]
             impl<_T: HostFoo + ?Sized + Send> HostFoo for &mut _T {
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Foo>,
                 ) -> wasmtime::Result<()> {
-                    HostFoo::drop(*self, rep)
+                    HostFoo::drop(*self, rep).await
                 }
             }
             #[wasmtime::component::__internal::async_trait]
@@ -1053,14 +1062,17 @@ pub mod foo {
             {
                 let mut inst = linker
                     .instance("foo:foo/transitive-interface-with-resource")?;
-                inst.resource(
+                inst.resource_async(
                     "foo",
                     wasmtime::component::ResourceType::host::<Foo>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostFoo::drop(
-                            &mut host_getter(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
+                    move |mut store, rep| {
+                        std::boxed::Box::new(async move {
+                            HostFoo::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                                .await
+                        })
                     },
                 )?;
                 Ok(())
