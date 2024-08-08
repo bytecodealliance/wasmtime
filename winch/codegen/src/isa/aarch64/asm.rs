@@ -166,24 +166,63 @@ impl Assembler {
     }
 
     /// Load a register.
-    pub fn ldr(&mut self, addr: Address, rd: Reg, size: OperandSize) {
+    pub fn ldr(&mut self, addr: Address, rd: Reg, size: OperandSize, signed: bool) {
         use OperandSize::*;
         let writable_reg = Writable::from_reg(rd.into());
         let mem: AMode = addr.try_into().unwrap();
         let flags = MemFlags::trusted();
 
-        let inst = match size {
-            S64 => Inst::ULoad64 {
+        let inst = match (rd.is_int(), signed, size) {
+            (_, false, S8) => Inst::ULoad8 {
                 rd: writable_reg,
                 mem,
                 flags,
             },
-            S32 => Inst::ULoad32 {
+            (_, true, S8) => Inst::SLoad8 {
                 rd: writable_reg,
                 mem,
                 flags,
             },
-            _ => unreachable!(),
+            (_, false, S16) => Inst::ULoad16 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (_, true, S16) => Inst::SLoad16 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (true, false, S32) => Inst::ULoad32 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (false, _, S32) => Inst::FpuLoad32 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (true, true, S32) => Inst::SLoad32 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (true, _, S64) => Inst::ULoad64 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (false, _, S64) => Inst::FpuLoad64 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (_, _, S128) => Inst::FpuLoad128 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
         };
 
         self.emit(inst);
