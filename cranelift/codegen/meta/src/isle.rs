@@ -33,12 +33,17 @@ pub fn get_isle_compilations(
 
     // Directory for mid-end optimizations.
     let src_opts = codegen_crate_dir.join("src").join("opts");
+
     // Directories for lowering backends.
     let src_isa_x64 = codegen_crate_dir.join("src").join("isa").join("x64");
     let src_isa_aarch64 = codegen_crate_dir.join("src").join("isa").join("aarch64");
     let src_isa_s390x = codegen_crate_dir.join("src").join("isa").join("s390x");
-
     let src_isa_risc_v = codegen_crate_dir.join("src").join("isa").join("riscv64");
+    let src_isa_pulley_shared = codegen_crate_dir
+        .join("src")
+        .join("isa")
+        .join("pulley_shared");
+
     // This is a set of ISLE compilation units.
     //
     // The format of each entry is:
@@ -118,6 +123,17 @@ pub fn get_isle_compilations(
                     src_isa_risc_v.join("inst.isle"),
                     src_isa_risc_v.join("inst_vector.isle"),
                     src_isa_risc_v.join("lower.isle"),
+                ],
+                untracked_inputs: vec![clif_lower_isle.clone()],
+            },
+            // The Pulley instruction selector.
+            IsleCompilation {
+                output: gen_dir.join("isle_pulley_shared.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
+                    src_isa_pulley_shared.join("inst.isle"),
+                    src_isa_pulley_shared.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],
             },

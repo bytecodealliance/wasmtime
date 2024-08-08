@@ -1,0 +1,345 @@
+test compile precise-output
+target pulley64
+
+function %brif_icmp_eq(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xeq32 x0, x1, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 05 00 01 0b 00 00 00            br_if_xeq32 x0, x1, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_ne(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp ne v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xneq32 x0, x1, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 06 00 01 0b 00 00 00            br_if_xneq32 x0, x1, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_ult(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp ult v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xult32 x0, x1, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 09 00 01 0b 00 00 00            br_if_xult32 x0, x1, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_ule(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp ule v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xulteq32 x0, x1, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 0a 00 01 0b 00 00 00            br_if_xulteq32 x0, x1, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_slt(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp slt v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslt32 x0, x1, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 07 00 01 0b 00 00 00            br_if_xslt32 x0, x1, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_sle(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp sle v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslteq32 x0, x1, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 08 00 01 0b 00 00 00            br_if_xslteq32 x0, x1, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_ugt(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp ugt v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xult32 x1, x0, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 09 01 00 0b 00 00 00            br_if_xult32 x1, x0, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_uge(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp uge v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xulteq32 x1, x0, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 0a 01 00 0b 00 00 00            br_if_xulteq32 x1, x0, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_sgt(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp sgt v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslt32 x1, x0, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 07 01 00 0b 00 00 00            br_if_xslt32 x1, x0, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_icmp_sge(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp sge v0, v1
+  brif v2, block2, block1
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslteq32 x1, x0, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 08 01 00 0b 00 00 00            br_if_xslteq32 x1, x0, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+
+function %brif_uextend_icmp_eq(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  brif v3, block2, block1
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+; VCode:
+; block0:
+;   br_if_xeq32 x0, x1, label2; jump label1
+; block1:
+;   x0 = xconst8 1
+;   ret
+; block2:
+;   x0 = xconst8 2
+;   ret
+;
+; Disassembled:
+;        0: 05 00 01 0b 00 00 00            br_if_xeq32 x0, x1, 0xb    // target = 0xb
+;        7: 0e 00 01                        xconst8 x0, 1
+;        a: 00                              ret
+;        b: 0e 00 02                        xconst8 x0, 2
+;        e: 00                              ret
+

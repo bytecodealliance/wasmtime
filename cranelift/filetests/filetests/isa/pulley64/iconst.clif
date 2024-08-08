@@ -1,0 +1,63 @@
+test compile precise-output
+target pulley64
+
+function %i8() -> i8 {
+block0:
+    v0 = iconst.i8 0xff
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = xconst16 255
+;   ret
+;
+; Disassembled:
+;        0: 0f 00 ff 00                     xconst16 x0, 255
+;        4: 00                              ret
+
+function %i16() -> i16 {
+block0:
+    v0 = iconst.i16 0xffff
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = xconst32 65535
+;   ret
+;
+; Disassembled:
+;        0: 10 00 ff ff 00 00               xconst32 x0, 65535
+;        6: 00                              ret
+
+function %i32() -> i32 {
+block0:
+    v0 = iconst.i32 0xffff_ffff
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = xconst32 -1
+;   ret
+;
+; Disassembled:
+;        0: 10 00 ff ff ff ff               xconst32 x0, -1
+;        6: 00                              ret
+
+function %i64() -> i64 {
+block0:
+    v0 = iconst.i64 0xffff_ffff_ffff_ffff
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = xconst64 -1
+;   ret
+;
+; Disassembled:
+;        0: 11 00 ff ff ff ff ff ff ff ff   xconst64 x0, -1
+;        a: 00                              ret
+
