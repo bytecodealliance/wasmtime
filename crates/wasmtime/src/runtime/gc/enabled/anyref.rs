@@ -4,8 +4,8 @@ use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    ArrayType, AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
-    Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, I31,
+    ArrayRef, ArrayType, AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted,
+    RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, I31,
 };
 use core::mem;
 use core::mem::MaybeUninit;
@@ -105,6 +105,20 @@ impl From<Rooted<StructRef>> for Rooted<AnyRef> {
 impl From<ManuallyRooted<StructRef>> for ManuallyRooted<AnyRef> {
     #[inline]
     fn from(s: ManuallyRooted<StructRef>) -> Self {
+        s.to_anyref()
+    }
+}
+
+impl From<Rooted<ArrayRef>> for Rooted<AnyRef> {
+    #[inline]
+    fn from(s: Rooted<ArrayRef>) -> Self {
+        s.to_anyref()
+    }
+}
+
+impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<AnyRef> {
+    #[inline]
+    fn from(s: ManuallyRooted<ArrayRef>) -> Self {
         s.to_anyref()
     }
 }
@@ -427,6 +441,70 @@ impl AnyRef {
         Ok(self
             ._as_struct(store)?
             .expect("AnyRef::unwrap_struct on non-structref"))
+    }
+
+    /// Is this `anyref` an `arrayref`?
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn is_array(&self, store: impl AsContext) -> Result<bool> {
+        self._is_array(store.as_context().0)
+    }
+
+    pub(crate) fn _is_array(&self, store: &StoreOpaque) -> Result<bool> {
+        let gc_ref = self.inner.try_gc_ref(store)?;
+        Ok(!gc_ref.is_i31() && store.gc_store()?.kind(gc_ref).matches(VMGcKind::ArrayRef))
+    }
+
+    /// Downcast this `anyref` to an `arrayref`.
+    ///
+    /// If this `anyref` is an `arrayref`, then `Some(_)` is returned.
+    ///
+    /// If this `anyref` is not an `arrayref`, then `None` is returned.
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn as_array(&self, store: impl AsContext) -> Result<Option<Rooted<ArrayRef>>> {
+        self._as_array(store.as_context().0)
+    }
+
+    pub(crate) fn _as_array(&self, store: &StoreOpaque) -> Result<Option<Rooted<ArrayRef>>> {
+        if self._is_array(store)? {
+            Ok(Some(Rooted::from_gc_root_index(self.inner)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Downcast this `anyref` to an `arrayref`, panicking if this `anyref` is
+    /// not an `arrayref`.
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store, or if
+    /// this `anyref` is not an `array`.
+    pub fn unwrap_array(&self, store: impl AsContext) -> Result<Rooted<ArrayRef>> {
+        self._unwrap_array(store.as_context().0)
+    }
+
+    pub(crate) fn _unwrap_array(&self, store: &StoreOpaque) -> Result<Rooted<ArrayRef>> {
+        Ok(self
+            ._as_array(store)?
+            .expect("AnyRef::unwrap_array on non-arrayref"))
     }
 }
 

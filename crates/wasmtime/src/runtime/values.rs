@@ -1,9 +1,8 @@
 use crate::runtime::vm::TableElement;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{prelude::*, StructRef};
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType, Rooted, RootedGcRefImpl,
-    ValType, V128,
+    prelude::*, AnyRef, ArrayRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType,
+    Rooted, RootedGcRefImpl, StructRef, ValType, V128,
 };
 use core::ptr;
 
@@ -483,14 +482,28 @@ impl From<Option<Rooted<AnyRef>>> for Val {
 impl From<Rooted<StructRef>> for Val {
     #[inline]
     fn from(val: Rooted<StructRef>) -> Val {
-        Val::AnyRef(Some(val.unchecked_cast()))
+        Val::AnyRef(Some(val.into()))
     }
 }
 
 impl From<Option<Rooted<StructRef>>> for Val {
     #[inline]
     fn from(val: Option<Rooted<StructRef>>) -> Val {
-        Val::AnyRef(val.map(|s| s.unchecked_cast()))
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
+impl From<Rooted<ArrayRef>> for Val {
+    #[inline]
+    fn from(val: Rooted<ArrayRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Rooted<ArrayRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Rooted<ArrayRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
     }
 }
 
@@ -653,14 +666,28 @@ impl From<Option<Rooted<AnyRef>>> for Ref {
 impl From<Rooted<StructRef>> for Ref {
     #[inline]
     fn from(e: Rooted<StructRef>) -> Ref {
-        Ref::Any(Some(e.unchecked_cast::<AnyRef>()))
+        Ref::Any(Some(e.into()))
     }
 }
 
 impl From<Option<Rooted<StructRef>>> for Ref {
     #[inline]
     fn from(e: Option<Rooted<StructRef>>) -> Ref {
-        Ref::Any(e.map(|e| e.unchecked_cast::<AnyRef>()))
+        Ref::Any(e.map(Into::into))
+    }
+}
+
+impl From<Rooted<ArrayRef>> for Ref {
+    #[inline]
+    fn from(e: Rooted<ArrayRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<Rooted<ArrayRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Rooted<ArrayRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
     }
 }
 
@@ -860,8 +887,12 @@ impl Ref {
                 Some(s) => s._matches_ty(store, _ty)?,
             },
             (Ref::Any(Some(_)), HeapType::Eq) => todo!("eqref"),
-            (Ref::Any(Some(_)), HeapType::Array) => todo!("wasm GC arrays"),
-            (Ref::Any(Some(_)), HeapType::ConcreteArray(_)) => todo!("wasm GC arrays"),
+            (Ref::Any(Some(a)), HeapType::Array) => a._is_array(store)?,
+            (Ref::Any(Some(a)), HeapType::ConcreteArray(_ty)) => match a._as_array(store)? {
+                None => false,
+                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
+                Some(a) => a._matches_ty(store, _ty)?,
+            },
             (
                 Ref::Any(None),
                 HeapType::None

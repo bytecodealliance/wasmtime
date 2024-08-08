@@ -300,6 +300,17 @@ impl VMGcRef {
         }
     }
 
+    /// Is this GC reference pointing to a `T`?
+    pub fn is_typed<T>(&self, gc_heap: &impl GcHeap) -> bool
+    where
+        T: GcHeapObject,
+    {
+        if self.is_i31() {
+            return false;
+        }
+        T::is(gc_heap.header(&self))
+    }
+
     /// Borrow `self` as a typed GC reference, checking that `self` actually is
     /// a `T`.
     pub fn as_typed<T>(&self, gc_heap: &impl GcHeap) -> Option<&TypedGcRef<T>>

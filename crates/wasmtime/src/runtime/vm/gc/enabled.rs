@@ -1,10 +1,14 @@
 //! Implementation of garbage collection and GC types in Wasmtime.
 
+mod arrayref;
+mod data;
 mod drc;
 mod externref;
 mod free_list;
 mod structref;
 
+pub use arrayref::*;
+pub use data::*;
 pub use drc::*;
 pub use externref::*;
 pub use structref::*;

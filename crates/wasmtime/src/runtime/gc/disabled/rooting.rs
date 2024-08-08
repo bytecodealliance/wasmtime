@@ -58,7 +58,7 @@ impl RootSet {
 /// This type is disabled because the `gc` cargo feature was not enabled at
 /// compile time.
 pub struct Rooted<T: GcRef> {
-    inner: Uninhabited,
+    pub(crate) inner: Uninhabited,
     _phantom: marker::PhantomData<T>,
 }
 
@@ -175,7 +175,7 @@ pub struct ManuallyRooted<T>
 where
     T: GcRef,
 {
-    inner: Uninhabited,
+    pub(crate) inner: Uninhabited,
     _phantom: marker::PhantomData<T>,
 }
 

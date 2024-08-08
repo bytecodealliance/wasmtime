@@ -33,7 +33,9 @@ pub enum VMExternRef {}
 
 pub enum VMStructRef {}
 
-pub struct VMStructDataMut<'a> {
+pub enum VMArrayRef {}
+
+pub struct VMGcObjectDataMut<'a> {
     inner: VMStructRef,
     _phantom: core::marker::PhantomData<&'a mut ()>,
 }

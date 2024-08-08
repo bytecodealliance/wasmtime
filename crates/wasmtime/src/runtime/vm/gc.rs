@@ -198,16 +198,36 @@ impl GcStore {
         self.gc_heap.dealloc_uninit_struct(structref);
     }
 
-    /// Get the data for the given struct reference.
+    /// Get the data for the given object reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
+    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_> {
+        self.gc_heap.gc_object_data(gc_ref)
+    }
+
+    /// Allocate an uninitialized array with the given type index.
     ///
-    /// This does NOT check for mismatches where the referenced struct is not
-    /// actually `size` bytes large. Failure to pass the right `size` is memory
-    /// safe, but will lead to general incorrectness such as panics and wrong
-    /// results.
-    pub fn struct_data(&mut self, structref: &VMStructRef, size: u32) -> VMStructDataMut<'_> {
-        self.gc_heap.struct_data(structref, size)
+    /// This does NOT check that the index is currently allocated in the types
+    /// registry or that the layout matches the index's type. Failure to uphold
+    /// those invariants is memory safe, but will lead to general incorrectness
+    /// such as panics and wrong results.
+    pub fn alloc_uninit_array(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        len: u32,
+        layout: &GcArrayLayout,
+    ) -> Result<Option<VMArrayRef>> {
+        self.gc_heap.alloc_uninit_array(ty, len, layout)
+    }
+
+    /// Deallocate an uninitialized array.
+    pub fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) {
+        self.gc_heap.dealloc_uninit_array(arrayref);
+    }
+
+    /// Get the length of the given array.
+    pub fn array_len(&self, arrayref: &VMArrayRef) -> u32 {
+        self.gc_heap.array_len(arrayref)
     }
 }
 
@@ -272,7 +292,24 @@ pub fn disabled_gc_heap() -> Box<dyn GcHeap> {
         fn dealloc_uninit_struct(&mut self, _structref: VMStructRef) {
             unreachable!()
         }
-        fn struct_data(&mut self, _structref: &VMStructRef, _size: u32) -> VMStructDataMut<'_> {
+        fn gc_object_data(&mut self, _gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_> {
+            unreachable!()
+        }
+        fn alloc_uninit_array(
+            &mut self,
+            _ty: VMSharedTypeIndex,
+            _len: u32,
+            _layout: &GcArrayLayout,
+        ) -> Result<Option<VMArrayRef>> {
+            bail!(
+                "GC support disabled either in the `Config` or at compile time \
+                 because the `gc` cargo feature was not enabled"
+            )
+        }
+        fn dealloc_uninit_array(&mut self, _structref: VMArrayRef) {
+            unreachable!()
+        }
+        fn array_len(&self, _arrayref: &VMArrayRef) -> u32 {
             unreachable!()
         }
         fn gc<'a>(

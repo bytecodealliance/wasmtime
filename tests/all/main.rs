@@ -1,5 +1,6 @@
 #![cfg_attr(miri, allow(dead_code, unused_imports))]
 
+mod arrays;
 mod async_functions;
 mod call_hook;
 mod cli_tests;

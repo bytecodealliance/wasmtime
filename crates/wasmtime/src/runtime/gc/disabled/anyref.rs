@@ -1,12 +1,41 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    AsContext, AsContextMut, GcRefImpl, HeapType, Result, Rooted, StructRef, I31,
+    ArrayRef, AsContext, AsContextMut, GcRefImpl, HeapType, ManuallyRooted, Result, Rooted,
+    StructRef, I31,
 };
 
 /// Support for `anyref` disabled at compile time because the `gc` cargo feature
 /// was not enabled.
 pub enum AnyRef {}
+
+impl From<Rooted<StructRef>> for Rooted<AnyRef> {
+    #[inline]
+    fn from(s: Rooted<StructRef>) -> Self {
+        match s.inner {}
+    }
+}
+
+impl From<ManuallyRooted<StructRef>> for ManuallyRooted<AnyRef> {
+    #[inline]
+    fn from(s: ManuallyRooted<StructRef>) -> Self {
+        match s.inner {}
+    }
+}
+
+impl From<Rooted<ArrayRef>> for Rooted<AnyRef> {
+    #[inline]
+    fn from(s: Rooted<ArrayRef>) -> Self {
+        match s.inner {}
+    }
+}
+
+impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<AnyRef> {
+    #[inline]
+    fn from(s: ManuallyRooted<ArrayRef>) -> Self {
+        match s.inner {}
+    }
+}
 
 impl GcRefImpl for AnyRef {}
 
@@ -72,6 +101,26 @@ impl AnyRef {
     }
 
     pub fn unwrap_struct(&self, _store: impl AsContext) -> Result<StructRef> {
+        match *self {}
+    }
+
+    pub fn is_array(&self, _store: impl AsContext) -> Result<bool> {
+        match *self {}
+    }
+
+    pub(crate) fn _is_array(&self, _store: &StoreOpaque) -> Result<bool> {
+        match *self {}
+    }
+
+    pub fn as_array(&self, _store: impl AsContext) -> Result<Option<ArrayRef>> {
+        match *self {}
+    }
+
+    pub(crate) fn _as_array(&self, _store: &StoreOpaque) -> Result<Option<ArrayRef>> {
+        match *self {}
+    }
+
+    pub fn unwrap_array(&self, _store: impl AsContext) -> Result<ArrayRef> {
         match *self {}
     }
 }
