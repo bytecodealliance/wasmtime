@@ -562,8 +562,8 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn extend(&mut self, _src: Reg, _dst: Reg, _kind: ExtendKind) {
-        todo!()
+    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
+        self.asm.extend(src, dst, kind);
     }
 
     fn get_label(&mut self) -> MachLabel {

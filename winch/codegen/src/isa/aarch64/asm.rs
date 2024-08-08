@@ -1,7 +1,7 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::{FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::masm::{ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::{
     BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
@@ -609,6 +609,26 @@ impl Assembler {
             rd: Writable::from_reg(rd.into()),
             cond,
         });
+    }
+
+    pub fn extend(&mut self, rn: Reg, rd: Reg, kind: ExtendKind) {
+        use ExtendKind::*;
+        let (signed, from_bits, to_bits) = match kind {
+            I64ExtendI32S => (true, 32, 64),
+            I64ExtendI32U => (false, 32, 64),
+            I32Extend8S => (true, 8, 32),
+            I32Extend16S => (true, 16, 32),
+            I64Extend8S => (true, 8, 64),
+            I64Extend16S => (true, 16, 64),
+            I64Extend32S => (true, 32, 64),
+        };
+        self.emit(Inst::Extend {
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            signed,
+            from_bits,
+            to_bits,
+        })
     }
 
     /// Bitwise AND (shifted register), setting flags.
