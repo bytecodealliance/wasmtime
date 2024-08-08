@@ -1,5 +1,8 @@
 //! Pulley settings.
 
+// The generated settings include some dead code.
+#![allow(dead_code)]
+
 use crate::{
     machinst::IsaFlags,
     settings::{self, detail, Builder, Value},
