@@ -102,7 +102,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn compute_arg_locs(
         call_conv: isa::CallConv,
-        _flags: &settings::Flags,
+        flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
@@ -160,6 +160,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 "Invalid type for AArch64: {:?}",
                 param.value_type
             );
+
+            if is_apple_cc && param.value_type == types::F128 && !flags.enable_llvm_abi_extensions()
+            {
+                panic!(
+                    "f128 args/return values not supported for apple_aarch64 unless LLVM ABI extensions are enabled"
+                );
+            }
 
             let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
 

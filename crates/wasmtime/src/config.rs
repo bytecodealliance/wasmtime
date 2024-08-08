@@ -2812,6 +2812,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
         return match feature {
             "lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
             "paca" => Some(std::arch::is_aarch64_feature_detected!("paca")),
+            "fp16" => Some(std::arch::is_aarch64_feature_detected!("fp16")),
 
             _ => None,
         };

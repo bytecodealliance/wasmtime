@@ -750,7 +750,7 @@ impl ASIMDMovModImm {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ASIMDFPModImm {
     imm: u8,
-    is_64bit: bool,
+    size: ScalarSize,
 }
 
 impl ASIMDFPModImm {
@@ -759,6 +759,21 @@ impl ASIMDFPModImm {
         // In all cases immediates are encoded as an 8-bit number 0b_abcdefgh;
         // let `D` be the inverse of the digit `d`.
         match size {
+            ScalarSize::Size16 => {
+                // In this case the representable immediates are 16-bit numbers of the form
+                // 0b_aBbb_cdef_gh00_0000.
+                let value = value as u16;
+                let b0_5 = (value >> 6) & 0b111111;
+                let b6 = (value >> 6) & (1 << 6);
+                let b7 = (value >> 8) & (1 << 7);
+                let imm = (b0_5 | b6 | b7) as u8;
+
+                if value == Self::value16(imm) {
+                    Some(ASIMDFPModImm { imm, size })
+                } else {
+                    None
+                }
+            }
             ScalarSize::Size32 => {
                 // In this case the representable immediates are 32-bit numbers of the form
                 // 0b_aBbb_bbbc_defg_h000 shifted to the left by 16.
@@ -769,10 +784,7 @@ impl ASIMDFPModImm {
                 let imm = (b0_5 | b6 | b7) as u8;
 
                 if value == Self::value32(imm) {
-                    Some(ASIMDFPModImm {
-                        imm,
-                        is_64bit: false,
-                    })
+                    Some(ASIMDFPModImm { imm, size })
                 } else {
                     None
                 }
@@ -786,10 +798,7 @@ impl ASIMDFPModImm {
                 let imm = (b0_5 | b6 | b7) as u8;
 
                 if value == Self::value64(imm) {
-                    Some(ASIMDFPModImm {
-                        imm,
-                        is_64bit: true,
-                    })
+                    Some(ASIMDFPModImm { imm, size })
                 } else {
                     None
                 }
@@ -801,6 +810,17 @@ impl ASIMDFPModImm {
     /// Returns bits ready for encoding.
     pub fn enc_bits(&self) -> u8 {
         self.imm
+    }
+
+    /// Returns the 16-bit value that corresponds to an 8-bit encoding.
+    fn value16(imm: u8) -> u16 {
+        let imm = imm as u16;
+        let b0_5 = imm & 0b111111;
+        let b6 = (imm >> 6) & 1;
+        let b6_inv = b6 ^ 1;
+        let b7 = (imm >> 7) & 1;
+
+        b0_5 << 6 | (b6 * 0b11) << 12 | b6_inv << 14 | b7 << 15
     }
 
     /// Returns the 32-bit value that corresponds to an 8-bit encoding.
@@ -931,10 +951,21 @@ impl PrettyPrint for ASIMDMovModImm {
 
 impl PrettyPrint for ASIMDFPModImm {
     fn pretty_print(&self, _: u8) -> String {
-        if self.is_64bit {
-            format!("#{}", f64::from_bits(Self::value64(self.imm)))
-        } else {
-            format!("#{}", f32::from_bits(Self::value32(self.imm)))
+        match self.size {
+            ScalarSize::Size16 => {
+                // FIXME(#8312): Use `f16` once it is stable.
+                // `value` will always be a normal number. Convert it to a `f32`.
+                let value: u32 = Self::value16(self.imm).into();
+                let sign = (value & 0x8000) << 16;
+                // Adjust the exponent for the difference between the `f16` exponent bias and the
+                // `f32` exponent bias.
+                let exponent = ((value & 0x7c00) + ((127 - 15) << 10)) << 13;
+                let significand = (value & 0x3ff) << 13;
+                format!("#{}", f32::from_bits(sign | exponent | significand))
+            }
+            ScalarSize::Size32 => format!("#{}", f32::from_bits(Self::value32(self.imm))),
+            ScalarSize::Size64 => format!("#{}", f64::from_bits(Self::value64(self.imm))),
+            _ => unreachable!(),
         }
     }
 }

@@ -24,6 +24,11 @@
 (rule (lower (has_type ty (null)))
       (imm ty (ImmExtend.Zero) 0))
 
+;;;; Rules for `f16const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f16const (u16_from_ieee16 n)))
+      (constant_f16 n))
+
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u32_from_ieee32 n)))
@@ -33,6 +38,11 @@
 
 (rule (lower (f64const (u64_from_ieee64 n)))
       (constant_f64 n))
+
+;;;; Rules for `f128const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F128 (f128const (u128_from_constant n))))
+      (constant_f128 n))
 
 ;;;; Rules for `nop` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2330,11 +2340,17 @@
        (has_type $R64 (load flags address offset)))
       (aarch64_uload64 (amode $I64 address offset) flags))
 (rule (lower
+       (has_type $F16 (load flags address offset)))
+      (aarch64_fpuload16 (amode $F16 address offset) flags))
+(rule (lower
        (has_type $F32 (load flags address offset)))
       (aarch64_fpuload32 (amode $F32 address offset) flags))
 (rule (lower
        (has_type $F64 (load flags address offset)))
       (aarch64_fpuload64 (amode $F64 address offset) flags))
+(rule (lower
+       (has_type $F128 (load flags address offset)))
+      (aarch64_fpuload128 (amode $F128 address offset) flags))
 (rule (lower
        (has_type $I128 (load flags address offset)))
       (aarch64_loadp64 (pair_amode address offset) flags))
@@ -2448,6 +2464,10 @@
        (aarch64_store32 (amode $I32 address offset) flags value)))
 
 (rule (lower
+       (store flags value @ (value_type $F16) address offset))
+      (side_effect
+       (aarch64_fpustore16 (amode $F16 address offset) flags value)))
+(rule (lower
        (store flags value @ (value_type $F32) address offset))
       (side_effect
        (aarch64_fpustore32 (amode $F32 address offset) flags value)))
@@ -2455,6 +2475,10 @@
        (store flags value @ (value_type $F64) address offset))
       (side_effect
        (aarch64_fpustore64 (amode $F64 address offset) flags value)))
+(rule (lower
+       (store flags value @ (value_type $F128) address offset))
+      (side_effect
+       (aarch64_fpustore128 (amode $F128 address offset) flags value)))
 
 (rule (lower
        (store flags value @ (value_type $I128) address offset))
@@ -2491,8 +2515,16 @@
 ;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; SIMD&FP <=> SIMD&FP
-(rule 5 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type (ty_float_or_vec _)))))
+(rule 7 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type (ty_float_or_vec _)))))
       x)
+
+; I128 => SIMD&FP
+(rule 6 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type $I128))))
+      (mov_to_vec (mov_to_fpu (value_regs_get x 0) (ScalarSize.Size64)) (value_regs_get x 1) 1 (VectorSize.Size64x2)))
+
+; SIMD&FP => I128
+(rule 5 (lower (has_type $I128 (bitcast _ x @ (value_type (ty_float_or_vec _)))))
+      (value_regs (mov_from_vec x 0 (ScalarSize.Size64)) (mov_from_vec x 1 (ScalarSize.Size64))))
 
 ; GPR => SIMD&FP
 (rule 4 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type in_ty))))

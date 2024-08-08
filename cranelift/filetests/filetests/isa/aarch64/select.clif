@@ -41,3 +41,78 @@ block0(v0: f32, v1: f32, v2: i64, v3: i64):
 ;   csel x0, x0, x1, eq
 ;   ret
 
+function %select_f16(i8, f16, f16) -> f16 {
+block0(v0: i8, v1: f16, v2: f16):
+    v3 = select.f16 v0, v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   ands wzr, w0, #255
+;   fcsel s0, s0, s1, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tst w0, #0xff
+;   fcsel s0, s0, s1, ne
+;   ret
+
+function %select_f32(i8, f32, f32) -> f32 {
+block0(v0: i8, v1: f32, v2: f32):
+    v3 = select.f32 v0, v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   ands wzr, w0, #255
+;   fcsel s0, s0, s1, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tst w0, #0xff
+;   fcsel s0, s0, s1, ne
+;   ret
+
+function %select_f64(i8, f64, f64) -> f64 {
+block0(v0: i8, v1: f64, v2: f64):
+    v3 = select.f64 v0, v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   ands wzr, w0, #255
+;   fcsel d0, d0, d1, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tst w0, #0xff
+;   fcsel d0, d0, d1, ne
+;   ret
+
+function %select_f128(i8, f128, f128) -> f128 {
+block0(v0: i8, v1: f128, v2: f128):
+    v3 = select.f128 v0, v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   ands wzr, w0, #255
+;   vcsel v0.16b, v0.16b, v1.16b, ne (if-then-else diamond)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tst w0, #0xff
+;   b.ne #0x10
+;   mov v0.16b, v1.16b
+;   b #0x14
+;   mov v0.16b, v0.16b
+;   ret
+

@@ -6700,6 +6700,19 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::FpuLoad16 {
+            rd: writable_vreg(16),
+            mem: AMode::RegScaled {
+                rn: xreg(8),
+                rm: xreg(9),
+            },
+            flags: MemFlags::trusted(),
+        },
+        "1079697C",
+        "ldr h16, [x8, x9, LSL #1]",
+    ));
+
+    insns.push((
         Inst::FpuLoad32 {
             rd: writable_vreg(16),
             mem: AMode::RegScaled {
@@ -6772,6 +6785,19 @@ fn test_aarch64_binemit() {
         },
         "5000009C",
         "ldr q16, pc+8",
+    ));
+
+    insns.push((
+        Inst::FpuStore16 {
+            rd: vreg(16),
+            mem: AMode::RegScaled {
+                rn: xreg(8),
+                rm: xreg(9),
+            },
+            flags: MemFlags::trusted(),
+        },
+        "1079297C",
+        "str h16, [x8, x9, LSL #1]",
     ));
 
     insns.push((
@@ -6971,6 +6997,17 @@ fn test_aarch64_binemit() {
         },
         "F2DB89AC",
         "stp q18, q22, [sp], #304",
+    ));
+
+    insns.push((
+        Inst::FpuCSel16 {
+            rd: writable_vreg(1),
+            rn: vreg(2),
+            rm: vreg(3),
+            cond: Cond::Hi,
+        },
+        "418CE31E",
+        "fcsel h1, h2, h3, hi",
     ));
 
     insns.push((
