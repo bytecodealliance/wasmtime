@@ -86,8 +86,8 @@ fn simple() {
         r#"
        0: 0e 1f f0                        xconst8 x31, -16
        3: 12 20 20 1f                     xadd32 sp, sp, x31
-       7: 29 20 08 21                     store64_offset8 sp, 8, lr
-       b: 27 20 22                        store64 sp, fp
+       7: 2c 20 08 21                     store64_offset8 sp, 8, lr
+       b: 2a 20 22                        store64 sp, fp
        e: 0b 22 20                        xmov fp, sp
       11: 12 00 00 01                     xadd32 x0, x0, x1
       15: 0b 20 22                        xmov sp, fp
