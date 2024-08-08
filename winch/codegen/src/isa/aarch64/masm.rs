@@ -162,8 +162,8 @@ impl Masm for MacroAssembler {
         self.asm.ldr(src, dst, size, false);
     }
 
-    fn load_ptr(&mut self, _src: Self::Address, _dst: Reg) {
-        todo!()
+    fn load_ptr(&mut self, src: Self::Address, dst: Reg) {
+        self.load(src, dst, self.ptr_size);
     }
 
     fn wasm_load(
