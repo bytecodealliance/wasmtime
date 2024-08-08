@@ -434,8 +434,7 @@ where
                 Ok((&[RegClass::Vector], ty))
             }
             _ => Err(CodegenError::Unsupported(format!(
-                "Unexpected SSA-value type: {}",
-                ty
+                "Unexpected SSA-value type: {ty}"
             ))),
         }
     }
@@ -491,7 +490,7 @@ pub fn reg_name(reg: Reg) -> String {
             }
         }
         None => {
-            format!("{:?}", reg)
+            format!("{reg:?}")
         }
     }
 }
@@ -519,7 +518,7 @@ impl Inst {
                 for arg in args {
                     let preg = format_reg(arg.preg);
                     let def = format_reg(arg.vreg.to_reg());
-                    write!(&mut s, " {}={}", def, preg).unwrap();
+                    write!(&mut s, " {def}={preg}").unwrap();
                 }
                 s
             }
