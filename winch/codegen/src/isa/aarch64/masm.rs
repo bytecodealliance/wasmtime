@@ -146,8 +146,8 @@ impl Masm for MacroAssembler {
         self.asm.str(src, dst, size);
     }
 
-    fn wasm_store(&mut self, _src: Reg, _dst: Self::Address, _size: OperandSize) {
-        todo!()
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) {
+        self.asm.str(src, dst, size);
     }
 
     fn call(

@@ -147,19 +147,42 @@ impl Assembler {
         let flags = MemFlags::trusted();
 
         use OperandSize::*;
-        let inst = match size {
-            S64 => Inst::Store64 {
+        let inst = match (reg.is_int(), size) {
+            (_, S8) => Inst::Store8 {
                 rd: reg.into(),
                 mem,
                 flags,
             },
-            S32 => Inst::Store32 {
+            (_, S16) => Inst::Store16 {
                 rd: reg.into(),
                 mem,
                 flags,
             },
-
-            _ => unreachable!(),
+            (true, S32) => Inst::Store32 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (false, S32) => Inst::FpuStore32 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (true, S64) => Inst::Store64 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (false, S64) => Inst::FpuStore64 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (_, S128) => Inst::FpuStore128 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
         };
 
         self.emit(inst);
