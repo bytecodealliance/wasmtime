@@ -126,6 +126,6 @@ file(GLOB headers "include/*.h")
 add_custom_target(headers-to-doc
   COMMAND
     ${CMAKE_COMMAND}
-      -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/include
+      -DWASMTIME_HEADER_DST=${CMAKE_BINARY_DIR}/include
       -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake
   DEPENDS ${headers})
