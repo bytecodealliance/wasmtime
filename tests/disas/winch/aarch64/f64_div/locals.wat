@@ -34,15 +34,15 @@
 ;;       movk    x16, #0x9999, lsl #32
 ;;       movk    x16, #0x3ff1, lsl #48
 ;;       fmov    d0, x16
-;;       stur    x0, [x28, #8]
+;;       stur    d0, [x28, #8]
 ;;       mov     x16, #0x999a
 ;;       movk    x16, #0x9999, lsl #16
 ;;       movk    x16, #0x9999, lsl #32
 ;;       movk    x16, #0x4001, lsl #48
 ;;       fmov    d0, x16
-;;       stur    x0, [x28]
-;;       ldur    x0, [x28]
-;;       ldur    x1, [x28, #8]
+;;       stur    d0, [x28]
+;;       ldur    d0, [x28]
+;;       ldur    d1, [x28, #8]
 ;;       fdiv    d1, d1, d0
 ;;       fmov    d0, d1
 ;;       add     sp, sp, #0x20
