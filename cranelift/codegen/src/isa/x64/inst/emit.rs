@@ -1747,6 +1747,10 @@ pub(crate) fn emit(
             // Note that we do not emit anything for preserving and restoring
             // ordinary registers here: That's taken care of by regalloc for us,
             // since we marked this instruction as clobbering all registers.
+            //
+            // Also note that we do nothing about passing the single payload
+            // value: We've informed regalloc that it is sent and received via
+            // the fixed register given by [stack_switch::payload_register]
 
             let (tmp1, tmp2) = {
                 // Ideally we would just ask regalloc for two temporary registers.

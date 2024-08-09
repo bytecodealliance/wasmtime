@@ -40,6 +40,13 @@ pub fn control_context_layout() -> ControlContextLayout {
 }
 
 /// The register used for handing over the payload when switching stacks.
+///
+/// We must use a fixed register for sending and receiving the payload: When
+/// switching from one stack to another using two matching``stack_switch``
+/// instructions, they must agree on the register where the payload is, similar
+/// to a calling convention. The same holds when `stack_switch`-ing to a newly
+/// initialized stack, where the entry trampoline must know which register the
+/// payload is in.
 pub fn payload_register() -> Reg {
     regs::rdi()
 }
