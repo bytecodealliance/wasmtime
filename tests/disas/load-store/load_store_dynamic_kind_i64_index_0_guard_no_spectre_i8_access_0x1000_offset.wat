@@ -20,20 +20,16 @@
 
 ;; function u0:0(i64 vmctx, i64, i64, i32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned checked gv3+96
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned gv0+104
+;;     gv2 = load.i64 notrap aligned checked gv0+96
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
-;; @0040                               v4 = global_value.i64 gv4
+;; @0040                               v4 = global_value.i64 gv1
 ;; @0040                               v5 = iconst.i64 4097
 ;; @0040                               v6 = isub v4, v5  ; v5 = 4097
 ;; @0040                               v7 = icmp ugt v2, v6
 ;; @0040                               trapnz v7, heap_oob
-;; @0040                               v8 = global_value.i64 gv5
+;; @0040                               v8 = global_value.i64 gv2
 ;; @0040                               v9 = iadd v8, v2
 ;; @0040                               v10 = iconst.i64 4096
 ;; @0040                               v11 = iadd v9, v10  ; v10 = 4096
@@ -46,20 +42,16 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i64) -> i32 tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned checked gv3+96
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned gv0+104
+;;     gv2 = load.i64 notrap aligned checked gv0+96
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0049                               v4 = global_value.i64 gv4
+;; @0049                               v4 = global_value.i64 gv1
 ;; @0049                               v5 = iconst.i64 4097
 ;; @0049                               v6 = isub v4, v5  ; v5 = 4097
 ;; @0049                               v7 = icmp ugt v2, v6
 ;; @0049                               trapnz v7, heap_oob
-;; @0049                               v8 = global_value.i64 gv5
+;; @0049                               v8 = global_value.i64 gv2
 ;; @0049                               v9 = iadd v8, v2
 ;; @0049                               v10 = iconst.i64 4096
 ;; @0049                               v11 = iadd v9, v10  ; v10 = 4096

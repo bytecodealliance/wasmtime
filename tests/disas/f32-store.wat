@@ -11,15 +11,11 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, f32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned readonly checked gv0+96
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: f32):
 ;; @0031                               v4 = uextend.i64 v2
-;; @0031                               v5 = global_value.i64 gv4
+;; @0031                               v5 = global_value.i64 gv1
 ;; @0031                               v6 = iadd v5, v4
 ;; @0031                               store little heap v3, v6
 ;; @0034                               jump block1

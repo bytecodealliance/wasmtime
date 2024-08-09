@@ -19,17 +19,13 @@
     i32.load8_u offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;       lg      %r1, 8(%r2)
-;;       lg      %r1, 0(%r1)
-;;       la      %r1, 0xa0(%r1)
-;;       clgrtle %r15, %r1
 ;;       stmg    %r14, %r15, 0x70(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
 ;;       llgfr   %r7, %r4
 ;;       clgfi   %r7, 0xffffefff
-;;       jgh     0x4e
+;;       jgh     0x3a
 ;;       ag      %r7, 0x60(%r2)
 ;;       lghi    %r4, 0x1000
 ;;       stc     %r5, 0(%r4, %r7)
@@ -38,17 +34,13 @@
 ;;       .byte   0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;       lg      %r1, 8(%r2)
-;;       lg      %r1, 0(%r1)
-;;       la      %r1, 0xa0(%r1)
-;;       clgrtle %r15, %r1
 ;;       stmg    %r14, %r15, 0x70(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
 ;;       llgfr   %r7, %r4
 ;;       clgfi   %r7, 0xffffefff
-;;       jgh     0xa0
+;;       jgh     0x78
 ;;       ag      %r7, 0x60(%r2)
 ;;       lghi    %r4, 0x1000
 ;;       llc     %r2, 0(%r4, %r7)

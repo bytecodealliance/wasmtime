@@ -20,20 +20,16 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, i32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned checked gv3+96
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned gv0+104
+;;     gv2 = load.i64 notrap aligned checked gv0+96
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0040                               v4 = uextend.i64 v2
 ;; @0040                               v5 = iconst.i64 0xffff_0001
 ;; @0040                               v6 = uadd_overflow_trap v4, v5, heap_oob  ; v5 = 0xffff_0001
-;; @0040                               v7 = global_value.i64 gv4
+;; @0040                               v7 = global_value.i64 gv1
 ;; @0040                               v8 = icmp ugt v6, v7
-;; @0040                               v9 = global_value.i64 gv5
+;; @0040                               v9 = global_value.i64 gv2
 ;; @0040                               v10 = iadd v9, v4
 ;; @0040                               v11 = iconst.i64 0xffff_0000
 ;; @0040                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
@@ -48,20 +44,16 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned checked gv3+96
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned gv0+104
+;;     gv2 = load.i64 notrap aligned checked gv0+96
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @004c                               v4 = uextend.i64 v2
 ;; @004c                               v5 = iconst.i64 0xffff_0001
 ;; @004c                               v6 = uadd_overflow_trap v4, v5, heap_oob  ; v5 = 0xffff_0001
-;; @004c                               v7 = global_value.i64 gv4
+;; @004c                               v7 = global_value.i64 gv1
 ;; @004c                               v8 = icmp ugt v6, v7
-;; @004c                               v9 = global_value.i64 gv5
+;; @004c                               v9 = global_value.i64 gv2
 ;; @004c                               v10 = iadd v9, v4
 ;; @004c                               v11 = iconst.i64 0xffff_0000
 ;; @004c                               v12 = iadd v10, v11  ; v11 = 0xffff_0000

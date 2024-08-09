@@ -79,21 +79,11 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0043                               trap unreachable
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @004c                               jump block2
 ;;
@@ -102,11 +92,6 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0061                               v4 = iconst.i32 1
 ;; @0063                               brif v4, block6, block13  ; v4 = 1
@@ -134,11 +119,6 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0095                               v4 = iconst.i32 1
 ;; @0097                               jump block2(v4)  ; v4 = 1

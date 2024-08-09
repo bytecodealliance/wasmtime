@@ -19,11 +19,7 @@
 
 ;; function u0:0(i64 vmctx, i64, i32) -> i32, i32 tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned readonly checked gv0+96
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0057                               v6 = load.i64 notrap aligned readonly checked v0+96
@@ -38,11 +34,7 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32, i32 tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned readonly checked gv0+96
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0064                               v6 = load.i64 notrap aligned readonly checked v0+96

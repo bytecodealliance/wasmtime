@@ -24,11 +24,6 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32, i64, f32, f32, i32, f64, f32, i32, i32, i32, f32, f64, f64, f64, i32, i32, f32) -> f64, f32, i32, i32, i32, i64, f32, i32, i32, f32, f64, f64, i32, f32, i32, f64 tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64, v4: f32, v5: f32, v6: i32, v7: f64, v8: f32, v9: i32, v10: i32, v11: i32, v12: f32, v13: f64, v14: f64, v15: f64, v16: i32, v17: i32, v18: f32):
 ;; @0067                               jump block1(v7, v4, v2, v10, v9, v3, v5, v11, v6, v8, v15, v13, v17, v18, v16, v14)
 ;;

@@ -121,8 +121,10 @@ pub(crate) fn from_runtime_box(
             // then simultaneously assert that it's within a known linear memory
             // and additionally translate it to a wasm-local address to be added
             // as context to the error.
-            if let Some(fault) = faulting_addr.and_then(|addr| store.wasm_fault(pc, addr)) {
-                err = err.context(fault);
+            if trap != Trap::StackOverflow {
+                if let Some(fault) = faulting_addr.and_then(|addr| store.wasm_fault(pc, addr)) {
+                    err = err.context(fault);
+                }
             }
             (err, Some(pc))
         }

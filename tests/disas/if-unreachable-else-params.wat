@@ -44,11 +44,7 @@
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+112
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned readonly checked gv0+112
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0043                               v3 = iconst.i32 35
@@ -59,7 +55,7 @@
 ;;
 ;;                                 block4:
 ;; @004b                               v7 = uextend.i64 v4
-;; @004b                               v8 = global_value.i64 gv4
+;; @004b                               v8 = global_value.i64 gv1
 ;; @004b                               v9 = iadd v8, v7
 ;; @004b                               v10 = sload16.i64 little heap v9
 ;; @004e                               trap unreachable

@@ -6,12 +6,8 @@
 
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx) -> i64 system_v
 ;;     fn0 = colocated u1:16 sig0
-;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0016                               v3 = load.i64 notrap aligned v0+8

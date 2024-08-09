@@ -150,56 +150,6 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut func_env =
             FuncEnvironment::new(isa, translation, types, &self.tunables, self.wmemcheck);
 
-        // The `stack_limit` global value below is the implementation of stack
-        // overflow checks in Wasmtime.
-        //
-        // The Wasm spec defines that stack overflows will raise a trap, and
-        // there's also an added constraint where as an embedder you frequently
-        // are running host-provided code called from wasm. WebAssembly and
-        // native code currently share the same call stack, so Wasmtime needs to
-        // make sure that host-provided code will have enough call-stack
-        // available to it.
-        //
-        // The way that stack overflow is handled here is by adding a prologue
-        // check to all functions for how much native stack is remaining. The
-        // `VMContext` pointer is the first argument to all functions, and the
-        // first field of this structure is `*const VMRuntimeLimits` and the
-        // first field of that is the stack limit. Note that the stack limit in
-        // this case means "if the stack pointer goes below this, trap". Each
-        // function which consumes stack space or isn't a leaf function starts
-        // off by loading the stack limit, checking it against the stack
-        // pointer, and optionally traps.
-        //
-        // This manual check allows the embedder to give wasm a relatively
-        // precise amount of stack allocation. Using this scheme we reserve a
-        // chunk of stack for wasm code relative from where wasm code was
-        // called. This ensures that native code called by wasm should have
-        // native stack space to run, and the numbers of stack spaces here
-        // should all be configurable for various embeddings.
-        //
-        // Note that this check is independent of each thread's stack guard page
-        // here. If the stack guard page is reached that's still considered an
-        // abort for the whole program since the runtime limits configured by
-        // the embedder should cause wasm to trap before it reaches that
-        // (ensuring the host has enough space as well for its functionality).
-        let vmctx = context
-            .func
-            .create_global_value(ir::GlobalValueData::VMContext);
-        let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
-            base: vmctx,
-            offset: i32::from(func_env.offsets.ptr.vmctx_runtime_limits()).into(),
-            global_type: isa.pointer_type(),
-            flags: MemFlags::trusted().with_readonly(),
-        });
-        let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
-            base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.ptr.vmruntime_limits_stack_limit())
-                .unwrap()
-                .into(),
-            global_type: isa.pointer_type(),
-            flags: MemFlags::trusted(),
-        });
-        context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
@@ -999,6 +949,35 @@ fn save_last_wasm_exit_fp_and_pc(
     ptr: &impl PtrSize,
     limits: Value,
 ) {
+    // The Wasm spec defines that stack overflows will raise a trap, and
+    // there's also an added constraint where as an embedder you frequently are
+    // running host-provided code called from wasm. WebAssembly and native code
+    // currently share the same call stack, so Wasmtime needs to make sure that
+    // host-provided code will have enough call-stack available to it.
+    //
+    // The first field of `VMRuntimeLimits` is the stack limit. If the stack
+    // pointer is below this limit when we're about to call out of guest code,
+    // trap. But we don't check this limit as long as we stay within guest or
+    // trampoline code. Instead, we rely on the guest hitting a guard page,
+    // which the OS will tell our signal handler about. The following explicit
+    // check on guest exit ensures that native code called by wasm should have
+    // enough stack space to run without hitting a guard page.
+    let trampoline_sp = builder.ins().get_stack_pointer(pointer_type);
+    let stack_limit = builder.ins().load(
+        pointer_type,
+        MemFlags::trusted(),
+        limits,
+        ptr.vmruntime_limits_stack_limit(),
+    );
+    let is_overflow = builder.ins().icmp(
+        ir::condcodes::IntCC::UnsignedLessThan,
+        trampoline_sp,
+        stack_limit,
+    );
+    builder
+        .ins()
+        .trapnz(is_overflow, ir::TrapCode::StackOverflow);
+
     // Save the exit Wasm FP to the limits. We dereference the current FP to get
     // the previous FP because the current FP is the trampoline's FP, and we
     // want the Wasm function's FP, which is the caller of this trampoline.
