@@ -2,6 +2,70 @@ test compile precise-output
 set opt_level=speed
 target x86_64-unknown-linux-gnu
 
+;; Test code emitted for stack switch itself
+function %switch(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = stack_switch v0, v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $48, %rsp
+;   movq    %rbx, 0(%rsp)
+;   movq    %r12, 8(%rsp)
+;   movq    %r13, 16(%rsp)
+;   movq    %r14, 24(%rsp)
+;   movq    %r15, 32(%rsp)
+; block0:
+;   movq    %rdi, %r10
+;   movq    %rdx, %rdi
+;   %rdi = stack_switch %r10, %rsi, %rdi
+;   movq    %rdi, %rax
+;   movq    0(%rsp), %rbx
+;   movq    8(%rsp), %r12
+;   movq    16(%rsp), %r13
+;   movq    24(%rsp), %r14
+;   movq    32(%rsp), %r15
+;   addq    %rsp, $48, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rbx, (%rsp)
+;   movq %r12, 8(%rsp)
+;   movq %r13, 0x10(%rsp)
+;   movq %r14, 0x18(%rsp)
+;   movq %r15, 0x20(%rsp)
+; block1: ; offset 0x20
+;   movq %rdi, %r10
+;   movq %rdx, %rdi
+;   movq (%rsi), %rax
+;   movq %rsp, (%r10)
+;   movq %rax, %rsp
+;   movq 8(%rsi), %rax
+;   movq %rbp, 8(%r10)
+;   movq %rax, %rbp
+;   movq 0x10(%rsi), %rax
+;   leaq 6(%rip), %rcx
+;   movq %rcx, 0x10(%r10)
+;   jmpq *%rax
+;   movq %rdi, %rax
+;   movq (%rsp), %rbx
+;   movq 8(%rsp), %r12
+;   movq 0x10(%rsp), %r13
+;   movq 0x18(%rsp), %r14
+;   movq 0x20(%rsp), %r15
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 ;; Test clobbering of all 14 GPRs used by Cranelift
 function %switch_int_clobber(i64, i64) -> i64 {
