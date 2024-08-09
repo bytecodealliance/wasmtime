@@ -345,6 +345,9 @@ semver = { version = "1.0.17", default-features = false }
 # in configuring binary size and or exploring the binary size implications of
 # various features. Most features are enabled by default but most embeddings
 # likely won't need all features.
+#
+# When adding or removing a feature, make sure to kepe the C API in sync by
+# modifying locations marked WASMTIME_FEATURE_LIST
 [features]
 default = [
   # All subcommands are included by default.
