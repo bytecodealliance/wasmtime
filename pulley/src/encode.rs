@@ -82,12 +82,21 @@ impl Encode for i64 {
     }
 }
 
+impl Encode for SReg {
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        sink.extend(core::iter::once(self.to_u8()));
+    }
+}
+
 impl Encode for XReg {
     fn encode<E>(&self, sink: &mut E)
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -96,7 +105,7 @@ impl Encode for FReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -105,7 +114,7 @@ impl Encode for VReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -115,6 +124,15 @@ impl Encode for PcRelOffset {
         E: Extend<u8>,
     {
         i32::from(*self).encode(sink);
+    }
+}
+
+impl<R: Reg> Encode for BinaryOperands<R> {
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.to_bits().encode(sink);
     }
 }
 

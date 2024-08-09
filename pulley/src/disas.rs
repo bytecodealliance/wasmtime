@@ -53,6 +53,12 @@ trait Disas {
     fn disas(&self, position: usize, disas: &mut String);
 }
 
+impl Disas for SReg {
+    fn disas(&self, _position: usize, disas: &mut String) {
+        write!(disas, "{self}").unwrap();
+    }
+}
+
 impl Disas for XReg {
     fn disas(&self, _position: usize, disas: &mut String) {
         write!(disas, "{self}").unwrap();
@@ -124,6 +130,16 @@ impl Disas for PcRelOffset {
         let offset = isize::try_from(i32::from(*self)).unwrap();
         let target = position.wrapping_add(offset as usize);
         write!(disas, "{offset:#x}    // target = {target:#x}").unwrap()
+    }
+}
+
+impl<R: Disas> Disas for BinaryOperands<R> {
+    fn disas(&self, position: usize, disas: &mut String) {
+        self.dst.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src1.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src2.disas(position, disas);
     }
 }
 

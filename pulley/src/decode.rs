@@ -336,6 +336,16 @@ impl Decode for i64 {
     }
 }
 
+impl Decode for SReg {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        let byte = u8::decode(bytecode)?;
+        SReg::new(byte).ok_or_else(|| bytecode.invalid_reg(byte))
+    }
+}
+
 impl Decode for XReg {
     fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
     where
@@ -372,6 +382,15 @@ impl Decode for PcRelOffset {
         T: BytecodeStream,
     {
         i32::decode(bytecode).map(|x| Self::from(x))
+    }
+}
+
+impl<R: Reg> Decode for BinaryOperands<R> {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        u16::decode(bytecode).map(|bits| Self::from_bits(bits))
     }
 }
 
