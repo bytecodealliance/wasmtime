@@ -928,8 +928,12 @@ pub(crate) fn define(
         current (i.e., original) stack at ``store_context_ptr``, to
         enabled switching back to the original stack at a later point.
 
-        The size and layout of the information stored at ``load_context_ptr``
-        and ``store_context_ptr`` is platform-dependent.
+        The size, alignment and layout of the information stored at
+        ``load_context_ptr`` and ``store_context_ptr`` is platform-dependent.
+        The instruction assumes that ``load_context_ptr`` and
+        ``store_context_ptr`` are valid pointers to memory with said layout and
+        alignment, and does not perform any checks on these pointers or the data
+        stored there.
 
         The instruction is experimental and only supported on x64 Linux at the
         moment.
@@ -951,6 +955,12 @@ pub(crate) fn define(
         to be equal; the instruction ensures that all data is loaded from the
         former before writing to the latter.
 
+        Stack switching is one-shot in the sense that each ``stack_switch``
+        operation effectively consumes the context identified by
+        ``load_context_ptr``. In other words, performing two ``stack_switches``
+        using the same ``load_context_ptr`` causes undefined behavior, unless
+        the context at ``load_context_ptr`` is overwritten by another
+        `stack_switch` in between.
         "#,
             &formats.ternary,
         )
