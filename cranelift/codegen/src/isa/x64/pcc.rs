@@ -902,9 +902,7 @@ pub(crate) fn check(
 
         Inst::Unwind { .. } | Inst::DummyUse { .. } => Ok(()),
 
-        Inst::StackSwitch { .. } => {
-            Err(PccError::UnimplementedInst)
-        }
+        Inst::StackSwitch { .. } => Err(PccError::UnimplementedInst),
     }
 }
 
