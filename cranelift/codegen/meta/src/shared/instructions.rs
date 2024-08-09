@@ -962,7 +962,8 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("out_payload0", iAddr)])
         .other_side_effects()
         .can_load()
-        .can_store(),
+        .can_store()
+        .call(),
     );
 
     let I16x8 = &TypeVar::new(
