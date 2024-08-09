@@ -4,7 +4,7 @@ use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
+    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, FpuOPWidth, ZcbMemOp,
 };
 use cranelift_control::ControlPlane;
 
@@ -908,21 +908,16 @@ impl Inst {
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::FpuRR {
-                frm,
                 alu_op,
+                width,
+                frm,
                 rd,
                 rs,
             } => {
-                let x = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs) << 15
-                    | alu_op.rs2_funct5() << 20
-                    | alu_op.funct7() << 25;
                 if alu_op.is_convert_to_int() {
                     sink.add_trap(TrapCode::BadConversionToInteger);
                 }
-                sink.put4(x);
+                sink.put4(encode_fp_rr(alu_op, width, frm, rd, rs));
             }
             &Inst::FpuRRRR {
                 alu_op,
@@ -931,31 +926,19 @@ impl Inst {
                 rs2,
                 rs3,
                 frm,
+                width,
             } => {
-                let x = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct2() << 25
-                    | reg_to_gpr_num(rs3) << 27;
-
-                sink.put4(x);
+                sink.put4(encode_fp_rrrr(alu_op, width, frm, rd, rs1, rs2, rs3));
             }
             &Inst::FpuRRR {
                 alu_op,
+                width,
                 frm,
                 rd,
                 rs1,
                 rs2,
             } => {
-                let x: u32 = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct7() << 25;
-                sink.put4(x);
+                sink.put4(encode_fp_rrr(alu_op, width, frm, rd, rs1, rs2));
             }
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
@@ -1263,11 +1246,8 @@ impl Inst {
                         imm12: Imm12::ZERO,
                     },
                     RegClass::Float => Inst::FpuRRR {
-                        alu_op: if ty == F32 {
-                            FpuOPRRR::FsgnjS
-                        } else {
-                            FpuOPRRR::FsgnjD
-                        },
+                        alu_op: FpuOPRRR::Fsgnj,
+                        width: FpuOPWidth::try_from(ty).unwrap(),
                         frm: FRM::RNE,
                         rd: rd,
                         rs1: rm,

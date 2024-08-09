@@ -3,7 +3,7 @@
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
+use crate::ir::types::{self, F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 
 pub use crate::ir::{ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
@@ -1151,28 +1151,24 @@ impl Inst {
                 }
             }
             &Inst::FpuRR {
-                frm,
                 alu_op,
+                width,
+                frm,
                 rd,
                 rs,
             } => {
                 let rs = format_reg(rs);
                 let rd = format_reg(rd.to_reg());
-                let frm = match alu_op {
-                    FpuOPRR::FmvXW
-                    | FpuOPRR::FmvWX
-                    | FpuOPRR::FmvXD
-                    | FpuOPRR::FmvDX
-                    | FpuOPRR::FclassS
-                    | FpuOPRR::FclassD
-                    | FpuOPRR::FcvtDW
-                    | FpuOPRR::FcvtDWU => String::new(),
-                    _ => format_frm(frm),
+                let frm = if alu_op.has_frm() {
+                    format_frm(frm)
+                } else {
+                    String::new()
                 };
-                format!("{} {rd},{rs}{frm}", alu_op.op_name())
+                format!("{} {rd},{rs}{frm}", alu_op.op_name(width))
             }
             &Inst::FpuRRR {
                 alu_op,
+                width,
                 rd,
                 rs1,
                 rs2,
@@ -1181,35 +1177,18 @@ impl Inst {
                 let rs1 = format_reg(rs1);
                 let rs2 = format_reg(rs2);
                 let rd = format_reg(rd.to_reg());
-                let rs1_is_rs2 = rs1 == rs2;
-                if rs1_is_rs2 && alu_op.is_copy_sign() {
-                    // this is move instruction.
-                    format!("fmv.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
-                } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
-                    format!("fneg.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
-                } else if rs1_is_rs2 && alu_op.is_copy_xor_sign() {
-                    format!("fabs.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
+                let frm = if alu_op.has_frm() {
+                    format_frm(frm)
                 } else {
-                    let frm = match alu_op {
-                        FpuOPRRR::FsgnjS
-                        | FpuOPRRR::FsgnjnS
-                        | FpuOPRRR::FsgnjxS
-                        | FpuOPRRR::FsgnjD
-                        | FpuOPRRR::FsgnjnD
-                        | FpuOPRRR::FsgnjxD
-                        | FpuOPRRR::FminS
-                        | FpuOPRRR::FminD
-                        | FpuOPRRR::FmaxS
-                        | FpuOPRRR::FmaxD
-                        | FpuOPRRR::FeqS
-                        | FpuOPRRR::FeqD
-                        | FpuOPRRR::FltS
-                        | FpuOPRRR::FltD
-                        | FpuOPRRR::FleS
-                        | FpuOPRRR::FleD => String::new(),
-                        _ => format_frm(frm),
-                    };
-                    format!("{} {rd},{rs1},{rs2}{frm}", alu_op.op_name())
+                    String::new()
+                };
+
+                let rs1_is_rs2 = rs1 == rs2;
+                match alu_op {
+                    FpuOPRRR::Fsgnj if rs1_is_rs2 => format!("fmv.{width} {rd},{rs1}"),
+                    FpuOPRRR::Fsgnjn if rs1_is_rs2 => format!("fneg.{width} {rd},{rs1}"),
+                    FpuOPRRR::Fsgnjx if rs1_is_rs2 => format!("fabs.{width} {rd},{rs1}"),
+                    _ => format!("{} {rd},{rs1},{rs2}{frm}", alu_op.op_name(width)),
                 }
             }
             &Inst::FpuRRRR {
@@ -1219,20 +1198,15 @@ impl Inst {
                 rs2,
                 rs3,
                 frm,
+                width,
             } => {
                 let rs1 = format_reg(rs1);
                 let rs2 = format_reg(rs2);
                 let rs3 = format_reg(rs3);
                 let rd = format_reg(rd.to_reg());
-                format!(
-                    "{} {},{},{},{}{}",
-                    alu_op.op_name(),
-                    rd,
-                    rs1,
-                    rs2,
-                    rs3,
-                    format_frm(frm)
-                )
+                let frm = format_frm(frm);
+                let op_name = alu_op.op_name(width);
+                format!("{op_name} {rd},{rs1},{rs2},{rs3}{frm}")
             }
             &Inst::AluRRImm12 {
                 alu_op,

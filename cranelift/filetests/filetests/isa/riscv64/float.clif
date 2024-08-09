@@ -699,7 +699,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   fcvt.d.wu fa0,a0
+;   fcvt.d.wu fa0,a0,rne
 ;   ret
 ;
 ; Disassembled:
@@ -715,7 +715,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   fcvt.d.w fa0,a0
+;   fcvt.d.w fa0,a0,rne
 ;   ret
 ;
 ; Disassembled:
