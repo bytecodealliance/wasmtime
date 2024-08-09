@@ -1,6 +1,6 @@
 test compile precise-output
 set opt_level=speed
-target x86_64
+target x86_64-unknown-linux-gnu
 
 
 ;; Test clobbering of all 14 GPRs used by Cranelift
