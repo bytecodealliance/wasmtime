@@ -23,7 +23,7 @@ runs:
         elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
           echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-pinned-nightly" ]; then
-          echo "version=nightly-2024-07-25" >> "$GITHUB_OUTPUT"
+          echo "version=nightly-2024-08-09" >> "$GITHUB_OUTPUT"
         else
           echo "version=${{ inputs.toolchain }}" >> "$GITHUB_OUTPUT"
         fi
