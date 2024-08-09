@@ -12,12 +12,21 @@ pub fn parse(lexer: Lexer) -> Result<Defs> {
     parser.parse_defs()
 }
 
+/// Parse without positional information. Provided mainly to support testing, to
+/// enable equality testing on structure alone.
+pub fn parse_without_pos(lexer: Lexer) -> Result<Defs> {
+    let mut parser = Parser::new(lexer);
+    parser.disable_pos();
+    parser.parse_defs()
+}
+
 /// The ISLE parser.
 ///
 /// Takes in a lexer and creates an AST.
 #[derive(Clone, Debug)]
 struct Parser<'a> {
     lexer: Lexer<'a>,
+    disable_pos: bool,
 }
 
 /// Used during parsing a `(rule ...)` to encapsulate some form that
@@ -31,7 +40,14 @@ enum IfLetOrExpr {
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
-        Parser { lexer }
+        Parser {
+            lexer,
+            disable_pos: false,
+        }
+    }
+
+    pub fn disable_pos(&mut self) {
+        self.disable_pos = true;
     }
 
     fn error(&self, pos: Pos, msg: String) -> Errors {
@@ -76,9 +92,13 @@ impl<'a> Parser<'a> {
     }
 
     fn pos(&self) -> Pos {
-        self.lexer
-            .peek()
-            .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
+        if !self.disable_pos {
+            self.lexer
+                .peek()
+                .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
+        } else {
+            Pos::default()
+        }
     }
 
     fn is_lparen(&self) -> bool {

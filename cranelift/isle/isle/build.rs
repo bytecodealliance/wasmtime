@@ -8,6 +8,11 @@ fn main() {
         std::env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
     );
 
+    isle_tests(&out_dir);
+    isle_printer_tests(&out_dir);
+}
+
+fn isle_tests(out_dir: &std::path::PathBuf) {
     let mut out = String::new();
 
     emit_tests(&mut out, "isle_examples/pass", "run_pass");
@@ -16,6 +21,15 @@ fn main() {
     emit_tests(&mut out, "isle_examples/run", "run_run");
 
     let output = out_dir.join("isle_tests.rs");
+    std::fs::write(output, out).unwrap();
+}
+
+fn isle_printer_tests(out_dir: &std::path::PathBuf) {
+    let mut out = String::new();
+
+    emit_tests(&mut out, "isle_examples/pass", "run_print");
+
+    let output = out_dir.join("isle_printer_tests.rs");
     std::fs::write(output, out).unwrap();
 }
 

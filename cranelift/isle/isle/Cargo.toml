@@ -8,12 +8,17 @@ readme = "../README.md"
 repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
 version = "0.112.0"
 
+[[test]]
+name = "printer_tests"
+required-features = ["printer"]
+
 [lints]
 workspace = true
 
 [dependencies]
 codespan-reporting = { version = "0.11.1", optional = true }
 log = { workspace = true, optional = true }
+pretty = { version = "0.12", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -23,3 +28,4 @@ default = []
 
 logging = ["log"]
 fancy-errors = ["codespan-reporting"]
+printer = ["pretty"]
