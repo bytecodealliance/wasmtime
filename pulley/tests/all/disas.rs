@@ -50,3 +50,38 @@ fn simple() {
         "#,
     );
 }
+
+#[test]
+fn push_pop_many() {
+    assert_disas(
+        &[
+            // Prologue.
+            Op::PushFrame(PushFrame {}),
+            Op::XPush32Many(XPush32Many {
+                srcs: RegSet::from_iter([XReg::x0, XReg::x1, XReg::x2, XReg::x3, XReg::x4]),
+            }),
+            // Function body.
+            Op::Xadd32(Xadd32 {
+                operands: BinaryOperands {
+                    dst: XReg::x0,
+                    src1: XReg::x0,
+                    src2: XReg::x1,
+                },
+            }),
+            // Epilogue.
+            Op::XPop32Many(XPop32Many {
+                dsts: RegSet::from_iter([XReg::x0, XReg::x1, XReg::x2, XReg::x3, XReg::x4]),
+            }),
+            Op::PopFrame(PopFrame {}),
+            Op::Ret(Ret {}),
+        ],
+        r#"
+       0: 2f                              push_frame
+       1: 32 1f 00 00 00                  xpush32_many x0, x1, x2, x3, x4
+       6: 12 00 04                        xadd32 x0, x0, x1
+       9: 36 1f 00 00 00                  xpop32_many x0, x1, x2, x3, x4
+       e: 30                              pop_frame
+       f: 00                              ret
+        "#,
+    );
+}

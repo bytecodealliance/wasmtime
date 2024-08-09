@@ -1008,8 +1008,22 @@ impl OpVisitor for InterpreterVisitor<'_> {
         Continuation::Continue
     }
 
+    fn xpush32_many(&mut self, srcs: RegSet<XReg>) -> Self::Return {
+        for src in srcs {
+            self.xpush32(src);
+        }
+        Continuation::Continue
+    }
+
     fn xpush64(&mut self, src: XReg) -> Self::Return {
         self.state.push(self.state[src].get_u64());
+        Continuation::Continue
+    }
+
+    fn xpush64_many(&mut self, srcs: RegSet<XReg>) -> Self::Return {
+        for src in srcs {
+            self.xpush64(src);
+        }
         Continuation::Continue
     }
 
@@ -1019,9 +1033,23 @@ impl OpVisitor for InterpreterVisitor<'_> {
         Continuation::Continue
     }
 
+    fn xpop32_many(&mut self, dsts: RegSet<XReg>) -> Self::Return {
+        for dst in dsts.into_iter().rev() {
+            self.xpop32(dst);
+        }
+        Continuation::Continue
+    }
+
     fn xpop64(&mut self, dst: XReg) -> Self::Return {
         let val = self.state.pop();
         self.state[dst].set_u64(val);
+        Continuation::Continue
+    }
+
+    fn xpop64_many(&mut self, dsts: RegSet<XReg>) -> Self::Return {
+        for dst in dsts.into_iter().rev() {
+            self.xpop64(dst);
+        }
         Continuation::Continue
     }
 

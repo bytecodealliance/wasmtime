@@ -2146,6 +2146,7 @@ name = "pulley-interpreter"
 version = "0.1.0"
 dependencies = [
  "arbitrary",
+ "cranelift-bitset",
  "env_logger",
  "log",
  "sptr",

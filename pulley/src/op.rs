@@ -15,7 +15,7 @@ macro_rules! define_op {
         /// This type is useful for debugging, writing tests, etc... but is not
         /// actually ever used by the interpreter, encoder, or decoder, all of
         /// which avoid materializing ops.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
         pub enum Op {
             $(
@@ -28,7 +28,7 @@ macro_rules! define_op {
 
         $(
             $( #[$attr] )*
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+            #[derive(Clone, Copy, Debug, PartialEq, Eq)]
             #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
             pub struct $name { $(
                 $(

@@ -138,13 +138,21 @@ macro_rules! for_each_op {
 
             /// `*sp = low32(src); sp += 4`
             xpush32 = XPush32 { src: XReg };
+            /// `for src in srcs { xpush32 src }`
+            xpush32_many = XPush32Many { srcs: RegSet<XReg> };
             /// `*sp = src; sp += 8`
             xpush64 = XPush64 { src: XReg };
+            /// `for src in srcs { xpush64 src }`
+            xpush64_many = XPush64Many { srcs: RegSet<XReg> };
 
             /// `*dst = *sp; sp -= 4`
             xpop32 = XPop32 { dst: XReg };
+            /// `for dst in dsts.rev() { xpop32 dst }`
+            xpop32_many = XPop32Many { dsts: RegSet<XReg> };
             /// `*dst = *sp; sp -= 8`
             xpop64 = XPop64 { dst: XReg };
+            /// `for dst in dsts.rev() { xpop64 dst }`
+            xpop64_many = XPop64Many { dsts: RegSet<XReg> };
 
             /// `low32(dst) = bitcast low32(src) as i32`
             bitcast_int_from_float_32 = BitcastIntFromFloat32 { dst: XReg, src: FReg };
