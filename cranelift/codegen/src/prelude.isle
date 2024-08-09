@@ -452,6 +452,15 @@
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(decl unop (Type Opcode Value) Value)
+(extractor (unop ty op x) (inst_data ty (InstructionData.Unary op x)))
+
+(decl binop (Type Opcode Value Value) Value)
+(extractor (binop ty op x y) (inst_data ty (InstructionData.Binary op (value_array_2 x y))))
+
+(decl ternop (Type Opcode Value Value Value) Value)
+(extractor (ternop ty op x y z) (inst_data ty (InstructionData.Ternary op (value_array_3 x y z))))
+
 (decl eq (Type Value Value) Value)
 (extractor (eq ty x y) (icmp ty (IntCC.Equal) x y))
 

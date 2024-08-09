@@ -27,6 +27,10 @@
 (decl value_array_3_ctor (Value Value Value) ValueArray3)
 (extern constructor value_array_3_ctor value_array_3_ctor)
 
+(rule (unop ty op x) (make_inst ty (InstructionData.Unary op x)))
+(rule (binop ty op x y) (make_inst ty (InstructionData.Binary op (value_array_2 x y))))
+(rule (ternop ty op x y z) (make_inst ty (InstructionData.Ternary op (value_array_3 x y z))))
+
 (rule (eq ty x y) (icmp ty (IntCC.Equal) x y))
 (rule (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
 (rule (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))
