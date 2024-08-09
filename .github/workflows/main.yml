@@ -458,7 +458,7 @@ jobs:
 
     # Run clippy configuration
     - run: rustup component add clippy
-    - run: cargo clippy --workspace
+    - run: cargo clippy --workspace --all-targets
 
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
