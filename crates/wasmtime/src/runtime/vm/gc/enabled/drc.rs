@@ -369,7 +369,7 @@ impl DrcHeap {
                 gc_ref.is_i31() || activations_table_set.contains(&gc_ref),
                 "every on-stack gc_ref inside a Wasm frame should \
                  have an entry in the VMGcRefActivationsTable; \
-                 {gc_ref:?} is not in the table",
+                 {gc_ref:#p} is not in the table",
             );
             if gc_ref.is_i31() {
                 continue;
@@ -401,10 +401,8 @@ impl DrcHeap {
             .iter_mut()
             .take(num_filled)
             .map(|slot| {
-                let r64 = *slot.get_mut();
-                VMGcRef::from_r64(r64)
-                    .expect("valid r64")
-                    .expect("non-null")
+                let raw = *slot.get_mut();
+                VMGcRef::from_raw_u32(raw).expect("non-null")
             })
     }
 
@@ -432,10 +430,8 @@ impl DrcHeap {
         // borrows.
         let mut alloc = mem::take(&mut self.activations_table.alloc);
         for slot in alloc.chunk.iter_mut().take(num_filled) {
-            let r64 = mem::take(slot.get_mut());
-            let gc_ref = VMGcRef::from_r64(r64)
-                .expect("valid r64")
-                .expect("non-null");
+            let raw = mem::take(slot.get_mut());
+            let gc_ref = VMGcRef::from_raw_u32(raw).expect("non-null");
             f(self, gc_ref);
             *slot.get_mut() = 0;
         }
@@ -777,7 +773,7 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
 /// The type of `VMGcRefActivationsTable`'s bump region's elements.
 ///
 /// These are written to by Wasm.
-type TableElem = UnsafeCell<u64>;
+type TableElem = UnsafeCell<u32>;
 
 /// A table that over-approximizes the set of `VMGcRef`s that any Wasm
 /// activation on this thread is currently using.
@@ -943,7 +939,7 @@ impl VMGcRefActivationsTable {
                 0,
                 "slots >= the `next` bump finger are always `None`"
             );
-            ptr::write(next.as_ptr(), UnsafeCell::new(gc_ref.into_r64()));
+            ptr::write(next.as_ptr(), UnsafeCell::new(gc_ref.as_raw_u32()));
 
             let next = NonNull::new_unchecked(next.as_ptr().add(1));
             debug_assert!(next <= self.alloc.end);
@@ -982,7 +978,7 @@ impl VMGcRefActivationsTable {
         // filled-in slots.
         let num_filled = self.num_filled_in_bump_chunk();
         for slot in self.alloc.chunk.iter().take(num_filled) {
-            if let Some(elem) = VMGcRef::from_r64(unsafe { *slot.get() }).expect("valid r64") {
+            if let Some(elem) = VMGcRef::from_raw_u32(unsafe { *slot.get() }) {
                 f(&elem);
             }
         }

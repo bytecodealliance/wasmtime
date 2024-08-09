@@ -233,22 +233,6 @@ impl VMGcRef {
         VMGcRef::from_raw_non_zero_u32(non_zero)
     }
 
-    /// Create a new `VMGcRef` from a raw `r64` value from Cranelift.
-    ///
-    /// Returns an error if `raw` cannot be losslessly converted from a `u64`
-    /// into a `u32`.
-    ///
-    /// Returns `Ok(None)` if `raw` is zero (aka a "null" `VMGcRef`).
-    ///
-    /// This method only exists because we can't currently use Cranelift's `r32`
-    /// type on 64-bit platforms. We should instead have a `from_r32` method.
-    pub fn from_r64(raw: u64) -> Result<Option<Self>> {
-        let raw = u32::try_from(raw & (u32::MAX as u64))
-            .err2anyhow()
-            .with_context(|| format!("invalid r64: {raw:#x} cannot be converted into a u32"))?;
-        Ok(Self::from_raw_u32(raw))
-    }
-
     /// Copy this `VMGcRef` without running the GC's clone barriers.
     ///
     /// Prefer calling `clone(&mut GcStore)` instead! This is mostly an internal
@@ -276,24 +260,6 @@ impl VMGcRef {
     /// actually a reference to a GC object or is an `i31ref`.
     pub fn as_raw_u32(&self) -> u32 {
         self.0.get()
-    }
-
-    /// Get this GC reference as a raw `r64` value for passing to Cranelift.
-    ///
-    /// This method only exists because we can't currently use Cranelift's `r32`
-    /// type on 64-bit platforms. We should instead be able to pass `VMGcRef`
-    /// into compiled code directly.
-    pub fn into_r64(self) -> u64 {
-        u64::from(self.0.get())
-    }
-
-    /// Get this GC reference as a raw `r64` value for passing to Cranelift.
-    ///
-    /// This method only exists because we can't currently use Cranelift's `r32`
-    /// type on 64-bit platforms. We should instead be able to pass `VMGcRef`
-    /// into compiled code directly.
-    pub fn as_r64(&self) -> u64 {
-        u64::from(self.0.get())
     }
 
     /// Creates a typed GC reference from `self`, checking that `self` actually

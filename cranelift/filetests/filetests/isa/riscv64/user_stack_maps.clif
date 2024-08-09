@@ -52,7 +52,7 @@ block0:
 ;   mv s2,a2
 ;   mv a0,s3
 ;   call userextname0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
 ;   mv a0,s1
 ;   sw a0,0(slot)
 ;   mv a0,s2
@@ -60,12 +60,12 @@ block0:
 ;   mv s2,a0
 ;   mv a0,s3
 ;   call userextname0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
 ;   mv a0,s2
 ;   sw a0,0(slot)
 ;   mv a0,s1
 ;   call userextname0
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})] }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
 ;   mv a0,s2
 ;   call userextname0
 ;   ld s1,40(sp)
@@ -173,7 +173,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   fsd fa1,32(slot)
 ;   fmv.d fs0,fa1
 ;   call userextname0
-;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})] }
+;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})], sp_to_sized_stack_slots: None }
 ;   mv a2,s2
 ;   mv a4,s10
 ;   sw a2,0(a4)

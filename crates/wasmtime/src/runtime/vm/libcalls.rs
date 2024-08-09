@@ -139,7 +139,7 @@ pub mod raw {
 
         (@ty i32) => (u32);
         (@ty i64) => (u64);
-        (@ty reference) => (*mut u8);
+        (@ty reference) => (u32);
         (@ty pointer) => (*mut u8);
         (@ty vmctx) => (*mut VMContext);
     }
@@ -201,21 +201,39 @@ fn memory32_grow(
     Ok(result as *mut _)
 }
 
-// Implementation of `table.grow`.
-unsafe fn table_grow(
+/// Implementation of `table.grow` for `funcref` tables.
+unsafe fn table_grow_func_ref(
     instance: &mut Instance,
     table_index: u32,
     delta: u32,
-    // NB: we don't know whether this is a pointer to a `VMFuncRef` or is an
-    // `r64` that represents a `VMGcRef` until we look at the table type.
     init_value: *mut u8,
 ) -> Result<u32> {
     let table_index = TableIndex::from_u32(table_index);
 
     let element = match instance.table_element_type(table_index) {
         TableElementType::Func => (init_value as *mut VMFuncRef).into(),
-        TableElementType::GcRef => VMGcRef::from_r64(u64::try_from(init_value as usize).unwrap())
-            .unwrap()
+        TableElementType::GcRef => unreachable!(),
+    };
+
+    Ok(match instance.table_grow(table_index, delta, element)? {
+        Some(r) => r,
+        None => (-1_i32).unsigned(),
+    })
+}
+
+/// Implementation of `table.grow` for GC-reference tables.
+#[cfg(feature = "gc")]
+unsafe fn table_grow_gc_ref(
+    instance: &mut Instance,
+    table_index: u32,
+    delta: u32,
+    init_value: u32,
+) -> Result<u32> {
+    let table_index = TableIndex::from_u32(table_index);
+
+    let element = match instance.table_element_type(table_index) {
+        TableElementType::Func => unreachable!(),
+        TableElementType::GcRef => VMGcRef::from_raw_u32(init_value)
             .map(|r| (*instance.store()).gc_store().clone_gc_ref(&r))
             .into(),
     };
@@ -226,18 +244,11 @@ unsafe fn table_grow(
     })
 }
 
-use table_grow as table_grow_func_ref;
-
-#[cfg(feature = "gc")]
-use table_grow as table_grow_gc_ref;
-
-// Implementation of `table.fill`.
-unsafe fn table_fill(
+/// Implementation of `table.fill` for `funcref`s.
+unsafe fn table_fill_func_ref(
     instance: &mut Instance,
     table_index: u32,
     dst: u32,
-    // NB: we don't know whether this is an `r64` that represents a `VMGcRef` or
-    // a pointer to a `VMFuncRef` until we look at the table's element type.
     val: *mut u8,
     len: u32,
 ) -> Result<(), Trap> {
@@ -248,20 +259,30 @@ unsafe fn table_fill(
             let val = val.cast::<VMFuncRef>();
             table.fill((*instance.store()).gc_store(), dst, val.into(), len)
         }
+        TableElementType::GcRef => unreachable!(),
+    }
+}
 
+#[cfg(feature = "gc")]
+unsafe fn table_fill_gc_ref(
+    instance: &mut Instance,
+    table_index: u32,
+    dst: u32,
+    val: u32,
+    len: u32,
+) -> Result<(), Trap> {
+    let table_index = TableIndex::from_u32(table_index);
+    let table = &mut *instance.get_table(table_index);
+    match table.element_type() {
+        TableElementType::Func => unreachable!(),
         TableElementType::GcRef => {
             let gc_store = (*instance.store()).gc_store();
-            let gc_ref = VMGcRef::from_r64(u64::try_from(val as usize).unwrap()).unwrap();
+            let gc_ref = VMGcRef::from_raw_u32(val);
             let gc_ref = gc_ref.map(|r| gc_store.clone_gc_ref(&r));
             table.fill(gc_store, dst, gc_ref.into(), len)
         }
     }
 }
-
-use table_fill as table_fill_func_ref;
-
-#[cfg(feature = "gc")]
-use table_fill as table_fill_gc_ref;
 
 // Implementation of `table.copy`.
 unsafe fn table_copy(
@@ -372,22 +393,19 @@ unsafe fn table_get_lazy_init_func_ref(
     elem.into_func_ref_asserting_initialized().cast()
 }
 
-// Drop a GC reference.
+/// Drop a GC reference.
 #[cfg(feature = "gc")]
-unsafe fn drop_gc_ref(instance: &mut Instance, gc_ref: *mut u8) {
-    let gc_ref = VMGcRef::from_r64(u64::try_from(gc_ref as usize).unwrap())
-        .expect("valid r64")
-        .expect("non-null VMGcRef");
-    log::trace!("libcalls::drop_gc_ref({gc_ref:?})");
+unsafe fn drop_gc_ref(instance: &mut Instance, gc_ref: u32) {
+    log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
+    let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
     (*instance.store()).gc_store().drop_gc_ref(gc_ref);
 }
 
-// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
-// reference.
+/// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
+/// reference.
 #[cfg(feature = "gc")]
-unsafe fn gc(instance: &mut Instance, gc_ref: *mut u8) -> Result<*mut u8> {
-    let gc_ref = u64::try_from(gc_ref as usize).unwrap();
-    let gc_ref = VMGcRef::from_r64(gc_ref).expect("valid r64");
+unsafe fn gc(instance: &mut Instance, gc_ref: u32) -> Result<u32> {
+    let gc_ref = VMGcRef::from_raw_u32(gc_ref);
     let gc_ref = gc_ref.map(|r| (*instance.store()).gc_store().clone_gc_ref(&r));
 
     if let Some(gc_ref) = &gc_ref {
@@ -404,18 +422,18 @@ unsafe fn gc(instance: &mut Instance, gc_ref: *mut u8) -> Result<*mut u8> {
     }
 
     match (*instance.store()).gc(gc_ref)? {
-        None => Ok(core::ptr::null_mut()),
+        None => Ok(0),
         Some(r) => {
-            let r64 = r.as_r64();
+            let raw = r.as_raw_u32();
             (*instance.store()).gc_store().expose_gc_ref_to_wasm(r);
-            Ok(usize::try_from(r64).unwrap() as *mut u8)
+            Ok(raw)
         }
     }
 }
 
-// Perform a Wasm `global.get` for GC reference globals.
+/// Perform a Wasm `global.get` for GC reference globals.
 #[cfg(feature = "gc")]
-unsafe fn gc_ref_global_get(instance: &mut Instance, index: u32) -> Result<*mut u8> {
+unsafe fn gc_ref_global_get(instance: &mut Instance, index: u32) -> Result<u32> {
     use core::num::NonZeroUsize;
 
     let index = wasmtime_environ::GlobalIndex::from_u32(index);
@@ -430,22 +448,22 @@ unsafe fn gc_ref_global_get(instance: &mut Instance, index: u32) -> Result<*mut 
     }
 
     match (*global).as_gc_ref() {
-        None => Ok(core::ptr::null_mut()),
+        None => Ok(0),
         Some(gc_ref) => {
             let gc_ref = gc_store.clone_gc_ref(gc_ref);
-            let ret = usize::try_from(gc_ref.as_r64()).unwrap() as *mut u8;
+            let ret = gc_ref.as_raw_u32();
             gc_store.expose_gc_ref_to_wasm(gc_ref);
             Ok(ret)
         }
     }
 }
 
-// Perform a Wasm `global.set` for GC reference globals.
+/// Perform a Wasm `global.set` for GC reference globals.
 #[cfg(feature = "gc")]
-unsafe fn gc_ref_global_set(instance: &mut Instance, index: u32, gc_ref: *mut u8) {
+unsafe fn gc_ref_global_set(instance: &mut Instance, index: u32, gc_ref: u32) {
     let index = wasmtime_environ::GlobalIndex::from_u32(index);
     let global = instance.defined_or_imported_global_ptr(index);
-    let gc_ref = VMGcRef::from_r64(u64::try_from(gc_ref as usize).unwrap()).expect("valid r64");
+    let gc_ref = VMGcRef::from_raw_u32(gc_ref);
     let gc_store = (*instance.store()).gc_store();
     (*global).write_gc_ref(gc_store, gc_ref.as_ref());
 }

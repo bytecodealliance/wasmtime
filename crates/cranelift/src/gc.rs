@@ -25,14 +25,11 @@ pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
     imp::gc_compiler(func_env)
 }
 
-/// Load a `*mut VMGcRef` into a virtual register of the function environment's
-/// reference type, aka `r{32,64}`, without any GC barriers.
+/// Load a `*mut VMGcRef` into a virtual register, without any GC barriers.
 ///
-/// Note that a `VMGcRef` is always 4-bytes large, even when targeting
-/// 64-bit architectures.
-///
-/// Because Cranelift doesn't support using `r32` with 64-bit targets, this
-/// means that the loaded value may need to be extended.
+/// The resulting value is an instance of the function environment's type for
+/// GC-managed references, aka `i32`. Note that a `VMGcRef` is always 4-bytes
+/// large, even when targeting 64-bit architectures.
 pub fn unbarriered_load_gc_ref(
     func_env: &FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -47,15 +44,9 @@ pub fn unbarriered_load_gc_ref(
 ///
 /// `dst` is a `*mut VMGcRef`.
 ///
-/// `gc_ref` is an instance of the function environment's reference type, aka
-/// `r{32,64}`.
-///
-/// Note that a `VMGcRef` is always 4-bytes large, even when targeting
-/// 64-bit architectures.
-///
-/// Because Cranelift doesn't support using `r32` with 64-bit targets, we keep
-/// `VMGcRef`s on the Wasm stack as `r64`s with the top half unset, and this
-/// means that `value` may need to be truncated.
+/// `gc_ref` is an instance of the function environment's type for GC-managed
+/// references, aka `i32`. Note that a `VMGcRef` is always 4-bytes large, even
+/// when targeting 64-bit architectures.
 pub fn unbarriered_store_gc_ref(
     func_env: &FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -144,7 +135,7 @@ pub trait GcCompiler {
     /// * `flags`: The memory flags that should be used when accessing `src`.
     ///
     /// This method should return the cloned GC reference (an instance of
-    /// `VMGcRef`) of type `r64`.
+    /// `VMGcRef`) of type `i32`.
     fn translate_read_gc_reference(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,
@@ -183,7 +174,7 @@ pub trait GcCompiler {
     ///   itself or a `*mut VMGcHeader`!
     ///
     /// * `new_val`: The new value that should be written into `dst`. This is a
-    ///   `VMGcRef` of Cranelift type `r64`; not a `*mut VMGcRef`.
+    ///   `VMGcRef` of Cranelift type `i32`; not a `*mut VMGcRef`.
     ///
     /// * `flags`: The memory flags that should be used when accessing `dst`.
     fn translate_write_gc_reference(

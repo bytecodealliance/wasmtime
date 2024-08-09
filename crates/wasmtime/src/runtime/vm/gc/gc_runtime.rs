@@ -451,28 +451,30 @@ pub struct GcRootsList(Vec<RawGcRoot>);
 //    such that it is easily reusable across GCs is in the store itself. But the
 //    contents of the roots list (when it is non-empty, during GCs) borrow from
 //    the store, which creates self-references.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum RawGcRoot {
-    Stack(SendSyncPtr<u64>),
+    Stack(SendSyncPtr<u32>),
     NonStack(SendSyncPtr<VMGcRef>),
 }
 
 impl GcRootsList {
     /// Add a GC root that is inside a Wasm stack frame to this list.
     #[inline]
-    pub unsafe fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u64>) {
+    pub unsafe fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u32>) {
         log::trace!(
-            "Adding Wasm stack root: {:#p}",
-            VMGcRef::from_r64(*ptr_to_root.as_ref()).unwrap().unwrap()
+            "Adding Wasm stack root: {:#p} -> {:#p}",
+            ptr_to_root,
+            VMGcRef::from_raw_u32(*ptr_to_root.as_ref()).unwrap()
         );
+        debug_assert!(VMGcRef::from_raw_u32(*ptr_to_root.as_ref()).is_some());
         self.0.push(RawGcRoot::Stack(ptr_to_root));
     }
 
     /// Add a GC root to this list.
     #[inline]
-    pub unsafe fn add_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>) {
+    pub unsafe fn add_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>, why: &str) {
         log::trace!(
-            "Adding non-stack root: {:#p}",
+            "Adding non-stack root: {why}: {:#p}",
             ptr_to_root.as_ref().unchecked_copy()
         );
         self.0.push(RawGcRoot::NonStack(ptr_to_root))
@@ -530,6 +532,7 @@ impl<'a> Iterator for GcRootsIter<'a> {
 ///
 /// Collector implementations should update the `VMGcRef` if they move the
 /// `VMGcRef`'s referent during the course of a GC.
+#[derive(Debug)]
 pub struct GcRoot<'a> {
     raw: RawGcRoot,
     _phantom: marker::PhantomData<&'a mut VMGcRef>,
@@ -550,10 +553,8 @@ impl GcRoot<'_> {
         match self.raw {
             RawGcRoot::NonStack(ptr) => unsafe { ptr::read(ptr.as_ptr()) },
             RawGcRoot::Stack(ptr) => unsafe {
-                let r64 = ptr::read(ptr.as_ptr());
-                VMGcRef::from_r64(r64)
-                    .expect("valid r64")
-                    .expect("non-null")
+                let raw: u32 = ptr::read(ptr.as_ptr());
+                VMGcRef::from_raw_u32(raw).expect("non-null")
             },
         }
     }
@@ -571,8 +572,7 @@ impl GcRoot<'_> {
                 ptr::write(ptr.as_ptr(), new_ref);
             },
             RawGcRoot::Stack(ptr) => unsafe {
-                let r64 = new_ref.into_r64();
-                ptr::write(ptr.as_ptr(), r64);
+                ptr::write(ptr.as_ptr(), new_ref.as_raw_u32());
             },
         }
     }

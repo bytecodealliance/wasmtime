@@ -27,6 +27,7 @@ wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
 gimli = { workspace = true, features = ['std'] }
 object = { workspace = true, features = ['write', 'std'] }
+smallvec = { workspace = true }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }

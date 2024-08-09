@@ -128,6 +128,7 @@ impl GcStore {
     /// Hook to call whenever a GC reference is about to be exposed to Wasm.
     pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) {
         if !gc_ref.is_i31() {
+            log::trace!("exposing GC ref to Wasm: {gc_ref:p}");
             self.gc_heap.expose_gc_ref_to_wasm(gc_ref);
         }
     }

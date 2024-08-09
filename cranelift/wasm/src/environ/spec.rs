@@ -69,18 +69,9 @@ pub trait TargetEnvironment: TypeConvert {
     /// Get the Cranelift reference type to use for the given Wasm reference
     /// type.
     ///
-    /// By default, this returns `R64` for 64-bit architectures and `R32` for
-    /// 32-bit architectures. If you override this, then you should also
-    /// override `FuncEnvironment::{translate_ref_null, translate_ref_is_null}`
-    /// as well.
-    fn reference_type(&self, ty: WasmHeapType) -> ir::Type {
-        let _ = ty;
-        match self.pointer_type() {
-            ir::types::I32 => ir::types::R32,
-            ir::types::I64 => ir::types::R64,
-            _ => panic!("unsupported pointer type"),
-        }
-    }
+    /// Returns a pair of the CLIF reference type to use and a boolean that
+    /// describes whether the value should be included in GC stack maps or not.
+    fn reference_type(&self, ty: WasmHeapType) -> (ir::Type, bool);
 }
 
 /// Environment affecting the translation of a single WebAssembly function.
@@ -94,6 +85,20 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn is_wasm_parameter(&self, signature: &ir::Signature, index: usize) -> bool {
         signature.params[index].purpose == ir::ArgumentPurpose::Normal
     }
+
+    /// Does the given parameter require inclusion in stack maps?
+    fn param_needs_stack_map(&self, signature: &ir::Signature, index: usize) -> bool;
+
+    /// Does the given result require inclusion in stack maps?
+    fn sig_ref_result_needs_stack_map(&self, sig_ref: ir::SigRef, index: usize) -> bool;
+
+    /// Does the given result require inclusion in stack maps?
+    fn func_ref_result_needs_stack_map(
+        &self,
+        func: &ir::Function,
+        func_ref: ir::FuncRef,
+        index: usize,
+    ) -> bool;
 
     /// Is the given return of the given function a wasm-level parameter, as
     /// opposed to a hidden parameter added for use by the implementation?
@@ -424,39 +429,11 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn translate_elem_drop(&mut self, pos: FuncCursor, seg_index: u32) -> WasmResult<()>;
 
     /// Translate a `ref.null T` WebAssembly instruction.
-    ///
-    /// By default, translates into a null reference type.
-    ///
-    /// Override this if you don't use Cranelift reference types for all Wasm
-    /// reference types (e.g. you use a raw pointer for `funcref`s) or if the
-    /// null sentinel is not a null reference type pointer for your type. If you
-    /// override this method, then you should also override
-    /// `translate_ref_is_null` as well.
-    fn translate_ref_null(
-        &mut self,
-        mut pos: FuncCursor,
-        ty: WasmHeapType,
-    ) -> WasmResult<ir::Value> {
-        let _ = ty;
-        Ok(pos.ins().null(self.reference_type(ty)))
-    }
+    fn translate_ref_null(&mut self, pos: FuncCursor, ty: WasmHeapType) -> WasmResult<ir::Value>;
 
     /// Translate a `ref.is_null` WebAssembly instruction.
-    ///
-    /// By default, assumes that `value` is a Cranelift reference type, and that
-    /// a null Cranelift reference type is the null value for all Wasm reference
-    /// types.
-    ///
-    /// If you override this method, you probably also want to override
-    /// `translate_ref_null` as well.
-    fn translate_ref_is_null(
-        &mut self,
-        mut pos: FuncCursor,
-        value: ir::Value,
-    ) -> WasmResult<ir::Value> {
-        let is_null = pos.ins().is_null(value);
-        Ok(pos.ins().uextend(ir::types::I32, is_null))
-    }
+    fn translate_ref_is_null(&mut self, pos: FuncCursor, value: ir::Value)
+        -> WasmResult<ir::Value>;
 
     /// Translate a `ref.func` WebAssembly instruction.
     fn translate_ref_func(
@@ -469,7 +446,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// that is custom.
     fn translate_custom_global_get(
         &mut self,
-        pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         global_index: GlobalIndex,
     ) -> WasmResult<ir::Value>;
 
@@ -477,7 +454,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// that is custom.
     fn translate_custom_global_set(
         &mut self,
-        pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         global_index: GlobalIndex,
         val: ir::Value,
     ) -> WasmResult<()>;
