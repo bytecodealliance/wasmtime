@@ -2442,8 +2442,6 @@ mod test {
                 Pos {
                     file: 0,
                     offset: 19,
-                    line: 2,
-                    col: 18,
                 },
             ),
             Type::Enum {
@@ -2483,8 +2481,6 @@ mod test {
                 pos: Pos {
                     file: 0,
                     offset: 58,
-                    line: 3,
-                    col: 18,
                 },
             },
         ];

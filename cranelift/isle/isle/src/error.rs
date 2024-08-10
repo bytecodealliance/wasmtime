@@ -241,8 +241,6 @@ impl Span {
             to: Pos {
                 file: pos.file,
                 offset: pos.offset + 1,
-                line: pos.line,
-                col: pos.col + 1,
             },
         }
     }

@@ -33,10 +33,6 @@ pub struct Pos {
     pub file: usize,
     /// This source position's byte offset in the file.
     pub offset: usize,
-    /// This source position's line number in the file.
-    pub line: usize,
-    /// This source position's column number in the file.
-    pub col: usize,
 }
 
 impl Pos {
@@ -72,12 +68,7 @@ impl<'a> Lexer<'a> {
             files: Arc::new(Files::from_iter([(filename.to_string(), s.to_string())])),
 
             buf: Cow::Borrowed(s.as_bytes()),
-            pos: Pos {
-                file: 0,
-                offset: 0,
-                line: 1,
-                col: 0,
-            },
+            pos: Pos { file: 0, offset: 0 },
             lookahead: None,
         };
         l.reload()?;
@@ -112,12 +103,7 @@ impl<'a> Lexer<'a> {
         let mut l = Lexer {
             files: Arc::new(files),
             buf: Cow::Owned(buf.into_bytes()),
-            pos: Pos {
-                file: 0,
-                offset: 0,
-                line: 1,
-                col: 0,
-            },
+            pos: Pos { file: 0, offset: 0 },
             lookahead: None,
         };
         l.reload()?;
@@ -129,24 +115,16 @@ impl<'a> Lexer<'a> {
         Pos {
             file: self.pos.file,
             offset: self.pos.offset - self.files.file_starts[self.pos.file],
-            line: self.pos.line,
-            col: self.pos.col,
         }
     }
 
     fn advance_pos(&mut self) {
-        self.pos.col += 1;
-        if self.buf[self.pos.offset] == b'\n' {
-            self.pos.line += 1;
-            self.pos.col = 0;
-        }
         self.pos.offset += 1;
         if self.pos.file + 1 < self.files.file_starts.len() {
             let next_start = self.files.file_starts[self.pos.file + 1];
             if self.pos.offset >= next_start {
                 assert!(self.pos.offset == next_start);
                 self.pos.file += 1;
-                self.pos.line = 1;
             }
         }
     }
