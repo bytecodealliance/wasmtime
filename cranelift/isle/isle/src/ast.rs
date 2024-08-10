@@ -2,6 +2,7 @@
 
 #![allow(missing_docs)]
 
+use crate::files::Files;
 use crate::lexer::Pos;
 use crate::log;
 use std::sync::Arc;
@@ -10,8 +11,7 @@ use std::sync::Arc;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Defs {
     pub defs: Vec<Def>,
-    pub filenames: Vec<Arc<str>>,
-    pub file_texts: Vec<Arc<str>>,
+    pub files: Arc<Files>,
 }
 
 /// One toplevel form in an ISLE file.

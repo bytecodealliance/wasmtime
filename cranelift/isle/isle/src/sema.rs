@@ -15,6 +15,7 @@
 
 use crate::ast;
 use crate::error::*;
+use crate::files::Files;
 use crate::lexer::Pos;
 use crate::log;
 use crate::stablemapset::{StableMap, StableSet};
@@ -58,15 +59,10 @@ declare_id!(
 /// Keeps track of which symbols and rules have which types.
 #[derive(Debug)]
 pub struct TypeEnv {
-    /// Arena of input ISLE source filenames.
-    ///
-    /// We refer to these indirectly through the `Pos::file` indices.
-    pub filenames: Vec<Arc<str>>,
-
     /// Arena of input ISLE source contents.
     ///
     /// We refer to these indirectly through the `Pos::file` indices.
-    pub file_texts: Vec<Arc<str>>,
+    pub files: Arc<Files>,
 
     /// Arena of interned symbol names.
     ///
@@ -914,8 +910,7 @@ impl TypeEnv {
     /// Construct the type environment from the AST.
     pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv, Errors> {
         let mut tyenv = TypeEnv {
-            filenames: defs.filenames.clone(),
-            file_texts: defs.file_texts.clone(),
+            files: defs.files.clone(),
             syms: vec![],
             sym_map: StableMap::new(),
             types: vec![],
@@ -997,8 +992,7 @@ impl TypeEnv {
         } else {
             Err(Errors {
                 errors: std::mem::take(&mut self.errors),
-                filenames: self.filenames.clone(),
-                file_texts: self.file_texts.clone(),
+                files: self.files.clone(),
             })
         }
     }

@@ -121,7 +121,7 @@ impl<'a> Codegen<'a> {
             "// Generated automatically from the instruction-selection DSL code in:",
         )
         .unwrap();
-        for file in &self.typeenv.filenames {
+        for file in &self.typeenv.files.file_names {
             writeln!(code, "// - {file}").unwrap();
         }
 
@@ -335,7 +335,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                         code,
                         "\n/// Internal type {}: defined at {}.",
                         name,
-                        pos.pretty_print_line(&self.typeenv.filenames[..])
+                        pos.pretty_print_line(&self.typeenv.files)
                     )
                     .unwrap();
 
@@ -454,7 +454,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                         term_name,
                         termdata
                             .decl_pos
-                            .pretty_print_line(&self.typeenv.filenames[..])
+                            .pretty_print_line(&self.typeenv.files)
                     ),
                 }
             };
@@ -640,7 +640,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                 ctx.out,
                                 "{}// Rule at {}.",
                                 &ctx.indent,
-                                pos.pretty_print_line(&self.typeenv.filenames)
+                                pos.pretty_print_line(&self.typeenv.files)
                             )?;
                             write!(ctx.out, "{}", &ctx.indent)?;
                             match ret_kind {

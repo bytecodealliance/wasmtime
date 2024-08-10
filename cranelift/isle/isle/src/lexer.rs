@@ -1,6 +1,7 @@
 //! Lexer for the ISLE language.
 
 use crate::error::{Error, Errors, Span};
+use crate::files::Files;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -15,14 +16,8 @@ pub struct Lexer<'a> {
     /// Arena of filenames from the input source.
     ///
     /// Indexed via `Pos::file`.
-    pub filenames: Vec<Arc<str>>,
+    pub files: Arc<Files>,
 
-    /// Arena of file source texts.
-    ///
-    /// Indexed via `Pos::file`.
-    pub file_texts: Vec<Arc<str>>,
-
-    file_starts: Vec<usize>,
     buf: Cow<'a, [u8]>,
     pos: Pos,
     lookahead: Option<(Pos, Token)>,
@@ -46,8 +41,12 @@ pub struct Pos {
 
 impl Pos {
     /// Print this source position as `file.isle line 12`.
-    pub fn pretty_print_line(&self, filenames: &[Arc<str>]) -> String {
-        format!("{} line {}", filenames[self.file], self.line)
+    pub fn pretty_print_line(&self, files: &Files) -> String {
+        format!(
+            "{} line {}",
+            files.file_name(self.file).unwrap(),
+            files.file_line_map(self.file).unwrap().line(self.offset)
+        )
     }
 }
 
@@ -70,9 +69,8 @@ impl<'a> Lexer<'a> {
     /// Create a new lexer for the given source contents and filename.
     pub fn from_str(s: &'a str, filename: &'a str) -> Result<Lexer<'a>> {
         let mut l = Lexer {
-            filenames: vec![filename.into()],
-            file_texts: vec![s.into()],
-            file_starts: vec![0],
+            files: Arc::new(Files::from_iter([(filename.to_string(), s.to_string())])),
+
             buf: Cow::Borrowed(s.as_bytes()),
             pos: Pos {
                 file: 0,
@@ -103,26 +101,17 @@ impl<'a> Lexer<'a> {
 
     /// Create a new lexer from the given files and contents.
     pub fn from_file_contents(files: Vec<(PathBuf, String)>) -> Result<Lexer<'a>> {
-        let mut filenames = Vec::<Arc<str>>::new();
-        let mut file_texts = Vec::<Arc<str>>::new();
-        for (f, content) in files.iter() {
-            filenames.push(f.display().to_string().into());
-
-            file_texts.push(content.as_str().into());
-        }
-        assert!(!filenames.is_empty());
-        let mut file_starts = vec![];
         let mut buf = String::new();
-        for text in &file_texts {
-            file_starts.push(buf.len());
-            buf += text;
+
+        let files = Files::from_iter(files.into_iter().map(|(path, text)| {
+            buf += &text;
             buf += "\n";
-        }
+            (path.display().to_string(), text)
+        }));
+
         let mut l = Lexer {
-            filenames,
-            file_texts,
+            files: Arc::new(files),
             buf: Cow::Owned(buf.into_bytes()),
-            file_starts,
             pos: Pos {
                 file: 0,
                 offset: 0,
@@ -139,7 +128,7 @@ impl<'a> Lexer<'a> {
     pub fn pos(&self) -> Pos {
         Pos {
             file: self.pos.file,
-            offset: self.pos.offset - self.file_starts[self.pos.file],
+            offset: self.pos.offset - self.files.file_starts[self.pos.file],
             line: self.pos.line,
             col: self.pos.col,
         }
@@ -152,8 +141,8 @@ impl<'a> Lexer<'a> {
             self.pos.col = 0;
         }
         self.pos.offset += 1;
-        if self.pos.file + 1 < self.file_starts.len() {
-            let next_start = self.file_starts[self.pos.file + 1];
+        if self.pos.file + 1 < self.files.file_starts.len() {
+            let next_start = self.files.file_starts[self.pos.file + 1];
             if self.pos.offset >= next_start {
                 assert!(self.pos.offset == next_start);
                 self.pos.file += 1;
@@ -168,8 +157,7 @@ impl<'a> Lexer<'a> {
                 msg: msg.into(),
                 span: Span::new_single(pos),
             }],
-            filenames: self.filenames.clone(),
-            file_texts: self.file_texts.clone(),
+            files: self.files.clone(),
         }
     }
 

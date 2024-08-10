@@ -23,6 +23,7 @@ pub mod codegen;
 pub mod compile;
 pub mod disjointsets;
 pub mod error;
+pub mod files;
 pub mod lexer;
 mod log;
 pub mod overlap;

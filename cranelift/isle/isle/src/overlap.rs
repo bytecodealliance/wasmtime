@@ -21,8 +21,7 @@ pub fn check(
     } else {
         Err(error::Errors {
             errors,
-            filenames: tyenv.filenames.clone(),
-            file_texts: tyenv.file_texts.clone(),
+            files: tyenv.files.clone(),
         })
     }
 }

@@ -2,14 +2,13 @@
 
 use std::sync::Arc;
 
-use crate::lexer::Pos;
+use crate::{files::Files, lexer::Pos};
 
 /// A collection of errors from attempting to compile some ISLE source files.
 pub struct Errors {
     /// The individual errors.
     pub errors: Vec<Error>,
-    pub(crate) filenames: Vec<Arc<str>>,
-    pub(crate) file_texts: Vec<Arc<str>>,
+    pub(crate) files: Arc<Files>,
 }
 
 impl std::fmt::Debug for Errors {
@@ -146,8 +145,7 @@ impl Errors {
                 error,
                 context: context.into(),
             }],
-            filenames: Vec::new(),
-            file_texts: Vec::new(),
+            files: Arc::new(Files::default()),
         }
     }
 
@@ -161,7 +159,12 @@ impl Errors {
         let w = termcolor::BufferWriter::stderr(termcolor::ColorChoice::Auto);
         let mut b = w.buffer();
         let mut files = codespan_reporting::files::SimpleFiles::new();
-        for (name, source) in self.filenames.iter().zip(self.file_texts.iter()) {
+        for (name, source) in self
+            .files
+            .file_names
+            .iter()
+            .zip(self.files.file_texts.iter())
+        {
             files.add(name, source);
         }
         for diagnostic in diagnostics {
@@ -179,21 +182,16 @@ impl Errors {
         f: &mut std::fmt::Formatter,
         diagnostics: Vec<Diagnostic<usize>>,
     ) -> std::fmt::Result {
-        let line_ends: Vec<Vec<_>> = self
-            .file_texts
-            .iter()
-            .map(|text| text.match_indices('\n').map(|(i, _)| i + 1).collect())
-            .collect();
         let pos = |file_id: usize, offset| {
-            let ends = &line_ends[file_id];
-            let line0 = ends.partition_point(|&end| end <= offset);
-            let text = &self.file_texts[file_id];
+            let ends = self.files.file_line_map(file_id).unwrap();
+            let line0 = ends.line(offset);
+            let text = &self.files.file_texts[file_id];
             let start = line0.checked_sub(1).map_or(0, |prev| ends[prev]);
             let end = ends.get(line0).copied().unwrap_or(text.len());
             let col = offset - start + 1;
             format!(
                 "{}:{}:{}: {}",
-                self.filenames[file_id],
+                self.files.file_names[file_id],
                 line0 + 1,
                 col,
                 &text[start..end]

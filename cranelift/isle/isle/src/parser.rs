@@ -40,8 +40,7 @@ impl<'a> Parser<'a> {
                 msg,
                 span: Span::new_single(pos),
             }],
-            filenames: self.lexer.filenames.clone(),
-            file_texts: self.lexer.file_texts.clone(),
+            files: self.lexer.files.clone(),
         }
     }
 
@@ -143,8 +142,7 @@ impl<'a> Parser<'a> {
         }
         Ok(Defs {
             defs,
-            filenames: self.lexer.filenames,
-            file_texts: self.lexer.file_texts,
+            files: self.lexer.files,
         })
     }
 
