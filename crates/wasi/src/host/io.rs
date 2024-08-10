@@ -42,8 +42,8 @@ impl<T> streams::HostOutputStream for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
-        self.table().delete(stream)?;
+    async fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
+        self.table().delete(stream)?.cancel().await;
         Ok(())
     }
 
@@ -188,8 +188,11 @@ impl<T> streams::HostInputStream for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
-        self.table().delete(stream)?;
+    async fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
+        match self.table().delete(stream)? {
+            InputStream::Host(mut s) => s.cancel().await,
+            InputStream::File(_) => {}
+        }
         Ok(())
     }
 
@@ -278,7 +281,7 @@ pub mod sync {
         T: WasiView,
     {
         fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
-            AsyncHostOutputStream::drop(self, stream)
+            in_tokio(async { AsyncHostOutputStream::drop(self, stream).await })
         }
 
         fn check_write(&mut self, stream: Resource<OutputStream>) -> StreamResult<u64> {
@@ -358,7 +361,7 @@ pub mod sync {
         T: WasiView,
     {
         fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
-            AsyncHostInputStream::drop(self, stream)
+            in_tokio(async { AsyncHostInputStream::drop(self, stream).await })
         }
 
         fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {

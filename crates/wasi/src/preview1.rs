@@ -1368,10 +1368,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         match desc {
             Descriptor::Stdin { stream, .. } => {
                 streams::HostInputStream::drop(&mut self.as_wasi_impl(), stream)
+                    .await
                     .context("failed to call `drop` on `input-stream`")
             }
             Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
                 streams::HostOutputStream::drop(&mut self.as_wasi_impl(), stream)
+                    .await
                     .context("failed to call `drop` on `output-stream`")
             }
             Descriptor::File(File { fd, .. }) | Descriptor::Directory { fd, .. } => {
@@ -1805,6 +1807,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                     )
                     .await;
                 streams::HostInputStream::drop(&mut self.as_wasi_impl(), stream)
+                    .await
                     .map_err(|e| types::Error::trap(e))?;
                 (buf, read?)
             }

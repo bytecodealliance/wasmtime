@@ -29,6 +29,9 @@ pub trait HostInputStream: Subscribe {
         let bs = self.read(nelem)?;
         Ok(bs.len())
     }
+
+    /// Cancel any asynchronous work and wait for it to wrap up.
+    async fn cancel(&mut self) {}
 }
 
 /// Representation of the `error` resource type in the `wasi:io/error`
@@ -153,6 +156,9 @@ pub trait HostOutputStream: Subscribe {
         self.ready().await;
         self.check_write()
     }
+
+    /// Cancel any asynchronous work and wait for it to wrap up.
+    async fn cancel(&mut self) {}
 }
 
 #[async_trait::async_trait]
