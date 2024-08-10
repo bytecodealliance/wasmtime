@@ -321,6 +321,7 @@ impl FileOutputStream {
 // FIXME: configurable? determine from how much space left in file?
 const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
+#[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         use system_interface::fs::FileIoExt;
@@ -402,6 +403,24 @@ impl HostOutputStream for FileOutputStream {
                 _ => unreachable!(),
             },
             OutputState::Waiting(_) => Ok(0),
+        }
+    }
+    async fn cancel(&mut self) {
+        match mem::replace(&mut self.state, OutputState::Closed) {
+            OutputState::Waiting(task) => {
+                // The task was created using `spawn_blocking`, so unless we're
+                // lucky enough that the task hasn't started yet, the abort
+                // signal won't have any effect and we're forced to wait for it
+                // to run to completion.
+                // From the guest's point of view, `output-stream::drop` then
+                // appears to block. Certainly less than ideal, but arguably still
+                // better than letting the guest rack up an unbounded number of
+                // background tasks. Also, the guest is only blocked if
+                // the stream was dropped mid-write, which we don't expect to
+                // occur frequently.
+                task.abort_wait().await;
+            }
+            _ => {}
         }
     }
 }

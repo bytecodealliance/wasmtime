@@ -39,6 +39,18 @@ pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
 /// by keeping this handle owned by the Resource.
 #[derive(Debug)]
 pub struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
+impl<T> AbortOnDropJoinHandle<T> {
+    /// Abort the task and wait for it to finish. Optionally returns the result
+    /// of the task if it ran to completion prior to being aborted.
+    pub(crate) async fn abort_wait(mut self) -> Option<T> {
+        self.0.abort();
+        match (&mut self.0).await {
+            Ok(value) => Some(value),
+            Err(err) if err.is_cancelled() => None,
+            Err(err) => std::panic::resume_unwind(err.into_panic()),
+        }
+    }
+}
 impl<T> Drop for AbortOnDropJoinHandle<T> {
     fn drop(&mut self) {
         self.0.abort()
