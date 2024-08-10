@@ -1,6 +1,6 @@
 use crate::bindings::filesystem::types;
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
-use crate::{HostOutputStream, StreamError, Subscribe, TrappableError};
+use crate::{HostOutputStream, StreamError, StreamResult, Subscribe, TrappableError};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -131,10 +131,19 @@ impl File {
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        match self._run_blocking(body) {
-            SpawnBlocking::Done(result) => result,
-            SpawnBlocking::Spawned(task) => task.await,
+        match self.as_blocking_file() {
+            Some(file) => body(file),
+            None => self.spawn_blocking(body).await,
         }
+    }
+
+    pub(crate) fn spawn_blocking<F, R>(&self, body: F) -> AbortOnDropJoinHandle<R>
+    where
+        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let f = self.file.clone();
+        spawn_blocking(move || body(&f))
     }
 
     /// Returns `Some` when the current thread is allowed to block in filesystem
@@ -147,25 +156,6 @@ impl File {
             None
         }
     }
-
-    fn _run_blocking<F, R>(&self, body: F) -> SpawnBlocking<R>
-    where
-        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        match self.as_blocking_file() {
-            Some(file) => SpawnBlocking::Done(body(file)),
-            None => {
-                let f = self.file.clone();
-                SpawnBlocking::Spawned(spawn_blocking(move || body(&f)))
-            }
-        }
-    }
-}
-
-enum SpawnBlocking<T> {
-    Done(T),
-    Spawned(AbortOnDropJoinHandle<T>),
 }
 
 bitflags::bitflags! {
@@ -340,6 +330,43 @@ impl FileOutputStream {
             state: OutputState::Ready,
         }
     }
+
+    fn blocking_write(
+        file: &cap_std::fs::File,
+        mut buf: Bytes,
+        mode: FileOutputMode,
+    ) -> io::Result<usize> {
+        use system_interface::fs::FileIoExt;
+
+        match mode {
+            FileOutputMode::Position(mut p) => {
+                let mut total = 0;
+                loop {
+                    let nwritten = file.write_at(buf.as_ref(), p)?;
+                    // afterwards buf contains [nwritten, len):
+                    let _ = buf.split_to(nwritten);
+                    p += nwritten as u64;
+                    total += nwritten;
+                    if buf.is_empty() {
+                        break;
+                    }
+                }
+                Ok(total)
+            }
+            FileOutputMode::Append => {
+                let mut total = 0;
+                loop {
+                    let nwritten = file.append(buf.as_ref())?;
+                    let _ = buf.split_to(nwritten);
+                    total += nwritten;
+                    if buf.is_empty() {
+                        break;
+                    }
+                }
+                Ok(total)
+            }
+        }
+    }
 }
 
 // FIXME: configurable? determine from how much space left in file?
@@ -348,7 +375,6 @@ const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 #[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
-        use system_interface::fs::FileIoExt;
         match self.state {
             OutputState::Ready => {}
             OutputState::Closed => return Err(StreamError::Closed),
@@ -361,49 +387,45 @@ impl HostOutputStream for FileOutputStream {
         }
 
         let m = self.mode;
-        let result = self.file._run_blocking(move |f| {
-            match m {
-                FileOutputMode::Position(mut p) => {
-                    let mut total = 0;
-                    let mut buf = buf;
-                    loop {
-                        let nwritten = f.write_at(buf.as_ref(), p)?;
-                        // afterwards buf contains [nwritten, len):
-                        let _ = buf.split_to(nwritten);
-                        p += nwritten as u64;
-                        total += nwritten;
-                        if buf.is_empty() {
-                            break;
-                        }
-                    }
-                    Ok(total)
-                }
-                FileOutputMode::Append => {
-                    let mut total = 0;
-                    let mut buf = buf;
-                    loop {
-                        let nwritten = f.append(buf.as_ref())?;
-                        let _ = buf.split_to(nwritten);
-                        total += nwritten;
-                        if buf.is_empty() {
-                            break;
-                        }
-                    }
-                    Ok(total)
-                }
-            }
-        });
-        self.state = match result {
-            SpawnBlocking::Done(Ok(nwritten)) => {
+        self.state = OutputState::Waiting(
+            self.file
+                .spawn_blocking(move |f| Self::blocking_write(f, buf, m)),
+        );
+        Ok(())
+    }
+    /// Customized blocking_* variant to eliminate tokio's task spawning & joining
+    /// overhead on synchronous file I/O.
+    async fn blocking_write_and_flush(&mut self, buf: Bytes) -> StreamResult<()> {
+        self.ready().await;
+
+        match self.state {
+            OutputState::Ready => {}
+            OutputState::Closed => return Err(StreamError::Closed),
+            OutputState::Error(_) => match mem::replace(&mut self.state, OutputState::Closed) {
+                OutputState::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
+                _ => unreachable!(),
+            },
+            OutputState::Waiting(_) => unreachable!("we've just waited for readiness"),
+        }
+
+        let m = self.mode;
+        match self
+            .file
+            .run_blocking(move |f| Self::blocking_write(f, buf, m))
+            .await
+        {
+            Ok(nwritten) => {
                 if let FileOutputMode::Position(ref mut p) = &mut self.mode {
                     *p += nwritten as u64;
                 }
-                OutputState::Ready
+                self.state = OutputState::Ready;
+                Ok(())
             }
-            SpawnBlocking::Done(Err(e)) => OutputState::Error(e),
-            SpawnBlocking::Spawned(task) => OutputState::Waiting(task),
-        };
-        Ok(())
+            Err(e) => {
+                self.state = OutputState::Closed;
+                Err(StreamError::LastOperationFailed(e.into()))
+            }
+        }
     }
     fn flush(&mut self) -> Result<(), StreamError> {
         match self.state {

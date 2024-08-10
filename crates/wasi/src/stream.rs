@@ -229,18 +229,11 @@ pub trait HostOutputStream: Subscribe {
     /// // Check for any errors that arose during `flush`
     /// let _ = this.check-write();         // eliding error handling
     /// ```
-    async fn blocking_write_zeroes_and_flush(&mut self, mut nelem: usize) -> StreamResult<()> {
-        while nelem > 0 {
-            let permit = self.write_ready().await?;
-            let this_len = nelem.min(permit);
-            self.write_zeroes(this_len)?;
-            nelem -= this_len;
-        }
-
-        self.flush()?;
-        self.write_ready().await?;
-
-        Ok(())
+    async fn blocking_write_zeroes_and_flush(&mut self, nelem: usize) -> StreamResult<()> {
+        // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
+        // repeatedly from a 'static buffer of zeros.
+        let bs = Bytes::from_iter(core::iter::repeat(0).take(nelem));
+        self.blocking_write_and_flush(bs).await
     }
 
     /// Simultaneously waits for this stream to be writable and then returns how
