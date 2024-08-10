@@ -112,7 +112,7 @@ pub struct AsyncReadStream {
     closed: bool,
     buffer: Option<Result<Bytes, StreamError>>,
     receiver: mpsc::Receiver<Result<Bytes, StreamError>>,
-    _join_handle: crate::runtime::AbortOnDropJoinHandle<()>,
+    join_handle: Option<crate::runtime::AbortOnDropJoinHandle<()>>,
 }
 
 impl AsyncReadStream {
@@ -143,7 +143,7 @@ impl AsyncReadStream {
             closed: false,
             buffer: None,
             receiver,
-            _join_handle: join_handle,
+            join_handle: Some(join_handle),
         }
     }
 }
@@ -188,6 +188,13 @@ impl HostInputStream for AsyncReadStream {
             Err(TryRecvError::Disconnected) => Err(StreamError::Trap(anyhow!(
                 "AsyncReadStream sender died - should be impossible"
             ))),
+        }
+    }
+
+    async fn cancel(&mut self) {
+        match self.join_handle.take() {
+            Some(task) => _ = task.abort_wait().await,
+            None => {}
         }
     }
 }

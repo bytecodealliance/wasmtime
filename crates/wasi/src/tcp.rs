@@ -787,6 +787,7 @@ impl TcpWriteStream {
     }
 }
 
+#[async_trait::async_trait]
 impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
         match self.last_write {
@@ -852,6 +853,12 @@ impl HostOutputStream for TcpWriteStream {
             return Ok(0);
         }
         Ok(SOCKET_READY_SIZE)
+    }
+    async fn cancel(&mut self) {
+        match mem::replace(&mut self.last_write, LastWrite::Closed) {
+            LastWrite::Waiting(task) => _ = task.abort_wait().await,
+            _ => {}
+        }
     }
 }
 
