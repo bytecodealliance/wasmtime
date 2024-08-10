@@ -66,29 +66,16 @@ where
         stream: Resource<OutputStream>,
         bytes: Vec<u8>,
     ) -> StreamResult<()> {
-        let s = self.table().get_mut(&stream)?;
-
         if bytes.len() > 4096 {
             return Err(StreamError::trap(
                 "Buffer too large for blocking-write-and-flush (expected at most 4096)",
             ));
         }
 
-        let mut bytes = bytes::Bytes::from(bytes);
-        loop {
-            let permit = s.write_ready().await?;
-            let len = bytes.len().min(permit);
-            let chunk = bytes.split_to(len);
-            s.write(chunk)?;
-            if bytes.is_empty() {
-                break;
-            }
-        }
-
-        s.flush()?;
-        s.write_ready().await?;
-
-        Ok(())
+        self.table()
+            .get_mut(&stream)?
+            .blocking_write_and_flush(bytes.into())
+            .await
     }
 
     async fn blocking_write_zeroes_and_flush(
@@ -96,26 +83,16 @@ where
         stream: Resource<OutputStream>,
         len: u64,
     ) -> StreamResult<()> {
-        let s = self.table().get_mut(&stream)?;
-
         if len > 4096 {
             return Err(StreamError::trap(
                 "Buffer too large for blocking-write-zeroes-and-flush (expected at most 4096)",
             ));
         }
 
-        let mut len = len;
-        while len > 0 {
-            let permit = s.write_ready().await?;
-            let this_len = len.min(permit as u64);
-            s.write_zeroes(this_len as usize)?;
-            len -= this_len;
-        }
-
-        s.flush()?;
-        s.write_ready().await?;
-
-        Ok(())
+        self.table()
+            .get_mut(&stream)?
+            .blocking_write_zeroes_and_flush(len as usize)
+            .await
     }
 
     fn write_zeroes(&mut self, stream: Resource<OutputStream>, len: u64) -> StreamResult<()> {
@@ -211,10 +188,13 @@ where
         stream: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<Vec<u8>> {
-        if let InputStream::Host(s) = self.table().get_mut(&stream)? {
-            s.ready().await;
-        }
-        self.read(stream, len).await
+        let len = len.try_into().unwrap_or(usize::MAX);
+        let bytes = match self.table().get_mut(&stream)? {
+            InputStream::Host(s) => s.blocking_read(len).await?,
+            InputStream::File(s) => s.read(len).await?,
+        };
+        debug_assert!(bytes.len() <= len);
+        Ok(bytes.into())
     }
 
     async fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
@@ -231,10 +211,12 @@ where
         stream: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<u64> {
-        if let InputStream::Host(s) = self.table().get_mut(&stream)? {
-            s.ready().await;
-        }
-        self.skip(stream, len).await
+        let len = len.try_into().unwrap_or(usize::MAX);
+        let written = match self.table().get_mut(&stream)? {
+            InputStream::Host(s) => s.blocking_skip(len).await?,
+            InputStream::File(s) => s.skip(len).await?,
+        };
+        Ok(written.try_into().expect("usize always fits in u64"))
     }
 
     fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {

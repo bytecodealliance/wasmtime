@@ -21,6 +21,13 @@ pub trait HostInputStream: Subscribe {
     /// closed, when a read fails, or when a trap should be generated.
     fn read(&mut self, size: usize) -> StreamResult<Bytes>;
 
+    /// Similar to `read`, except that it blocks until at least one byte can be
+    /// read.
+    async fn blocking_read(&mut self, size: usize) -> StreamResult<Bytes> {
+        self.ready().await;
+        self.read(size)
+    }
+
     /// Same as the `read` method except that bytes are skipped.
     ///
     /// Note that this method is non-blocking like `read` and returns the same
@@ -28,6 +35,13 @@ pub trait HostInputStream: Subscribe {
     fn skip(&mut self, nelem: usize) -> StreamResult<usize> {
         let bs = self.read(nelem)?;
         Ok(bs.len())
+    }
+
+    /// Similar to `skip`, except that it blocks until at least one byte can be
+    /// skipped.
+    async fn blocking_skip(&mut self, nelem: usize) -> StreamResult<usize> {
+        self.ready().await;
+        self.skip(nelem)
     }
 
     /// Cancel any asynchronous work and wait for it to wrap up.
@@ -138,6 +152,47 @@ pub trait HostOutputStream: Subscribe {
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     fn check_write(&mut self) -> StreamResult<usize>;
 
+    /// Perform a write of up to 4096 bytes, and then flush the stream. Block
+    /// until all of these operations are complete, or an error occurs.
+    ///
+    /// This is a convenience wrapper around the use of `check-write`,
+    /// `subscribe`, `write`, and `flush`, and is implemented with the
+    /// following pseudo-code:
+    ///
+    /// ```text
+    /// let pollable = this.subscribe();
+    /// while !contents.is_empty() {
+    ///     // Wait for the stream to become writable
+    ///     pollable.block();
+    ///     let Ok(n) = this.check-write(); // eliding error handling
+    ///     let len = min(n, contents.len());
+    ///     let (chunk, rest) = contents.split_at(len);
+    ///     this.write(chunk  );            // eliding error handling
+    ///     contents = rest;
+    /// }
+    /// this.flush();
+    /// // Wait for completion of `flush`
+    /// pollable.block();
+    /// // Check for any errors that arose during `flush`
+    /// let _ = this.check-write();         // eliding error handling
+    /// ```
+    async fn blocking_write_and_flush(&mut self, mut bytes: Bytes) -> StreamResult<()> {
+        loop {
+            let permit = self.write_ready().await?;
+            let len = bytes.len().min(permit);
+            let chunk = bytes.split_to(len);
+            self.write(chunk)?;
+            if bytes.is_empty() {
+                break;
+            }
+        }
+
+        self.flush()?;
+        self.write_ready().await?;
+
+        Ok(())
+    }
+
     /// Repeatedly write a byte to a stream.
     /// Important: this write must be non-blocking!
     /// Returning an Err which downcasts to a [`StreamError`] will be
@@ -147,6 +202,44 @@ pub trait HostOutputStream: Subscribe {
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0).take(nelem));
         self.write(bs)?;
+        Ok(())
+    }
+
+    /// Perform a write of up to 4096 zeroes, and then flush the stream.
+    /// Block until all of these operations are complete, or an error
+    /// occurs.
+    ///
+    /// This is a convenience wrapper around the use of `check-write`,
+    /// `subscribe`, `write-zeroes`, and `flush`, and is implemented with
+    /// the following pseudo-code:
+    ///
+    /// ```text
+    /// let pollable = this.subscribe();
+    /// while num_zeroes != 0 {
+    ///     // Wait for the stream to become writable
+    ///     pollable.block();
+    ///     let Ok(n) = this.check-write(); // eliding error handling
+    ///     let len = min(n, num_zeroes);
+    ///     this.write-zeroes(len);         // eliding error handling
+    ///     num_zeroes -= len;
+    /// }
+    /// this.flush();
+    /// // Wait for completion of `flush`
+    /// pollable.block();
+    /// // Check for any errors that arose during `flush`
+    /// let _ = this.check-write();         // eliding error handling
+    /// ```
+    async fn blocking_write_zeroes_and_flush(&mut self, mut nelem: usize) -> StreamResult<()> {
+        while nelem > 0 {
+            let permit = self.write_ready().await?;
+            let this_len = nelem.min(permit);
+            self.write_zeroes(this_len)?;
+            nelem -= this_len;
+        }
+
+        self.flush()?;
+        self.write_ready().await?;
+
         Ok(())
     }
 
