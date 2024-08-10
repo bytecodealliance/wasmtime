@@ -112,14 +112,26 @@ impl File {
         }
     }
 
-    /// Spawn a task on tokio's blocking thread for performing blocking
-    /// syscalls on the underlying [`cap_std::fs::File`].
-    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
+    /// Execute the blocking `body` function.
+    ///
+    /// Depending on how the WasiCtx was configured, the body may either be:
+    /// - Executed directly on the current thread. In this case the `async`
+    ///   signature of this method is effectively a lie and the returned
+    ///   Future will always be immediately Ready. Or:
+    /// - Spawned on a background thread using [`tokio::task::spawn_blocking`]
+    ///   and immediately awaited.
+    ///
+    /// Intentionally blocking the executor thread might seem unorthodox, but is
+    /// not actually a problem for specific workloads. See:
+    /// - [`crate::WasiCtxBuilder::allow_blocking_current_thread`]
+    /// - [Poor performance of wasmtime file I/O maybe because tokio](https://github.com/bytecodealliance/wasmtime/issues/7973)
+    /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
+    pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        match self._spawn_blocking(body) {
+        match self._run_blocking(body) {
             SpawnBlocking::Done(result) => result,
             SpawnBlocking::Spawned(task) => task.await,
         }
@@ -136,7 +148,7 @@ impl File {
         }
     }
 
-    fn _spawn_blocking<F, R>(&self, body: F) -> SpawnBlocking<R>
+    fn _run_blocking<F, R>(&self, body: F) -> SpawnBlocking<R>
     where
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
@@ -217,9 +229,21 @@ impl Dir {
         }
     }
 
-    /// Spawn a task on tokio's blocking thread for performing blocking
-    /// syscalls on the underlying [`cap_std::fs::Dir`].
-    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
+    /// Execute the blocking `body` function.
+    ///
+    /// Depending on how the WasiCtx was configured, the body may either be:
+    /// - Executed directly on the current thread. In this case the `async`
+    ///   signature of this method is effectively a lie and the returned
+    ///   Future will always be immediately Ready. Or:
+    /// - Spawned on a background thread using [`tokio::task::spawn_blocking`]
+    ///   and immediately awaited.
+    ///
+    /// Intentionally blocking the executor thread might seem unorthodox, but is
+    /// not actually a problem for specific workloads. See:
+    /// - [`crate::WasiCtxBuilder::allow_blocking_current_thread`]
+    /// - [Poor performance of wasmtime file I/O maybe because tokio](https://github.com/bytecodealliance/wasmtime/issues/7973)
+    /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
+    pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
         R: Send + 'static,
@@ -251,7 +275,7 @@ impl FileInputStream {
 
         let (r, mut buf) = self
             .file
-            .spawn_blocking(move |f| {
+            .run_blocking(move |f| {
                 let mut buf = BytesMut::zeroed(size);
                 let r = f.read_at(&mut buf, p);
                 (r, buf)
@@ -337,7 +361,7 @@ impl HostOutputStream for FileOutputStream {
         }
 
         let m = self.mode;
-        let result = self.file._spawn_blocking(move |f| {
+        let result = self.file._run_blocking(move |f| {
             match m {
                 FileOutputMode::Position(mut p) => {
                     let mut total = 0;

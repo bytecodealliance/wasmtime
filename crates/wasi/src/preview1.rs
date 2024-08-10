@@ -655,7 +655,7 @@ impl WasiP1Ctx {
                     // block.
                     None => {
                         let buf = memory.to_vec(buf)?;
-                        f.spawn_blocking(move |f| do_write(f, &buf)).await
+                        f.run_blocking(move |f| do_write(f, &buf)).await
                     }
                 };
 
@@ -1730,7 +1730,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                         drop(buf);
                         let mut buf = vec![0; iov.len() as usize];
                         let buf = file
-                            .spawn_blocking(move |file| -> Result<_, types::Error> {
+                            .run_blocking(move |file| -> Result<_, types::Error> {
                                 let bytes_read = file
                                     .read_at(&mut buf, pos)
                                     .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
