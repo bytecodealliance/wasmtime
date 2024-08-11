@@ -183,6 +183,12 @@ struct File {
     blocking_mode: BlockingMode,
 }
 
+/// NB: preview1 files always use blocking writes regardless of what
+/// they're configured to use since OSes don't have nonblocking
+/// reads/writes anyway. This behavior originated in the first
+/// implementation of WASIp1 where flags were propagated to the
+/// OS and the OS ignored the nonblocking flag for files
+/// generally.
 #[derive(Clone, Copy, Debug)]
 enum BlockingMode {
     Blocking,
@@ -203,23 +209,11 @@ impl BlockingMode {
         max_size: usize,
     ) -> Result<Vec<u8>, types::Error> {
         let max_size = max_size.try_into().unwrap_or(u64::MAX);
-        match self {
-            BlockingMode::Blocking => {
-                match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
-                    Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
-                    Ok(r) => Ok(r),
-                    Err(StreamError::Closed) => Ok(Vec::new()),
-                    Err(e) => Err(e.into()),
-                }
-            }
-
-            BlockingMode::NonBlocking => {
-                match streams::HostInputStream::read(host, input_stream, max_size).await {
-                    Ok(r) => Ok(r),
-                    Err(StreamError::Closed) => Ok(Vec::new()),
-                    Err(e) => Err(e.into()),
-                }
-            }
+        match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
+            Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
+            Ok(r) => Ok(r),
+            Err(StreamError::Closed) => Ok(Vec::new()),
+            Err(e) => Err(e.into()),
         }
     }
     async fn write(
@@ -236,52 +230,18 @@ impl BlockingMode {
             .map_err(|e| StreamError::Trap(e.into()))?;
         let mut bytes = &bytes[..];
 
-        match self {
-            BlockingMode::Blocking => {
-                let total = bytes.len();
-                while !bytes.is_empty() {
-                    // NOTE: blocking_write_and_flush takes at most one 4k buffer.
-                    let len = bytes.len().min(4096);
-                    let (chunk, rest) = bytes.split_at(len);
-                    bytes = rest;
+        let total = bytes.len();
+        while !bytes.is_empty() {
+            // NOTE: blocking_write_and_flush takes at most one 4k buffer.
+            let len = bytes.len().min(4096);
+            let (chunk, rest) = bytes.split_at(len);
+            bytes = rest;
 
-                    Streams::blocking_write_and_flush(
-                        host,
-                        output_stream.borrowed(),
-                        Vec::from(chunk),
-                    )
-                    .await?
-                }
-
-                Ok(total)
-            }
-            BlockingMode::NonBlocking => {
-                let n = match Streams::check_write(host, output_stream.borrowed()) {
-                    Ok(n) => n,
-                    Err(StreamError::Closed) => 0,
-                    Err(e) => Err(e)?,
-                };
-
-                let len = bytes.len().min(n as usize);
-                if len == 0 {
-                    return Ok(0);
-                }
-
-                match Streams::write(host, output_stream.borrowed(), bytes[..len].to_vec()) {
-                    Ok(()) => {}
-                    Err(StreamError::Closed) => return Ok(0),
-                    Err(e) => Err(e)?,
-                }
-
-                match Streams::blocking_flush(host, output_stream.borrowed()).await {
-                    Ok(()) => {}
-                    Err(StreamError::Closed) => return Ok(0),
-                    Err(e) => Err(e)?,
-                };
-
-                Ok(len)
-            }
+            Streams::blocking_write_and_flush(host, output_stream.borrowed(), Vec::from(chunk))
+                .await?
         }
+
+        Ok(total)
     }
 }
 
