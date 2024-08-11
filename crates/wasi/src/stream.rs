@@ -40,8 +40,8 @@ pub trait HostInputStream: Subscribe {
     /// Similar to `skip`, except that it blocks until at least one byte can be
     /// skipped.
     async fn blocking_skip(&mut self, nelem: usize) -> StreamResult<usize> {
-        self.ready().await;
-        self.skip(nelem)
+        let bs = self.blocking_read(nelem).await?;
+        Ok(bs.len())
     }
 
     /// Cancel any asynchronous work and wait for it to wrap up.

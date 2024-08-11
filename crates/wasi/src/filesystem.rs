@@ -1,6 +1,8 @@
 use crate::bindings::filesystem::types;
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
-use crate::{HostOutputStream, StreamError, StreamResult, Subscribe, TrappableError};
+use crate::{
+    HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, TrappableError,
+};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -250,13 +252,73 @@ impl Dir {
 pub struct FileInputStream {
     file: File,
     position: u64,
+    state: ReadState,
+}
+enum ReadState {
+    Idle,
+    Waiting(AbortOnDropJoinHandle<io::Result<Bytes>>),
+    DataAvailable(Bytes),
+    Error(io::Error),
+    Closed,
 }
 impl FileInputStream {
     pub fn new(file: &File, position: u64) -> Self {
         Self {
             file: file.clone(),
             position,
+            state: ReadState::Idle,
         }
+    }
+
+    fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> io::Result<Bytes> {
+        use system_interface::fs::FileIoExt;
+
+        let mut buf = BytesMut::zeroed(size);
+        loop {
+            match file.read_at(&mut buf, offset) {
+                Ok(n) => {
+                    buf.truncate(n);
+                    return Ok(buf.freeze());
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
+                    // Try again, continue looping
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    /// Wait for existing background task to finish, without starting any new background reads.
+    async fn wait_ready(&mut self) {
+        match &mut self.state {
+            ReadState::Waiting(task) => {
+                self.state = match task.await {
+                    Ok(b) if b.len() == 0 => ReadState::Closed,
+                    Ok(b) => ReadState::DataAvailable(b),
+                    Err(e) => ReadState::Error(e),
+                };
+            }
+            _ => {}
+        }
+    }
+
+    fn read_available_data(&mut self, size: usize) -> Bytes {
+        let ReadState::DataAvailable(b) = &mut self.state else {
+            unreachable!();
+        };
+        debug_assert!(b.len() > 0);
+
+        if size == 0 {
+            return Bytes::new();
+        }
+
+        let min_len = b.len().min(size);
+        let chunk = b.split_to(min_len);
+        if b.len() == 0 {
+            self.state = ReadState::Idle;
+        }
+        self.position += min_len as u64;
+        chunk
     }
 
     pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
@@ -289,6 +351,108 @@ fn read_result(r: io::Result<usize>, size: usize) -> Result<usize, StreamError> 
         Ok(n) => Ok(n),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
         Err(e) => Err(StreamError::LastOperationFailed(e.into())),
+    }
+}
+#[async_trait::async_trait]
+impl HostInputStream for FileInputStream {
+    fn read(&mut self, size: usize) -> StreamResult<Bytes> {
+        match self.state {
+            ReadState::Idle => {
+                if size == 0 {
+                    return Ok(Bytes::new());
+                }
+
+                let p = self.position;
+                self.state = ReadState::Waiting(
+                    self.file
+                        .spawn_blocking(move |f| Self::blocking_read(f, p, size)),
+                );
+                Ok(Bytes::new())
+            }
+            ReadState::DataAvailable(_) => Ok(self.read_available_data(size)),
+            ReadState::Waiting(_) => Ok(Bytes::new()),
+            ReadState::Error(_) => match mem::replace(&mut self.state, ReadState::Closed) {
+                ReadState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
+                _ => unreachable!(),
+            },
+            ReadState::Closed => Err(StreamError::Closed),
+        }
+    }
+    /// Specialized blocking_* variant to bypass tokio's task spawning & joining
+    /// overhead on synchronous file I/O.
+    async fn blocking_read(&mut self, size: usize) -> StreamResult<Bytes> {
+        self.wait_ready().await;
+
+        match &mut self.state {
+            ReadState::Idle => {
+                if size == 0 {
+                    return Ok(Bytes::new());
+                }
+
+                let p = self.position;
+                match self
+                    .file
+                    .run_blocking(move |f| Self::blocking_read(f, p, size))
+                    .await
+                {
+                    Ok(b) if b.len() == 0 => {
+                        self.state = ReadState::Closed;
+                        Err(StreamError::Closed)
+                    }
+                    Ok(b) => {
+                        self.position += b.len() as u64;
+                        Ok(b)
+                    }
+                    Err(e) => {
+                        self.state = ReadState::Closed;
+                        Err(StreamError::LastOperationFailed(e.into()))
+                    }
+                }
+            }
+            ReadState::DataAvailable(_) => Ok(self.read_available_data(size)),
+            ReadState::Waiting(_) => Ok(Bytes::new()),
+            ReadState::Error(_) => match mem::replace(&mut self.state, ReadState::Closed) {
+                ReadState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
+                _ => unreachable!(),
+            },
+            ReadState::Closed => Err(StreamError::Closed),
+        }
+    }
+    async fn cancel(&mut self) {
+        match mem::replace(&mut self.state, ReadState::Closed) {
+            ReadState::Waiting(task) => {
+                // The task was created using `spawn_blocking`, so unless we're
+                // lucky enough that the task hasn't started yet, the abort
+                // signal won't have any effect and we're forced to wait for it
+                // to run to completion.
+                // From the guest's point of view, `input-stream::drop` then
+                // appears to block. Certainly less than ideal, but arguably still
+                // better than letting the guest rack up an unbounded number of
+                // background tasks. Also, the guest is only blocked if
+                // the stream was dropped mid-read, which we don't expect to
+                // occur frequently.
+                task.abort_wait().await;
+            }
+            _ => {}
+        }
+    }
+}
+#[async_trait::async_trait]
+impl Subscribe for FileInputStream {
+    async fn ready(&mut self) {
+        if let ReadState::Idle = self.state {
+            // The guest hasn't initiated any read, but is nonetheless waiting
+            // for data to be available. We'll start a read for them:
+
+            const DEFAULT_READ_SIZE: usize = 4096;
+            let p = self.position;
+            self.state = ReadState::Waiting(
+                self.file
+                    .spawn_blocking(move |f| Self::blocking_read(f, p, DEFAULT_READ_SIZE)),
+            );
+        }
+
+        self.wait_ready().await
     }
 }
 
@@ -393,7 +557,7 @@ impl HostOutputStream for FileOutputStream {
         );
         Ok(())
     }
-    /// Customized blocking_* variant to eliminate tokio's task spawning & joining
+    /// Specialized blocking_* variant to bypass tokio's task spawning & joining
     /// overhead on synchronous file I/O.
     async fn blocking_write_and_flush(&mut self, buf: Bytes) -> StreamResult<()> {
         self.ready().await;
