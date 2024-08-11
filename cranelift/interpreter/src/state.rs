@@ -16,10 +16,10 @@ use thiserror::Error;
 /// all of the ways a Cranelift interpreter can interact with its virtual state. This makes it
 /// possible to use the [Interpreter](crate::interpreter::Interpreter) in a range of situations:
 /// - when interpretation needs to happen in a way isolated from the host a state which keeps a
-/// stack and bound checks memory accesses can be used, like
-/// [InterpreterState](crate::interpreter::InterpreterState).
+///   stack and bound checks memory accesses can be used, like
+///   [InterpreterState](crate::interpreter::InterpreterState).
 /// - when interpretation needs to have access to the host a state which allows direct access to the
-/// host memory and native functions can be used.
+///   host memory and native functions can be used.
 pub trait State<'a> {
     /// Retrieve a reference to a [Function].
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;

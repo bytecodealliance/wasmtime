@@ -115,11 +115,11 @@ where
 
 /// This function ensures the following:
 /// * The immediate offset and memory access size fit in a single u64. Given:
-/// that the memory access size is a `u8`, we must guarantee that the immediate
-/// offset will fit in a `u32`, making the result of their addition fit in a u64
-/// and overflow safe.
+///   that the memory access size is a `u8`, we must guarantee that the immediate
+///   offset will fit in a `u32`, making the result of their addition fit in a u64
+///   and overflow safe.
 /// * Adjust the base index to account for the immediate offset via an unsigned
-/// addition and check for overflow in case the previous condition is not met.
+///   addition and check for overflow in case the previous condition is not met.
 #[inline]
 pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
     masm: &mut M,
