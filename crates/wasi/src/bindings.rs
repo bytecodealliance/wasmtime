@@ -370,7 +370,6 @@ mod async_io {
                 "[method]input-stream.blocking-read",
                 "[method]input-stream.blocking-skip",
                 "[drop]input-stream",
-                "[method]output-stream.forward",
                 "[method]output-stream.blocking-splice",
                 "[method]output-stream.blocking-flush",
                 "[method]output-stream.blocking-write",
