@@ -273,23 +273,27 @@ impl<'a> Lexer<'a> {
                 // Find the range in the buffer for this integer literal. We'll
                 // pass this range to `i64::from_str_radix` to do the actual
                 // string-to-integer conversion.
-                let mut s = vec![];
+                let start = self.pos.offset;
                 while self.pos.offset < self.buf.len()
                     && ((radix <= 10 && self.buf[self.pos.offset].is_ascii_digit())
                         || (radix == 16 && self.buf[self.pos.offset].is_ascii_hexdigit())
                         || self.buf[self.pos.offset] == b'_')
                 {
-                    if self.buf[self.pos.offset] != b'_' {
-                        s.push(self.buf[self.pos.offset]);
-                    }
                     self.advance_pos();
                 }
-                let s_utf8 = std::str::from_utf8(&s[..]).unwrap();
+                let end = self.pos.offset;
+                let s = &self.buf[start..end];
+                let s = std::str::from_utf8(&s[..]).unwrap();
+                let s = if s.contains('_') {
+                    Cow::Owned(s.replace('_', ""))
+                } else {
+                    Cow::Borrowed(s)
+                };
 
                 // Support either signed range (-2^127..2^127) or
                 // unsigned range (0..2^128).
-                let num = i128::from_str_radix(s_utf8, radix)
-                    .or_else(|_| u128::from_str_radix(s_utf8, radix).map(|val| val as i128))
+                let num = i128::from_str_radix(&s, radix)
+                    .or_else(|_| u128::from_str_radix(&s, radix).map(|val| val as i128))
                     .map_err(|e| self.error(start_pos, e.to_string()))?;
 
                 let tok = if neg {
