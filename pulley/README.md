@@ -97,7 +97,7 @@ interpreter:
   perform the work of multiple operations in a single instruction. The more work
   we do in each turn of the interpreter loop the less we are impacted by its
   overhead. Additionally, Cranelift, as the primary Pulley bytecode producer,
-  can leverage ISLE lowering patterns to easily identify opportunites for
+  can leverage ISLE lowering patterns to easily identify opportunities for
   emitting super-instructions.
 
 * We do not, in general, define sub-opcodes. There should be only one branch, on

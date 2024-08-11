@@ -204,13 +204,13 @@ int main() {
       host_func_name.data(), host_func_name.size(), functype.get(),
       [](void *, wasmtime_caller_t *, const wasmtime_val_t *args, size_t,
          wasmtime_val_t *, size_t, wasm_trap_t **trap_ret,
-         wasmtime_async_continuation_t *continutation_ret) {
+         wasmtime_async_continuation_t *continuation_ret) {
         std::cout << "invoking async host function" << std::endl;
         printer_state.set_value_to_print(args[0].of.i32);
 
-        continutation_ret->callback = &poll_print_finished_state;
-        continutation_ret->env = new async_call_env{trap_ret};
-        continutation_ret->finalizer = [](void *env) {
+        continuation_ret->callback = &poll_print_finished_state;
+        continuation_ret->env = new async_call_env{trap_ret};
+        continuation_ret->finalizer = [](void *env) {
           std::cout << "deleting async_call_env" << std::endl;
           delete static_cast<async_call_env *>(env);
         };

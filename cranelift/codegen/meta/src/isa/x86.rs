@@ -284,7 +284,7 @@ pub(crate) fn define() -> TargetIsa {
     );
     let sapphire_rapids = settings.add_preset(
         "sapphirerapids",
-        "Saphire Rapids microarchitecture.",
+        "Sapphire Rapids microarchitecture.",
         preset!(icelake_server),
     );
     settings.add_preset(

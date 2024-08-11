@@ -3727,7 +3727,7 @@
             (tmp1 Xmm (x64_subps tmp1 tmp2))
 
             ;; Create mask for all positive lanes to saturate (i.e. greater than
-            ;; or equal to the maxmimum allowable unsigned int).
+            ;; or equal to the maximum allowable unsigned int).
             (tmp2 Xmm (x64_cmpps tmp2 tmp1 (FcmpImm.LessThanOrEqual)))
 
             ;; Convert those set of lanes that have the max_signed_int factored out.
