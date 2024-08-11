@@ -138,6 +138,11 @@ pub enum Error {
 }
 
 impl Errors {
+    /// Create new Errors
+    pub fn new(errors: Vec<Error>, files: Arc<Files>) -> Self {
+        Self { errors, files }
+    }
+
     /// Create `isle::Errors` from the given I/O error and context.
     pub fn from_io(error: std::io::Error, context: impl Into<String>) -> Self {
         Errors {

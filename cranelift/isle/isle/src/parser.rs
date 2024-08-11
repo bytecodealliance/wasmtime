@@ -1,13 +1,13 @@
 //! Parser for ISLE language.
 
 use crate::ast::*;
-use crate::error::{Error, Errors, Span};
+use crate::error::{Error, Span};
 use crate::lexer::{Lexer, Pos, Token};
 
-type Result<T> = std::result::Result<T, Errors>;
+type Result<T> = std::result::Result<T, Error>;
 
 /// Parse the top-level ISLE definitions and return their AST.
-pub fn parse(lexer: Lexer) -> Result<Defs> {
+pub fn parse(lexer: Lexer) -> Result<Vec<Def>> {
     let parser = Parser::new(lexer);
     parser.parse_defs()
 }
@@ -34,13 +34,10 @@ impl<'a> Parser<'a> {
         Parser { lexer }
     }
 
-    fn error(&self, pos: Pos, msg: String) -> Errors {
-        Errors {
-            errors: vec![Error::ParseError {
-                msg,
-                span: Span::new_single(pos),
-            }],
-            files: self.lexer.files.clone(),
+    fn error(&self, pos: Pos, msg: String) -> Error {
+        Error::ParseError {
+            msg,
+            span: Span::new_single(pos),
         }
     }
 
@@ -135,15 +132,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_defs(mut self) -> Result<Defs> {
+    fn parse_defs(mut self) -> Result<Vec<Def>> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
         }
-        Ok(Defs {
-            defs,
-            files: self.lexer.files,
-        })
+        Ok(defs)
     }
 
     fn parse_def(&mut self) -> Result<Def> {

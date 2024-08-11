@@ -1,6 +1,7 @@
 #![allow(missing_docs)]
 
 use std::ops::Index;
+use std::path::{Path, PathBuf};
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct Files {
@@ -13,11 +14,6 @@ pub struct Files {
     ///
     /// Indexed via `Pos::file`.
     pub file_texts: Vec<String>,
-
-    /// Arena of length of each file
-    ///
-    /// Indexed via `Pos::file`.
-    pub file_starts: Vec<usize>,
 
     /// Arena of file line maps.
     ///
@@ -57,17 +53,37 @@ impl LineMap {
 }
 
 impl Files {
-    pub fn from_iter(files: impl IntoIterator<Item = (String, String)>) -> Self {
+    pub fn from_paths<P: AsRef<Path>>(
+        paths: impl IntoIterator<Item = P>,
+    ) -> Result<Self, (PathBuf, std::io::Error)> {
         let mut file_names = Vec::new();
         let mut file_texts = Vec::new();
-        let mut file_starts = Vec::new();
         let mut file_line_maps = Vec::new();
 
-        let mut len = 0;
-        for (name, contents) in files {
-            file_starts.push(len);
-            len += contents.len();
+        for path in paths {
+            let path = path.as_ref();
+            let contents =
+                std::fs::read_to_string(path).map_err(|err| (path.to_path_buf(), err))?;
+            let name = path.display().to_string();
 
+            file_line_maps.push(LineMap::from_str(&contents));
+            file_names.push(name);
+            file_texts.push(contents);
+        }
+
+        Ok(Self {
+            file_names,
+            file_texts,
+            file_line_maps,
+        })
+    }
+
+    pub fn from_names_and_contents(files: impl IntoIterator<Item = (String, String)>) -> Self {
+        let mut file_names = Vec::new();
+        let mut file_texts = Vec::new();
+        let mut file_line_maps = Vec::new();
+
+        for (name, contents) in files {
             file_line_maps.push(LineMap::from_str(&contents));
             file_names.push(name);
             file_texts.push(contents);
@@ -76,7 +92,6 @@ impl Files {
         Self {
             file_names,
             file_texts,
-            file_starts,
             file_line_maps,
         }
     }

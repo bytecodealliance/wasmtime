@@ -1,24 +1,18 @@
 //! Lexer for the ISLE language.
 
-use crate::error::{Error, Errors, Span};
-use crate::files::Files;
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-type Result<T> = std::result::Result<T, Errors>;
+use crate::error::{Error, Span};
+use crate::files::Files;
+
+type Result<T> = std::result::Result<T, Error>;
 
 /// The lexer.
 ///
 /// Breaks source text up into a sequence of tokens (with source positions).
 #[derive(Clone, Debug)]
 pub struct Lexer<'a> {
-    /// Arena of filenames from the input source.
-    ///
-    /// Indexed via `Pos::file`.
-    pub files: Arc<Files>,
-
-    buf: Cow<'a, [u8]>,
+    buf: &'a [u8],
     pos: Pos,
     lookahead: Option<(Pos, Token)>,
 }
@@ -36,6 +30,11 @@ pub struct Pos {
 }
 
 impl Pos {
+    /// Create a new `Pos`.
+    pub fn new(file: usize, offset: usize) -> Self {
+        Self { file, offset }
+    }
+
     /// Print this source position as `file.isle line 12`.
     pub fn pretty_print_line(&self, files: &Files) -> String {
         format!(
@@ -62,48 +61,11 @@ pub enum Token {
 }
 
 impl<'a> Lexer<'a> {
-    /// Create a new lexer for the given source contents and filename.
-    pub fn from_str(s: &'a str, filename: &'a str) -> Result<Lexer<'a>> {
+    /// Create a new lexer for the given source contents
+    pub fn new(file: usize, src: &'a str) -> Result<Lexer<'a>> {
         let mut l = Lexer {
-            files: Arc::new(Files::from_iter([(filename.to_string(), s.to_string())])),
-
-            buf: Cow::Borrowed(s.as_bytes()),
-            pos: Pos { file: 0, offset: 0 },
-            lookahead: None,
-        };
-        l.reload()?;
-        Ok(l)
-    }
-
-    /// Create a new lexer from the given files.
-    pub fn from_files<P>(file_paths: impl IntoIterator<Item = P>) -> Result<Lexer<'a>>
-    where
-        P: AsRef<Path>,
-    {
-        let mut files = vec![];
-        for f in file_paths.into_iter() {
-            let f = f.as_ref().to_path_buf();
-            let s = std::fs::read_to_string(f.as_path())
-                .map_err(|e| Errors::from_io(e, format!("failed to read file: {}", f.display())))?;
-            files.push((f, s));
-        }
-        Self::from_file_contents(files)
-    }
-
-    /// Create a new lexer from the given files and contents.
-    pub fn from_file_contents(files: Vec<(PathBuf, String)>) -> Result<Lexer<'a>> {
-        let mut buf = String::new();
-
-        let files = Files::from_iter(files.into_iter().map(|(path, text)| {
-            buf += &text;
-            buf += "\n";
-            (path.display().to_string(), text)
-        }));
-
-        let mut l = Lexer {
-            files: Arc::new(files),
-            buf: Cow::Owned(buf.into_bytes()),
-            pos: Pos { file: 0, offset: 0 },
+            buf: src.as_bytes(),
+            pos: Pos::new(file, 0),
             lookahead: None,
         };
         l.reload()?;
@@ -112,30 +74,17 @@ impl<'a> Lexer<'a> {
 
     /// Get the lexer's current source position.
     pub fn pos(&self) -> Pos {
-        Pos {
-            file: self.pos.file,
-            offset: self.pos.offset - self.files.file_starts[self.pos.file],
-        }
+        self.pos
     }
 
     fn advance_pos(&mut self) {
         self.pos.offset += 1;
-        if self.pos.file + 1 < self.files.file_starts.len() {
-            let next_start = self.files.file_starts[self.pos.file + 1];
-            if self.pos.offset >= next_start {
-                assert!(self.pos.offset == next_start);
-                self.pos.file += 1;
-            }
-        }
     }
 
-    fn error(&self, pos: Pos, msg: impl Into<String>) -> Errors {
-        Errors {
-            errors: vec![Error::ParseError {
-                msg: msg.into(),
-                span: Span::new_single(pos),
-            }],
-            files: self.files.clone(),
+    fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
+        Error::ParseError {
+            msg: msg.into(),
+            span: Span::new_single(pos),
         }
     }
 
@@ -316,9 +265,9 @@ impl Token {
 mod test {
     use super::*;
 
-    fn lex(s: &str, file: &str) -> Vec<Token> {
+    fn lex(src: &str) -> Vec<Token> {
         let mut toks = vec![];
-        let mut lexer = Lexer::from_str(s, file).unwrap();
+        let mut lexer = Lexer::new(0, src).unwrap();
         while let Some((_, tok)) = lexer.next().unwrap() {
             toks.push(tok);
         }
@@ -328,10 +277,7 @@ mod test {
     #[test]
     fn lexer_basic() {
         assert_eq!(
-            lex(
-                ";; comment\n; another\r\n   \t(one two three 23 -568  )\n",
-                "lexer_basic"
-            ),
+            lex(";; comment\n; another\r\n   \t(one two three 23 -568  )\n"),
             [
                 Token::LParen,
                 Token::Symbol("one".to_string()),
@@ -346,21 +292,18 @@ mod test {
 
     #[test]
     fn ends_with_sym() {
-        assert_eq!(
-            lex("asdf", "ends_with_sym"),
-            [Token::Symbol("asdf".to_string())]
-        );
+        assert_eq!(lex("asdf"), [Token::Symbol("asdf".to_string())]);
     }
 
     #[test]
     fn ends_with_num() {
-        assert_eq!(lex("23", "ends_with_num"), [Token::Int(23)]);
+        assert_eq!(lex("23"), [Token::Int(23)]);
     }
 
     #[test]
     fn weird_syms() {
         assert_eq!(
-            lex("(+ [] => !! _test!;comment\n)", "weird_syms"),
+            lex("(+ [] => !! _test!;comment\n)"),
             [
                 Token::LParen,
                 Token::Symbol("+".to_string()),
