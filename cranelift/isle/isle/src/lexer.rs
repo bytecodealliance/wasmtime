@@ -202,19 +202,22 @@ impl<'src> Lexer<'src> {
                     Cow::Borrowed(s)
                 };
 
-                // Support either signed range (-2^127..2^127) or
-                // unsigned range (0..2^128).
-                let num = i128::from_str_radix(&s, radix)
-                    .or_else(|_| u128::from_str_radix(&s, radix).map(|val| val as i128))
-                    .map_err(|e| self.error(start_pos, e.to_string()))?;
-
-                let tok = if neg {
-                    Token::Int(num.checked_neg().ok_or_else(|| {
-                        self.error(start_pos, "integer literal cannot fit in i128")
-                    })?)
-                } else {
-                    Token::Int(num)
+                // Support either signed range (-2^127-1..2^127-1) or
+                // unsigned range (0..2^128-1).
+                let num = match u128::from_str_radix(&s, radix) {
+                    Ok(num) => num as i128,
+                    Err(err) => return Err(self.error(start_pos, err.to_string())),
                 };
+
+                let num = match (neg, num.checked_neg()) {
+                    (true, None) => {
+                        return Err(self.error(start_pos, "integer literal cannot fit in i128"))
+                    }
+                    (true, Some(num)) => num,
+                    (false, _) => num,
+                };
+                let tok = Token::Int(num);
+
                 Ok(Some((start_pos, tok)))
             }
             c => Err(self.error(self.pos, format!("Unexpected character '{c}'"))),
