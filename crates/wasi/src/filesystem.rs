@@ -320,38 +320,6 @@ impl FileInputStream {
         self.position += min_len as u64;
         chunk
     }
-
-    pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
-        use system_interface::fs::FileIoExt;
-        let p = self.position;
-
-        let (r, mut buf) = self
-            .file
-            .run_blocking(move |f| {
-                let mut buf = BytesMut::zeroed(size);
-                let r = f.read_at(&mut buf, p);
-                (r, buf)
-            })
-            .await;
-        let n = read_result(r, size)?;
-        buf.truncate(n);
-        self.position += n as u64;
-        Ok(buf.freeze())
-    }
-
-    pub async fn skip(&mut self, nelem: usize) -> Result<usize, StreamError> {
-        let bs = self.read(nelem).await?;
-        Ok(bs.len())
-    }
-}
-
-fn read_result(r: io::Result<usize>, size: usize) -> Result<usize, StreamError> {
-    match r {
-        Ok(0) if size > 0 => Err(StreamError::Closed),
-        Ok(n) => Ok(n),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
-        Err(e) => Err(StreamError::LastOperationFailed(e.into())),
-    }
 }
 #[async_trait::async_trait]
 impl HostInputStream for FileInputStream {

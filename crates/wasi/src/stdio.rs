@@ -415,7 +415,7 @@ where
 {
     fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
         let stream = self.ctx().stdin.stream();
-        Ok(self.table().push(streams::InputStream::Host(stream))?)
+        Ok(self.table().push(stream)?)
     }
 }
 

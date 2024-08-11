@@ -1,4 +1,3 @@
-use crate::filesystem::FileInputStream;
 use crate::poll::Subscribe;
 use anyhow::Result;
 use bytes::Bytes;
@@ -254,20 +253,13 @@ impl Subscribe for Box<dyn HostOutputStream> {
     }
 }
 
-pub enum InputStream {
-    Host(Box<dyn HostInputStream>),
-    File(FileInputStream),
-}
-
 #[async_trait::async_trait]
-impl Subscribe for InputStream {
+impl Subscribe for Box<dyn HostInputStream> {
     async fn ready(&mut self) {
-        match self {
-            InputStream::Host(stream) => stream.ready().await,
-            // Files are always ready
-            InputStream::File(_) => {}
-        }
+        (**self).ready().await
     }
 }
+
+pub type InputStream = Box<dyn HostInputStream>;
 
 pub type OutputStream = Box<dyn HostOutputStream>;

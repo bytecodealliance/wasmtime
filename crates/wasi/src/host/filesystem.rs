@@ -746,10 +746,10 @@ where
         }
 
         // Create a stream view for it.
-        let reader = FileInputStream::new(f, offset);
+        let reader: InputStream = Box::new(FileInputStream::new(f, offset));
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table().push(InputStream::Host(Box::new(reader)))?;
+        let index = self.table().push(reader)?;
 
         Ok(index)
     }

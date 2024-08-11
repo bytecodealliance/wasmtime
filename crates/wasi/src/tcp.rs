@@ -278,8 +278,7 @@ impl TcpSocket {
             Ok(stream) => {
                 let stream = Arc::new(stream);
                 self.tcp_state = TcpState::Connected(stream.clone());
-                let input: InputStream =
-                    InputStream::Host(Box::new(TcpReadStream::new(stream.clone())));
+                let input: InputStream = Box::new(TcpReadStream::new(stream.clone()));
                 let output: OutputStream = Box::new(TcpWriteStream::new(stream));
                 Ok((input, output))
             }
@@ -428,7 +427,7 @@ impl TcpSocket {
 
         let client = Arc::new(client);
 
-        let input: InputStream = InputStream::Host(Box::new(TcpReadStream::new(client.clone())));
+        let input: InputStream = Box::new(TcpReadStream::new(client.clone()));
         let output: OutputStream = Box::new(TcpWriteStream::new(client.clone()));
         let tcp_socket = TcpSocket::from_state(TcpState::Connected(client), self.family)?;
 

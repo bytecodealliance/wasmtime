@@ -112,7 +112,7 @@ where
         Ok(())
     }
 
-    async fn splice(
+    fn splice(
         &mut self,
         dest: Resource<OutputStream>,
         src: Resource<InputStream>,
@@ -129,10 +129,7 @@ where
             return Ok(0);
         }
 
-        let contents = match self.table().get_mut(&src)? {
-            InputStream::Host(h) => h.read(len)?,
-            InputStream::File(f) => f.read(len).await?,
-        };
+        let contents = self.table().get_mut(&src)?.read(len)?;
 
         let len = contents.len();
         if len == 0 {
@@ -156,7 +153,7 @@ where
 
         self.table().get_mut(&src)?.ready().await;
 
-        self.splice(dest, src, len).await
+        self.splice(dest, src, len)
     }
 }
 
@@ -166,19 +163,13 @@ where
     T: WasiView,
 {
     async fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
-        match self.table().delete(stream)? {
-            InputStream::Host(mut s) => s.cancel().await,
-            InputStream::File(_) => {}
-        }
+        self.table().delete(stream)?.cancel().await;
         Ok(())
     }
 
-    async fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
+    fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let bytes = match self.table().get_mut(&stream)? {
-            InputStream::Host(s) => s.read(len)?,
-            InputStream::File(s) => s.read(len).await?,
-        };
+        let bytes = self.table().get_mut(&stream)?.read(len)?;
         debug_assert!(bytes.len() <= len);
         Ok(bytes.into())
     }
@@ -189,20 +180,14 @@ where
         len: u64,
     ) -> StreamResult<Vec<u8>> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let bytes = match self.table().get_mut(&stream)? {
-            InputStream::Host(s) => s.blocking_read(len).await?,
-            InputStream::File(s) => s.read(len).await?,
-        };
+        let bytes = self.table().get_mut(&stream)?.blocking_read(len).await?;
         debug_assert!(bytes.len() <= len);
         Ok(bytes.into())
     }
 
-    async fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
+    fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let written = match self.table().get_mut(&stream)? {
-            InputStream::Host(s) => s.skip(len)?,
-            InputStream::File(s) => s.skip(len).await?,
-        };
+        let written = self.table().get_mut(&stream)?.skip(len)?;
         Ok(written.try_into().expect("usize always fits in u64"))
     }
 
@@ -212,10 +197,7 @@ where
         len: u64,
     ) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let written = match self.table().get_mut(&stream)? {
-            InputStream::Host(s) => s.blocking_skip(len).await?,
-            InputStream::File(s) => s.skip(len).await?,
-        };
+        let written = self.table().get_mut(&stream)?.blocking_skip(len).await?;
         Ok(written.try_into().expect("usize always fits in u64"))
     }
 
@@ -325,7 +307,7 @@ pub mod sync {
             src: Resource<InputStream>,
             len: u64,
         ) -> StreamResult<u64> {
-            in_tokio(async { AsyncHostOutputStream::splice(self, dst, src, len).await })
+            AsyncHostOutputStream::splice(self, dst, src, len)
         }
 
         fn blocking_splice(
@@ -347,7 +329,7 @@ pub mod sync {
         }
 
         fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
-            in_tokio(async { AsyncHostInputStream::read(self, stream, len).await })
+            AsyncHostInputStream::read(self, stream, len)
         }
 
         fn blocking_read(
@@ -359,7 +341,7 @@ pub mod sync {
         }
 
         fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
-            in_tokio(async { AsyncHostInputStream::skip(self, stream, len).await })
+            AsyncHostInputStream::skip(self, stream, len)
         }
 
         fn blocking_skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
