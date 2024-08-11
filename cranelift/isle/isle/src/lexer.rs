@@ -11,8 +11,8 @@ type Result<T> = std::result::Result<T, Error>;
 ///
 /// Breaks source text up into a sequence of tokens (with source positions).
 #[derive(Clone, Debug)]
-pub struct Lexer<'a> {
-    buf: &'a [u8],
+pub struct Lexer<'src> {
+    src: &'src str,
     pos: Pos,
     lookahead: Option<(Pos, Token)>,
 }
@@ -60,11 +60,11 @@ pub enum Token {
     At,
 }
 
-impl<'a> Lexer<'a> {
+impl<'src> Lexer<'src> {
     /// Create a new lexer for the given source contents
-    pub fn new(file: usize, src: &'a str) -> Result<Lexer<'a>> {
+    pub fn new(file: usize, src: &'src str) -> Result<Lexer<'src>> {
         let mut l = Lexer {
-            buf: src.as_bytes(),
+            src,
             pos: Pos::new(file, 0),
             lookahead: None,
         };
@@ -105,13 +105,15 @@ impl<'a> Lexer<'a> {
         }
 
         // Skip any whitespace and any comments.
-        while self.pos.offset < self.buf.len() {
-            if self.buf[self.pos.offset].is_ascii_whitespace() {
+        while self.pos.offset < self.src.len() {
+            if self.src.as_bytes()[self.pos.offset].is_ascii_whitespace() {
                 self.advance_pos();
                 continue;
             }
-            if self.buf[self.pos.offset] == b';' {
-                while self.pos.offset < self.buf.len() && self.buf[self.pos.offset] != b'\n' {
+            if self.src.as_bytes()[self.pos.offset] == b';' {
+                while self.pos.offset < self.src.len()
+                    && self.src.as_bytes()[self.pos.offset] != b'\n'
+                {
                     self.advance_pos();
                 }
                 continue;
@@ -119,12 +121,11 @@ impl<'a> Lexer<'a> {
             break;
         }
 
-        if self.pos.offset == self.buf.len() {
+        let Some(c) = self.src.as_bytes().get(self.pos.offset) else {
             return Ok(None);
-        }
-
+        };
         let char_pos = self.pos();
-        match self.buf[self.pos.offset] {
+        match c {
             b'(' => {
                 self.advance_pos();
                 Ok(Some((char_pos, Token::LParen)))
@@ -137,23 +138,22 @@ impl<'a> Lexer<'a> {
                 self.advance_pos();
                 Ok(Some((char_pos, Token::At)))
             }
-            c if is_sym_first_char(c) => {
+            c if is_sym_first_char(*c) => {
                 let start = self.pos.offset;
                 let start_pos = self.pos();
-                while self.pos.offset < self.buf.len()
-                    && is_sym_other_char(self.buf[self.pos.offset])
+                while self.pos.offset < self.src.len()
+                    && is_sym_other_char(self.src.as_bytes()[self.pos.offset])
                 {
                     self.advance_pos();
                 }
                 let end = self.pos.offset;
-                let s = std::str::from_utf8(&self.buf[start..end])
-                    .expect("Only ASCII characters, should be UTF-8");
+                let s = &self.src[start..end];
                 debug_assert!(!s.is_empty());
                 Ok(Some((start_pos, Token::Symbol(s.to_string()))))
             }
             c @ (b'0'..=b'9' | b'-') => {
                 let start_pos = self.pos();
-                let neg = if c == b'-' {
+                let neg = if *c == b'-' {
                     self.advance_pos();
                     true
                 } else {
@@ -164,20 +164,20 @@ impl<'a> Lexer<'a> {
 
                 // Check for prefixed literals.
                 match (
-                    self.buf.get(self.pos.offset),
-                    self.buf.get(self.pos.offset + 1),
+                    self.src.as_bytes().get(self.pos.offset),
+                    self.src.as_bytes().get(self.pos.offset + 1),
                 ) {
-                    (Some(b'0'), Some(b'x')) | (Some(b'0'), Some(b'X')) => {
+                    (Some(b'0'), Some(b'x' | b'X')) => {
                         self.advance_pos();
                         self.advance_pos();
                         radix = 16;
                     }
-                    (Some(b'0'), Some(b'o')) => {
+                    (Some(b'0'), Some(b'o' | b'O')) => {
                         self.advance_pos();
                         self.advance_pos();
                         radix = 8;
                     }
-                    (Some(b'0'), Some(b'b')) => {
+                    (Some(b'0'), Some(b'b' | b'B')) => {
                         self.advance_pos();
                         self.advance_pos();
                         radix = 2;
@@ -189,16 +189,16 @@ impl<'a> Lexer<'a> {
                 // pass this range to `i64::from_str_radix` to do the actual
                 // string-to-integer conversion.
                 let start = self.pos.offset;
-                while self.pos.offset < self.buf.len()
-                    && ((radix <= 10 && self.buf[self.pos.offset].is_ascii_digit())
-                        || (radix == 16 && self.buf[self.pos.offset].is_ascii_hexdigit())
-                        || self.buf[self.pos.offset] == b'_')
+                while self.pos.offset < self.src.len()
+                    && ((radix <= 10 && self.src.as_bytes()[self.pos.offset].is_ascii_digit())
+                        || (radix == 16
+                            && self.src.as_bytes()[self.pos.offset].is_ascii_hexdigit())
+                        || self.src.as_bytes()[self.pos.offset] == b'_')
                 {
                     self.advance_pos();
                 }
                 let end = self.pos.offset;
-                let s = &self.buf[start..end];
-                let s = std::str::from_utf8(&s[..]).unwrap();
+                let s = &self.src[start..end];
                 let s = if s.contains('_') {
                     Cow::Owned(s.replace('_', ""))
                 } else {
@@ -232,7 +232,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn reload(&mut self) -> Result<()> {
-        if self.lookahead.is_none() && self.pos.offset < self.buf.len() {
+        if self.lookahead.is_none() && self.pos.offset < self.src.len() {
             self.lookahead = self.next_token()?;
         }
         Ok(())
