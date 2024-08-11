@@ -266,6 +266,7 @@ impl Token {
 mod test {
     use super::*;
 
+    #[track_caller]
     fn lex(src: &str) -> Vec<Token> {
         let mut toks = vec![];
         let mut lexer = Lexer::new(0, src).unwrap();
@@ -315,5 +316,25 @@ mod test {
                 Token::RParen,
             ]
         );
+    }
+
+    #[test]
+    fn integers() {
+        assert_eq!(
+            lex("0 1 -1"),
+            [Token::Int(0), Token::Int(1), Token::Int(-1)]
+        );
+
+        assert_eq!(
+            lex("340_282_366_920_938_463_463_374_607_431_768_211_455"),
+            [Token::Int(-1)]
+        );
+
+        assert_eq!(
+            lex("170_141_183_460_469_231_731_687_303_715_884_105_727"),
+            [Token::Int(i128::MAX)]
+        );
+
+        assert!(Lexer::new(0, "-170_141_183_460_469_231_731_687_303_715_884_105_728").is_err())
     }
 }
