@@ -105,23 +105,22 @@ impl<'src> Lexer<'src> {
         }
 
         // Skip any whitespace and any comments.
-        while self.pos.offset < self.src.len() {
-            if self.src.as_bytes()[self.pos.offset].is_ascii_whitespace() {
-                self.advance_pos();
-                continue;
-            }
-            if self.src.as_bytes()[self.pos.offset] == b';' {
-                while self.pos.offset < self.src.len()
-                    && self.src.as_bytes()[self.pos.offset] != b'\n'
-                {
-                    self.advance_pos();
+        while let Some(c) = self.peek_byte() {
+            match c {
+                c if c.is_ascii_whitespace() => self.advance_pos(),
+                b';' => {
+                    while let Some(c) = self.peek_byte() {
+                        match c {
+                            b'\n' => break,
+                            _ => self.advance_pos(),
+                        }
+                    }
                 }
-                continue;
+                _ => break,
             }
-            break;
         }
 
-        let Some(c) = self.src.as_bytes().get(self.pos.offset) else {
+        let Some(c) = self.peek_byte() else {
             return Ok(None);
         };
         let char_pos = self.pos();
@@ -138,13 +137,14 @@ impl<'src> Lexer<'src> {
                 self.advance_pos();
                 Ok(Some((char_pos, Token::At)))
             }
-            c if is_sym_first_char(*c) => {
+            c if is_sym_first_char(c) => {
                 let start = self.pos.offset;
                 let start_pos = self.pos();
-                while self.pos.offset < self.src.len()
-                    && is_sym_other_char(self.src.as_bytes()[self.pos.offset])
-                {
-                    self.advance_pos();
+                while let Some(c) = self.peek_byte() {
+                    match c {
+                        c if is_sym_other_char(c) => self.advance_pos(),
+                        _ => break,
+                    }
                 }
                 let end = self.pos.offset;
                 let s = &self.src[start..end];
@@ -153,12 +153,11 @@ impl<'src> Lexer<'src> {
             }
             c @ (b'0'..=b'9' | b'-') => {
                 let start_pos = self.pos();
-                let neg = if *c == b'-' {
+                let mut neg = false;
+                if c == b'-' {
                     self.advance_pos();
-                    true
-                } else {
-                    false
-                };
+                    neg = true;
+                }
 
                 let mut radix = 10;
 
@@ -189,13 +188,11 @@ impl<'src> Lexer<'src> {
                 // pass this range to `i64::from_str_radix` to do the actual
                 // string-to-integer conversion.
                 let start = self.pos.offset;
-                while self.pos.offset < self.src.len()
-                    && ((radix <= 10 && self.src.as_bytes()[self.pos.offset].is_ascii_digit())
-                        || (radix == 16
-                            && self.src.as_bytes()[self.pos.offset].is_ascii_hexdigit())
-                        || self.src.as_bytes()[self.pos.offset] == b'_')
-                {
-                    self.advance_pos();
+                while let Some(c) = self.peek_byte() {
+                    match c {
+                        b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b'_' => self.advance_pos(),
+                        _ => break,
+                    }
                 }
                 let end = self.pos.offset;
                 let s = &self.src[start..end];
@@ -246,6 +243,10 @@ impl<'src> Lexer<'src> {
     /// Are we at the end of the source input?
     pub fn eof(&self) -> bool {
         self.lookahead.is_none()
+    }
+
+    fn peek_byte(&self) -> Option<u8> {
+        self.src.as_bytes().get(self.pos.offset).copied()
     }
 }
 
