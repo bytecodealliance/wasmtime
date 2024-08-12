@@ -1,6 +1,10 @@
 //! Copy-on-write initialization support: creation of backing images for
 //! modules, and logic to support mapping these backing images into memory.
 
+// `MemoryImageSource` is an empty enum on some platforms which triggers some
+// warnings
+#![cfg_attr(not(unix), allow(unreachable_patterns))]
+
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
 use crate::runtime::vm::{MmapVec, SendSyncPtr};
