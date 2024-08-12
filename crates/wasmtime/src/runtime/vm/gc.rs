@@ -149,6 +149,7 @@ impl GcStore {
     ) -> Result<Result<VMExternRef, Box<dyn Any + Send + Sync>>> {
         let host_data_id = self.host_data_table.alloc(value);
         match self.gc_heap.alloc_externref(host_data_id)? {
+            #[cfg(feature = "gc")]
             Some(x) => Ok(Ok(x)),
             None => Ok(Err(self.host_data_table.dealloc(host_data_id))),
         }

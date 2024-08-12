@@ -854,9 +854,10 @@ impl Ref {
             (Ref::Any(_), HeapType::Any) => true,
             (Ref::Any(Some(a)), HeapType::I31) => a._is_i31(store)?,
             (Ref::Any(Some(a)), HeapType::Struct) => a._is_struct(store)?,
-            (Ref::Any(Some(a)), HeapType::ConcreteStruct(ty)) => match a._as_struct(store)? {
+            (Ref::Any(Some(a)), HeapType::ConcreteStruct(_ty)) => match a._as_struct(store)? {
                 None => false,
-                Some(s) => s._matches_ty(store, ty)?,
+                #[cfg(feature = "gc")]
+                Some(s) => s._matches_ty(store, _ty)?,
             },
             (Ref::Any(Some(_)), HeapType::Eq) => todo!("eqref"),
             (Ref::Any(Some(_)), HeapType::Array) => todo!("wasm GC arrays"),
