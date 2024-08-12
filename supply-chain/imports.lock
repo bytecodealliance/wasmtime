@@ -1140,6 +1140,12 @@ when = "2024-05-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-bitset]]
+version = "0.110.1"
+when = "2024-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-codegen]]
 version = "0.105.2"
 when = "2024-02-28"
