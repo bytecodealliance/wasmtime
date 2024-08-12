@@ -856,7 +856,7 @@ impl Ref {
             (Ref::Any(Some(a)), HeapType::Struct) => a._is_struct(store)?,
             (Ref::Any(Some(a)), HeapType::ConcreteStruct(_ty)) => match a._as_struct(store)? {
                 None => false,
-                #[cfg(feature = "gc")]
+                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(s) => s._matches_ty(store, _ty)?,
             },
             (Ref::Any(Some(_)), HeapType::Eq) => todo!("eqref"),
