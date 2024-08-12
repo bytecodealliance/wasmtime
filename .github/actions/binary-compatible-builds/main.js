@@ -47,7 +47,7 @@ if (process.env.CENTOS !== undefined) {
   // is mounted below.
   args.push('bash');
   args.push('-c');
-  args.push('export PATH=$PATH:/rust/bin; exec "$@"');
+  args.push('export PATH=$PATH:/rust/bin; export RUSTFLAGS="$RUSTFLAGS $EXTRA_RUSTFLAGS"; exec "$@"');
   args.push('bash');
 
   // Add in whatever we're running which will get executed in the sub-shell with
