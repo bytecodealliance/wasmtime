@@ -513,6 +513,7 @@ pub use wasmtime_component_macro::bindgen;
 ///
 /// #[derive(ComponentType)]
 /// #[component(enum)]
+/// #[repr(u8)]
 /// enum Setting {
 ///     #[component(name = "yes")]
 ///     Yes,

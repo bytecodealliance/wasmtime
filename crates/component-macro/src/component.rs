@@ -629,7 +629,7 @@ impl Expander for LiftExpander {
 
         let extract_ty = quote! {
             let ty = match ty {
-                #internal::InterfaceType::Variant(i) => &cx.types[i],
+                #internal::InterfaceType::Enum(i) => &cx.types[i],
                 _ => #internal::bad_type_info(),
             };
         };
