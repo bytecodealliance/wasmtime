@@ -1745,7 +1745,7 @@
   (rv_vmfeq_vf y x (unmasked) ty))
 
 ;; FloatCC.NotEqual
-;; Note: This is UnorderedNotEqual. It is the only unoredered comparison that is not named as such.
+;; Note: This is UnorderedNotEqual. It is the only unordered comparison that is not named as such.
 
 (rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.NotEqual) x y)
   (rv_vmfne_vv x y (unmasked) ty))

@@ -126,7 +126,7 @@ async fn invoke_c_async_callback<'a>(
     let (params, out_results) = hostcall_val_storage.split_at_mut(params.len());
 
     // Invoke the C function pointer.
-    // The result will be a continutation which we will wrap in a Future.
+    // The result will be a continuation which we will wrap in a Future.
     let mut caller = wasmtime_caller_t { caller };
     let mut trap = None;
     extern "C" fn panic_callback(_: *mut c_void) -> bool {

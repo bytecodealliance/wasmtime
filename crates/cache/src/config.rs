@@ -157,7 +157,7 @@ const ZSTD_COMPRESSION_LEVELS: std::ops::RangeInclusive<i32> = 0..=21;
 // so we have at most one module per wasmtime instance
 // if changed, update cli-cache.md
 const DEFAULT_WORKER_EVENT_QUEUE_SIZE: u64 = 0x10;
-const WORKER_EVENT_QUEUE_SIZE_WARNING_TRESHOLD: u64 = 3;
+const WORKER_EVENT_QUEUE_SIZE_WARNING_THRESHOLD: u64 = 3;
 // should be quick and provide good enough compression
 // if changed, update cli-cache.md
 const DEFAULT_BASELINE_COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL;
@@ -460,7 +460,7 @@ impl CacheConfig {
             self.worker_event_queue_size = Some(DEFAULT_WORKER_EVENT_QUEUE_SIZE);
         }
 
-        if self.worker_event_queue_size.unwrap() < WORKER_EVENT_QUEUE_SIZE_WARNING_TRESHOLD {
+        if self.worker_event_queue_size.unwrap() < WORKER_EVENT_QUEUE_SIZE_WARNING_THRESHOLD {
             warn!("Detected small worker event queue size. Some messages might be lost.");
         }
     }

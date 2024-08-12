@@ -149,7 +149,7 @@ impl Inst {
         }
     }
 
-    /// Returns Some(VState) if this insturction is expecting a specific vector state
+    /// Returns Some(VState) if this instruction is expecting a specific vector state
     /// before emission.
     fn expected_vstate(&self) -> Option<&VState> {
         match self {
@@ -363,13 +363,13 @@ impl Inst {
                     _ => return None,
                 };
                 // The canonical expansion for these instruction has `rd == rs1`, but
-                // these are all comutative operations, so we can swap the operands.
+                // these are all commutative operations, so we can swap the operands.
                 let src = if rd.to_reg() == rs1 { rs2 } else { rs1 };
 
                 sink.put2(encode_ca_type(op, rd, src));
             }
 
-            // The sub instructions are non comutative, so we can't swap the operands.
+            // The sub instructions are non commutative, so we can't swap the operands.
             Inst::AluRRR {
                 alu_op: alu_op @ (AluOPRRR::Sub | AluOPRRR::Subw),
                 rd,
@@ -386,7 +386,7 @@ impl Inst {
 
             // c.j
             //
-            // We don't have a separate JAL as that is only availabile in RV32C
+            // We don't have a separate JAL as that is only available in RV32C
             Inst::Jal { label } => {
                 sink.use_label_at_offset(*start_off, label, LabelUse::RVCJump);
                 sink.add_uncond_branch(*start_off, *start_off + 2, label);
@@ -870,7 +870,7 @@ impl Inst {
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
                 // It is not very long, no need to check if need `emit_island`.
-                // If data is very long , this is a bug because RawData is typecial
+                // If data is very long , this is a bug because RawData is typically
                 // use to load some data and rely on some position in the code stream.
                 // and we may exceed `Inst::worst_case_size`.
                 // for more information see https://github.com/bytecodealliance/wasmtime/pull/5612.
@@ -1570,7 +1570,7 @@ impl Inst {
                     (xregs, yregs, condition)
                 };
 
-                // Unconditonally move one of the values to the destination register.
+                // Unconditionally move one of the values to the destination register.
                 //
                 // These moves may not end up being emitted if the source and
                 // destination registers are the same. That logic is built into

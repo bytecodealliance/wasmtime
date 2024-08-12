@@ -44,14 +44,14 @@ impl<'a> lists::Lists for WasiCtx<'a> {
 }
 
 #[derive(Debug)]
-struct ReduceExcusesExcercise {
+struct ReduceExcusesExercise {
     excuse_values: Vec<types::Excuse>,
     excuse_ptr_locs: Vec<MemArea>,
     array_ptr_loc: MemArea,
     return_ptr_loc: MemArea,
 }
 
-impl ReduceExcusesExcercise {
+impl ReduceExcusesExercise {
     pub fn strat() -> BoxedStrategy<Self> {
         (1..256u32)
             .prop_flat_map(|len| {
@@ -126,7 +126,7 @@ impl ReduceExcusesExcercise {
 }
 proptest! {
     #[test]
-    fn reduce_excuses(e in ReduceExcusesExcercise::strat()) {
+    fn reduce_excuses(e in ReduceExcusesExercise::strat()) {
         e.test()
     }
 }
@@ -141,12 +141,12 @@ fn excuse_strat() -> impl Strategy<Value = types::Excuse> {
 }
 
 #[derive(Debug)]
-struct PopulateExcusesExcercise {
+struct PopulateExcusesExercise {
     array_ptr_loc: MemArea,
     elements: Vec<MemArea>,
 }
 
-impl PopulateExcusesExcercise {
+impl PopulateExcusesExercise {
     pub fn strat() -> BoxedStrategy<Self> {
         (1..256u32)
             .prop_flat_map(|len| {
@@ -214,7 +214,7 @@ impl PopulateExcusesExcercise {
 }
 proptest! {
     #[test]
-    fn populate_excuses(e in PopulateExcusesExcercise::strat()) {
+    fn populate_excuses(e in PopulateExcusesExercise::strat()) {
         e.test()
     }
 }

@@ -487,7 +487,7 @@ impl ABIParams {
             return Self::with_bytes(initial_bytes);
         }
 
-        let regiser_capacity = params.len().min(6);
+        let register_capacity = params.len().min(6);
         let (mut operands, mut regs, mut stack_bytes): (
             SmallVec<[ABIOperand; 6]>,
             HashSet<Reg>,
@@ -495,7 +495,7 @@ impl ABIParams {
         ) = params.iter().fold(
             (
                 SmallVec::new(),
-                HashSet::with_capacity(regiser_capacity),
+                HashSet::with_capacity(register_capacity),
                 initial_bytes,
             ),
             |(mut operands, mut regs, stack_bytes), arg| {
