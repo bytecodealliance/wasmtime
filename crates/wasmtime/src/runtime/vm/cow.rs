@@ -3,7 +3,7 @@
 
 // `MemoryImageSource` is an empty enum on some platforms which triggers some
 // warnings
-#![cfg_attr(not(unix), allow(unreachable_patterns))]
+#![cfg_attr(any(not(unix), miri), allow(unreachable_patterns))]
 
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
