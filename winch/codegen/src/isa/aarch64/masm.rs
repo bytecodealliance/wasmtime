@@ -558,8 +558,8 @@ impl Masm for MacroAssembler {
         self.asm.clz(scratch, dst, size);
     }
 
-    fn wrap(&mut self, _src: Reg, _dst: Reg) {
-        todo!()
+    fn wrap(&mut self, src: Reg, dst: Reg) {
+        self.asm.mov_rr(src, dst, OperandSize::S32);
     }
 
     fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
