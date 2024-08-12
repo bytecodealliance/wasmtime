@@ -63,6 +63,7 @@ pub mod bindings {
         // terms of raw pointers.
         skip: ["run", "get-environment", "poll"],
         generate_all,
+        disable_custom_section_link_helpers: true,
     });
 
     #[cfg(feature = "reactor")]
@@ -80,6 +81,7 @@ pub mod bindings {
         // terms of raw pointers.
         skip: ["get-environment", "poll"],
         generate_all,
+        disable_custom_section_link_helpers: true,
     });
 
     #[cfg(feature = "proxy")]
@@ -103,6 +105,7 @@ pub mod bindings {
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         skip: ["poll"],
         generate_all,
+        disable_custom_section_link_helpers: true,
     });
 
     pub mod wit_bindgen_rt_shim {
