@@ -12,6 +12,7 @@ use crate::{
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
+    isa::aarch64::inst::VectorSize,
     settings, Final, MachBufferFinalized, MachLabel,
 };
 use regalloc2::RegClass;
@@ -435,8 +436,20 @@ impl Masm for MacroAssembler {
         self.asm.load_constant(0, reg);
     }
 
-    fn popcnt(&mut self, _context: &mut CodeGenContext, _size: OperandSize) {
-        todo!()
+    fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
+        let src = context.pop_to_reg(self, None);
+        let tmp = context.reg_for_class(RegClass::Float, self);
+        self.asm.mov_to_fpu(src.into(), tmp, size);
+        self.asm.cnt(tmp);
+        match size {
+            OperandSize::S8 => {}
+            OperandSize::S16 => self.asm.addp_rrr(tmp, tmp, tmp, VectorSize::Size8x8),
+            OperandSize::S32 | OperandSize::S64 => self.asm.addv(tmp, tmp, VectorSize::Size8x8),
+            OperandSize::S128 => unimplemented!(),
+        }
+        self.asm.mov_from_vec(tmp, src.into(), 0, OperandSize::S8);
+        context.stack.push(src.into());
+        context.free_reg(tmp);
     }
 
     fn signed_truncate(

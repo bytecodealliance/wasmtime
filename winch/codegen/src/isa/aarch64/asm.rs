@@ -8,16 +8,16 @@ use cranelift_codegen::isa::aarch64::inst::{
     FPUOpRI::{self, UShr32, UShr64},
     FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
-use cranelift_codegen::MachInst;
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode,
+        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode, VecALUOp, VecLanesOp, VecMisc2,
+        VectorSize,
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    Writable,
+    settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
+    MachLabel, Writable,
 };
 
 impl From<OperandSize> for inst::OperandSize {
@@ -312,6 +312,15 @@ impl Assembler {
         });
     }
 
+    pub fn mov_from_vec(&mut self, rn: Reg, rd: Reg, idx: u8, size: OperandSize) {
+        self.emit(Inst::MovFromVec {
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            idx,
+            size: size.into(),
+        });
+    }
+
     /// Add with three registers.
     pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
@@ -327,6 +336,27 @@ impl Assembler {
             self.load_constant(imm, scratch);
             self.emit_alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
+    }
+
+    /// Add Pairwise (vector).
+    pub fn addp_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: VectorSize) {
+        self.emit(Inst::VecRRR {
+            alu_op: VecALUOp::Addp,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            rm: rm.into(),
+            size,
+        });
+    }
+
+    /// Add across Vector.
+    pub fn addv(&mut self, rn: Reg, rd: Reg, size: VectorSize) {
+        self.emit(Inst::VecLanes {
+            op: VecLanesOp::Addv,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            size,
+        });
     }
 
     /// Subtract with three registers.
@@ -608,6 +638,16 @@ impl Assembler {
         self.emit(Inst::CSet {
             rd: Writable::from_reg(rd.into()),
             cond,
+        });
+    }
+
+    // Population Count per byte.
+    pub fn cnt(&mut self, rd: Reg) {
+        self.emit(Inst::VecMisc {
+            op: VecMisc2::Cnt,
+            rd: Writable::from_reg(rd.into()),
+            rn: rd.into(),
+            size: VectorSize::Size8x8,
         });
     }
 
