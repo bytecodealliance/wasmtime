@@ -28,6 +28,9 @@ audit-as-crates-io = true
 [policy.cranelift-bforest]
 audit-as-crates-io = true
 
+[policy.cranelift-bitset]
+audit-as-crates-io = true
+
 [policy.cranelift-codegen]
 audit-as-crates-io = true
 
