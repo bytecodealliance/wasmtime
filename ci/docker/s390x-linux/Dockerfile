@@ -7,6 +7,4 @@ RUN apt-get update -y && apt-get install -y gcc gcc-s390x-linux-gnu ca-certifica
 RUN curl -L https://github.com/Kitware/CMake/releases/download/v3.29.3/cmake-3.29.3-linux-x86_64.tar.gz | tar xzf -
 ENV PATH=$PATH:/cmake-3.29.3-linux-x86_64/bin
 
-ENV PATH=$PATH:/rust/bin
-ENV CARGO_BUILD_TARGET=s390x-unknown-linux-gnu
 ENV CARGO_TARGET_S390X_UNKNOWN_LINUX_GNU_LINKER=s390x-linux-gnu-gcc

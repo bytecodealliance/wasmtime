@@ -32,7 +32,26 @@ if (process.env.INPUT_NAME && process.env.INPUT_NAME.indexOf("android") >= 0) {
 // commands in there with the `$CENTOS` env var.
 
 if (process.env.CENTOS !== undefined) {
-  const args = ['exec', '-w', process.cwd(), '-i', 'build-container'];
+  const args = ['exec', '--workdir', process.cwd(), '--interactive'];
+  // forward any rust-looking env vars from the environment into the container
+  // itself.
+  for (let key in process.env) {
+    if (key.startsWith('CARGO') || key.startsWith('RUST')) {
+      args.push('--env');
+      args.push(key);
+    }
+  }
+  args.push('build-container')
+
+  // Start the container by appending to `$PATH` with the `/rust/bin` path that
+  // is mounted below.
+  args.push('bash');
+  args.push('-c');
+  args.push('export PATH=$PATH:/rust/bin; exec "$@"');
+  args.push('bash');
+
+  // Add in whatever we're running which will get executed in the sub-shell with
+  // an augmented PATH.
   for (const arg of process.argv.slice(2)) {
     args.push(arg);
   }

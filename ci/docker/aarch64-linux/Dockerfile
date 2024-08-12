@@ -7,6 +7,4 @@ RUN apt-get update -y && apt-get install -y gcc gcc-aarch64-linux-gnu ca-certifi
 RUN curl -L https://github.com/Kitware/CMake/releases/download/v3.29.3/cmake-3.29.3-linux-x86_64.tar.gz | tar xzf -
 ENV PATH=$PATH:/cmake-3.29.3-linux-x86_64/bin
 
-ENV PATH=$PATH:/rust/bin
-ENV CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
