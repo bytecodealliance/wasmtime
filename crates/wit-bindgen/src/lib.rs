@@ -1931,8 +1931,8 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(")]\n");
 
         let repr = match enum_.cases.len().ilog2() {
-            0..8 => "u8",
-            8..16 => "u16",
+            0..=7 => "u8",
+            8..=15 => "u16",
             _ => "u32",
         };
         uwriteln!(self.src, "#[repr({repr})]");

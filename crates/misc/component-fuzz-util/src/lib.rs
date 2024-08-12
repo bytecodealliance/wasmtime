@@ -570,8 +570,8 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
 
             let name = make_rust_name(name_counter);
             let repr = match count.ilog2() {
-                0..8 => quote!(u8),
-                8..16 => quote!(u16),
+                0..=7 => quote!(u8),
+                8..=15 => quote!(u16),
                 _ => quote!(u32),
             };
 
