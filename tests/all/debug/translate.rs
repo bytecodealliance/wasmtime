@@ -132,3 +132,26 @@ check:        DW_AT_decl_line	(10)
     "##,
     )
 }
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+fn test_debug_dwarf_translate_generated() -> Result<()> {
+    check_wasm(
+        "tests/all/debug/testsuite/fraction-norm.wasm",
+        r##"
+check: DW_TAG_compile_unit
+check: DW_TAG_compile_unit
+check:   DW_AT_producer	("wasmtime")
+check:   DW_AT_name	("<gen-$(=\d+)>.wasm")
+check:   DW_AT_comp_dir	("/<wasm-module>")
+check:   DW_TAG_subprogram
+check:     DW_AT_name	("__wasm_call_ctors")
+check:     DW_AT_decl_file	("/<wasm-module>/<gen-$(=\d+)>.wasm")
+check:     DW_AT_decl_line	(124)
+    "##,
+    )
+}

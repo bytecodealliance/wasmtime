@@ -37,7 +37,7 @@ fn generate_line_info(
     comp_dir_id: write::StringId,
     name_id: write::StringId,
     name: &str,
-) -> Result<write::LineProgram, Error> {
+) -> Result<(write::LineProgram, write::FileId), Error> {
     let out_comp_dir = write::LineString::StringRef(comp_dir_id);
     let out_comp_name = write::LineString::StringRef(name_id);
 
@@ -90,7 +90,7 @@ fn generate_line_info(
         out_program.end_sequence(end_addr);
     }
 
-    Ok(out_program)
+    Ok((out_program, file_index))
 }
 
 fn check_invalid_chars_in_name(s: &str) -> Option<&str> {
@@ -108,8 +108,8 @@ fn autogenerate_dwarf_wasm_path(di: &DebugInfoData) -> PathBuf {
         .module_name
         .and_then(check_invalid_chars_in_name)
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("<gen-{}>", NEXT_ID.fetch_add(1, SeqCst)));
-    let path = format!("/<wasm-module>/{module_name}.wasm");
+        .unwrap_or_else(|| format!("<gen-{}>.wasm", NEXT_ID.fetch_add(1, SeqCst)));
+    let path = format!("/<wasm-module>/{module_name}");
     PathBuf::from(path)
 }
 
@@ -302,7 +302,7 @@ pub fn generate_simulated_dwarf(
         (&di.wasm_file, path)
     };
 
-    let (unit, root_id, name_id) = {
+    let (unit, root_id, file_id) = {
         let comp_dir_id = out_strings.add(assert_dwarf_str!(path
             .parent()
             .context("path dir")?
@@ -315,7 +315,7 @@ pub fn generate_simulated_dwarf(
             .context("path name encoding")?;
         let name_id = out_strings.add(assert_dwarf_str!(name));
 
-        let out_program = generate_line_info(
+        let (out_program, file_id) = generate_line_info(
             addr_tr,
             translated,
             out_encoding,
@@ -342,7 +342,7 @@ pub fn generate_simulated_dwarf(
             gimli::DW_AT_comp_dir,
             write::AttributeValue::StringRef(comp_dir_id),
         );
-        (unit, root_id, name_id)
+        (unit, root_id, file_id)
     };
 
     let mut module_wasm_types = PrimaryMap::new();
@@ -393,13 +393,13 @@ pub fn generate_simulated_dwarf(
 
         die.set(
             gimli::DW_AT_decl_file,
-            write::AttributeValue::StringRef(name_id),
+            write::AttributeValue::FileIndex(Some(file_id)),
         );
 
         let f_start = map.addresses[0].wasm;
         let wasm_offset = di.wasm_file.code_section_offset + f_start;
         die.set(
-            gimli::DW_AT_decl_file,
+            gimli::DW_AT_decl_line,
             write::AttributeValue::Udata(wasm_offset),
         );
 
