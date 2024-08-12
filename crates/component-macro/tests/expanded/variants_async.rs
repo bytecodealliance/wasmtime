@@ -112,6 +112,7 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(enum)]
             #[derive(Clone, Copy, Eq, PartialEq)]
+            #[repr(u8)]
             pub enum E1 {
                 #[component(name = "a")]
                 A,
@@ -320,6 +321,7 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(enum)]
             #[derive(Clone, Copy, Eq, PartialEq)]
+            #[repr(u8)]
             pub enum MyErrno {
                 #[component(name = "bad1")]
                 Bad1,
@@ -862,6 +864,7 @@ pub mod exports {
                 #[derive(wasmtime::component::Lower)]
                 #[component(enum)]
                 #[derive(Clone, Copy, Eq, PartialEq)]
+                #[repr(u8)]
                 pub enum E1 {
                     #[component(name = "a")]
                     A,
@@ -1125,6 +1128,7 @@ pub mod exports {
                 #[derive(wasmtime::component::Lower)]
                 #[component(enum)]
                 #[derive(Clone, Copy, Eq, PartialEq)]
+                #[repr(u8)]
                 pub enum MyErrno {
                     #[component(name = "bad1")]
                     Bad1,

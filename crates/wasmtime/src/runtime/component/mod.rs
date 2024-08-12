@@ -143,6 +143,7 @@ pub mod __internal {
     pub use anyhow;
     #[cfg(feature = "async")]
     pub use async_trait::async_trait;
+    pub use core::mem::transmute;
     pub use wasmtime_environ;
     pub use wasmtime_environ::component::{CanonicalAbiInfo, ComponentTypes, InterfaceType};
 }
@@ -512,6 +513,7 @@ pub use wasmtime_component_macro::bindgen;
 ///
 /// #[derive(ComponentType)]
 /// #[component(enum)]
+/// #[repr(u8)]
 /// enum Setting {
 ///     #[component(name = "yes")]
 ///     Yes,

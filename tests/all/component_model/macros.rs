@@ -236,6 +236,7 @@ fn variant_derive() -> Result<()> {
 fn enum_derive() -> Result<()> {
     #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Debug, Copy, Clone)]
     #[component(enum)]
+    #[repr(u8)]
     enum Foo {
         #[component(name = "foo-bar-baz")]
         A,
@@ -299,6 +300,7 @@ fn enum_derive() -> Result<()> {
     #[add_variants(257)]
     #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Debug, Copy, Clone)]
     #[component(enum)]
+    #[repr(u16)]
     enum Many {}
 
     let component = Component::new(
@@ -330,6 +332,7 @@ fn enum_derive() -> Result<()> {
     // #[add_variants(65537)]
     // #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Debug, Copy, Clone)]
     // #[component(enum)]
+    // #[repr(u32)]
     // enum ManyMore {}
 
     Ok(())

@@ -105,6 +105,7 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(enum)]
             #[derive(Clone, Copy, Eq, PartialEq)]
+            #[repr(u8)]
             pub enum Error {
                 #[component(name = "success")]
                 Success,
@@ -207,6 +208,7 @@ pub mod exports {
                 #[derive(wasmtime::component::Lower)]
                 #[component(enum)]
                 #[derive(Clone, Copy, Eq, PartialEq)]
+                #[repr(u8)]
                 pub enum Error {
                     #[component(name = "success")]
                     Success,
