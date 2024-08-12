@@ -33,7 +33,7 @@ if (process.env.INPUT_NAME && process.env.INPUT_NAME.indexOf("android") >= 0) {
 
 if (process.env.CENTOS !== undefined) {
   const args = ['exec', '--workdir', process.cwd(), '--interactive'];
-  // forward any rust-looking env vars from the environment into the container
+  // Forward any rust-looking env vars from the environment into the container
   // itself.
   for (let key in process.env) {
     if (key.startsWith('CARGO') || key.startsWith('RUST')) {
