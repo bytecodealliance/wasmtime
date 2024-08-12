@@ -10,6 +10,7 @@ categories = ["no-std"]
 readme = "README.md"
 keywords = ["btree", "forest", "set", "map"]
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

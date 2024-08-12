@@ -2,6 +2,7 @@
 name = "verify-component-adapter"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 publish = false
 

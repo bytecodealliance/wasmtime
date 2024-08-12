@@ -4,6 +4,7 @@ authors.workspace = true
 description = "Compiler explorer for Wasmtime and Cranelift"
 documentation = "https://docs.rs/wasmtime-explorer/"
 edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 version.workspace = true

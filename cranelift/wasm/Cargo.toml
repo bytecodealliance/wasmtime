@@ -10,6 +10,7 @@ categories = ["no-std", "wasm"]
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

@@ -3,6 +3,7 @@ name = "test-programs"
 version = "0.0.0"
 authors = ["The Wasmtime Project Developers"]
 edition.workspace = true
+rust-version.workspace = true
 publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 

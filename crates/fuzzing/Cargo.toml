@@ -2,6 +2,7 @@
 authors.workspace = true
 description = "Fuzzing infrastructure for Wasmtime"
 edition.workspace = true
+rust-version.workspace = true
 name = "wasmtime-fuzzing"
 publish = false
 version = "0.0.0"

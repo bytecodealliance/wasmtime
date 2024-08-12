@@ -5,6 +5,7 @@ name = "wasm-spec-interpreter"
 version = "0.0.0"
 publish = false
 edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 
 [lints]

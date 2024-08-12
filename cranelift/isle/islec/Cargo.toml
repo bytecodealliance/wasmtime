@@ -3,6 +3,7 @@ name = "islec"
 version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 publish = false
 

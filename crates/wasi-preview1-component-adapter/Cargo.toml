@@ -3,6 +3,7 @@ name = "wasi-preview1-component-adapter"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 publish = false
 
 [lints]
