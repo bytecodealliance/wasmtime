@@ -147,6 +147,11 @@ jobs:
       run: cargo vet --locked
       continue-on-error: ${{ github.event_name == 'pull_request' }}
 
+    # Double-check that if versions are bumped that `cargo vet` still works.
+    # This is intended to weed out mistakes such as #9115 from happening again.
+    - run: rustc scripts/publish.rs && ./publish bump-patch && cargo vet
+      name: Ensure `cargo vet` works if versions are bumped
+
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
       if: failure() && github.event_name != 'pull_request'
