@@ -7,6 +7,7 @@
 #ifndef WASMTIME_CONF_H
 #define WASMTIME_CONF_H
 
+// WASMTIME_FEATURE_LIST
 #cmakedefine WASMTIME_FEATURE_PROFILING
 #cmakedefine WASMTIME_FEATURE_WAT
 #cmakedefine WASMTIME_FEATURE_CACHE
@@ -22,6 +23,8 @@
 #cmakedefine WASMTIME_FEATURE_ASYNC
 #cmakedefine WASMTIME_FEATURE_CRANELIFT
 #cmakedefine WASMTIME_FEATURE_WINCH
+// ... if you add a line above this be sure to change the other locations
+// marked WASMTIME_FEATURE_LIST
 
 #if defined(WASMTIME_FEATURE_CRANELIFT) || defined(WASMTIME_FEATURE_WINCH)
 #define WASMTIME_FEATURE_COMPILER
