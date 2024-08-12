@@ -1,3 +1,15 @@
+## 23.0.2
+
+Released 2024-08-12.
+
+### Changed
+
+* Building the c-api from crates.io now correctly configures an `include`
+  directory for header files with configured versions of header files.
+  [#9102](https://github.com/bytecodealliance/wasmtime/pull/9102)
+
+----
+
 ## 23.0.1
 
 Released 2024-07-22.
