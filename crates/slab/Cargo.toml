@@ -2,6 +2,7 @@
 authors = ["The Wasmtime Project Developers"]
 description = "Uni-typed slab with a free list for use in Wasmtime"
 edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 name = "wasmtime-slab"
 repository = "https://github.com/bytecodealliance/wasmtime"

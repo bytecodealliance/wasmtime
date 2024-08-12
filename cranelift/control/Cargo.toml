@@ -8,6 +8,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 keywords = ["fuzz", "test"]
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 arbitrary = { workspace = true, optional = true }

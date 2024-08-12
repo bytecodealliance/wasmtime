@@ -2,6 +2,7 @@
 authors = ["The Pulley Project Developers"]
 description = "The Pulley interpreter, its bytecode definition, encoder, decoder, and etc..."
 edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 name = "pulley-interpreter"
 readme = "./README.md"

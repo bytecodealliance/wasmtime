@@ -3,6 +3,7 @@ name = "wiggle-macro"
 version.workspace = true
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 description = "Wiggle code generator"
 categories = ["wasm"]

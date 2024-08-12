@@ -2,6 +2,7 @@
 authors = ["The Wasmtime Project Developers"]
 description = "Macros for defining versioned exports in Wasmtime"
 edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 name = "wasmtime-versioned-export-macros"
 repository = "https://github.com/bytecodealliance/wasmtime"

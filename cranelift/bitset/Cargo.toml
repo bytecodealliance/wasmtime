@@ -7,6 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-bitset"
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

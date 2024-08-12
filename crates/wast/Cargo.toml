@@ -8,6 +8,7 @@ categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

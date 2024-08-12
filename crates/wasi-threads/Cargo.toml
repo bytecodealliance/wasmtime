@@ -10,6 +10,7 @@ keywords = ["webassembly", "wasm", "neural-network"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

@@ -9,6 +9,7 @@ categories = ["no-std"]
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true
