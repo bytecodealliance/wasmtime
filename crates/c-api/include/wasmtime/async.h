@@ -11,22 +11,22 @@
  * are three mechanisms for yielding control from wasm to the caller: fuel,
  * epochs, and async host functions.
  *
- * When WebAssembly is executed, a #wasmtime_call_future_t is returned. This
+ * When WebAssembly is executed, a `wasmtime_call_future_t` is returned. This
  * struct represents the state of the execution and each call to
- * #wasmtime_call_future_poll will execute the WebAssembly code on a separate
+ * `wasmtime_call_future_poll` will execute the WebAssembly code on a separate
  * stack until the function returns or yields control back to the caller.
  *
  * It's expected these futures are pulled in a loop until completed, at which
  * point the future should be deleted. Functions that return a
- * #wasmtime_call_future_t are special in that all parameters to that function
+ * `wasmtime_call_future_t` are special in that all parameters to that function
  * should not be modified in any way and must be kept alive until the future is
  * deleted. This includes concurrent calls for a single store - another function
- * on a store should not be called while there is a #wasmtime_call_future_t
+ * on a store should not be called while there is a `wasmtime_call_future_t`
  * alive.
  *
  * As for asynchronous host calls - the reverse contract is upheld. Wasmtime
  * will keep all parameters to the function alive and unmodified until the
- * #wasmtime_func_async_continuation_callback_t returns true.
+ * `wasmtime_func_async_continuation_callback_t` returns true.
  *
  */
 
