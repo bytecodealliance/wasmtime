@@ -504,12 +504,14 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn demote(&mut self, _src: Reg, _dst: Reg) {
-        todo!()
+    fn demote(&mut self, src: Reg, dst: Reg) {
+        self.asm
+            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S64, OperandSize::S32);
     }
 
-    fn promote(&mut self, _src: Reg, _dst: Reg) {
-        todo!()
+    fn promote(&mut self, src: Reg, dst: Reg) {
+        self.asm
+            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S32, OperandSize::S64);
     }
 
     fn push(&mut self, reg: Reg, _size: OperandSize) -> StackSlot {

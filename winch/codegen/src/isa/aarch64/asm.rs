@@ -587,6 +587,27 @@ impl Assembler {
         })
     }
 
+    /// Change precision of float.
+    pub fn cvt_float_to_float(
+        &mut self,
+        rn: Reg,
+        rd: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        let (fpu_op, size) = match (src_size, dst_size) {
+            (OperandSize::S32, OperandSize::S64) => (FPUOp1::Cvt32To64, ScalarSize::Size32),
+            (OperandSize::S64, OperandSize::S32) => (FPUOp1::Cvt64To32, ScalarSize::Size64),
+            _ => unimplemented!(),
+        };
+        self.emit(Inst::FpuRR {
+            fpu_op,
+            size,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {});
