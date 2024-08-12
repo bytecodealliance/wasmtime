@@ -7,6 +7,9 @@ Released 2024-08-12.
 * Building the c-api from crates.io now correctly configures an `include`
   directory for header files with configured versions of header files.
   [#9102](https://github.com/bytecodealliance/wasmtime/pull/9102)
+* Wasmtime no longer requires linking with `libm` in Linux builds, which
+  fixes linking against musl in some cases.
+  [#9100](https://github.com/bytecodealliance/wasmtime/pull/9100)
 
 ----
 
