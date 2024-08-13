@@ -5,9 +5,9 @@
 //! There are two main operations that can be performed:
 //!
 //! - *Parking* refers to suspending the thread while simultaneously enqueuing it
-//! on a queue keyed by some address.
+//!   on a queue keyed by some address.
 //! - *Unparking* refers to dequeuing a thread from a queue keyed by some address
-//! and resuming it.
+//!   and resuming it.
 
 #![deny(missing_docs)]
 

@@ -263,7 +263,7 @@ pub trait Compiler: Send + Sync {
     /// 1. First, the index within `funcs` that is being resolved,
     ///
     /// 2. and next the `RelocationTarget` which is the relocation target to
-    /// resolve.
+    ///    resolve.
     ///
     /// The return value is an index within `funcs` that the relocation points
     /// to.

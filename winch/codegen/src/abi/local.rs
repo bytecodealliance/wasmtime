@@ -21,6 +21,7 @@ enum Base {
 ///   function defined locals and the param locals.
 /// * Local slots that represent arguments in the stack, are referenced through the
 ///   base pointer register.
+///
 /// A [crate::masm::StackSlot] is a generalized form of a [LocalSlot]: they
 /// represent dynamic chunks of memory that get created throughout the function
 /// compilation lifetime when spilling values (register and locals) into the

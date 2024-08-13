@@ -425,6 +425,7 @@ impl RuleSetBuilder {
     /// copy the constraint and push the equality inside it. For example:
     /// - `(term x @ 2 x)` is rewritten to `(term 2 2)`
     /// - `(term x @ (T.A _ _) x)` is rewritten to `(term (T.A y z) (T.A y z))`
+    ///
     /// In the latter case, note that every field of `T.A` has been replaced with a fresh variable
     /// and each of the copies are set equal.
     ///

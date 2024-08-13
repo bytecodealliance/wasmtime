@@ -10,11 +10,11 @@
 //!
 //! The three main primitives are the following:
 //! - `compute_cache_key` is used to compute the cache key associated to a `Function`. This is
-//! basically the content of the function, modulo a few things the caching system is resilient to.
+//!   basically the content of the function, modulo a few things the caching system is resilient to.
 //! - `serialize_compiled` is used to serialize the result of a compilation, so it can be reused
-//! later on by...
+//!   later on by...
 //! - `try_finish_recompile`, which reads binary blobs serialized with `serialize_compiled`,
-//! re-creating the compilation artifact from those.
+//!   re-creating the compilation artifact from those.
 //!
 //! The `CacheStore` trait and `Context::compile_with_cache` method are provided as
 //! high-level, easy-to-use facilities to make use of that cache, and show an example of how to use
