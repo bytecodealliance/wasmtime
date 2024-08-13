@@ -146,8 +146,8 @@ impl Masm for MacroAssembler {
         self.asm.str(src, dst, size);
     }
 
-    fn wasm_store(&mut self, _src: Reg, _dst: Self::Address, _size: OperandSize) {
-        todo!()
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) {
+        self.asm.str(src, dst, size);
     }
 
     fn call(
@@ -159,21 +159,27 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
-        self.asm.ldr(src, dst, size);
+        self.asm.uload(src, dst, size);
     }
 
-    fn load_ptr(&mut self, _src: Self::Address, _dst: Reg) {
-        todo!()
+    fn load_ptr(&mut self, src: Self::Address, dst: Reg) {
+        self.load(src, dst, self.ptr_size);
     }
 
     fn wasm_load(
         &mut self,
-        _src: Self::Address,
-        _dst: Reg,
-        _size: OperandSize,
-        _kind: Option<ExtendKind>,
+        src: Self::Address,
+        dst: Reg,
+        size: OperandSize,
+        kind: Option<ExtendKind>,
     ) {
-        todo!()
+        // kind is some if the value is signed
+        // unlike x64, unused bits are set to zero so we don't need to extend
+        if kind.is_some() {
+            self.asm.sload(src, dst, size);
+        } else {
+            self.asm.uload(src, dst, size);
+        }
     }
 
     fn load_addr(&mut self, _src: Self::Address, _dst: Reg, _size: OperandSize) {

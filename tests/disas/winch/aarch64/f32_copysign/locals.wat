@@ -31,13 +31,13 @@
 ;;       mov     w16, #0xcccd
 ;;       movk    w16, #0xbf8c, lsl #16
 ;;       fmov    s0, w16
-;;       stur    w0, [x28, #4]
+;;       stur    s0, [x28, #4]
 ;;       mov     w16, #0xcccd
 ;;       movk    w16, #0x400c, lsl #16
 ;;       fmov    s0, w16
-;;       stur    w0, [x28]
-;;       ldur    w0, [x28]
-;;       ldur    w1, [x28, #4]
+;;       stur    s0, [x28]
+;;       ldur    s0, [x28]
+;;       ldur    s1, [x28, #4]
 ;;       ushr    v0.2s, v0.2s, #0x1f
 ;;       sli     v1.2s, v0.2s, #0x1f
 ;;       fmov    s0, s1

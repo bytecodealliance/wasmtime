@@ -147,43 +147,115 @@ impl Assembler {
         let flags = MemFlags::trusted();
 
         use OperandSize::*;
-        let inst = match size {
-            S64 => Inst::Store64 {
+        let inst = match (reg.is_int(), size) {
+            (_, S8) => Inst::Store8 {
                 rd: reg.into(),
                 mem,
                 flags,
             },
-            S32 => Inst::Store32 {
+            (_, S16) => Inst::Store16 {
                 rd: reg.into(),
                 mem,
                 flags,
             },
-
-            _ => unreachable!(),
+            (true, S32) => Inst::Store32 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (false, S32) => Inst::FpuStore32 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (true, S64) => Inst::Store64 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (false, S64) => Inst::FpuStore64 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
+            (_, S128) => Inst::FpuStore128 {
+                rd: reg.into(),
+                mem,
+                flags,
+            },
         };
 
         self.emit(inst);
     }
 
+    /// Load a signed register.
+    pub fn sload(&mut self, addr: Address, rd: Reg, size: OperandSize) {
+        self.ldr(addr, rd, size, true);
+    }
+
+    /// Load an unsigned register.
+    pub fn uload(&mut self, addr: Address, rd: Reg, size: OperandSize) {
+        self.ldr(addr, rd, size, false);
+    }
+
     /// Load a register.
-    pub fn ldr(&mut self, addr: Address, rd: Reg, size: OperandSize) {
+    fn ldr(&mut self, addr: Address, rd: Reg, size: OperandSize, signed: bool) {
         use OperandSize::*;
         let writable_reg = Writable::from_reg(rd.into());
         let mem: AMode = addr.try_into().unwrap();
         let flags = MemFlags::trusted();
 
-        let inst = match size {
-            S64 => Inst::ULoad64 {
+        let inst = match (rd.is_int(), signed, size) {
+            (_, false, S8) => Inst::ULoad8 {
                 rd: writable_reg,
                 mem,
                 flags,
             },
-            S32 => Inst::ULoad32 {
+            (_, true, S8) => Inst::SLoad8 {
                 rd: writable_reg,
                 mem,
                 flags,
             },
-            _ => unreachable!(),
+            (_, false, S16) => Inst::ULoad16 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (_, true, S16) => Inst::SLoad16 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (true, false, S32) => Inst::ULoad32 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (false, _, S32) => Inst::FpuLoad32 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (true, true, S32) => Inst::SLoad32 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (true, _, S64) => Inst::ULoad64 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (false, _, S64) => Inst::FpuLoad64 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
+            (_, _, S128) => Inst::FpuLoad128 {
+                rd: writable_reg,
+                mem,
+                flags,
+            },
         };
 
         self.emit(inst);

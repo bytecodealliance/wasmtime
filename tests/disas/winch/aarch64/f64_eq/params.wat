@@ -17,10 +17,10 @@
 ;;       mov     x28, sp
 ;;       stur    x0, [x28, #0x18]
 ;;       stur    x1, [x28, #0x10]
-;;       stur    x0, [x28, #8]
-;;       stur    x1, [x28]
-;;       ldur    x0, [x28]
-;;       ldur    x1, [x28, #8]
+;;       stur    d0, [x28, #8]
+;;       stur    d1, [x28]
+;;       ldur    d0, [x28]
+;;       ldur    d1, [x28, #8]
 ;;       fcmp    d0, d1
 ;;       cset    x0, eq
 ;;       add     sp, sp, #0x20
