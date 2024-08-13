@@ -188,8 +188,18 @@ impl Assembler {
         self.emit(inst);
     }
 
+    /// Load a signed register.
+    pub fn sload(&mut self, addr: Address, rd: Reg, size: OperandSize) {
+        self.ldr(addr, rd, size, true);
+    }
+
+    /// Load an unsigned register.
+    pub fn uload(&mut self, addr: Address, rd: Reg, size: OperandSize) {
+        self.ldr(addr, rd, size, false);
+    }
+
     /// Load a register.
-    pub fn ldr(&mut self, addr: Address, rd: Reg, size: OperandSize, signed: bool) {
+    fn ldr(&mut self, addr: Address, rd: Reg, size: OperandSize, signed: bool) {
         use OperandSize::*;
         let writable_reg = Writable::from_reg(rd.into());
         let mem: AMode = addr.try_into().unwrap();
