@@ -4,7 +4,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use std::net::TcpListener;
 use std::{path::Path, time::Duration};
-use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
+use wasmtime::{
+    CodeBuilder, CodeHint, Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder,
+};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 use wasmtime_wasi::WasiCtxBuilder;
 
@@ -227,33 +229,24 @@ impl RunCommon {
             }
             #[cfg(any(feature = "cranelift", feature = "winch"))]
             None => {
-                // Parse the text format here specifically to add the `path` to
-                // the error message if there's a syntax error.
-                #[cfg(feature = "wat")]
-                let bytes = wat::parse_bytes(bytes).map_err(|mut e| {
-                    e.set_path(path);
-                    e
-                })?;
-                if wasmparser::Parser::is_component(&bytes) {
-                    #[cfg(feature = "component-model")]
-                    {
-                        self.ensure_allow_components()?;
-                        let component = wasmtime::CodeBuilder::new(engine)
-                            .wasm(&bytes, Some(path))?
-                            .compile_component()?;
-                        RunTarget::Component(component)
+                let mut code = CodeBuilder::new(engine);
+                code.wasm_binary_or_text(bytes, Some(path))?;
+                match code.hint() {
+                    Some(CodeHint::Component) => {
+                        #[cfg(feature = "component-model")]
+                        {
+                            self.ensure_allow_components()?;
+                            RunTarget::Component(code.compile_component()?)
+                        }
+                        #[cfg(not(feature = "component-model"))]
+                        {
+                            bail!("support for components was not enabled at compile time");
+                        }
                     }
-                    #[cfg(not(feature = "component-model"))]
-                    {
-                        bail!("support for components was not enabled at compile time");
-                    }
-                } else {
-                    let module = wasmtime::CodeBuilder::new(engine)
-                        .wasm(&bytes, Some(path))?
-                        .compile_module()?;
-                    RunTarget::Core(module)
+                    Some(CodeHint::Module) | None => RunTarget::Core(code.compile_module()?),
                 }
             }
+
             #[cfg(not(any(feature = "cranelift", feature = "winch")))]
             None => {
                 let _ = path;

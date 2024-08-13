@@ -5,7 +5,7 @@ use clap::Parser;
 use once_cell::sync::Lazy;
 use std::fs;
 use std::path::PathBuf;
-use wasmtime::Engine;
+use wasmtime::{CodeBuilder, CodeHint, Engine};
 use wasmtime_cli_flags::CommonOptions;
 
 static AFTER_HELP: Lazy<String> = Lazy::new(|| {
@@ -87,11 +87,8 @@ impl CompileCommand {
             );
         }
 
-        #[cfg(feature = "wat")]
-        let input = wat::parse_file(&self.module).with_context(|| "failed to read input file")?;
-        #[cfg(not(feature = "wat"))]
-        let input = std::fs::read(&self.module)
-            .with_context(|| format!("failed to read input file: {:?}", self.module))?;
+        let mut code = CodeBuilder::new(&engine);
+        code.wasm_binary_or_text_file(&self.module)?;
 
         let output = self.output.take().unwrap_or_else(|| {
             let mut output: PathBuf = self.module.file_name().unwrap().into();
@@ -99,19 +96,14 @@ impl CompileCommand {
             output
         });
 
-        let output_bytes = if wasmparser::Parser::is_component(&input) {
+        let output_bytes = match code.hint() {
             #[cfg(feature = "component-model")]
-            {
-                engine.precompile_component(&input)?
-            }
+            Some(CodeHint::Component) => code.compile_component_serialized()?,
             #[cfg(not(feature = "component-model"))]
-            {
+            Some(CodeHint::Component) => {
                 bail!("component model support was disabled at compile time")
             }
-        } else {
-            wasmtime::CodeBuilder::new(&engine)
-                .wasm(&input, Some(&self.module))?
-                .compile_module_serialized()?
+            Some(CodeHint::Module) | None => code.compile_module_serialized()?,
         };
         fs::write(&output, output_bytes)
             .with_context(|| format!("failed to write output: {}", output.display()))?;

@@ -18,31 +18,36 @@ use std::path::Path;
 /// [`Module::deserialize`](crate::Module::deserialize) instead.
 ///
 /// A [`CodeBuilder`] requires a source of WebAssembly bytes to be configured
-/// before calling [`compile_module_serialized`] or [`compile_module`]. This can be
-/// provided with either the [`wasm`] or [`wasm_file`] method. Note that only
-/// a single source of bytes can be provided.
+/// before calling [`compile_module_serialized`] or [`compile_module`]. This can
+/// be provided with either the [`wasm_binary`] or [`wasm_binary_file`] method.
+/// Note that only a single source of bytes can be provided.
 ///
 /// # WebAssembly Text Format
 ///
-/// This builder supports the WebAssembly Text Format (`*.wat` files).
-/// WebAssembly text files are automatically converted to a WebAssembly binary
-/// and then the binary is compiled. This requires the `wat` feature of the
-/// `wasmtime` crate to be enabled, and the feature is enabled by default.
-///
-/// If the text format is not desired then the [`CodeBuilder::wat`] method
-/// can be used to disable this conversion.
+/// This builder supports the WebAssembly Text Format (`*.wat` files) through
+/// the [`CodeBuilder::wasm_binary_or_text`] and
+/// [`CodeBuilder::wasm_binary_or_text_file`] methods. These methods
+/// automatically convert WebAssembly text files to binary. Note though that
+/// this behavior is disabled if the `wat` crate feature is not enabled.
 ///
 /// [`compile_module_serialized`]: CodeBuilder::compile_module_serialized
 /// [`compile_module`]: CodeBuilder::compile_module
-/// [`wasm`]: CodeBuilder::wasm
-/// [`wasm_file`]: CodeBuilder::wasm_file
+/// [`wasm_binary`]: CodeBuilder::wasm_binary
+/// [`wasm_binary_file`]: CodeBuilder::wasm_binary_file
 pub struct CodeBuilder<'a> {
     pub(super) engine: &'a Engine,
     wasm: Option<Cow<'a, [u8]>>,
     wasm_path: Option<Cow<'a, Path>>,
     dwarf_package: Option<Cow<'a, [u8]>>,
     dwarf_package_path: Option<Cow<'a, Path>>,
-    wat: bool,
+}
+
+/// Return value of [`CodeBuilder::hint`]
+pub enum CodeHint {
+    /// Hint that the code being compiled is a module.
+    Module,
+    /// Hint that the code being compiled is a component.
+    Component,
 }
 
 impl<'a> CodeBuilder<'a> {
@@ -55,15 +60,14 @@ impl<'a> CodeBuilder<'a> {
             wasm_path: None,
             dwarf_package: None,
             dwarf_package_path: None,
-            wat: cfg!(feature = "wat"),
         }
     }
 
-    /// Configures the WebAssembly binary or text that is being compiled.
+    /// Configures the WebAssembly binary that is being compiled.
     ///
-    /// The `wasm_bytes` parameter is either a binary WebAssembly file or a
-    /// WebAssembly module in its text format. This will be stored within the
-    /// [`CodeBuilder`] for processing later when compilation is finalized.
+    /// The `wasm_bytes` parameter must be a binary WebAssembly file.
+    /// This will be stored within the [`CodeBuilder`] for processing later when
+    /// compilation is finalized.
     ///
     /// The optional `wasm_path` parameter is the path to the `wasm_bytes` on
     /// disk, if any. This may be used for diagnostics and other
@@ -72,11 +76,15 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// # Errors
     ///
-    /// If wasm bytes have already been configured via a call to this method or
-    /// [`CodeBuilder::wasm_file`] then an error will be returned.
-    pub fn wasm(&mut self, wasm_bytes: &'a [u8], wasm_path: Option<&'a Path>) -> Result<&mut Self> {
+    /// This method will return an error if WebAssembly bytes have already been
+    /// configured.
+    pub fn wasm_binary(
+        &mut self,
+        wasm_bytes: impl Into<Cow<'a, [u8]>>,
+        wasm_path: Option<&'a Path>,
+    ) -> Result<&mut Self> {
         if self.wasm.is_some() {
-            bail!("cannot call `wasm` or `wasm_file` twice");
+            bail!("cannot configure wasm bytes twice");
         }
         self.wasm = Some(wasm_bytes.into());
         self.wasm_path = wasm_path.map(|p| p.into());
@@ -88,73 +96,83 @@ impl<'a> CodeBuilder<'a> {
         Ok(self)
     }
 
-    /// Configures whether the WebAssembly text format is supported in this
-    /// builder.
+    /// Equivalent of [`CodeBuilder::wasm_binary`] that also accepts the
+    /// WebAssembly text format.
     ///
-    /// This support is enabled by default if the `wat` crate feature is also
-    /// enabled.
+    /// This method will configure the WebAssembly binary to be compiled. The
+    /// input `wasm_bytes` may either be the wasm text format or the binary
+    /// format. If the `wat` crate feature is enabled, which is enabled by
+    /// default, then the text format will automatically be converted to the
+    /// binary format.
     ///
     /// # Errors
     ///
-    /// If this feature is explicitly enabled here via this method and the
-    /// `wat` crate feature is disabled then an error will be returned.
-    pub fn wat(&mut self, enable: bool) -> Result<&mut Self> {
-        if !cfg!(feature = "wat") && enable {
-            bail!("support for `wat` was disabled at compile time");
-        }
-        self.wat = enable;
-        Ok(self)
+    /// This method will return an error if WebAssembly bytes have already been
+    /// configured. This method will also return an error if `wasm_bytes` is the
+    /// wasm text format and the text syntax is not valid.
+    pub fn wasm_binary_or_text(
+        &mut self,
+        wasm_bytes: &'a [u8],
+        wasm_path: Option<&'a Path>,
+    ) -> Result<&mut Self> {
+        #[cfg(feature = "wat")]
+        let wasm_bytes = wat::parse_bytes(wasm_bytes).map_err(|mut e| {
+            if let Some(path) = wasm_path {
+                e.set_path(path);
+            }
+            e
+        })?;
+        self.wasm_binary(wasm_bytes, wasm_path)
     }
 
     /// Reads the `file` specified for the WebAssembly bytes that are going to
     /// be compiled.
     ///
     /// This method will read `file` from the filesystem and interpret it
-    /// either as a WebAssembly binary or as a WebAssembly text file. The
-    /// contents are inspected to do this, the file extension is not consulted.
+    /// as a WebAssembly binary.
     ///
     /// A DWARF package file will be probed using the root of `file` and with a
-    /// `.dwp` extension.  If found, it will be loaded and DWARF fusion
+    /// `.dwp` extension. If found, it will be loaded and DWARF fusion
     /// performed.
     ///
     /// # Errors
     ///
-    /// If wasm bytes have already been configured via a call to this method or
-    /// [`CodeBuilder::wasm`] then an error will be returned.
+    /// This method will return an error if WebAssembly bytes have already been
+    /// configured.
     ///
     /// If `file` can't be read or an error happens reading it then that will
     /// also be returned.
     ///
     /// If DWARF fusion is performed and the DWARF packaged file cannot be read
     /// then an error will be returned.
-    pub fn wasm_file(&mut self, file: &'a Path) -> Result<&mut Self> {
-        if self.wasm.is_some() {
-            bail!("cannot call `wasm` or `wasm_file` twice");
-        }
+    pub fn wasm_binary_file(&mut self, file: &'a Path) -> Result<&mut Self> {
         let wasm = std::fs::read(file)
             .with_context(|| format!("failed to read input file: {}", file.display()))?;
-        self.wasm = Some(wasm.into());
-        self.wasm_path = Some(file.into());
-        self.dwarf_package_from_wasm_path()?;
-
-        Ok(self)
+        self.wasm_binary(wasm, Some(file))
     }
 
-    pub(super) fn wasm_binary(&self) -> Result<Cow<'_, [u8]>> {
-        let wasm = self
-            .wasm
-            .as_ref()
-            .ok_or_else(|| anyhow!("no wasm bytes have been configured"))?;
-        if self.wat {
-            #[cfg(feature = "wat")]
-            return wat::parse_bytes(wasm).map_err(|mut e| {
-                if let Some(path) = &self.wasm_path {
-                    e.set_path(path);
-                }
-                e.into()
-            });
-        }
-        Ok((&wasm[..]).into())
+    /// Equivalent of [`CodeBuilder::wasm_binary_file`] that also accepts the
+    /// WebAssembly text format.
+    ///
+    /// This method is will read the file at `path` and interpret the contents
+    /// to determine if it's the wasm text format or binary format. The file
+    /// extension of `file` is not consulted. The text format is automatically
+    /// converted to the binary format if the crate feature `wat` is active.
+    ///
+    /// # Errors
+    ///
+    /// In addition to the errors returned by [`CodeBuilder::wasm_binary_file`]
+    /// this may also fail if the text format is read and the syntax is invalid.
+    pub fn wasm_binary_or_text_file(&mut self, file: &'a Path) -> Result<&mut Self> {
+        let wasm = std::fs::read(file)
+            .with_context(|| format!("failed to read input file: {}", file.display()))?;
+        self.wasm_binary_or_text(wasm, Some(file))
+    }
+
+    pub(super) fn get_wasm(&self) -> Result<&[u8]> {
+        self.wasm
+            .as_deref()
+            .ok_or_else(|| anyhow!("no wasm bytes have been configured"))
     }
 
     /// Explicitly specify DWARF `.dwp` path.
@@ -163,7 +181,7 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// This method will return an error if the `.dwp` file has already been set
     /// through [`CodeBuilder::dwarf_package`] or auto-detection in
-    /// [`CodeBuilder::wasm_file`].
+    /// [`CodeBuilder::wasm_binary_file`].
     ///
     /// This method will also return an error if `file` cannot be read.
     pub fn dwarf_package_file(&mut self, file: &Path) -> Result<&mut Self> {
@@ -189,8 +207,8 @@ impl<'a> CodeBuilder<'a> {
     }
 
     /// Gets the DWARF package.
-    pub(super) fn dwarf_package_binary(&self) -> Option<&[u8]> {
-        return self.dwarf_package.as_deref();
+    pub(super) fn get_dwarf_package(&self) -> Option<&[u8]> {
+        self.dwarf_package.as_deref()
     }
 
     /// Set the DWARF package binary.
@@ -202,7 +220,7 @@ impl<'a> CodeBuilder<'a> {
     /// # Errors
     ///
     /// Returns an error if the `*.dwp` file is already set via auto-probing in
-    /// [`CodeBuilder::wasm_file`] or explicitly via
+    /// [`CodeBuilder::wasm_binary_file`] or explicitly via
     /// [`CodeBuilder::dwarf_package_file`].
     pub fn dwarf_package(&mut self, dwp_bytes: &'a [u8]) -> Result<&mut Self> {
         if self.dwarf_package.is_some() {
@@ -212,11 +230,30 @@ impl<'a> CodeBuilder<'a> {
         Ok(self)
     }
 
+    /// Returns a hint, if possible, of what the provided bytes are.
+    ///
+    /// This method can be use to detect what the previously supplied bytes to
+    /// methods such as [`CodeBuilder::wasm_binary_or_text`] are. This will
+    /// return whether a module or a component was found in the provided bytes.
+    ///
+    /// This method will return `None` if wasm bytes have not been configured
+    /// or if the provided bytes don't look like either a component or a
+    /// module.
+    pub fn hint(&self) -> Option<CodeHint> {
+        let wasm = self.wasm.as_ref()?;
+        if wasmparser::Parser::is_component(wasm) {
+            Some(CodeHint::Component)
+        } else if wasmparser::Parser::is_core_wasm(wasm) {
+            Some(CodeHint::Module)
+        } else {
+            None
+        }
+    }
+
     /// Finishes this compilation and produces a serialized list of bytes.
     ///
-    /// This method requires that either [`CodeBuilder::wasm`] or
-    /// [`CodeBuilder::wasm_file`] was invoked prior to indicate what is
-    /// being compiled.
+    /// This method requires that either [`CodeBuilder::wasm_binary`] or
+    /// related methods were invoked prior to indicate what is being compiled.
     ///
     /// This method will block the current thread until compilation has
     /// finished, and when done the serialized artifact will be returned.
@@ -229,8 +266,8 @@ impl<'a> CodeBuilder<'a> {
     /// This can fail if the input wasm module was not valid or if another
     /// compilation-related error is encountered.
     pub fn compile_module_serialized(&self) -> Result<Vec<u8>> {
-        let wasm = self.wasm_binary()?;
-        let dwarf_package = self.dwarf_package_binary();
+        let wasm = self.get_wasm()?;
+        let dwarf_package = self.get_dwarf_package();
         let (v, _) = super::build_artifacts(self.engine, &wasm, dwarf_package.as_deref())?;
         Ok(v)
     }
@@ -240,7 +277,7 @@ impl<'a> CodeBuilder<'a> {
     /// instead of a module.
     #[cfg(feature = "component-model")]
     pub fn compile_component_serialized(&self) -> Result<Vec<u8>> {
-        let bytes = self.wasm_binary()?;
+        let bytes = self.get_wasm()?;
         let (v, _) = super::build_component_artifacts(self.engine, &bytes, None)?;
         Ok(v)
     }

@@ -18,7 +18,7 @@ pub fn compile_cranelift(
     }
     let engine = Engine::new(&config)?;
     let module = CodeBuilder::new(&engine)
-        .wasm(wasm, path)?
+        .wasm_binary_or_text(wasm, path)?
         .compile_module()?;
     let bytes = module.serialize()?;
 

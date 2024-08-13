@@ -494,7 +494,7 @@ impl Engine {
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         crate::CodeBuilder::new(self)
-            .wasm(bytes, None)?
+            .wasm_binary_or_text(bytes, None)?
             .compile_module_serialized()
     }
 
@@ -503,7 +503,7 @@ impl Engine {
     #[cfg(feature = "component-model")]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         crate::CodeBuilder::new(self)
-            .wasm(bytes, None)?
+            .wasm_binary_or_text(bytes, None)?
             .compile_component_serialized()
     }
 
