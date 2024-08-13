@@ -164,9 +164,15 @@ impl<'a> CodeBuilder<'a> {
     /// In addition to the errors returned by [`CodeBuilder::wasm_binary_file`]
     /// this may also fail if the text format is read and the syntax is invalid.
     pub fn wasm_binary_or_text_file(&mut self, file: &'a Path) -> Result<&mut Self> {
-        let wasm = std::fs::read(file)
-            .with_context(|| format!("failed to read input file: {}", file.display()))?;
-        self.wasm_binary_or_text(wasm, Some(file))
+        #[cfg(feature = "wat")]
+        {
+            let wasm = wat::parse_file(file)?;
+            self.wasm_binary(wasm, Some(file))
+        }
+        #[cfg(not(feature = "wat"))]
+        {
+            self.wasm_binary_file(file)
+        }
     }
 
     pub(super) fn get_wasm(&self) -> Result<&[u8]> {
