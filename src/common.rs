@@ -4,9 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use std::net::TcpListener;
 use std::{path::Path, time::Duration};
-use wasmtime::{
-    CodeBuilder, CodeHint, Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder,
-};
+use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 use wasmtime_wasi::WasiCtxBuilder;
 
@@ -229,10 +227,10 @@ impl RunCommon {
             }
             #[cfg(any(feature = "cranelift", feature = "winch"))]
             None => {
-                let mut code = CodeBuilder::new(engine);
+                let mut code = wasmtime::CodeBuilder::new(engine);
                 code.wasm_binary_or_text(bytes, Some(path))?;
                 match code.hint() {
-                    Some(CodeHint::Component) => {
+                    Some(wasmtime::CodeHint::Component) => {
                         #[cfg(feature = "component-model")]
                         {
                             self.ensure_allow_components()?;
@@ -243,7 +241,9 @@ impl RunCommon {
                             bail!("support for components was not enabled at compile time");
                         }
                     }
-                    Some(CodeHint::Module) | None => RunTarget::Core(code.compile_module()?),
+                    Some(wasmtime::CodeHint::Module) | None => {
+                        RunTarget::Core(code.compile_module()?)
+                    }
                 }
             }
 
