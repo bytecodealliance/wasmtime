@@ -1,0 +1,17 @@
+test compile precise-output
+target pulley64
+
+function %get_stack_pointer() -> i64 {
+block0:
+  v0 = get_stack_pointer.i64
+  return v0
+}
+
+; VCode:
+; block0:
+;   x0 = get_sp
+;   ret
+;
+; Disassembled:
+;        0: 33 02 00 00                     get_sp x0
+;        4: 00                              ret

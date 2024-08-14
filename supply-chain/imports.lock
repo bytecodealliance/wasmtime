@@ -145,6 +145,10 @@ audited_as = "0.110.1"
 version = "0.112.0"
 audited_as = "0.110.1"
 
+[[unpublished.pulley-interpreter]]
+version = "0.1.0"
+audited_as = "0.0.0"
+
 [[unpublished.wasi-common]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -809,6 +813,13 @@ when = "2024-04-17"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
+
+[[publisher.pulley-interpreter]]
+version = "0.0.0"
+when = "2024-07-30"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
 
 [[publisher.quote]]
 version = "1.0.36"

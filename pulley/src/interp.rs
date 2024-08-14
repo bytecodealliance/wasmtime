@@ -74,7 +74,7 @@ impl Vm {
         rets: impl IntoIterator<Item = RegType> + 'a,
     ) -> Result<impl Iterator<Item = Val> + 'a, *mut u8> {
         // NB: make sure this method stays in sync with
-        // `Pbc64MachineDeps::compute_arg_locs`!
+        // `PulleyMachineDeps::compute_arg_locs`!
 
         let mut x_args = (0..16).map(|x| XReg::unchecked_new(x));
         let mut f_args = (0..16).map(|f| FReg::unchecked_new(f));

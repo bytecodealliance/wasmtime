@@ -1,0 +1,38 @@
+test compile precise-output
+target pulley32
+
+function %jump(i8) -> i8 {
+block0(v0: i8):
+  brif v0, block1, block2
+
+block1:
+  v1 = iconst.i8 1
+  jump block3(v1)
+
+block2:
+  v2 = iconst.i8 0
+  jump block3(v2)
+
+block3(v3: i8):
+  return v3
+}
+
+; VCode:
+; block0:
+;   br_if x0, label2; jump label1
+; block1:
+;   x0 = xconst8 0
+;   jump label3
+; block2:
+;   x0 = xconst8 1
+;   jump label3
+; block3:
+;   ret
+;
+; Disassembled:
+;        0: 03 00 0e 00 00 00               br_if x0, 0xe    // target = 0xe
+;        6: 0e 00 00                        xconst8 x0, 0
+;        9: 02 08 00 00 00                  jump 0x8    // target = 0x11
+;        e: 0e 00 01                        xconst8 x0, 1
+;       11: 00                              ret
+

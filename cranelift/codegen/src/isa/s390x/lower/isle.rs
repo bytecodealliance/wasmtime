@@ -12,7 +12,6 @@ use crate::isa::s390x::inst::{
     UImm16Shifted, UImm32Shifted, WritableRegPair,
 };
 use crate::isa::s390x::S390xBackend;
-use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
 use crate::machinst::{MachLabel, Reg};
 use crate::{

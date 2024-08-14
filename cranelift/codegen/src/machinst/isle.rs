@@ -45,7 +45,10 @@ pub enum RangeView {
 #[doc(hidden)]
 macro_rules! isle_lower_prelude_methods {
     () => {
-        isle_common_prelude_methods!();
+        crate::isle_lower_prelude_methods!(MInst);
+    };
+    ($inst:ty) => {
+        crate::isle_common_prelude_methods!();
 
         #[inline]
         fn value_type(&mut self, val: Value) -> Type {
@@ -530,6 +533,7 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx
                 .abi()
                 .sized_stackslot_addr(stack_slot, offset, dst)
+                .into()
         }
 
         fn abi_dynamic_stackslot_addr(
@@ -542,7 +546,10 @@ macro_rules! isle_lower_prelude_methods {
                 .abi()
                 .dynamic_stackslot_offsets()
                 .is_valid(stack_slot));
-            self.lower_ctx.abi().dynamic_stackslot_addr(stack_slot, dst)
+            self.lower_ctx
+                .abi()
+                .dynamic_stackslot_addr(stack_slot, dst)
+                .into()
         }
 
         fn real_reg_to_reg(&mut self, reg: RealReg) -> Reg {
@@ -597,7 +604,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
-            MInst::gen_move(dst, src, ty)
+            <$inst>::gen_move(dst, src, ty).into()
         }
 
         /// Generate the return instruction.

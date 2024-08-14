@@ -73,10 +73,19 @@ impl SubTest for TestCompile {
         info!("Generated {} bytes of code:\n{}", total_size, vcode);
 
         if self.precise_output {
-            let cs = isa
-                .to_capstone()
-                .map_err(|e| anyhow::format_err!("{}", e))?;
-            let dis = compiled_code.disassemble(Some(&params), &cs)?;
+            let dis = match isa.triple().architecture {
+                target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64 => {
+                    pulley_interpreter::disas::Disassembler::disassemble_all(
+                        compiled_code.buffer.data(),
+                    )?
+                }
+                _ => {
+                    let cs = isa
+                        .to_capstone()
+                        .map_err(|e| anyhow::format_err!("{}", e))?;
+                    compiled_code.disassemble(Some(&params), &cs)?
+                }
+            };
 
             let actual = Vec::from_iter(
                 std::iter::once("VCode:")
@@ -84,6 +93,7 @@ impl SubTest for TestCompile {
                     .chain(["", "Disassembled:"])
                     .chain(dis.lines()),
             );
+
             check_precise_output(&actual, context)
         } else {
             run_filecheck(&vcode, context)
