@@ -243,3 +243,71 @@ async fn poll_through_wasm_activation() -> Result<()> {
     .await?;
     Ok(())
 }
+
+/// Test async drop method for host resources.
+#[tokio::test]
+async fn drop_resource_async() -> Result<()> {
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
+    let engine = super::async_engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+
+                (core func $drop (canon resource.drop $t))
+
+                (core module $m
+                    (import "" "drop" (func $drop (param i32)))
+                    (func (export "f") (param i32)
+                        (call $drop (local.get 0))
+                    )
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "drop" (func $drop))
+                    ))
+                ))
+
+                (func (export "f") (param "x" (own $t))
+                    (canon lift (core func $i "f")))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    let drop_status = Arc::new(Mutex::new("not dropped"));
+    let ds = drop_status.clone();
+
+    linker
+        .root()
+        .resource_async("t", ResourceType::host::<MyType>(), move |_, _| {
+            let ds = ds.clone();
+            Box::new(async move {
+                *ds.lock().unwrap() = "before yield";
+                tokio::task::yield_now().await;
+                *ds.lock().unwrap() = "after yield";
+                Ok(())
+            })
+        })?;
+    let i = linker.instantiate_async(&mut store, &c).await?;
+    let f = i.get_typed_func::<(Resource<MyType>,), ()>(&mut store, "f")?;
+
+    execute_across_threads(async move {
+        let resource = Resource::new_own(100);
+        f.call_async(&mut store, (resource,)).await?;
+        f.post_return_async(&mut store).await?;
+        Ok::<_, anyhow::Error>(())
+    })
+    .await?;
+
+    assert_eq!("after yield", *drop_status.lock().unwrap());
+
+    Ok(())
+}
