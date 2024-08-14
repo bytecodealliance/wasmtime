@@ -112,7 +112,6 @@ use smallvec::smallvec;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
-use target_lexicon::Triple;
 
 /// A small vector of instructions (with some reasonable size); appropriate for
 /// a small fixed sequence implementing one operation.
@@ -1036,8 +1035,6 @@ pub struct Callee<M: ABIMachineSpec> {
     /// manually register-allocated and carefully only use caller-saved
     /// registers and keep nothing live after this sequence of instructions.
     stack_limit: Option<(Reg, SmallInstVec<M::I>)>,
-    // Target triple
-    triple: Triple,
 
     _mach: PhantomData<M>,
 }
@@ -1163,7 +1160,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             isa_flags: isa_flags.clone(),
             is_leaf: f.is_leaf(),
             stack_limit,
-            triple: isa.triple().clone(),
             _mach: PhantomData,
         })
     }
@@ -1386,10 +1382,6 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// The offsets of all dynamic stack slots (not spill slots) for debuginfo purposes.
     pub fn dynamic_stackslot_offsets(&self) -> &PrimaryMap<DynamicStackSlot, u32> {
         &self.dynamic_stackslots
-    }
-
-    pub fn triple(&self) -> &Triple {
-        &self.triple
     }
 
     /// Generate an instruction which copies an argument to a destination

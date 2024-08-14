@@ -870,9 +870,6 @@
 (decl pure partial preserve_frame_pointers () Unit)
 (extern constructor preserve_frame_pointers preserve_frame_pointers)
 
-(decl pure partial on_linux () Unit)
-(extern constructor on_linux on_linux)
-
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl box_external_name (ExternalName) BoxExternalName)

@@ -3359,9 +3359,6 @@
 ;; Rules for `stack_switch` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (stack_switch store_context_ptr load_context_ptr in_payload0))
-       ;; For the time being, stack switching is only supported on x64 Linux
-       (if (on_linux))
-
        (let ((store_context_ptr Gpr (put_in_gpr store_context_ptr))
              (load_context_ptr Gpr (put_in_gpr load_context_ptr))
              (in_payload0 Gpr (put_in_gpr in_payload0)))

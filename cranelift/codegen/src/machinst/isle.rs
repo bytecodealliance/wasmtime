@@ -341,14 +341,6 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn on_linux(&mut self) -> Option<()> {
-            match self.lower_ctx.abi().triple().operating_system {
-                target_lexicon::OperatingSystem::Linux => Some(()),
-                _ => None,
-            }
-        }
-
-        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             let reloc_distance = if funcdata.colocated {

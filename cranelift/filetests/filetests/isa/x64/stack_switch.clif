@@ -1,6 +1,6 @@
 test compile precise-output
 set opt_level=speed
-target x86_64-unknown-linux-gnu
+target x86_64
 
 ;; Test code emitted for stack switch itself
 function %switch(i64, i64, i64) -> i64 {
