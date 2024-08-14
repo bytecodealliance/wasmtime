@@ -147,13 +147,27 @@ where
         src: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<u64> {
-        use crate::Subscribe;
+        let len = len.try_into().unwrap_or(usize::MAX);
 
-        self.table().get_mut(&dest)?.ready().await;
+        let permit = {
+            let output = self.table().get_mut(&dest)?;
+            output.write_ready().await?
+        };
+        let len = len.min(permit);
+        if len == 0 {
+            return Ok(0);
+        }
 
-        self.table().get_mut(&src)?.ready().await;
+        let contents = self.table().get_mut(&src)?.blocking_read(len).await?;
 
-        self.splice(dest, src, len)
+        let len = contents.len();
+        if len == 0 {
+            return Ok(0);
+        }
+
+        let output = self.table().get_mut(&dest)?;
+        output.blocking_write_and_flush(contents).await?;
+        Ok(len.try_into().expect("usize can fit in u64"))
     }
 }
 
