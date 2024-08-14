@@ -17,8 +17,9 @@ use std::time::Duration;
 
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
-    // cranelift
+    // pulley
     "pulley-interpreter",
+    // cranelift
     "cranelift-bitset",
     "cranelift-isle",
     "cranelift-entity",
@@ -140,6 +141,7 @@ fn main() {
     crates.push(root);
     find_crates("crates".as_ref(), &ws, &mut crates);
     find_crates("cranelift".as_ref(), &ws, &mut crates);
+    find_crates("pulley".as_ref(), &ws, &mut crates);
     find_crates("winch".as_ref(), &ws, &mut crates);
 
     let pos = CRATES_TO_PUBLISH
