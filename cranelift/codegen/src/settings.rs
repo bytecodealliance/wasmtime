@@ -511,6 +511,7 @@ mod tests {
         let expected = r#"[shared]
 opt_level = "none"
 tls_model = "none"
+stack_switch_model = "none"
 libcall_call_conv = "isa_default"
 probestack_size_log2 = 12
 probestack_strategy = "outline"

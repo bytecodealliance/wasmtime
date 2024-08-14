@@ -155,6 +155,19 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_enum(
+        "stack_switch_model",
+        "Defines the model used to performing stack switching.",
+        r#"
+           This determines the compilation of `stack_switch` instructions. If
+           set to `basic`, we simply save all registers, update stack pointer
+           and frame pointer (if needed), and jump to the target IP.
+           If set to `update_windows_tib`, we *additionally* update information
+           about the active stack in Windows' Thread Information Block.
+        "#,
+        vec!["none", "basic", "update_windows_tib"],
+    );
+
+    settings.add_enum(
         "libcall_call_conv",
         "Defines the calling convention to use for LibCalls call expansion.",
         r#"

@@ -870,6 +870,13 @@
 (decl pure partial preserve_frame_pointers () Unit)
 (extern constructor preserve_frame_pointers preserve_frame_pointers)
 
+;; This definition should be kept up to date with the values defined in
+;; cranelift/codegen/meta/src/shared/settings.rs
+(type StackSwitchModel extern (enum (None) (Basic) (UpdateWindowsTib)))
+
+(decl stack_switch_model (StackSwitchModel) Type)
+(extern extractor infallible stack_switch_model stack_switch_model)
+
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl box_external_name (ExternalName) BoxExternalName)

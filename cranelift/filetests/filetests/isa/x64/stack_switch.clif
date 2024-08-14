@@ -1,5 +1,6 @@
 test compile precise-output
 set opt_level=speed
+set stack_switch_model=basic
 target x86_64
 
 ;; Test code emitted for stack switch itself
@@ -21,7 +22,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   movq    %rdi, %r10
 ;   movq    %rdx, %rdi
-;   %rdi = stack_switch %r10, %rsi, %rdi
+;   %rdi = stack_switch_basic %r10, %rsi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    0(%rsp), %rbx
 ;   movq    8(%rsp), %r12
@@ -181,7 +182,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rdi, rsp(0 + virtual offset)
 ;   movq    %rdx, rsp(24 + virtual offset)
 ;   xorq    %rdi, %rdi, %rdi
-;   %rdi = stack_switch %rsi, %rsi, %rdi
+;   %rdi = stack_switch_basic %rsi, %rsi, %rdi
 ;   movq    rsp(128 + virtual offset), %rdx
 ;   movq    %rdi, rsp(16 + virtual offset)
 ;   movq    0(%rdx), %r8
@@ -451,7 +452,7 @@ block0(v0: i64, v1: i64):
 ;   movsd   120(%rdi), %xmm7
 ;   movdqu  %xmm7, rsp(0 + virtual offset)
 ;   xorq    %rdi, %rdi, %rdi
-;   %rdi = stack_switch %rsi, %rsi, %rdi
+;   %rdi = stack_switch_basic %rsi, %rsi, %rdi
 ;   u64_to_f64_seq %rdi, %xmm0, %rax, %rcx
 ;   movdqu  rsp(240 + virtual offset), %xmm7
 ;   addsd   %xmm0, %xmm7, %xmm0
