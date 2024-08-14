@@ -3,27 +3,20 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
-use crate::error::{self, Error, Span};
+use crate::error::{Error, Span};
 use crate::lexer::Pos;
-use crate::sema::{TermEnv, TermId, TermKind, TypeEnv};
+use crate::sema::{TermEnv, TermId, TermKind};
 use crate::trie_again;
 
 /// Check for overlap.
-pub fn check(
-    tyenv: &TypeEnv,
-    termenv: &TermEnv,
-) -> Result<Vec<(TermId, trie_again::RuleSet)>, error::Errors> {
+pub fn check(termenv: &TermEnv) -> Result<Vec<(TermId, trie_again::RuleSet)>, Vec<Error>> {
     let (terms, mut errors) = trie_again::build(termenv);
     errors.append(&mut check_overlaps(&terms, termenv).report());
 
     if errors.is_empty() {
         Ok(terms)
     } else {
-        Err(error::Errors {
-            errors,
-            filenames: tyenv.filenames.clone(),
-            file_texts: tyenv.file_texts.clone(),
-        })
+        Err(errors)
     }
 }
 

@@ -1,29 +1,18 @@
 //! Lexer for the ISLE language.
 
-use crate::error::{Error, Errors, Span};
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-type Result<T> = std::result::Result<T, Errors>;
+use crate::error::{Error, Span};
+use crate::files::Files;
+
+type Result<T> = std::result::Result<T, Error>;
 
 /// The lexer.
 ///
 /// Breaks source text up into a sequence of tokens (with source positions).
 #[derive(Clone, Debug)]
-pub struct Lexer<'a> {
-    /// Arena of filenames from the input source.
-    ///
-    /// Indexed via `Pos::file`.
-    pub filenames: Vec<Arc<str>>,
-
-    /// Arena of file source texts.
-    ///
-    /// Indexed via `Pos::file`.
-    pub file_texts: Vec<Arc<str>>,
-
-    file_starts: Vec<usize>,
-    buf: Cow<'a, [u8]>,
+pub struct Lexer<'src> {
+    src: &'src str,
     pos: Pos,
     lookahead: Option<(Pos, Token)>,
 }
@@ -38,16 +27,21 @@ pub struct Pos {
     pub file: usize,
     /// This source position's byte offset in the file.
     pub offset: usize,
-    /// This source position's line number in the file.
-    pub line: usize,
-    /// This source position's column number in the file.
-    pub col: usize,
 }
 
 impl Pos {
+    /// Create a new `Pos`.
+    pub fn new(file: usize, offset: usize) -> Self {
+        Self { file, offset }
+    }
+
     /// Print this source position as `file.isle line 12`.
-    pub fn pretty_print_line(&self, filenames: &[Arc<str>]) -> String {
-        format!("{} line {}", filenames[self.file], self.line)
+    pub fn pretty_print_line(&self, files: &Files) -> String {
+        format!(
+            "{} line {}",
+            files.file_name(self.file).unwrap(),
+            files.file_line_map(self.file).unwrap().line(self.offset)
+        )
     }
 }
 
@@ -66,69 +60,12 @@ pub enum Token {
     At,
 }
 
-impl<'a> Lexer<'a> {
-    /// Create a new lexer for the given source contents and filename.
-    pub fn from_str(s: &'a str, filename: &'a str) -> Result<Lexer<'a>> {
+impl<'src> Lexer<'src> {
+    /// Create a new lexer for the given source contents
+    pub fn new(file: usize, src: &'src str) -> Result<Lexer<'src>> {
         let mut l = Lexer {
-            filenames: vec![filename.into()],
-            file_texts: vec![s.into()],
-            file_starts: vec![0],
-            buf: Cow::Borrowed(s.as_bytes()),
-            pos: Pos {
-                file: 0,
-                offset: 0,
-                line: 1,
-                col: 0,
-            },
-            lookahead: None,
-        };
-        l.reload()?;
-        Ok(l)
-    }
-
-    /// Create a new lexer from the given files.
-    pub fn from_files<P>(file_paths: impl IntoIterator<Item = P>) -> Result<Lexer<'a>>
-    where
-        P: AsRef<Path>,
-    {
-        let mut files = vec![];
-        for f in file_paths.into_iter() {
-            let f = f.as_ref().to_path_buf();
-            let s = std::fs::read_to_string(f.as_path())
-                .map_err(|e| Errors::from_io(e, format!("failed to read file: {}", f.display())))?;
-            files.push((f, s));
-        }
-        Self::from_file_contents(files)
-    }
-
-    /// Create a new lexer from the given files and contents.
-    pub fn from_file_contents(files: Vec<(PathBuf, String)>) -> Result<Lexer<'a>> {
-        let mut filenames = Vec::<Arc<str>>::new();
-        let mut file_texts = Vec::<Arc<str>>::new();
-        for (f, content) in files.iter() {
-            filenames.push(f.display().to_string().into());
-
-            file_texts.push(content.as_str().into());
-        }
-        assert!(!filenames.is_empty());
-        let mut file_starts = vec![];
-        let mut buf = String::new();
-        for text in &file_texts {
-            file_starts.push(buf.len());
-            buf += text;
-            buf += "\n";
-        }
-        let mut l = Lexer {
-            filenames,
-            file_texts,
-            buf: Cow::Owned(buf.into_bytes()),
-            file_starts,
-            pos: Pos {
-                file: 0,
-                offset: 0,
-                line: 1,
-                col: 0,
-            },
+            src,
+            pos: Pos::new(file, 0),
             lookahead: None,
         };
         l.reload()?;
@@ -137,39 +74,17 @@ impl<'a> Lexer<'a> {
 
     /// Get the lexer's current source position.
     pub fn pos(&self) -> Pos {
-        Pos {
-            file: self.pos.file,
-            offset: self.pos.offset - self.file_starts[self.pos.file],
-            line: self.pos.line,
-            col: self.pos.col,
-        }
+        self.pos
     }
 
     fn advance_pos(&mut self) {
-        self.pos.col += 1;
-        if self.buf[self.pos.offset] == b'\n' {
-            self.pos.line += 1;
-            self.pos.col = 0;
-        }
         self.pos.offset += 1;
-        if self.pos.file + 1 < self.file_starts.len() {
-            let next_start = self.file_starts[self.pos.file + 1];
-            if self.pos.offset >= next_start {
-                assert!(self.pos.offset == next_start);
-                self.pos.file += 1;
-                self.pos.line = 1;
-            }
-        }
     }
 
-    fn error(&self, pos: Pos, msg: impl Into<String>) -> Errors {
-        Errors {
-            errors: vec![Error::ParseError {
-                msg: msg.into(),
-                span: Span::new_single(pos),
-            }],
-            filenames: self.filenames.clone(),
-            file_texts: self.file_texts.clone(),
+    fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
+        Error::ParseError {
+            msg: msg.into(),
+            span: Span::new_single(pos),
         }
     }
 
@@ -190,26 +105,26 @@ impl<'a> Lexer<'a> {
         }
 
         // Skip any whitespace and any comments.
-        while self.pos.offset < self.buf.len() {
-            if self.buf[self.pos.offset].is_ascii_whitespace() {
-                self.advance_pos();
-                continue;
-            }
-            if self.buf[self.pos.offset] == b';' {
-                while self.pos.offset < self.buf.len() && self.buf[self.pos.offset] != b'\n' {
-                    self.advance_pos();
+        while let Some(c) = self.peek_byte() {
+            match c {
+                c if c.is_ascii_whitespace() => self.advance_pos(),
+                b';' => {
+                    while let Some(c) = self.peek_byte() {
+                        match c {
+                            b'\n' => break,
+                            _ => self.advance_pos(),
+                        }
+                    }
                 }
-                continue;
+                _ => break,
             }
-            break;
         }
 
-        if self.pos.offset == self.buf.len() {
+        let Some(c) = self.peek_byte() else {
             return Ok(None);
-        }
-
+        };
         let char_pos = self.pos();
-        match self.buf[self.pos.offset] {
+        match c {
             b'(' => {
                 self.advance_pos();
                 Ok(Some((char_pos, Token::LParen)))
@@ -225,44 +140,43 @@ impl<'a> Lexer<'a> {
             c if is_sym_first_char(c) => {
                 let start = self.pos.offset;
                 let start_pos = self.pos();
-                while self.pos.offset < self.buf.len()
-                    && is_sym_other_char(self.buf[self.pos.offset])
-                {
-                    self.advance_pos();
+                while let Some(c) = self.peek_byte() {
+                    match c {
+                        c if is_sym_other_char(c) => self.advance_pos(),
+                        _ => break,
+                    }
                 }
                 let end = self.pos.offset;
-                let s = std::str::from_utf8(&self.buf[start..end])
-                    .expect("Only ASCII characters, should be UTF-8");
+                let s = &self.src[start..end];
                 debug_assert!(!s.is_empty());
                 Ok(Some((start_pos, Token::Symbol(s.to_string()))))
             }
             c @ (b'0'..=b'9' | b'-') => {
                 let start_pos = self.pos();
-                let neg = if c == b'-' {
+                let mut neg = false;
+                if c == b'-' {
                     self.advance_pos();
-                    true
-                } else {
-                    false
-                };
+                    neg = true;
+                }
 
                 let mut radix = 10;
 
                 // Check for prefixed literals.
                 match (
-                    self.buf.get(self.pos.offset),
-                    self.buf.get(self.pos.offset + 1),
+                    self.src.as_bytes().get(self.pos.offset),
+                    self.src.as_bytes().get(self.pos.offset + 1),
                 ) {
-                    (Some(b'0'), Some(b'x')) | (Some(b'0'), Some(b'X')) => {
+                    (Some(b'0'), Some(b'x' | b'X')) => {
                         self.advance_pos();
                         self.advance_pos();
                         radix = 16;
                     }
-                    (Some(b'0'), Some(b'o')) => {
+                    (Some(b'0'), Some(b'o' | b'O')) => {
                         self.advance_pos();
                         self.advance_pos();
                         radix = 8;
                     }
-                    (Some(b'0'), Some(b'b')) => {
+                    (Some(b'0'), Some(b'b' | b'B')) => {
                         self.advance_pos();
                         self.advance_pos();
                         radix = 2;
@@ -273,32 +187,37 @@ impl<'a> Lexer<'a> {
                 // Find the range in the buffer for this integer literal. We'll
                 // pass this range to `i64::from_str_radix` to do the actual
                 // string-to-integer conversion.
-                let mut s = vec![];
-                while self.pos.offset < self.buf.len()
-                    && ((radix <= 10 && self.buf[self.pos.offset].is_ascii_digit())
-                        || (radix == 16 && self.buf[self.pos.offset].is_ascii_hexdigit())
-                        || self.buf[self.pos.offset] == b'_')
-                {
-                    if self.buf[self.pos.offset] != b'_' {
-                        s.push(self.buf[self.pos.offset]);
+                let start = self.pos.offset;
+                while let Some(c) = self.peek_byte() {
+                    match c {
+                        b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b'_' => self.advance_pos(),
+                        _ => break,
                     }
-                    self.advance_pos();
                 }
-                let s_utf8 = std::str::from_utf8(&s[..]).unwrap();
+                let end = self.pos.offset;
+                let s = &self.src[start..end];
+                let s = if s.contains('_') {
+                    Cow::Owned(s.replace('_', ""))
+                } else {
+                    Cow::Borrowed(s)
+                };
 
                 // Support either signed range (-2^127..2^127) or
                 // unsigned range (0..2^128).
-                let num = i128::from_str_radix(s_utf8, radix)
-                    .or_else(|_| u128::from_str_radix(s_utf8, radix).map(|val| val as i128))
-                    .map_err(|e| self.error(start_pos, e.to_string()))?;
-
-                let tok = if neg {
-                    Token::Int(num.checked_neg().ok_or_else(|| {
-                        self.error(start_pos, "integer literal cannot fit in i128")
-                    })?)
-                } else {
-                    Token::Int(num)
+                let num = match u128::from_str_radix(&s, radix) {
+                    Ok(num) => num,
+                    Err(err) => return Err(self.error(start_pos, err.to_string())),
                 };
+
+                let num = match (neg, num) {
+                    (true, 0x80000000000000000000000000000000) => {
+                        return Err(self.error(start_pos, "integer literal cannot fit in i128"))
+                    }
+                    (true, _) => -(num as i128),
+                    (false, _) => num as i128,
+                };
+                let tok = Token::Int(num);
+
                 Ok(Some((start_pos, tok)))
             }
             c => Err(self.error(self.pos, format!("Unexpected character '{c}'"))),
@@ -313,7 +232,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn reload(&mut self) -> Result<()> {
-        if self.lookahead.is_none() && self.pos.offset < self.buf.len() {
+        if self.lookahead.is_none() && self.pos.offset < self.src.len() {
             self.lookahead = self.next_token()?;
         }
         Ok(())
@@ -327,6 +246,10 @@ impl<'a> Lexer<'a> {
     /// Are we at the end of the source input?
     pub fn eof(&self) -> bool {
         self.lookahead.is_none()
+    }
+
+    fn peek_byte(&self) -> Option<u8> {
+        self.src.as_bytes().get(self.pos.offset).copied()
     }
 }
 
@@ -346,9 +269,10 @@ impl Token {
 mod test {
     use super::*;
 
-    fn lex(s: &str, file: &str) -> Vec<Token> {
+    #[track_caller]
+    fn lex(src: &str) -> Vec<Token> {
         let mut toks = vec![];
-        let mut lexer = Lexer::from_str(s, file).unwrap();
+        let mut lexer = Lexer::new(0, src).unwrap();
         while let Some((_, tok)) = lexer.next().unwrap() {
             toks.push(tok);
         }
@@ -358,11 +282,8 @@ mod test {
     #[test]
     fn lexer_basic() {
         assert_eq!(
-            lex(
-                ";; comment\n; another\r\n   \t(one two three 23 -568  )\n",
-                "lexer_basic"
-            ),
-            vec![
+            lex(";; comment\n; another\r\n   \t(one two three 23 -568  )\n"),
+            [
                 Token::LParen,
                 Token::Symbol("one".to_string()),
                 Token::Symbol("two".to_string()),
@@ -376,22 +297,19 @@ mod test {
 
     #[test]
     fn ends_with_sym() {
-        assert_eq!(
-            lex("asdf", "ends_with_sym"),
-            vec![Token::Symbol("asdf".to_string()),]
-        );
+        assert_eq!(lex("asdf"), [Token::Symbol("asdf".to_string())]);
     }
 
     #[test]
     fn ends_with_num() {
-        assert_eq!(lex("23", "ends_with_num"), vec![Token::Int(23)],);
+        assert_eq!(lex("23"), [Token::Int(23)]);
     }
 
     #[test]
     fn weird_syms() {
         assert_eq!(
-            lex("(+ [] => !! _test!;comment\n)", "weird_syms"),
-            vec![
+            lex("(+ [] => !! _test!;comment\n)"),
+            [
                 Token::LParen,
                 Token::Symbol("+".to_string()),
                 Token::Symbol("[]".to_string()),
@@ -401,5 +319,25 @@ mod test {
                 Token::RParen,
             ]
         );
+    }
+
+    #[test]
+    fn integers() {
+        assert_eq!(
+            lex("0 1 -1"),
+            [Token::Int(0), Token::Int(1), Token::Int(-1)]
+        );
+
+        assert_eq!(
+            lex("340_282_366_920_938_463_463_374_607_431_768_211_455"),
+            [Token::Int(-1)]
+        );
+
+        assert_eq!(
+            lex("170_141_183_460_469_231_731_687_303_715_884_105_727"),
+            [Token::Int(i128::MAX)]
+        );
+
+        assert!(Lexer::new(0, "-170_141_183_460_469_231_731_687_303_715_884_105_728").is_err())
     }
 }

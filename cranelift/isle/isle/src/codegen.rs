@@ -1,11 +1,13 @@
 //! Generate Rust code from a series of Sequences.
 
+use crate::files::Files;
 use crate::sema::{ExternalSig, ReturnKind, Sym, Term, TermEnv, TermId, Type, TypeEnv, TypeId};
 use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
 use crate::stablemapset::StableSet;
 use crate::trie_again::{Binding, BindingId, Constraint, RuleSet};
 use std::fmt::Write;
 use std::slice::Iter;
+use std::sync::Arc;
 
 /// Options for code generation.
 #[derive(Clone, Debug, Default)]
@@ -17,16 +19,18 @@ pub struct CodegenOptions {
 
 /// Emit Rust source code for the given type and term environments.
 pub fn codegen(
+    files: Arc<Files>,
     typeenv: &TypeEnv,
     termenv: &TermEnv,
     terms: &[(TermId, RuleSet)],
     options: &CodegenOptions,
 ) -> String {
-    Codegen::compile(typeenv, termenv, terms).generate_rust(options)
+    Codegen::compile(files, typeenv, termenv, terms).generate_rust(options)
 }
 
 #[derive(Clone, Debug)]
 struct Codegen<'a> {
+    files: Arc<Files>,
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
     terms: &'a [(TermId, RuleSet)],
@@ -91,11 +95,13 @@ impl<'a, W: Write> BodyContext<'a, W> {
 
 impl<'a> Codegen<'a> {
     fn compile(
+        files: Arc<Files>,
         typeenv: &'a TypeEnv,
         termenv: &'a TermEnv,
         terms: &'a [(TermId, RuleSet)],
     ) -> Codegen<'a> {
         Codegen {
+            files,
             typeenv,
             termenv,
             terms,
@@ -121,7 +127,7 @@ impl<'a> Codegen<'a> {
             "// Generated automatically from the instruction-selection DSL code in:",
         )
         .unwrap();
-        for file in &self.typeenv.filenames {
+        for file in &self.files.file_names {
             writeln!(code, "// - {file}").unwrap();
         }
 
@@ -335,7 +341,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                         code,
                         "\n/// Internal type {}: defined at {}.",
                         name,
-                        pos.pretty_print_line(&self.typeenv.filenames[..])
+                        pos.pretty_print_line(&self.files)
                     )
                     .unwrap();
 
@@ -454,7 +460,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                         term_name,
                         termdata
                             .decl_pos
-                            .pretty_print_line(&self.typeenv.filenames[..])
+                            .pretty_print_line(&self.files)
                     ),
                 }
             };
@@ -640,7 +646,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                 ctx.out,
                                 "{}// Rule at {}.",
                                 &ctx.indent,
-                                pos.pretty_print_line(&self.typeenv.filenames)
+                                pos.pretty_print_line(&self.files)
                             )?;
                             write!(ctx.out, "{}", &ctx.indent)?;
                             match ret_kind {

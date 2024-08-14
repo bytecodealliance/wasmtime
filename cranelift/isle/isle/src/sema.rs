@@ -22,7 +22,6 @@ use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 declare_id!(
     /// The id of an interned symbol.
@@ -58,16 +57,6 @@ declare_id!(
 /// Keeps track of which symbols and rules have which types.
 #[derive(Debug)]
 pub struct TypeEnv {
-    /// Arena of input ISLE source filenames.
-    ///
-    /// We refer to these indirectly through the `Pos::file` indices.
-    pub filenames: Vec<Arc<str>>,
-
-    /// Arena of input ISLE source contents.
-    ///
-    /// We refer to these indirectly through the `Pos::file` indices.
-    pub file_texts: Vec<Arc<str>>,
-
     /// Arena of interned symbol names.
     ///
     /// Referred to indirectly via `Sym` indices.
@@ -912,10 +901,8 @@ macro_rules! unwrap_or_continue {
 
 impl TypeEnv {
     /// Construct the type environment from the AST.
-    pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv, Errors> {
+    pub fn from_ast(defs: &[ast::Def]) -> Result<TypeEnv, Vec<Error>> {
         let mut tyenv = TypeEnv {
-            filenames: defs.filenames.clone(),
-            file_texts: defs.file_texts.clone(),
             syms: vec![],
             sym_map: StableMap::new(),
             types: vec![],
@@ -926,7 +913,7 @@ impl TypeEnv {
 
         // Traverse defs, assigning type IDs to type names. We'll fill
         // in types on a second pass.
-        for def in &defs.defs {
+        for def in defs {
             match def {
                 &ast::Def::Type(ref td) => {
                     let tid = TypeId(tyenv.type_map.len());
@@ -954,7 +941,7 @@ impl TypeEnv {
         // Now lower AST nodes to type definitions, raising errors
         // where typenames of fields are undefined or field names are
         // duplicated.
-        for def in &defs.defs {
+        for def in defs {
             match def {
                 &ast::Def::Type(ref td) => {
                     let tid = tyenv.types.len();
@@ -967,7 +954,7 @@ impl TypeEnv {
         }
 
         // Now collect types for extern constants.
-        for def in &defs.defs {
+        for def in defs {
             if let &ast::Def::Extern(ast::Extern::Const {
                 ref name,
                 ref ty,
@@ -991,15 +978,11 @@ impl TypeEnv {
         Ok(tyenv)
     }
 
-    fn return_errors(&mut self) -> Result<(), Errors> {
+    fn return_errors(&mut self) -> Result<(), Vec<Error>> {
         if self.errors.is_empty() {
             Ok(())
         } else {
-            Err(Errors {
-                errors: std::mem::take(&mut self.errors),
-                filenames: self.filenames.clone(),
-                file_texts: self.file_texts.clone(),
-            })
+            Err(std::mem::take(&mut self.errors))
         }
     }
 
@@ -1169,7 +1152,7 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv, Errors> {
+    pub fn from_ast(tyenv: &mut TypeEnv, defs: &[ast::Def]) -> Result<TermEnv, Vec<Error>> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
@@ -1196,13 +1179,13 @@ impl TermEnv {
         Ok(env)
     }
 
-    fn collect_pragmas(&mut self, _: &ast::Defs) {
+    fn collect_pragmas(&mut self, _: &[ast::Def]) {
         // currently, no pragmas are defined, but the infrastructure is useful to keep around
         return;
     }
 
-    fn collect_term_sigs(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        for def in &defs.defs {
+    fn collect_term_sigs(&mut self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
+        for def in defs {
             match def {
                 &ast::Def::Decl(ref decl) => {
                     let name = tyenv.intern_mut(&decl.term);
@@ -1315,8 +1298,8 @@ impl TermEnv {
         }
     }
 
-    fn collect_constructors(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        for def in &defs.defs {
+    fn collect_constructors(&mut self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
+        for def in defs {
             log!("collect_constructors from def: {:?}", def);
             match def {
                 &ast::Def::Rule(ref rule) => {
@@ -1378,10 +1361,10 @@ impl TermEnv {
         }
     }
 
-    fn collect_extractor_templates(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
+    fn collect_extractor_templates(&mut self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
         let mut extractor_call_graph = BTreeMap::new();
 
-        for def in &defs.defs {
+        for def in defs {
             if let &ast::Def::Extractor(ref ext) = def {
                 let term = match self.get_term_by_name(tyenv, &ext.term) {
                     Some(x) => x,
@@ -1502,8 +1485,8 @@ impl TermEnv {
         }
     }
 
-    fn collect_converters(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        for def in &defs.defs {
+    fn collect_converters(&mut self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
+        for def in defs {
             match def {
                 &ast::Def::Converter(ast::Converter {
                     ref term,
@@ -1565,8 +1548,8 @@ impl TermEnv {
         }
     }
 
-    fn collect_externs(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        for def in &defs.defs {
+    fn collect_externs(&mut self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
+        for def in defs {
             match def {
                 &ast::Def::Extern(ast::Extern::Constructor {
                     ref term,
@@ -1688,8 +1671,8 @@ impl TermEnv {
         }
     }
 
-    fn collect_rules(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        for def in &defs.defs {
+    fn collect_rules(&mut self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
+        for def in defs {
             match def {
                 &ast::Def::Rule(ref rule) => {
                     let pos = rule.pos;
@@ -1781,8 +1764,8 @@ impl TermEnv {
         }
     }
 
-    fn check_for_undefined_decls(&self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        for def in &defs.defs {
+    fn check_for_undefined_decls(&self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
+        for def in defs {
             if let ast::Def::Decl(decl) = def {
                 let term = self.get_term_by_name(tyenv, &decl.term).unwrap();
                 let term = &self.terms[term.index()];
@@ -1799,8 +1782,8 @@ impl TermEnv {
         }
     }
 
-    fn check_for_expr_terms_without_constructors(&self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        for def in &defs.defs {
+    fn check_for_expr_terms_without_constructors(&self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
+        for def in defs {
             if let ast::Def::Rule(rule) = def {
                 rule.expr.terms(&mut |pos, ident| {
                     let term = match self.get_term_by_name(tyenv, ident) {
@@ -2410,7 +2393,7 @@ mod test {
             (type u32 (primitive u32))
             (type A extern (enum (B (f1 u32) (f2 u32)) (C (f1 u32))))
         ";
-        let ast = parse(Lexer::from_str(text, "file.isle").unwrap()).expect("should parse");
+        let ast = parse(Lexer::new(0, text).unwrap()).expect("should parse");
         let tyenv = TypeEnv::from_ast(&ast).expect("should not have type-definition errors");
 
         let sym_a = tyenv
@@ -2448,8 +2431,6 @@ mod test {
                 Pos {
                     file: 0,
                     offset: 19,
-                    line: 2,
-                    col: 18,
                 },
             ),
             Type::Enum {
@@ -2489,8 +2470,6 @@ mod test {
                 pos: Pos {
                     file: 0,
                     offset: 58,
-                    line: 3,
-                    col: 18,
                 },
             },
         ];
