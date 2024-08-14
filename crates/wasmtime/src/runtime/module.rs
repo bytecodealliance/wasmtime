@@ -243,7 +243,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         crate::CodeBuilder::new(engine)
-            .wasm(bytes.as_ref(), None)?
+            .wasm_binary_or_text(bytes.as_ref(), None)?
             .compile_module()
     }
 
@@ -278,7 +278,7 @@ impl Module {
     #[cfg(all(feature = "std", any(feature = "cranelift", feature = "winch")))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         crate::CodeBuilder::new(engine)
-            .wasm_file(file.as_ref())?
+            .wasm_binary_or_text_file(file.as_ref())?
             .compile_module()
     }
 
@@ -316,8 +316,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         crate::CodeBuilder::new(engine)
-            .wasm(binary, None)?
-            .wat(false)?
+            .wasm_binary(binary, None)?
             .compile_module()
     }
 
@@ -351,7 +350,7 @@ impl Module {
         }
 
         crate::CodeBuilder::new(engine)
-            .wasm(&mmap, Some(file.as_ref()))?
+            .wasm_binary_or_text(&mmap[..], Some(file.as_ref()))?
             .compile_module()
     }
 

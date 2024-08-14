@@ -13,8 +13,8 @@ impl<'a> CodeBuilder<'a> {
         &self,
         build_artifacts: fn(&Engine, &[u8], Option<&[u8]>) -> Result<(MmapVecWrapper, Option<T>)>,
     ) -> Result<(Arc<CodeMemory>, Option<T>)> {
-        let wasm = self.wasm_binary()?;
-        let dwarf_package = self.dwarf_package_binary();
+        let wasm = self.get_wasm()?;
+        let dwarf_package = self.get_dwarf_package();
 
         self.engine
             .check_compatible_with_native_host()
