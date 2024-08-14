@@ -883,11 +883,44 @@ impl OpVisitor for InterpreterVisitor<'_> {
         Continuation::Continue
     }
 
+    fn load32_u_offset64(&mut self, dst: XReg, ptr: XReg, offset: i64) -> Self::Return {
+        let val = unsafe {
+            self.state[ptr]
+                .get_ptr::<u32>()
+                .byte_offset(offset as isize)
+                .read_unaligned()
+        };
+        self.state[dst].set_u64(u64::from(val));
+        Continuation::Continue
+    }
+
+    fn load32_s_offset64(&mut self, dst: XReg, ptr: XReg, offset: i64) -> Self::Return {
+        let val = unsafe {
+            self.state[ptr]
+                .get_ptr::<i32>()
+                .byte_offset(offset as isize)
+                .read_unaligned()
+        };
+        self.state[dst].set_i64(i64::from(val));
+        Continuation::Continue
+    }
+
     fn load64_offset8(&mut self, dst: XReg, ptr: XReg, offset: i8) -> Self::Return {
         let val = unsafe {
             self.state[ptr]
                 .get_ptr::<u64>()
                 .byte_offset(offset.into())
+                .read_unaligned()
+        };
+        self.state[dst].set_u64(val);
+        Continuation::Continue
+    }
+
+    fn load64_offset64(&mut self, dst: XReg, ptr: XReg, offset: i64) -> Self::Return {
+        let val = unsafe {
+            self.state[ptr]
+                .get_ptr::<u64>()
+                .byte_offset(offset as isize)
                 .read_unaligned()
         };
         self.state[dst].set_u64(val);
@@ -929,6 +962,28 @@ impl OpVisitor for InterpreterVisitor<'_> {
             self.state[ptr]
                 .get_ptr::<u64>()
                 .byte_offset(offset.into())
+                .write_unaligned(val);
+        }
+        Continuation::Continue
+    }
+
+    fn store32_offset64(&mut self, ptr: XReg, offset: i64, src: XReg) -> Self::Return {
+        let val = self.state[src].get_u32();
+        unsafe {
+            self.state[ptr]
+                .get_ptr::<u32>()
+                .byte_offset(offset as isize)
+                .write_unaligned(val);
+        }
+        Continuation::Continue
+    }
+
+    fn store64_offset64(&mut self, ptr: XReg, offset: i64, src: XReg) -> Self::Return {
+        let val = self.state[src].get_u64();
+        unsafe {
+            self.state[ptr]
+                .get_ptr::<u64>()
+                .byte_offset(offset as isize)
                 .write_unaligned(val);
         }
         Continuation::Continue
