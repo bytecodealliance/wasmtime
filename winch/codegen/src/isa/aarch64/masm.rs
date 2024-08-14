@@ -438,7 +438,7 @@ impl Masm for MacroAssembler {
 
     fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
         let src = context.pop_to_reg(self, None);
-        let tmp = context.reg_for_class(RegClass::Float, self);
+        let tmp = regs::float_scratch();
         self.asm.mov_to_fpu(src.into(), tmp, size);
         self.asm.cnt(tmp);
         match size {

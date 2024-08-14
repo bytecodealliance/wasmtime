@@ -18,10 +18,10 @@
 ;;       stur    x1, [x28]
 ;;       mov     x16, #0xf
 ;;       mov     w0, w16
-;;       fmov    s0, w0
-;;       cnt     v0.8b, v0.8b
-;;       addv    b0, v0.8b
-;;       umov    w0, v0.b[0]
+;;       fmov    s31, w0
+;;       cnt     v31.8b, v31.8b
+;;       addv    b31, v31.8b
+;;       umov    w0, v31.b[0]
 ;;       add     sp, sp, #0x10
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10
