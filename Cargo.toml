@@ -219,7 +219,7 @@ wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version 
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=25.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 
-pulley-interpreter = { path = 'pulley' }
+pulley-interpreter = { path = 'pulley', version = "=0.1.0" }
 pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.112.0" }
