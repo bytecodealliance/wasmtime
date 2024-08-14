@@ -1,23 +1,22 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::{FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::masm::{ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::isa::aarch64::inst::{
     BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
     FPUOpRI::{self, UShr32, UShr64},
     FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
-use cranelift_codegen::MachInst;
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode,
+        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode, VecLanesOp, VecMisc2, VectorSize,
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    Writable,
+    settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
+    MachLabel, Writable,
 };
 
 impl From<OperandSize> for inst::OperandSize {
@@ -312,6 +311,15 @@ impl Assembler {
         });
     }
 
+    pub fn mov_from_vec(&mut self, rn: Reg, rd: Reg, idx: u8, size: OperandSize) {
+        self.emit(Inst::MovFromVec {
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            idx,
+            size: size.into(),
+        });
+    }
+
     /// Add with three registers.
     pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
@@ -327,6 +335,16 @@ impl Assembler {
             self.load_constant(imm, scratch);
             self.emit_alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
+    }
+
+    /// Add across Vector.
+    pub fn addv(&mut self, rn: Reg, rd: Reg, size: VectorSize) {
+        self.emit(Inst::VecLanes {
+            op: VecLanesOp::Addv,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            size,
+        });
     }
 
     /// Subtract with three registers.
@@ -557,6 +575,27 @@ impl Assembler {
         })
     }
 
+    /// Change precision of float.
+    pub fn cvt_float_to_float(
+        &mut self,
+        rn: Reg,
+        rd: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        let (fpu_op, size) = match (src_size, dst_size) {
+            (OperandSize::S32, OperandSize::S64) => (FPUOp1::Cvt32To64, ScalarSize::Size32),
+            (OperandSize::S64, OperandSize::S32) => (FPUOp1::Cvt64To32, ScalarSize::Size64),
+            _ => unimplemented!(),
+        };
+        self.emit(Inst::FpuRR {
+            fpu_op,
+            size,
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {});
@@ -609,6 +648,26 @@ impl Assembler {
             rd: Writable::from_reg(rd.into()),
             cond,
         });
+    }
+
+    // Population Count per byte.
+    pub fn cnt(&mut self, rd: Reg) {
+        self.emit(Inst::VecMisc {
+            op: VecMisc2::Cnt,
+            rd: Writable::from_reg(rd.into()),
+            rn: rd.into(),
+            size: VectorSize::Size8x8,
+        });
+    }
+
+    pub fn extend(&mut self, rn: Reg, rd: Reg, kind: ExtendKind) {
+        self.emit(Inst::Extend {
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            signed: kind.signed(),
+            from_bits: kind.from_bits(),
+            to_bits: kind.to_bits(),
+        })
     }
 
     /// Bitwise AND (shifted register), setting flags.

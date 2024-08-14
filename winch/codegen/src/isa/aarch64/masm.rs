@@ -12,6 +12,7 @@ use crate::{
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
+    isa::aarch64::inst::VectorSize,
     settings, Final, MachBufferFinalized, MachLabel,
 };
 use regalloc2::RegClass;
@@ -435,8 +436,14 @@ impl Masm for MacroAssembler {
         self.asm.load_constant(0, reg);
     }
 
-    fn popcnt(&mut self, _context: &mut CodeGenContext, _size: OperandSize) {
-        todo!()
+    fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
+        let src = context.pop_to_reg(self, None);
+        let tmp = regs::float_scratch();
+        self.asm.mov_to_fpu(src.into(), tmp, size);
+        self.asm.cnt(tmp);
+        self.asm.addv(tmp, tmp, VectorSize::Size8x8);
+        self.asm.mov_from_vec(tmp, src.into(), 0, OperandSize::S8);
+        context.stack.push(src.into());
     }
 
     fn signed_truncate(
@@ -491,12 +498,14 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn demote(&mut self, _src: Reg, _dst: Reg) {
-        todo!()
+    fn demote(&mut self, src: Reg, dst: Reg) {
+        self.asm
+            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S64, OperandSize::S32);
     }
 
-    fn promote(&mut self, _src: Reg, _dst: Reg) {
-        todo!()
+    fn promote(&mut self, src: Reg, dst: Reg) {
+        self.asm
+            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S32, OperandSize::S64);
     }
 
     fn push(&mut self, reg: Reg, _size: OperandSize) -> StackSlot {
@@ -558,12 +567,12 @@ impl Masm for MacroAssembler {
         self.asm.clz(scratch, dst, size);
     }
 
-    fn wrap(&mut self, _src: Reg, _dst: Reg) {
-        todo!()
+    fn wrap(&mut self, src: Reg, dst: Reg) {
+        self.asm.mov_rr(src, dst, OperandSize::S32);
     }
 
-    fn extend(&mut self, _src: Reg, _dst: Reg, _kind: ExtendKind) {
-        todo!()
+    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
+        self.asm.extend(src, dst, kind);
     }
 
     fn get_label(&mut self) -> MachLabel {
