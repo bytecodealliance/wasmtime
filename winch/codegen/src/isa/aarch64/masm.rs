@@ -441,12 +441,7 @@ impl Masm for MacroAssembler {
         let tmp = regs::float_scratch();
         self.asm.mov_to_fpu(src.into(), tmp, size);
         self.asm.cnt(tmp);
-        match size {
-            OperandSize::S8 => {}
-            OperandSize::S16 => self.asm.addp_rrr(tmp, tmp, tmp, VectorSize::Size8x8),
-            OperandSize::S32 | OperandSize::S64 => self.asm.addv(tmp, tmp, VectorSize::Size8x8),
-            OperandSize::S128 => unimplemented!(),
-        }
+        self.asm.addv(tmp, tmp, VectorSize::Size8x8);
         self.asm.mov_from_vec(tmp, src.into(), 0, OperandSize::S8);
         context.stack.push(src.into());
         context.free_reg(tmp);

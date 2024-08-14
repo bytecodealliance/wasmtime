@@ -13,8 +13,7 @@ use cranelift_codegen::{
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode, VecALUOp, VecLanesOp, VecMisc2,
-        VectorSize,
+        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode, VecLanesOp, VecMisc2, VectorSize,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, Writable,
@@ -336,17 +335,6 @@ impl Assembler {
             self.load_constant(imm, scratch);
             self.emit_alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
-    }
-
-    /// Add Pairwise (vector).
-    pub fn addp_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: VectorSize) {
-        self.emit(Inst::VecRRR {
-            alu_op: VecALUOp::Addp,
-            rd: Writable::from_reg(rd.into()),
-            rn: rn.into(),
-            rm: rm.into(),
-            size,
-        });
     }
 
     /// Add across Vector.
