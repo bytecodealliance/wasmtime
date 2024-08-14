@@ -10,7 +10,7 @@ fn check_wat(wat: &str) -> Result<()> {
     let wasm = parse_str(wat)?;
     let obj_file = NamedTempFile::new()?;
     let obj_path = obj_file.path().to_str().unwrap();
-    compile_cranelift(&wasm, None, obj_path)?;
+    compile_cranelift(&wasm, None, None, obj_path)?;
     let dump = get_dwarfdump(obj_path, DwarfDumpSection::DebugInfo)?;
     let mut builder = CheckerBuilder::new();
     builder

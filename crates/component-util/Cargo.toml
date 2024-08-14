@@ -9,3 +9,4 @@ documentation = "https://docs.rs/wasmtime-component-util/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
+rust-version.workspace = true

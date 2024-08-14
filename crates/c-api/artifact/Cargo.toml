@@ -7,6 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
+rust-version.workspace = true
 publish = false
 
 [lib]
@@ -20,6 +21,7 @@ doctest = false
 wasmtime-c-api = { path = '..', package = 'wasmtime-c-api-impl' }
 
 [features]
+# WASMTIME_FEATURE_LIST
 default = [
   'profiling',
   'wat',
@@ -34,10 +36,8 @@ default = [
   'gc',
   'cranelift',
   'winch',
-  # ... if you add a line above this be sure to also change:
-  #
-  #   crates/c-api/CMakeLists.txt
-  #   crates/c-api/Cargo.toml
+  # ... if you add a line above this be sure to change the other locations
+  # marked WASMTIME_FEATURE_LIST
 ]
 async = ['wasmtime-c-api/async']
 profiling = ["wasmtime-c-api/profiling"]

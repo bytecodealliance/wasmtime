@@ -8,6 +8,7 @@ documentation = "https://github.com/bytecodealliance/wasmtime/blob/main/cranelif
 repository = "https://github.com/bytecodealliance/wasmtime"
 publish = false
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

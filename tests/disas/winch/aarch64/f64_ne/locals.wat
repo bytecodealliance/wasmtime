@@ -31,12 +31,12 @@
 ;;       stur    x16, [x28]
 ;;       mov     x16, #0x4000000000000000
 ;;       fmov    d0, x16
-;;       stur    x0, [x28, #8]
+;;       stur    d0, [x28, #8]
 ;;       mov     x16, #0x4008000000000000
 ;;       fmov    d0, x16
-;;       stur    x0, [x28]
-;;       ldur    x0, [x28]
-;;       ldur    x1, [x28, #8]
+;;       stur    d0, [x28]
+;;       ldur    d0, [x28]
+;;       ldur    d1, [x28, #8]
 ;;       fcmp    d0, d1
 ;;       cset    x0, ne
 ;;       add     sp, sp, #0x20

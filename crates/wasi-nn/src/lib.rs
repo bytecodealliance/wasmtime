@@ -68,7 +68,7 @@ impl std::ops::Deref for Graph {
 /// Eventually, this may be defined in each backend as they gain the ability to
 /// hold tensors on various devices (TODO:
 /// https://github.com/WebAssembly/wasi-nn/pull/70).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Tensor {
     dimensions: Vec<u32>,
     ty: wit::TensorType,

@@ -9,6 +9,7 @@ documentation = "https://docs.rs/wasmtime-environ/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

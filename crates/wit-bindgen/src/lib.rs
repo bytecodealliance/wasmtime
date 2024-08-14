@@ -1986,6 +1986,13 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(&derives.into_iter().collect::<Vec<_>>().join(", "));
         self.push_str(")]\n");
 
+        let repr = match enum_.cases.len().ilog2() {
+            0..=7 => "u8",
+            8..=15 => "u16",
+            _ => "u32",
+        };
+        uwriteln!(self.src, "#[repr({repr})]");
+
         self.push_str(&format!("pub enum {name} {{\n"));
         for case in enum_.cases.iter() {
             self.rustdoc(&case.docs);

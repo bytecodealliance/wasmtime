@@ -2898,13 +2898,14 @@
 ;; lane order than the current function, we need to swap lanes.
 ;; The first operand is the lane order used by the callee.
 (decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
-(rule 4 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
-(rule 3 (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
+(rule 5 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
+(rule 4 (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
+(rule 3 (abi_vec_elt_rev _ $I128 reg) reg)
 (rule 2 (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
 (rule 0 (abi_vec_elt_rev callee_lane_order _ reg)
       (if-let $true (lane_order_equal callee_lane_order (lane_order)))
       reg)
-(rule 1 (abi_vec_elt_rev callee_lane_order (vr128_ty ty) reg)
+(rule 1 (abi_vec_elt_rev callee_lane_order (ty_vec128 ty) reg)
       (if-let $false (lane_order_equal callee_lane_order (lane_order)))
       (vec_elt_rev ty reg))
 

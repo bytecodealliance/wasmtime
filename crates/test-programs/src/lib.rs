@@ -9,10 +9,9 @@ wit_bindgen::generate!({
 
         world test {
             include wasi:cli/imports@0.2.1;
+            include wasi:http/imports@0.2.1;
             include wasi:config/imports@0.2.0-draft;
             include wasi:keyvalue/imports@0.2.0-draft;
-            import wasi:http/types@0.2.1;
-            import wasi:http/outgoing-handler@0.2.1;
         }
     ",
     path: [

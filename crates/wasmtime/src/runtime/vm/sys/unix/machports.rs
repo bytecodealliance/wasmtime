@@ -166,7 +166,7 @@ unsafe fn handler_thread() {
             break;
         }
         if kret != KERN_SUCCESS {
-            eprintln!("mach_msg failed with {} ({0:x})", kret);
+            eprintln!("mach_msg failed with {kret} ({kret:x})");
             libc::abort();
         }
         if request.body.Head.msgh_id != EXCEPTION_MSG_ID {

@@ -260,8 +260,8 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
 rustix = "0.38.31"
 # wit-bindgen:
-wit-bindgen = { version = "0.29.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.29.0", default-features = false }
+wit-bindgen = { version = "0.30.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.30.0", default-features = false }
 
 # wasm-tools family:
 wasmparser = { version = "0.215.0", default-features = false }
@@ -345,6 +345,9 @@ semver = { version = "1.0.17", default-features = false }
 # in configuring binary size and or exploring the binary size implications of
 # various features. Most features are enabled by default but most embeddings
 # likely won't need all features.
+#
+# When adding or removing a feature, make sure to kepe the C API in sync by
+# modifying locations marked WASMTIME_FEATURE_LIST
 [features]
 default = [
   # All subcommands are included by default.

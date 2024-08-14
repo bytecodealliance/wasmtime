@@ -109,7 +109,9 @@ impl CompileCommand {
                 bail!("component model support was disabled at compile time")
             }
         } else {
-            engine.precompile_module(&input)?
+            wasmtime::CodeBuilder::new(&engine)
+                .wasm(&input, Some(&self.module))?
+                .compile_module_serialized()?
         };
         fs::write(&output, output_bytes)
             .with_context(|| format!("failed to write output: {}", output.display()))?;

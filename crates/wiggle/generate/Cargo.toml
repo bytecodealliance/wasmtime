@@ -4,6 +4,7 @@ version.workspace = true
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition.workspace = true
+rust-version.workspace = true
 description = "Library crate for wiggle code generator."
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]

@@ -4,6 +4,7 @@ version = "0.0.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition.workspace = true
+rust-version.workspace = true
 description = "Reusable testing components for wiggle code generator. Only intended to be used by tests in `wiggle` crate."
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]

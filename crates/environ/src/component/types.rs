@@ -735,6 +735,24 @@ impl CanonicalAbiInfo {
         }
     }
 
+    /// Calculates ABI information for an enum with `cases` cases.
+    pub const fn enum_(cases: usize) -> CanonicalAbiInfo {
+        // NB: this is basically a duplicate definition of
+        // `CanonicalAbiInfo::variant`, these should be kept in sync.
+
+        let discrim_size = match DiscriminantSize::from_count(cases) {
+            Some(size) => size.byte_size(),
+            None => unreachable!(),
+        };
+        CanonicalAbiInfo {
+            size32: discrim_size,
+            align32: discrim_size,
+            size64: discrim_size,
+            align64: discrim_size,
+            flat_count: Some(1),
+        }
+    }
+
     /// Returns the flat count of this ABI information so long as the count
     /// doesn't exceed the `max` specified.
     pub fn flat_count(&self, max: usize) -> Option<usize> {

@@ -16,8 +16,8 @@
 ;;       mov     x28, sp
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
-;;       stur    w0, [x28, #4]
-;;       ldur    w0, [x28, #4]
+;;       stur    s0, [x28, #4]
+;;       ldur    s0, [x28, #4]
 ;;       fsqrt   s0, s0
 ;;       add     sp, sp, #0x18
 ;;       mov     x28, sp

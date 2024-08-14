@@ -10,7 +10,7 @@ fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
     let wasm = read(wasm_path)?;
     let obj_file = NamedTempFile::new()?;
     let obj_path = obj_file.path().to_str().unwrap();
-    compile_cranelift(&wasm, None, obj_path)?;
+    compile_cranelift(&wasm, Some(wasm_path.as_ref()), None, obj_path)?;
     let dump = get_dwarfdump(obj_path, DwarfDumpSection::DebugInfo)?;
     let mut builder = CheckerBuilder::new();
     builder
@@ -29,7 +29,7 @@ fn check_line_program(wasm_path: &str, directives: &str) -> Result<()> {
     let wasm = read(wasm_path)?;
     let obj_file = NamedTempFile::new()?;
     let obj_path = obj_file.path().to_str().unwrap();
-    compile_cranelift(&wasm, None, obj_path)?;
+    compile_cranelift(&wasm, Some(wasm_path.as_ref()), None, obj_path)?;
     let dump = get_dwarfdump(obj_path, DwarfDumpSection::DebugLine)?;
     let mut builder = CheckerBuilder::new();
     builder
@@ -129,6 +129,47 @@ check:        DW_AT_name	("b")
 check:      DW_TAG_variable
 check:        DW_AT_name	("i")
 check:        DW_AT_decl_line	(10)
+    "##,
+    )
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+fn test_debug_dwarf_translate_generated() -> Result<()> {
+    check_wasm(
+        "tests/all/debug/testsuite/fraction-norm.wasm",
+        r##"
+check: DW_TAG_compile_unit
+check: DW_TAG_compile_unit
+check:   DW_AT_producer	("wasmtime")
+check:   DW_AT_name	("<gen-$(=\d+)>.wasm")
+check:   DW_AT_comp_dir	("/<wasm-module>")
+check:   DW_TAG_subprogram
+check:     DW_AT_name	("__wasm_call_ctors")
+check:     DW_AT_decl_file	("/<wasm-module>/<gen-$(=\d+)>.wasm")
+check:     DW_AT_decl_line	(124)
+    "##,
+    )
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+fn test_debug_dwarf_translate_fission() -> Result<()> {
+    check_wasm(
+        "tests/all/debug/testsuite/dwarf_fission.wasm",
+        r##"
+check: DW_TAG_compile_unit
+check:   DW_AT_producer	("clang version 19.0.0git (https:/github.com/llvm/llvm-project ccdebbae4d77d3efc236af92c22941de5d437e01)")
+check:   DW_AT_language	(DW_LANG_C11)
+check:   DW_AT_name	("dwarf_fission.c")
     "##,
     )
 }

@@ -9,6 +9,7 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
+rust-version.workspace = true
 include = ["src/**/*", "tests/**/*", "witx", "README.md", "LICENSE", "build.rs"]
 
 [lints]

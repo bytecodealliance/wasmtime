@@ -6,7 +6,7 @@ pub mod generated_code;
 use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use self::generated_code::{VecAluOpRR, VecLmul};
+use self::generated_code::{FpuOPWidth, VecAluOpRR, VecLmul};
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
@@ -115,6 +115,16 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         call_site.emit_return_call(self.lower_ctx, args);
 
         InstOutput::new()
+    }
+
+    fn fpu_op_width_from_ty(&mut self, ty: Type) -> FpuOPWidth {
+        match ty {
+            F16 => FpuOPWidth::H,
+            F32 => FpuOPWidth::S,
+            F64 => FpuOPWidth::D,
+            F128 => FpuOPWidth::Q,
+            _ => unimplemented!("Unimplemented FPU Op Width: {ty}"),
+        }
     }
 
     fn vreg_new(&mut self, r: Reg) -> VReg {

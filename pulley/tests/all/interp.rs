@@ -38,8 +38,8 @@ unsafe fn assert_one<R0, R1, V>(
         let val = val.into();
         eprintln!("{reg} = {val:#018x}");
         match (reg, val) {
-            (AnyReg::X(r), Val::XReg(v)) => *vm.state_mut().x_mut(r) = v,
-            (AnyReg::F(r), Val::FReg(v)) => *vm.state_mut().f_mut(r) = v,
+            (AnyReg::X(r), Val::XReg(v)) => vm.state_mut()[r] = v,
+            (AnyReg::F(r), Val::FReg(v)) => vm.state_mut()[r] = v,
             (AnyReg::V(_), Val::VReg(_)) => todo!(),
             (kind, val) => panic!("register kind and value mismatch: {kind:?} and {val:?}"),
         }
@@ -53,8 +53,8 @@ unsafe fn assert_one<R0, R1, V>(
     eprintln!("expected = {expected:#018x}");
 
     let actual = match result.into() {
-        AnyReg::X(r) => vm.state_mut().x(r).get_u64(),
-        AnyReg::F(r) => vm.state_mut().f(r).get_f64().to_bits(),
+        AnyReg::X(r) => vm.state_mut()[r].get_u64(),
+        AnyReg::F(r) => vm.state_mut()[r].get_f64().to_bits(),
         AnyReg::V(_) => todo!(),
     };
     eprintln!("actual   = {actual:#018x}");
@@ -992,5 +992,5 @@ fn trap() {
     }
 
     // `dst` should not have been written to the second time.
-    assert_eq!(vm.state().x(dst).get_u32(), 1);
+    assert_eq!(vm.state()[dst].get_u32(), 1);
 }

@@ -611,7 +611,7 @@
 ;; would indeed happen, we have no way of signalling two different trap
 ;; conditions from the same instruction.  By explicitly checking for the
 ;; integer-overflow case ahead of time, any hardware trap in the divide
-;; instruction is guaranteed to indicate divison-by-zero.
+;; instruction is guaranteed to indicate division-by-zero.
 ;;
 ;; In addition, for types smaller than 64 bits we would have to perform
 ;; the check explicitly anyway, since the instruction provides a 64-bit

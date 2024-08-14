@@ -7,8 +7,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
+rust-version.workspace = true
 links = "wasmtime-c-api"
-include = ["include", "src", "build.rs"]
+include = ["include", "src", "build.rs", "CMakeLists.txt", "cmake", "doxygen.conf.in"]
 
 [lints]
 workspace = true
@@ -39,6 +40,7 @@ wasmtime-wasi = { workspace = true, optional = true, features = ["preview1"] }
 futures = { workspace = true, optional = true }
 
 [features]
+# WASMTIME_FEATURE_LIST
 async = ['wasmtime/async', 'futures']
 profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
@@ -53,6 +55,5 @@ threads = ["wasmtime/threads"]
 gc = ["wasmtime/gc"]
 cranelift = ['wasmtime/cranelift']
 winch = ['wasmtime/winch']
-# ... if you add a line above this be sure to also change:
-#
-#   crates/c-api/artifact/Cargo.toml
+# ... if you add a line above this be sure to change the other locations
+# marked WASMTIME_FEATURE_LIST

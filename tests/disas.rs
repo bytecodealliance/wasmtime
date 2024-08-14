@@ -409,14 +409,8 @@ fn assert_or_bless_output(path: &Path, wat: &str, actual: &str) -> Result<()> {
     let mut expected_lines: Vec<_> = wat
         .lines()
         .rev()
-        .take_while(|l| l.starts_with(";;"))
-        .map(|l| {
-            if l.starts_with(";; ") {
-                &l[3..]
-            } else {
-                &l[2..]
-            }
-        })
+        .map_while(|l| l.strip_prefix(";;"))
+        .map(|l| l.strip_prefix(" ").unwrap_or(l))
         .collect();
     expected_lines.reverse();
     let expected = expected_lines.join("\n");

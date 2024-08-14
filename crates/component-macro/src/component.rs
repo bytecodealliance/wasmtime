@@ -16,24 +16,20 @@ mod kw {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum VariantStyle {
-    Variant,
-    Enum,
-}
-
-impl fmt::Display for VariantStyle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Variant => "variant",
-            Self::Enum => "enum",
-        })
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
 enum Style {
     Record,
-    Variant(VariantStyle),
+    Enum,
+    Variant,
+}
+
+impl fmt::Display for Style {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Style::Record => f.write_str("record"),
+            Style::Enum => f.write_str("enum"),
+            Style::Variant => f.write_str("variant"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -50,10 +46,10 @@ impl Parse for ComponentAttr {
             Ok(ComponentAttr::Style(Style::Record))
         } else if lookahead.peek(kw::variant) {
             input.parse::<kw::variant>()?;
-            Ok(ComponentAttr::Style(Style::Variant(VariantStyle::Variant)))
+            Ok(ComponentAttr::Style(Style::Variant))
         } else if lookahead.peek(Token![enum]) {
             input.parse::<Token![enum]>()?;
-            Ok(ComponentAttr::Style(Style::Variant(VariantStyle::Enum)))
+            Ok(ComponentAttr::Style(Style::Enum))
         } else if lookahead.peek(kw::wasmtime_crate) {
             input.parse::<kw::wasmtime_crate>()?;
             input.parse::<Token![=]>()?;
@@ -126,7 +122,14 @@ pub trait Expander {
         generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
-        style: VariantStyle,
+        wasmtime_crate: &syn::Path,
+    ) -> Result<TokenStream>;
+
+    fn expand_enum(
+        &self,
+        name: &syn::Ident,
+        discriminant_size: DiscriminantSize,
+        cases: &[VariantCase],
         wasmtime_crate: &syn::Path,
     ) -> Result<TokenStream>;
 }
@@ -157,7 +160,7 @@ pub fn expand(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenStrea
     let wasmtime_crate = wasmtime_crate.unwrap_or_else(default_wasmtime_crate);
     match style {
         Style::Record => expand_record(expander, input, &wasmtime_crate),
-        Style::Variant(style) => expand_variant(expander, input, style, &wasmtime_crate),
+        Style::Enum | Style::Variant => expand_variant(expander, input, style, &wasmtime_crate),
     }
 }
 
@@ -199,7 +202,7 @@ fn expand_record(
 fn expand_variant(
     expander: &dyn Expander,
     input: &DeriveInput,
-    style: VariantStyle,
+    style: Style,
     wasmtime_crate: &syn::Path,
 ) -> Result<TokenStream> {
     let name = &input.ident;
@@ -253,8 +256,9 @@ fn expand_variant(
                                      containing variants with {}",
                                     style,
                                     match style {
-                                        VariantStyle::Variant => "at most one unnamed field each",
-                                        VariantStyle::Enum => "no fields",
+                                        Style::Variant => "at most one unnamed field each",
+                                        Style::Enum => "no fields",
+                                        Style::Record => unreachable!(),
                                     }
                                 ),
                             ))
@@ -265,14 +269,77 @@ fn expand_variant(
         )
         .collect::<Result<Vec<_>>>()?;
 
-    expander.expand_variant(
-        &input.ident,
-        &input.generics,
-        discriminant_size,
-        &cases,
-        style,
-        wasmtime_crate,
-    )
+    match style {
+        Style::Variant => expander.expand_variant(
+            &input.ident,
+            &input.generics,
+            discriminant_size,
+            &cases,
+            wasmtime_crate,
+        ),
+        Style::Enum => {
+            validate_enum(input, &body, discriminant_size)?;
+            expander.expand_enum(&input.ident, discriminant_size, &cases, wasmtime_crate)
+        }
+        Style::Record => unreachable!(),
+    }
+}
+
+/// Validates component model `enum` definitions are accompanied with
+/// appropriate `#[repr]` tags. Additionally requires that no discriminants are
+/// listed to ensure that unsafe transmutes in lift are valid.
+fn validate_enum(input: &DeriveInput, body: &syn::DataEnum, size: DiscriminantSize) -> Result<()> {
+    if !input.generics.params.is_empty() {
+        return Err(Error::new_spanned(
+            &input.generics.params,
+            "cannot have generics on an `enum`",
+        ));
+    }
+    if let Some(clause) = &input.generics.where_clause {
+        return Err(Error::new_spanned(
+            clause,
+            "cannot have a where clause on an `enum`",
+        ));
+    }
+    let expected_discr = match size {
+        DiscriminantSize::Size1 => "u8",
+        DiscriminantSize::Size2 => "u16",
+        DiscriminantSize::Size4 => "u32",
+    };
+    let mut found_repr = false;
+    for attr in input.attrs.iter() {
+        if !attr.meta.path().is_ident("repr") {
+            continue;
+        }
+        let list = attr.meta.require_list()?;
+        found_repr = true;
+        if list.tokens.to_string() != expected_discr {
+            return Err(Error::new_spanned(
+                &list.tokens,
+                format!(
+                    "expected `repr({expected_discr})`, found `repr({})`",
+                    list.tokens
+                ),
+            ));
+        }
+    }
+    if !found_repr {
+        return Err(Error::new_spanned(
+            &body.enum_token,
+            format!("missing required `#[repr({expected_discr})]`"),
+        ));
+    }
+
+    for case in body.variants.iter() {
+        if let Some((_, expr)) = &case.discriminant {
+            return Err(Error::new_spanned(
+                expr,
+                "cannot have an explicit discriminant",
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 fn expand_record_for_component_type(
@@ -452,7 +519,6 @@ impl Expander for LiftExpander {
         generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
-        style: VariantStyle,
         wt: &syn::Path,
     ) -> Result<TokenStream> {
         let internal = quote!(#wt::component::__internal);
@@ -460,23 +526,13 @@ impl Expander for LiftExpander {
         let mut lifts = TokenStream::new();
         let mut loads = TokenStream::new();
 
-        let interface_type_variant = match style {
-            VariantStyle::Variant => quote!(Variant),
-            VariantStyle::Enum => quote!(Enum),
-        };
-
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
             let index_u32 = u32::try_from(index).unwrap();
 
             let index_quoted = quote(discriminant_size, index);
 
             if let Some(ty) = ty {
-                let payload_ty = match style {
-                    VariantStyle::Variant => {
-                        quote!(ty.cases[#index].unwrap_or_else(#internal::bad_type_info))
-                    }
-                    VariantStyle::Enum => unreachable!(),
-                };
+                let payload_ty = quote!(ty.cases[#index].unwrap_or_else(#internal::bad_type_info));
                 lifts.extend(
                     quote!(#index_u32 => Self::#ident(<#ty as #wt::component::Lift>::lift(
                         cx, #payload_ty, unsafe { &src.payload.#ident }
@@ -506,7 +562,7 @@ impl Expander for LiftExpander {
 
         let extract_ty = quote! {
             let ty = match ty {
-                #internal::InterfaceType::#interface_type_variant(i) => &cx.types[i],
+                #internal::InterfaceType::Variant(i) => &cx.types[i],
                 _ => #internal::bad_type_info(),
             };
         };
@@ -541,6 +597,75 @@ impl Expander for LiftExpander {
                     Ok(match discrim {
                         #loads
                         discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
+                    })
+                }
+            }
+        };
+
+        Ok(expanded)
+    }
+
+    fn expand_enum(
+        &self,
+        name: &syn::Ident,
+        discriminant_size: DiscriminantSize,
+        cases: &[VariantCase],
+        wt: &syn::Path,
+    ) -> Result<TokenStream> {
+        let internal = quote!(#wt::component::__internal);
+
+        let (from_bytes, discrim_ty) = match discriminant_size {
+            DiscriminantSize::Size1 => (quote!(bytes[0]), quote!(u8)),
+            DiscriminantSize::Size2 => (
+                quote!(u16::from_le_bytes(bytes[0..2].try_into()?)),
+                quote!(u16),
+            ),
+            DiscriminantSize::Size4 => (
+                quote!(u32::from_le_bytes(bytes[0..4].try_into()?)),
+                quote!(u32),
+            ),
+        };
+        let discrim_limit = proc_macro2::Literal::usize_unsuffixed(cases.len());
+
+        let extract_ty = quote! {
+            let ty = match ty {
+                #internal::InterfaceType::Enum(i) => &cx.types[i],
+                _ => #internal::bad_type_info(),
+            };
+        };
+
+        let expanded = quote! {
+            unsafe impl #wt::component::Lift for #name {
+                #[inline]
+                fn lift(
+                    cx: &mut #internal::LiftContext<'_>,
+                    ty: #internal::InterfaceType,
+                    src: &Self::Lower,
+                ) -> #internal::anyhow::Result<Self> {
+                    #extract_ty
+                    let discrim = src.tag.get_u32();
+                    if discrim >= #discrim_limit {
+                        #internal::anyhow::bail!("unexpected discriminant: {discrim}");
+                    }
+                    Ok(unsafe {
+                        #internal::transmute::<#discrim_ty, #name>(discrim as #discrim_ty)
+                    })
+                }
+
+                #[inline]
+                fn load(
+                    cx: &mut #internal::LiftContext<'_>,
+                    ty: #internal::InterfaceType,
+                    bytes: &[u8],
+                ) -> #internal::anyhow::Result<Self> {
+                    let align = <Self as #wt::component::ComponentType>::ALIGN32;
+                    debug_assert!((bytes.as_ptr() as usize) % (align as usize) == 0);
+                    let discrim = #from_bytes;
+                    if discrim >= #discrim_limit {
+                        #internal::anyhow::bail!("unexpected discriminant: {discrim}");
+                    }
+                    Ok(unsafe {
+                        #internal::transmute::<#discrim_ty, #name>(discrim)
                     })
                 }
             }
@@ -627,18 +752,12 @@ impl Expander for LowerExpander {
         generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
-        style: VariantStyle,
         wt: &syn::Path,
     ) -> Result<TokenStream> {
         let internal = quote!(#wt::component::__internal);
 
         let mut lowers = TokenStream::new();
         let mut stores = TokenStream::new();
-
-        let interface_type_variant = match style {
-            VariantStyle::Variant => quote!(Variant),
-            VariantStyle::Enum => quote!(Enum),
-        };
 
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
             let index_u32 = u32::try_from(index).unwrap();
@@ -652,12 +771,7 @@ impl Expander for LowerExpander {
             let store;
 
             if ty.is_some() {
-                let ty = match style {
-                    VariantStyle::Variant => {
-                        quote!(ty.cases[#index].unwrap_or_else(#internal::bad_type_info))
-                    }
-                    VariantStyle::Enum => unreachable!(),
-                };
+                let ty = quote!(ty.cases[#index].unwrap_or_else(#internal::bad_type_info));
                 pattern = quote!(Self::#ident(value));
                 lower = quote!(value.lower(cx, #ty, dst));
                 store = quote!(value.store(
@@ -693,7 +807,7 @@ impl Expander for LowerExpander {
 
         let extract_ty = quote! {
             let ty = match ty {
-                #internal::InterfaceType::#interface_type_variant(i) => &cx.types[i],
+                #internal::InterfaceType::Variant(i) => &cx.types[i],
                 _ => #internal::bad_type_info(),
             };
         };
@@ -725,6 +839,63 @@ impl Expander for LowerExpander {
                     match self {
                         #stores
                     }
+                }
+            }
+        };
+
+        Ok(expanded)
+    }
+
+    fn expand_enum(
+        &self,
+        name: &syn::Ident,
+        discriminant_size: DiscriminantSize,
+        _cases: &[VariantCase],
+        wt: &syn::Path,
+    ) -> Result<TokenStream> {
+        let internal = quote!(#wt::component::__internal);
+
+        let extract_ty = quote! {
+            let ty = match ty {
+                #internal::InterfaceType::Enum(i) => &cx.types[i],
+                _ => #internal::bad_type_info(),
+            };
+        };
+
+        let (size, ty) = match discriminant_size {
+            DiscriminantSize::Size1 => (1, quote!(u8)),
+            DiscriminantSize::Size2 => (2, quote!(u16)),
+            DiscriminantSize::Size4 => (4, quote!(u32)),
+        };
+        let size = proc_macro2::Literal::usize_unsuffixed(size);
+
+        let expanded = quote! {
+            unsafe impl #wt::component::Lower for #name {
+                #[inline]
+                fn lower<T>(
+                    &self,
+                    cx: &mut #internal::LowerContext<'_, T>,
+                    ty: #internal::InterfaceType,
+                    dst: &mut core::mem::MaybeUninit<Self::Lower>,
+                ) -> #internal::anyhow::Result<()> {
+                    #extract_ty
+                    #internal::map_maybe_uninit!(dst.tag)
+                        .write(#wt::ValRaw::u32(*self as u32));
+                    Ok(())
+                }
+
+                #[inline]
+                fn store<T>(
+                    &self,
+                    cx: &mut #internal::LowerContext<'_, T>,
+                    ty: #internal::InterfaceType,
+                    mut offset: usize
+                ) -> #internal::anyhow::Result<()> {
+                    #extract_ty
+                    debug_assert!(offset % (<Self as #wt::component::ComponentType>::ALIGN32 as usize) == 0);
+                    let discrim = *self as #ty;
+                    *cx.get::<#size>(offset) = discrim.to_le_bytes();
+                    Ok(())
                 }
             }
         };
@@ -773,7 +944,6 @@ impl Expander for ComponentTypeExpander {
         generics: &syn::Generics,
         _discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
-        style: VariantStyle,
         wt: &syn::Path,
     ) -> Result<TokenStream> {
         let internal = quote!(#wt::component::__internal);
@@ -794,17 +964,9 @@ impl Expander for ComponentTypeExpander {
             if let Some(ty) = ty {
                 abi_list.extend(quote!(Some(<#ty as #wt::component::ComponentType>::ABI),));
 
-                case_names_and_checks.extend(match style {
-                    VariantStyle::Variant => {
-                        quote!((#name, Some(<#ty as #wt::component::ComponentType>::typecheck)),)
-                    }
-                    VariantStyle::Enum => {
-                        return Err(Error::new(
-                            ident.span(),
-                            "payloads are not permitted for `enum` cases",
-                        ))
-                    }
-                });
+                case_names_and_checks.extend(
+                    quote!((#name, Some(<#ty as #wt::component::ComponentType>::typecheck)),),
+                );
 
                 let generic = format_ident!("T{}", index);
 
@@ -816,20 +978,10 @@ impl Expander for ComponentTypeExpander {
                 unique_types.insert(ty);
             } else {
                 abi_list.extend(quote!(None,));
-                case_names_and_checks.extend(match style {
-                    VariantStyle::Variant => {
-                        quote!((#name, None),)
-                    }
-                    VariantStyle::Enum => quote!(#name,),
-                });
+                case_names_and_checks.extend(quote!((#name, None),));
                 lower_payload_case_declarations.extend(quote!(#ident: [#wt::ValRaw; 0],));
             }
         }
-
-        let typecheck = match style {
-            VariantStyle::Variant => quote!(typecheck_variant),
-            VariantStyle::Enum => quote!(typecheck_enum),
-        };
 
         let generics = add_trait_bounds(generics, parse_quote!(#wt::component::ComponentType));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -869,7 +1021,7 @@ impl Expander for ComponentTypeExpander {
                     ty: &#internal::InterfaceType,
                     types: &#internal::InstanceType<'_>,
                 ) -> #internal::anyhow::Result<()> {
-                    #internal::#typecheck(ty, types, &[#case_names_and_checks])
+                    #internal::typecheck_variant(ty, types, &[#case_names_and_checks])
                 }
 
                 const ABI: #internal::CanonicalAbiInfo =
@@ -877,6 +1029,67 @@ impl Expander for ComponentTypeExpander {
             }
 
             unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
+                const CASES: &'static [Option<#internal::CanonicalAbiInfo>] = &[#abi_list];
+            }
+        };
+
+        Ok(quote!(const _: () = { #expanded };))
+    }
+
+    fn expand_enum(
+        &self,
+        name: &syn::Ident,
+        _discriminant_size: DiscriminantSize,
+        cases: &[VariantCase],
+        wt: &syn::Path,
+    ) -> Result<TokenStream> {
+        let internal = quote!(#wt::component::__internal);
+
+        let mut case_names = TokenStream::new();
+        let mut abi_list = TokenStream::new();
+
+        for VariantCase { attrs, ident, ty } in cases.iter() {
+            let rename = find_rename(attrs)?;
+
+            let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
+
+            if ty.is_some() {
+                return Err(Error::new(
+                    ident.span(),
+                    "payloads are not permitted for `enum` cases",
+                ));
+            }
+            abi_list.extend(quote!(None,));
+            case_names.extend(quote!(#name,));
+        }
+
+        let lower = format_ident!("Lower{}", name);
+
+        let cases_len = cases.len();
+        let expanded = quote! {
+            #[doc(hidden)]
+            #[derive(Clone, Copy)]
+            #[repr(C)]
+            pub struct #lower {
+                tag: #wt::ValRaw,
+            }
+
+            unsafe impl #wt::component::ComponentType for #name {
+                type Lower = #lower;
+
+                #[inline]
+                fn typecheck(
+                    ty: &#internal::InterfaceType,
+                    types: &#internal::InstanceType<'_>,
+                ) -> #internal::anyhow::Result<()> {
+                    #internal::typecheck_enum(ty, types, &[#case_names])
+                }
+
+                const ABI: #internal::CanonicalAbiInfo =
+                    #internal::CanonicalAbiInfo::enum_(#cases_len);
+            }
+
+            unsafe impl #internal::ComponentVariant for #name {
                 const CASES: &'static [Option<#internal::CanonicalAbiInfo>] = &[#abi_list];
             }
         };

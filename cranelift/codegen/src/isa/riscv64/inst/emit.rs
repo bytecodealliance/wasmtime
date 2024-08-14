@@ -4,7 +4,7 @@ use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
+    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, FpuOPWidth, ZcbMemOp,
 };
 use cranelift_control::ControlPlane;
 
@@ -149,7 +149,7 @@ impl Inst {
         }
     }
 
-    /// Returns Some(VState) if this insturction is expecting a specific vector state
+    /// Returns Some(VState) if this instruction is expecting a specific vector state
     /// before emission.
     fn expected_vstate(&self) -> Option<&VState> {
         match self {
@@ -363,13 +363,13 @@ impl Inst {
                     _ => return None,
                 };
                 // The canonical expansion for these instruction has `rd == rs1`, but
-                // these are all comutative operations, so we can swap the operands.
+                // these are all commutative operations, so we can swap the operands.
                 let src = if rd.to_reg() == rs1 { rs2 } else { rs1 };
 
                 sink.put2(encode_ca_type(op, rd, src));
             }
 
-            // The sub instructions are non comutative, so we can't swap the operands.
+            // The sub instructions are non commutative, so we can't swap the operands.
             Inst::AluRRR {
                 alu_op: alu_op @ (AluOPRRR::Sub | AluOPRRR::Subw),
                 rd,
@@ -386,7 +386,7 @@ impl Inst {
 
             // c.j
             //
-            // We don't have a separate JAL as that is only availabile in RV32C
+            // We don't have a separate JAL as that is only available in RV32C
             Inst::Jal { label } => {
                 sink.use_label_at_offset(*start_off, label, LabelUse::RVCJump);
                 sink.add_uncond_branch(*start_off, *start_off + 2, label);
@@ -870,7 +870,7 @@ impl Inst {
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
                 // It is not very long, no need to check if need `emit_island`.
-                // If data is very long , this is a bug because RawData is typecial
+                // If data is very long , this is a bug because RawData is typically
                 // use to load some data and rely on some position in the code stream.
                 // and we may exceed `Inst::worst_case_size`.
                 // for more information see https://github.com/bytecodealliance/wasmtime/pull/5612.
@@ -908,21 +908,16 @@ impl Inst {
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::FpuRR {
-                frm,
                 alu_op,
+                width,
+                frm,
                 rd,
                 rs,
             } => {
-                let x = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs) << 15
-                    | alu_op.rs2_funct5() << 20
-                    | alu_op.funct7() << 25;
                 if alu_op.is_convert_to_int() {
                     sink.add_trap(TrapCode::BadConversionToInteger);
                 }
-                sink.put4(x);
+                sink.put4(encode_fp_rr(alu_op, width, frm, rd, rs));
             }
             &Inst::FpuRRRR {
                 alu_op,
@@ -931,31 +926,19 @@ impl Inst {
                 rs2,
                 rs3,
                 frm,
+                width,
             } => {
-                let x = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct2() << 25
-                    | reg_to_gpr_num(rs3) << 27;
-
-                sink.put4(x);
+                sink.put4(encode_fp_rrrr(alu_op, width, frm, rd, rs1, rs2, rs3));
             }
             &Inst::FpuRRR {
                 alu_op,
+                width,
                 frm,
                 rd,
                 rs1,
                 rs2,
             } => {
-                let x: u32 = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct7() << 25;
-                sink.put4(x);
+                sink.put4(encode_fp_rrr(alu_op, width, frm, rd, rs1, rs2));
             }
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
@@ -1263,11 +1246,8 @@ impl Inst {
                         imm12: Imm12::ZERO,
                     },
                     RegClass::Float => Inst::FpuRRR {
-                        alu_op: if ty == F32 {
-                            FpuOPRRR::FsgnjS
-                        } else {
-                            FpuOPRRR::FsgnjD
-                        },
+                        alu_op: FpuOPRRR::Fsgnj,
+                        width: FpuOPWidth::try_from(ty).unwrap(),
                         frm: FRM::RNE,
                         rd: rd,
                         rs1: rm,
@@ -1590,7 +1570,7 @@ impl Inst {
                     (xregs, yregs, condition)
                 };
 
-                // Unconditonally move one of the values to the destination register.
+                // Unconditionally move one of the values to the destination register.
                 //
                 // These moves may not end up being emitted if the source and
                 // destination registers are the same. That logic is built into

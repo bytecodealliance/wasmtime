@@ -3,6 +3,7 @@ name = "wasmtime-wasi-http"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 repository = "https://github.com/bytecodealliance/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "Experimental HTTP library for WebAssembly in Wasmtime"

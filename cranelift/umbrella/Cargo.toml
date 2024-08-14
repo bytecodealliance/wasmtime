@@ -10,6 +10,7 @@ categories = ["no-std"]
 readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 cranelift-codegen = { workspace = true }
