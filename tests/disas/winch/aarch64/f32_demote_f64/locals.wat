@@ -20,7 +20,7 @@
 ;;       stur    x1, [x28, #8]
 ;;       mov     x16, #0
 ;;       stur    x16, [x28]
-;;       ldur    x0, [x28]
+;;       ldur    d0, [x28]
 ;;       fcvt    s0, d0
 ;;       add     sp, sp, #0x18
 ;;       mov     x28, sp
