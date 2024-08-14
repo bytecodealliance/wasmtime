@@ -156,18 +156,18 @@ pub mod foo {
             pub enum Y {}
             #[wasmtime::component::__internal::async_trait]
             pub trait HostY {
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Y>,
                 ) -> wasmtime::Result<()>;
             }
             #[wasmtime::component::__internal::async_trait]
             impl<_T: HostY + ?Sized + Send> HostY for &mut _T {
-                fn drop(
+                async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Y>,
                 ) -> wasmtime::Result<()> {
-                    HostY::drop(*self, rep)
+                    HostY::drop(*self, rep).await
                 }
             }
             #[wasmtime::component::__internal::async_trait]
@@ -192,14 +192,17 @@ pub mod foo {
                 T: Send,
             {
                 let mut inst = linker.instance("foo:foo/transitive-import")?;
-                inst.resource(
+                inst.resource_async(
                     "y",
                     wasmtime::component::ResourceType::host::<Y>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostY::drop(
-                            &mut host_getter(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
+                    move |mut store, rep| {
+                        std::boxed::Box::new(async move {
+                            HostY::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                                .await
+                        })
                     },
                 )?;
                 Ok(())

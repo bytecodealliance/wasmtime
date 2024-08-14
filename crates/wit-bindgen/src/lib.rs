@@ -179,6 +179,17 @@ pub struct TrappableError {
     pub rust_type_name: String,
 }
 
+/// Which imports should be generated as async functions.
+///
+/// The imports should be declared in the following format:
+/// - Regular functions: `"{function-name}"`
+/// - Resource methods: `"[method]{resource-name}.{method-name}"`
+/// - Resource destructors: `"[drop]{resource-name}"`
+///
+/// Examples:
+/// - Regular function: `"get-environment"`
+/// - Resource method: `"[method]input-stream.read"`
+/// - Resource destructor: `"[drop]input-stream"`
 #[derive(Default, Debug, Clone)]
 pub enum AsyncConfig {
     /// No functions are `async`.
@@ -203,6 +214,10 @@ impl AsyncConfig {
             AsyncConfig::AllExceptImports(set) => !set.contains(f),
             AsyncConfig::OnlyImports(set) => set.contains(f),
         }
+    }
+
+    pub fn is_drop_async(&self, r: &str) -> bool {
+        self.is_import_async(&format!("[drop]{r}"))
     }
 
     pub fn maybe_async(&self) -> bool {
@@ -1318,17 +1333,12 @@ impl Wasmtime {
                 "
             );
             for name in get_world_resources(resolve, world) {
-                let camel = name.to_upper_camel_case();
-                uwriteln!(
-                    self.src,
-                    "
-                        linker.resource(
-                            \"{name}\",
-                            {wt}::component::ResourceType::host::<{camel}>(),
-                            move |mut store, rep| -> {wt}::Result<()> {{
-                                Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep))
-                            }},
-                        )?;"
+                Self::generate_add_resource_to_linker(
+                    &mut self.src,
+                    &self.opts,
+                    &wt,
+                    "linker",
+                    name,
                 );
             }
             for f in self.import_functions.iter() {
@@ -1364,6 +1374,41 @@ impl Wasmtime {
                 uwriteln!(self.src, "{path}::add_to_linker(linker, get)?;");
             }
             uwriteln!(self.src, "Ok(())\n}}");
+        }
+    }
+
+    fn generate_add_resource_to_linker(
+        src: &mut Source,
+        opts: &Opts,
+        wt: &str,
+        inst: &str,
+        name: &str,
+    ) {
+        let camel = name.to_upper_camel_case();
+        if opts.async_.is_drop_async(name) {
+            uwriteln!(
+                src,
+                "{inst}.resource_async(
+                    \"{name}\",
+                    {wt}::component::ResourceType::host::<{camel}>(),
+                    move |mut store, rep| {{
+                        std::boxed::Box::new(async move {{
+                            Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
+                        }})
+                    }},
+                )?;"
+            )
+        } else {
+            uwriteln!(
+                src,
+                "{inst}.resource(
+                    \"{name}\",
+                    {wt}::component::ResourceType::host::<{camel}>(),
+                    move |mut store, rep| -> {wt}::Result<()> {{
+                        Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep))
+                    }},
+                )?;"
+            )
         }
     }
 }
@@ -1490,6 +1535,9 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(";\n");
             }
 
+            if self.gen.opts.async_.is_drop_async(name) {
+                uwrite!(self.src, "async ");
+            }
             uwrite!(
                 self.src,
                 "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()>;"
@@ -1527,11 +1575,19 @@ impl<'a> InterfaceGenerator<'a> {
                     }
                     uwriteln!(self.src, "}}");
                 }
-                uwriteln!(self.src, "
-                    fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> {{
-                        Host{camel}::drop(*self, rep)
-                    }}",
-                );
+                if self.gen.opts.async_.is_drop_async(name) {
+                    uwriteln!(self.src, "
+                        async fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> {{
+                            Host{camel}::drop(*self, rep).await
+                        }}",
+                    );
+                } else {
+                    uwriteln!(self.src, "
+                        fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> {{
+                            Host{camel}::drop(*self, rep)
+                        }}",
+                    );
+                }
                 uwriteln!(self.src, "}}");
             }
         } else {
@@ -2232,17 +2288,13 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "let mut inst = linker.instance(\"{name}\")?;");
 
         for name in get_resources(self.resolve, id) {
-            let camel = name.to_upper_camel_case();
-            uwriteln!(
-                self.src,
-                "inst.resource(
-                    \"{name}\",
-                    {wt}::component::ResourceType::host::<{camel}>(),
-                    move |mut store, rep| -> {wt}::Result<()> {{
-                        Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep))
-                    }},
-                )?;"
-            )
+            Wasmtime::generate_add_resource_to_linker(
+                &mut self.src,
+                &self.gen.opts,
+                &wt,
+                "inst",
+                name,
+            );
         }
 
         for (_, func) in iface.functions.iter() {
