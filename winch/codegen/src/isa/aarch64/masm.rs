@@ -444,7 +444,6 @@ impl Masm for MacroAssembler {
         self.asm.addv(tmp, tmp, VectorSize::Size8x8);
         self.asm.mov_from_vec(tmp, src.into(), 0, OperandSize::S8);
         context.stack.push(src.into());
-        context.free_reg(tmp);
     }
 
     fn signed_truncate(
