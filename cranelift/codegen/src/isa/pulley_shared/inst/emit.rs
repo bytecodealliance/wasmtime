@@ -416,10 +416,8 @@ fn pulley_emit<P>(
         } => {
             use ExtKind as X;
             let r = mem.get_base_register().unwrap();
-            let r = pulley_interpreter::regs::XReg::new(r.to_real_reg().unwrap().hw_enc()).unwrap();
-            let dst =
-                pulley_interpreter::regs::XReg::new(dst.to_reg().to_real_reg().unwrap().hw_enc())
-                    .unwrap();
+            let r = reg_to_pulley_xreg(r);
+            let dst = reg_to_pulley_xreg(dst.to_reg());
             let x = mem.get_offset_with_state(state);
             match (*ext, *ty, i8::try_from(x)) {
                 (X::Sign, types::I32, Ok(0)) => enc::load32_s(sink, dst, r),
@@ -445,9 +443,8 @@ fn pulley_emit<P>(
             flags: _,
         } => {
             let r = mem.get_base_register().unwrap();
-            let r = pulley_interpreter::regs::XReg::new(r.to_real_reg().unwrap().hw_enc()).unwrap();
-            let src =
-                pulley_interpreter::regs::XReg::new(src.to_real_reg().unwrap().hw_enc()).unwrap();
+            let r = reg_to_pulley_xreg(r);
+            let src = reg_to_pulley_xreg(*src);
             let x = mem.get_offset_with_state(state);
             match (*ty, i8::try_from(x)) {
                 (types::I32, Ok(0)) => enc::store32(sink, r, src),
@@ -504,4 +501,8 @@ fn br_if_cond_helper<P>(
     sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::Jump(1));
     sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
     enc::jump(sink, 0x00000000);
+}
+
+fn reg_to_pulley_xreg(r: Reg) -> pulley_interpreter::XReg {
+    pulley_interpreter::XReg::new(r.to_real_reg().unwrap().hw_enc()).unwrap()
 }
