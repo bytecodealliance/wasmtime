@@ -42,8 +42,8 @@ impl<T> streams::HostOutputStream for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
-        self.table().delete(stream)?;
+    async fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
+        self.table().delete(stream)?.cancel().await;
         Ok(())
     }
 
@@ -66,29 +66,16 @@ where
         stream: Resource<OutputStream>,
         bytes: Vec<u8>,
     ) -> StreamResult<()> {
-        let s = self.table().get_mut(&stream)?;
-
         if bytes.len() > 4096 {
             return Err(StreamError::trap(
                 "Buffer too large for blocking-write-and-flush (expected at most 4096)",
             ));
         }
 
-        let mut bytes = bytes::Bytes::from(bytes);
-        loop {
-            let permit = s.write_ready().await?;
-            let len = bytes.len().min(permit);
-            let chunk = bytes.split_to(len);
-            s.write(chunk)?;
-            if bytes.is_empty() {
-                break;
-            }
-        }
-
-        s.flush()?;
-        s.write_ready().await?;
-
-        Ok(())
+        self.table()
+            .get_mut(&stream)?
+            .blocking_write_and_flush(bytes.into())
+            .await
     }
 
     async fn blocking_write_zeroes_and_flush(
@@ -96,26 +83,16 @@ where
         stream: Resource<OutputStream>,
         len: u64,
     ) -> StreamResult<()> {
-        let s = self.table().get_mut(&stream)?;
-
         if len > 4096 {
             return Err(StreamError::trap(
                 "Buffer too large for blocking-write-zeroes-and-flush (expected at most 4096)",
             ));
         }
 
-        let mut len = len;
-        while len > 0 {
-            let permit = s.write_ready().await?;
-            let this_len = len.min(permit as u64);
-            s.write_zeroes(this_len as usize)?;
-            len -= this_len;
-        }
-
-        s.flush()?;
-        s.write_ready().await?;
-
-        Ok(())
+        self.table()
+            .get_mut(&stream)?
+            .blocking_write_zeroes_and_flush(len as usize)
+            .await
     }
 
     fn write_zeroes(&mut self, stream: Resource<OutputStream>, len: u64) -> StreamResult<()> {
@@ -135,7 +112,7 @@ where
         Ok(())
     }
 
-    async fn splice(
+    fn splice(
         &mut self,
         dest: Resource<OutputStream>,
         src: Resource<InputStream>,
@@ -152,10 +129,7 @@ where
             return Ok(0);
         }
 
-        let contents = match self.table().get_mut(&src)? {
-            InputStream::Host(h) => h.read(len)?,
-            InputStream::File(f) => f.read(len).await?,
-        };
+        let contents = self.table().get_mut(&src)?.read(len)?;
 
         let len = contents.len();
         if len == 0 {
@@ -173,13 +147,27 @@ where
         src: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<u64> {
-        use crate::Subscribe;
+        let len = len.try_into().unwrap_or(usize::MAX);
 
-        self.table().get_mut(&dest)?.ready().await;
+        let permit = {
+            let output = self.table().get_mut(&dest)?;
+            output.write_ready().await?
+        };
+        let len = len.min(permit);
+        if len == 0 {
+            return Ok(0);
+        }
 
-        self.table().get_mut(&src)?.ready().await;
+        let contents = self.table().get_mut(&src)?.blocking_read(len).await?;
 
-        self.splice(dest, src, len).await
+        let len = contents.len();
+        if len == 0 {
+            return Ok(0);
+        }
+
+        let output = self.table().get_mut(&dest)?;
+        output.blocking_write_and_flush(contents).await?;
+        Ok(len.try_into().expect("usize can fit in u64"))
     }
 }
 
@@ -188,17 +176,14 @@ impl<T> streams::HostInputStream for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
-        self.table().delete(stream)?;
+    async fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
+        self.table().delete(stream)?.cancel().await;
         Ok(())
     }
 
-    async fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
+    fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let bytes = match self.table().get_mut(&stream)? {
-            InputStream::Host(s) => s.read(len)?,
-            InputStream::File(s) => s.read(len).await?,
-        };
+        let bytes = self.table().get_mut(&stream)?.read(len)?;
         debug_assert!(bytes.len() <= len);
         Ok(bytes.into())
     }
@@ -208,18 +193,15 @@ where
         stream: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<Vec<u8>> {
-        if let InputStream::Host(s) = self.table().get_mut(&stream)? {
-            s.ready().await;
-        }
-        self.read(stream, len).await
+        let len = len.try_into().unwrap_or(usize::MAX);
+        let bytes = self.table().get_mut(&stream)?.blocking_read(len).await?;
+        debug_assert!(bytes.len() <= len);
+        Ok(bytes.into())
     }
 
-    async fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
+    fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let written = match self.table().get_mut(&stream)? {
-            InputStream::Host(s) => s.skip(len)?,
-            InputStream::File(s) => s.skip(len).await?,
-        };
+        let written = self.table().get_mut(&stream)?.skip(len)?;
         Ok(written.try_into().expect("usize always fits in u64"))
     }
 
@@ -228,10 +210,9 @@ where
         stream: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<u64> {
-        if let InputStream::Host(s) = self.table().get_mut(&stream)? {
-            s.ready().await;
-        }
-        self.skip(stream, len).await
+        let len = len.try_into().unwrap_or(usize::MAX);
+        let written = self.table().get_mut(&stream)?.blocking_skip(len).await?;
+        Ok(written.try_into().expect("usize always fits in u64"))
     }
 
     fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
@@ -278,7 +259,7 @@ pub mod sync {
         T: WasiView,
     {
         fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
-            AsyncHostOutputStream::drop(self, stream)
+            in_tokio(async { AsyncHostOutputStream::drop(self, stream).await })
         }
 
         fn check_write(&mut self, stream: Resource<OutputStream>) -> StreamResult<u64> {
@@ -340,7 +321,7 @@ pub mod sync {
             src: Resource<InputStream>,
             len: u64,
         ) -> StreamResult<u64> {
-            in_tokio(async { AsyncHostOutputStream::splice(self, dst, src, len).await })
+            AsyncHostOutputStream::splice(self, dst, src, len)
         }
 
         fn blocking_splice(
@@ -358,11 +339,11 @@ pub mod sync {
         T: WasiView,
     {
         fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
-            AsyncHostInputStream::drop(self, stream)
+            in_tokio(async { AsyncHostInputStream::drop(self, stream).await })
         }
 
         fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
-            in_tokio(async { AsyncHostInputStream::read(self, stream, len).await })
+            AsyncHostInputStream::read(self, stream, len)
         }
 
         fn blocking_read(
@@ -374,7 +355,7 @@ pub mod sync {
         }
 
         fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
-            in_tokio(async { AsyncHostInputStream::skip(self, stream, len).await })
+            AsyncHostInputStream::skip(self, stream, len)
         }
 
         fn blocking_skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {

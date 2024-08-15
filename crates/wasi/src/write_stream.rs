@@ -139,7 +139,7 @@ impl Worker {
 /// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream {
     worker: Arc<Worker>,
-    _join_handle: crate::runtime::AbortOnDropJoinHandle<()>,
+    join_handle: Option<crate::runtime::AbortOnDropJoinHandle<()>>,
 }
 
 impl AsyncWriteStream {
@@ -156,11 +156,12 @@ impl AsyncWriteStream {
 
         AsyncWriteStream {
             worker,
-            _join_handle: join_handle,
+            join_handle: Some(join_handle),
         }
     }
 }
 
+#[async_trait::async_trait]
 impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut state = self.worker.state();
@@ -193,6 +194,13 @@ impl HostOutputStream for AsyncWriteStream {
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
         self.worker.check_write()
+    }
+
+    async fn cancel(&mut self) {
+        match self.join_handle.take() {
+            Some(task) => _ = task.abort_wait().await,
+            None => {}
+        }
     }
 }
 #[async_trait::async_trait]

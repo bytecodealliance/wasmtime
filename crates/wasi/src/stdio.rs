@@ -103,6 +103,7 @@ impl StdinStream for AsyncStdinStream {
     }
 }
 
+#[async_trait::async_trait]
 impl HostInputStream for AsyncStdinStream {
     fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
         match self.0.try_lock() {
@@ -114,6 +115,15 @@ impl HostInputStream for AsyncStdinStream {
         match self.0.try_lock() {
             Ok(mut stream) => stream.skip(size),
             Err(_) => Err(StreamError::trap("concurrent skips are not supported")),
+        }
+    }
+    async fn cancel(&mut self) {
+        // Cancel the inner stream if we're the last reference to it:
+        if let Some(mutex) = Arc::get_mut(&mut self.0) {
+            match mutex.try_lock() {
+                Ok(mut stream) => stream.cancel().await,
+                Err(_) => {}
+            }
         }
     }
 }
@@ -355,6 +365,7 @@ impl StdoutStream for AsyncStdoutStream {
 // won't attempt to interleave async IO from these disparate uses of stdio.
 // If that expectation doesn't turn out to be true, and you find yourself at
 // this comment to correct it: sorry about that.
+#[async_trait::async_trait]
 impl HostOutputStream for AsyncStdoutStream {
     fn check_write(&mut self) -> Result<usize, StreamError> {
         match self.0.try_lock() {
@@ -372,6 +383,15 @@ impl HostOutputStream for AsyncStdoutStream {
         match self.0.try_lock() {
             Ok(mut stream) => stream.flush(),
             Err(_) => Err(StreamError::trap("concurrent flushes not supported yet")),
+        }
+    }
+    async fn cancel(&mut self) {
+        // Cancel the inner stream if we're the last reference to it:
+        if let Some(mutex) = Arc::get_mut(&mut self.0) {
+            match mutex.try_lock() {
+                Ok(mut stream) => stream.cancel().await,
+                Err(_) => {}
+            }
         }
     }
 }
@@ -395,7 +415,7 @@ where
 {
     fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
         let stream = self.ctx().stdin.stream();
-        Ok(self.table().push(streams::InputStream::Host(stream))?)
+        Ok(self.table().push(stream)?)
     }
 }
 

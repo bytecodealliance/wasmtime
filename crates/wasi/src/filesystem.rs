@@ -1,6 +1,8 @@
 use crate::bindings::filesystem::types;
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
-use crate::{HostOutputStream, StreamError, Subscribe, TrappableError};
+use crate::{
+    HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, TrappableError,
+};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -112,17 +114,38 @@ impl File {
         }
     }
 
-    /// Spawn a task on tokio's blocking thread for performing blocking
-    /// syscalls on the underlying [`cap_std::fs::File`].
-    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
+    /// Execute the blocking `body` function.
+    ///
+    /// Depending on how the WasiCtx was configured, the body may either be:
+    /// - Executed directly on the current thread. In this case the `async`
+    ///   signature of this method is effectively a lie and the returned
+    ///   Future will always be immediately Ready. Or:
+    /// - Spawned on a background thread using [`tokio::task::spawn_blocking`]
+    ///   and immediately awaited.
+    ///
+    /// Intentionally blocking the executor thread might seem unorthodox, but is
+    /// not actually a problem for specific workloads. See:
+    /// - [`crate::WasiCtxBuilder::allow_blocking_current_thread`]
+    /// - [Poor performance of wasmtime file I/O maybe because tokio](https://github.com/bytecodealliance/wasmtime/issues/7973)
+    /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
+    pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        match self._spawn_blocking(body) {
-            SpawnBlocking::Done(result) => result,
-            SpawnBlocking::Spawned(task) => task.await,
+        match self.as_blocking_file() {
+            Some(file) => body(file),
+            None => self.spawn_blocking(body).await,
         }
+    }
+
+    pub(crate) fn spawn_blocking<F, R>(&self, body: F) -> AbortOnDropJoinHandle<R>
+    where
+        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let f = self.file.clone();
+        spawn_blocking(move || body(&f))
     }
 
     /// Returns `Some` when the current thread is allowed to block in filesystem
@@ -135,25 +158,6 @@ impl File {
             None
         }
     }
-
-    fn _spawn_blocking<F, R>(&self, body: F) -> SpawnBlocking<R>
-    where
-        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        match self.as_blocking_file() {
-            Some(file) => SpawnBlocking::Done(body(file)),
-            None => {
-                let f = self.file.clone();
-                SpawnBlocking::Spawned(spawn_blocking(move || body(&f)))
-            }
-        }
-    }
-}
-
-enum SpawnBlocking<T> {
-    Done(T),
-    Spawned(AbortOnDropJoinHandle<T>),
 }
 
 bitflags::bitflags! {
@@ -217,9 +221,21 @@ impl Dir {
         }
     }
 
-    /// Spawn a task on tokio's blocking thread for performing blocking
-    /// syscalls on the underlying [`cap_std::fs::Dir`].
-    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
+    /// Execute the blocking `body` function.
+    ///
+    /// Depending on how the WasiCtx was configured, the body may either be:
+    /// - Executed directly on the current thread. In this case the `async`
+    ///   signature of this method is effectively a lie and the returned
+    ///   Future will always be immediately Ready. Or:
+    /// - Spawned on a background thread using [`tokio::task::spawn_blocking`]
+    ///   and immediately awaited.
+    ///
+    /// Intentionally blocking the executor thread might seem unorthodox, but is
+    /// not actually a problem for specific workloads. See:
+    /// - [`crate::WasiCtxBuilder::allow_blocking_current_thread`]
+    /// - [Poor performance of wasmtime file I/O maybe because tokio](https://github.com/bytecodealliance/wasmtime/issues/7973)
+    /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
+    pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
         R: Send + 'static,
@@ -236,45 +252,137 @@ impl Dir {
 pub struct FileInputStream {
     file: File,
     position: u64,
+    state: ReadState,
+}
+enum ReadState {
+    Idle,
+    Waiting(AbortOnDropJoinHandle<ReadState>),
+    DataAvailable(Bytes),
+    Error(io::Error),
+    Closed,
 }
 impl FileInputStream {
     pub fn new(file: &File, position: u64) -> Self {
         Self {
             file: file.clone(),
             position,
+            state: ReadState::Idle,
         }
     }
 
-    pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
+    fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
         use system_interface::fs::FileIoExt;
-        let p = self.position;
 
-        let (r, mut buf) = self
-            .file
-            .spawn_blocking(move |f| {
-                let mut buf = BytesMut::zeroed(size);
-                let r = f.read_at(&mut buf, p);
-                (r, buf)
-            })
-            .await;
-        let n = read_result(r, size)?;
-        buf.truncate(n);
-        self.position += n as u64;
-        Ok(buf.freeze())
+        let mut buf = BytesMut::zeroed(size);
+        loop {
+            match file.read_at(&mut buf, offset) {
+                Ok(0) => return ReadState::Closed,
+                Ok(n) => {
+                    buf.truncate(n);
+                    return ReadState::DataAvailable(buf.freeze());
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
+                    // Try again, continue looping
+                }
+                Err(e) => return ReadState::Error(e),
+            }
+        }
     }
 
-    pub async fn skip(&mut self, nelem: usize) -> Result<usize, StreamError> {
-        let bs = self.read(nelem).await?;
-        Ok(bs.len())
+    /// Wait for existing background task to finish, without starting any new background reads.
+    async fn wait_ready(&mut self) {
+        match &mut self.state {
+            ReadState::Waiting(task) => {
+                self.state = task.await;
+            }
+            _ => {}
+        }
     }
 }
+#[async_trait::async_trait]
+impl HostInputStream for FileInputStream {
+    fn read(&mut self, size: usize) -> StreamResult<Bytes> {
+        match &mut self.state {
+            ReadState::Idle => {
+                if size == 0 {
+                    return Ok(Bytes::new());
+                }
 
-fn read_result(r: io::Result<usize>, size: usize) -> Result<usize, StreamError> {
-    match r {
-        Ok(0) if size > 0 => Err(StreamError::Closed),
-        Ok(n) => Ok(n),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
-        Err(e) => Err(StreamError::LastOperationFailed(e.into())),
+                let p = self.position;
+                self.state = ReadState::Waiting(
+                    self.file
+                        .spawn_blocking(move |f| Self::blocking_read(f, p, size)),
+                );
+                Ok(Bytes::new())
+            }
+            ReadState::DataAvailable(b) => {
+                let min_len = b.len().min(size);
+                let chunk = b.split_to(min_len);
+                if b.len() == 0 {
+                    self.state = ReadState::Idle;
+                }
+                self.position += min_len as u64;
+                Ok(chunk)
+            }
+            ReadState::Waiting(_) => Ok(Bytes::new()),
+            ReadState::Error(_) => match mem::replace(&mut self.state, ReadState::Closed) {
+                ReadState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
+                _ => unreachable!(),
+            },
+            ReadState::Closed => Err(StreamError::Closed),
+        }
+    }
+    /// Specialized blocking_* variant to bypass tokio's task spawning & joining
+    /// overhead on synchronous file I/O.
+    async fn blocking_read(&mut self, size: usize) -> StreamResult<Bytes> {
+        self.wait_ready().await;
+
+        // Before we defer to the regular `read`, make sure it has data ready to go:
+        if let ReadState::Idle = self.state {
+            let p = self.position;
+            self.state = self
+                .file
+                .run_blocking(move |f| Self::blocking_read(f, p, size))
+                .await;
+        }
+
+        self.read(size)
+    }
+    async fn cancel(&mut self) {
+        match mem::replace(&mut self.state, ReadState::Closed) {
+            ReadState::Waiting(task) => {
+                // The task was created using `spawn_blocking`, so unless we're
+                // lucky enough that the task hasn't started yet, the abort
+                // signal won't have any effect and we're forced to wait for it
+                // to run to completion.
+                // From the guest's point of view, `input-stream::drop` then
+                // appears to block. Certainly less than ideal, but arguably still
+                // better than letting the guest rack up an unbounded number of
+                // background tasks. Also, the guest is only blocked if
+                // the stream was dropped mid-read, which we don't expect to
+                // occur frequently.
+                task.abort_wait().await;
+            }
+            _ => {}
+        }
+    }
+}
+#[async_trait::async_trait]
+impl Subscribe for FileInputStream {
+    async fn ready(&mut self) {
+        if let ReadState::Idle = self.state {
+            // The guest hasn't initiated any read, but is nonetheless waiting
+            // for data to be available. We'll start a read for them:
+
+            const DEFAULT_READ_SIZE: usize = 4096;
+            let p = self.position;
+            self.state = ReadState::Waiting(
+                self.file
+                    .spawn_blocking(move |f| Self::blocking_read(f, p, DEFAULT_READ_SIZE)),
+            );
+        }
+
+        self.wait_ready().await
     }
 }
 
@@ -316,14 +424,51 @@ impl FileOutputStream {
             state: OutputState::Ready,
         }
     }
+
+    fn blocking_write(
+        file: &cap_std::fs::File,
+        mut buf: Bytes,
+        mode: FileOutputMode,
+    ) -> io::Result<usize> {
+        use system_interface::fs::FileIoExt;
+
+        match mode {
+            FileOutputMode::Position(mut p) => {
+                let mut total = 0;
+                loop {
+                    let nwritten = file.write_at(buf.as_ref(), p)?;
+                    // afterwards buf contains [nwritten, len):
+                    let _ = buf.split_to(nwritten);
+                    p += nwritten as u64;
+                    total += nwritten;
+                    if buf.is_empty() {
+                        break;
+                    }
+                }
+                Ok(total)
+            }
+            FileOutputMode::Append => {
+                let mut total = 0;
+                loop {
+                    let nwritten = file.append(buf.as_ref())?;
+                    let _ = buf.split_to(nwritten);
+                    total += nwritten;
+                    if buf.is_empty() {
+                        break;
+                    }
+                }
+                Ok(total)
+            }
+        }
+    }
 }
 
 // FIXME: configurable? determine from how much space left in file?
 const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
+#[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
-        use system_interface::fs::FileIoExt;
         match self.state {
             OutputState::Ready => {}
             OutputState::Closed => return Err(StreamError::Closed),
@@ -336,49 +481,45 @@ impl HostOutputStream for FileOutputStream {
         }
 
         let m = self.mode;
-        let result = self.file._spawn_blocking(move |f| {
-            match m {
-                FileOutputMode::Position(mut p) => {
-                    let mut total = 0;
-                    let mut buf = buf;
-                    loop {
-                        let nwritten = f.write_at(buf.as_ref(), p)?;
-                        // afterwards buf contains [nwritten, len):
-                        let _ = buf.split_to(nwritten);
-                        p += nwritten as u64;
-                        total += nwritten;
-                        if buf.is_empty() {
-                            break;
-                        }
-                    }
-                    Ok(total)
-                }
-                FileOutputMode::Append => {
-                    let mut total = 0;
-                    let mut buf = buf;
-                    loop {
-                        let nwritten = f.append(buf.as_ref())?;
-                        let _ = buf.split_to(nwritten);
-                        total += nwritten;
-                        if buf.is_empty() {
-                            break;
-                        }
-                    }
-                    Ok(total)
-                }
-            }
-        });
-        self.state = match result {
-            SpawnBlocking::Done(Ok(nwritten)) => {
+        self.state = OutputState::Waiting(
+            self.file
+                .spawn_blocking(move |f| Self::blocking_write(f, buf, m)),
+        );
+        Ok(())
+    }
+    /// Specialized blocking_* variant to bypass tokio's task spawning & joining
+    /// overhead on synchronous file I/O.
+    async fn blocking_write_and_flush(&mut self, buf: Bytes) -> StreamResult<()> {
+        self.ready().await;
+
+        match self.state {
+            OutputState::Ready => {}
+            OutputState::Closed => return Err(StreamError::Closed),
+            OutputState::Error(_) => match mem::replace(&mut self.state, OutputState::Closed) {
+                OutputState::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
+                _ => unreachable!(),
+            },
+            OutputState::Waiting(_) => unreachable!("we've just waited for readiness"),
+        }
+
+        let m = self.mode;
+        match self
+            .file
+            .run_blocking(move |f| Self::blocking_write(f, buf, m))
+            .await
+        {
+            Ok(nwritten) => {
                 if let FileOutputMode::Position(ref mut p) = &mut self.mode {
                     *p += nwritten as u64;
                 }
-                OutputState::Ready
+                self.state = OutputState::Ready;
+                Ok(())
             }
-            SpawnBlocking::Done(Err(e)) => OutputState::Error(e),
-            SpawnBlocking::Spawned(task) => OutputState::Waiting(task),
-        };
-        Ok(())
+            Err(e) => {
+                self.state = OutputState::Closed;
+                Err(StreamError::LastOperationFailed(e.into()))
+            }
+        }
     }
     fn flush(&mut self) -> Result<(), StreamError> {
         match self.state {
@@ -402,6 +543,24 @@ impl HostOutputStream for FileOutputStream {
                 _ => unreachable!(),
             },
             OutputState::Waiting(_) => Ok(0),
+        }
+    }
+    async fn cancel(&mut self) {
+        match mem::replace(&mut self.state, OutputState::Closed) {
+            OutputState::Waiting(task) => {
+                // The task was created using `spawn_blocking`, so unless we're
+                // lucky enough that the task hasn't started yet, the abort
+                // signal won't have any effect and we're forced to wait for it
+                // to run to completion.
+                // From the guest's point of view, `output-stream::drop` then
+                // appears to block. Certainly less than ideal, but arguably still
+                // better than letting the guest rack up an unbounded number of
+                // background tasks. Also, the guest is only blocked if
+                // the stream was dropped mid-write, which we don't expect to
+                // occur frequently.
+                task.abort_wait().await;
+            }
+            _ => {}
         }
     }
 }

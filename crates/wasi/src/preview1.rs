@@ -183,6 +183,12 @@ struct File {
     blocking_mode: BlockingMode,
 }
 
+/// NB: preview1 files always use blocking writes regardless of what
+/// they're configured to use since OSes don't have nonblocking
+/// reads/writes anyway. This behavior originated in the first
+/// implementation of WASIp1 where flags were propagated to the
+/// OS and the OS ignored the nonblocking flag for files
+/// generally.
 #[derive(Clone, Copy, Debug)]
 enum BlockingMode {
     Blocking,
@@ -203,23 +209,11 @@ impl BlockingMode {
         max_size: usize,
     ) -> Result<Vec<u8>, types::Error> {
         let max_size = max_size.try_into().unwrap_or(u64::MAX);
-        match self {
-            BlockingMode::Blocking => {
-                match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
-                    Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
-                    Ok(r) => Ok(r),
-                    Err(StreamError::Closed) => Ok(Vec::new()),
-                    Err(e) => Err(e.into()),
-                }
-            }
-
-            BlockingMode::NonBlocking => {
-                match streams::HostInputStream::read(host, input_stream, max_size).await {
-                    Ok(r) => Ok(r),
-                    Err(StreamError::Closed) => Ok(Vec::new()),
-                    Err(e) => Err(e.into()),
-                }
-            }
+        match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
+            Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
+            Ok(r) => Ok(r),
+            Err(StreamError::Closed) => Ok(Vec::new()),
+            Err(e) => Err(e.into()),
         }
     }
     async fn write(
@@ -236,52 +230,18 @@ impl BlockingMode {
             .map_err(|e| StreamError::Trap(e.into()))?;
         let mut bytes = &bytes[..];
 
-        match self {
-            BlockingMode::Blocking => {
-                let total = bytes.len();
-                while !bytes.is_empty() {
-                    // NOTE: blocking_write_and_flush takes at most one 4k buffer.
-                    let len = bytes.len().min(4096);
-                    let (chunk, rest) = bytes.split_at(len);
-                    bytes = rest;
+        let total = bytes.len();
+        while !bytes.is_empty() {
+            // NOTE: blocking_write_and_flush takes at most one 4k buffer.
+            let len = bytes.len().min(4096);
+            let (chunk, rest) = bytes.split_at(len);
+            bytes = rest;
 
-                    Streams::blocking_write_and_flush(
-                        host,
-                        output_stream.borrowed(),
-                        Vec::from(chunk),
-                    )
-                    .await?
-                }
-
-                Ok(total)
-            }
-            BlockingMode::NonBlocking => {
-                let n = match Streams::check_write(host, output_stream.borrowed()) {
-                    Ok(n) => n,
-                    Err(StreamError::Closed) => 0,
-                    Err(e) => Err(e)?,
-                };
-
-                let len = bytes.len().min(n as usize);
-                if len == 0 {
-                    return Ok(0);
-                }
-
-                match Streams::write(host, output_stream.borrowed(), bytes[..len].to_vec()) {
-                    Ok(()) => {}
-                    Err(StreamError::Closed) => return Ok(0),
-                    Err(e) => Err(e)?,
-                }
-
-                match Streams::blocking_flush(host, output_stream.borrowed()).await {
-                    Ok(()) => {}
-                    Err(StreamError::Closed) => return Ok(0),
-                    Err(e) => Err(e)?,
-                };
-
-                Ok(len)
-            }
+            Streams::blocking_write_and_flush(host, output_stream.borrowed(), Vec::from(chunk))
+                .await?
         }
+
+        Ok(total)
     }
 }
 
@@ -655,7 +615,7 @@ impl WasiP1Ctx {
                     // block.
                     None => {
                         let buf = memory.to_vec(buf)?;
-                        f.spawn_blocking(move |f| do_write(f, &buf)).await
+                        f.run_blocking(move |f| do_write(f, &buf)).await
                     }
                 };
 
@@ -1368,10 +1328,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         match desc {
             Descriptor::Stdin { stream, .. } => {
                 streams::HostInputStream::drop(&mut self.as_wasi_impl(), stream)
+                    .await
                     .context("failed to call `drop` on `input-stream`")
             }
             Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
                 streams::HostOutputStream::drop(&mut self.as_wasi_impl(), stream)
+                    .await
                     .context("failed to call `drop` on `output-stream`")
             }
             Descriptor::File(File { fd, .. }) | Descriptor::Directory { fd, .. } => {
@@ -1728,7 +1690,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                         drop(buf);
                         let mut buf = vec![0; iov.len() as usize];
                         let buf = file
-                            .spawn_blocking(move |file| -> Result<_, types::Error> {
+                            .run_blocking(move |file| -> Result<_, types::Error> {
                                 let bytes_read = file
                                     .read_at(&mut buf, pos)
                                     .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
@@ -1805,6 +1767,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                     )
                     .await;
                 streams::HostInputStream::drop(&mut self.as_wasi_impl(), stream)
+                    .await
                     .map_err(|e| types::Error::trap(e))?;
                 (buf, read?)
             }
