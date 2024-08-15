@@ -189,7 +189,7 @@ pub fn transform_dwarf(
             let mut resolved_unit = None;
             let mut split_dwarf = None;
 
-            if let gimli::UnitType::Skeleton(_dwo_id) = unit.header.type_() {
+            if unit.dwo_id.is_some() {
                 if let Some(dwarf_package) = &dwarf_package {
                     if let Some((fused, fused_dwarf)) =
                         replace_unit_from_split_dwarf(&unit, dwarf_package, &di.dwarf)
