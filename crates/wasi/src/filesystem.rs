@@ -256,7 +256,7 @@ pub struct FileInputStream {
 }
 enum ReadState {
     Idle,
-    Waiting(AbortOnDropJoinHandle<io::Result<Bytes>>),
+    Waiting(AbortOnDropJoinHandle<ReadState>),
     DataAvailable(Bytes),
     Error(io::Error),
     Closed,
@@ -270,20 +270,21 @@ impl FileInputStream {
         }
     }
 
-    fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> io::Result<Bytes> {
+    fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
         use system_interface::fs::FileIoExt;
 
         let mut buf = BytesMut::zeroed(size);
         loop {
             match file.read_at(&mut buf, offset) {
+                Ok(0) => return ReadState::Closed,
                 Ok(n) => {
                     buf.truncate(n);
-                    return Ok(buf.freeze());
+                    return ReadState::DataAvailable(buf.freeze());
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
                     // Try again, continue looping
                 }
-                Err(e) => return Err(e),
+                Err(e) => return ReadState::Error(e),
             }
         }
     }
@@ -292,39 +293,16 @@ impl FileInputStream {
     async fn wait_ready(&mut self) {
         match &mut self.state {
             ReadState::Waiting(task) => {
-                self.state = match task.await {
-                    Ok(b) if b.len() == 0 => ReadState::Closed,
-                    Ok(b) => ReadState::DataAvailable(b),
-                    Err(e) => ReadState::Error(e),
-                };
+                self.state = task.await;
             }
             _ => {}
         }
-    }
-
-    fn read_available_data(&mut self, size: usize) -> Bytes {
-        let ReadState::DataAvailable(b) = &mut self.state else {
-            unreachable!();
-        };
-        debug_assert!(b.len() > 0);
-
-        if size == 0 {
-            return Bytes::new();
-        }
-
-        let min_len = b.len().min(size);
-        let chunk = b.split_to(min_len);
-        if b.len() == 0 {
-            self.state = ReadState::Idle;
-        }
-        self.position += min_len as u64;
-        chunk
     }
 }
 #[async_trait::async_trait]
 impl HostInputStream for FileInputStream {
     fn read(&mut self, size: usize) -> StreamResult<Bytes> {
-        match self.state {
+        match &mut self.state {
             ReadState::Idle => {
                 if size == 0 {
                     return Ok(Bytes::new());
@@ -337,7 +315,15 @@ impl HostInputStream for FileInputStream {
                 );
                 Ok(Bytes::new())
             }
-            ReadState::DataAvailable(_) => Ok(self.read_available_data(size)),
+            ReadState::DataAvailable(b) => {
+                let min_len = b.len().min(size);
+                let chunk = b.split_to(min_len);
+                if b.len() == 0 {
+                    self.state = ReadState::Idle;
+                }
+                self.position += min_len as u64;
+                Ok(chunk)
+            }
             ReadState::Waiting(_) => Ok(Bytes::new()),
             ReadState::Error(_) => match mem::replace(&mut self.state, ReadState::Closed) {
                 ReadState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
@@ -351,40 +337,16 @@ impl HostInputStream for FileInputStream {
     async fn blocking_read(&mut self, size: usize) -> StreamResult<Bytes> {
         self.wait_ready().await;
 
-        match &mut self.state {
-            ReadState::Idle => {
-                if size == 0 {
-                    return Ok(Bytes::new());
-                }
-
-                let p = self.position;
-                match self
-                    .file
-                    .run_blocking(move |f| Self::blocking_read(f, p, size))
-                    .await
-                {
-                    Ok(b) if b.len() == 0 => {
-                        self.state = ReadState::Closed;
-                        Err(StreamError::Closed)
-                    }
-                    Ok(b) => {
-                        self.position += b.len() as u64;
-                        Ok(b)
-                    }
-                    Err(e) => {
-                        self.state = ReadState::Closed;
-                        Err(StreamError::LastOperationFailed(e.into()))
-                    }
-                }
-            }
-            ReadState::DataAvailable(_) => Ok(self.read_available_data(size)),
-            ReadState::Waiting(_) => Ok(Bytes::new()),
-            ReadState::Error(_) => match mem::replace(&mut self.state, ReadState::Closed) {
-                ReadState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
-                _ => unreachable!(),
-            },
-            ReadState::Closed => Err(StreamError::Closed),
+        // Before we defer to the regular `read`, make sure it has data ready to go:
+        if let ReadState::Idle = self.state {
+            let p = self.position;
+            self.state = self
+                .file
+                .run_blocking(move |f| Self::blocking_read(f, p, size))
+                .await;
         }
+
+        self.read(size)
     }
     async fn cancel(&mut self) {
         match mem::replace(&mut self.state, ReadState::Closed) {
