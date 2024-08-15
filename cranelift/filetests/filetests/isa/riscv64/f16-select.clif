@@ -1,0 +1,103 @@
+test compile precise-output
+target riscv64 has_zfh
+
+function %select_icmp_i8_f16(i8, f16, f16) -> f16 {
+block0(v0: i8, v1: f16, v2: f16):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a1,42
+;   andi a5,a0,255
+;   andi a1,a1,255
+;   select fa0,fa0,fa1##condition=(a5 eq a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a1, zero, 0x2a
+;   andi a5, a0, 0xff
+;   andi a1, a1, 0xff
+;   beq a5, a1, 8
+;   fmv.d fa0, fa1
+;   ret
+
+function %select_icmp_i16_f16(i16, f16, f16) -> f16 {
+block0(v0: i16, v1: f16, v2: f16):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   slli a5,a0,48
+;   srai a1,a5,48
+;   slli a3,a3,48
+;   srai a5,a3,48
+;   select fa0,fa0,fa1##condition=(a1 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   slli a5, a0, 0x30
+;   srai a1, a5, 0x30
+;   slli a3, a3, 0x30
+;   srai a5, a3, 0x30
+;   beq a1, a5, 8
+;   fmv.d fa0, fa1
+;   ret
+
+function %select_icmp_i32_f16(i32, f16, f16) -> f16 {
+block0(v0: i32, v1: f16, v2: f16):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a1,42
+;   sext.w a5,a0
+;   sext.w a1,a1
+;   select fa0,fa0,fa1##condition=(a5 eq a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a1, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a1, a1
+;   beq a5, a1, 8
+;   fmv.d fa0, fa1
+;   ret
+
+function %select_icmp_i64_f16(i64, f16, f16) -> f16 {
+block0(v0: i64, v1: f16, v2: f16):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   select fa0,fa0,fa1##condition=(a0 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   beq a0, a5, 8
+;   fmv.d fa0, fa1
+;   ret
+
