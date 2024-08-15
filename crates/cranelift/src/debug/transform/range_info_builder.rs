@@ -1,5 +1,5 @@
 use super::address_transform::AddressTransform;
-use super::{DebugInputContext, Reader};
+use super::Reader;
 use anyhow::Error;
 use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit};
 use wasmtime_environ::DefinedFuncIndex;
@@ -16,7 +16,6 @@ impl RangeInfoBuilder {
         dwarf: &gimli::Dwarf<R>,
         unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
-        context: &DebugInputContext<R>,
         cu_low_pc: u64,
     ) -> Result<Self, Error>
     where
@@ -24,7 +23,7 @@ impl RangeInfoBuilder {
     {
         if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges)? {
             let r = dwarf.ranges_offset_from_raw(unit, r);
-            return RangeInfoBuilder::from_ranges_ref(unit, r, context, cu_low_pc);
+            return RangeInfoBuilder::from_ranges_ref(dwarf, unit, r, cu_low_pc);
         };
 
         let low_pc =
@@ -33,7 +32,7 @@ impl RangeInfoBuilder {
             } else if let Some(AttributeValue::DebugAddrIndex(i)) =
                 entry.attr_value(gimli::DW_AT_low_pc)?
             {
-                context.debug_addr.get_address(4, unit.addr_base, i)?
+                dwarf.debug_addr.get_address(4, unit.addr_base, i)?
             } else {
                 return Ok(RangeInfoBuilder::Undefined);
             };
@@ -48,20 +47,20 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_ranges_ref<R>(
+        dwarf: &gimli::Dwarf<R>,
         unit: &Unit<R, R::Offset>,
         ranges: RangeListsOffset,
-        context: &DebugInputContext<R>,
         cu_low_pc: u64,
     ) -> Result<Self, Error>
     where
         R: Reader,
     {
         let unit_encoding = unit.encoding();
-        let mut ranges = context.rnglists.ranges(
+        let mut ranges = dwarf.ranges.ranges(
             ranges,
             unit_encoding,
             cu_low_pc,
-            &context.debug_addr,
+            &dwarf.debug_addr,
             unit.addr_base,
         )?;
         let mut result = Vec::new();
@@ -83,7 +82,6 @@ impl RangeInfoBuilder {
         dwarf: &gimli::Dwarf<R>,
         unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
-        context: &DebugInputContext<R>,
         addr_tr: &AddressTransform,
         cu_low_pc: u64,
     ) -> Result<Self, Error>
@@ -97,16 +95,16 @@ impl RangeInfoBuilder {
             } else if let Some(AttributeValue::DebugAddrIndex(i)) =
                 entry.attr_value(gimli::DW_AT_low_pc)?
             {
-                context.debug_addr.get_address(4, unit.addr_base, i)?
+                dwarf.debug_addr.get_address(4, unit.addr_base, i)?
             } else if let Some(AttributeValue::RangeListsRef(r)) =
                 entry.attr_value(gimli::DW_AT_ranges)?
             {
                 let r = dwarf.ranges_offset_from_raw(unit, r);
-                let mut ranges = context.rnglists.ranges(
+                let mut ranges = dwarf.ranges.ranges(
                     r,
                     unit_encoding,
                     cu_low_pc,
-                    &context.debug_addr,
+                    &dwarf.debug_addr,
                     unit.addr_base,
                 )?;
                 if let Some(range) = ranges.next()? {

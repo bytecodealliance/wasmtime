@@ -11,7 +11,7 @@ use anyhow::{Context, Error};
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
-use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
+use gimli::{AttributeValue, DebuggingInformationEntry, Dwarf, Unit};
 use std::collections::HashSet;
 use wasmtime_environ::StaticModuleIndex;
 use wasmtime_versioned_export_macros::versioned_stringify_ident;
@@ -47,7 +47,7 @@ impl<T> InheritedAttr<T> {
 fn get_base_type_name(
     type_entry: &DebuggingInformationEntry<Reader<'_>>,
     unit: &Unit<Reader<'_>, usize>,
-    context: &DebugInputContext<Reader<'_>>,
+    dwarf: &Dwarf<Reader<'_>>,
 ) -> Result<String, Error> {
     // FIXME remove recursion.
     if let Some(AttributeValue::UnitRef(ref offset)) = type_entry.attr_value(gimli::DW_AT_type)? {
@@ -58,21 +58,21 @@ fn get_base_type_name(
                 die.attr_value(gimli::DW_AT_name)?
             {
                 return Ok(String::from(
-                    context.debug_str.get_str(str_offset)?.to_string()?,
+                    dwarf.debug_str.get_str(str_offset)?.to_string()?,
                 ));
             }
             match die.tag() {
                 gimli::DW_TAG_const_type => {
-                    return Ok(format!("const {}", get_base_type_name(die, unit, context)?));
+                    return Ok(format!("const {}", get_base_type_name(die, unit, dwarf)?));
                 }
                 gimli::DW_TAG_pointer_type => {
-                    return Ok(format!("{}*", get_base_type_name(die, unit, context)?));
+                    return Ok(format!("{}*", get_base_type_name(die, unit, dwarf)?));
                 }
                 gimli::DW_TAG_reference_type => {
-                    return Ok(format!("{}&", get_base_type_name(die, unit, context)?));
+                    return Ok(format!("{}&", get_base_type_name(die, unit, dwarf)?));
                 }
                 gimli::DW_TAG_array_type => {
-                    return Ok(format!("{}[]", get_base_type_name(die, unit, context)?));
+                    return Ok(format!("{}[]", get_base_type_name(die, unit, dwarf)?));
                 }
                 _ => (),
             }
@@ -110,7 +110,7 @@ fn replace_pointer_type(
     wp_die_id: write::UnitEntryId,
     pointer_type_entry: &DebuggingInformationEntry<Reader<'_>>,
     unit: &Unit<Reader<'_>, usize>,
-    context: &DebugInputContext<Reader<'_>>,
+    dwarf: &Dwarf<Reader<'_>>,
     out_strings: &mut write::StringTable,
     pending_die_refs: &mut PendingUnitRefs,
 ) -> Result<write::UnitEntryId, Error> {
@@ -131,11 +131,11 @@ fn replace_pointer_type(
     let name = match kind {
         WebAssemblyPtrKind::Pointer => format!(
             "WebAssemblyPtrWrapper<{}>",
-            get_base_type_name(pointer_type_entry, unit, context)?
+            get_base_type_name(pointer_type_entry, unit, dwarf)?
         ),
         WebAssemblyPtrKind::Reference => format!(
             "WebAssemblyRefWrapper<{}>",
-            get_base_type_name(pointer_type_entry, unit, context)?
+            get_base_type_name(pointer_type_entry, unit, dwarf)?
         ),
     };
     add_tag!(parent_id, gimli::DW_TAG_structure_type => wrapper_die as wrapper_die_id {
@@ -250,10 +250,10 @@ fn is_dead_code(entry: &DebuggingInformationEntry<Reader<'_>>) -> bool {
 pub(crate) fn clone_unit(
     compilation: &mut Compilation<'_>,
     module: StaticModuleIndex,
-    unit: &Unit<Reader<'_>, usize>,
+    skeleton_unit: &Unit<Reader<'_>, usize>,
     split_unit: Option<&Unit<Reader<'_>, usize>>,
-    split_dwarf: Option<&gimli::Dwarf<Reader<'_>>>,
-    context: &DebugInputContext<Reader<'_>>,
+    split_dwarf: Option<&Dwarf<Reader<'_>>>,
+    context: &DebugInputContext,
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,
@@ -266,39 +266,38 @@ pub(crate) fn clone_unit(
     let mut pending_di_refs = PendingDebugInfoRefs::new();
     let mut stack = Vec::new();
 
-    let mut program_unit = unit;
     let mut skeleton_die = None;
 
     // Get entries in outer scope to avoid borrowing on short lived temporary.
-    let mut skeleton_entries = unit.entries();
-    if let Some(unit) = split_unit {
-        program_unit = unit;
-
+    let mut skeleton_entries = skeleton_unit.entries();
+    if split_unit.is_some() {
         // From the spec, a skeleton unit has no children so we can assume the first, and only, entry is the DW_TAG_skeleton_unit (https://dwarfstd.org/doc/DWARF5.pdf).
         if let Some(die_tuple) = skeleton_entries.next_dfs()? {
             skeleton_die = Some(die_tuple.1);
         }
     }
 
-    let dwarf = &compilation.translations[module].debuginfo.dwarf;
+    let skeleton_dwarf = &compilation.translations[module].debuginfo.dwarf;
     let memory_offset = &compilation.module_memory_offsets[module];
 
     // Iterate over all of this compilation unit's entries.
-    let mut entries = program_unit.entries();
+    let dwarf = split_dwarf.unwrap_or(skeleton_dwarf);
+    let unit = split_unit.unwrap_or(skeleton_unit);
+    let mut entries = unit.entries();
     let (mut comp_unit, unit_id, file_map, file_index_base, cu_low_pc, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
             assert_eq!(depth_delta, 0);
             let (out_line_program, debug_line_offset, file_map, file_index_base) =
                 clone_line_program(
-                    split_dwarf.unwrap_or(dwarf),
                     dwarf,
-                    program_unit,
+                    skeleton_dwarf,
+                    unit,
                     entry,
                     skeleton_die,
                     addr_tr,
                     out_encoding,
-                    context.debug_str,
-                    context.debug_line,
+                    &skeleton_dwarf.debug_str,
+                    &skeleton_dwarf.debug_line,
                     out_strings,
                 )?;
 
@@ -311,10 +310,9 @@ pub(crate) fn clone_unit(
                 let cu_low_pc = unit.low_pc;
 
                 clone_die_attributes(
-                    split_dwarf.unwrap_or(dwarf),
-                    &program_unit,
+                    dwarf,
+                    &unit,
                     entry,
-                    context,
                     addr_tr,
                     None,
                     comp_unit,
@@ -392,9 +390,8 @@ pub(crate) fn clone_unit(
         current_scope_ranges.update(new_stack_len);
         current_value_range.update(new_stack_len);
         let range_builder = if entry.tag() == gimli::DW_TAG_subprogram {
-            let range_builder = RangeInfoBuilder::from_subprogram_die(
-                dwarf, &unit, entry, context, addr_tr, cu_low_pc,
-            )?;
+            let range_builder =
+                RangeInfoBuilder::from_subprogram_die(dwarf, &unit, entry, addr_tr, cu_low_pc)?;
             if let RangeInfoBuilder::Function(func) = range_builder {
                 let frame_info = compilation.function_frame_info(module, func);
                 current_value_range.push(new_stack_len, frame_info);
@@ -410,8 +407,7 @@ pub(crate) fn clone_unit(
             let high_pc = entry.attr_value(gimli::DW_AT_high_pc)?;
             let ranges = entry.attr_value(gimli::DW_AT_ranges)?;
             if high_pc.is_some() || ranges.is_some() {
-                let range_builder =
-                    RangeInfoBuilder::from(dwarf, &unit, entry, context, cu_low_pc)?;
+                let range_builder = RangeInfoBuilder::from(dwarf, &unit, entry, cu_low_pc)?;
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {
@@ -449,8 +445,8 @@ pub(crate) fn clone_unit(
                 comp_unit,
                 wp_die_id,
                 entry,
-                &unit,
-                context,
+                unit,
+                dwarf,
                 out_strings,
                 &mut pending_die_refs,
             )?;
@@ -467,10 +463,9 @@ pub(crate) fn clone_unit(
         die_ref_map.insert(entry.offset(), die_id);
 
         clone_die_attributes(
-            split_dwarf.unwrap_or(dwarf),
+            dwarf,
             &unit,
             entry,
-            context,
             addr_tr,
             current_value_range.top(),
             &mut comp_unit,
