@@ -2,7 +2,7 @@ use super::address_transform::AddressTransform;
 use super::expression::{compile_expression, CompiledExpression, FunctionFrameInfo};
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
-use super::{DebugInputContext, Reader, TransformError};
+use super::{Reader, TransformError};
 use anyhow::{bail, Error};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{write, AttributeValue, DebugLineOffset, DebuggingInformationEntry, Unit};
@@ -36,7 +36,6 @@ pub(crate) fn clone_die_attributes<'a, R>(
     dwarf: &gimli::Dwarf<R>,
     unit: &Unit<R, R::Offset>,
     entry: &DebuggingInformationEntry<R>,
-    context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
     frame_info: Option<&FunctionFrameInfo>,
     out_unit: &mut write::Unit,
@@ -61,7 +60,7 @@ where
         // FIXME for CU: currently address_transform operate on a single
         // function range, and when CU spans multiple ranges the
         // transformation may be incomplete.
-        RangeInfoBuilder::from(dwarf, unit, entry, context, cu_low_pc)?
+        RangeInfoBuilder::from(dwarf, unit, entry, cu_low_pc)?
     };
     range_info.build(addr_tr, out_unit, current_scope_id);
 
@@ -88,7 +87,7 @@ where
                 write::AttributeValue::Address(addr)
             }
             AttributeValue::DebugAddrIndex(i) => {
-                let u = context.debug_addr.get_address(4, unit.addr_base, i)?;
+                let u = dwarf.debug_addr.get_address(4, unit.addr_base, i)?;
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
@@ -138,17 +137,17 @@ where
             }
             AttributeValue::RangeListsRef(r) => {
                 let r = dwarf.ranges_offset_from_raw(unit, r);
-                let range_info = RangeInfoBuilder::from_ranges_ref(unit, r, context, cu_low_pc)?;
+                let range_info = RangeInfoBuilder::from_ranges_ref(dwarf, unit, r, cu_low_pc)?;
                 let range_list_id = range_info.build_ranges(addr_tr, &mut out_unit.ranges);
                 write::AttributeValue::RangeListRef(range_list_id)
             }
             AttributeValue::LocationListsRef(r) => {
                 let low_pc = 0;
-                let mut locs = context.loclists.locations(
+                let mut locs = dwarf.locations.locations(
                     r,
                     unit_encoding,
                     low_pc,
-                    &context.debug_addr,
+                    &dwarf.debug_addr,
                     unit.addr_base,
                 )?;
                 let frame_base =

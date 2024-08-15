@@ -5,10 +5,7 @@ use crate::debug::gc::build_dependencies;
 use crate::debug::Compilation;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
-use gimli::{
-    write, DebugAddr, DebugLine, DebugStr, Dwarf, DwarfPackage, LittleEndian, LocationLists,
-    RangeLists, Section, Unit, UnitSectionOffset,
-};
+use gimli::{write, Dwarf, DwarfPackage, LittleEndian, Section, Unit, UnitSectionOffset};
 use std::{collections::HashSet, fmt::Debug};
 use thiserror::Error;
 use wasmtime_environ::{
@@ -53,15 +50,7 @@ impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where
 #[error("Debug info transform error: {0}")]
 pub struct TransformError(&'static str);
 
-pub(crate) struct DebugInputContext<'a, R>
-where
-    R: Reader,
-{
-    debug_str: &'a DebugStr<R>,
-    debug_line: &'a DebugLine<R>,
-    debug_addr: &'a DebugAddr<R>,
-    rnglists: &'a RangeLists<R>,
-    loclists: &'a LocationLists<R>,
+pub(crate) struct DebugInputContext<'a> {
     reachable: &'a HashSet<UnitSectionOffset>,
 }
 
@@ -190,11 +179,6 @@ pub fn transform_dwarf(
         let addr_tr = &transforms[module];
         let di = &translation.debuginfo;
         let context = DebugInputContext {
-            debug_str: &di.dwarf.debug_str,
-            debug_line: &di.dwarf.debug_line,
-            debug_addr: &di.dwarf.debug_addr,
-            rnglists: &di.dwarf.ranges,
-            loclists: &di.dwarf.locations,
             reachable: &reachable,
         };
         let mut iter = di.dwarf.debug_info.units();
@@ -266,8 +250,7 @@ fn replace_unit_from_split_dwarf<'a>(
     let dwo_id = unit.dwo_id?;
     let split_unit_dwarf = dwp.find_cu(dwo_id, parent).ok()??;
     let unit_header = split_unit_dwarf.debug_info.units().next().ok()??;
-    Some((
-        split_unit_dwarf.unit(unit_header).unwrap(),
-        split_unit_dwarf,
-    ))
+    let mut split_unit = split_unit_dwarf.unit(unit_header).ok()?;
+    split_unit.copy_relocated_attributes(unit);
+    Some((split_unit, split_unit_dwarf))
 }
