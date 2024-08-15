@@ -1,0 +1,39 @@
+test compile precise-output
+target riscv64 has_zfh
+
+function %ret_0() -> f16 {
+block0():
+  v0 = f16const 0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   fmv.h.x fa0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x00, 0xf4
+;   ret
+
+function %ret_1() -> f16 {
+block0():
+  v0 = f16const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,4
+;   addi a2,a0,-1024
+;   fmv.h.x fa0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 4
+;   addi a2, a0, -0x400
+;   .byte 0x53, 0x05, 0x06, 0xf4
+;   ret
+

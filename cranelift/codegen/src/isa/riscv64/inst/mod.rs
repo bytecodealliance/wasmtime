@@ -1430,6 +1430,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg());
 
                 let op = match ty {
+                    F16 => "fmv.h",
                     F32 => "fmv.s",
                     F64 => "fmv.d",
                     ty if ty.is_vector() => "vmv1r.v",

@@ -14,6 +14,11 @@
 (rule (lower (has_type (ty_supported_vec ty) (vconst n)))
   (gen_constant ty (const_to_vconst n)))
 
+;;;; Rules for `f16const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f16const (u16_from_ieee16 n)))
+  (imm $F16 n))
+
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u32_from_ieee32 n)))
