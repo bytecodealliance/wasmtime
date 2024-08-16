@@ -1112,24 +1112,19 @@ block2(v8: i128):
 ; block0:
 ;   xorq    %rax, %rax, %rax
 ;   xorq    %r8, %r8, %r8
-;   movq    %r8, %rcx
 ;   testb   %dl, %dl
 ;   jnz     label2; j label1
 ; block1:
-;   movl    $2, %r8d
-;   xorq    %r9, %r9, %r9
-;   addq    %rax, %r8, %rax
-;   movq    %rcx, %rdx
-;   adcq    %rdx, %r9, %rdx
+;   addq    %rax, $2, %rax
+;   movq    %r8, %rdx
+;   adcq    %rdx, $0, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
-;   movq    %rcx, %rdx
-;   movl    $1, %r8d
-;   xorq    %r9, %r9, %r9
-;   addq    %rax, %r8, %rax
-;   adcq    %rdx, %r9, %rdx
+;   movq    %r8, %rdx
+;   addq    %rax, $1, %rax
+;   adcq    %rdx, $0, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1141,24 +1136,19 @@ block2(v8: i128):
 ; block1: ; offset 0x4
 ;   xorq %rax, %rax
 ;   xorq %r8, %r8
-;   movq %r8, %rcx
 ;   testb %dl, %dl
-;   jne 0x2c
-; block2: ; offset 0x15
-;   movl $2, %r8d
-;   xorq %r9, %r9
-;   addq %r8, %rax
-;   movq %rcx, %rdx
-;   adcq %r9, %rdx
+;   jne 0x22
+; block2: ; offset 0x12
+;   addq $2, %rax
+;   movq %r8, %rdx
+;   adcq $0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x2c
-;   movq %rcx, %rdx
-;   movl $1, %r8d
-;   xorq %r9, %r9
-;   addq %r8, %rax
-;   adcq %r9, %rdx
+; block3: ; offset 0x22
+;   movq %r8, %rdx
+;   addq $1, %rax
+;   adcq $0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1179,34 +1169,31 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $32, %rsp
-;   movq    %rbx, 0(%rsp)
-;   movq    %r13, 8(%rsp)
-;   movq    %r14, 16(%rsp)
-;   movq    %r15, 24(%rsp)
+;   movq    %r13, 0(%rsp)
+;   movq    %r14, 8(%rsp)
+;   movq    %r15, 16(%rsp)
 ; block0:
-;   movq    %rdx, %rbx
-;   movq    %rcx, %r14
+;   movq    %rcx, %r13
+;   movq    %rdx, %r15
 ;   movq    rbp(stack args max - 48), %rcx
 ;   movq    rbp(stack args max - 40), %rax
 ;   movq    rbp(stack args max - 32), %rdx
 ;   movq    rbp(stack args max - 24), %r11
 ;   movq    rbp(stack args max - 16), %r10
-;   addq    %rdi, %rbx, %rdi
-;   movq    %r14, %r15
-;   adcq    %rsi, %r15, %rsi
-;   xorq    %r13, %r13, %r13
+;   addq    %rdi, %r15, %rdi
+;   movq    %r13, %r14
+;   adcq    %rsi, %r14, %rsi
 ;   addq    %r9, %r8, %r9
-;   adcq    %rcx, %r13, %rcx
+;   adcq    %rcx, $0, %rcx
 ;   addq    %rax, %r11, %rax
 ;   adcq    %rdx, %r10, %rdx
 ;   addq    %rdi, %r9, %rdi
 ;   adcq    %rsi, %rcx, %rsi
 ;   addq    %rax, %rdi, %rax
 ;   adcq    %rdx, %rsi, %rdx
-;   movq    0(%rsp), %rbx
-;   movq    8(%rsp), %r13
-;   movq    16(%rsp), %r14
-;   movq    24(%rsp), %r15
+;   movq    0(%rsp), %r13
+;   movq    8(%rsp), %r14
+;   movq    16(%rsp), %r15
 ;   addq    %rsp, $32, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -1217,34 +1204,31 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x20, %rsp
-;   movq %rbx, (%rsp)
-;   movq %r13, 8(%rsp)
-;   movq %r14, 0x10(%rsp)
-;   movq %r15, 0x18(%rsp)
-; block1: ; offset 0x1b
-;   movq %rdx, %rbx
-;   movq %rcx, %r14
+;   movq %r13, (%rsp)
+;   movq %r14, 8(%rsp)
+;   movq %r15, 0x10(%rsp)
+; block1: ; offset 0x16
+;   movq %rcx, %r13
+;   movq %rdx, %r15
 ;   movq 0x10(%rbp), %rcx
 ;   movq 0x18(%rbp), %rax
 ;   movq 0x20(%rbp), %rdx
 ;   movq 0x28(%rbp), %r11
 ;   movq 0x30(%rbp), %r10
-;   addq %rbx, %rdi
-;   movq %r14, %r15
-;   adcq %r15, %rsi
-;   xorq %r13, %r13
+;   addq %r15, %rdi
+;   movq %r13, %r14
+;   adcq %r14, %rsi
 ;   addq %r8, %r9
-;   adcq %r13, %rcx
+;   adcq $0, %rcx
 ;   addq %r11, %rax
 ;   adcq %r10, %rdx
 ;   addq %r9, %rdi
 ;   adcq %rcx, %rsi
 ;   addq %rdi, %rax
 ;   adcq %rsi, %rdx
-;   movq (%rsp), %rbx
-;   movq 8(%rsp), %r13
-;   movq 0x10(%rsp), %r14
-;   movq 0x18(%rsp), %r15
+;   movq (%rsp), %r13
+;   movq 8(%rsp), %r14
+;   movq 0x10(%rsp), %r15
 ;   addq $0x20, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1878,7 +1862,7 @@ block0(v0: i128):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -1895,3 +1879,158 @@ block0(v0: i128):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+
+function %mul_wide_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   mulq    %rax, %rsi, %rax, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   mulq %rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_concat_64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v10 = iconst.i64 0
+    v2 = iconcat v0, v10
+    v3 = iconcat v1, v10
+    v4 = iadd v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rdi, %rax
+;   addq    %rax, %rsi, %rax
+;   adcq    %rdx, $0, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %rdx, %rdx
+;   movq %rdi, %rax
+;   addq %rsi, %rax
+;   adcq $0, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mul_uextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   mulq    %rax, %rsi, %rax, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   mulq %rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mul_sextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   imulq   %rax, %rsi, %rax, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   imulq %rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %sub_uextend_64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = isub v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rdi, %rax
+;   subq    %rax, %rsi, %rax
+;   sbbq    %rdx, $0, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %rdx, %rdx
+;   movq %rdi, %rax
+;   subq %rsi, %rax
+;   sbbq $0, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
