@@ -958,6 +958,7 @@ impl MachInstEmit for Inst {
             | &Inst::ULoad64 {
                 rd, ref mem, flags, ..
             }
+            | &Inst::FpuLoad16 { rd, ref mem, flags }
             | &Inst::FpuLoad32 { rd, ref mem, flags }
             | &Inst::FpuLoad64 { rd, ref mem, flags }
             | &Inst::FpuLoad128 { rd, ref mem, flags } => {
@@ -983,6 +984,7 @@ impl MachInstEmit for Inst {
                     Inst::ULoad32 { .. } => 0b1011100001,
                     Inst::SLoad32 { .. } => 0b1011100010,
                     Inst::ULoad64 { .. } => 0b1111100001,
+                    Inst::FpuLoad16 { .. } => 0b0111110001,
                     Inst::FpuLoad32 { .. } => 0b1011110001,
                     Inst::FpuLoad64 { .. } => 0b1111110001,
                     Inst::FpuLoad128 { .. } => 0b0011110011,
@@ -1098,6 +1100,7 @@ impl MachInstEmit for Inst {
             | &Inst::Store16 { rd, ref mem, flags }
             | &Inst::Store32 { rd, ref mem, flags }
             | &Inst::Store64 { rd, ref mem, flags }
+            | &Inst::FpuStore16 { rd, ref mem, flags }
             | &Inst::FpuStore32 { rd, ref mem, flags }
             | &Inst::FpuStore64 { rd, ref mem, flags }
             | &Inst::FpuStore128 { rd, ref mem, flags } => {
@@ -1114,6 +1117,7 @@ impl MachInstEmit for Inst {
                     Inst::Store16 { .. } => 0b0111100000,
                     Inst::Store32 { .. } => 0b1011100000,
                     Inst::Store64 { .. } => 0b1111100000,
+                    Inst::FpuStore16 { .. } => 0b0111110000,
                     Inst::FpuStore32 { .. } => 0b1011110000,
                     Inst::FpuStore64 { .. } => 0b1111110000,
                     Inst::FpuStore128 { .. } => 0b0011110010,
@@ -2213,6 +2217,9 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_inttofpu(top16, rd, rn));
             }
+            &Inst::FpuCSel16 { rd, rn, rm, cond } => {
+                sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size16));
+            }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
                 sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size32));
             }
@@ -2234,6 +2241,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovToFpu { rd, rn, size } => {
                 let template = match size {
+                    ScalarSize::Size16 => 0b000_11110_11_1_00_111_000000_00000_00000,
                     ScalarSize::Size32 => 0b000_11110_00_1_00_111_000000_00000_00000,
                     ScalarSize::Size64 => 0b100_11110_01_1_00_111_000000_00000_00000,
                     _ => unreachable!(),
@@ -2241,14 +2249,9 @@ impl MachInstEmit for Inst {
                 sink.put4(template | (machreg_to_gpr(rn) << 5) | machreg_to_vec(rd.to_reg()));
             }
             &Inst::FpuMoveFPImm { rd, imm, size } => {
-                let size_code = match size {
-                    ScalarSize::Size32 => 0b00,
-                    ScalarSize::Size64 => 0b01,
-                    _ => unimplemented!(),
-                };
                 sink.put4(
                     0b000_11110_00_1_00_000_000100_00000_00000
-                        | size_code << 22
+                        | size.ftype() << 22
                         | ((imm.enc_bits() as u32) << 13)
                         | machreg_to_vec(rd.to_reg()),
                 );

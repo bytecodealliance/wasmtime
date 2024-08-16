@@ -202,6 +202,7 @@ mod test {
             "-Dlogging=n",
             "-Ccranelift-has-lse",
             "-Ccranelift-has-pauth",
+            "-Ccranelift-has-fp16",
             "-Ccranelift-sign-return-address",
             "-Ccranelift-sign-return-address-all",
             "-Ccranelift-sign-return-address-with-bkey",

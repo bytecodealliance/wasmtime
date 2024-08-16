@@ -1,0 +1,21 @@
+test compile precise-output
+target aarch64 has_fp16
+
+function %select_f16(i8, f16, f16) -> f16 {
+block0(v0: i8, v1: f16, v2: f16):
+    v3 = select.f16 v0, v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   ands wzr, w0, #255
+;   fcsel h0, h0, h1, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tst w0, #0xff
+;   fcsel h0, h0, h1, ne
+;   ret
+

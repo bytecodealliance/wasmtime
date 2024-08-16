@@ -391,6 +391,7 @@ impl Engine {
             // aarch64 features to detect
             "has_lse" => "lse",
             "has_pauth" => "paca",
+            "has_fp16" => "fp16",
 
             // aarch64 features which don't need detection
             // No effect on its own.

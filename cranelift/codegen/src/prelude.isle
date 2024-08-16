@@ -83,6 +83,10 @@
 (decl pure u16_as_i16 (u16) i16)
 (extern constructor u16_as_i16 u16_as_i16)
 
+(decl pure u16_as_u32 (u16) u32)
+(extern constructor u16_as_u32 u16_as_u32)
+(convert u16 u32 u16_as_u32)
+
 (decl pure u16_as_u64 (u16) u64)
 (extern constructor u16_as_u64 u16_as_u64)
 (convert u16 u64 u16_as_u64)
@@ -133,6 +137,9 @@
 
 (decl u64_as_u32 (u32) u64)
 (extern extractor u64_as_u32 u64_as_u32)
+
+(decl u32_as_u16 (u16) u32)
+(extern extractor u32_as_u16 u32_as_u16)
 
 (decl pure u64_as_i32 (u64) i32)
 (extern constructor u64_as_i32 u64_as_i32)
