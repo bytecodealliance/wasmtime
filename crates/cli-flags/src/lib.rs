@@ -115,6 +115,14 @@ wasmtime_option_group! {
         /// The maximum runtime size of each linear memory in the pooling
         /// allocator, in bytes.
         pub pooling_max_memory_size: Option<usize>,
+
+        /// The maximum table elements for any table defined in a module when
+        /// using the pooling allocator.
+        pub pooling_table_elements: Option<u32>,
+
+        /// The maximum size, in bytes, allocated for a core instance's metadata
+        /// when using the pooling allocator.
+        pub pooling_max_core_instance_size: Option<usize>,
     }
 
     enum Optimize {
@@ -608,6 +616,12 @@ impl CommonOptions {
                     }
                     if let Some(limit) = self.opts.pooling_total_tables {
                         cfg.total_tables(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_table_elements {
+                        cfg.table_elements(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_max_core_instance_size {
+                        cfg.max_core_instance_size(limit);
                     }
                     match_feature! {
                         ["async" : self.opts.pooling_total_stacks]
