@@ -263,8 +263,13 @@
           (value_regs_get_gpr x_regs 1)
           (value_regs_get_gpr y_regs 0)
           (value_regs_get_gpr y_regs 1))))
-(rule 2 (lower (has_type $I128 (isub (iconcat x_lo x_hi) (iconcat y_lo y_hi))))
-        (isub128 x_lo x_hi y_lo y_hi))
+(rule 2 (lower (has_type $I128 (isub x (iconcat y_lo y_hi))))
+        (let ((x_regs ValueRegs x))
+          (isub128 (value_regs_get_gpr x 0) (value_regs_get_gpr x 1) y_lo y_hi)))
+(rule 3 (lower (has_type $I128 (isub x (uextend y @ (value_type $I64)))))
+        (let ((x_regs ValueRegs x))
+          (isub128 (value_regs_get_gpr x 0) (value_regs_get_gpr x 1)
+                   y (RegMemImm.Imm 0))))
 
 ;; Helper for lowering 128-bit subtraction with the 64-bit halves of the lhs/rhs
 ;; already split. The first two arguments are lo/hi for the lhs and the second

@@ -2001,3 +2001,36 @@ block0(v0: i64, v1: i64):
 ;   popq %rbp
 ;   retq
 
+function %sub_uextend_64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = isub v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rdi, %rax
+;   subq    %rax, %rsi, %rax
+;   sbbq    %rdx, $0, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %rdx, %rdx
+;   movq %rdi, %rax
+;   subq %rsi, %rax
+;   sbbq $0, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
