@@ -209,10 +209,16 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
                 true
             }
 
-            // If the vector type has floating point lanes, then we only support it for
-            // 32 or 64 bit lanes with the base extension
+            // If the vector type has floating point lanes then the spec states:
+            //
+            // Vector instructions where any floating-point vector operand’s EEW is not a
+            // supported floating-point type width (which includes when FLEN < SEW) are reserved.
+            //
+            // So we also have to check if we support the scalar version of the type.
             ty if self.ty_vec_fits_in_register(ty).is_some()
                 && lane_type.is_float()
+                && self.ty_supported(lane_type).is_some()
+                // Additionally the base V spec only supports 32 and 64 bit floating point types.
                 && (lane_type.bits() == 32 || lane_type.bits() == 64) =>
             {
                 true
