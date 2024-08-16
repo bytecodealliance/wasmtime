@@ -449,6 +449,7 @@
   (Lhu)
   (Lwu)
   (Ld)
+  (Flh)
   (Flw)
   (Fld)
 ))
@@ -458,6 +459,7 @@
   (Sh)
   (Sw)
   (Sd)
+  (Fsh)
   (Fsw)
   (Fsd)
 ))
@@ -2435,6 +2437,7 @@
 (decl load_op_reg_type (LoadOP) Type)
 (rule 1 (load_op_reg_type (LoadOP.Fld)) $F64)
 (rule 1 (load_op_reg_type (LoadOP.Flw)) $F64)
+(rule 1 (load_op_reg_type (LoadOP.Flh)) $F64)
 (rule 0 (load_op_reg_type _) $I64)
 
 ;; Helper constructor to build a load instruction.

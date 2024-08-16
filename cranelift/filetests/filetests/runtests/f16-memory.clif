@@ -1,0 +1,48 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64
+target riscv64 has_zfh
+
+function %f16_load(i16) -> f16 {
+    ss0 = explicit_slot 4
+
+block0(v0: i16):
+    stack_store.i16 v0, ss0+2
+    
+    v1 = stack_load.f16 ss0+2
+    return v1
+}
+; run: %f16_load(0) == 0x0.0
+; run: %f16_load(15680) == 0x1.5
+; run: %f16_load(32256)  == NaN
+; run: %f16_load(31744)  == Inf
+
+
+function %f16_store(f16) -> i16 {
+    ss0 = explicit_slot 4
+
+block0(v0: f16):
+    stack_store.f16 v0, ss0+2
+    
+    v1 = stack_load.i16 ss0+2
+    return v1
+}
+; run: %f16_store(0x0.0) == 0
+; run: %f16_store(0x1.5) == 15680
+; run: %f16_store(NaN) == 32256
+; run: %f16_store(Inf) == 31744
+
+
+function %f16_roundtrip(f16) -> f16 {
+    ss0 = explicit_slot 2
+
+block0(v0: f16):
+    stack_store.f16 v0, ss0
+    v1 = stack_load.f16 ss0
+    return v1
+}
+; run: %f16_roundtrip(0x0.0) == 0x0.0
+; run: %f16_roundtrip(0x1.5) == 0x1.5
+; run: %f16_roundtrip(NaN) == NaN
+; run: %f16_roundtrip(Inf) == Inf
