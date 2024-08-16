@@ -1243,7 +1243,7 @@ impl StoreOP {
             I8 => Self::Sb,
             I16 => Self::Sh,
             I32 | R32 => Self::Sw,
-            I64 | R64  => Self::Sd,
+            I64 | R64 => Self::Sd,
             _ => unreachable!(),
         }
     }
