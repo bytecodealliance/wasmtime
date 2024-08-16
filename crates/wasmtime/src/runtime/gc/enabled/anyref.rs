@@ -408,8 +408,8 @@ impl AnyRef {
         }
     }
 
-    /// Downcast this `anyref` to an `i31`, panicking if this `anyref` is not a
-    /// `struct`.
+    /// Downcast this `anyref` to a `structref`, panicking if this `anyref` is
+    /// not a `structref`.
     ///
     /// # Errors
     ///
