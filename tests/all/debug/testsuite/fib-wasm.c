@@ -14,3 +14,10 @@ int fib(int n) {
   }
   return b;
 }
+
+// Placed at the end so that line numbers are stable.
+//
+//   clang --target=wasm32 fib-wasm.c -o fib-wasm-split4.wasm \
+//     -gdwarf-4 -gsplit-dwarf \
+//     -Wl,--no-entry,--export=fib -nostdlib -fdebug-prefix-map=$PWD=.
+//   llvm-dwp -e fib-wasm-split4.wasm -o fib-wasm-split4.dwp

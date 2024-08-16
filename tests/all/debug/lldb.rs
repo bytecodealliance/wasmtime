@@ -149,6 +149,47 @@ check: exited with status
     any(target_os = "linux", target_os = "macos"),
     target_pointer_width = "64"
 ))]
+pub fn test_debug_split_dwarf4_lldb() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Ddebug-info",
+            "--invoke",
+            "fib",
+            "tests/all/debug/testsuite/fib-wasm-split4.wasm",
+            "3",
+        ],
+        r#"b fib
+r
+fr v
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: Breakpoint 1: no locations (pending)
+check: Unable to resolve breakpoint to any actual locations.
+check: 1 location added to breakpoint 1
+check: stop reason = breakpoint 1.1
+check: frame #0
+sameln: JIT
+sameln: fib(n=3)
+check: n = 3
+check: a = 0
+check: resuming
+check: exited with status
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
