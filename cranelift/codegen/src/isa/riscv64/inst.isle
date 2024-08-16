@@ -1847,7 +1847,7 @@
 (rule 9 (imm (ty_supported_float $F64) 0) (gen_bitcast (zero_reg) $I64 $F64))
 
 ;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
-(rule 8 (imm (ty_supported_float ty) imm)
+(rule 8 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
   (if-let $true (has_zfa))
   (if-let const (fli_constant_from_u64 ty imm))
   (rv_fli ty const))
@@ -1857,7 +1857,7 @@
 ;;
 ;; For f64's this saves one instruction, and for f32's it avoids
 ;; having to allocate an integer register, reducing integer register pressure.
-(rule 7 (imm (ty_supported_float ty) imm)
+(rule 7 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
   (if-let $true (has_zfa))
   (if-let const (fli_constant_from_negated_u64 ty imm))
   (rv_fneg ty (rv_fli ty const)))
