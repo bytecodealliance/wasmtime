@@ -2924,9 +2924,13 @@
 ;; Generates a bitcast instruction.
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
-(rule 5 (gen_bitcast r (ty_supported_float src_ty) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
-(rule 4 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
-(rule 3 (gen_bitcast r (ty_supported_vec _) (ty_supported_float dst_ty)) (rv_vfmv_fs r dst_ty))
+
+;; To support FP16 vfmv.* we need to check for the `zvfh` isa flag, which we currently don't
+;; support, so restrict the floating point types to 32/64 bits.
+(rule 5 (gen_bitcast r (ty_supported_float (ty_32_or_64 src_ty)) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
+(rule 4 (gen_bitcast r (ty_supported_vec _) (ty_supported_float (ty_32_or_64 dst_ty))) (rv_vfmv_fs r dst_ty))
+
+(rule 3 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
 (rule 2 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
 (rule 1 (gen_bitcast r $F16 $I16) (rv_fmvxh r))
 (rule 1 (gen_bitcast r $F32 $I32) (rv_fmvxw r))
