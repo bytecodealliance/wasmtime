@@ -16,14 +16,13 @@ impl RangeInfoBuilder {
         dwarf: &gimli::Dwarf<R>,
         unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
-        cu_low_pc: u64,
     ) -> Result<Self, Error>
     where
         R: Reader,
     {
         if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges)? {
             let r = dwarf.ranges_offset_from_raw(unit, r);
-            return RangeInfoBuilder::from_ranges_ref(dwarf, unit, r, cu_low_pc);
+            return RangeInfoBuilder::from_ranges_ref(dwarf, unit, r);
         };
 
         let low_pc =
@@ -50,7 +49,6 @@ impl RangeInfoBuilder {
         dwarf: &gimli::Dwarf<R>,
         unit: &Unit<R, R::Offset>,
         ranges: RangeListsOffset,
-        cu_low_pc: u64,
     ) -> Result<Self, Error>
     where
         R: Reader,
@@ -59,7 +57,7 @@ impl RangeInfoBuilder {
         let mut ranges = dwarf.ranges.ranges(
             ranges,
             unit_encoding,
-            cu_low_pc,
+            unit.low_pc,
             &dwarf.debug_addr,
             unit.addr_base,
         )?;
@@ -83,7 +81,6 @@ impl RangeInfoBuilder {
         unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
         addr_tr: &AddressTransform,
-        cu_low_pc: u64,
     ) -> Result<Self, Error>
     where
         R: Reader,
@@ -103,7 +100,7 @@ impl RangeInfoBuilder {
                 let mut ranges = dwarf.ranges.ranges(
                     r,
                     unit_encoding,
-                    cu_low_pc,
+                    unit.low_pc,
                     &dwarf.debug_addr,
                     unit.addr_base,
                 )?;
