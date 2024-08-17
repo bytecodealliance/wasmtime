@@ -262,17 +262,6 @@ pub(crate) fn clone_unit(
     let mut pending_di_refs = PendingDebugInfoRefs::new();
     let mut stack = Vec::new();
 
-    let mut skeleton_die = None;
-
-    // Get entries in outer scope to avoid borrowing on short lived temporary.
-    let mut skeleton_entries = skeleton_unit.entries();
-    if split_unit.is_some() {
-        // From the spec, a skeleton unit has no children so we can assume the first, and only, entry is the DW_TAG_skeleton_unit (https://dwarfstd.org/doc/DWARF5.pdf).
-        if let Some(die_tuple) = skeleton_entries.next_dfs()? {
-            skeleton_die = Some(die_tuple.1);
-        }
-    }
-
     let skeleton_dwarf = &compilation.translations[module].debuginfo.dwarf;
     let memory_offset = &compilation.module_memory_offsets[module];
 
@@ -285,15 +274,11 @@ pub(crate) fn clone_unit(
             assert_eq!(depth_delta, 0);
             let (out_line_program, debug_line_offset, file_map, file_index_base) =
                 clone_line_program(
-                    dwarf,
                     skeleton_dwarf,
-                    unit,
-                    entry,
-                    skeleton_die,
+                    skeleton_unit,
+                    unit.name,
                     addr_tr,
                     out_encoding,
-                    &skeleton_dwarf.debug_str,
-                    &skeleton_dwarf.debug_line,
                     out_strings,
                 )?;
 

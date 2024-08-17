@@ -306,27 +306,3 @@ where
     }
     Ok(())
 }
-
-pub(crate) fn clone_attr_string<R>(
-    attr_value: &AttributeValue<R>,
-    form: gimli::DwForm,
-    unit: &Unit<R, R::Offset>,
-    dwarf: &gimli::Dwarf<R>,
-    out_strings: &mut write::StringTable,
-) -> Result<write::LineString, Error>
-where
-    R: Reader,
-{
-    let content = dwarf
-        .attr_string(unit, attr_value.clone())?
-        .to_string_lossy()?
-        .into_owned();
-    Ok(match form {
-        gimli::DW_FORM_strp => {
-            let id = out_strings.add(content);
-            write::LineString::StringRef(id)
-        }
-        gimli::DW_FORM_string => write::LineString::String(content.into()),
-        _ => bail!("DW_FORM_line_strp or other not supported"),
-    })
-}
