@@ -31,7 +31,7 @@ impl RangeInfoBuilder {
             } else if let Some(AttributeValue::DebugAddrIndex(i)) =
                 entry.attr_value(gimli::DW_AT_low_pc)?
             {
-                dwarf.debug_addr.get_address(4, unit.addr_base, i)?
+                dwarf.address(unit, i)?
             } else {
                 return Ok(RangeInfoBuilder::Undefined);
             };
@@ -53,14 +53,7 @@ impl RangeInfoBuilder {
     where
         R: Reader,
     {
-        let unit_encoding = unit.encoding();
-        let mut ranges = dwarf.ranges.ranges(
-            ranges,
-            unit_encoding,
-            unit.low_pc,
-            &dwarf.debug_addr,
-            unit.addr_base,
-        )?;
+        let mut ranges = dwarf.ranges(unit, ranges)?;
         let mut result = Vec::new();
         while let Some(range) = ranges.next()? {
             if range.begin >= range.end {
@@ -85,25 +78,18 @@ impl RangeInfoBuilder {
     where
         R: Reader,
     {
-        let unit_encoding = unit.encoding();
         let addr =
             if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)? {
                 addr
             } else if let Some(AttributeValue::DebugAddrIndex(i)) =
                 entry.attr_value(gimli::DW_AT_low_pc)?
             {
-                dwarf.debug_addr.get_address(4, unit.addr_base, i)?
+                dwarf.address(unit, i)?
             } else if let Some(AttributeValue::RangeListsRef(r)) =
                 entry.attr_value(gimli::DW_AT_ranges)?
             {
                 let r = dwarf.ranges_offset_from_raw(unit, r);
-                let mut ranges = dwarf.ranges.ranges(
-                    r,
-                    unit_encoding,
-                    unit.low_pc,
-                    &dwarf.debug_addr,
-                    unit.addr_base,
-                )?;
+                let mut ranges = dwarf.ranges(unit, r)?;
                 if let Some(range) = ranges.next()? {
                     range.begin
                 } else {

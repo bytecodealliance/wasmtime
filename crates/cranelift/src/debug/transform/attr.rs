@@ -91,7 +91,7 @@ where
                 write::AttributeValue::Address(addr)
             }
             AttributeValue::DebugAddrIndex(i) => {
-                let u = dwarf.debug_addr.get_address(4, unit.addr_base, i)?;
+                let u = dwarf.address(unit, i)?;
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
