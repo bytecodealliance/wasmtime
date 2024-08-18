@@ -1,0 +1,35 @@
+test compile precise-output
+target aarch64 has_fp16
+
+function %bitcast_f16_to_i16(f16) -> i16 {
+block0(v0: f16):
+  v1 = bitcast.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.h[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.h[0]
+;   ret
+
+function %bitcast_i16_to_f16(i16) -> f16 {
+block0(v0: i16):
+  v1 = bitcast.f16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmov h0, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov h0, w0
+;   ret
+

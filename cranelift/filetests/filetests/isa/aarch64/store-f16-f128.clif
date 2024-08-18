@@ -1,0 +1,36 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %store_f16(f16, i64) {
+block0(v0: f16, v1: i64):
+    store.f16 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   str h0, [x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   str h0, [x0] ; trap: heap_oob
+;   ret
+
+function %store_f128(f128, i64) {
+block0(v0: f128, v1: i64):
+    store.f128 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   str q0, [x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   str q0, [x0] ; trap: heap_oob
+;   ret
+

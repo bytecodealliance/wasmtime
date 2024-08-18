@@ -1,7 +1,7 @@
 //! This module defines aarch64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
+use crate::ir::types::{F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 use crate::ir::{types, ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
@@ -281,6 +281,11 @@ impl Inst {
                 mem,
                 flags,
             },
+            F16 => Inst::FpuLoad16 {
+                rd: into_reg,
+                mem,
+                flags,
+            },
             F32 => Inst::FpuLoad32 {
                 rd: into_reg,
                 mem,
@@ -292,7 +297,7 @@ impl Inst {
                 flags,
             },
             _ => {
-                if ty.is_vector() {
+                if ty.is_vector() || ty.is_float() {
                     let bits = ty_bits(ty);
                     let rd = into_reg;
 
@@ -332,6 +337,11 @@ impl Inst {
                 mem,
                 flags,
             },
+            F16 => Inst::FpuStore16 {
+                rd: from_reg,
+                mem,
+                flags,
+            },
             F32 => Inst::FpuStore32 {
                 rd: from_reg,
                 mem,
@@ -343,7 +353,7 @@ impl Inst {
                 flags,
             },
             _ => {
-                if ty.is_vector() {
+                if ty.is_vector() || ty.is_float() {
                     let bits = ty_bits(ty);
                     let rd = from_reg;
 
@@ -372,6 +382,7 @@ impl Inst {
             Inst::ULoad32 { .. } => Some(I32),
             Inst::SLoad32 { .. } => Some(I32),
             Inst::ULoad64 { .. } => Some(I64),
+            Inst::FpuLoad16 { .. } => Some(F16),
             Inst::FpuLoad32 { .. } => Some(F32),
             Inst::FpuLoad64 { .. } => Some(F64),
             Inst::FpuLoad128 { .. } => Some(I8X16),
@@ -379,6 +390,7 @@ impl Inst {
             Inst::Store16 { .. } => Some(I16),
             Inst::Store32 { .. } => Some(I32),
             Inst::Store64 { .. } => Some(I64),
+            Inst::FpuStore16 { .. } => Some(F16),
             Inst::FpuStore32 { .. } => Some(F32),
             Inst::FpuStore64 { .. } => Some(F64),
             Inst::FpuStore128 { .. } => Some(I8X16),
@@ -697,6 +709,10 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
+        Inst::FpuLoad16 { rd, mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
         Inst::FpuLoad32 { rd, mem, .. } => {
             collector.reg_def(rd);
             memarg_operands(mem, collector);
@@ -707,6 +723,10 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::FpuLoad128 { rd, mem, .. } => {
             collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        Inst::FpuStore16 { rd, mem, .. } => {
+            collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
         Inst::FpuStore32 { rd, mem, .. } => {
@@ -749,7 +769,9 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        Inst::FpuCSel32 { rd, rn, rm, .. } | Inst::FpuCSel64 { rd, rn, rm, .. } => {
+        Inst::FpuCSel16 { rd, rn, rm, .. }
+        | Inst::FpuCSel32 { rd, rn, rm, .. }
+        | Inst::FpuCSel64 { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
@@ -1060,6 +1082,7 @@ impl MachInst for Inst {
             | &Inst::SLoad32 { .. }
             | &Inst::ULoad64 { .. }
             | &Inst::LoadP64 { .. }
+            | &Inst::FpuLoad16 { .. }
             | &Inst::FpuLoad32 { .. }
             | &Inst::FpuLoad64 { .. }
             | &Inst::FpuLoad128 { .. }
@@ -1070,6 +1093,7 @@ impl MachInst for Inst {
             | &Inst::Store32 { .. }
             | &Inst::Store64 { .. }
             | &Inst::StoreP64 { .. }
+            | &Inst::FpuStore16 { .. }
             | &Inst::FpuStore32 { .. }
             | &Inst::FpuStore64 { .. }
             | &Inst::FpuStore128 { .. } => true,
@@ -1134,8 +1158,10 @@ impl MachInst for Inst {
             I64 => Ok((&[RegClass::Int], &[I64])),
             R32 => panic!("32-bit reftype pointer should never be seen on AArch64"),
             R64 => Ok((&[RegClass::Int], &[R64])),
+            F16 => Ok((&[RegClass::Float], &[F16])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
+            F128 => Ok((&[RegClass::Float], &[F128])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             _ if ty.is_vector() => {
                 assert!(ty.bits() <= 128);
@@ -1809,6 +1835,13 @@ impl Inst {
                 let rm = pretty_print_vreg_scalar(rm, size);
                 format!("fcmp {rn}, {rm}")
             }
+            &Inst::FpuLoad16 { rd, ref mem, .. } => {
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size16);
+                let mem = mem.clone();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
+                format!("{mem_str}ldr {rd}, {mem}")
+            }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32);
                 let mem = mem.clone();
@@ -1830,6 +1863,13 @@ impl Inst {
                 let access_ty = self.mem_type().unwrap();
                 let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{mem_str}ldr {rd}, {mem}")
+            }
+            &Inst::FpuStore16 { rd, ref mem, .. } => {
+                let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size16);
+                let mem = mem.clone();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
+                format!("{mem_str}str {rd}, {mem}")
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size32);
@@ -1922,6 +1962,13 @@ impl Inst {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), sizedest);
                 let rn = pretty_print_ireg(rn, sizesrc);
                 format!("{op} {rd}, {rn}")
+            }
+            &Inst::FpuCSel16 { rd, rn, rm, cond } => {
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size16);
+                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size16);
+                let rm = pretty_print_vreg_scalar(rm, ScalarSize::Size16);
+                let cond = cond.pretty_print(0);
+                format!("fcsel {rd}, {rn}, {rm}, {cond}")
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32);

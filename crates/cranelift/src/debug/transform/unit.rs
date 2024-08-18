@@ -54,12 +54,8 @@ fn get_base_type_name(
         let mut entries = unit.entries_at_offset(*offset)?;
         entries.next_entry()?;
         if let Some(die) = entries.current() {
-            if let Some(AttributeValue::DebugStrRef(str_offset)) =
-                die.attr_value(gimli::DW_AT_name)?
-            {
-                return Ok(String::from(
-                    dwarf.debug_str.get_str(str_offset)?.to_string()?,
-                ));
+            if let Some(value) = die.attr_value(gimli::DW_AT_name)? {
+                return Ok(String::from(dwarf.attr_string(unit, value)?.to_string()?));
             }
             match die.tag() {
                 gimli::DW_TAG_const_type => {

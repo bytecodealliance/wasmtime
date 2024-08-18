@@ -2,6 +2,8 @@ test interpret
 test run
 set enable_llvm_abi_extensions
 target x86_64
+target aarch64
+target aarch64 has_fp16
 
 function %bitcast_i128_f128(i128) -> f128 fast {
 block0(v0: i128):

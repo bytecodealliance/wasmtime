@@ -89,3 +89,7 @@
 (rule (simplify (ireduce ty (bor  _ x y))) (bor  ty (ireduce ty x) (ireduce ty y)))
 (rule (simplify (ireduce ty (bxor _ x y))) (bxor ty (ireduce ty x) (ireduce ty y)))
 (rule (simplify (ireduce ty (band _ x y))) (band ty (ireduce ty x) (ireduce ty y)))
+
+;; Try to transform an `iconcat` into an i128 into either an sextend or uextend
+(rule (simplify (iconcat $I128 x (iconst_u _ 0))) (uextend $I128 x))
+(rule (simplify (iconcat $I128 x (sshr _ x (iconst_u _ 63)))) (sextend $I128 x))
