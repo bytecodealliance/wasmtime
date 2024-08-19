@@ -47,6 +47,7 @@ pub struct Engine {
 
 struct EngineInner {
     config: Config,
+    features: WasmFeatures,
     tunables: Tunables,
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler: Box<dyn wasmtime_environ::Compiler>,
@@ -99,10 +100,10 @@ impl Engine {
         }
 
         let config = config.clone();
-        let tunables = config.validate()?;
+        let (tunables, features) = config.validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        let (config, compiler) = config.build_compiler(&tunables)?;
+        let (config, compiler) = config.build_compiler(&tunables, features)?;
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
@@ -122,6 +123,7 @@ impl Engine {
                 compatible_with_native_host: OnceLock::new(),
                 config,
                 tunables,
+                features,
             }),
         })
     }
@@ -130,6 +132,11 @@ impl Engine {
     #[inline]
     pub fn config(&self) -> &Config {
         &self.inner.config
+    }
+
+    #[inline]
+    pub(crate) fn features(&self) -> WasmFeatures {
+        self.inner.features
     }
 
     pub(crate) fn run_maybe_parallel<
@@ -307,7 +314,7 @@ impl Engine {
             // like typed function references and GC) are enabled this must be
             // enabled, otherwise this setting can have any value.
             "enable_safepoints" => {
-                if self.config().features.contains(WasmFeatures::REFERENCE_TYPES) {
+                if self.features().contains(WasmFeatures::REFERENCE_TYPES) {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())

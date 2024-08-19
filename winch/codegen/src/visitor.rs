@@ -1338,6 +1338,10 @@ where
             I32 | I64 | F32 | F64 | V128 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => context.stack.push(Val::local(index, slot.ty)),
+                WasmHeapType::Extern => {
+                    self.found_unsupported_instruction =
+                        Some("unsupported local.get of externref local");
+                }
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
         }
@@ -1430,7 +1434,13 @@ where
                 }
                 _ => unimplemented!("Support for eager table init"),
             },
-            t => unimplemented!("Support for WasmHeapType: {t}"),
+            WasmHeapType::Extern => {
+                self.found_unsupported_instruction =
+                    Some("unsupported table.get of externref table");
+            }
+            t => {
+                unimplemented!("Support for WasmHeapType: {t}")
+            }
         }
     }
 
@@ -2150,6 +2160,7 @@ impl From<WasmValType> for OperandSize {
                     // to be updated in such a way that the calculation of the
                     // OperandSize will depend on the target's  pointer size.
                     WasmHeapType::Func => OperandSize::S64,
+                    WasmHeapType::Extern => OperandSize::S64,
                     t => unimplemented!("Support for WasmHeapType: {t}"),
                 }
             }

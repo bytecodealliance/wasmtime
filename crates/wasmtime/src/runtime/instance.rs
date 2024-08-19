@@ -341,8 +341,7 @@ impl Instance {
             compiled_module.module(),
             store
                 .engine()
-                .config()
-                .features
+                .features()
                 .contains(WasmFeatures::BULK_MEMORY),
         )?;
 

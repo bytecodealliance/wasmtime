@@ -238,7 +238,7 @@ impl Metadata<'_> {
             saturating_float_to_int: _,
             sign_extension: _,
             floats: _,
-        } = engine.config().features.inflate();
+        } = engine.features().inflate();
 
         // These features are not implemented in Wasmtime yet. We match on them
         // above so that once we do implement support for them, we won't
@@ -281,7 +281,7 @@ impl Metadata<'_> {
         self.check_shared_flags(engine)?;
         self.check_isa_flags(engine)?;
         self.check_tunables(&engine.tunables())?;
-        self.check_features(&engine.config().features)?;
+        self.check_features(&engine.features())?;
         Ok(())
     }
 

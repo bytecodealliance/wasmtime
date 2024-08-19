@@ -1520,8 +1520,7 @@ impl StoreOpaque {
         #[cfg(feature = "gc")]
         fn allocate_gc_store(engine: &Engine) -> Result<GcStore> {
             let (index, heap) = if engine
-                .config()
-                .features
+                .features()
                 .contains(wasmparser::WasmFeatures::REFERENCE_TYPES)
             {
                 engine

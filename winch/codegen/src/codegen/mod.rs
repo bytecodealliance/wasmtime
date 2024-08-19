@@ -419,7 +419,9 @@ where
                 match &ty {
                     I32 | I64 | F32 | F64 | V128 => self.masm.store(src.into(), addr, ty.into()),
                     Ref(rt) => match rt.heap_type {
-                        WasmHeapType::Func => self.masm.store_ptr(src.into(), addr),
+                        WasmHeapType::Func | WasmHeapType::Extern => {
+                            self.masm.store_ptr(src.into(), addr)
+                        }
                         ht => unimplemented!("Support for WasmHeapType: {ht}"),
                     },
                 }
