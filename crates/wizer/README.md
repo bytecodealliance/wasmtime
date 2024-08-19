@@ -71,7 +71,7 @@ Download the a pre-built release from the [releases](https://github.com/bytecode
 Alternatively you can install via `cargo`:
 
 ```shell-session
-$ cargo install wizer --all-features
+cargo install wizer --all-features
 ```
 
 ## Example Usage
@@ -91,7 +91,7 @@ For a complete C++ example, see [this](https://github.com/bytecodealliance/wizer
 Then, if your Wasm module is named `input.wasm`, run the `wizer` CLI:
 
 ```shell-session
-$ wizer input.wasm -o initialized.wasm
+wizer input.wasm -o initialized.wasm
 ```
 
 Now you have a pre-initialized version of your Wasm module at
@@ -100,7 +100,7 @@ Now you have a pre-initialized version of your Wasm module at
 More details, flags, and options can be found via `--help`:
 
 ```shell-session
-$ wizer --help
+wizer --help
 ```
 
 ## Caveats
