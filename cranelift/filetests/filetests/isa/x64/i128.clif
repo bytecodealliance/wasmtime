@@ -2069,3 +2069,77 @@ block0(v0: i64, v1: i64):
 ;   popq %rbp
 ;   retq
 
+function %sink_two_i128_loads_in_add(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v10 = load.i64 v0
+    v11 = load.i64 v0+8
+    v18 = uextend.i128 v1
+    v20 = iconcat v10, v11
+    v14 = iadd v18, v20
+    return v14
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi), %r9
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rsi, %rax
+;   addq    %rax, %r9, %rax
+;   adcq    %rdx, 8(%rdi), %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %r9 ; trap: heap_oob
+;   xorq %rdx, %rdx
+;   movq %rsi, %rax
+;   addq %r9, %rax
+;   adcq 8(%rdi), %rdx ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %sink_two_i128_loads_in_sub(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v10 = load.i64 v0
+    v11 = load.i64 v0+8
+    v18 = uextend.i128 v1
+    v20 = iconcat v10, v11
+    v14 = isub v18, v20
+    return v14
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi), %r9
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rsi, %rax
+;   subq    %rax, %r9, %rax
+;   sbbq    %rdx, 8(%rdi), %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %r9 ; trap: heap_oob
+;   xorq %rdx, %rdx
+;   movq %rsi, %rax
+;   subq %r9, %rax
+;   sbbq 8(%rdi), %rdx ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
