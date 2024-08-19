@@ -163,6 +163,7 @@ struct CompilerConfig {
     #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<std::path::PathBuf>,
+    opt_clif_dir: Option<std::path::PathBuf>,
     wmemcheck: bool,
 }
 
@@ -177,6 +178,7 @@ impl CompilerConfig {
             #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
             cache_store: None,
             clif_dir: None,
+            opt_clif_dir: None,
             wmemcheck: false,
         }
     }
@@ -1897,6 +1899,10 @@ impl Config {
             compiler.clif_dir(path)?;
         }
 
+        if let Some(path) = &self.compiler_config.opt_clif_dir {
+            compiler.opt_clif_dir(path)?;
+        }
+
         // If probestack is enabled for a target, Wasmtime will always use the
         // inline strategy which doesn't require us to define a `__probestack`
         // function or similar.
@@ -1996,6 +2002,13 @@ impl Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn emit_clif(&mut self, path: &Path) -> &mut Self {
         self.compiler_config.clif_dir = Some(path.to_path_buf());
+        self
+    }
+
+    /// Enables optimized clif output when compiling a WebAssembly module.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn emit_opt_clif(&mut self, path: &Path) -> &mut Self {
+        self.compiler_config.opt_clif_dir = Some(path.to_path_buf());
         self
     }
 

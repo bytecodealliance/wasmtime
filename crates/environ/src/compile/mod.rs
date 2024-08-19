@@ -111,6 +111,11 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
         anyhow::bail!("clif output not supported");
     }
 
+    /// Enables optimized clif output in the directory specified.
+    fn opt_clif_dir(&mut self, _path: &path::Path) -> Result<()> {
+        anyhow::bail!("optimized clif output not supported");
+    }
+
     /// Returns the currently configured target triple that compilation will
     /// produce artifacts for.
     fn triple(&self) -> &target_lexicon::Triple;

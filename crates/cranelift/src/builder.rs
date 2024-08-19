@@ -21,6 +21,7 @@ struct Builder {
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
+    opt_clif_dir: Option<path::PathBuf>,
     wmemcheck: bool,
 }
 
@@ -44,6 +45,7 @@ pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
         linkopts: LinkOptions::default(),
         cache_store: None,
         clif_dir: None,
+        opt_clif_dir: None,
         wmemcheck: false,
     }))
 }
@@ -55,6 +57,11 @@ impl CompilerBuilder for Builder {
 
     fn clif_dir(&mut self, path: &path::Path) -> Result<()> {
         self.clif_dir = Some(path.to_path_buf());
+        Ok(())
+    }
+
+    fn opt_clif_dir(&mut self, path: &path::Path) -> Result<()> {
+        self.opt_clif_dir = Some(path.to_path_buf());
         Ok(())
     }
 
@@ -97,6 +104,7 @@ impl CompilerBuilder for Builder {
             self.cache_store.clone(),
             self.linkopts.clone(),
             self.clif_dir.clone(),
+            self.opt_clif_dir.clone(),
             self.wmemcheck,
         )))
     }

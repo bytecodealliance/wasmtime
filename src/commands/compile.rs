@@ -51,6 +51,10 @@ pub struct CompileCommand {
     #[arg(long = "emit-clif", value_name = "PATH")]
     pub emit_clif: Option<PathBuf>,
 
+    /// The directory path to write optimized clif files into, one clif file per wasm function.
+    #[arg(long = "emit-opt-clif", value_name = "PATH")]
+    pub emit_opt_clif: Option<PathBuf>,
+
     /// The path of the WebAssembly to compile
     #[arg(index = 1, value_name = "MODULE")]
     pub module: PathBuf,
@@ -76,6 +80,21 @@ impl CompileCommand {
             }
 
             config.emit_clif(&path);
+        }
+
+        if let Some(path) = self.emit_opt_clif {
+            if !path.exists() {
+                std::fs::create_dir(&path)?;
+            }
+
+            if !path.is_dir() {
+                bail!(
+                    "the path passed for '--emit-opt-clif' ({}) must be a directory",
+                    path.display()
+                );
+            }
+
+            config.emit_opt_clif(&path);
         }
 
         let engine = Engine::new(&config)?;

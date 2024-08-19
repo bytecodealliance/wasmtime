@@ -1,3 +1,4 @@
+use crate::compiler::path::PathBuf;
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
 use crate::DEBUG_ASSERT_TRAP_CODE;
@@ -69,6 +70,7 @@ pub struct Compiler {
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
+    opt_clif_dir: Option<path::PathBuf>,
     wmemcheck: bool,
 }
 
@@ -107,6 +109,7 @@ impl Compiler {
         cache_store: Option<Arc<dyn CacheStore>>,
         linkopts: LinkOptions,
         clif_dir: Option<path::PathBuf>,
+        opt_clif_dir: Option<path::PathBuf>,
         wmemcheck: bool,
     ) -> Compiler {
         Compiler {
@@ -116,6 +119,7 @@ impl Compiler {
             linkopts,
             cache_store,
             clif_dir,
+            opt_clif_dir,
             wmemcheck,
         }
     }
@@ -228,7 +232,11 @@ impl wasmtime_environ::Compiler for Compiler {
             write!(output, "{}", context.func.display()).unwrap();
         }
 
-        let (info, func) = compiler.finish_with_info(Some((&body, &self.tunables)))?;
+        let (info, func) = compiler.finish_with_info(
+            Some((&body, &self.tunables)),
+            &self.opt_clif_dir,
+            func_index.as_u32(),
+        )?;
 
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
@@ -799,7 +807,7 @@ impl FunctionCompiler<'_> {
     }
 
     fn finish(self) -> Result<CompiledFunction, CompileError> {
-        let (info, func) = self.finish_with_info(None)?;
+        let (info, func) = self.finish_with_info(None, &None, 0)?;
         assert!(info.stack_maps.is_empty());
         Ok(func)
     }
@@ -807,12 +815,25 @@ impl FunctionCompiler<'_> {
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
+        opt_clif_dir: &Option<PathBuf>,
+        func_index: u32,
     ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
         let (_, _code_buf) =
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
         let mut compiled_code = context.take_compiled_code().unwrap();
+
+        if let Some(path) = opt_clif_dir {
+            use std::io::Write;
+
+            let mut path = path.to_path_buf();
+            path.push(format!("wasm_func_{func_index}"));
+            path.set_extension("clif");
+
+            let mut output = std::fs::File::create(path).unwrap();
+            write!(output, "{}", context.func.display()).unwrap();
+        }
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
