@@ -2694,7 +2694,9 @@
       ;; above that we have to handle properly. (Conversely, if they
       ;; don't differ, then the native instruction's answer is the
       ;; right one per CLIF semantics.)
-      (let ((min1 Xmm (x64_minps x y))
+      (let ((x Xmm x) ;; force x/y into registers and disallow load sinking
+            (y Xmm y)
+            (min1 Xmm (x64_minps x y))
             (min2 Xmm (x64_minps y x))
             ;; Compute the OR of the two. Note that NaNs have an
             ;; exponent field of all-ones (0xFF for F32), so if either
@@ -2732,7 +2734,9 @@
 ;; Likewise for F64 lanes, except that the right-shift is by 13 bits
 ;; (1 sign, 11 exponent, 1 QNaN bit).
 (rule (lower (has_type $F64X2 (fmin x y)))
-      (let ((min1 Xmm (x64_minpd x y))
+      (let ((x Xmm x) ;; force x/y into registers and disallow load sinking
+            (y Xmm y)
+            (min1 Xmm (x64_minpd x y))
             (min2 Xmm (x64_minpd y x))
             (min_or Xmm (x64_orpd min1 min2))
             (is_nan_mask Xmm (x64_cmppd min1 min2 (FcmpImm.Unordered)))
@@ -2757,7 +2761,9 @@
       ;; above that we have to handle properly. (Conversely, if they
       ;; don't differ, then the native instruction's answer is the
       ;; right one per CLIF semantics.)
-      (let ((max1 Xmm (x64_maxps x y))
+      (let ((x Xmm x) ;; force x/y into registers and disallow load sinking
+            (y Xmm y)
+            (max1 Xmm (x64_maxps x y))
             (max2 Xmm (x64_maxps y x))
             ;; Compute the XOR of the two maxima. In the case
             ;; where we don't have a +/-0 mismatch or NaNs, then
@@ -2800,7 +2806,9 @@
       ;; above that we have to handle properly. (Conversely, if they
       ;; don't differ, then the native instruction's answer is the
       ;; right one per CLIF semantics.)
-      (let ((max1 Xmm (x64_maxpd x y))
+      (let ((x Xmm x) ;; force x/y into registers and disallow load sinking
+            (y Xmm y)
+            (max1 Xmm (x64_maxpd x y))
             (max2 Xmm (x64_maxpd y x))
             ;; Compute the XOR of the two maxima. In the case
             ;; where we don't have a +/-0 mismatch or NaNs, then
