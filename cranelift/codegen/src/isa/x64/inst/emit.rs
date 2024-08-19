@@ -164,9 +164,9 @@ pub(crate) fn emit(
             let mut rex = RexFlags::from(*size);
             let (opcode_r, opcode_m, subopcode_i) = match op {
                 AluRmiROpcode::Add => (0x01, 0x03, 0),
-                AluRmiROpcode::Adc => (0x11, 0x03, 2),
+                AluRmiROpcode::Adc => (0x11, 0x13, 2),
                 AluRmiROpcode::Sub => (0x29, 0x2B, 5),
-                AluRmiROpcode::Sbb => (0x19, 0x2B, 3),
+                AluRmiROpcode::Sbb => (0x19, 0x1B, 3),
                 AluRmiROpcode::And => (0x21, 0x23, 4),
                 AluRmiROpcode::Or => (0x09, 0x0B, 1),
                 AluRmiROpcode::Xor => (0x31, 0x33, 6),
