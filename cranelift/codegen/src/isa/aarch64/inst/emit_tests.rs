@@ -6486,7 +6486,7 @@ fn test_aarch64_binemit() {
             rm: vreg(31),
             ra: vreg(1),
         },
-        "CF275F1F",
+        "CF077F1F",
         "fnmadd d15, d30, d31, d1",
     ));
 
@@ -6499,7 +6499,7 @@ fn test_aarch64_binemit() {
             rm: vreg(31),
             ra: vreg(1),
         },
-        "CFA75F1F",
+        "CF877F1F",
         "fnmsub d15, d30, d31, d1",
     ));
 
