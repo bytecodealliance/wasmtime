@@ -66,3 +66,6 @@ members = [
 
 [profile.bench]
 debug = true
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(fuzzing)'] }

@@ -19,9 +19,6 @@ pub struct Snapshot {
 
     /// Segments of non-zero memory.
     pub data_segments: Vec<DataSegment>,
-
-    /// Snapshots for each nested instantiation.
-    pub instantiations: Vec<Snapshot>,
 }
 
 /// A data segment initializer for a memory.
@@ -83,13 +80,11 @@ pub fn snapshot(ctx: &mut impl AsContextMut, instance: &wasmtime::Instance) -> S
 
     let globals = snapshot_globals(&mut *ctx, instance);
     let (memory_mins, data_segments) = snapshot_memories(&mut *ctx, instance);
-    let instantiations = snapshot_instantiations(&mut *ctx, instance);
 
     Snapshot {
         globals,
         memory_mins,
         data_segments,
-        instantiations,
     }
 }
 
@@ -272,20 +267,4 @@ fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegment>) {
     // Finally, sort the data segments again so that our output is
     // deterministic.
     merged_data_segments.sort_by_key(|s| (s.memory_index, s.offset));
-}
-
-fn snapshot_instantiations(
-    ctx: &mut impl AsContextMut,
-    instance: &wasmtime::Instance,
-) -> Vec<Snapshot> {
-    log::debug!("Snapshotting nested instantiations");
-    let instantiations = vec![];
-    loop {
-        let name = format!("__wizer_instance_{}", instantiations.len());
-        match instance.get_export(&mut *ctx, &name) {
-            None => break,
-            Some(_) => unreachable!(),
-        }
-    }
-    instantiations
 }

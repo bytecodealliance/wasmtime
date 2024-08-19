@@ -2,7 +2,7 @@ name: 'Set up a CentOS 6 container to build releases in'
 description: 'Set up a CentOS 6 container to build releases in'
 
 runs:
-  using: node12
+  using: node20
   main: 'main.js'
 inputs:
   name:
