@@ -259,9 +259,6 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
-        // Not yet implemented in Wasmtime
-        ret.features.set(WasmFeatures::EXTENDED_CONST, false);
-
         // Conditionally enabled features depending on compile-time crate
         // features. Note that if these features are disabled then `Config` has
         // no way of re-enabling them.
@@ -285,6 +282,7 @@ impl Config {
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
+        ret.wasm_extended_const(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
         ret
@@ -960,6 +958,17 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/memory64
     pub fn wasm_memory64(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::MEMORY64, enable);
+        self
+    }
+
+    /// Configures whether the WebAssembly extended-const [proposal] will
+    /// be enabled for compilation.
+    ///
+    /// This is `true` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/extended-const
+    pub fn wasm_extended_const(&mut self, enable: bool) -> &mut Self {
+        self.features.set(WasmFeatures::EXTENDED_CONST, enable);
         self
     }
 

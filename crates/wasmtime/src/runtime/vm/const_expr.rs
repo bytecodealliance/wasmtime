@@ -78,6 +78,36 @@ impl ConstExprEvaluator {
                     let raw = VMGcRef::from_i31(i31).as_raw_u32();
                     self.stack.push(ValRaw::anyref(raw));
                 }
+                wasmtime_environ::ConstOp::I32Add => {
+                    let b = self.pop()?.get_i32();
+                    let a = self.pop()?.get_i32();
+                    self.stack.push(ValRaw::i32(a.wrapping_add(b)));
+                }
+                wasmtime_environ::ConstOp::I32Sub => {
+                    let b = self.pop()?.get_i32();
+                    let a = self.pop()?.get_i32();
+                    self.stack.push(ValRaw::i32(a.wrapping_sub(b)));
+                }
+                wasmtime_environ::ConstOp::I32Mul => {
+                    let b = self.pop()?.get_i32();
+                    let a = self.pop()?.get_i32();
+                    self.stack.push(ValRaw::i32(a.wrapping_mul(b)));
+                }
+                wasmtime_environ::ConstOp::I64Add => {
+                    let b = self.pop()?.get_i64();
+                    let a = self.pop()?.get_i64();
+                    self.stack.push(ValRaw::i64(a.wrapping_add(b)));
+                }
+                wasmtime_environ::ConstOp::I64Sub => {
+                    let b = self.pop()?.get_i64();
+                    let a = self.pop()?.get_i64();
+                    self.stack.push(ValRaw::i64(a.wrapping_sub(b)));
+                }
+                wasmtime_environ::ConstOp::I64Mul => {
+                    let b = self.pop()?.get_i64();
+                    let a = self.pop()?.get_i64();
+                    self.stack.push(ValRaw::i64(a.wrapping_mul(b)));
+                }
             }
         }
 

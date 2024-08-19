@@ -1484,6 +1484,12 @@ pub enum ConstOp {
     RefI31,
     RefNull,
     RefFunc(FuncIndex),
+    I32Add,
+    I32Sub,
+    I32Mul,
+    I64Add,
+    I64Sub,
+    I64Mul,
 }
 
 impl ConstOp {
@@ -1500,6 +1506,12 @@ impl ConstOp {
             O::RefFunc { function_index } => Self::RefFunc(FuncIndex::from_u32(function_index)),
             O::GlobalGet { global_index } => Self::GlobalGet(GlobalIndex::from_u32(global_index)),
             O::RefI31 => Self::RefI31,
+            O::I32Add => Self::I32Add,
+            O::I32Sub => Self::I32Sub,
+            O::I32Mul => Self::I32Mul,
+            O::I64Add => Self::I64Add,
+            O::I64Sub => Self::I64Sub,
+            O::I64Mul => Self::I64Mul,
             op => {
                 return Err(wasm_unsupported!(
                     "unsupported opcode in const expression at offset {offset:#x}: {op:?}",
