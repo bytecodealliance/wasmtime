@@ -608,6 +608,10 @@ impl Func {
     /// | `AnyRef`                          | `(ref any)`                               |
     /// | `Option<I31>`                     | `i31ref` aka `(ref null i31)`             |
     /// | `I31`                             | `(ref i31)`                               |
+    /// | `Option<StructRef>`               | `(ref null struct)`                       |
+    /// | `StructRef`                       | `(ref struct)`                            |
+    /// | `Option<ArrayRef>`                | `(ref null array)`                        |
+    /// | `ArrayRef`                        | `(ref array)`                             |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
@@ -1428,6 +1432,10 @@ impl Func {
     /// | `(ref any)`                               | `AnyRef`                              |
     /// | `i31ref` aka `(ref null i31)`             | `Option<I31>`                         |
     /// | `(ref i31)`                               | `I31`                                 |
+    /// | `structref` aka `(ref null struct)`       | `Option<Struct>`                      |
+    /// | `(ref struct)`                            | `Struct`                              |
+    /// | `arrayref` aka `(ref null array)`         | `Option<Array>`                       |
+    /// | `(ref array)`                             | `Array`                               |
     /// | `funcref` aka `(ref null func)`           | `Option<Func>`                        |
     /// | `(ref func)`                              | `Func`                                |
     /// | `(ref null <func type index>)`            | `Option<Func>`                        |

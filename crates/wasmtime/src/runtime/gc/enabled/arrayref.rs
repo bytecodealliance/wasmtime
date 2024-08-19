@@ -38,8 +38,8 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 /// // Define an array type.
 /// let array_ty = ArrayType::new(
 ///    store.engine(),
-///    FieldType::new(Mutability::Var, StorageType::I32),
-/// )?;
+///    FieldType::new(Mutability::Var, ValType::I32.into()),
+/// );
 ///
 /// // Create an allocator for the array type.
 /// let allocator = ArrayRefPre::new(&mut store, array_ty);
@@ -53,7 +53,7 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 ///     for i in 0..10 {
 ///         let len = 42;
 ///         let elem = Val::I32(36);
-///         ArrayRef::new(&mut scope, &allocator, len, elem)?;
+///         ArrayRef::new(&mut scope, &allocator, &elem, len)?;
 ///     }
 /// }
 /// # Ok(())
@@ -128,8 +128,8 @@ impl ArrayRefPre {
 /// // Define the type for an array of `i32`s.
 /// let array_ty = ArrayType::new(
 ///    store.engine(),
-///    FieldType::new(Mutability::Var, ValType::I32),
-/// )?;
+///    FieldType::new(Mutability::Var, ValType::I32.into()),
+/// );
 ///
 /// // Create an allocator for the array type.
 /// let allocator = ArrayRefPre::new(&mut store, array_ty);
