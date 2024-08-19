@@ -1049,11 +1049,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn sinkable_inst(&mut self, val: Value) -> Option<Inst> {
-        let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let Some((inst, 0)) = input.inst.as_inst() {
-            return Some(inst);
-        }
-        None
+        self.is_sinkable_inst(val)
     }
 
     #[inline]

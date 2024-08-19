@@ -2034,3 +2034,38 @@ block0(v0: i64, v1: i64):
 ;   popq %rbp
 ;   retq
 
+function %sink_load_of_i128_half(i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64):
+    v10 = load.i64 v0
+    v18 = uextend.i128 v1
+    v20 = uextend.i128 v10
+    v14 = iadd v18, v20
+    v15, v16 = isplit v14
+    return v15, v16
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rsi, %rax
+;   addq    %rax, 0(%rdi), %rax
+;   adcq    %rdx, $0, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %rdx, %rdx
+;   movq %rsi, %rax
+;   addq (%rdi), %rax ; trap: heap_oob
+;   adcq $0, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
