@@ -42,7 +42,6 @@ pub(crate) fn clone_die_attributes<'a, R>(
     current_scope_id: write::UnitEntryId,
     subprogram_range_builder: Option<RangeInfoBuilder>,
     scope_ranges: Option<&Vec<(u64, u64)>>,
-    cu_low_pc: u64,
     out_strings: &mut write::StringTable,
     pending_die_refs: &mut PendingUnitRefs,
     pending_di_refs: &mut PendingDebugInfoRefs,
@@ -60,7 +59,7 @@ where
         // FIXME for CU: currently address_transform operate on a single
         // function range, and when CU spans multiple ranges the
         // transformation may be incomplete.
-        RangeInfoBuilder::from(dwarf, unit, entry, cu_low_pc)?
+        RangeInfoBuilder::from(dwarf, unit, entry)?
     };
     range_info.build(addr_tr, out_unit, current_scope_id);
 
@@ -92,7 +91,7 @@ where
                 write::AttributeValue::Address(addr)
             }
             AttributeValue::DebugAddrIndex(i) => {
-                let u = dwarf.debug_addr.get_address(4, unit.addr_base, i)?;
+                let u = dwarf.address(unit, i)?;
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
@@ -142,7 +141,7 @@ where
             }
             AttributeValue::RangeListsRef(_) | AttributeValue::DebugRngListsIndex(_) => {
                 let r = dwarf.attr_ranges_offset(unit, attr_value)?.unwrap();
-                let range_info = RangeInfoBuilder::from_ranges_ref(dwarf, unit, r, cu_low_pc)?;
+                let range_info = RangeInfoBuilder::from_ranges_ref(dwarf, unit, r)?;
                 let range_list_id = range_info.build_ranges(addr_tr, &mut out_unit.ranges);
                 write::AttributeValue::RangeListRef(range_list_id)
             }
@@ -306,28 +305,4 @@ where
         current_scope.set(attr.name(), out_attr_value);
     }
     Ok(())
-}
-
-pub(crate) fn clone_attr_string<R>(
-    attr_value: &AttributeValue<R>,
-    form: gimli::DwForm,
-    unit: &Unit<R, R::Offset>,
-    dwarf: &gimli::Dwarf<R>,
-    out_strings: &mut write::StringTable,
-) -> Result<write::LineString, Error>
-where
-    R: Reader,
-{
-    let content = dwarf
-        .attr_string(unit, attr_value.clone())?
-        .to_string_lossy()?
-        .into_owned();
-    Ok(match form {
-        gimli::DW_FORM_strp => {
-            let id = out_strings.add(content);
-            write::LineString::StringRef(id)
-        }
-        gimli::DW_FORM_string => write::LineString::String(content.into()),
-        _ => bail!("DW_FORM_line_strp or other not supported"),
-    })
 }

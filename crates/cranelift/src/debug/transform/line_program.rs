@@ -1,11 +1,7 @@
 use super::address_transform::AddressTransform;
-use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
-use anyhow::{Context, Error};
-use gimli::{
-    write, AttributeValue::DebugLineRef, DebugLine, DebugLineOffset, DebugStr,
-    DebuggingInformationEntry, LineEncoding, Unit,
-};
+use anyhow::{bail, Error};
+use gimli::{write, DebugLineOffset, LineEncoding, Unit};
 use wasmtime_environ::DefinedFuncIndex;
 
 #[derive(Debug)]
@@ -41,65 +37,18 @@ enum ReadLineProgramState {
 
 pub(crate) fn clone_line_program<R>(
     dwarf: &gimli::Dwarf<R>,
-    skeleton_dwarf: &gimli::Dwarf<R>,
     unit: &Unit<R, R::Offset>,
-    root: &DebuggingInformationEntry<R>,
-    skeleton_die: Option<&DebuggingInformationEntry<R>>,
+    comp_name: Option<R>,
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
-    debug_str: &DebugStr<R>,
-    debug_line: &DebugLine<R>,
     out_strings: &mut write::StringTable,
 ) -> Result<(write::LineProgram, DebugLineOffset, Vec<write::FileId>, u64), Error>
 where
     R: Reader,
 {
-    // Where are the "location" attributes
-    let (location_die, location_dwarf) = match skeleton_die {
-        Some(die) => (die, skeleton_dwarf),
-        _ => (root, dwarf),
-    };
-
-    let offset = match location_die.attr_value(gimli::DW_AT_stmt_list)? {
-        Some(DebugLineRef(offset)) => offset,
-        Some(gimli::AttributeValue::SecOffset(offset)) => DebugLineOffset(offset),
-        _ => {
-            return Err(TransformError("Debug line offset is not found").into());
-        }
-    };
-    let comp_dir = location_die.attr_value(gimli::DW_AT_comp_dir)?;
-    let comp_name = root.attr_value(gimli::DW_AT_name)?;
-    let out_comp_dir = match &comp_dir {
-        Some(comp_dir) => Some(clone_attr_string(
-            comp_dir,
-            gimli::DW_FORM_strp,
-            unit,
-            location_dwarf,
-            out_strings,
-        )?),
-        None => None,
-    };
-    let out_comp_name = match comp_name {
-        Some(_) => clone_attr_string(
-            comp_name
-                .as_ref()
-                .context("failed to read DW_AT_name attribute")?,
-            gimli::DW_FORM_strp,
-            unit,
-            dwarf,
-            out_strings,
-        )?,
-        _ => gimli::write::LineString::String("missing DW_AT_name attribute".into()),
-    };
-
-    let program = debug_line.program(
-        offset,
-        unit.header.address_size(),
-        comp_dir.and_then(|val| val.string_value(&debug_str)),
-        comp_name.and_then(|val| val.string_value(&debug_str)),
-    );
-    if let Ok(program) = program {
+    if let Some(program) = unit.line_program.clone() {
         let header = program.header();
+        let offset = header.offset();
         let file_index_base = if header.version() < 5 { 1 } else { 0 };
         assert!(header.version() <= 5, "not supported 6");
         let line_encoding = LineEncoding {
@@ -109,21 +58,32 @@ where
             line_base: header.line_base(),
             line_range: header.line_range(),
         };
+        let out_comp_dir = match header.directory(0) {
+            Some(comp_dir) => clone_line_string(
+                dwarf.attr_string(unit, comp_dir)?,
+                gimli::DW_FORM_strp,
+                out_strings,
+            )?,
+            None => write::LineString::String(Vec::new()),
+        };
+        let out_comp_name = match comp_name {
+            Some(comp_name) => clone_line_string(comp_name, gimli::DW_FORM_strp, out_strings)?,
+            None => write::LineString::String(Vec::new()),
+        };
+
         let mut out_program = write::LineProgram::new(
             out_encoding,
             line_encoding,
-            out_comp_dir.unwrap_or_else(|| write::LineString::String(Vec::new())),
+            out_comp_dir,
             out_comp_name,
             None,
         );
         let mut dirs = Vec::new();
         dirs.push(out_program.default_directory());
         for dir_attr in header.include_directories() {
-            let dir_id = out_program.add_directory(clone_attr_string(
-                dir_attr,
+            let dir_id = out_program.add_directory(clone_line_string(
+                dwarf.attr_string(unit, dir_attr.clone())?,
                 gimli::DW_FORM_string,
-                unit,
-                location_dwarf,
                 out_strings,
             )?);
             dirs.push(dir_id);
@@ -135,11 +95,9 @@ where
             let dir_index = file_entry.directory_index() + directory_index_correction;
             let dir_id = dirs[dir_index as usize];
             let file_id = out_program.add_file(
-                clone_attr_string(
-                    &file_entry.path_name(),
+                clone_line_string(
+                    dwarf.attr_string(unit, file_entry.path_name())?,
                     gimli::DW_FORM_string,
-                    unit,
-                    location_dwarf,
                     out_strings,
                 )?,
                 dir_id,
@@ -284,4 +242,23 @@ where
     } else {
         Err(TransformError("Valid line program not found").into())
     }
+}
+
+fn clone_line_string<R>(
+    value: R,
+    form: gimli::DwForm,
+    out_strings: &mut write::StringTable,
+) -> Result<write::LineString, Error>
+where
+    R: Reader,
+{
+    let content = value.to_string_lossy()?.into_owned();
+    Ok(match form {
+        gimli::DW_FORM_strp => {
+            let id = out_strings.add(content);
+            write::LineString::StringRef(id)
+        }
+        gimli::DW_FORM_string => write::LineString::String(content.into()),
+        _ => bail!("DW_FORM_line_strp or other not supported"),
+    })
 }

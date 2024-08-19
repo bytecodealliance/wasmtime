@@ -262,17 +262,6 @@ pub(crate) fn clone_unit(
     let mut pending_di_refs = PendingDebugInfoRefs::new();
     let mut stack = Vec::new();
 
-    let mut skeleton_die = None;
-
-    // Get entries in outer scope to avoid borrowing on short lived temporary.
-    let mut skeleton_entries = skeleton_unit.entries();
-    if split_unit.is_some() {
-        // From the spec, a skeleton unit has no children so we can assume the first, and only, entry is the DW_TAG_skeleton_unit (https://dwarfstd.org/doc/DWARF5.pdf).
-        if let Some(die_tuple) = skeleton_entries.next_dfs()? {
-            skeleton_die = Some(die_tuple.1);
-        }
-    }
-
     let skeleton_dwarf = &compilation.translations[module].debuginfo.dwarf;
     let memory_offset = &compilation.module_memory_offsets[module];
 
@@ -280,20 +269,16 @@ pub(crate) fn clone_unit(
     let dwarf = split_dwarf.unwrap_or(skeleton_dwarf);
     let unit = split_unit.unwrap_or(skeleton_unit);
     let mut entries = unit.entries();
-    let (mut comp_unit, unit_id, file_map, file_index_base, cu_low_pc, wp_die_id, vmctx_die_id) =
+    let (mut comp_unit, unit_id, file_map, file_index_base, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
             assert_eq!(depth_delta, 0);
             let (out_line_program, debug_line_offset, file_map, file_index_base) =
                 clone_line_program(
-                    dwarf,
                     skeleton_dwarf,
-                    unit,
-                    entry,
-                    skeleton_die,
+                    skeleton_unit,
+                    unit.name,
                     addr_tr,
                     out_encoding,
-                    &skeleton_dwarf.debug_str,
-                    &skeleton_dwarf.debug_line,
                     out_strings,
                 )?;
 
@@ -303,7 +288,6 @@ pub(crate) fn clone_unit(
 
                 let root_id = comp_unit.root();
                 die_ref_map.insert(entry.offset(), root_id);
-                let cu_low_pc = unit.low_pc;
 
                 clone_die_attributes(
                     dwarf,
@@ -315,7 +299,6 @@ pub(crate) fn clone_unit(
                     root_id,
                     None,
                     None,
-                    cu_low_pc,
                     out_strings,
                     &mut pending_die_refs,
                     &mut pending_di_refs,
@@ -332,7 +315,6 @@ pub(crate) fn clone_unit(
                     unit_id,
                     file_map,
                     file_index_base,
-                    cu_low_pc,
                     wp_die_id,
                     vmctx_die_id,
                 )
@@ -387,7 +369,7 @@ pub(crate) fn clone_unit(
         current_value_range.update(new_stack_len);
         let range_builder = if entry.tag() == gimli::DW_TAG_subprogram {
             let range_builder =
-                RangeInfoBuilder::from_subprogram_die(dwarf, &unit, entry, addr_tr, cu_low_pc)?;
+                RangeInfoBuilder::from_subprogram_die(dwarf, &unit, entry, addr_tr)?;
             if let RangeInfoBuilder::Function(func) = range_builder {
                 let frame_info = compilation.function_frame_info(module, func);
                 current_value_range.push(new_stack_len, frame_info);
@@ -403,7 +385,7 @@ pub(crate) fn clone_unit(
             let high_pc = entry.attr_value(gimli::DW_AT_high_pc)?;
             let ranges = entry.attr_value(gimli::DW_AT_ranges)?;
             if high_pc.is_some() || ranges.is_some() {
-                let range_builder = RangeInfoBuilder::from(dwarf, &unit, entry, cu_low_pc)?;
+                let range_builder = RangeInfoBuilder::from(dwarf, &unit, entry)?;
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {
@@ -468,7 +450,6 @@ pub(crate) fn clone_unit(
             die_id,
             range_builder,
             current_scope_ranges.top(),
-            cu_low_pc,
             out_strings,
             &mut pending_die_refs,
             &mut pending_di_refs,
