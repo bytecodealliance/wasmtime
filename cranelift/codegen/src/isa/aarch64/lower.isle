@@ -535,15 +535,22 @@
 (decl pure get_fneg_value (IsFneg) Value)
 (rule (get_fneg_value (IsFneg.Result _ v)) v)
 
-(decl fmadd_series (Type u64 Value Value Value) InstOutput)
-(rule 0 (fmadd_series (ty_scalar_float ty) 0 x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
-(rule 0 (fmadd_series (ty_scalar_float ty) 1 x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
+(decl fmadd_series (Type u64 u64 Value Value Value) InstOutput)
+;; MAdd: + x * y + z
+(rule 0 (fmadd_series (ty_scalar_float ty) 0 0 x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+;; MSub: - x * y + z
+(rule 0 (fmadd_series (ty_scalar_float ty) 1 0 x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
+;; NMAdd: - x * y - z
+(rule 0 (fmadd_series (ty_scalar_float ty) 1 1 x y z) (fpu_rrrr (FPUOp3.NMAdd) (scalar_size ty) x y z))
+;; NMSub: + x * y - z
+(rule 0 (fmadd_series (ty_scalar_float ty) 0 1 x y z) (fpu_rrrr (FPUOp3.NMSub) (scalar_size ty) x y z))
 
-(rule (lower (has_type (ty_scalar_float ty) (fma x_src y_src z)))
+(rule (lower (has_type (ty_scalar_float ty) (fma x_src y_src z_src)))
   (let
       ((x_res IsFneg (is_fneg x_src))
-       (y_res IsFneg (is_fneg y_src)))
-      (fmadd_series ty (u64_xor (is_fneg_neg x_res) (is_fneg_neg y_res)) (get_fneg_value x_res) (get_fneg_value y_res) z)))
+       (y_res IsFneg (is_fneg y_src))
+       (z_res IsFneg (is_fneg z_src)))
+      (fmadd_series ty (u64_xor (is_fneg_neg x_res) (is_fneg_neg y_res)) (is_fneg_neg z_res) (get_fneg_value x_res) (get_fneg_value y_res) (get_fneg_value z_res))))
 
 ;; Delegate vector-based lowerings to helpers below
 (rule 1 (lower (has_type ty @ (multi_lane _ _) (fma x y z)))

@@ -67,6 +67,72 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   fmsub d0, d0, d1, d2
 ;   ret
 
+function %fnmadd_f32(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = fneg v1
+    v4 = fneg v2
+    v5 = fma v0, v3, v4
+    return v5
+}
+; VCode:
+; block0:
+;   fnmadd s0, s0, s1, s2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fnmadd s0, s0, s1, s2
+;   ret
+
+function %fnmadd_f64(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = fneg v1
+    v4 = fneg v2
+    v5 = fma v0, v3, v4
+    return v5
+}
+; VCode:
+; block0:
+;   fnmadd d0, d0, d1, d2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fnmadd d0, d0, d1, d2
+;   ret
+
+function %fnmadd_f32(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+; VCode:
+; block0:
+;   fnmsub s0, s0, s1, s2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fnmsub s0, s0, s1, s2
+;   ret
+
+function %fnmadd_f64(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+; VCode:
+; block0:
+;   fnmsub d0, d0, d1, d2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fnmsub d0, d0, d1, d2
+;   ret
+
 function %fma_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4, v2: f32x4):
     v3 = fma v0, v1, v2
