@@ -295,26 +295,36 @@ pub struct Lower<'func, I: VCodeInst> {
 /// actually merged" point. Instead, we compute a
 /// transitive-uniqueness. That is what this enum represents.
 ///
-/// There is one final caveat as well to the result of this analysis. Notably
-/// some instructions are considered "root" instructions for this analysis whose
-/// operands don't accurately reflect the use of the results. Root instructions
-/// are currently defined as multi-result instructions. This means that even if
-/// all results of a multi-result instruction are used, or if any result is used
-/// more than once, then that doesn't affect the calculation of the use state of
-/// its operands. This caveat comes with the tradeoff that
-/// `get_value_as_source_or_const` does not "look through" a root instruction
-/// ever. This means that ISLE cannot pattern match across root instructions
-/// (aka multi-result instructions).
+/// There is one final caveat as well to the result of this analysis.  Notably,
+/// we define some instructions to be "root" instructions, which means that we
+/// assume they will always be codegen'd at the root of a matching tree, and not
+/// matched. (This comes with the caveat that we actually enforce this property
+/// by making them "opaque" to subtree matching in
+/// `get_value_as_source_or_const`). Because they will always be codegen'd once,
+/// they in some sense "reset" multiplicity: these root instructions can be used
+/// many times, but because their result(s) are only computed once, they only
+/// use their inputs once.
 ///
-/// To define it plainly: a value is `Unused` if no references exist
-/// to it; `Once` if only one other op refers to it, *and* that other
-/// op is `Unused` or `Once`; and `Multiple` otherwise. In other
-/// words, `Multiple` is contagious (except through root instructions): even if
-/// an op's result value is directly used only once in the CLIF, that value is
-/// `Multiple` if the op that uses it is itself used multiple times (hence
-/// could be codegen'd multiple times). In brief, this analysis tells us
-/// whether, if every op merged all of its operand tree, a given op could be
-/// codegen'd in more than one place.
+/// We currently define all multi-result instructions to be "root" instructions,
+/// because it is too complex to reason about matching through them, and they
+/// cause too-coarse-grained approximation of multiplicity otherwise: the
+/// analysis would have to assume (as it used to!) that they are always
+/// multiply-used, simply because they have multiple outputs even if those
+/// outputs are used only once.
+///
+/// In the future we could define other instructions to be "root" instructions
+/// as well, if we make the corresponding change to get_value_as_source_or_const
+/// as well.
+///
+/// To define `ValueUseState` more plainly: a value is `Unused` if no references
+/// exist to it; `Once` if only one other op refers to it, *and* that other op
+/// is `Unused` or `Once`; and `Multiple` otherwise. In other words, `Multiple`
+/// is contagious (except through root instructions): even if an op's result
+/// value is directly used only once in the CLIF, that value is `Multiple` if
+/// the op that uses it is itself used multiple times (hence could be codegen'd
+/// multiple times). In brief, this analysis tells us whether, if every op
+/// merged all of its operand tree, a given op could be codegen'd in more than
+/// one place.
 ///
 /// To compute this, we first consider direct uses. At this point
 /// `Unused` answers are correct, `Multiple` answers are correct, but
@@ -1365,18 +1375,22 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let src_side_effect = has_lowering_side_effect(self.f, src_inst);
                 trace!(" -> src inst {}", src_inst);
                 trace!(" -> has lowering side effect: {}", src_side_effect);
-                if !src_side_effect {
-                    // If this value is used only once and the instruction is
-                    // known to propagate accurate `ValueUseState` information
-                    // to its operands, then we can "look through" the value to
-                    // see the original source instruction.
-                    //
-                    // Multiply-used values or definitions which may report
-                    // inaccurate use information of its operands (through this
-                    // node) cannot be considered unique.
-                    if self.value_ir_uses[val] == ValueUseState::Once
-                        && !is_value_use_root(self.f, src_inst)
-                    {
+                if is_value_use_root(self.f, src_inst) {
+                    // If this instruction is a "root instruction" then it's
+                    // required that we can't look through it to see the
+                    // definition. This means that the `ValueUseState` for the
+                    // operands of this result assume that this instruction is
+                    // generated exactly once which might get violated were we
+                    // to allow looking through it.
+                    trace!(" -> is a root instruction");
+                    InputSourceInst::None
+                } else if !src_side_effect {
+                    // Otherwise if this instruction has no side effects and the
+                    // value is used only once then we can look through it with
+                    // a "unique" tag. A non-unique `Use` can be shown for other
+                    // values ensuring consumers know how it's computed but that
+                    // it's not available to omit.
+                    if self.value_ir_uses[val] == ValueUseState::Once {
                         InputSourceInst::UniqueUse(src_inst, result_idx)
                     } else {
                         InputSourceInst::Use(src_inst, result_idx)
@@ -1402,7 +1416,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             + 1
                             == self.cur_scan_entry_color.unwrap().get()
                     {
-                        debug_assert!(!is_value_use_root(self.f, src_inst));
                         InputSourceInst::UniqueUse(src_inst, 0)
                     } else {
                         InputSourceInst::None
