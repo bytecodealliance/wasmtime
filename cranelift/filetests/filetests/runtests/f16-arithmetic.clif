@@ -1,0 +1,77 @@
+test run
+target riscv64 has_zfh
+
+function %fadd(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fadd v0, v1
+  return v2
+}
+; run: %fadd(0x0.0, 0x0.0) == 0x0.0
+; run: %fadd(0x1.5, 0x2.9) == 0x1.fp1
+
+function %fsub(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fsub v0, v1
+  return v2
+}
+; run: %fsub(0x0.5, 0x1.0) == -0x1.600p-1
+; run: %fsub(0x1.5, 0x2.9) == -0x1.400p0
+
+
+function %fmul(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fmul v0, v1
+  return v2
+}
+; run: %fmul(0x0.5, 0x1.0) == 0x1.400p-2
+; run: %fmul(0x1.5, 0x2.9) == 0x1.ae8p1
+
+function %fdiv(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fdiv v0, v1
+  return v2
+}
+; run: %fdiv(0x0.5, 0x1.0) == 0x1.400p-2
+; run: %fdiv(0x1.5, 0x2.9) == 0x1.064p-1
+
+function %sqrt(f16) -> f16 {
+block0(v0: f16):
+  v1 = sqrt v0
+  return v1
+}
+; run: %sqrt(0x9.0) == 0x3.0
+; run: %sqrt(0x0.0) == 0x0.0
+; run: %sqrt(-0x0.0) == -0x0.0
+; run: %sqrt(+Inf) == +Inf
+
+function %fabs(f16) -> f16 {
+block0(v0: f16):
+  v1 = fabs v0
+  return v1
+}
+; run: %fabs(0x9.0) == 0x9.0
+; run: %fabs(-0x9.0) == 0x9.0
+; run: %fabs(0x0.0) == 0x0.0
+; run: %fabs(-0x0.0) == 0x0.0
+
+function %fneg(f16) -> f16 {
+block0(v0: f16):
+  v1 = fneg v0
+  return v1
+}
+; run: %fneg(0x9.0) == -0x9.0
+; run: %fneg(-0x9.0) == 0x9.0
+; run: %fneg(0x0.0) == -0x0.0
+; run: %fneg(-0x0.0) == 0x0.0
+
+function %fcopysign(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fcopysign v0, v1
+  return v2
+}
+; run: %fcopysign(0x9.0, 0x9.0) == 0x9.0
+; run: %fcopysign(-0x9.0, 0x9.0) == 0x9.0
+; run: %fcopysign(0x9.0, -0x9.0) == -0x9.0
+; run: %fcopysign(-0x9.0, -0x9.0) == -0x9.0
+; run: %fcopysign(0x0.0, -0x0.0) == -0x0.0
+; run: %fcopysign(-0x0.0, 0x0.0) == 0x0.0

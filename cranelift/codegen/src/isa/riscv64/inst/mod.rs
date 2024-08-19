@@ -807,6 +807,7 @@ impl MachInst for Inst {
             I64 => Ok((&[RegClass::Int], &[I64])),
             R32 => panic!("32-bit reftype pointer should never be seen on riscv64"),
             R64 => Ok((&[RegClass::Int], &[R64])),
+            F16 => Ok((&[RegClass::Float], &[F16])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
@@ -1429,6 +1430,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg());
 
                 let op = match ty {
+                    F16 => "fmv.h",
                     F32 => "fmv.s",
                     F64 => "fmv.d",
                     ty if ty.is_vector() => "vmv1r.v",

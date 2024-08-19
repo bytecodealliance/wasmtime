@@ -1,0 +1,38 @@
+test run
+target riscv64 has_zfh
+
+function %fmadd(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+  v3 = fma v0, v1, v2
+  return v3
+}
+; run: %fmadd(0x7.0, 0x8.0, 0x9.0) == 0x1.040p6
+
+
+
+function %fmsub(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+; run: %fmsub(0x7.0, 0x8.0, 0x9.0) == 0x1.780p5
+
+
+function %fnmsub(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = fneg v0
+    v4 = fma v3, v1, v2
+    return v4
+}
+; run: %fnmsub(0x7.0, 0x8.0, 0x9.0) == -0x1.780p5
+
+
+function %fnmadd(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = fneg v0
+    v4 = fneg v2
+    v5 = fma v3, v1, v4
+    return v5
+}
+; run: %fnmadd(0x7.0, 0x8.0, 0x9.0) == -0x1.040p6

@@ -1,0 +1,74 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zfh
+
+
+function %fmadd(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   fmadd.h fa0,fa0,fa1,fa2,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x43, 0x05, 0xb5, 0x64
+;   ret
+
+
+
+function %fmsub(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   fmsub.h fa0,fa0,fa1,fa2,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x47, 0x05, 0xb5, 0x64
+;   ret
+
+function %fnmsub(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = fneg v0
+    v4 = fma v3, v1, v2
+    return v4
+}
+
+; VCode:
+; block0:
+;   fnmsub.h fa0,fa0,fa1,fa2,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x4b, 0x05, 0xb5, 0x64
+;   ret
+
+function %fnmadd(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = fneg v0
+    v4 = fneg v2
+    v5 = fma v3, v1, v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   fnmadd.h fa0,fa0,fa1,fa2,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x4f, 0x05, 0xb5, 0x64
+;   ret

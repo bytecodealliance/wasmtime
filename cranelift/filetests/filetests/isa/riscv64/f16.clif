@@ -1,0 +1,131 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zfh
+
+function %fadd(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fadd.h fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0xb5, 0x04
+;   ret
+
+function %fsub(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fsub.h fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0xb5, 0x0c
+;   ret
+
+function %fmul(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fmul.h fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0xb5, 0x14
+;   ret
+
+function %fdiv(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fdiv.h fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0xb5, 0x1c
+;   ret
+
+function %fsqrt(f16) -> f16 {
+block0(v0: f16):
+  v1 = sqrt v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fsqrt.h fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x05, 0x5c
+;   ret
+
+function %fabs(f16) -> f16 {
+block0(v0: f16):
+  v1 = fabs v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fabs.h fa0,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x25, 0xa5, 0x24
+;   ret
+
+function %fneg_h(f16) -> f16 {
+block0(v0: f16):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fneg.h fa0,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x15, 0xa5, 0x24
+;   ret
+
+function %fsignj_h(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fsgnj.h fa0,fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0xb5, 0x24
+;   ret

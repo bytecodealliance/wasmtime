@@ -449,6 +449,7 @@
   (Lhu)
   (Lwu)
   (Ld)
+  (Flh)
   (Flw)
   (Fld)
 ))
@@ -458,6 +459,7 @@
   (Sh)
   (Sw)
   (Sd)
+  (Fsh)
   (Fsw)
   (Fsd)
 ))
@@ -1004,6 +1006,9 @@
 (decl pure has_zfa () bool)
 (extern constructor has_zfa has_zfa)
 
+(decl pure has_zfh () bool)
+(extern constructor has_zfh has_zfh)
+
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
 
@@ -1364,6 +1369,10 @@
 (decl rv_fnmsub (Type FRM FReg FReg FReg) FReg)
 (rule (rv_fnmsub ty frm rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.Fnmsub) ty frm rs1 rs2 rs3))
 
+;; Helper for emitting the `fmv.x.h` instruction.
+(decl rv_fmvxh (FReg) XReg)
+(rule (rv_fmvxh r) (fpu_rr_int (FpuOPRR.FmvXFmt) $F16 (FRM.RNE) r))
+
 ;; Helper for emitting the `fmv.x.w` instruction.
 (decl rv_fmvxw (FReg) XReg)
 (rule (rv_fmvxw r) (fpu_rr_int (FpuOPRR.FmvXFmt) $F32 (FRM.RNE) r))
@@ -1371,6 +1380,10 @@
 ;; Helper for emitting the `fmv.x.d` instruction.
 (decl rv_fmvxd (FReg) XReg)
 (rule (rv_fmvxd r) (fpu_rr_int (FpuOPRR.FmvXFmt) $F64 (FRM.RNE) r))
+
+;; Helper for emitting the `fmv.h.x` instruction.
+(decl rv_fmvhx (XReg) FReg)
+(rule (rv_fmvhx r) (fpu_rr (FpuOPRR.FmvFmtX) $F16 (FRM.RNE) r))
 
 ;; Helper for emitting the `fmv.w.x` instruction.
 (decl rv_fmvwx (XReg) FReg)
@@ -1829,11 +1842,12 @@
 
 ;; Special-case 0.0 for floats to use the `(zero_reg)` directly.
 ;; See #7162 for why this doesn't fall out of the rules below.
-(rule 8 (imm $F32 0) (gen_bitcast (zero_reg) $I32 $F32))
-(rule 8 (imm $F64 0) (gen_bitcast (zero_reg) $I64 $F64))
+(rule 9 (imm (ty_supported_float $F16) 0) (gen_bitcast (zero_reg) $I16 $F16))
+(rule 9 (imm (ty_supported_float $F32) 0) (gen_bitcast (zero_reg) $I32 $F32))
+(rule 9 (imm (ty_supported_float $F64) 0) (gen_bitcast (zero_reg) $I64 $F64))
 
 ;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
-(rule 7 (imm (ty_supported_float ty) imm)
+(rule 8 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
   (if-let $true (has_zfa))
   (if-let const (fli_constant_from_u64 ty imm))
   (rv_fli ty const))
@@ -1843,14 +1857,15 @@
 ;;
 ;; For f64's this saves one instruction, and for f32's it avoids
 ;; having to allocate an integer register, reducing integer register pressure.
-(rule 6 (imm (ty_supported_float ty) imm)
+(rule 7 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
   (if-let $true (has_zfa))
   (if-let const (fli_constant_from_negated_u64 ty imm))
   (rv_fneg ty (rv_fli ty const)))
 
 ;; Otherwise floats get loaded as integers and then moved into an F register.
-(rule 5 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
-(rule 5 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
+(rule 6 (imm (ty_supported_float $F16) c) (gen_bitcast (imm $I16 c) $I16 $F16))
+(rule 6 (imm (ty_supported_float $F32) c) (gen_bitcast (imm $I32 c) $I32 $F32))
+(rule 6 (imm (ty_supported_float $F64) c) (gen_bitcast (imm $I64 c) $I64 $F64))
 
 ;; Refs get loaded as integers.
 (rule 5 (imm $R32 c) (imm $I32 c))
@@ -2422,6 +2437,7 @@
 (decl load_op_reg_type (LoadOP) Type)
 (rule 1 (load_op_reg_type (LoadOP.Fld)) $F64)
 (rule 1 (load_op_reg_type (LoadOP.Flw)) $F64)
+(rule 1 (load_op_reg_type (LoadOP.Flh)) $F64)
 (rule 0 (load_op_reg_type _) $I64)
 
 ;; Helper constructor to build a load instruction.
@@ -2908,12 +2924,18 @@
 ;; Generates a bitcast instruction.
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
-(rule 5 (gen_bitcast r (ty_supported_float src_ty) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
-(rule 4 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
-(rule 3 (gen_bitcast r (ty_supported_vec _) (ty_supported_float dst_ty)) (rv_vfmv_fs r dst_ty))
+
+;; To support FP16 vfmv.* we need to check for the `zvfh` isa flag, which we currently don't
+;; support, so restrict the floating point types to 32/64 bits.
+(rule 5 (gen_bitcast r (ty_supported_float (ty_32_or_64 src_ty)) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
+(rule 4 (gen_bitcast r (ty_supported_vec _) (ty_supported_float (ty_32_or_64 dst_ty))) (rv_vfmv_fs r dst_ty))
+
+(rule 3 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
 (rule 2 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
+(rule 1 (gen_bitcast r $F16 $I16) (rv_fmvxh r))
 (rule 1 (gen_bitcast r $F32 $I32) (rv_fmvxw r))
 (rule 1 (gen_bitcast r $F64 $I64) (rv_fmvxd r))
+(rule 1 (gen_bitcast r $I16 $F16) (rv_fmvhx r))
 (rule 1 (gen_bitcast r $I32 $F32) (rv_fmvwx r))
 (rule 1 (gen_bitcast r $I64 $F64) (rv_fmvdx r))
 (rule 1 (gen_bitcast r $I64 $R64) (copy_reg r $I64))

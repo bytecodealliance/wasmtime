@@ -4,6 +4,7 @@ set enable_llvm_abi_extensions
 target x86_64
 target aarch64
 target aarch64 has_fp16
+target riscv64 has_zfh
 
 
 ;; These values are special for RISC-V since it has a dedicated

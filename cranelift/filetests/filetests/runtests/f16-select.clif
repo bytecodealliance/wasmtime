@@ -1,0 +1,70 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64
+target riscv64 has_zfh
+
+function %select_icmp_i8_f16(i8, f16, f16) -> f16 {
+block0(v0: i8, v1: f16, v2: f16):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+; run: %select_icmp_i8_f16(42, 0x0.0, 0x1.0) == 0x0.0
+; run: %select_icmp_i8_f16(10, 0x0.0, 0x1.0) == 0x1.0
+; run: %select_icmp_i8_f16(42, +Inf, -Inf) == +Inf
+; run: %select_icmp_i8_f16(10, +Inf, -Inf) == -Inf
+; run: %select_icmp_i8_f16(42, +NaN, -NaN) == +NaN
+; run: %select_icmp_i8_f16(10, +NaN, -NaN) == -NaN
+; run: %select_icmp_i8_f16(42, 0x0.800p-14, -0x0.800p-14) == 0x0.800p-14
+; run: %select_icmp_i8_f16(10, 0x0.800p-14, -0x0.800p-14) == -0x0.800p-14
+
+function %select_icmp_i16_f16(i16, f16, f16) -> f16 {
+block0(v0: i16, v1: f16, v2: f16):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+; run: %select_icmp_i16_f16(42, 0x0.0, 0x1.0) == 0x0.0
+; run: %select_icmp_i16_f16(10, 0x0.0, 0x1.0) == 0x1.0
+; run: %select_icmp_i16_f16(42, +Inf, -Inf) == +Inf
+; run: %select_icmp_i16_f16(10, +Inf, -Inf) == -Inf
+; run: %select_icmp_i16_f16(42, +NaN, -NaN) == +NaN
+; run: %select_icmp_i16_f16(10, +NaN, -NaN) == -NaN
+; run: %select_icmp_i16_f16(42, 0x0.800p-14, -0x0.800p-14) == 0x0.800p-14
+; run: %select_icmp_i16_f16(10, 0x0.800p-14, -0x0.800p-14) == -0x0.800p-14
+
+function %select_icmp_i32_f16(i32, f16, f16) -> f16 {
+block0(v0: i32, v1: f16, v2: f16):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+; run: %select_icmp_i32_f16(42, 0x0.0, 0x1.0) == 0x0.0
+; run: %select_icmp_i32_f16(10, 0x0.0, 0x1.0) == 0x1.0
+; run: %select_icmp_i32_f16(42, +Inf, -Inf) == +Inf
+; run: %select_icmp_i32_f16(10, +Inf, -Inf) == -Inf
+; run: %select_icmp_i32_f16(42, +NaN, -NaN) == +NaN
+; run: %select_icmp_i32_f16(10, +NaN, -NaN) == -NaN
+; run: %select_icmp_i32_f16(42, 0x0.800p-14, -0x0.800p-14) == 0x0.800p-14
+; run: %select_icmp_i32_f16(10, 0x0.800p-14, -0x0.800p-14) == -0x0.800p-14
+
+
+function %select_icmp_i64_f16(i64, f16, f16) -> f16 {
+block0(v0: i64, v1: f16, v2: f16):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+; run: %select_icmp_i64_f16(42, 0x0.0, 0x1.0) == 0x0.0
+; run: %select_icmp_i64_f16(10, 0x0.0, 0x1.0) == 0x1.0
+; run: %select_icmp_i64_f16(42, +Inf, -Inf) == +Inf
+; run: %select_icmp_i64_f16(10, +Inf, -Inf) == -Inf
+; run: %select_icmp_i64_f16(42, +NaN, -NaN) == +NaN
+; run: %select_icmp_i64_f16(10, +NaN, -NaN) == -NaN
+; run: %select_icmp_i64_f16(42, 0x0.800p-14, -0x0.800p-14) == 0x0.800p-14
+; run: %select_icmp_i64_f16(10, 0x0.800p-14, -0x0.800p-14) == -0x0.800p-14
