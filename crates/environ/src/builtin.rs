@@ -67,11 +67,11 @@ macro_rules! foreach_builtin_function {
             update_mem_size(vmctx: vmctx, num_bytes: i32);
 
             // Drop a non-stack GC reference (eg an overwritten table entry)
-            // once it will no longer be used again. (Note: `val` is not a
+            // once it will no longer be used again. (Note: `val` is not of type
             // `reference` because it needn't appear in any stack maps, as it
             // must not be live after this call.)
             #[cfg(feature = "gc")]
-            drop_gc_ref(vmctx: vmctx, val: pointer);
+            drop_gc_ref(vmctx: vmctx, val: i32);
 
             // Do a GC, treating the optional `root` as a GC root and returning
             // the updated `root` (so that, in the case of moving collectors,

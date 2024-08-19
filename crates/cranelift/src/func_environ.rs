@@ -1,10 +1,10 @@
 use crate::{gc, BuiltinFunctionSignatures};
 use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir;
-use cranelift_codegen::ir::condcodes::*;
+use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, types};
 use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::ReservedValue;
@@ -12,10 +12,11 @@ use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
-    HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
-    TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
+    EngineOrModuleTypeIndex, FuncEnvironment as _, FuncIndex, FuncTranslationState, GlobalIndex,
+    GlobalVariable, Heap, HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize,
+    TargetEnvironment, TypeIndex, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmResult,
 };
+use smallvec::SmallVec;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
@@ -84,6 +85,8 @@ pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
     types: &'module_environment ModuleTypesBuilder,
+    wasm_func_ty: &'module_environment WasmFuncType,
+    sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
 
     #[cfg(feature = "wmemcheck")]
     translation: &'module_environment ModuleTranslation<'module_environment>,
@@ -147,6 +150,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         types: &'module_environment ModuleTypesBuilder,
         tunables: &'module_environment Tunables,
         wmemcheck: bool,
+        wasm_func_ty: &'module_environment WasmFuncType,
     ) -> Self {
         let builtin_functions = BuiltinFunctions::new(isa);
 
@@ -158,6 +162,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             isa,
             module: &translation.module,
             types,
+            wasm_func_ty,
+            sig_ref_to_ty: SecondaryMap::default(),
+
             heaps: PrimaryMap::default(),
             tables: SecondaryMap::default(),
             vmctx: None,
@@ -781,7 +788,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // For GC-managed references, tables store `Option<VMGcRef>`s.
             ir::types::I32.bytes()
         } else {
-            self.reference_type(table.wasm_ty.heap_type).bytes()
+            self.reference_type(table.wasm_ty.heap_type).0.bytes()
         };
 
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
@@ -997,32 +1004,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pointee_mt
         });
         (pointee, mt)
-    }
-
-    fn i31_ref_to_unshifted_value(&self, pos: &mut FuncCursor, i31ref: ir::Value) -> ir::Value {
-        let ref_ty = self.reference_type(WasmHeapType::I31);
-        debug_assert_eq!(pos.func.dfg.value_type(i31ref), ref_ty);
-
-        let is_null = pos.ins().is_null(i31ref);
-        pos.ins().trapnz(is_null, ir::TrapCode::NullI31Ref);
-
-        let val = pos.ins().bitcast(ref_ty.as_int(), MemFlags::new(), i31ref);
-
-        if cfg!(debug_assertions) {
-            let is_i31_ref = pos
-                .ins()
-                .band_imm(val, i64::from(crate::I31_REF_DISCRIMINANT));
-            pos.ins().trapz(
-                is_i31_ref,
-                ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
-            );
-        }
-
-        match ref_ty.bytes() {
-            8 => pos.ins().ireduce(ir::types::I32, val),
-            4 => val,
-            _ => unreachable!(),
-        }
     }
 }
 
@@ -1433,7 +1414,24 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         if self.tail {
             self.builder.ins().return_call(callee, args)
         } else {
-            self.builder.ins().call(callee, args)
+            let inst = self.builder.ins().call(callee, args);
+            let results: SmallVec<[_; 4]> = self
+                .builder
+                .func
+                .dfg
+                .inst_results(inst)
+                .iter()
+                .copied()
+                .collect();
+            for (i, val) in results.into_iter().enumerate() {
+                if self
+                    .env
+                    .func_ref_result_needs_stack_map(&self.builder.func, callee, i)
+                {
+                    self.builder.declare_value_needs_stack_map(val);
+                }
+            }
+            inst
         }
     }
 
@@ -1448,7 +1446,21 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .ins()
                 .return_call_indirect(sig_ref, func_addr, args)
         } else {
-            self.builder.ins().call_indirect(sig_ref, func_addr, args)
+            let inst = self.builder.ins().call_indirect(sig_ref, func_addr, args);
+            let results: SmallVec<[_; 4]> = self
+                .builder
+                .func
+                .dfg
+                .inst_results(inst)
+                .iter()
+                .copied()
+                .collect();
+            for (i, val) in results.into_iter().enumerate() {
+                if self.env.sig_ref_result_needs_stack_map(sig_ref, i) {
+                    self.builder.declare_value_needs_stack_map(val);
+                }
+            }
+            inst
         }
     }
 }
@@ -1469,8 +1481,13 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
         self.isa.frontend_config()
     }
 
-    fn reference_type(&self, ty: WasmHeapType) -> ir::Type {
-        crate::reference_type(ty, self.pointer_type())
+    fn reference_type(&self, wasm_ty: WasmHeapType) -> (ir::Type, bool) {
+        let ty = crate::reference_type(wasm_ty, self.pointer_type());
+        let needs_stack_map = match wasm_ty.top() {
+            WasmHeapTopType::Extern | WasmHeapTopType::Any => true,
+            WasmHeapTopType::Func => false,
+        };
+        (ty, needs_stack_map)
     }
 
     fn heap_access_spectre_mitigation(&self) -> bool {
@@ -1491,6 +1508,31 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
         index >= 2
+    }
+
+    fn param_needs_stack_map(&self, _signature: &ir::Signature, index: usize) -> bool {
+        // Skip the caller and callee vmctx.
+        if index < 2 {
+            return false;
+        }
+
+        self.wasm_func_ty.params()[index - 2].is_vmgcref_type_and_not_i31()
+    }
+
+    fn sig_ref_result_needs_stack_map(&self, sig_ref: ir::SigRef, index: usize) -> bool {
+        let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
+        wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
+    }
+
+    fn func_ref_result_needs_stack_map(
+        &self,
+        func: &ir::Function,
+        func_ref: ir::FuncRef,
+        index: usize,
+    ) -> bool {
+        let sig_ref = func.dfg.ext_funcs[func_ref].signature;
+        let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
+        wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
     }
 
     fn after_locals(&mut self, num_locals: usize) {
@@ -1677,18 +1719,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn translate_ref_i31(&mut self, mut pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value> {
+        debug_assert_eq!(pos.func.dfg.value_type(val), ir::types::I32);
         let shifted = pos.ins().ishl_imm(val, 1);
         let tagged = pos
             .ins()
             .bor_imm(shifted, i64::from(crate::I31_REF_DISCRIMINANT));
-        let ref_ty = self.reference_type(WasmHeapType::I31);
-        let extended = if ref_ty.bytes() > 4 {
-            pos.ins().uextend(ref_ty.as_int(), tagged)
-        } else {
-            tagged
-        };
-        let i31ref = pos.ins().bitcast(ref_ty, MemFlags::new(), extended);
-        Ok(i31ref)
+        let (ref_ty, _needs_stack_map) = self.reference_type(WasmHeapType::I31);
+        debug_assert_eq!(ref_ty, ir::types::I32);
+        Ok(tagged)
     }
 
     fn translate_i31_get_s(
@@ -1696,9 +1734,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor,
         i31ref: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let val = self.i31_ref_to_unshifted_value(&mut pos, i31ref);
-        let shifted = pos.ins().sshr_imm(val, 1);
-        Ok(shifted)
+        Ok(pos.ins().sshr_imm(i31ref, 1))
     }
 
     fn translate_i31_get_u(
@@ -1706,9 +1742,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor,
         i31ref: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let val = self.i31_ref_to_unshifted_value(&mut pos, i31ref);
-        let shifted = pos.ins().ushr_imm(val, 1);
-        Ok(shifted)
+        Ok(pos.ins().ushr_imm(i31ref, 1))
     }
 
     fn translate_ref_null(
@@ -1718,9 +1752,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         Ok(match ht.top() {
             WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
-                pos.ins().null(self.reference_type(ht))
-            }
+            // NB: null GC references don't need to be in stack maps.
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => pos.ins().iconst(types::I32, 0),
         })
     }
 
@@ -1729,18 +1762,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: cranelift_codegen::cursor::FuncCursor,
         value: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let bool_is_null = match pos.func.dfg.value_type(value) {
-            // `externref`
-            ty if ty.is_ref() => pos.ins().is_null(value),
-            // `funcref`
-            ty if ty == self.pointer_type() => {
-                pos.ins()
-                    .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0)
-            }
-            _ => unreachable!(),
-        };
-
-        Ok(pos.ins().uextend(ir::types::I32, bool_is_null))
+        let byte_is_null =
+            pos.ins()
+                .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0);
+        Ok(pos.ins().uextend(ir::types::I32, byte_is_null))
     }
 
     fn translate_ref_func(
@@ -1758,7 +1783,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_custom_global_get(
         &mut self,
-        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        builder: &mut FunctionBuilder,
         index: cranelift_wasm::GlobalIndex,
     ) -> WasmResult<ir::Value> {
         let ty = self.module.globals[index].wasm_ty;
@@ -1769,19 +1794,23 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // TODO: use `GcCompiler::translate_read_gc_reference` for GC-reference
         // globals instead of a libcall.
-        let libcall = gc::gc_ref_global_get_builtin(ty, self, &mut pos.func)?;
+        let libcall = gc::gc_ref_global_get_builtin(ty, self, &mut builder.func)?;
 
-        let vmctx = self.vmctx_val(&mut pos);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
 
-        let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
-        let call_inst = pos.ins().call(libcall, &[vmctx, global_index_arg]);
+        let global_index_arg = builder.ins().iconst(I32, index.as_u32() as i64);
+        let call_inst = builder.ins().call(libcall, &[vmctx, global_index_arg]);
 
-        Ok(pos.func.dfg.first_result(call_inst))
+        let val = builder.func.dfg.first_result(call_inst);
+        if ty.is_vmgcref_type_and_not_i31() {
+            builder.declare_value_needs_stack_map(val);
+        }
+        Ok(val)
     }
 
     fn translate_custom_global_set(
         &mut self,
-        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        builder: &mut FunctionBuilder,
         index: cranelift_wasm::GlobalIndex,
         value: ir::Value,
     ) -> WasmResult<()> {
@@ -1793,12 +1822,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // TODO: use `GcCompiler::translate_write_gc_reference` for GC-reference
         // globals instead of a libcall.
-        let libcall = gc::gc_ref_global_set_builtin(ty, self, &mut pos.func)?;
+        let libcall = gc::gc_ref_global_set_builtin(ty, self, &mut builder.func)?;
 
-        let vmctx = self.vmctx_val(&mut pos);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
 
-        let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
-        pos.ins().call(libcall, &[vmctx, global_index_arg, value]);
+        let global_index_arg = builder.ins().iconst(I32, index.as_u32() as i64);
+        builder
+            .ins()
+            .call(libcall, &[vmctx, global_index_arg, value]);
 
         Ok(())
     }
@@ -2077,10 +2108,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
-        let index = self.module.types[index];
-        let sig =
-            crate::wasm_call_signature(self.isa, self.types[index].unwrap_func(), &self.tunables);
-        Ok(func.import_signature(sig))
+        let interned_index = self.module.types[index];
+        let wasm_func_ty = self.types[interned_index].unwrap_func();
+        let sig = crate::wasm_call_signature(self.isa, wasm_func_ty, &self.tunables);
+        let sig_ref = func.import_signature(sig);
+        self.sig_ref_to_ty[sig_ref] = Some(wasm_func_ty);
+        Ok(sig_ref)
     }
 
     fn make_direct_func(
@@ -2089,9 +2122,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
         let sig = self.module.functions[index].signature;
-        let sig =
-            crate::wasm_call_signature(self.isa, self.types[sig].unwrap_func(), &self.tunables);
+        let wasm_func_ty = self.types[sig].unwrap_func();
+        let sig = crate::wasm_call_signature(self.isa, wasm_func_ty, &self.tunables);
         let signature = func.import_signature(sig);
+        self.sig_ref_to_ty[signature] = Some(wasm_func_ty);
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
                 namespace: crate::NS_WASM_FUNC,
@@ -2101,19 +2135,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             name,
             signature,
 
-            // The value of this flag determines the codegen for calls to this
-            // function. If this flag is `false` then absolute relocations will
+            // the value of this flag determines the codegen for calls to this
+            // function. if this flag is `false` then absolute relocations will
             // be generated for references to the function, which requires
-            // load-time relocation resolution. If this flag is set to `true`
+            // load-time relocation resolution. if this flag is set to `true`
             // then relative relocations are emitted which can be resolved at
             // object-link-time, just after all functions are compiled.
             //
-            // This flag is set to `true` for functions defined in the object
+            // this flag is set to `true` for functions defined in the object
             // we'll be defining in this compilation unit, or everything local
-            // to the wasm module. This means that between functions in a wasm
-            // module there's relative calls encoded. All calls external to a
+            // to the wasm module. this means that between functions in a wasm
+            // module there's relative calls encoded. all calls external to a
             // wasm module (e.g. imports or libcalls) are either encoded through
-            // the `VMContext` as relative jumps (hence no relocations) or
+            // the `vmcontext` as relative jumps (hence no relocations) or
             // they're libcalls with absolute relocations.
             colocated: self.module.defined_func_index(index).is_some(),
         }))

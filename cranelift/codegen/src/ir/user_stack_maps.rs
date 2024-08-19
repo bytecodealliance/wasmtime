@@ -67,12 +67,20 @@ pub struct UserStackMapEntry {
     derive(serde_derive::Deserialize, serde_derive::Serialize)
 )]
 pub struct UserStackMap {
+    // Offsets into the frame's sized stack slots that are GC references, by type.
     by_type: SmallVec<[(ir::Type, CompoundBitSet); 1]>,
+
+    // The offset of the sized stack slots, from SP, for this stack map's
+    // associated PC.
+    //
+    // This is initially `None` upon construction during lowering, but filled in
+    // after regalloc during emission when we have the precise frame layout.
+    sp_to_sized_stack_slots: Option<u32>,
 }
 
 impl UserStackMap {
     /// Coalesce the given entries into a new `UserStackMap`.
-    pub fn new(
+    pub(crate) fn new(
         entries: &[UserStackMapEntry],
         stack_slot_offsets: &PrimaryMap<ir::StackSlot, u32>,
     ) -> Self {
@@ -96,6 +104,35 @@ impl UserStackMap {
             by_type[index].1.insert(offset);
         }
 
-        UserStackMap { by_type }
+        UserStackMap {
+            by_type,
+            sp_to_sized_stack_slots: None,
+        }
+    }
+
+    /// Finalize this stack map by filling in the SP-to-stack-slots offset.
+    pub(crate) fn finalize(&mut self, sp_to_sized_stack_slots: u32) {
+        debug_assert!(self.sp_to_sized_stack_slots.is_none());
+        self.sp_to_sized_stack_slots = Some(sp_to_sized_stack_slots);
+    }
+
+    /// Iterate over the entries in this stack map.
+    ///
+    /// Yields pairs of the type of GC reference that is at the offset, and the
+    /// offset from SP. If a pair `(i64, 0x42)` is yielded, for example, then
+    /// when execution is at this stack map's associated PC, `SP + 0x42` is a
+    /// pointer to an `i64`, and that `i64` is a live GC reference.
+    pub fn entries(&self) -> impl Iterator<Item = (ir::Type, u32)> + '_ {
+        let sp_to_sized_stack_slots = self.sp_to_sized_stack_slots.expect(
+            "`sp_to_sized_stack_slots` should have been filled in before this stack map was used",
+        );
+        self.by_type.iter().flat_map(move |(ty, bitset)| {
+            bitset.iter().map(move |slot_offset| {
+                (
+                    *ty,
+                    sp_to_sized_stack_slots + u32::try_from(slot_offset).unwrap(),
+                )
+            })
+        })
     }
 }

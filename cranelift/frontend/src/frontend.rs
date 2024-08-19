@@ -438,6 +438,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Panics if the variable's type is larger than 16 bytes or if this
     /// variable has not been declared yet.
     pub fn declare_var_needs_stack_map(&mut self, var: Variable) {
+        log::trace!("declare_var_needs_stack_map({var:?})");
         let ty = self.func_ctx.types[var];
         assert!(ty != types::INVALID);
         assert!(ty.bytes() <= 16);
@@ -560,6 +561,8 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// Panics if `val` is larger than 16 bytes.
     pub fn declare_value_needs_stack_map(&mut self, val: Value) {
+        log::trace!("declare_value_needs_stack_map({val:?})");
+
         // We rely on these properties in `insert_safepoint_spills`.
         let size = self.func.dfg.value_type(val).bytes();
         assert!(size <= 16);

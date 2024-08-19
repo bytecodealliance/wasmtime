@@ -1,6 +1,6 @@
 use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, condcodes::IntCC, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     TargetEnvironment, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
@@ -19,15 +19,13 @@ pub fn unbarriered_load_gc_ref(
     ptr_to_gc_ref: ir::Value,
     flags: ir::MemFlags,
 ) -> WasmResult<ir::Value> {
-    let ref_ty = func_env.reference_type(ty);
+    debug_assert!({
+        let (_, needs_stack_map) = func_env.reference_type(ty);
+        needs_stack_map
+    });
     let gc_ref = builder.ins().load(ir::types::I32, flags, ptr_to_gc_ref, 0);
-    let gc_ref = if ref_ty.bytes() > ir::types::I32.bytes() {
-        builder.ins().uextend(ref_ty.as_int(), gc_ref)
-    } else {
-        assert_eq!(ref_ty.bytes(), ir::types::I32.bytes());
-        gc_ref
-    };
-    Ok(builder.ins().bitcast(ref_ty, ir::MemFlags::new(), gc_ref))
+    builder.declare_value_needs_stack_map(gc_ref);
+    Ok(gc_ref)
 }
 
 pub fn unbarriered_store_gc_ref(
@@ -38,16 +36,10 @@ pub fn unbarriered_store_gc_ref(
     gc_ref: ir::Value,
     flags: ir::MemFlags,
 ) -> WasmResult<()> {
-    let ref_ty = func_env.reference_type(ty);
-    let gc_ref = builder
-        .ins()
-        .bitcast(ref_ty.as_int(), ir::MemFlags::new(), gc_ref);
-    let gc_ref = if ref_ty.bytes() > ir::types::I32.bytes() {
-        builder.ins().ireduce(ir::types::I32, gc_ref)
-    } else {
-        assert_eq!(ref_ty.bytes(), ir::types::I32.bytes());
-        gc_ref
-    };
+    debug_assert!({
+        let (_, needs_stack_map) = func_env.reference_type(ty);
+        needs_stack_map
+    });
     builder.ins().store(flags, gc_ref, dst, 0);
     Ok(())
 }
@@ -121,9 +113,12 @@ impl FuncEnvironment<'_> {
         let pointer_type = self.pointer_type();
         let (base, bound) = self.get_gc_heap_base_bound(builder);
 
-        let index = builder
-            .ins()
-            .bitcast(pointer_type, ir::MemFlags::new(), gc_ref);
+        debug_assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
+        let index = match pointer_type {
+            ir::types::I32 => gc_ref,
+            ir::types::I64 => builder.ins().uextend(ir::types::I64, gc_ref),
+            _ => unreachable!(),
+        };
 
         let offset = builder
             .ins()
@@ -178,36 +173,29 @@ impl FuncEnvironment<'_> {
             WasmHeapTopType::Extern | WasmHeapTopType::Func => false,
         };
 
-        let ptr_ty = self.pointer_type();
-
         match (ty.nullable, might_be_i31) {
             // This GC reference statically cannot be null nor an i31. (Let
             // Cranelift's optimizer const-propagate this value and erase any
             // unnecessary control flow resulting from branching on this value.)
-            (false, false) => builder.ins().iconst(ptr_ty, 0),
+            (false, false) => builder.ins().iconst(ir::types::I32, 0),
 
             // This GC reference is always non-null, but might be an i31.
-            (false, true) => {
-                // TODO: support bitwise operations directly on `r{32,64}` types
-                // so we don't need this bitcast.
-                let raw = builder.ins().bitcast(ptr_ty, ir::MemFlags::new(), gc_ref);
-                builder.ins().band_imm(raw, I31_DISCRIMINANT as i64)
-            }
+            (false, true) => builder.ins().band_imm(gc_ref, I31_DISCRIMINANT as i64),
 
             // This GC reference might be null, but can never be an i31.
-            (true, false) => builder.ins().is_null(gc_ref),
+            (true, false) => builder.ins().icmp_imm(IntCC::Equal, gc_ref, 0),
 
             // Fully general case: this GC reference could be either null or an
             // i31.
             (true, true) => {
-                // TODO: support bitwise operations directly on `r{32,64}` types
-                // so we don't need this bitcast.
-                let raw = builder.ins().bitcast(ptr_ty, ir::MemFlags::new(), gc_ref);
                 // Mask for checking whether any bits are set, other than the
                 // `i31ref` discriminant, which should not be set. This folds
                 // the null and i31ref checks together into a single `band`.
-                let mask = builder.ins().iconst(ptr_ty, NON_NULL_NON_I31_MASK as i64);
-                let is_non_null_and_non_i31 = builder.ins().band(raw, mask);
+                let mask = builder.ins().iconst(
+                    ir::types::I32,
+                    (NON_NULL_NON_I31_MASK & u32::MAX as u64) as i64,
+                );
+                let is_non_null_and_non_i31 = builder.ins().band(gc_ref, mask);
                 builder
                     .ins()
                     .icmp_imm(ir::condcodes::IntCC::Equal, is_non_null_and_non_i31, 0)
@@ -318,14 +306,14 @@ impl GcCompiler for DrcCompiler {
     ) -> WasmResult<ir::Value> {
         assert!(ty.is_vmgcref_type_and_not_i31());
 
-        let reference_type = func_env.reference_type(ty.heap_type);
+        let (reference_type, needs_stack_map) = func_env.reference_type(ty.heap_type);
+        debug_assert!(needs_stack_map);
 
-        // Special case for references to uninhabited bottom types: either
-        // the reference must either be nullable and we can just eagerly
-        // return null, or we are in dynamically unreachable code and should
-        // just trap.
+        // Special case for references to uninhabited bottom types: the
+        // reference must either be nullable and we can just eagerly return
+        // null, or we are in dynamically unreachable code and should just trap.
         if let WasmHeapType::None = ty.heap_type {
-            let null = builder.ins().null(reference_type);
+            let null = builder.ins().iconst(reference_type, 0);
             if !ty.nullable {
                 // NB: Don't use an unconditional trap instruction, since that
                 // is a block terminator, and we still need to integrate with
@@ -461,7 +449,8 @@ impl GcCompiler for DrcCompiler {
     ) -> WasmResult<()> {
         assert!(ty.is_vmgcref_type_and_not_i31());
 
-        let ref_ty = func_env.reference_type(ty.heap_type);
+        let (ref_ty, needs_stack_map) = func_env.reference_type(ty.heap_type);
+        debug_assert!(needs_stack_map);
 
         // Special case for references to uninhabited bottom types: either the
         // reference must either be nullable and we can just eagerly store null
@@ -624,13 +613,7 @@ impl GcCompiler for DrcCompiler {
         builder.seal_block(drop_old_val_block);
         let drop_gc_ref_libcall = func_env.builtin_functions.drop_gc_ref(builder.func);
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
-        let old_val_pointer =
-            builder
-                .ins()
-                .bitcast(func_env.pointer_type(), ir::MemFlags::new(), old_val);
-        builder
-            .ins()
-            .call(drop_gc_ref_libcall, &[vmctx, old_val_pointer]);
+        builder.ins().call(drop_gc_ref_libcall, &[vmctx, old_val]);
         builder.ins().jump(continue_block, &[]);
 
         // Block to store the new ref count back to `old_val` for when

@@ -37,35 +37,35 @@
 ;; @002a                               return v2
 ;; }
 ;;
-;; function u0:1(i64 vmctx, i64) -> r64 tail {
+;; function u0:1(i64 vmctx, i64) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @002d                               v3 = null.r64 
-;; @002f                               v4 = null.r64 
+;; @002d                               v3 = iconst.i32 0
+;; @002f                               v4 = iconst.i32 0
 ;; @0031                               v5 = iconst.i32 1
-;; @0033                               v6 = select v5, v3, v4  ; v5 = 1
+;; @0033                               v6 = select v5, v3, v4  ; v5 = 1, v3 = 0, v4 = 0
 ;; @0036                               jump block1(v6)
 ;;
-;;                                 block1(v2: r64):
+;;                                 block1(v2: i32):
 ;; @0036                               return v2
 ;; }
 ;;
-;; function u0:2(i64 vmctx, i64, r64) -> r64 tail {
+;; function u0:2(i64 vmctx, i64, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     stack_limit = gv2
 ;;
-;;                                 block0(v0: i64, v1: i64, v2: r64):
-;; @0039                               v4 = null.r64 
+;;                                 block0(v0: i64, v1: i64, v2: i32):
+;; @0039                               v4 = iconst.i32 0
 ;; @003d                               v5 = iconst.i32 1
-;; @003f                               v6 = select v5, v4, v2  ; v5 = 1
+;; @003f                               v6 = select v5, v4, v2  ; v5 = 1, v4 = 0
 ;; @0042                               jump block1(v6)
 ;;
-;;                                 block1(v3: r64):
+;;                                 block1(v3: i32):
 ;; @0042                               return v3
 ;; }

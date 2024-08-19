@@ -190,11 +190,7 @@ fn wasm_call_signature(
 fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht.top() {
         WasmHeapTopType::Func => pointer_type,
-        WasmHeapTopType::Any | WasmHeapTopType::Extern => match pointer_type {
-            ir::types::I32 => ir::types::R32,
-            ir::types::I64 => ir::types::R64,
-            _ => panic!("unsupported pointer type"),
-        },
+        WasmHeapTopType::Any | WasmHeapTopType::Extern => ir::types::I32,
     }
 }
 
@@ -354,13 +350,10 @@ impl BuiltinFunctionSignatures {
     fn new(isa: &dyn TargetIsa) -> Self {
         Self {
             pointer_type: isa.pointer_type(),
-            #[cfg(feature = "gc")]
-            reference_type: match isa.pointer_type() {
-                ir::types::I32 => ir::types::R32,
-                ir::types::I64 => ir::types::R64,
-                _ => panic!(),
-            },
             call_conv: CallConv::triple_default(isa.triple()),
+
+            #[cfg(feature = "gc")]
+            reference_type: ir::types::I32,
         }
     }
 

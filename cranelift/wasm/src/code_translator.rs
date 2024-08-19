@@ -180,10 +180,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     flags.set_alias_region(Some(ir::AliasRegion::Table));
                     builder.ins().load(ty, flags, addr, offset)
                 }
-                GlobalVariable::Custom => environ.translate_custom_global_get(
-                    builder.cursor(),
-                    GlobalIndex::from_u32(*global_index),
-                )?,
+                GlobalVariable::Custom => environ
+                    .translate_custom_global_get(builder, GlobalIndex::from_u32(*global_index))?,
             };
             state.push1(val);
         }
@@ -207,7 +205,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalVariable::Custom => {
                     let val = state.pop1();
                     environ.translate_custom_global_set(
-                        builder.cursor(),
+                        builder,
                         GlobalIndex::from_u32(*global_index),
                         val,
                     )?;

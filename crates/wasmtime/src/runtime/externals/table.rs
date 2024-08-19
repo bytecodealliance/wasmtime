@@ -388,7 +388,7 @@ impl Table {
                 let gc_ref = NonNull::from(gc_ref);
                 let gc_ref = SendSyncPtr::new(gc_ref);
                 unsafe {
-                    gc_roots_list.add_root(gc_ref);
+                    gc_roots_list.add_root(gc_ref, "Wasm table element");
                 }
             }
         }

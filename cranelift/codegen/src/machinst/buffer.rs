@@ -1693,7 +1693,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         &mut self,
         emit_state: &I::State,
         return_addr: CodeOffset,
-        stack_map: ir::UserStackMap,
+        mut stack_map: ir::UserStackMap,
     ) {
         let span = emit_state.frame_layout().active_size();
         trace!("Adding user stack map @ {return_addr:#x} spanning {span} bytes: {stack_map:?}");
@@ -1707,6 +1707,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             return_addr,
         );
 
+        stack_map.finalize(emit_state.frame_layout().sp_to_sized_stack_slots());
         self.user_stack_maps.push((return_addr, span, stack_map));
     }
 }
@@ -1775,6 +1776,16 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     /// Take this buffer's stack map metadata.
     pub fn take_stack_maps(&mut self) -> SmallVec<[MachStackMap; 8]> {
         mem::take(&mut self.stack_maps)
+    }
+
+    /// Ge tthe user stack map metadata for this code.
+    pub fn user_stack_maps(&self) -> &[(CodeOffset, u32, ir::UserStackMap)] {
+        &self.user_stack_maps
+    }
+
+    /// Take this buffer's user strack map metadata.
+    pub fn take_user_stack_maps(&mut self) -> SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]> {
+        mem::take(&mut self.user_stack_maps)
     }
 
     /// Get the list of call sites for this code.
