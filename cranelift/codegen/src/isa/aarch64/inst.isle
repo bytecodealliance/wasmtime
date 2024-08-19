@@ -1355,6 +1355,10 @@
     (MAdd)
     ;; Multiply-sub
     (MSub)
+    ;; Negated fused Multiply-add
+    (NMAdd)
+    ;; Negated fused Multiply-sub
+    (NMSub)
 ))
 
 ;; A conversion from an FP to an integer value.

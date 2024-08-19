@@ -1823,6 +1823,8 @@ impl Inst {
                 let op = match fpu_op {
                     FPUOp3::MAdd => "fmadd",
                     FPUOp3::MSub => "fmsub",
+                    FPUOp3::NMAdd => "fnmadd",
+                    FPUOp3::NMSub => "fnmsub",
                 };
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
                 let rn = pretty_print_vreg_scalar(rn, size);
