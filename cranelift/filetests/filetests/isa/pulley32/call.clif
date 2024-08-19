@@ -12,35 +12,35 @@ block0:
 }
 
 ; VCode:
-;   x35 = xconst8 -16
-;   x32 = xadd32 x32, x35
-;   store64 sp+8, x33 // flags =  notrap aligned
-;   store64 sp+0, x34 // flags =  notrap aligned
-;   x34 = xmov x32
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
 ; block0:
 ;   x0 = xconst8 0
 ;   call TestCase(%g), CallInfo { uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [1204185006387685820006398, 4294967295] }, callee_pop_size: 0 }
 ;   x0 = xconst8 1
-;   x33 = load64_u sp+8 // flags = notrap aligned
-;   x34 = load64_u sp+0 // flags = notrap aligned
-;   x35 = xconst8 16
-;   x32 = xadd32 x32, x35
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
 ;   ret
 ;
 ; Disassembled:
-;        0: 0e 23 f0                        xconst8 spilltmp0, -16
-;        3: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;        7: 2c 20 08 21                     store64_offset8 sp, 8, lr
-;        b: 2a 20 22                        store64 sp, fp
-;        e: 0b 22 20                        xmov fp, sp
-;       11: 0e 00 00                        xconst8 x0, 0
-;       14: 01 00 00 00 00                  call 0x0    // target = 0x14
-;       19: 0e 00 01                        xconst8 x0, 1
-;       1c: 25 21 20 08                     load64_offset8 lr, sp, 8
-;       20: 22 22 20                        load64 fp, sp
-;       23: 0e 23 10                        xconst8 spilltmp0, 16
-;       26: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       2a: 00                              ret
+;        0: 0e 1e f0                        xconst8 spilltmp0, -16
+;        3: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;        6: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
+;        a: 2a 1b 1d                        store64 sp, fp
+;        d: 0b 1d 1b                        xmov fp, sp
+;       10: 0e 00 00                        xconst8 x0, 0
+;       13: 01 00 00 00 00                  call 0x0    // target = 0x13
+;       18: 0e 00 01                        xconst8 x0, 1
+;       1b: 25 1c 1b 08                     load64_offset8 lr, sp, 8
+;       1f: 22 1d 1b                        load64 fp, sp
+;       22: 0e 1e 10                        xconst8 spilltmp0, 16
+;       25: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       28: 00                              ret
 
 function %colocated_args_i32_rets_i32() -> i32 {
     fn0 = colocated %g(i32) -> i32
@@ -53,35 +53,35 @@ block0:
 }
 
 ; VCode:
-;   x35 = xconst8 -16
-;   x32 = xadd32 x32, x35
-;   store64 sp+8, x33 // flags =  notrap aligned
-;   store64 sp+0, x34 // flags =  notrap aligned
-;   x34 = xmov x32
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
 ; block0:
 ;   x0 = xconst8 0
 ;   call TestCase(%g), CallInfo { uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [1204185006387685820006398, 4294967295] }, callee_pop_size: 0 }
 ;   x0 = xconst8 1
-;   x33 = load64_u sp+8 // flags = notrap aligned
-;   x34 = load64_u sp+0 // flags = notrap aligned
-;   x35 = xconst8 16
-;   x32 = xadd32 x32, x35
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
 ;   ret
 ;
 ; Disassembled:
-;        0: 0e 23 f0                        xconst8 spilltmp0, -16
-;        3: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;        7: 2c 20 08 21                     store64_offset8 sp, 8, lr
-;        b: 2a 20 22                        store64 sp, fp
-;        e: 0b 22 20                        xmov fp, sp
-;       11: 0e 00 00                        xconst8 x0, 0
-;       14: 01 00 00 00 00                  call 0x0    // target = 0x14
-;       19: 0e 00 01                        xconst8 x0, 1
-;       1c: 25 21 20 08                     load64_offset8 lr, sp, 8
-;       20: 22 22 20                        load64 fp, sp
-;       23: 0e 23 10                        xconst8 spilltmp0, 16
-;       26: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       2a: 00                              ret
+;        0: 0e 1e f0                        xconst8 spilltmp0, -16
+;        3: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;        6: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
+;        a: 2a 1b 1d                        store64 sp, fp
+;        d: 0b 1d 1b                        xmov fp, sp
+;       10: 0e 00 00                        xconst8 x0, 0
+;       13: 01 00 00 00 00                  call 0x0    // target = 0x13
+;       18: 0e 00 01                        xconst8 x0, 1
+;       1b: 25 1c 1b 08                     load64_offset8 lr, sp, 8
+;       1f: 22 1d 1b                        load64 fp, sp
+;       22: 0e 1e 10                        xconst8 spilltmp0, 16
+;       25: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       28: 00                              ret
 
 function %colocated_args_i64_i32_i64_i32() {
     fn0 = colocated %g(i64, i32, i64, i32)
@@ -96,39 +96,39 @@ block0:
 }
 
 ; VCode:
-;   x35 = xconst8 -16
-;   x32 = xadd32 x32, x35
-;   store64 sp+8, x33 // flags =  notrap aligned
-;   store64 sp+0, x34 // flags =  notrap aligned
-;   x34 = xmov x32
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
 ; block0:
 ;   x0 = xconst8 0
 ;   x1 = xconst8 1
 ;   x2 = xconst8 2
 ;   x3 = xconst8 3
 ;   call TestCase(%g), CallInfo { uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [], clobbers: PRegSet { bits: [1204185006387685820006399, 4294967295] }, callee_pop_size: 0 }
-;   x33 = load64_u sp+8 // flags = notrap aligned
-;   x34 = load64_u sp+0 // flags = notrap aligned
-;   x35 = xconst8 16
-;   x32 = xadd32 x32, x35
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
 ;   ret
 ;
 ; Disassembled:
-;        0: 0e 23 f0                        xconst8 spilltmp0, -16
-;        3: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;        7: 2c 20 08 21                     store64_offset8 sp, 8, lr
-;        b: 2a 20 22                        store64 sp, fp
-;        e: 0b 22 20                        xmov fp, sp
-;       11: 0e 00 00                        xconst8 x0, 0
-;       14: 0e 01 01                        xconst8 x1, 1
-;       17: 0e 02 02                        xconst8 x2, 2
-;       1a: 0e 03 03                        xconst8 x3, 3
-;       1d: 01 00 00 00 00                  call 0x0    // target = 0x1d
-;       22: 25 21 20 08                     load64_offset8 lr, sp, 8
-;       26: 22 22 20                        load64 fp, sp
-;       29: 0e 23 10                        xconst8 spilltmp0, 16
-;       2c: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       30: 00                              ret
+;        0: 0e 1e f0                        xconst8 spilltmp0, -16
+;        3: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;        6: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
+;        a: 2a 1b 1d                        store64 sp, fp
+;        d: 0b 1d 1b                        xmov fp, sp
+;       10: 0e 00 00                        xconst8 x0, 0
+;       13: 0e 01 01                        xconst8 x1, 1
+;       16: 0e 02 02                        xconst8 x2, 2
+;       19: 0e 03 03                        xconst8 x3, 3
+;       1c: 01 00 00 00 00                  call 0x0    // target = 0x1c
+;       21: 25 1c 1b 08                     load64_offset8 lr, sp, 8
+;       25: 22 1d 1b                        load64 fp, sp
+;       28: 0e 1e 10                        xconst8 spilltmp0, 16
+;       2b: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       2e: 00                              ret
 
 function %colocated_rets_i64_i64_i64_i64() -> i64 {
     fn0 = colocated %g() -> i64, i64, i64, i64
@@ -142,37 +142,37 @@ block0:
 }
 
 ; VCode:
-;   x35 = xconst8 -16
-;   x32 = xadd32 x32, x35
-;   store64 sp+8, x33 // flags =  notrap aligned
-;   store64 sp+0, x34 // flags =  notrap aligned
-;   x34 = xmov x32
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
 ; block0:
 ;   call TestCase(%g), CallInfo { uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }], clobbers: PRegSet { bits: [1204185006387685820006384, 4294967295] }, callee_pop_size: 0 }
 ;   x4 = xadd64 x0, x2
 ;   x3 = xadd64 x1, x3
 ;   x0 = xadd64 x4, x3
-;   x33 = load64_u sp+8 // flags = notrap aligned
-;   x34 = load64_u sp+0 // flags = notrap aligned
-;   x35 = xconst8 16
-;   x32 = xadd32 x32, x35
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
 ;   ret
 ;
 ; Disassembled:
-;        0: 0e 23 f0                        xconst8 spilltmp0, -16
-;        3: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;        7: 2c 20 08 21                     store64_offset8 sp, 8, lr
-;        b: 2a 20 22                        store64 sp, fp
-;        e: 0b 22 20                        xmov fp, sp
-;       11: 01 00 00 00 00                  call 0x0    // target = 0x11
-;       16: 13 04 00 02                     xadd64 x4, x0, x2
-;       1a: 13 03 01 03                     xadd64 x3, x1, x3
-;       1e: 13 00 04 03                     xadd64 x0, x4, x3
-;       22: 25 21 20 08                     load64_offset8 lr, sp, 8
-;       26: 22 22 20                        load64 fp, sp
-;       29: 0e 23 10                        xconst8 spilltmp0, 16
-;       2c: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       30: 00                              ret
+;        0: 0e 1e f0                        xconst8 spilltmp0, -16
+;        3: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;        6: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
+;        a: 2a 1b 1d                        store64 sp, fp
+;        d: 0b 1d 1b                        xmov fp, sp
+;       10: 01 00 00 00 00                  call 0x0    // target = 0x10
+;       15: 13 04 08                        xadd64 x4, x0, x2
+;       18: 13 23 0c                        xadd64 x3, x1, x3
+;       1b: 13 80 0c                        xadd64 x0, x4, x3
+;       1e: 25 1c 1b 08                     load64_offset8 lr, sp, 8
+;       22: 22 1d 1b                        load64 fp, sp
+;       25: 0e 1e 10                        xconst8 spilltmp0, 16
+;       28: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       2b: 00                              ret
 
 function %colocated_stack_args() {
     fn0 = colocated %g(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)
@@ -184,13 +184,13 @@ block0:
 }
 
 ; VCode:
-;   x35 = xconst8 -16
-;   x32 = xadd32 x32, x35
-;   store64 sp+8, x33 // flags =  notrap aligned
-;   store64 sp+0, x34 // flags =  notrap aligned
-;   x34 = xmov x32
-;   x35 = xconst8 -48
-;   x32 = xadd32 x32, x35
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
+;   x30 = xconst8 -48
+;   x27 = xadd32 x27, x30
 ; block0:
 ;   x15 = xconst8 0
 ;   store64 OutgoingArg(0), x15 // flags =  notrap aligned
@@ -215,52 +215,52 @@ block0:
 ;   x13 = xmov x15
 ;   x14 = xmov x15
 ;   call TestCase(%g), CallInfo { uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }, CallArgPair { vreg: p15i, preg: p15i }], defs: [], clobbers: PRegSet { bits: [1204185006387685820006399, 4294967295] }, callee_pop_size: 0 }
-;   x35 = xconst8 48
-;   x32 = xadd32 x32, x35
-;   x33 = load64_u sp+8 // flags = notrap aligned
-;   x34 = load64_u sp+0 // flags = notrap aligned
-;   x35 = xconst8 16
-;   x32 = xadd32 x32, x35
+;   x30 = xconst8 48
+;   x27 = xadd32 x27, x30
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
 ;   ret
 ;
 ; Disassembled:
-;        0: 0e 23 f0                        xconst8 spilltmp0, -16
-;        3: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;        7: 2c 20 08 21                     store64_offset8 sp, 8, lr
-;        b: 2a 20 22                        store64 sp, fp
-;        e: 0b 22 20                        xmov fp, sp
-;       11: 0e 23 d0                        xconst8 spilltmp0, -48
-;       14: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       18: 0e 0f 00                        xconst8 x15, 0
-;       1b: 2a 20 0f                        store64 sp, x15
-;       1e: 2c 20 08 0f                     store64_offset8 sp, 8, x15
-;       22: 2c 20 10 0f                     store64_offset8 sp, 16, x15
-;       26: 2c 20 18 0f                     store64_offset8 sp, 24, x15
-;       2a: 2c 20 20 0f                     store64_offset8 sp, 32, x15
-;       2e: 2c 20 28 0f                     store64_offset8 sp, 40, x15
-;       32: 0b 00 0f                        xmov x0, x15
-;       35: 0b 01 0f                        xmov x1, x15
-;       38: 0b 02 0f                        xmov x2, x15
-;       3b: 0b 03 0f                        xmov x3, x15
-;       3e: 0b 04 0f                        xmov x4, x15
-;       41: 0b 05 0f                        xmov x5, x15
-;       44: 0b 06 0f                        xmov x6, x15
-;       47: 0b 07 0f                        xmov x7, x15
-;       4a: 0b 08 0f                        xmov x8, x15
-;       4d: 0b 09 0f                        xmov x9, x15
-;       50: 0b 0a 0f                        xmov x10, x15
-;       53: 0b 0b 0f                        xmov x11, x15
-;       56: 0b 0c 0f                        xmov x12, x15
-;       59: 0b 0d 0f                        xmov x13, x15
-;       5c: 0b 0e 0f                        xmov x14, x15
-;       5f: 01 00 00 00 00                  call 0x0    // target = 0x5f
-;       64: 0e 23 30                        xconst8 spilltmp0, 48
-;       67: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       6b: 25 21 20 08                     load64_offset8 lr, sp, 8
-;       6f: 22 22 20                        load64 fp, sp
-;       72: 0e 23 10                        xconst8 spilltmp0, 16
-;       75: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       79: 00                              ret
+;        0: 0e 1e f0                        xconst8 spilltmp0, -16
+;        3: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;        6: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
+;        a: 2a 1b 1d                        store64 sp, fp
+;        d: 0b 1d 1b                        xmov fp, sp
+;       10: 0e 1e d0                        xconst8 spilltmp0, -48
+;       13: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       16: 0e 0f 00                        xconst8 x15, 0
+;       19: 2a 1b 0f                        store64 sp, x15
+;       1c: 2c 1b 08 0f                     store64_offset8 sp, 8, x15
+;       20: 2c 1b 10 0f                     store64_offset8 sp, 16, x15
+;       24: 2c 1b 18 0f                     store64_offset8 sp, 24, x15
+;       28: 2c 1b 20 0f                     store64_offset8 sp, 32, x15
+;       2c: 2c 1b 28 0f                     store64_offset8 sp, 40, x15
+;       30: 0b 00 0f                        xmov x0, x15
+;       33: 0b 01 0f                        xmov x1, x15
+;       36: 0b 02 0f                        xmov x2, x15
+;       39: 0b 03 0f                        xmov x3, x15
+;       3c: 0b 04 0f                        xmov x4, x15
+;       3f: 0b 05 0f                        xmov x5, x15
+;       42: 0b 06 0f                        xmov x6, x15
+;       45: 0b 07 0f                        xmov x7, x15
+;       48: 0b 08 0f                        xmov x8, x15
+;       4b: 0b 09 0f                        xmov x9, x15
+;       4e: 0b 0a 0f                        xmov x10, x15
+;       51: 0b 0b 0f                        xmov x11, x15
+;       54: 0b 0c 0f                        xmov x12, x15
+;       57: 0b 0d 0f                        xmov x13, x15
+;       5a: 0b 0e 0f                        xmov x14, x15
+;       5d: 01 00 00 00 00                  call 0x0    // target = 0x5d
+;       62: 0e 1e 30                        xconst8 spilltmp0, 48
+;       65: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       68: 25 1c 1b 08                     load64_offset8 lr, sp, 8
+;       6c: 22 1d 1b                        load64 fp, sp
+;       6f: 0e 1e 10                        xconst8 spilltmp0, 16
+;       72: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       75: 00                              ret
 
 function %colocated_stack_rets() -> i64 {
     fn0 = colocated %g() -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64
@@ -299,13 +299,13 @@ block0:
 }
 
 ; VCode:
-;   x35 = xconst8 -16
-;   x32 = xadd32 x32, x35
-;   store64 sp+8, x33 // flags =  notrap aligned
-;   store64 sp+0, x34 // flags =  notrap aligned
-;   x34 = xmov x32
-;   x35 = xconst8 -64
-;   x32 = xadd32 x32, x35
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
+;   x30 = xconst8 -64
+;   x27 = xadd32 x27, x30
 ;   store64 sp+56, x16 // flags =  notrap aligned
 ;   store64 sp+48, x18 // flags =  notrap aligned
 ; block0:
@@ -345,65 +345,65 @@ block0:
 ;   x0 = xadd64 x14, x13
 ;   x16 = load64_u sp+56 // flags = notrap aligned
 ;   x18 = load64_u sp+48 // flags = notrap aligned
-;   x35 = xconst8 64
-;   x32 = xadd32 x32, x35
-;   x33 = load64_u sp+8 // flags = notrap aligned
-;   x34 = load64_u sp+0 // flags = notrap aligned
-;   x35 = xconst8 16
-;   x32 = xadd32 x32, x35
+;   x30 = xconst8 64
+;   x27 = xadd32 x27, x30
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
 ;   ret
 ;
 ; Disassembled:
-;        0: 0e 23 f0                        xconst8 spilltmp0, -16
-;        3: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;        7: 2c 20 08 21                     store64_offset8 sp, 8, lr
-;        b: 2a 20 22                        store64 sp, fp
-;        e: 0b 22 20                        xmov fp, sp
-;       11: 0e 23 c0                        xconst8 spilltmp0, -64
-;       14: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       18: 2c 20 38 10                     store64_offset8 sp, 56, x16
-;       1c: 2c 20 30 12                     store64_offset8 sp, 48, x18
-;       20: 0b 00 20                        xmov x0, sp
-;       23: 01 00 00 00 00                  call 0x0    // target = 0x23
-;       28: 0b 10 0d                        xmov x16, x13
-;       2b: 0b 12 0b                        xmov x18, x11
-;       2e: 22 19 20                        load64 x25, sp
-;       31: 25 0b 20 08                     load64_offset8 x11, sp, 8
-;       35: 25 0d 20 10                     load64_offset8 x13, sp, 16
-;       39: 25 1f 20 18                     load64_offset8 x31, sp, 24
-;       3d: 25 11 20 20                     load64_offset8 x17, sp, 32
-;       41: 13 1e 00 01                     xadd64 x30, x0, x1
-;       45: 13 1d 02 03                     xadd64 x29, x2, x3
-;       49: 13 05 04 05                     xadd64 x5, x4, x5
-;       4d: 13 06 06 07                     xadd64 x6, x6, x7
-;       51: 13 07 08 09                     xadd64 x7, x8, x9
-;       55: 0b 00 12                        xmov x0, x18
-;       58: 13 04 0a 00                     xadd64 x4, x10, x0
-;       5c: 0b 0a 10                        xmov x10, x16
-;       5f: 13 08 0c 0a                     xadd64 x8, x12, x10
-;       63: 13 0e 0e 0f                     xadd64 x14, x14, x15
-;       67: 13 0f 19 0b                     xadd64 x15, x25, x11
-;       6b: 13 0d 0b 0d                     xadd64 x13, x11, x13
-;       6f: 13 00 1f 11                     xadd64 x0, x31, x17
-;       73: 13 01 1e 1d                     xadd64 x1, x30, x29
-;       77: 13 02 05 06                     xadd64 x2, x5, x6
-;       7b: 13 03 07 04                     xadd64 x3, x7, x4
-;       7f: 13 0e 08 0e                     xadd64 x14, x8, x14
-;       83: 13 0d 0f 0d                     xadd64 x13, x15, x13
-;       87: 13 0f 00 00                     xadd64 x15, x0, x0
-;       8b: 13 00 01 02                     xadd64 x0, x1, x2
-;       8f: 13 0e 03 0e                     xadd64 x14, x3, x14
-;       93: 13 0d 0d 0f                     xadd64 x13, x13, x15
-;       97: 13 0e 00 0e                     xadd64 x14, x0, x14
-;       9b: 13 0d 0d 0d                     xadd64 x13, x13, x13
-;       9f: 13 00 0e 0d                     xadd64 x0, x14, x13
-;       a3: 25 10 20 38                     load64_offset8 x16, sp, 56
-;       a7: 25 12 20 30                     load64_offset8 x18, sp, 48
-;       ab: 0e 23 40                        xconst8 spilltmp0, 64
-;       ae: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       b2: 25 21 20 08                     load64_offset8 lr, sp, 8
-;       b6: 22 22 20                        load64 fp, sp
-;       b9: 0e 23 10                        xconst8 spilltmp0, 16
-;       bc: 12 20 20 23                     xadd32 sp, sp, spilltmp0
-;       c0: 00                              ret
+;        0: 0e 1e f0                        xconst8 spilltmp0, -16
+;        3: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;        6: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
+;        a: 2a 1b 1d                        store64 sp, fp
+;        d: 0b 1d 1b                        xmov fp, sp
+;       10: 0e 1e c0                        xconst8 spilltmp0, -64
+;       13: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       16: 2c 1b 38 10                     store64_offset8 sp, 56, x16
+;       1a: 2c 1b 30 12                     store64_offset8 sp, 48, x18
+;       1e: 0b 00 1b                        xmov x0, sp
+;       21: 01 00 00 00 00                  call 0x0    // target = 0x21
+;       26: 0b 10 0d                        xmov x16, x13
+;       29: 0b 12 0b                        xmov x18, x11
+;       2c: 22 19 1b                        load64 x25, sp
+;       2f: 25 0b 1b 08                     load64_offset8 x11, sp, 8
+;       33: 25 0d 1b 10                     load64_offset8 x13, sp, 16
+;       37: 25 1f 1b 18                     load64_offset8 spilltmp1, sp, 24
+;       3b: 25 11 1b 20                     load64_offset8 x17, sp, 32
+;       3f: 13 1e 04                        xadd64 spilltmp0, x0, x1
+;       42: 13 5d 0c                        xadd64 fp, x2, x3
+;       45: 13 85 14                        xadd64 x5, x4, x5
+;       48: 13 c6 1c                        xadd64 x6, x6, x7
+;       4b: 13 07 25                        xadd64 x7, x8, x9
+;       4e: 0b 00 12                        xmov x0, x18
+;       51: 13 44 01                        xadd64 x4, x10, x0
+;       54: 0b 0a 10                        xmov x10, x16
+;       57: 13 88 29                        xadd64 x8, x12, x10
+;       5a: 13 ce 3d                        xadd64 x14, x14, x15
+;       5d: 13 2f 2f                        xadd64 x15, x25, x11
+;       60: 13 6d 35                        xadd64 x13, x11, x13
+;       63: 13 e0 47                        xadd64 x0, spilltmp1, x17
+;       66: 13 c1 77                        xadd64 x1, spilltmp0, fp
+;       69: 13 a2 18                        xadd64 x2, x5, x6
+;       6c: 13 e3 10                        xadd64 x3, x7, x4
+;       6f: 13 0e 39                        xadd64 x14, x8, x14
+;       72: 13 ed 35                        xadd64 x13, x15, x13
+;       75: 13 0f 00                        xadd64 x15, x0, x0
+;       78: 13 20 08                        xadd64 x0, x1, x2
+;       7b: 13 6e 38                        xadd64 x14, x3, x14
+;       7e: 13 ad 3d                        xadd64 x13, x13, x15
+;       81: 13 0e 38                        xadd64 x14, x0, x14
+;       84: 13 ad 35                        xadd64 x13, x13, x13
+;       87: 13 c0 35                        xadd64 x0, x14, x13
+;       8a: 25 10 1b 38                     load64_offset8 x16, sp, 56
+;       8e: 25 12 1b 30                     load64_offset8 x18, sp, 48
+;       92: 0e 1e 40                        xconst8 spilltmp0, 64
+;       95: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       98: 25 1c 1b 08                     load64_offset8 lr, sp, 8
+;       9c: 22 1d 1b                        load64 fp, sp
+;       9f: 0e 1e 10                        xconst8 spilltmp0, 16
+;       a2: 12 7b 7b                        xadd32 sp, sp, spilltmp0
+;       a5: 00                              ret
 

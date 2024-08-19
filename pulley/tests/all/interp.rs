@@ -136,9 +136,11 @@ fn xadd32() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xadd32 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -154,9 +156,11 @@ fn xadd64() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xadd64 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -177,9 +181,11 @@ fn xeq64() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xeq64 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -200,9 +206,11 @@ fn xneq64() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xneq64 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -230,9 +238,11 @@ fn xslt64() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xslt64 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -260,9 +270,11 @@ fn xslteq64() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xslteq64 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -287,9 +299,11 @@ fn xult64() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xult64 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -314,9 +328,11 @@ fn xulteq64() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xulteq64 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -341,9 +357,11 @@ fn xeq32() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xeq32 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -365,9 +383,11 @@ fn xneq32() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xneq32 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -397,9 +417,11 @@ fn xslt32() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xslt32 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -427,9 +449,11 @@ fn xslteq32() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xslteq32 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -453,9 +477,11 @@ fn xult32() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xult32 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,
@@ -479,9 +505,11 @@ fn xulteq32() {
             assert_one(
                 [(x(0), 0x1234567812345678), (x(1), a), (x(2), b)],
                 Xulteq32 {
-                    dst: x(0),
-                    src1: x(1),
-                    src2: x(2),
+                    operands: BinaryOperands {
+                        dst: x(0),
+                        src1: x(1),
+                        src2: x(2),
+                    },
                 },
                 x(0),
                 expected,

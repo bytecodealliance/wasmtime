@@ -147,12 +147,12 @@ block2:
 ;   ret
 ;
 ; Disassembled:
-;        0: 1a 05 00 01                     xeq32 x5, x0, x1
-;        4: 03 05 0a 00 00 00               br_if x5, 0xa    // target = 0xe
-;        a: 0e 00 00                        xconst8 x0, 0
-;        d: 00                              ret
-;        e: 0e 00 01                        xconst8 x0, 1
-;       11: 00                              ret
+;        0: 1a 05 04                        xeq32 x5, x0, x1
+;        3: 03 05 0a 00 00 00               br_if x5, 0xa    // target = 0xd
+;        9: 0e 00 00                        xconst8 x0, 0
+;        c: 00                              ret
+;        d: 0e 00 01                        xconst8 x0, 1
+;       10: 00                              ret
 
 function %brif_icmp_i16(i16, i16) -> i8 {
 block0(v0: i16, v1: i16):
@@ -180,12 +180,12 @@ block2:
 ;   ret
 ;
 ; Disassembled:
-;        0: 1b 05 00 01                     xneq32 x5, x0, x1
-;        4: 03 05 0a 00 00 00               br_if x5, 0xa    // target = 0xe
-;        a: 0e 00 00                        xconst8 x0, 0
-;        d: 00                              ret
-;        e: 0e 00 01                        xconst8 x0, 1
-;       11: 00                              ret
+;        0: 1b 05 04                        xneq32 x5, x0, x1
+;        3: 03 05 0a 00 00 00               br_if x5, 0xa    // target = 0xd
+;        9: 0e 00 00                        xconst8 x0, 0
+;        c: 00                              ret
+;        d: 0e 00 01                        xconst8 x0, 1
+;       10: 00                              ret
 
 function %brif_icmp_i32(i32, i32) -> i8 {
 block0(v0: i32, v1: i32):
@@ -244,10 +244,10 @@ block2:
 ;   ret
 ;
 ; Disassembled:
-;        0: 19 05 01 00                     xulteq64 x5, x1, x0
-;        4: 03 05 0a 00 00 00               br_if x5, 0xa    // target = 0xe
-;        a: 0e 00 00                        xconst8 x0, 0
-;        d: 00                              ret
-;        e: 0e 00 01                        xconst8 x0, 1
-;       11: 00                              ret
+;        0: 19 25 00                        xulteq64 x5, x1, x0
+;        3: 03 05 0a 00 00 00               br_if x5, 0xa    // target = 0xd
+;        9: 0e 00 00                        xconst8 x0, 0
+;        c: 00                              ret
+;        d: 0e 00 01                        xconst8 x0, 1
+;       10: 00                              ret
 
