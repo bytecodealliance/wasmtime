@@ -959,6 +959,7 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(TableElement::GcRef(None))
                 }
+                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(e) => {
                     let gc_ref = e.try_clone_gc_ref(&mut store)?;
                     Ok(TableElement::GcRef(Some(gc_ref)))
@@ -970,6 +971,7 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(TableElement::GcRef(None))
                 }
+                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(a) => {
                     let gc_ref = a.try_clone_gc_ref(&mut store)?;
                     Ok(TableElement::GcRef(Some(gc_ref)))
