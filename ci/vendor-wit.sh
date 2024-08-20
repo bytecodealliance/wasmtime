@@ -64,6 +64,6 @@ rm -rf $cache_dir
 # Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is
 # slightly different than above.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
-revision=0.2.0-rc-2024-06-25
+revision=0.2.0-rc-2024-08-19
 curl -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
 curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit

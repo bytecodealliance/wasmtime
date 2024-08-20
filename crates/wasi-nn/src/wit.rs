@@ -329,14 +329,6 @@ impl gen::tensor::HostTensor for WasiNnView<'_> {
 }
 
 impl gen::errors::HostError for WasiNnView<'_> {
-    fn new(
-        &mut self,
-        _code: gen::errors::ErrorCode,
-        _data: String,
-    ) -> wasmtime::Result<Resource<Error>> {
-        unimplemented!("this should be removed; see https://github.com/WebAssembly/wasi-nn/pull/76")
-    }
-
     fn code(&mut self, error: Resource<Error>) -> wasmtime::Result<gen::errors::ErrorCode> {
         let error = self.table.get(&error)?;
         match error.code {
