@@ -266,6 +266,8 @@ impl ArrayRef {
 
         return Self::_new_unchecked(store, allocator, RepeatN(elem, len));
 
+        // NB: Can't use `iter::repeat(elem).take(len)` above because that
+        // doesn't implement `ExactSizeIterator`.
         struct RepeatN<'a>(&'a Val, u32);
 
         impl<'a> Iterator for RepeatN<'a> {
