@@ -1751,13 +1751,15 @@ impl Config {
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL;
                 match self.compiler_target().architecture {
-                    // The aarch64 backend is incomplete and doesn't support any
-                    // full features at this times, so indicate that all
-                    // features don't work. Note that this technically still
-                    // allows MVP modules without floats, but it's on the
-                    // backend to reject those.
                     target_lexicon::Architecture::Aarch64(_) => {
-                        unsupported |= WasmFeatures::all();
+                        // no support for simd on aarch64
+                        unsupported |= WasmFeatures::SIMD;
+                        // technically this is mostly supported in the sense of
+                        // multi-tables work well enough but enough of MVP wasm
+                        // currently panics that this is used here instead to
+                        // disable most spec tests which require reference
+                        // types.
+                        unsupported |= WasmFeatures::REFERENCE_TYPES;
                     }
 
                     // Winch doesn't support other non-x64 architectures at this
