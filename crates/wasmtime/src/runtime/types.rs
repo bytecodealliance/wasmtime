@@ -142,6 +142,9 @@ impl ValType {
     /// The `i31ref` type, aka `(ref null i31)`.
     pub const I31REF: Self = ValType::Ref(RefType::I31REF);
 
+    /// The `arrayref` type, aka `(ref null array)`.
+    pub const ARRAYREF: Self = ValType::Ref(RefType::ARRAYREF);
+
     /// The `structref` type, aka `(ref null struct)`.
     pub const STRUCTREF: Self = ValType::Ref(RefType::STRUCTREF);
 
@@ -335,6 +338,19 @@ impl ValType {
             WasmValType::Ref(r) => Self::Ref(RefType::from_wasm_type(engine, r)),
         }
     }
+
+    /// What is the size (in bytes) of this type's values when they are stored
+    /// inside the GC heap?
+    pub(crate) fn byte_size_in_gc_heap(&self) -> u32 {
+        match self {
+            ValType::I32 => 4,
+            ValType::I64 => 8,
+            ValType::F32 => 4,
+            ValType::F64 => 8,
+            ValType::V128 => 16,
+            ValType::Ref(r) => r.byte_size_in_gc_heap(),
+        }
+    }
 }
 
 /// Opaque references to data in the Wasm heap or to host data.
@@ -405,6 +421,12 @@ impl RefType {
     pub const I31REF: Self = RefType {
         is_nullable: true,
         heap_type: HeapType::I31,
+    };
+
+    /// The `arrayref` type, aka `(ref null array)`.
+    pub const ARRAYREF: Self = RefType {
+        is_nullable: true,
+        heap_type: HeapType::Array,
     };
 
     /// The `structref` type, aka `(ref null struct)`.
@@ -496,6 +518,26 @@ impl RefType {
 
     pub(crate) fn is_vmgcref_type_and_points_to_object(&self) -> bool {
         self.heap_type().is_vmgcref_type_and_points_to_object()
+    }
+
+    /// What is the size (in bytes) of this type's values when they are stored
+    /// inside the GC heap?
+    pub(crate) fn byte_size_in_gc_heap(&self) -> u32 {
+        match &self.heap_type {
+            HeapType::Extern | HeapType::NoExtern => 4,
+
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => {
+                todo!("funcrefs in the gc heap aren't supported yet")
+            }
+            HeapType::Any
+            | HeapType::Eq
+            | HeapType::I31
+            | HeapType::Array
+            | HeapType::ConcreteArray(_)
+            | HeapType::Struct
+            | HeapType::ConcreteStruct(_)
+            | HeapType::None => 4,
+        }
     }
 }
 
@@ -1339,6 +1381,16 @@ impl StorageType {
         a.matches(b) && b.matches(a)
     }
 
+    /// What is the size (in bytes) of this type's values when they are stored
+    /// inside the GC heap?
+    pub(crate) fn byte_size_in_gc_heap(&self) -> u32 {
+        match self {
+            StorageType::I8 => 1,
+            StorageType::I16 => 2,
+            StorageType::ValType(ty) => ty.byte_size_in_gc_heap(),
+        }
+    }
+
     pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
         match self {
             StorageType::I8 | StorageType::I16 => true,
@@ -1751,6 +1803,14 @@ pub struct ArrayType {
     registered_type: RegisteredType,
 }
 
+impl fmt::Display for ArrayType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let field_ty = self.field_type();
+        write!(f, "(array (field {field_ty}))")?;
+        Ok(())
+    }
+}
+
 impl ArrayType {
     /// Construct a new `ArrayType` with the given field type's mutability and
     /// storage type.
@@ -1909,6 +1969,10 @@ impl ArrayType {
 
     pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
         Engine::same(self.registered_type.engine(), engine)
+    }
+
+    pub(crate) fn registered_type(&self) -> &RegisteredType {
+        &self.registered_type
     }
 
     pub(crate) fn type_index(&self) -> VMSharedTypeIndex {

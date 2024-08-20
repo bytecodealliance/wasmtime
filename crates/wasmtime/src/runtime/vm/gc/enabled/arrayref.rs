@@ -1,116 +1,116 @@
 use crate::{
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
-    store::AutoAssertNoGc,
-    vm::GcStructLayout,
+    store::{AutoAssertNoGc, StoreOpaque},
+    vm::GcArrayLayout,
     AnyRef, ExternRef, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
 };
 use core::fmt;
 use wasmtime_environ::VMGcKind;
 
-/// A `VMGcRef` that we know points to a `struct`.
+/// A `VMGcRef` that we know points to a `array`.
 ///
-/// Create a `VMStructRef` via `VMGcRef::into_structref` and
-/// `VMGcRef::as_structref`, or their untyped equivalents
-/// `VMGcRef::into_structref_unchecked` and `VMGcRef::as_structref_unchecked`.
+/// Create a `VMArrayRef` via `VMGcRef::into_arrayref` and
+/// `VMGcRef::as_arrayref`, or their untyped equivalents
+/// `VMGcRef::into_arrayref_unchecked` and `VMGcRef::as_arrayref_unchecked`.
 ///
 /// Note: This is not a `TypedGcRef<_>` because each collector can have a
-/// different concrete representation of `structref` that they allocate inside
+/// different concrete representation of `arrayref` that they allocate inside
 /// their heaps.
 #[derive(Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct VMStructRef(VMGcRef);
+pub struct VMArrayRef(VMGcRef);
 
-impl fmt::Pointer for VMStructRef {
+impl fmt::Pointer for VMArrayRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Pointer::fmt(&self.0, f)
     }
 }
 
-impl From<VMStructRef> for VMGcRef {
+impl From<VMArrayRef> for VMGcRef {
     #[inline]
-    fn from(x: VMStructRef) -> Self {
+    fn from(x: VMArrayRef) -> Self {
         x.0
     }
 }
 
 impl VMGcRef {
-    /// Is this `VMGcRef` pointing to a `struct`?
-    pub fn is_structref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> bool {
+    /// Is this `VMGcRef` pointing to a `array`?
+    pub fn is_arrayref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> bool {
         if self.is_i31() {
             return false;
         }
 
         let header = gc_heap.header(&self);
-        header.kind().matches(VMGcKind::StructRef)
+        header.kind().matches(VMGcKind::ArrayRef)
     }
 
-    /// Create a new `VMStructRef` from the given `gc_ref`.
+    /// Create a new `VMArrayRef` from the given `gc_ref`.
     ///
-    /// If this is not a GC reference to an `structref`, `Err(self)` is
+    /// If this is not a GC reference to an `arrayref`, `Err(self)` is
     /// returned.
-    pub fn into_structref(self, gc_heap: &impl GcHeap) -> Result<VMStructRef, VMGcRef> {
-        if self.is_structref(gc_heap) {
-            Ok(self.into_structref_unchecked())
+    pub fn into_arrayref(self, gc_heap: &impl GcHeap) -> Result<VMArrayRef, VMGcRef> {
+        if self.is_arrayref(gc_heap) {
+            Ok(self.into_arrayref_unchecked())
         } else {
             Err(self)
         }
     }
 
-    /// Create a new `VMStructRef` from `self` without actually checking that
-    /// `self` is an `structref`.
+    /// Create a new `VMArrayRef` from `self` without actually checking that
+    /// `self` is an `arrayref`.
     ///
-    /// This method does not check that `self` is actually an `structref`, but
+    /// This method does not check that `self` is actually an `arrayref`, but
     /// it should be. Failure to uphold this invariant is memory safe but will
     /// result in general incorrectness down the line such as panics or wrong
     /// results.
     #[inline]
-    pub fn into_structref_unchecked(self) -> VMStructRef {
+    pub fn into_arrayref_unchecked(self) -> VMArrayRef {
         debug_assert!(!self.is_i31());
-        VMStructRef(self)
+        VMArrayRef(self)
     }
 
-    /// Get this GC reference as an `structref` reference, if it actually is an
-    /// `structref` reference.
-    pub fn as_structref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> Option<&VMStructRef> {
-        if self.is_structref(gc_heap) {
-            Some(self.as_structref_unchecked())
+    /// Get this GC reference as an `arrayref` reference, if it actually is an
+    /// `arrayref` reference.
+    pub fn as_arrayref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> Option<&VMArrayRef> {
+        if self.is_arrayref(gc_heap) {
+            Some(self.as_arrayref_unchecked())
         } else {
             None
         }
     }
 
-    /// Get this GC reference as an `structref` reference without checking if it
-    /// actually is an `structref` reference.
+    /// Get this GC reference as an `arrayref` reference without checking if it
+    /// actually is an `arrayref` reference.
     ///
-    /// Calling this method on a non-`structref` reference is memory safe, but
+    /// Calling this method on a non-`arrayref` reference is memory safe, but
     /// will lead to general incorrectness like panics and wrong results.
-    pub fn as_structref_unchecked(&self) -> &VMStructRef {
+    pub fn as_arrayref_unchecked(&self) -> &VMArrayRef {
         debug_assert!(!self.is_i31());
         let ptr = self as *const VMGcRef;
         let ret = unsafe { &*ptr.cast() };
-        assert!(matches!(ret, VMStructRef(VMGcRef { .. })));
+        assert!(matches!(ret, VMArrayRef(VMGcRef { .. })));
         ret
     }
 }
 
-impl VMStructRef {
+impl VMArrayRef {
     /// Get the underlying `VMGcRef`.
     pub fn as_gc_ref(&self) -> &VMGcRef {
         &self.0
     }
 
-    /// Clone this `VMStructRef`, running any GC barriers as necessary.
+    /// Clone this `VMArrayRef`, running any GC barriers as necessary.
     pub fn clone(&self, gc_store: &mut GcStore) -> Self {
         Self(gc_store.clone_gc_ref(&self.0))
     }
 
-    /// Explicitly drop this `structref`, running GC drop barriers as necessary.
+    /// Explicitly drop this `arrayref`, running GC drop barriers as necessary.
     pub fn drop(self, gc_store: &mut GcStore) {
         gc_store.drop_gc_ref(self.0);
     }
 
-    /// Copy this `VMStructRef` without running the GC's clone barriers.
+    /// Copy this `VMArrayRef` without running the GC's clone barriers.
     ///
     /// Prefer calling `clone(&mut GcStore)` instead! This is mostly an internal
     /// escape hatch for collector implementations.
@@ -122,23 +122,29 @@ impl VMStructRef {
         Self(self.0.unchecked_copy())
     }
 
-    /// Read a field of the given `StorageType` into a `Val`.
+    /// Get the length of this array.
+    pub fn len(&self, store: &StoreOpaque) -> u32 {
+        store.unwrap_gc_store().array_len(self)
+    }
+
+    /// Read an element of the given `StorageType` into a `Val`.
     ///
     /// `i8` and `i16` fields are zero-extended into `Val::I32(_)`s.
     ///
-    /// Does not check that the field is actually of type `ty`. That is the
-    /// caller's responsibility. Failure to do so is memory safe, but will lead
-    /// to general incorrectness such as panics and wrong results.
+    /// Does not check that this array's elements are actually of type
+    /// `ty`. That is the caller's responsibility. Failure to do so is memory
+    /// safe, but will lead to general incorrectness such as panics and wrong
+    /// results.
     ///
     /// Panics on out-of-bounds accesses.
-    pub fn read_field(
+    pub fn read_elem(
         &self,
         store: &mut AutoAssertNoGc,
-        layout: &GcStructLayout,
+        layout: &GcArrayLayout,
         ty: &StorageType,
-        field: usize,
+        index: u32,
     ) -> Val {
-        let offset = layout.fields[field];
+        let offset = layout.elems_offset + index * ty.byte_size_in_gc_heap();
         let data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match ty {
             StorageType::I8 => Val::I32(data.read_u8(offset).into()),
@@ -163,7 +169,7 @@ impl VMStructRef {
         }
     }
 
-    /// Write the given value into this struct at the given offset.
+    /// Write the given value into this array at the given offset.
     ///
     /// Returns an error if `val` is a GC reference that has since been
     /// unrooted.
@@ -174,18 +180,18 @@ impl VMStructRef {
     /// such as panics and wrong results.
     ///
     /// Panics on out-of-bounds accesses.
-    pub fn write_field(
+    pub fn write_elem(
         &self,
         store: &mut AutoAssertNoGc,
-        layout: &GcStructLayout,
+        layout: &GcArrayLayout,
         ty: &StorageType,
-        field: usize,
+        index: u32,
         val: Val,
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
 
-        let offset = layout.fields[field];
-        let mut data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+        let offset = layout.elem_offset(index, ty.byte_size_in_gc_heap());
+        let mut data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, i as i8),
             Val::I32(i) if ty.is_i16() => data.write_i16(offset, i as i16),
@@ -197,11 +203,11 @@ impl VMStructRef {
 
             // For GC-managed references, we need to take care to run the
             // appropriate barriers, even when we are writing null references
-            // into the struct.
+            // into the array.
             //
             // POD-read the old value into a local copy, run the GC write
             // barrier on that local copy, and then POD-write the updated
-            // value back into the struct. This avoids transmuting the inner
+            // value back into the array. This avoids transmuting the inner
             // data, which would probably be fine, but this approach is
             // Obviously Correct and should get us by for now. If LLVM isn't
             // able to elide some of these unnecessary copies, and this
@@ -235,19 +241,19 @@ impl VMStructRef {
         Ok(())
     }
 
-    /// Initialize a field in this structref that is currently uninitialized.
+    /// Initialize an element in this arrayref that is currently uninitialized.
     ///
-    /// The difference between this method and `write_field` is that GC barriers
-    /// are handled differently. When overwriting an initialized field (aka
-    /// `write_field`) we need to call the full write GC write barrier, which
+    /// The difference between this method and `write_elem` is that GC barriers
+    /// are handled differently. When overwriting an initialized element (aka
+    /// `write_elem`) we need to call the full write GC write barrier, which
     /// logically drops the old GC reference and clones the new GC
-    /// reference. When we are initializing a field for the first time, there is
-    /// no old GC reference that is being overwritten and which we need to drop,
-    /// so we only need to clone the new GC reference.
+    /// reference. When we are initializing an element for the first time, there
+    /// is no old GC reference that is being overwritten and which we need to
+    /// drop, so we only need to clone the new GC reference.
     ///
-    /// Calling this method on a structref that has already had the associated
-    /// field initialized will result in GC bugs. These are memory safe but will
-    /// lead to generally incorrect behavior such as panics, leaks, and
+    /// Calling this method on a arrayref that has already had the associated
+    /// element initialized will result in GC bugs. These are memory safe but
+    /// will lead to generally incorrect behavior such as panics, leaks, and
     /// incorrect results.
     ///
     /// Does not check that `val` matches `ty`, nor that the field is actually
@@ -259,16 +265,16 @@ impl VMStructRef {
     /// unrooted.
     ///
     /// Panics on out-of-bounds accesses.
-    pub fn initialize_field(
+    pub fn initialize_elem(
         &self,
         store: &mut AutoAssertNoGc,
-        layout: &GcStructLayout,
+        layout: &GcArrayLayout,
         ty: &StorageType,
-        field: usize,
+        index: u32,
         val: Val,
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
-        let offset = layout.fields[field];
+        let offset = layout.elem_offset(index, ty.byte_size_in_gc_heap());
         match val {
             Val::I32(i) if ty.is_i8() => store
                 .gc_store_mut()?

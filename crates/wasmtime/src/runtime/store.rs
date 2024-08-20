@@ -1760,10 +1760,12 @@ impl StoreOpaque {
         log::trace!("End trace GC roots :: user");
     }
 
-    /// Insert a type into this store. This makes it suitable for the embedder
-    /// to allocate instances of this type in this store, and we don't have to
-    /// worry about the type being reclaimed (since it is possible that none of
-    /// the Wasm modules in this store are holding it alive).
+    /// Insert a host-allocated GC type into this store.
+    ///
+    /// This makes it suitable for the embedder to allocate instances of this
+    /// type in this store, and we don't have to worry about the type being
+    /// reclaimed (since it is possible that none of the Wasm modules in this
+    /// store are holding it alive).
     pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
         self.gc_host_alloc_types.insert(ty);
     }
