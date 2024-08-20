@@ -305,6 +305,26 @@ pub(crate) fn clone_unit(
                     FileAttributeContext::Root(Some(debug_line_offset)),
                     isa,
                 )?;
+                if split_unit.is_some() {
+                    if let Some((_, skeleton_entry)) = skeleton_unit.entries().next_dfs()? {
+                        clone_die_attributes(
+                            skeleton_dwarf,
+                            skeleton_unit,
+                            skeleton_entry,
+                            addr_tr,
+                            None,
+                            comp_unit,
+                            root_id,
+                            None,
+                            None,
+                            out_strings,
+                            &mut pending_die_refs,
+                            &mut pending_di_refs,
+                            FileAttributeContext::Root(Some(debug_line_offset)),
+                            isa,
+                        )?;
+                    }
+                }
 
                 let (wp_die_id, vmctx_die_id) =
                     add_internal_types(comp_unit, root_id, out_strings, memory_offset);
