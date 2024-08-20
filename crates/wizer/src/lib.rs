@@ -17,7 +17,6 @@ mod snapshot;
 mod stack_ext;
 mod translate;
 
-use wasi_common::sync::WasiCtxBuilder;
 /// Re-export wasmtime so users can align with our version. This is
 /// especially useful when providing a custom Linker.
 pub use wasmtime;
@@ -30,8 +29,11 @@ use std::path::PathBuf;
 use std::rc::Rc;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
-use wasi_common::WasiCtx;
 use wasmtime::{Engine, Extern};
+use wasmtime_wasi::{
+    preview1::{self, WasiP1Ctx},
+    WasiCtxBuilder,
+};
 
 const DEFAULT_INHERIT_STDIO: bool = true;
 const DEFAULT_INHERIT_ENV: bool = false;
@@ -41,15 +43,22 @@ const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 const DEFAULT_WASM_BULK_MEMORY: bool = false;
 const DEFAULT_WASM_SIMD: bool = true;
 
+/// The type of data that is stored in the `wasmtime::Store` during
+/// initialization.
+pub struct StoreData {
+    /// The WASI context that is optionally used during initialization.
+    pub wasi_ctx: Option<WasiP1Ctx>,
+}
+
 /// We only ever use `Store<T>` with a fixed `T` that is our optional WASI
 /// context.
-pub(crate) type Store = wasmtime::Store<Option<WasiCtx>>;
+pub(crate) type Store = wasmtime::Store<StoreData>;
 
 /// The type of linker that Wizer uses when evaluating the initialization function.
-pub type Linker = wasmtime::Linker<Option<WasiCtx>>;
+pub type Linker = wasmtime::Linker<StoreData>;
 
 #[cfg(feature = "structopt")]
-fn parse_map_dirs(s: &str) -> anyhow::Result<(PathBuf, PathBuf)> {
+fn parse_map_dirs(s: &str) -> anyhow::Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.split("::").collect();
     if parts.len() != 2 {
         anyhow::bail!("must contain exactly one double colon ('::')");
@@ -211,7 +220,7 @@ pub struct Wizer {
         feature = "structopt",
         structopt(long = "mapdir", value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))
     )]
-    map_dirs: Vec<(PathBuf, PathBuf)>,
+    map_dirs: Vec<(String, PathBuf)>,
 
     /// Enable or disable Wasm multi-memory proposal.
     ///
@@ -504,7 +513,7 @@ impl Wizer {
     /// None are mapped by default.
     pub fn map_dir(
         &mut self,
-        guest_dir: impl Into<PathBuf>,
+        guest_dir: impl Into<String>,
         host_dir: impl Into<PathBuf>,
     ) -> &mut Self {
         self.map_dirs.push((guest_dir.into(), host_dir.into()));
@@ -576,7 +585,7 @@ impl Wizer {
         let config = self.wasmtime_config()?;
         let engine = wasmtime::Engine::new(&config)?;
         let wasi_ctx = self.wasi_context()?;
-        let mut store = wasmtime::Store::new(&engine, wasi_ctx);
+        let mut store = wasmtime::Store::new(&engine, StoreData { wasi_ctx });
         let module = wasmtime::Module::new(&engine, &instrumented_wasm)
             .context("failed to compile the Wasm module")?;
         self.validate_init_func(&module)?;
@@ -762,7 +771,7 @@ impl Wizer {
         Ok(())
     }
 
-    fn wasi_context(&self) -> anyhow::Result<Option<WasiCtx>> {
+    fn wasi_context(&self) -> anyhow::Result<Option<WasiP1Ctx>> {
         if !self.allow_wasi {
             return Ok(None);
         }
@@ -772,31 +781,30 @@ impl Wizer {
             ctx.inherit_stdio();
         }
         if self.inherit_env.unwrap_or(DEFAULT_INHERIT_ENV) {
-            ctx.inherit_env()?;
+            ctx.inherit_env();
         }
         for dir in &self.dirs {
             log::debug!("Preopening directory: {}", dir.display());
-            let preopened = wasi_common::sync::Dir::open_ambient_dir(
+            let guest = dir.display().to_string();
+            ctx.preopened_dir(
                 dir,
-                wasi_common::sync::ambient_authority(),
+                guest,
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
             )
             .with_context(|| format!("failed to open directory: {}", dir.display()))?;
-            ctx.preopened_dir(preopened, dir)?;
         }
         for (guest_dir, host_dir) in &self.map_dirs {
-            log::debug!(
-                "Preopening directory: {}::{}",
-                guest_dir.display(),
-                host_dir.display()
-            );
-            let preopened = wasi_common::sync::Dir::open_ambient_dir(
+            log::debug!("Preopening directory: {guest_dir}::{}", host_dir.display());
+            ctx.preopened_dir(
                 host_dir,
-                wasi_common::sync::ambient_authority(),
+                guest_dir,
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
             )
             .with_context(|| format!("failed to open directory: {}", host_dir.display()))?;
-            ctx.preopened_dir(preopened, guest_dir)?;
         }
-        Ok(Some(ctx.build()))
+        Ok(Some(ctx.build_p1()))
     }
 
     /// Preload a module.
@@ -834,8 +842,8 @@ impl Wizer {
         };
 
         if self.allow_wasi {
-            wasi_common::sync::add_to_linker(&mut linker, |ctx: &mut Option<WasiCtx>| {
-                ctx.as_mut().unwrap()
+            preview1::add_to_linker_sync(&mut linker, |ctx: &mut StoreData| {
+                ctx.wasi_ctx.as_mut().unwrap()
             })?;
         }
 

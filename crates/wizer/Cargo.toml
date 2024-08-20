@@ -36,7 +36,7 @@ structopt = { version = "0.3.26", optional = true }
 wasm-encoder = "0.202.0"
 wasmparser = "0.202.0"
 wasmtime = { workspace = true }
-wasi-common = { workspace = true }
+wasmtime-wasi = { workspace = true, features = ["preview1"] }
 
 # Enable this dependency to get messages with WAT disassemblies when certain
 # internal panics occur.
@@ -46,9 +46,8 @@ optional = true
 
 [workspace.dependencies]
 wasmprinter = "0.202.0"
-wasmtime = "19"
-wasi-common = "19"
-
+wasmtime = "23"
+wasmtime-wasi = "23"
 
 [dev-dependencies]
 criterion = "0.5.1"

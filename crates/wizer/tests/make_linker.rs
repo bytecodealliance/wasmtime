@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use std::rc::Rc;
+use wasmtime_wasi::WasiCtxBuilder;
 use wat::parse_str as wat_to_wasm;
 use wizer::Wizer;
 
@@ -35,7 +36,7 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     config.wasm_multi_value(true);
 
     let engine = wasmtime::Engine::new(&config)?;
-    let wasi_ctx = wasi_common::sync::WasiCtxBuilder::new().build();
+    let wasi_ctx = WasiCtxBuilder::new().build_p1();
     let mut store = wasmtime::Store::new(&engine, wasi_ctx);
     let module =
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;

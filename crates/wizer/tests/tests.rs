@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use wasm_encoder::ConstExpr;
+use wasmtime_wasi::{preview1, WasiCtxBuilder};
 use wat::parse_str as wat_to_wasm;
-use wizer::Wizer;
+use wizer::{StoreData, Wizer};
 
 fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
     let _ = env_logger::try_init();
@@ -48,8 +49,13 @@ fn wizen_and_run_wasm(
     config.wasm_multi_value(true);
 
     let engine = wasmtime::Engine::new(&config)?;
-    let wasi_ctx = wasi_common::sync::WasiCtxBuilder::new().build();
-    let mut store = wasmtime::Store::new(&engine, wasi_ctx);
+    let wasi_ctx = WasiCtxBuilder::new().build_p1();
+    let mut store = wasmtime::Store::new(
+        &engine,
+        StoreData {
+            wasi_ctx: Some(wasi_ctx),
+        },
+    );
     let module =
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
@@ -61,7 +67,7 @@ fn wizen_and_run_wasm(
         .define_name(&mut store, "f", thunk)?
         .define(&mut store, "x", "f", thunk)?;
 
-    wasi_common::sync::add_to_linker(&mut linker, |wasi| wasi)?;
+    preview1::add_to_linker_sync(&mut linker, |wasi| wasi.wasi_ctx.as_mut().unwrap())?;
 
     let instance = linker.instantiate(&mut store, &module)?;
 
