@@ -126,7 +126,7 @@ jobs:
         working-directory: ./npm/wizer
         run: npm install && npm version "${{ steps.tagname.outputs.val }}" --allow-same-version
       - name: Setup npm auth
-        run: sudo npm config --global set '//registry.npmjs.org/:_authToken'='$NODE_AUTH_TOKEN'
+        run: sudo npm config --global set '//registry.npmjs.org/:_authToken'='${NODE_AUTH_TOKEN}'
       - name: Publish npm packages
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         working-directory: ./npm
