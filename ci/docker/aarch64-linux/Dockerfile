@@ -1,6 +1,6 @@
 FROM ubuntu:16.04
 
-RUN apt-get update -y && apt-get install -y gcc gcc-aarch64-linux-gnu ca-certificates curl make
+RUN apt-get update -y && apt-get install -y gcc gcc-aarch64-linux-gnu ca-certificates curl make git
 
 # The CMake in Ubuntu 16.04 was a bit too old for us to use so download one from
 # CMake's own releases and use that instead.
