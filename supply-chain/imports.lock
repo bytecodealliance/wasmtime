@@ -293,6 +293,10 @@ audited_as = "23.0.1"
 version = "25.0.0"
 audited_as = "23.0.1"
 
+[[unpublished.wasmtime-wasi-keyvalue]]
+version = "25.0.0"
+audited_as = "24.0.0"
+
 [[unpublished.wasmtime-wasi-nn]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -300,6 +304,10 @@ audited_as = "23.0.1"
 [[unpublished.wasmtime-wasi-nn]]
 version = "25.0.0"
 audited_as = "23.0.1"
+
+[[unpublished.wasmtime-wasi-runtime-config]]
+version = "25.0.0"
+audited_as = "24.0.0"
 
 [[unpublished.wasmtime-wasi-threads]]
 version = "24.0.0"
@@ -1228,9 +1236,21 @@ when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-wasi-keyvalue]]
+version = "24.0.0"
+when = "2024-08-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-wasi-nn]]
 version = "23.0.1"
 when = "2024-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-runtime-config]]
+version = "24.0.0"
+when = "2024-08-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
