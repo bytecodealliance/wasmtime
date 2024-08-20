@@ -9,6 +9,7 @@ use clap::Parser;
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser, PartialEq)]
 #[command(
+    name = "wasmtime",
     version = version(),
     after_help = "If a subcommand is not provided, the `run` subcommand will be used.\n\
                   \n\
