@@ -1742,6 +1742,7 @@ impl Config {
     /// backend partially supports simd so it's not listed here. Winch doesn't
     /// fully support simd but unimplemented instructions just return errors.
     fn compiler_panicking_wasm_features(&self) -> WasmFeatures {
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
         match self.compiler_config.strategy {
             None | Some(Strategy::Cranelift) => WasmFeatures::empty(),
             Some(Strategy::Winch) => {
@@ -1771,6 +1772,8 @@ impl Config {
             }
             Some(Strategy::Auto) => unreachable!(),
         }
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        return WasmFeatures::empty();
     }
 
     /// Calculates the set of features that are enabled for this `Config`.
