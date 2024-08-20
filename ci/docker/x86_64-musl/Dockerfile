@@ -8,6 +8,7 @@ RUN apk add libgcc
 FROM ubuntu:24.04
 RUN apt-get update -y && apt-get install -y cmake musl-tools git
 COPY --from=libgcc_s_src /usr/lib/libgcc_s.so.1 /usr/lib/x86_64-linux-musl
+RUN git config --global --add safe.directory '*'
 
 # Note that `-crt-feature` is passed here to specifically disable static linking
 # with musl. We want a `*.so` to pop out so static linking isn't what we want.
