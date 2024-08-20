@@ -2,14 +2,22 @@
 
 import { fileURLToPath } from 'node:url';
 import { dirname, join, parse } from 'node:path';
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import decompress from 'decompress';
 import decompressUnzip from 'decompress-unzip';
 import decompressTar from 'decompress-tar';
 import plzma from 'plzmasdk';
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const input = process.argv.slice(2).at(0);
-const tag = input ? `v${input}` : 'dev';
+const version = process.argv.slice(2).at(0).trim();
+const tag = version ? `v${version}` : 'dev';
+
+const pjson = JSON.parse(await readFile('package.json'));
+pjson.version = version;
+delete pjson.private;
+for (const dep of Object.keys(pjson.optionalDependencies)) {
+    pjson.optionalDependencies[dep] = version;
+}
+await writeFile('package.json', JSON.stringify(pjson, null, 2));
 
 let packages = {
     'wizer-darwin-arm64': {
