@@ -61,7 +61,7 @@ where
         let out_comp_dir = match header.directory(0) {
             Some(comp_dir) => clone_line_string(
                 dwarf.attr_string(unit, comp_dir)?,
-                gimli::DW_FORM_strp,
+                gimli::DW_FORM_string,
                 out_strings,
             )?,
             None => write::LineString::String(Vec::new()),

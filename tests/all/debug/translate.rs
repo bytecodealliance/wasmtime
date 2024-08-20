@@ -203,6 +203,9 @@ check: DW_TAG_compile_unit
 check:   DW_AT_producer	("clang version 19.0.0git (https:/github.com/llvm/llvm-project ccdebbae4d77d3efc236af92c22941de5d437e01)")
 check:   DW_AT_language	(DW_LANG_C11)
 check:   DW_AT_name	("dwarf_fission.c")
+check:   DW_AT_ranges	(0x00000000
+check:   DW_AT_stmt_list	(0x00000000)
+check:   DW_AT_comp_dir	("C:\\tmp\\dwarfc")
     "##,
     )
 }
