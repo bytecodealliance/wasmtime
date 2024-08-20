@@ -170,7 +170,7 @@
 //!   only process those which are required during island emission, deferring
 //!   all longer-range fixups to later.
 
-use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
+use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::function::FunctionParameters;
 use crate::ir::{ExternalName, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
@@ -249,8 +249,6 @@ pub struct MachBuffer<I: VCodeInst> {
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc<Stencil>; 64]>,
-    /// Any stack maps referring to this code.
-    stack_maps: SmallVec<[MachStackMap; 8]>,
     /// Any user stack maps for this code.
     ///
     /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
@@ -334,7 +332,6 @@ impl MachBufferFinalized<Stencil> {
                 .into_iter()
                 .map(|srcloc| srcloc.apply_base_srcloc(base_srcloc))
                 .collect(),
-            stack_maps: self.stack_maps,
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
             alignment: self.alignment,
@@ -362,8 +359,6 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
-    /// Any stack maps referring to this code.
-    pub(crate) stack_maps: SmallVec<[MachStackMap; 8]>,
     /// Any user stack maps for this code.
     ///
     /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
@@ -414,17 +409,6 @@ impl Default for MachLabel {
     }
 }
 
-/// A stack map extent, when creating a stack map.
-pub enum StackMapExtent {
-    /// The stack map starts at this instruction, and ends after the number of upcoming bytes
-    /// (note: this is a code offset diff).
-    UpcomingBytes(CodeOffset),
-
-    /// The stack map started at the given offset and ends at the current one. This helps
-    /// architectures where the instruction size has not a fixed length.
-    StartedAtOffset(CodeOffset),
-}
-
 /// Represents the beginning of an editable region in the [`MachBuffer`], while code emission is
 /// still occurring. An [`OpenPatchRegion`] is closed by [`MachBuffer::end_patchable`], consuming
 /// the [`OpenPatchRegion`] token in the process.
@@ -458,7 +442,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
             srclocs: SmallVec::new(),
-            stack_maps: SmallVec::new(),
             user_stack_maps: SmallVec::new(),
             unwind_info: SmallVec::new(),
             cur_srcloc: None,
@@ -1547,7 +1530,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: self.traps,
             call_sites: self.call_sites,
             srclocs,
-            stack_maps: self.stack_maps,
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
             alignment,
@@ -1658,28 +1640,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Add stack map metadata for this program point: a set of stack offsets
-    /// (from SP upward) that contain live references.
-    pub fn add_stack_map(&mut self, extent: StackMapExtent, stack_map: StackMap) {
-        let (start, end) = match extent {
-            StackMapExtent::UpcomingBytes(insn_len) => {
-                let start_offset = self.cur_offset();
-                (start_offset, start_offset + insn_len)
-            }
-            StackMapExtent::StartedAtOffset(start_offset) => {
-                let end_offset = self.cur_offset();
-                debug_assert!(end_offset >= start_offset);
-                (start_offset, end_offset)
-            }
-        };
-        trace!("Adding stack map for offsets {start:#x}..{end:#x}: {stack_map:?}");
-        self.stack_maps.push(MachStackMap {
-            offset: start,
-            offset_end: end,
-            stack_map,
-        });
-    }
-
     /// Push a user stack map onto this buffer.
     ///
     /// The stack map is associated with the given `return_addr` code
@@ -1768,17 +1728,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         &self.traps[..]
     }
 
-    /// Get the stack map metadata for this code.
-    pub fn stack_maps(&self) -> &[MachStackMap] {
-        &self.stack_maps[..]
-    }
-
-    /// Take this buffer's stack map metadata.
-    pub fn take_stack_maps(&mut self) -> SmallVec<[MachStackMap; 8]> {
-        mem::take(&mut self.stack_maps)
-    }
-
-    /// Ge tthe user stack map metadata for this code.
+    /// Get the user stack map metadata for this code.
     pub fn user_stack_maps(&self) -> &[(CodeOffset, u32, ir::UserStackMap)] {
         &self.user_stack_maps
     }
@@ -1985,23 +1935,6 @@ impl MachSrcLoc<Stencil> {
             loc: self.loc.expand(base_srcloc),
         }
     }
-}
-
-/// Record of stack map metadata: stack offsets containing references.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(
-    feature = "enable-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
-pub struct MachStackMap {
-    /// The code offset at which this stack map applies.
-    pub offset: CodeOffset,
-    /// The code offset just past the "end" of the instruction: that is, the
-    /// offset of the first byte of the following instruction, or equivalently,
-    /// the start offset plus the instruction length.
-    pub offset_end: CodeOffset,
-    /// The stack map itself.
-    pub stack_map: StackMap,
 }
 
 /// Record of branch instruction in the buffer, to facilitate editing.

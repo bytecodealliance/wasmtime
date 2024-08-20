@@ -3,7 +3,7 @@ use cfg_if::cfg_if;
 use cranelift_codegen::ir::function::FunctionParameters;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{FinalizedMachReloc, MachStackMap, MachTrap};
+use cranelift_codegen::{FinalizedMachReloc, MachTrap};
 use std::fmt::Write;
 
 fn print_relocs(func_params: &FunctionParameters, relocs: &[FinalizedMachReloc]) -> String {
@@ -32,38 +32,6 @@ pub fn print_traps(traps: &[MachTrap]) -> String {
     let mut text = String::new();
     for &MachTrap { offset, code } in traps {
         writeln!(text, "trap: {code} at {offset:#x}").unwrap();
-    }
-    text
-}
-
-pub fn print_stack_maps(traps: &[MachStackMap]) -> String {
-    let mut text = String::new();
-    for MachStackMap {
-        offset,
-        offset_end,
-        stack_map,
-    } in traps
-    {
-        writeln!(
-            text,
-            "add_stack_map at {offset:#x}-{offset_end:#x} mapped_words={}",
-            stack_map.mapped_words()
-        )
-        .unwrap();
-
-        write!(text, "    entries: ").unwrap();
-        let mut first = true;
-        for i in 0..stack_map.mapped_words() {
-            if !stack_map.get_bit(i as usize) {
-                continue;
-            }
-            if !first {
-                write!(text, ", ").unwrap();
-            } else {
-                first = false;
-            }
-            write!(text, "{i}").unwrap();
-        }
     }
     text
 }
@@ -124,16 +92,14 @@ pub fn print_all(
     print: bool,
     relocs: &[FinalizedMachReloc],
     traps: &[MachTrap],
-    stack_maps: &[MachStackMap],
 ) -> Result<()> {
     print_bytes(&mem);
     print_disassembly(func, isa, &mem[0..code_size as usize])?;
     if print {
         println!(
-            "\n{}\n{}\n{}",
+            "\n{}\n{}",
             print_relocs(&func.params, relocs),
             print_traps(traps),
-            print_stack_maps(stack_maps)
         );
     }
     Ok(())

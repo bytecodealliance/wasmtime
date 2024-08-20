@@ -2,7 +2,6 @@
 
 use cranelift_control::ControlPlane;
 
-use crate::binemit::StackMap;
 use crate::ir::{self, types::*};
 use crate::isa::aarch64::inst::*;
 use crate::trace;
@@ -651,10 +650,6 @@ fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Safepoint stack map for upcoming instruction, as provided to
-    /// `pre_safepoint()`.
-    stack_map: Option<StackMap>,
-
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
@@ -669,19 +664,13 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            stack_map: None,
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(
-        &mut self,
-        stack_map: Option<StackMap>,
-        user_stack_map: Option<ir::UserStackMap>,
-    ) {
-        self.stack_map = stack_map;
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
         self.user_stack_map = user_stack_map;
     }
 
@@ -699,12 +688,12 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl EmitState {
-    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
-        (self.stack_map.take(), self.user_stack_map.take())
+    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
+        self.user_stack_map.take()
     }
 
     fn clear_post_insn(&mut self) {
-        self.stack_map = None;
+        self.user_stack_map = None;
     }
 }
 
@@ -2935,10 +2924,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::Call { ref info } => {
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
+                let user_stack_map = state.take_stack_map();
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
                 if let Some(s) = user_stack_map {
@@ -2956,10 +2942,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::CallInd { ref info } => {
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
+                let user_stack_map = state.take_stack_map();
                 let rn = info.rn;
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
                 if let Some(s) = user_stack_map {

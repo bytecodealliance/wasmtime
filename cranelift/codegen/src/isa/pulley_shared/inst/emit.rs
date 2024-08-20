@@ -1,7 +1,6 @@
 //! Pulley binary code emission.
 
 use super::*;
-use crate::binemit::StackMap;
 use crate::ir;
 use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::isa::pulley_shared::PointerWidth;
@@ -40,7 +39,6 @@ where
 {
     _phantom: PhantomData<P>,
     ctrl_plane: ControlPlane,
-    stack_map: Option<StackMap>,
     user_stack_map: Option<ir::UserStackMap>,
     pub virtual_sp_offset: i64,
     frame_layout: FrameLayout,
@@ -50,8 +48,8 @@ impl<P> EmitState<P>
 where
     P: PulleyTargetKind,
 {
-    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
-        (self.stack_map.take(), self.user_stack_map.take())
+    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
+        self.user_stack_map.take()
     }
 
     pub(crate) fn adjust_virtual_sp_offset(&mut self, amount: i64) {
@@ -70,19 +68,13 @@ where
         EmitState {
             _phantom: PhantomData,
             ctrl_plane,
-            stack_map: None,
             user_stack_map: None,
             virtual_sp_offset: 0,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(
-        &mut self,
-        stack_map: Option<StackMap>,
-        user_stack_map: Option<ir::UserStackMap>,
-    ) {
-        self.stack_map = stack_map;
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
         self.user_stack_map = user_stack_map;
     }
 
@@ -156,10 +148,6 @@ fn pulley_emit<P>(
         Inst::LoadExtName { .. } => todo!(),
 
         Inst::Call { callee, info } => {
-            let (stack_map, user_stack_map) = state.take_stack_map();
-            if let Some(s) = stack_map {
-                sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
-            }
             sink.put1(pulley_interpreter::Opcode::Call as u8);
             sink.add_reloc(
                 // TODO: is it actually okay to reuse this reloc here?
@@ -170,7 +158,7 @@ fn pulley_emit<P>(
                 -1,
             );
             sink.put4(0);
-            if let Some(s) = user_stack_map {
+            if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
             }

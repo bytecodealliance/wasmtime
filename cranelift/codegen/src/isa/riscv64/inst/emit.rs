@@ -1,6 +1,5 @@
 //! Riscv64 ISA: binary code emission.
 
-use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
@@ -46,10 +45,6 @@ pub enum EmitVState {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Safepoint stack map for upcoming instruction, as provided to
-    /// `pre_safepoint()`.
-    stack_map: Option<StackMap>,
-
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
@@ -66,8 +61,8 @@ pub struct EmitState {
 }
 
 impl EmitState {
-    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
-        (self.stack_map.take(), self.user_stack_map.take())
+    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
+        self.user_stack_map.take()
     }
 }
 
@@ -77,7 +72,6 @@ impl MachInstEmitState<Inst> for EmitState {
         ctrl_plane: ControlPlane,
     ) -> Self {
         EmitState {
-            stack_map: None,
             user_stack_map: None,
             ctrl_plane,
             vstate: EmitVState::Unknown,
@@ -85,12 +79,7 @@ impl MachInstEmitState<Inst> for EmitState {
         }
     }
 
-    fn pre_safepoint(
-        &mut self,
-        stack_map: Option<StackMap>,
-        user_stack_map: Option<ir::UserStackMap>,
-    ) {
-        self.stack_map = stack_map;
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
         self.user_stack_map = user_stack_map;
     }
 
@@ -1129,16 +1118,11 @@ impl Inst {
                 sink.add_call_site();
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
 
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
-                }
-
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
-                if let Some(s) = user_stack_map {
+                if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset();
                     sink.push_user_stack_map(state, offset, s);
                 }
@@ -1151,8 +1135,6 @@ impl Inst {
                 }
             }
             &Inst::CallInd { ref info } => {
-                let start_offset = sink.cur_offset();
-
                 Inst::Jalr {
                     rd: writable_link_reg(),
                     base: info.rn,
@@ -1160,11 +1142,7 @@ impl Inst {
                 }
                 .emit(sink, emit_info, state);
 
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
-                }
-                if let Some(s) = user_stack_map {
+                if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset();
                     sink.push_user_stack_map(state, offset, s);
                 }

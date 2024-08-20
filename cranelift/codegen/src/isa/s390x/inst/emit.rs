@@ -1,6 +1,5 @@
 //! S390x ISA: binary code emission.
 
-use crate::binemit::StackMap;
 use crate::ir::{self, MemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
@@ -1320,10 +1319,6 @@ pub struct EmitState {
     /// ABI, between the AllocateArgs and the actual call instruction.
     pub(crate) nominal_sp_offset: u32,
 
-    /// Safepoint stack map for upcoming instruction, as provided to
-    /// `pre_safepoint()`.
-    stack_map: Option<StackMap>,
-
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
@@ -1339,19 +1334,13 @@ impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<S390xMachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             nominal_sp_offset: 0,
-            stack_map: None,
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(
-        &mut self,
-        stack_map: Option<StackMap>,
-        user_stack_map: Option<ir::UserStackMap>,
-    ) {
-        self.stack_map = stack_map;
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
         self.user_stack_map = user_stack_map;
     }
 
@@ -1369,12 +1358,12 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl EmitState {
-    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
-        (self.stack_map.take(), self.user_stack_map.take())
+    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
+        self.user_stack_map.take()
     }
 
     fn clear_post_insn(&mut self) {
-        self.stack_map = None;
+        self.user_stack_map = None;
     }
 }
 
@@ -3287,11 +3276,7 @@ impl Inst {
                     _ => unreachable!(),
                 }
 
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
-                }
-                if let Some(s) = user_stack_map {
+                if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 6;
                     sink.push_user_stack_map(state, offset, s);
                 }
@@ -3305,11 +3290,7 @@ impl Inst {
                 debug_assert_eq!(link.to_reg(), gpr(14));
                 let rn = info.rn;
 
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
-                }
-                if let Some(s) = user_stack_map {
+                if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 2;
                     sink.push_user_stack_map(state, offset, s);
                 }
