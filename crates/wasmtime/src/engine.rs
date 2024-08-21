@@ -339,6 +339,7 @@ impl Engine {
             | "bb_padding_log2_minus_one"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
+            | "stack_switch_model" // wasmtime doesn't use stack switching right now
             | "opt_level" // opt level doesn't change semantics
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_size_log2" // probestack above asserted disabled

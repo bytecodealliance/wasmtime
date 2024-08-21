@@ -1729,6 +1729,123 @@ pub(crate) fn emit(
             sink.put2(u16::try_from(*stack_bytes_to_pop).unwrap());
         }
 
+        Inst::StackSwitchBasic {
+            store_context_ptr,
+            load_context_ptr,
+            in_payload0,
+            out_payload0,
+        } => {
+            // Note that we do not emit anything for preserving and restoring
+            // ordinary registers here: That's taken care of by regalloc for us,
+            // since we marked this instruction as clobbering all registers.
+            //
+            // Also note that we do nothing about passing the single payload
+            // value: We've informed regalloc that it is sent and received via
+            // the fixed register given by [stack_switch::payload_register]
+
+            let (tmp1, tmp2) = {
+                // Ideally we would just ask regalloc for two temporary registers.
+                // However, adding any early defs to the constraints on StackSwitch
+                // causes TooManyLiveRegs. Fortunately, we can manually find tmp
+                // registers without regalloc: Since our instruction clobbers all
+                // registers, we can simply pick any register that is not assigned
+                // to the operands.
+
+                let all = crate::isa::x64::abi::ALL_CLOBBERS;
+
+                let used_regs = [
+                    **load_context_ptr,
+                    **store_context_ptr,
+                    **in_payload0,
+                    *out_payload0.to_reg(),
+                ];
+
+                let mut tmps = all.into_iter().filter_map(|preg| {
+                    let reg: Reg = preg.into();
+                    if !used_regs.contains(&reg) {
+                        WritableGpr::from_writable_reg(isle::WritableReg::from_reg(reg))
+                    } else {
+                        None
+                    }
+                });
+                (tmps.next().unwrap(), tmps.next().unwrap())
+            };
+
+            let layout = stack_switch::control_context_layout();
+            let rsp_offset = layout.stack_pointer_offset as i32;
+            let pc_offset = layout.ip_offset as i32;
+            let rbp_offset = layout.frame_pointer_offset as i32;
+
+            // Location to which someone switch-ing back to this stack will jump
+            // to: Right behind the `StackSwitch` instruction
+            let resume = sink.get_label();
+
+            //
+            // For RBP and RSP we do the following:
+            // - Load new value for register from `load_context_ptr` +
+            // corresponding offset.
+            // - Store previous (!) value of register at `store_context_ptr` +
+            // corresponding offset.
+            //
+            // Since `load_context_ptr` and `store_context_ptr` are allowed to be
+            // equal, we need to use a temporary register here.
+            //
+
+            let mut exchange = |offset, reg| {
+                let inst = Inst::Mov64MR {
+                    src: Amode::imm_reg(offset, **load_context_ptr).into(),
+                    dst: tmp1,
+                };
+                emit(&inst, sink, info, state);
+
+                let inst = Inst::MovRM {
+                    size: OperandSize::Size64,
+                    src: Gpr::new(reg).unwrap(),
+                    dst: Amode::imm_reg(offset, **store_context_ptr).into(),
+                };
+                emit(&inst, sink, info, state);
+
+                let dst = Writable::from_reg(reg.into());
+                let inst = Inst::MovRR {
+                    size: OperandSize::Size64,
+                    src: tmp1.to_reg(),
+                    dst: WritableGpr::from_writable_reg(dst.into()).unwrap(),
+                };
+                emit(&inst, sink, info, state);
+            };
+
+            exchange(rsp_offset, regs::rsp());
+            exchange(rbp_offset, regs::rbp());
+
+            //
+            // Load target PC, store resume PC, jump to target PC
+            //
+
+            let inst = Inst::Mov64MR {
+                src: Amode::imm_reg(pc_offset, **load_context_ptr).into(),
+                dst: tmp1,
+            };
+            emit(&inst, sink, info, state);
+
+            let amode = Amode::RipRelative { target: resume };
+            let inst = Inst::lea(amode, tmp2.map(Reg::from));
+            inst.emit(sink, info, state);
+
+            let inst = Inst::MovRM {
+                size: OperandSize::Size64,
+                src: tmp2.to_reg(),
+                dst: Amode::imm_reg(pc_offset, **store_context_ptr).into(),
+            };
+            emit(&inst, sink, info, state);
+
+            let inst = Inst::JmpUnknown {
+                target: RegMem::reg(tmp1.to_reg().into()),
+            };
+            emit(&inst, sink, info, state);
+
+            sink.bind_label(resume, state.ctrl_plane_mut());
+        }
+
         Inst::JmpKnown { dst } => {
             let br_start = sink.cur_offset();
             let br_disp_off = br_start + 1;

@@ -1,0 +1,605 @@
+test compile precise-output
+set opt_level=speed
+set stack_switch_model=basic
+target x86_64
+
+;; Test code emitted for stack switch itself
+function %switch(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = stack_switch v0, v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $48, %rsp
+;   movq    %rbx, 0(%rsp)
+;   movq    %r12, 8(%rsp)
+;   movq    %r13, 16(%rsp)
+;   movq    %r14, 24(%rsp)
+;   movq    %r15, 32(%rsp)
+; block0:
+;   movq    %rdi, %r10
+;   movq    %rdx, %rdi
+;   %rdi = stack_switch_basic %r10, %rsi, %rdi
+;   movq    %rdi, %rax
+;   movq    0(%rsp), %rbx
+;   movq    8(%rsp), %r12
+;   movq    16(%rsp), %r13
+;   movq    24(%rsp), %r14
+;   movq    32(%rsp), %r15
+;   addq    %rsp, $48, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rbx, (%rsp)
+;   movq %r12, 8(%rsp)
+;   movq %r13, 0x10(%rsp)
+;   movq %r14, 0x18(%rsp)
+;   movq %r15, 0x20(%rsp)
+; block1: ; offset 0x20
+;   movq %rdi, %r10
+;   movq %rdx, %rdi
+;   movq (%rsi), %rax
+;   movq %rsp, (%r10)
+;   movq %rax, %rsp
+;   movq 8(%rsi), %rax
+;   movq %rbp, 8(%r10)
+;   movq %rax, %rbp
+;   movq 0x10(%rsi), %rax
+;   leaq 6(%rip), %rcx
+;   movq %rcx, 0x10(%r10)
+;   jmpq *%rax
+;   movq %rdi, %rax
+;   movq (%rsp), %rbx
+;   movq 8(%rsp), %r12
+;   movq 0x10(%rsp), %r13
+;   movq 0x18(%rsp), %r14
+;   movq 0x20(%rsp), %r15
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Test clobbering of all 14 GPRs used by Cranelift
+function %switch_int_clobber(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+
+;; We create values v100 to v114 before the stack_switch and want to use them
+;; afterwards. Thus, they must all be spilled on the stack.
+;; Given that they are loads, they cannot be moved behind the stack_switch.
+
+  v100 = load.i64 v0+0
+  v101 = load.i64 v0+8
+  v102 = load.i64 v0+16
+  v103 = load.i64 v0+24
+  v104 = load.i64 v0+32
+  v105 = load.i64 v0+40
+  v106 = load.i64 v0+48
+  v107 = load.i64 v0+56
+  v108 = load.i64 v0+64
+  v109 = load.i64 v0+72
+  v110 = load.i64 v0+80
+  v111 = load.i64 v0+88
+  v112 = load.i64 v0+96
+  v113 = load.i64 v0+104
+  v114 = load.i64 v0+112
+
+  v299 = stack_switch v1, v1, v2
+
+;; We use v100 - v114 after the switch: We load from each v(100+i) into
+;; v(200+i), and use v(300+i) as an accumulator of all values so far.
+;; These are loads and therefore they cannot be moved before the stack_switch.
+
+  v200 = load.i64 v100
+  v300 = iadd.i64 v299, v200
+  v201 = load.i64 v101
+  v301 = iadd.i64 v300, v201
+  v202 = load.i64 v102
+  v302 = iadd.i64 v301, v202
+  v203 = load.i64 v103
+  v303 = iadd.i64 v302, v203
+  v204 = load.i64 v104
+  v304 = iadd.i64 v303, v204
+  v205 = load.i64 v105
+  v305 = iadd.i64 v304, v205
+  v206 = load.i64 v106
+  v306 = iadd.i64 v305, v206
+  v207 = load.i64 v107
+  v307 = iadd.i64 v306, v207
+  v208 = load.i64 v108
+  v308 = iadd.i64 v307, v208
+  v209 = load.i64 v109
+  v309 = iadd.i64 v308, v209
+  v210 = load.i64 v110
+  v310 = iadd.i64 v309, v210
+  v211 = load.i64 v111
+  v311 = iadd.i64 v310, v211
+  v212 = load.i64 v112
+  v312 = iadd.i64 v311, v212
+  v213 = load.i64 v113
+  v313 = iadd.i64 v312, v213
+  v214 = load.i64 v114
+  v314 = iadd.i64 v313, v214
+
+;; Let's also use v0 again
+  v400 = iadd.i64 v314, v0
+
+;; We cannot use v1 again: That causes TooManyLiveRegs, as this usage is an
+;; instance of https://github.com/bytecodealliance/regalloc2/issues/145
+;; v401 = iadd.i64 v400, v1
+
+  return v400
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $192, %rsp
+;   movq    %rbx, 144(%rsp)
+;   movq    %r12, 152(%rsp)
+;   movq    %r13, 160(%rsp)
+;   movq    %r14, 168(%rsp)
+;   movq    %r15, 176(%rsp)
+; block0:
+;   movq    0(%rdi), %rdx
+;   movq    %rdx, rsp(128 + virtual offset)
+;   movq    8(%rdi), %rdx
+;   movq    %rdx, rsp(8 + virtual offset)
+;   movq    16(%rdi), %rdx
+;   movq    %rdx, rsp(120 + virtual offset)
+;   movq    24(%rdi), %rdx
+;   movq    %rdx, rsp(112 + virtual offset)
+;   movq    32(%rdi), %rdx
+;   movq    %rdx, rsp(104 + virtual offset)
+;   movq    40(%rdi), %rdx
+;   movq    %rdx, rsp(96 + virtual offset)
+;   movq    48(%rdi), %rdx
+;   movq    %rdx, rsp(88 + virtual offset)
+;   movq    56(%rdi), %rdx
+;   movq    %rdx, rsp(80 + virtual offset)
+;   movq    64(%rdi), %rdx
+;   movq    %rdx, rsp(72 + virtual offset)
+;   movq    72(%rdi), %rdx
+;   movq    %rdx, rsp(64 + virtual offset)
+;   movq    80(%rdi), %rdx
+;   movq    %rdx, rsp(56 + virtual offset)
+;   movq    88(%rdi), %rdx
+;   movq    %rdx, rsp(48 + virtual offset)
+;   movq    96(%rdi), %rdx
+;   movq    %rdx, rsp(40 + virtual offset)
+;   movq    104(%rdi), %rdx
+;   movq    %rdx, rsp(32 + virtual offset)
+;   movq    112(%rdi), %rdx
+;   movq    %rdi, rsp(0 + virtual offset)
+;   movq    %rdx, rsp(24 + virtual offset)
+;   xorq    %rdi, %rdi, %rdi
+;   %rdi = stack_switch_basic %rsi, %rsi, %rdi
+;   movq    rsp(128 + virtual offset), %rdx
+;   movq    %rdi, rsp(16 + virtual offset)
+;   movq    0(%rdx), %r8
+;   movq    rsp(8 + virtual offset), %rdx
+;   movq    0(%rdx), %r9
+;   movq    rsp(120 + virtual offset), %rdx
+;   movq    %r9, rsp(8 + virtual offset)
+;   movq    0(%rdx), %r10
+;   movq    rsp(112 + virtual offset), %rdx
+;   movq    0(%rdx), %r9
+;   movq    rsp(104 + virtual offset), %rdx
+;   movq    0(%rdx), %rsi
+;   movq    rsp(96 + virtual offset), %rdx
+;   movq    0(%rdx), %rax
+;   movq    rsp(88 + virtual offset), %rdx
+;   movq    0(%rdx), %rcx
+;   movq    rsp(80 + virtual offset), %rdx
+;   movq    0(%rdx), %r15
+;   movq    rsp(72 + virtual offset), %rdx
+;   movq    0(%rdx), %r13
+;   movq    rsp(64 + virtual offset), %rdx
+;   movq    0(%rdx), %rbx
+;   movq    rsp(56 + virtual offset), %rdx
+;   movq    0(%rdx), %r14
+;   movq    rsp(48 + virtual offset), %rdx
+;   movq    0(%rdx), %r12
+;   movq    rsp(40 + virtual offset), %rdx
+;   movq    0(%rdx), %rdx
+;   movq    rsp(32 + virtual offset), %rdi
+;   movq    0(%rdi), %r11
+;   movq    rsp(16 + virtual offset), %rdi
+;   lea     0(%rdi,%r8,1), %r8
+;   movq    rsp(8 + virtual offset), %rdi
+;   lea     0(%rdi,%r10,1), %r10
+;   lea     0(%r8,%r10,1), %r8
+;   lea     0(%r9,%rsi,1), %r9
+;   lea     0(%rax,%rcx,1), %r10
+;   lea     0(%r15,%r13,1), %rsi
+;   lea     0(%r10,%rsi,1), %r10
+;   lea     0(%rbx,%r14,1), %rsi
+;   lea     0(%r10,%rsi,1), %r10
+;   lea     0(%r12,%rdx,1), %rdx
+;   lea     0(%r10,%rdx,1), %rdx
+;   lea     0(%r9,%rdx,1), %rdx
+;   lea     0(%r8,%rdx,1), %rdx
+;   movq    rsp(24 + virtual offset), %r8
+;   addq    %r11, 0(%r8), %r11
+;   movq    rsp(0 + virtual offset), %rdi
+;   lea     0(%r11,%rdi,1), %r8
+;   lea     0(%rdx,%r8,1), %rax
+;   movq    144(%rsp), %rbx
+;   movq    152(%rsp), %r12
+;   movq    160(%rsp), %r13
+;   movq    168(%rsp), %r14
+;   movq    176(%rsp), %r15
+;   addq    %rsp, $192, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0xc0, %rsp
+;   movq %rbx, 0x90(%rsp)
+;   movq %r12, 0x98(%rsp)
+;   movq %r13, 0xa0(%rsp)
+;   movq %r14, 0xa8(%rsp)
+;   movq %r15, 0xb0(%rsp)
+; block1: ; offset 0x33
+;   movq (%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x80(%rsp)
+;   movq 8(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 8(%rsp)
+;   movq 0x10(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x78(%rsp)
+;   movq 0x18(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x70(%rsp)
+;   movq 0x20(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x68(%rsp)
+;   movq 0x28(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x60(%rsp)
+;   movq 0x30(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x58(%rsp)
+;   movq 0x38(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x50(%rsp)
+;   movq 0x40(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x48(%rsp)
+;   movq 0x48(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x40(%rsp)
+;   movq 0x50(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x38(%rsp)
+;   movq 0x58(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x30(%rsp)
+;   movq 0x60(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x28(%rsp)
+;   movq 0x68(%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, 0x20(%rsp)
+;   movq 0x70(%rdi), %rdx ; trap: heap_oob
+;   movq %rdi, (%rsp)
+;   movq %rdx, 0x18(%rsp)
+;   xorq %rdi, %rdi
+;   movq (%rsi), %rax
+;   movq %rsp, (%rsi)
+;   movq %rax, %rsp
+;   movq 8(%rsi), %rax
+;   movq %rbp, 8(%rsi)
+;   movq %rax, %rbp
+;   movq 0x10(%rsi), %rax
+;   leaq 6(%rip), %rcx
+;   movq %rcx, 0x10(%rsi)
+;   jmpq *%rax
+;   movq 0x80(%rsp), %rdx
+;   movq %rdi, 0x10(%rsp)
+;   movq (%rdx), %r8 ; trap: heap_oob
+;   movq 8(%rsp), %rdx
+;   movq (%rdx), %r9 ; trap: heap_oob
+;   movq 0x78(%rsp), %rdx
+;   movq %r9, 8(%rsp)
+;   movq (%rdx), %r10 ; trap: heap_oob
+;   movq 0x70(%rsp), %rdx
+;   movq (%rdx), %r9 ; trap: heap_oob
+;   movq 0x68(%rsp), %rdx
+;   movq (%rdx), %rsi ; trap: heap_oob
+;   movq 0x60(%rsp), %rdx
+;   movq (%rdx), %rax ; trap: heap_oob
+;   movq 0x58(%rsp), %rdx
+;   movq (%rdx), %rcx ; trap: heap_oob
+;   movq 0x50(%rsp), %rdx
+;   movq (%rdx), %r15 ; trap: heap_oob
+;   movq 0x48(%rsp), %rdx
+;   movq (%rdx), %r13 ; trap: heap_oob
+;   movq 0x40(%rsp), %rdx
+;   movq (%rdx), %rbx ; trap: heap_oob
+;   movq 0x38(%rsp), %rdx
+;   movq (%rdx), %r14 ; trap: heap_oob
+;   movq 0x30(%rsp), %rdx
+;   movq (%rdx), %r12 ; trap: heap_oob
+;   movq 0x28(%rsp), %rdx
+;   movq (%rdx), %rdx ; trap: heap_oob
+;   movq 0x20(%rsp), %rdi
+;   movq (%rdi), %r11 ; trap: heap_oob
+;   movq 0x10(%rsp), %rdi
+;   addq %rdi, %r8
+;   movq 8(%rsp), %rdi
+;   addq %rdi, %r10
+;   addq %r10, %r8
+;   addq %rsi, %r9
+;   leaq (%rax, %rcx), %r10
+;   leaq (%r15, %r13), %rsi
+;   addq %rsi, %r10
+;   leaq (%rbx, %r14), %rsi
+;   addq %rsi, %r10
+;   addq %r12, %rdx
+;   addq %r10, %rdx
+;   addq %r9, %rdx
+;   addq %r8, %rdx
+;   movq 0x18(%rsp), %r8
+;   addq (%r8), %r11 ; trap: heap_oob
+;   movq (%rsp), %rdi
+;   leaq (%r11, %rdi), %r8
+;   leaq (%rdx, %r8), %rax
+;   movq 0x90(%rsp), %rbx
+;   movq 0x98(%rsp), %r12
+;   movq 0xa0(%rsp), %r13
+;   movq 0xa8(%rsp), %r14
+;   movq 0xb0(%rsp), %r15
+;   addq $0xc0, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Test clobbering of all 16 float registers
+function %switch_float_clobber(i64, i64) -> f64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0
+
+;; We create values v100 to v115 before the stack_switch and want to use them
+;; afterwards. Thus, they must all be spilled on the stack.
+;; Given that they are loads, they cannot be moved behind the stack_switch.
+
+  v100 = load.f64 v0+0
+  v101 = load.f64 v0+8
+  v102 = load.f64 v0+16
+  v103 = load.f64 v0+24
+  v104 = load.f64 v0+32
+  v105 = load.f64 v0+40
+  v106 = load.f64 v0+48
+  v107 = load.f64 v0+56
+  v108 = load.f64 v0+64
+  v109 = load.f64 v0+72
+  v110 = load.f64 v0+80
+  v111 = load.f64 v0+88
+  v112 = load.f64 v0+96
+  v113 = load.f64 v0+104
+  v114 = load.f64 v0+112
+  v115 = load.f64 v0+120
+
+  v198 = stack_switch v1, v1, v2
+  v199 = fcvt_from_uint.f64 v198
+
+;; We add v100 to v115, using v200 to v215 as an accumulator
+;; We make v199 part of the result to prevent summation of v100 to v115 before
+;; the switch.
+
+  v200 = fadd v199, v100
+  v201 = fadd v200, v101
+  v202 = fadd v201, v102
+  v203 = fadd v202, v103
+  v204 = fadd v203, v104
+  v205 = fadd v204, v105
+  v206 = fadd v205, v106
+  v207 = fadd v206, v107
+  v208 = fadd v207, v108
+  v209 = fadd v208, v109
+  v210 = fadd v209, v110
+  v211 = fadd v210, v111
+  v212 = fadd v211, v112
+  v213 = fadd v212, v113
+  v214 = fadd v213, v114
+  v215 = fadd v214, v115
+
+  return v215
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $304, %rsp
+;   movq    %rbx, 256(%rsp)
+;   movq    %r12, 264(%rsp)
+;   movq    %r13, 272(%rsp)
+;   movq    %r14, 280(%rsp)
+;   movq    %r15, 288(%rsp)
+; block0:
+;   movsd   0(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(240 + virtual offset)
+;   movsd   8(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(224 + virtual offset)
+;   movsd   16(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(208 + virtual offset)
+;   movsd   24(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(192 + virtual offset)
+;   movsd   32(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(176 + virtual offset)
+;   movsd   40(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(160 + virtual offset)
+;   movsd   48(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(144 + virtual offset)
+;   movsd   56(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(128 + virtual offset)
+;   movsd   64(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(112 + virtual offset)
+;   movsd   72(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(96 + virtual offset)
+;   movsd   80(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(80 + virtual offset)
+;   movsd   88(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(64 + virtual offset)
+;   movsd   96(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(48 + virtual offset)
+;   movsd   104(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(32 + virtual offset)
+;   movsd   112(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(16 + virtual offset)
+;   movsd   120(%rdi), %xmm7
+;   movdqu  %xmm7, rsp(0 + virtual offset)
+;   xorq    %rdi, %rdi, %rdi
+;   %rdi = stack_switch_basic %rsi, %rsi, %rdi
+;   u64_to_f64_seq %rdi, %xmm0, %rax, %rcx
+;   movdqu  rsp(240 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(224 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(208 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(192 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(176 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(160 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(144 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(128 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(112 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(96 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(80 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(64 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(48 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(32 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(16 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movdqu  rsp(0 + virtual offset), %xmm7
+;   addsd   %xmm0, %xmm7, %xmm0
+;   movq    256(%rsp), %rbx
+;   movq    264(%rsp), %r12
+;   movq    272(%rsp), %r13
+;   movq    280(%rsp), %r14
+;   movq    288(%rsp), %r15
+;   addq    %rsp, $304, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x130, %rsp
+;   movq %rbx, 0x100(%rsp)
+;   movq %r12, 0x108(%rsp)
+;   movq %r13, 0x110(%rsp)
+;   movq %r14, 0x118(%rsp)
+;   movq %r15, 0x120(%rsp)
+; block1: ; offset 0x33
+;   movsd (%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0xf0(%rsp)
+;   movsd 8(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0xe0(%rsp)
+;   movsd 0x10(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0xd0(%rsp)
+;   movsd 0x18(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0xc0(%rsp)
+;   movsd 0x20(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0xb0(%rsp)
+;   movsd 0x28(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0xa0(%rsp)
+;   movsd 0x30(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x90(%rsp)
+;   movsd 0x38(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x80(%rsp)
+;   movsd 0x40(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x70(%rsp)
+;   movsd 0x48(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x60(%rsp)
+;   movsd 0x50(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x50(%rsp)
+;   movsd 0x58(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x40(%rsp)
+;   movsd 0x60(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x30(%rsp)
+;   movsd 0x68(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x20(%rsp)
+;   movsd 0x70(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, 0x10(%rsp)
+;   movsd 0x78(%rdi), %xmm7 ; trap: heap_oob
+;   movdqu %xmm7, (%rsp)
+;   xorq %rdi, %rdi
+;   movq (%rsi), %rax
+;   movq %rsp, (%rsi)
+;   movq %rax, %rsp
+;   movq 8(%rsi), %rax
+;   movq %rbp, 8(%rsi)
+;   movq %rax, %rbp
+;   movq 0x10(%rsi), %rax
+;   leaq 6(%rip), %rcx
+;   movq %rcx, 0x10(%rsi)
+;   jmpq *%rax
+;   cmpq $0, %rdi
+;   jl 0x135
+;   cvtsi2sdq %rdi, %xmm0
+;   jmp 0x14f
+;   movq %rdi, %rax
+;   shrq $1, %rax
+;   movq %rdi, %rcx
+;   andq $1, %rcx
+;   orq %rax, %rcx
+;   cvtsi2sdq %rcx, %xmm0
+;   addsd %xmm0, %xmm0
+;   movdqu 0xf0(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0xe0(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0xd0(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0xc0(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0xb0(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0xa0(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x90(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x80(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x70(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x60(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x50(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x40(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x30(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x20(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu 0x10(%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movdqu (%rsp), %xmm7
+;   addsd %xmm7, %xmm0
+;   movq 0x100(%rsp), %rbx
+;   movq 0x108(%rsp), %r12
+;   movq 0x110(%rsp), %r13
+;   movq 0x118(%rsp), %r14
+;   movq 0x120(%rsp), %r15
+;   addq $0x130, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

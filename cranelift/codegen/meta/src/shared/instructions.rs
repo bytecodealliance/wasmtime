@@ -915,6 +915,66 @@ pub(crate) fn define(
         ])
         .can_store(),
     );
+    ig.push(
+        Inst::new(
+            "stack_switch",
+            r#"
+        Suspends execution of the current stack and resumes execution of another
+        one.
+
+        The target stack to switch to is identified by the data stored at
+        ``load_context_ptr``. Before switching, this instruction stores
+        analogous information about the
+        current (i.e., original) stack at ``store_context_ptr``, to
+        enabled switching back to the original stack at a later point.
+
+        The size, alignment and layout of the information stored at
+        ``load_context_ptr`` and ``store_context_ptr`` is platform-dependent.
+        The instruction assumes that ``load_context_ptr`` and
+        ``store_context_ptr`` are valid pointers to memory with said layout and
+        alignment, and does not perform any checks on these pointers or the data
+        stored there.
+
+        The instruction is experimental and only supported on x64 Linux at the
+        moment.
+
+        When switching from a stack A to a stack B, one of the following cases
+        must apply:
+        1. Stack B was previously suspended using a ``stack_switch`` instruction.
+        2. Stack B is a newly initialized stack. The necessary initialization is
+        platform-dependent and will generally involve running some kind of
+        trampoline to start execution of a function on the new stack.
+
+        In both cases, the ``in_payload`` argument of the ``stack_switch``
+        instruction executed on A is passed to stack B. In the first case above,
+        it will be the result value of the earlier ``stack_switch`` instruction
+        executed on stack B. In the second case, the value will be accessible to
+        the trampoline in a platform-dependent register.
+
+        The pointers ``load_context_ptr`` and ``store_context_ptr`` are allowed
+        to be equal; the instruction ensures that all data is loaded from the
+        former before writing to the latter.
+
+        Stack switching is one-shot in the sense that each ``stack_switch``
+        operation effectively consumes the context identified by
+        ``load_context_ptr``. In other words, performing two ``stack_switches``
+        using the same ``load_context_ptr`` causes undefined behavior, unless
+        the context at ``load_context_ptr`` is overwritten by another
+        `stack_switch` in between.
+        "#,
+            &formats.ternary,
+        )
+        .operands_in(vec![
+            Operand::new("store_context_ptr", iAddr),
+            Operand::new("load_context_ptr", iAddr),
+            Operand::new("in_payload0", iAddr),
+        ])
+        .operands_out(vec![Operand::new("out_payload0", iAddr)])
+        .other_side_effects()
+        .can_load()
+        .can_store()
+        .call(),
+    );
 
     let I16x8 = &TypeVar::new(
         "I16x8",
