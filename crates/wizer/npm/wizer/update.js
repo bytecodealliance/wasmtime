@@ -8,8 +8,8 @@ import decompressUnzip from 'decompress-unzip';
 import decompressTar from 'decompress-tar';
 import plzma from 'plzmasdk';
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const version = process.argv.slice(2).at(0).trim();
-const tag = version ? `v${version}` : 'dev';
+const tag = process.argv.slice(2).at(0).trim() || 'dev';
+const version = tag.startsWith('v') ? tag.slice(1) : tag;
 
 const pjson = JSON.parse(await readFile('package.json'));
 pjson.version = version;
