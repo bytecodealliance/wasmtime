@@ -21,4 +21,9 @@ pub fn default_gc_runtime() -> impl GcRuntime {
 }
 
 /// The default GC heap capacity: 512KiB.
+#[cfg(not(miri))]
 const DEFAULT_GC_HEAP_CAPACITY: usize = 1 << 19;
+
+/// The default GC heap capacity for miri: 64KiB.
+#[cfg(miri)]
+const DEFAULT_GC_HEAP_CAPACITY: usize = 1 << 16;
