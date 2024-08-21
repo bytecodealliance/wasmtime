@@ -341,8 +341,8 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn stack_switch_model(&mut self) -> Option<StackSwitchModel> {
-            Some(self.backend.flags().stack_switch_model())
+        fn stack_switch_model(&mut self) -> StackSwitchModel {
+            self.backend.flags().stack_switch_model()
         }
 
         #[inline]
