@@ -27,6 +27,68 @@
 //! `cranelift_codegen::ir::DataFlowGraph::append_user_stack_map_entry`). Cranelift
 //! will not insert spills and record these stack map entries automatically (in
 //! contrast to the old system and its `r64` values).
+//!
+//! Logically, a set of stack maps for a function record a table of the form:
+//!
+//! ```text
+//! +---------------------+-------------------------------------------+
+//! | Instruction Pointer | SP-Relative Offsets of Live GC References |
+//! +---------------------+-------------------------------------------+
+//! | 0x12345678          | 2, 6, 12                                  |
+//! | 0x1234abcd          | 2, 6                                      |
+//! | ...                 | ...                                       |
+//! +---------------------+-------------------------------------------+
+//! ```
+//!
+//! Where "instruction pointer" is an instruction pointer within the function,
+//! and "offsets of live GC references" contains the offsets (in units of words)
+//! from the frame's stack pointer where live GC references are stored on the
+//! stack. Instruction pointers within the function that do not have an entry in
+//! this table are not GC safepoints.
+//!
+//! Because
+//!
+//! * offsets of live GC references are relative from the stack pointer, and
+//! * stack frames grow down from higher addresses to lower addresses,
+//!
+//! to get a pointer to a live reference at offset `x` within a stack frame, you
+//! add `x` to the frame's stack pointer.
+//!
+//! For example, to calculate the pointer to the live GC reference inside "frame
+//! 1" below, you would do `frame_1_sp + x`:
+//!
+//! ```text
+//!           Stack
+//!         +-------------------+
+//!         | Frame 0           |
+//!         |                   |
+//!    |    |                   |
+//!    |    +-------------------+ <--- Frame 0's SP
+//!    |    | Frame 1           |
+//!  Grows  |                   |
+//!  down   |                   |
+//!    |    | Live GC reference | --+--
+//!    |    |                   |   |
+//!    |    |                   |   |
+//!    V    |                   |   x = offset of live GC reference
+//!         |                   |   |
+//!         |                   |   |
+//!         +-------------------+ --+--  <--- Frame 1's SP
+//!         | Frame 2           |
+//!         | ...               |
+//! ```
+//!
+//! An individual `UserStackMap` is associated with just one instruction pointer
+//! within the function, contains the size of the stack frame, and represents
+//! the stack frame as a bitmap. There is one bit per word in the stack frame,
+//! and if the bit is set, then the word contains a live GC reference.
+//!
+//! Note that a caller's outgoing argument stack slots (if any) and callee's
+//! incoming argument stack slots (if any) overlap, so we must choose which
+//! function's stack maps record live GC references in these slots. We record
+//! the incoming arguments in the callee's stack map. This choice plays nice
+//! with tail calls, where by the time we transfer control to the callee, the
+//! caller no longer exists.
 
 use crate::ir;
 use cranelift_bitset::CompoundBitSet;

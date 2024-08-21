@@ -134,7 +134,6 @@ fn handle_module(
                 options.print,
                 result.buffer.relocs(),
                 result.buffer.traps(),
-                result.buffer.stack_maps(),
             )?;
         }
     }

@@ -3,9 +3,6 @@
 //! The `binemit` module contains code for translating Cranelift's intermediate representation into
 //! binary machine code.
 
-mod stack_map;
-
-pub use self::stack_map::StackMap;
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};

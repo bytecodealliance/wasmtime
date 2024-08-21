@@ -1598,11 +1598,7 @@ pub(crate) fn emit(
             info: call_info,
             ..
         } => {
-            let (stack_map, user_stack_map) = state.take_stack_map();
-            if let Some(s) = stack_map {
-                sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
-            }
-            if let Some(s) = user_stack_map {
+            if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset() + 5;
                 sink.push_user_stack_map(state, offset, s);
             }
@@ -1670,7 +1666,6 @@ pub(crate) fn emit(
         } => {
             let dest = dest.clone();
 
-            let start_offset = sink.cur_offset();
             match dest {
                 RegMem::Reg { reg } => {
                     let reg_enc = int_reg_enc(reg);
@@ -1700,11 +1695,7 @@ pub(crate) fn emit(
                 }
             }
 
-            let (stack_map, user_stack_map) = state.take_stack_map();
-            if let Some(s) = stack_map {
-                sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
-            }
-            if let Some(s) = user_stack_map {
+            if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
             }

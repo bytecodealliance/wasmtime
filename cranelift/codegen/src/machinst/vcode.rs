@@ -935,15 +935,6 @@ impl<I: VCodeInst> VCode<I> {
                                 safepoint_slots.push(slot);
                             }
 
-                            let stack_map = if safepoint_slots.is_empty() {
-                                None
-                            } else {
-                                Some(
-                                    self.abi
-                                        .spillslots_to_stack_map(&safepoint_slots[..], &state),
-                                )
-                            };
-
                             let (user_stack_map, user_stack_map_disasm) = {
                                 // The `user_stack_maps` is keyed by reverse
                                 // instruction index, so we must flip the
@@ -958,7 +949,7 @@ impl<I: VCodeInst> VCode<I> {
                                 (user_stack_map, user_stack_map_disasm)
                             };
 
-                            state.pre_safepoint(stack_map, user_stack_map);
+                            state.pre_safepoint(user_stack_map);
 
                             user_stack_map_disasm
                         } else {

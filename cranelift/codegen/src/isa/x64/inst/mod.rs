@@ -2,7 +2,7 @@
 
 pub use emit_state::EmitState;
 
-use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
+use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{types, ExternalName, LibCall, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};

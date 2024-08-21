@@ -5,10 +5,6 @@ use cranelift_control::ControlPlane;
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Safepoint stack map for upcoming instruction, as provided to
-    /// `pre_safepoint()`.
-    stack_map: Option<StackMap>,
-
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
@@ -25,19 +21,13 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<X64ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            stack_map: None,
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(
-        &mut self,
-        stack_map: Option<StackMap>,
-        user_stack_map: Option<ir::UserStackMap>,
-    ) {
-        self.stack_map = stack_map;
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
         self.user_stack_map = user_stack_map;
     }
 
@@ -55,11 +45,11 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl EmitState {
-    pub(crate) fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
-        (self.stack_map.take(), self.user_stack_map.take())
+    pub(crate) fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
+        self.user_stack_map.take()
     }
 
     pub(crate) fn clear_post_insn(&mut self) {
-        self.stack_map = None;
+        self.user_stack_map = None;
     }
 }

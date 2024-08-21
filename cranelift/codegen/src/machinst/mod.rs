@@ -44,7 +44,7 @@
 //!
 //! ```
 
-use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
+use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc};
 use crate::ir::{
     self, function::FunctionParameters, DynamicStackSlot, RelSourceLoc, StackSlot, Type,
 };
@@ -304,11 +304,7 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
 
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
-    fn pre_safepoint(
-        &mut self,
-        stack_map: Option<StackMap>,
-        user_stack_map: Option<ir::UserStackMap>,
-    );
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>);
 
     /// The emission state holds ownership of a control plane, so it doesn't
     /// have to be passed around explicitly too much. `ctrl_plane_mut` may
