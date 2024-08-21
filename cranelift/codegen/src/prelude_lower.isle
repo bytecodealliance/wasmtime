@@ -874,8 +874,8 @@
 ;; cranelift/codegen/meta/src/shared/settings.rs
 (type StackSwitchModel extern (enum (None) (Basic) (UpdateWindowsTib)))
 
-(decl stack_switch_model (StackSwitchModel) Type)
-(extern extractor infallible stack_switch_model stack_switch_model)
+(decl pure partial stack_switch_model () StackSwitchModel)
+(extern constructor stack_switch_model stack_switch_model)
 
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
