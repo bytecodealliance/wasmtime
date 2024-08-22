@@ -1791,6 +1791,7 @@ impl Config {
         // subject to the criteria at
         // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
         features |= WasmFeatures::FLOATS;
+        features |= WasmFeatures::GC_TYPES;
         features |= WasmFeatures::MULTI_VALUE;
         features |= WasmFeatures::BULK_MEMORY;
         features |= WasmFeatures::SIGN_EXTENSION;
