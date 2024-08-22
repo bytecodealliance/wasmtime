@@ -147,13 +147,13 @@ impl<'a> SafeBytecodeStream<'a> {
 
 impl BytecodeStream for SafeBytecodeStream<'_> {
     fn read<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {
-        let bytes = *self
+        let (bytes, rest) = self
             .bytecode
-            .first_chunk::<N>()
+            .split_first_chunk()
             .ok_or_else(|| self.unexpected_eof())?;
-        self.bytecode = &self.bytecode[N..];
+        self.bytecode = rest;
         self.position += N;
-        Ok(bytes)
+        Ok(*bytes)
     }
 
     type Error = DecodingError;
