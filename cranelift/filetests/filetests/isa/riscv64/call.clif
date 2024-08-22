@@ -632,8 +632,6 @@ block0(v0: i128, v1: i64):
 ;   sd a1,0(sp)
 ;   mv a5,a1
 ;   load_sym s1,%f14+0
-;   mv a0,a7
-;   mv a1,a5
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
@@ -663,8 +661,6 @@ block0(v0: i128, v1: i64):
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f14 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv a0, a7
-;   mv a1, a5
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7
@@ -729,8 +725,6 @@ block0(v0: i128, v1: i64):
 ;   sd a1,0(sp)
 ;   mv a5,a1
 ;   load_sym s1,%f15+0
-;   mv a0,a7
-;   mv a1,a5
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
@@ -760,8 +754,6 @@ block0(v0: i128, v1: i64):
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f15 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv a0, a7
-;   mv a1, a5
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7

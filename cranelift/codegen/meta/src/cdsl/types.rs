@@ -17,7 +17,6 @@ static RUST_NAME_PREFIX: &str = "ir::types::";
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ValueType {
     Lane(LaneType),
-    Reference(ReferenceType),
     Vector(VectorType),
     DynamicVector(DynamicVectorType),
 }
@@ -28,15 +27,10 @@ impl ValueType {
         LaneTypeIterator::new()
     }
 
-    pub fn all_reference_types() -> ReferenceTypeIterator {
-        ReferenceTypeIterator::new()
-    }
-
     /// Return a string containing the documentation comment for this type.
     pub fn doc(&self) -> String {
         match *self {
             ValueType::Lane(l) => l.doc(),
-            ValueType::Reference(r) => r.doc(),
             ValueType::Vector(ref v) => v.doc(),
             ValueType::DynamicVector(ref v) => v.doc(),
         }
@@ -46,7 +40,6 @@ impl ValueType {
     pub fn lane_bits(&self) -> u64 {
         match *self {
             ValueType::Lane(l) => l.lane_bits(),
-            ValueType::Reference(r) => r.lane_bits(),
             ValueType::Vector(ref v) => v.lane_bits(),
             ValueType::DynamicVector(ref v) => v.lane_bits(),
         }
@@ -69,7 +62,6 @@ impl ValueType {
     pub fn number(&self) -> u16 {
         match *self {
             ValueType::Lane(l) => l.number(),
-            ValueType::Reference(r) => r.number(),
             ValueType::Vector(ref v) => v.number(),
             ValueType::DynamicVector(ref v) => v.number(),
         }
@@ -90,7 +82,6 @@ impl fmt::Display for ValueType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ValueType::Lane(l) => l.fmt(f),
-            ValueType::Reference(r) => r.fmt(f),
             ValueType::Vector(ref v) => v.fmt(f),
             ValueType::DynamicVector(ref v) => v.fmt(f),
         }
@@ -101,13 +92,6 @@ impl fmt::Display for ValueType {
 impl From<LaneType> for ValueType {
     fn from(lane: LaneType) -> Self {
         ValueType::Lane(lane)
-    }
-}
-
-/// Create a ValueType from a given reference type.
-impl From<ReferenceType> for ValueType {
-    fn from(reference: ReferenceType) -> Self {
-        ValueType::Reference(reference)
     }
 }
 
@@ -432,81 +416,5 @@ impl fmt::Debug for DynamicVectorType {
             self.base,
             self.minimum_lane_count(),
         )
-    }
-}
-
-/// Reference type is scalar type, but not lane type.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ReferenceType(pub shared_types::Reference);
-
-impl ReferenceType {
-    /// Return a string containing the documentation comment for this reference type.
-    pub fn doc(self) -> String {
-        format!("An opaque reference type with {} bits.", self.lane_bits())
-    }
-
-    /// Return the number of bits in a lane.
-    pub fn lane_bits(self) -> u64 {
-        match self.0 {
-            shared_types::Reference::R32 => 32,
-            shared_types::Reference::R64 => 64,
-        }
-    }
-
-    /// Find the unique number associated with this reference type.
-    pub fn number(self) -> u16 {
-        constants::REFERENCE_BASE
-            + match self {
-                ReferenceType(shared_types::Reference::R32) => 0,
-                ReferenceType(shared_types::Reference::R64) => 1,
-            }
-    }
-
-    pub fn ref_from_bits(num_bits: u16) -> ReferenceType {
-        ReferenceType(match num_bits {
-            32 => shared_types::Reference::R32,
-            64 => shared_types::Reference::R64,
-            _ => unreachable!("unexpected number of bits for a reference type"),
-        })
-    }
-}
-
-impl fmt::Display for ReferenceType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "r{}", self.lane_bits())
-    }
-}
-
-impl fmt::Debug for ReferenceType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ReferenceType(bits={})", self.lane_bits())
-    }
-}
-
-/// Create a ReferenceType from a given reference variant.
-impl From<shared_types::Reference> for ReferenceType {
-    fn from(r: shared_types::Reference) -> Self {
-        ReferenceType(r)
-    }
-}
-
-/// An iterator for different reference types.
-pub(crate) struct ReferenceTypeIterator {
-    reference_iter: shared_types::ReferenceIterator,
-}
-
-impl ReferenceTypeIterator {
-    /// Create a new reference type iterator.
-    fn new() -> Self {
-        Self {
-            reference_iter: shared_types::ReferenceIterator::new(),
-        }
-    }
-}
-
-impl Iterator for ReferenceTypeIterator {
-    type Item = ReferenceType;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.reference_iter.next().map(ReferenceType::from)
     }
 }

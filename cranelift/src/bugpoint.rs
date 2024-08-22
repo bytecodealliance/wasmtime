@@ -770,9 +770,6 @@ fn replace_with_const(pos: &mut FuncCursor, param: Value) -> &'static str {
     } else if ty == F64 {
         pos.ins().with_result(param).f64const(0.0);
         "f64const"
-    } else if ty.is_ref() {
-        pos.ins().with_result(param).null(ty);
-        "null"
     } else if ty.is_vector() {
         let zero_data = vec![0; ty.bytes() as usize].into();
         let zero_handle = pos.func.dfg.constants.insert(zero_data);

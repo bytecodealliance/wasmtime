@@ -98,7 +98,7 @@ fn define_control_flow(
     let iAddr = &TypeVar::new(
         "iAddr",
         "An integer address type",
-        TypeSetBuilder::new().ints(32..64).refs(32..64).build(),
+        TypeSetBuilder::new().ints(32..64).build(),
     );
 
     ig.push(
@@ -642,13 +642,7 @@ pub(crate) fn define(
     let iAddr = &TypeVar::new(
         "iAddr",
         "An integer address type",
-        TypeSetBuilder::new().ints(32..64).refs(32..64).build(),
-    );
-
-    let Ref = &TypeVar::new(
-        "Ref",
-        "A scalar reference type",
-        TypeSetBuilder::new().refs(Interval::All).build(),
+        TypeSetBuilder::new().ints(32..64).build(),
     );
 
     let TxN = &TypeVar::new(
@@ -667,7 +661,6 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
-            .refs(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)
             .build(),
@@ -680,7 +673,6 @@ pub(crate) fn define(
             .ints(Interval::All)
             .floats(Interval::All)
             .simd_lanes(Interval::All)
-            .refs(Interval::All)
             .dynamic_simd_lanes(Interval::All)
             .build(),
     );
@@ -1459,21 +1451,6 @@ pub(crate) fn define(
                 .with_doc("The 16 immediate bytes used for selecting the elements to shuffle"),
         ])
         .operands_out(vec![Operand::new("a", Tx16).with_doc("A vector value")]),
-    );
-
-    ig.push(
-        Inst::new(
-            "null",
-            r#"
-        Null constant value for reference types.
-
-        Create a scalar reference SSA value with a constant null value.
-        "#,
-            &formats.nullary,
-        )
-        .operands_out(vec![
-            Operand::new("a", Ref).with_doc("A constant reference null value")
-        ]),
     );
 
     ig.push(Inst::new(
@@ -3048,36 +3025,6 @@ pub(crate) fn define(
         .operands_out(vec![
             Operand::new("a", Float).with_doc("``x`` rounded to integral value")
         ]),
-    );
-
-    ig.push(
-        Inst::new(
-            "is_null",
-            r#"
-        Reference verification.
-
-        The condition code determines if the reference type in question is
-        null or not.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![Operand::new("x", Ref)])
-        .operands_out(vec![Operand::new("a", i8)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "is_invalid",
-            r#"
-        Reference verification.
-
-        The condition code determines if the reference type in question is
-        invalid or not.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![Operand::new("x", Ref)])
-        .operands_out(vec![Operand::new("a", i8)]),
     );
 
     ig.push(

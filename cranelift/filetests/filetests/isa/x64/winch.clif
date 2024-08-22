@@ -238,7 +238,6 @@ block0:
 ; block0:
 ;   load_ext_name userextname0+0, %r10
 ;   movq    %r10, rsp(0 + virtual offset)
-;   movq    rsp(0 + virtual offset), %r10
 ;   call    *%r10
 ;   movq    rsp(0 + virtual offset), %r10
 ;   call    *%r10
@@ -265,7 +264,6 @@ block0:
 ; block1: ; offset 0x21
 ;   movabsq $0, %r10 ; reloc_external Abs8 u2:0 0
 ;   movq %r10, (%rsp)
-;   movq (%rsp), %r10
 ;   callq *%r10
 ;   movq (%rsp), %r10
 ;   callq *%r10

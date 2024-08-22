@@ -155,12 +155,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         };
 
         for param in params {
-            assert!(
-                legal_type_for_machine(param.value_type),
-                "Invalid type for AArch64: {:?}",
-                param.value_type
-            );
-
             if is_apple_cc && param.value_type == types::F128 && !flags.enable_llvm_abi_extensions()
             {
                 panic!(
@@ -1326,15 +1320,6 @@ impl AArch64CallSite {
             }
             CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallInd { callee, info }),
         }
-    }
-}
-
-/// Is this type supposed to be seen on this machine? E.g. references of the
-/// wrong width are invalid.
-fn legal_type_for_machine(ty: Type) -> bool {
-    match ty {
-        R32 => false,
-        _ => true,
     }
 }
 

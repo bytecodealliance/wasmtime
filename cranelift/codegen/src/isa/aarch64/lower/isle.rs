@@ -230,7 +230,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn integral_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I8 | I16 | I32 | I64 | R64 => Some(ty),
+            I8 | I16 | I32 | I64 => Some(ty),
             _ => None,
         }
     }

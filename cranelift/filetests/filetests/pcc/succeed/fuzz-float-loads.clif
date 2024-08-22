@@ -22,7 +22,7 @@ block0(v0: i64, v1: i64):
     v25 -> v2
     v45 -> v2
     v24 -> v25
-    v3 = null.r64
+    v3 = iconst.i64 0
     v4 = global_value.i64 gv3
     v5 = load.i64 notrap aligned v4+8
     v17 -> v5
@@ -83,4 +83,3 @@ block7(v40: i64):
     store notrap aligned v41, v17+8
     trap unreachable
 }
-

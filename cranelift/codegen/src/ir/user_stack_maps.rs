@@ -25,8 +25,7 @@
 //! the associated stack map entries to each safepoint themselves (see
 //! `cranelift_frontend::Function::declare_needs_stack_map` and
 //! `cranelift_codegen::ir::DataFlowGraph::append_user_stack_map_entry`). Cranelift
-//! will not insert spills and record these stack map entries automatically (in
-//! contrast to the old system and its `r64` values).
+//! will not insert spills and record these stack map entries automatically.
 //!
 //! Logically, a set of stack maps for a function record a table of the form:
 //!

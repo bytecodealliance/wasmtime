@@ -560,7 +560,6 @@ where
         Opcode::F64const => assign(imm()),
         Opcode::F128const => assign(imm()),
         Opcode::Vconst => assign(imm()),
-        Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
         Opcode::Select | Opcode::SelectSpectreGuard => choose(arg(0).into_bool()?, arg(1), arg(2)),
         Opcode::Bitselect => assign(bitselect(arg(0), arg(1), arg(2))?),
@@ -873,8 +872,6 @@ where
         Opcode::Floor => unary(DataValueExt::floor, arg(0))?,
         Opcode::Trunc => unary(DataValueExt::trunc, arg(0))?,
         Opcode::Nearest => unary(DataValueExt::nearest, arg(0))?,
-        Opcode::IsNull => unimplemented!("IsNull"),
-        Opcode::IsInvalid => unimplemented!("IsInvalid"),
         Opcode::Bitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let lanes = &if input_ty.is_vector() {

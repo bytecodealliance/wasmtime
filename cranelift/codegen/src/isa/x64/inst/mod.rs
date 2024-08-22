@@ -2664,8 +2664,6 @@ impl MachInst for Inst {
             types::I16 => Ok((&[RegClass::Int], &[types::I16])),
             types::I32 => Ok((&[RegClass::Int], &[types::I32])),
             types::I64 => Ok((&[RegClass::Int], &[types::I64])),
-            types::R32 => panic!("32-bit reftype pointer should never be seen on x86-64"),
-            types::R64 => Ok((&[RegClass::Int], &[types::R64])),
             types::F16 => Ok((&[RegClass::Float], &[types::F16])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),

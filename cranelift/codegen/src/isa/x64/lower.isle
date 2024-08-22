@@ -45,11 +45,6 @@
 (rule 1 (lower (f128const (u128_from_constant 0)))
       (xmm_zero $F128))
 
-;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty (null)))
-      (imm ty 0))
-
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
@@ -2502,23 +2497,6 @@
        (x64_bswap $I64 (value_regs_get_gpr src 1))
        (x64_bswap $I64 (value_regs_get_gpr src 0))))
 
-;; Rules for `is_null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Null references are represented by the constant value `0`.
-(rule (lower (is_null src @ (value_type $R64)))
-      (with_flags
-       (x64_cmp_imm (OperandSize.Size64) src 0)
-       (x64_setcc (CC.Z))))
-
-;; Rules for `is_invalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Invalid references are represented by the constant value `-1`.
-(rule (lower (is_invalid src @ (value_type $R64)))
-      (with_flags
-       (x64_cmp_imm (OperandSize.Size64) src 0xffffffff)  ;; simm32 0xffff_ffff is sign-extended to -1.
-       (x64_setcc (CC.Z))))
-
-
 ;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; I{8,16,32,64} -> I128.
@@ -4133,20 +4111,6 @@
 (rule 1 (lower (has_type (is_gpr_type _)
                          (bitcast _ x @ (value_type (is_gpr_type _)))))
       x)
-
-;; Bitcasts between `r{32,64}` and `i{32,64}` need to be a copy to avoid
-;; conflicting regalloc constraints on reference type values that both need to
-;; be in some register but also some safepoint stack slot at the same time.
-(rule 2 (lower (has_type (is_gpr_type dst_ty)
-                         (bitcast _ x @ (value_type (is_gpr_type src_ty)))))
-      (if-let $true (is_ref_type src_ty))
-      (if-let $false (is_ref_type dst_ty))
-      (copy_gpr dst_ty x))
-(rule 2 (lower (has_type (is_gpr_type dst_ty)
-                         (bitcast _ x @ (value_type (is_gpr_type src_ty)))))
-      (if-let $false (is_ref_type src_ty))
-      (if-let $true (is_ref_type dst_ty))
-      (copy_gpr dst_ty x))
 
 ;; Bitcast between types residing in XMM registers is a no-op.
 (rule 3 (lower (has_type (is_xmm_type _)

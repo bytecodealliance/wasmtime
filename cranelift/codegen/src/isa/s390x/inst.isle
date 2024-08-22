@@ -2865,7 +2865,6 @@
 (rule (arg_store $I16 reg mem) (store16 reg mem))
 (rule (arg_store $I32 reg mem) (store32 reg mem))
 (rule (arg_store $I64 reg mem) (store64 reg mem))
-(rule (arg_store $R64 reg mem) (store64 reg mem))
 (rule (arg_store $F32 reg mem) (vec_store_lane $F32X4 reg mem 0))
 (rule (arg_store $F64 reg mem) (vec_store_lane $F64X2 reg mem 0))
 (rule -1 (arg_store (vr128_ty ty) reg mem) (vec_store reg mem))
@@ -2875,7 +2874,6 @@
 (rule (arg_load $I16 mem) (zext32_mem $I16 mem))
 (rule (arg_load $I32 mem) (load32 mem))
 (rule (arg_load $I64 mem) (load64 mem))
-(rule (arg_load $R64 mem) (load64 mem))
 (rule (arg_load $F32 mem) (vec_load_lane_undef $F32X4 mem 0))
 (rule (arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
 (rule -1 (arg_load (vr128_ty ty) mem) (vec_load ty mem))
@@ -2948,8 +2946,6 @@
 ;; Copy reference values into registers of integer type.
 ;; Zero- or sign-extend as required by the ABI.
 (decl prepare_arg_val (ABIArgSlot Value) Reg)
-(rule 1 (prepare_arg_val (ABIArgSlot.Reg _ $R64 (ArgumentExtension.None)) val)
-        (copy_reg $I64 val))
 (rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.None)) val)
       val)
 (rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Uext)) val)

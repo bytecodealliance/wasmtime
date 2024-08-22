@@ -158,7 +158,7 @@ pub type S390xCallee = Callee<S390xMachineDeps>;
 
 fn in_int_reg(ty: Type) -> bool {
     match ty {
-        types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
+        types::I8 | types::I16 | types::I32 | types::I64 => true,
         _ => false,
     }
 }

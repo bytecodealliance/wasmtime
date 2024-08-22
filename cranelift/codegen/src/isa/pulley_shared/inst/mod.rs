@@ -3,7 +3,7 @@
 use core::marker::PhantomData;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
+use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16};
 use crate::ir::{self, MemFlags, Type};
 use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::isa::FunctionAlignment;
@@ -409,8 +409,6 @@ where
             I16 => Ok((&[RegClass::Int], &[I16])),
             I32 => Ok((&[RegClass::Int], &[I32])),
             I64 => Ok((&[RegClass::Int], &[I64])),
-            R32 => Ok((&[RegClass::Int], &[R32])),
-            R64 => Ok((&[RegClass::Int], &[R64])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),

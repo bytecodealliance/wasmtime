@@ -19,11 +19,6 @@
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
       (imm ty (ImmExtend.Zero) n))
 
-;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty (null)))
-      (imm ty (ImmExtend.Zero) 0))
-
 ;;;; Rules for `f16const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f16const (u16_from_ieee16 n)))
@@ -2269,18 +2264,6 @@
 (rule (lower (fence))
       (side_effect (aarch64_fence)))
 
-;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (is_null x @ (value_type ty)))
-      (with_flags (cmp_imm (operand_size ty) x (u8_into_imm12 0))
-                  (materialize_bool_result (Cond.Eq))))
-
-;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (is_invalid x @ (value_type ty)))
-      (with_flags (cmn_imm (operand_size ty) x (u8_into_imm12 1))
-                  (materialize_bool_result (Cond.Eq))))
-
 ;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (debugtrap))
@@ -2342,9 +2325,6 @@
       (aarch64_uload32 (amode $I32 address offset) flags))
 (rule (lower
        (has_type $I64 (load flags address offset)))
-      (aarch64_uload64 (amode $I64 address offset) flags))
-(rule (lower
-       (has_type $R64 (load flags address offset)))
       (aarch64_uload64 (amode $I64 address offset) flags))
 (rule (lower
        (has_type $F16 (load flags address offset)))
@@ -2452,10 +2432,6 @@
        (store flags value @ (value_type $I64) address offset))
       (side_effect
        (aarch64_store64 (amode $I64 address offset) flags value)))
-(rule (lower
-       (store flags value @ (value_type $R64) address offset))
-      (side_effect
-       (aarch64_store64 (amode $I64 address offset) flags value)))
 
 (rule (lower
        (istore8 flags value address offset))
@@ -2542,22 +2518,6 @@
 (rule 3 (lower (has_type out_ty (bitcast _ x @ (value_type (fits_in_64 (ty_float_or_vec _))))))
       (if (ty_int_ref_scalar_64 out_ty))
       (mov_from_vec x 0 (scalar_size out_ty)))
-
-;; Bitcasts between `r{32,64}` and `i{32,64}` need to be a copy to avoid
-;; conflicting regalloc constraints on reference type values that both need to
-;; be in some register but also some safepoint stack slot at the same time.
-(rule 2 (lower (has_type dst_ty (bitcast _ x @ (value_type src_ty))))
-      (if (ty_int_ref_scalar_64 src_ty))
-      (if (ty_int_ref_scalar_64 dst_ty))
-      (if-let $true (is_ref_type src_ty))
-      (if-let $false (is_ref_type dst_ty))
-      (copy_reg dst_ty x))
-(rule 2 (lower (has_type dst_ty (bitcast _ x @ (value_type src_ty))))
-      (if (ty_int_ref_scalar_64 src_ty))
-      (if (ty_int_ref_scalar_64 dst_ty))
-      (if-let $false (is_ref_type src_ty))
-      (if-let $true (is_ref_type dst_ty))
-      (copy_reg src_ty x))
 
 ; GPR <=> GPR
 (rule 1 (lower (has_type out_ty (bitcast _ x @ (value_type in_ty))))
