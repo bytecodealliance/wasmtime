@@ -1781,12 +1781,12 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(
             self.src,
             "assert!({} == <{name} as {wt}::component::ComponentType>::SIZE32);",
-            self.gen.sizes.size(&Type::Id(id)),
+            self.gen.sizes.size(&Type::Id(id)).size_wasm32(),
         );
         uwriteln!(
             self.src,
             "assert!({} == <{name} as {wt}::component::ComponentType>::ALIGN32);",
-            self.gen.sizes.align(&Type::Id(id)),
+            self.gen.sizes.align(&Type::Id(id)).align_wasm32(),
         );
         self.push_str("};\n");
     }

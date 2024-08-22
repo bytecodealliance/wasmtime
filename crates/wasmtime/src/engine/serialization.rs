@@ -204,6 +204,7 @@ struct WasmFeatures {
     custom_page_sizes: bool,
     component_model_more_flags: bool,
     component_model_multiple_returns: bool,
+    gc_types: bool,
 }
 
 impl Metadata<'_> {
@@ -232,6 +233,7 @@ impl Metadata<'_> {
             component_model_more_flags,
             component_model_multiple_returns,
             legacy_exceptions,
+            gc_types,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -272,6 +274,7 @@ impl Metadata<'_> {
                 custom_page_sizes,
                 component_model_more_flags,
                 component_model_multiple_returns,
+                gc_types,
             },
         }
     }
@@ -477,6 +480,7 @@ impl Metadata<'_> {
             custom_page_sizes,
             component_model_more_flags,
             component_model_multiple_returns,
+            gc_types,
         } = self.features;
 
         use wasmparser::WasmFeatures as F;
@@ -567,6 +571,11 @@ impl Metadata<'_> {
             component_model_multiple_returns,
             other.contains(F::COMPONENT_MODEL_MULTIPLE_RETURNS),
             "WebAssembly component model support for multiple returns",
+        )?;
+        Self::check_bool(
+            gc_types,
+            other.contains(F::GC_TYPES),
+            "support for WebAssembly gc types",
         )?;
 
         Ok(())
