@@ -47,27 +47,16 @@ to change, instructions to appear and disappear, and APIs to be overhauled.
 Here is the disassembly of `f(a, b) = a + b` in Pulley today:
 
 ```
-       0: 0e 1a f0                        xconst8 x26, -16
-       3: 12 7b 6b                        xadd32 sp, sp, x26
-       6: 2c 1b 08 1c                     store64_offset8 sp, 8, lr
-       a: 2a 1b 1d                        store64 sp, fp
-       d: 0b 1d 1b                        xmov fp, sp
-      10: 12 00 04                        xadd32 x0, x0, x1
-      13: 0b 1b 1d                        xmov sp, fp
-      16: 25 1c 1b 08                     load64_offset8 lr, sp, 8
-      1a: 22 1d 1b                        load64 fp, sp
-      1d: 0e 1a 10                        xconst8 x26, 16
-      20: 12 7b 6b                        xadd32 sp, sp, x26
-      23: 00                              ret
+       0: 2f                              push_frame
+       1: 12 00 04                        xadd32 x0, x0, x1
+       4: 30                              pop_frame
+       5: 00                              ret
 ```
 
 Note that there are a number of things that could be improved here:
 
 * We could avoid allocating and deallocating a stack frame because this function's
   body doesn't use any stack slots.
-* We could collapse the whole prologue and epilogue instruction sequences into
-  super-instructions, since they are identical (modulo the frame size immediate)
-  for all functions.
 
 As mentioned above, Pulley is very much a work in progress.
 

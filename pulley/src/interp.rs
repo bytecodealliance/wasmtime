@@ -569,6 +569,21 @@ impl MachineState {
 
         state
     }
+
+    /// `*sp = val; sp += size_of::<T>()`
+    fn push<T>(&mut self, val: T) {
+        let sp = self[XReg::sp].get_ptr::<T>();
+        unsafe { sp.write_unaligned(val) }
+        self[XReg::sp].set_ptr(sp.wrapping_add(1));
+    }
+
+    /// `ret = *sp; sp -= size_of::<T>()`
+    fn pop<T>(&mut self) -> T {
+        let sp = self[XReg::sp].get_ptr::<T>();
+        let val = unsafe { sp.read_unaligned() };
+        self[XReg::sp].set_ptr(sp.wrapping_sub(1));
+        val
+    }
 }
 
 enum Continuation {
@@ -985,6 +1000,74 @@ impl OpVisitor for InterpreterVisitor<'_> {
                 .byte_offset(offset as isize)
                 .write_unaligned(val);
         }
+        Continuation::Continue
+    }
+
+    fn xpush32(&mut self, src: XReg) -> Self::Return {
+        self.state.push(self.state[src].get_u32());
+        Continuation::Continue
+    }
+
+    fn xpush32_many(&mut self, srcs: RegSet<XReg>) -> Self::Return {
+        for src in srcs {
+            self.xpush32(src);
+        }
+        Continuation::Continue
+    }
+
+    fn xpush64(&mut self, src: XReg) -> Self::Return {
+        self.state.push(self.state[src].get_u64());
+        Continuation::Continue
+    }
+
+    fn xpush64_many(&mut self, srcs: RegSet<XReg>) -> Self::Return {
+        for src in srcs {
+            self.xpush64(src);
+        }
+        Continuation::Continue
+    }
+
+    fn xpop32(&mut self, dst: XReg) -> Self::Return {
+        let val = self.state.pop();
+        self.state[dst].set_u32(val);
+        Continuation::Continue
+    }
+
+    fn xpop32_many(&mut self, dsts: RegSet<XReg>) -> Self::Return {
+        for dst in dsts.into_iter().rev() {
+            self.xpop32(dst);
+        }
+        Continuation::Continue
+    }
+
+    fn xpop64(&mut self, dst: XReg) -> Self::Return {
+        let val = self.state.pop();
+        self.state[dst].set_u64(val);
+        Continuation::Continue
+    }
+
+    fn xpop64_many(&mut self, dsts: RegSet<XReg>) -> Self::Return {
+        for dst in dsts.into_iter().rev() {
+            self.xpop64(dst);
+        }
+        Continuation::Continue
+    }
+
+    /// `push lr; push fp; fp = sp`
+    fn push_frame(&mut self) -> Self::Return {
+        self.state.push(self.state[XReg::lr].get_ptr::<u8>());
+        self.state.push(self.state[XReg::fp].get_ptr::<u8>());
+        self.state[XReg::fp] = self.state[XReg::sp];
+        Continuation::Continue
+    }
+
+    /// `sp = fp; pop fp; pop lr`
+    fn pop_frame(&mut self) -> Self::Return {
+        self.state[XReg::sp] = self.state[XReg::fp];
+        let fp = self.state.pop();
+        let lr = self.state.pop();
+        self.state[XReg::fp].set_ptr::<u8>(fp);
+        self.state[XReg::lr].set_ptr::<u8>(lr);
         Continuation::Continue
     }
 

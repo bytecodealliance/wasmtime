@@ -350,6 +350,33 @@ where
         self.0 = T::from(0);
     }
 
+    /// Remove and return the smallest value in the bitset.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cranelift_bitset::ScalarBitSet;
+    ///
+    /// let mut bitset = ScalarBitSet::<u64>::new();
+    ///
+    /// bitset.insert(0);
+    /// bitset.insert(24);
+    /// bitset.insert(13);
+    /// bitset.insert(36);
+    ///
+    /// assert_eq!(bitset.pop_min(), Some(0));
+    /// assert_eq!(bitset.pop_min(), Some(13));
+    /// assert_eq!(bitset.pop_min(), Some(24));
+    /// assert_eq!(bitset.pop_min(), Some(36));
+    /// assert_eq!(bitset.pop_min(), None);
+    /// ```
+    #[inline]
+    pub fn pop_min(&mut self) -> Option<u8> {
+        let min = self.min()?;
+        self.remove(min);
+        Some(min)
+    }
+
     /// Remove and return the largest value in the bitset.
     ///
     /// # Example
@@ -364,14 +391,14 @@ where
     /// bitset.insert(13);
     /// bitset.insert(36);
     ///
-    /// assert_eq!(bitset.pop(), Some(36));
-    /// assert_eq!(bitset.pop(), Some(24));
-    /// assert_eq!(bitset.pop(), Some(13));
-    /// assert_eq!(bitset.pop(), Some(0));
-    /// assert_eq!(bitset.pop(), None);
+    /// assert_eq!(bitset.pop_max(), Some(36));
+    /// assert_eq!(bitset.pop_max(), Some(24));
+    /// assert_eq!(bitset.pop_max(), Some(13));
+    /// assert_eq!(bitset.pop_max(), Some(0));
+    /// assert_eq!(bitset.pop_max(), None);
     /// ```
     #[inline]
-    pub fn pop(&mut self) -> Option<u8> {
+    pub fn pop_max(&mut self) -> Option<u8> {
         let max = self.max()?;
         self.remove(max);
         Some(max)
@@ -458,11 +485,8 @@ where
     /// );
     /// ```
     #[inline]
-    pub fn iter(&self) -> Iter<T> {
-        Iter {
-            value: self.0,
-            index: 0,
-        }
+    pub fn iter(self) -> Iter<T> {
+        Iter { bitset: self }
     }
 }
 
@@ -491,6 +515,12 @@ where
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+impl<T: ScalarBitSetStorage> From<T> for ScalarBitSet<T> {
+    fn from(bits: T) -> Self {
+        Self(bits)
     }
 }
 
@@ -550,8 +580,7 @@ impl_storage!(usize);
 
 /// An iterator over the elements in a [`ScalarBitSet`].
 pub struct Iter<T> {
-    value: T,
-    index: u8,
+    bitset: ScalarBitSet<T>,
 }
 
 impl<T> Iterator for Iter<T>
@@ -562,14 +591,36 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<u8> {
-        if self.value == T::from(0) {
-            None
-        } else {
-            let trailing_zeros = self.value.trailing_zeros();
-            let elem = self.index + trailing_zeros;
-            self.index += trailing_zeros + 1;
-            self.value = self.value >> (trailing_zeros + 1);
-            Some(elem)
-        }
+        self.bitset.pop_min()
+    }
+}
+
+impl<T> DoubleEndedIterator for Iter<T>
+where
+    T: ScalarBitSetStorage,
+{
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.bitset.pop_max()
+    }
+}
+
+impl<T> ExactSizeIterator for Iter<T>
+where
+    T: ScalarBitSetStorage,
+{
+    #[inline]
+    fn len(&self) -> usize {
+        usize::from(self.bitset.len())
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a, T> arbitrary::Arbitrary<'a> for ScalarBitSet<T>
+where
+    T: ScalarBitSetStorage + arbitrary::Arbitrary<'a>,
+{
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        T::arbitrary(u).map(Self)
     }
 }

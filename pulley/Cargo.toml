@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 arbitrary = { workspace = true, optional = true }
+cranelift-bitset = { workspace = true } 
 log = { workspace = true }
 sptr = { workspace = true }
 
@@ -22,7 +23,7 @@ env_logger = { workspace = true }
 
 [features]
 std = []
-arbitrary = ["dep:arbitrary", "arbitrary/derive", "std"]
+arbitrary = ["dep:arbitrary", "arbitrary/derive", "std", "cranelift-bitset/arbitrary"]
 encode = []
 decode = []
 disas = ["decode"]

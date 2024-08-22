@@ -105,6 +105,11 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         | Op::Xslteq32(Xslteq32 { operands, .. })
         | Op::Xult32(Xult32 { operands, .. })
         | Op::Xulteq32(Xulteq32 { operands, .. }) => !operands.dst.is_special(),
+        Op::PushFrame(_) | Op::PopFrame(_) => false,
+        Op::XPush32(_) | Op::XPush64(_) => false,
+        Op::XPop32(_) | Op::XPop64(_) => false,
+        Op::XPush32Many(_) | Op::XPush64Many(_) => false,
+        Op::XPop32Many(_) | Op::XPop64Many(_) => false,
     }
 }
 

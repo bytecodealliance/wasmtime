@@ -87,7 +87,7 @@ impl Encode for XReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -96,7 +96,7 @@ impl Encode for FReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -105,7 +105,7 @@ impl Encode for VReg {
     where
         E: Extend<u8>,
     {
-        sink.extend(core::iter::once(u8::try_from(self.index()).unwrap()));
+        sink.extend(core::iter::once(self.to_u8()));
     }
 }
 
@@ -124,6 +124,15 @@ impl<R: Reg> Encode for BinaryOperands<R> {
         E: Extend<u8>,
     {
         self.to_bits().encode(sink);
+    }
+}
+
+impl<R: Reg + Encode> Encode for RegSet<R> {
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.to_bitset().0.encode(sink);
     }
 }
 

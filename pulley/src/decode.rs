@@ -1,6 +1,8 @@
 //! Decoding support for pulley bytecode.
 
 use alloc::vec::Vec;
+use cranelift_bitset::scalar::ScalarBitSetStorage;
+use cranelift_bitset::ScalarBitSet;
 
 use crate::imms::*;
 use crate::opcode::*;
@@ -381,6 +383,24 @@ impl<R: Reg> Decode for BinaryOperands<R> {
         T: BytecodeStream,
     {
         u16::decode(bytecode).map(|bits| Self::from_bits(bits))
+    }
+}
+
+impl<S: Decode + ScalarBitSetStorage> Decode for ScalarBitSet<S> {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        S::decode(bytecode).map(ScalarBitSet::from)
+    }
+}
+
+impl<R: Reg + Decode> Decode for RegSet<R> {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        ScalarBitSet::decode(bytecode).map(Self::from)
     }
 }
 

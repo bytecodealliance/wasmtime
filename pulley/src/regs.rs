@@ -1,7 +1,10 @@
 //! Pulley registers.
 
 use core::hash::Hash;
+use core::marker::PhantomData;
 use core::{fmt, ops::Range};
+
+use cranelift_bitset::ScalarBitSet;
 
 /// Trait for common register operations.
 pub trait Reg: Sized + Copy + Eq + Ord + Hash + Into<AnyReg> + fmt::Debug + fmt::Display {
@@ -159,9 +162,9 @@ impl fmt::Debug for AnyReg {
 pub struct BinaryOperands<R> {
     /// The destination register, packed in bits 0..5.
     pub dst: R,
-    /// The frist source register, packed in bits 5..10.
+    /// The first source register, packed in bits 5..10.
     pub src1: R,
-    /// The frist source register, packed in bits 10..15.
+    /// The second source register, packed in bits 10..15.
     pub src2: R,
 }
 
@@ -190,6 +193,97 @@ impl<R: Reg> BinaryOperands<R> {
             src1: R::new(((bits >> 5) & 0b11111) as u8).unwrap(),
             src2: R::new(((bits >> 10) & 0b11111) as u8).unwrap(),
         }
+    }
+}
+
+/// A set of registers, packed into a 32-bit bitset.
+pub struct RegSet<R> {
+    bitset: ScalarBitSet<u32>,
+    phantom: PhantomData<R>,
+}
+
+impl<R: Reg> RegSet<R> {
+    /// Create a `RegSet` from a `ScalarBitSet`.
+    pub fn from_bitset(bitset: ScalarBitSet<u32>) -> Self {
+        Self {
+            bitset,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Convert a `RegSet` into a `ScalarBitSet`.
+    pub fn to_bitset(self) -> ScalarBitSet<u32> {
+        self.bitset
+    }
+}
+
+impl<R: Reg> From<ScalarBitSet<u32>> for RegSet<R> {
+    fn from(bitset: ScalarBitSet<u32>) -> Self {
+        Self {
+            bitset,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<R: Reg> Into<ScalarBitSet<u32>> for RegSet<R> {
+    fn into(self) -> ScalarBitSet<u32> {
+        self.bitset
+    }
+}
+
+impl<R: Reg> IntoIterator for RegSet<R> {
+    type Item = R;
+    type IntoIter = core::iter::FilterMap<cranelift_bitset::scalar::Iter<u32>, fn(u8) -> Option<R>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.bitset.into_iter().filter_map(R::new)
+    }
+}
+
+impl<R: Reg> FromIterator<R> for RegSet<R> {
+    fn from_iter<I: IntoIterator<Item = R>>(iter: I) -> Self {
+        let mut set = ScalarBitSet::new();
+        for reg in iter {
+            set.insert(reg.to_u8());
+        }
+        RegSet::from(set)
+    }
+}
+
+impl<R: Reg> Default for RegSet<R> {
+    fn default() -> Self {
+        Self {
+            bitset: Default::default(),
+            phantom: Default::default(),
+        }
+    }
+}
+
+impl<R: Reg> Copy for RegSet<R> {}
+impl<R: Reg> Clone for RegSet<R> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<R: Reg> PartialEq for RegSet<R> {
+    fn eq(&self, other: &Self) -> bool {
+        self.bitset == other.bitset
+    }
+}
+impl<R: Reg> Eq for RegSet<R> {}
+
+impl<R: Reg> fmt::Debug for RegSet<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_set().entries(self.into_iter()).finish()
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a, R: Reg> arbitrary::Arbitrary<'a> for RegSet<R> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        ScalarBitSet::arbitrary(u).map(Self::from)
     }
 }
 
