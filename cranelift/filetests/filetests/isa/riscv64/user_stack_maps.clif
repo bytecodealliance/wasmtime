@@ -57,7 +57,6 @@ block0:
 ;   sw a0,0(slot)
 ;   mv a0,s2
 ;   sw a0,4(slot)
-;   mv s2,a0
 ;   mv a0,s3
 ;   call userextname0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
@@ -104,7 +103,6 @@ block0:
 ;   sw a0, 0(sp)
 ;   mv a0, s2
 ;   sw a0, 4(sp)
-;   mv s2, a0
 ;   mv a0, s3
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
 ;   jalr ra

@@ -70,9 +70,6 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu  %xmm1, rsp(16 + virtual offset)
 ;   movdqu  %xmm2, rsp(32 + virtual offset)
 ;   load_ext_name %FmaF32+0, %r8
-;   movdqu  rsp(0 + virtual offset), %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm1
-;   movdqu  rsp(32 + virtual offset), %xmm2
 ;   call    *%r8
 ;   movdqu  rsp(0 + virtual offset), %xmm4
 ;   movdqu  %xmm0, rsp(80 + virtual offset)
@@ -124,9 +121,6 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu %xmm1, 0x10(%rsp)
 ;   movdqu %xmm2, 0x20(%rsp)
 ;   movabsq $0, %r8 ; reloc_external Abs8 %FmaF32 0
-;   movdqu (%rsp), %xmm0
-;   movdqu 0x10(%rsp), %xmm1
-;   movdqu 0x20(%rsp), %xmm2
 ;   callq *%r8
 ;   movdqu (%rsp), %xmm4
 ;   movdqu %xmm0, 0x50(%rsp)
@@ -183,9 +177,6 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   movdqu  %xmm1, rsp(16 + virtual offset)
 ;   movdqu  %xmm2, rsp(32 + virtual offset)
 ;   load_ext_name %FmaF64+0, %r8
-;   movdqu  rsp(0 + virtual offset), %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm1
-;   movdqu  rsp(32 + virtual offset), %xmm2
 ;   call    *%r8
 ;   movdqu  %xmm0, rsp(48 + virtual offset)
 ;   movdqu  rsp(0 + virtual offset), %xmm0
@@ -214,9 +205,6 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   movdqu %xmm1, 0x10(%rsp)
 ;   movdqu %xmm2, 0x20(%rsp)
 ;   movabsq $0, %r8 ; reloc_external Abs8 %FmaF64 0
-;   movdqu (%rsp), %xmm0
-;   movdqu 0x10(%rsp), %xmm1
-;   movdqu 0x20(%rsp), %xmm2
 ;   callq *%r8
 ;   movdqu %xmm0, 0x30(%rsp)
 ;   movdqu (%rsp), %xmm0

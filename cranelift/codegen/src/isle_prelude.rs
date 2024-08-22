@@ -421,7 +421,7 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn ty_int_ref_64(&mut self, ty: Type) -> Option<Type> {
             match ty {
-                I64 | R64 => Some(ty),
+                I64 => Some(ty),
                 _ => None,
             }
         }
@@ -429,7 +429,7 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn ty_int_ref_16_to_64(&mut self, ty: Type) -> Option<Type> {
             match ty {
-                I16 | I32 | I64 | R64 => Some(ty),
+                I16 | I32 | I64 => Some(ty),
                 _ => None,
             }
         }
@@ -549,7 +549,7 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn ty_addr64(&mut self, ty: Type) -> Option<Type> {
             match ty {
-                I64 | R64 => Some(ty),
+                I64 => Some(ty),
                 _ => None,
             }
         }

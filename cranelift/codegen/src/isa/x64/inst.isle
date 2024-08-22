@@ -5337,20 +5337,6 @@
 (decl put_in_xmm_mem_aligned (Value) XmmMemAligned)
 (rule (put_in_xmm_mem_aligned val) (put_in_xmm_mem val))
 
-;; Copy a GPR of the given type to a new GPR.
-;;
-;; Generally, regalloc should take care of this kind of thing for us. This is
-;; only useful for implementing things like `bitcast` from an `r64` to an `i64`
-;; to avoid conflicting constraints on a single aliased value by splitting the
-;; value into two parts.
-(decl copy_gpr (Type Gpr) Gpr)
-(rule (copy_gpr ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovRR (operand_size_of_type_32_64 ty)
-                                       src
-                                       dst))))
-        dst))
-
 (decl mov_to_preg (PReg Gpr) SideEffectNoResult)
 (rule (mov_to_preg dst src)
       (SideEffectNoResult.Inst (MInst.MovToPReg src dst)))

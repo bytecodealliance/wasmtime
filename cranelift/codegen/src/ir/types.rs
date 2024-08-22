@@ -57,8 +57,8 @@ impl Type {
         match self.lane_type() {
             I8 => 3,
             I16 | F16 => 4,
-            I32 | F32 | R32 => 5,
-            I64 | F64 | R64 => 6,
+            I32 | F32 => 5,
+            I64 | F64 => 6,
             I128 | F128 => 7,
             _ => 0,
         }
@@ -69,8 +69,8 @@ impl Type {
         match self.lane_type() {
             I8 => 8,
             I16 | F16 => 16,
-            I32 | F32 | R32 => 32,
-            I64 | F64 | R64 => 64,
+            I32 | F32 => 32,
+            I64 | F64 => 64,
             I128 | F128 => 128,
             _ => 0,
         }
@@ -139,7 +139,6 @@ impl Type {
             I16 | F16 => I16,
             I32 | F32 => I32,
             I64 | F64 => I64,
-            R32 | R64 => panic!("Reference types are not truthy"),
             I128 | F128 => I128,
             _ => I8,
         })
@@ -162,8 +161,8 @@ impl Type {
         self.replace_lanes(match self.lane_type() {
             I8 => I8,
             I16 | F16 => I16,
-            I32 | F32 | R32 => I32,
-            I64 | F64 | R64 => I64,
+            I32 | F32 => I32,
+            I64 | F64 => I64,
             I128 | F128 => I128,
             _ => unimplemented!(),
         })
@@ -240,14 +239,6 @@ impl Type {
     pub fn is_float(self) -> bool {
         match self {
             F16 | F32 | F64 | F128 => true,
-            _ => false,
-        }
-    }
-
-    /// Is this a ref type?
-    pub fn is_ref(self) -> bool {
-        match self {
-            R32 | R64 => true,
             _ => false,
         }
     }
@@ -437,8 +428,6 @@ impl Display for Type {
             write!(f, "{}x{}", self.lane_type(), self.lane_count())
         } else if self.is_dynamic_vector() {
             write!(f, "{:?}x{}xN", self.lane_type(), self.min_lane_count())
-        } else if self.is_ref() {
-            write!(f, "r{}", self.lane_bits())
         } else {
             match *self {
                 INVALID => panic!("INVALID encountered"),
@@ -458,8 +447,6 @@ impl Debug for Type {
             write!(f, "{:?}X{}", self.lane_type(), self.lane_count())
         } else if self.is_dynamic_vector() {
             write!(f, "{:?}X{}XN", self.lane_type(), self.min_lane_count())
-        } else if self.is_ref() {
-            write!(f, "types::R{}", self.lane_bits())
         } else {
             match *self {
                 INVALID => write!(f, "types::INVALID"),
@@ -495,8 +482,6 @@ mod tests {
         assert_eq!(F128, F128.lane_type());
         assert_eq!(I32, I32X4.lane_type());
         assert_eq!(F64, F64X2.lane_type());
-        assert_eq!(R32, R32.lane_type());
-        assert_eq!(R64, R64.lane_type());
 
         assert_eq!(INVALID.lane_bits(), 0);
         assert_eq!(I8.lane_bits(), 8);
@@ -508,8 +493,6 @@ mod tests {
         assert_eq!(F32.lane_bits(), 32);
         assert_eq!(F64.lane_bits(), 64);
         assert_eq!(F128.lane_bits(), 128);
-        assert_eq!(R32.lane_bits(), 32);
-        assert_eq!(R64.lane_bits(), 64);
     }
 
     #[test]
@@ -602,8 +585,6 @@ mod tests {
         assert_eq!(I128.to_string(), "i128");
         assert_eq!(F32.to_string(), "f32");
         assert_eq!(F64.to_string(), "f64");
-        assert_eq!(R32.to_string(), "r32");
-        assert_eq!(R64.to_string(), "r64");
     }
 
     #[test]

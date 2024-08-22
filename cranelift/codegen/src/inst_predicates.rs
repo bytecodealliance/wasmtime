@@ -38,17 +38,6 @@ fn has_side_effect(func: &Function, inst: Inst) -> bool {
     trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
 }
 
-/// Is the given instruction a bitcast to or from a reference type (e.g. `r64`)?
-pub fn is_bitcast_from_ref(func: &Function, inst: Inst) -> bool {
-    let op = func.dfg.insts[inst].opcode();
-    if op != ir::Opcode::Bitcast {
-        return false;
-    }
-
-    let arg = func.dfg.inst_args(inst)[0];
-    func.dfg.value_type(arg).is_ref()
-}
-
 /// Does the given instruction behave as a "pure" node with respect to
 /// aegraph semantics?
 ///
@@ -76,11 +65,7 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 
     let op = func.dfg.insts[inst].opcode();
 
-    has_one_result
-        && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
-        // Cannot optimize ref-y bitcasts, as that can interact badly with
-        // safepoints and stack maps.
-        && !is_bitcast_from_ref(func, inst)
+    has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
 }
 
 /// Can the given instruction be merged into another copy of itself?
@@ -100,9 +85,6 @@ pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
         && !op.can_store()
         // Can only have idempotent side-effects.
         && (!has_side_effect(func, inst) || op.side_effects_idempotent())
-        // Cannot optimize ref-y bitcasts, as that can interact badly with
-        // safepoints and stack maps.
-        && !is_bitcast_from_ref(func, inst)
 }
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
@@ -115,11 +97,7 @@ pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
 /// Is the given instruction a constant value (`iconst`, `fconst`) that can be
 /// represented in 64 bits?
 pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
-    let data = &func.dfg.insts[inst];
-    if data.opcode() == Opcode::Null {
-        return Some(0);
-    }
-    match data {
+    match &func.dfg.insts[inst] {
         &InstructionData::UnaryImm { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee16 { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee32 { imm, .. } => Some(imm.bits() as u64),
@@ -130,8 +108,7 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
 
 /// Get the address, offset, and access type from the given instruction, if any.
 pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offset32, Type)> {
-    let data = &func.dfg.insts[inst];
-    match data {
+    match &func.dfg.insts[inst] {
         InstructionData::Load { arg, offset, .. } => {
             let ty = func.dfg.value_type(func.dfg.inst_results(inst)[0]);
             Some((*arg, *offset, ty))
@@ -154,8 +131,7 @@ pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offs
 
 /// Get the store data, if any, from an instruction.
 pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
-    let data = &func.dfg.insts[inst];
-    match data {
+    match &func.dfg.insts[inst] {
         InstructionData::Store { args, .. } | InstructionData::StoreNoOffset { args, .. } => {
             Some(args[0])
         }

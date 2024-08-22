@@ -5,7 +5,7 @@ use std::hash;
 use std::ops;
 use std::rc::Rc;
 
-use crate::cdsl::types::{LaneType, ReferenceType, ValueType};
+use crate::cdsl::types::{LaneType, ValueType};
 
 const MAX_LANES: u16 = 256;
 const MAX_BITS: u16 = 128;
@@ -56,10 +56,6 @@ impl TypeVar {
         let mut builder = TypeSetBuilder::new();
 
         let (scalar_type, num_lanes) = match value_type {
-            ValueType::Reference(ReferenceType(reference_type)) => {
-                let bits = reference_type as RangeBound;
-                return TypeVar::new(name, doc, builder.refs(bits..bits).build());
-            }
             ValueType::Lane(lane_type) => (lane_type, 1),
             ValueType::Vector(vec_type) => {
                 (vec_type.lane_type(), vec_type.lane_count() as RangeBound)
@@ -208,9 +204,7 @@ impl TypeVar {
                     "The `narrower` constraint does not apply to vectors"
                 );
                 assert!(
-                    (!ts.ints.is_empty() || !ts.floats.is_empty())
-                        && ts.refs.is_empty()
-                        && ts.dynamic_lanes.is_empty(),
+                    (!ts.ints.is_empty() || !ts.floats.is_empty()) && ts.dynamic_lanes.is_empty(),
                     "The `narrower` constraint only applies to scalar ints or floats"
                 );
             }
@@ -221,9 +215,7 @@ impl TypeVar {
                     "The `wider` constraint does not apply to vectors"
                 );
                 assert!(
-                    (!ts.ints.is_empty() || !ts.floats.is_empty())
-                        && ts.refs.is_empty()
-                        && ts.dynamic_lanes.is_empty(),
+                    (!ts.ints.is_empty() || !ts.floats.is_empty()) && ts.dynamic_lanes.is_empty(),
                     "The `wider` constraint only applies to scalar ints or floats"
                 );
             }
@@ -394,30 +386,22 @@ pub(crate) struct TypeSet {
     pub dynamic_lanes: NumSet,
     pub ints: NumSet,
     pub floats: NumSet,
-    pub refs: NumSet,
 }
 
 impl TypeSet {
-    fn new(
-        lanes: NumSet,
-        dynamic_lanes: NumSet,
-        ints: NumSet,
-        floats: NumSet,
-        refs: NumSet,
-    ) -> Self {
+    fn new(lanes: NumSet, dynamic_lanes: NumSet, ints: NumSet, floats: NumSet) -> Self {
         Self {
             lanes,
             dynamic_lanes,
             ints,
             floats,
-            refs,
         }
     }
 
     /// Return the number of concrete types represented by this typeset.
     pub fn size(&self) -> usize {
-        self.lanes.len() * (self.ints.len() + self.floats.len() + self.refs.len())
-            + self.dynamic_lanes.len() * (self.ints.len() + self.floats.len() + self.refs.len())
+        self.lanes.len() * (self.ints.len() + self.floats.len())
+            + self.dynamic_lanes.len() * (self.ints.len() + self.floats.len())
     }
 
     /// Return the image of self across the derived function func.
@@ -456,7 +440,6 @@ impl TypeSet {
         }
 
         copy.floats = NumSet::new();
-        copy.refs = NumSet::new();
         copy
     }
 
@@ -521,9 +504,6 @@ impl TypeSet {
             for &bits in &self.floats {
                 ret.push(LaneType::float_from_bits(bits).by(num_lanes));
             }
-            for &bits in &self.refs {
-                ret.push(ReferenceType::ref_from_bits(bits).into());
-            }
         }
         for &num_lanes in &self.dynamic_lanes {
             for &bits in &self.ints {
@@ -573,12 +553,6 @@ impl fmt::Debug for TypeSet {
                 Vec::from_iter(self.floats.iter().map(|x| x.to_string())).join(", ")
             ));
         }
-        if !self.refs.is_empty() {
-            subsets.push(format!(
-                "refs={{{}}}",
-                Vec::from_iter(self.refs.iter().map(|x| x.to_string())).join(", ")
-            ));
-        }
 
         write!(fmt, "{})", subsets.join(", "))?;
         Ok(())
@@ -588,7 +562,6 @@ impl fmt::Debug for TypeSet {
 pub(crate) struct TypeSetBuilder {
     ints: Interval,
     floats: Interval,
-    refs: Interval,
     includes_scalars: bool,
     simd_lanes: Interval,
     dynamic_simd_lanes: Interval,
@@ -599,7 +572,6 @@ impl TypeSetBuilder {
         Self {
             ints: Interval::None,
             floats: Interval::None,
-            refs: Interval::None,
             includes_scalars: true,
             simd_lanes: Interval::None,
             dynamic_simd_lanes: Interval::None,
@@ -614,11 +586,6 @@ impl TypeSetBuilder {
     pub fn floats(mut self, interval: impl Into<Interval>) -> Self {
         assert!(self.floats == Interval::None);
         self.floats = interval.into();
-        self
-    }
-    pub fn refs(mut self, interval: impl Into<Interval>) -> Self {
-        assert!(self.refs == Interval::None);
-        self.refs = interval.into();
         self
     }
     pub fn includes_scalars(mut self, includes_scalars: bool) -> Self {
@@ -644,7 +611,6 @@ impl TypeSetBuilder {
             range_to_set(self.dynamic_simd_lanes.to_range(2..MAX_LANES, None)),
             range_to_set(self.ints.to_range(8..MAX_BITS, None)),
             range_to_set(self.floats.to_range(16..MAX_FLOAT_BITS, None)),
-            range_to_set(self.refs.to_range(32..64, None)),
         )
     }
 }

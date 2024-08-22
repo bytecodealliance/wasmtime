@@ -704,8 +704,6 @@ block0(v0: i128, v1: i64):
 ;   str x1, [sp, #8]
 ;   mov x5, x1
 ;   load_ext_name x8, TestCase(%f14)+0
-;   mov x0, x4
-;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
 ;   blr x8
@@ -728,8 +726,6 @@ block0(v0: i128, v1: i64):
 ;   b #0x30
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f14 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mov x0, x4
-;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
 ;   blr x8
@@ -780,8 +776,6 @@ block0(v0: i128, v1: i64):
 ;   str x1, [sp, #8]
 ;   mov x5, x1
 ;   load_ext_name x8, TestCase(%f15)+0
-;   mov x0, x4
-;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
 ;   blr x8
@@ -804,8 +798,6 @@ block0(v0: i128, v1: i64):
 ;   b #0x30
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f15 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mov x0, x4
-;   mov x1, x5
 ;   mov x2, x4
 ;   mov x3, x5
 ;   blr x8
@@ -879,7 +871,6 @@ block0(v0: i64):
 ; block0:
 ;   mov x23, x8
 ;   load_ext_name x2, TestCase(%g)+0
-;   mov x8, x23
 ;   blr x2
 ;   mov x8, x23
 ;   ldr x23, [sp], #16
@@ -897,7 +888,6 @@ block0(v0: i64):
 ;   b #0x20
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mov x8, x23
 ;   blr x2
 ;   mov x8, x23
 ;   ldr x23, [sp], #0x10

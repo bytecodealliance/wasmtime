@@ -194,7 +194,6 @@ block0(v0: i64):
 ;   stg %r2, 160(%r15)
 ;   stg %r2, 168(%r15)
 ;   lgr %r7, %r2
-;   lgr %r2, %r7
 ;   lgr %r3, %r7
 ;   lgr %r4, %r7
 ;   lgr %r5, %r7
@@ -212,12 +211,11 @@ block0(v0: i64):
 ;   stg %r2, 0xa0(%r15)
 ;   stg %r2, 0xa8(%r15)
 ;   lgr %r7, %r2
-;   lgr %r2, %r7
 ;   lgr %r3, %r7
 ;   lgr %r4, %r7
 ;   lgr %r5, %r7
 ;   lgr %r6, %r7
-;   brasl %r14, 0x32 ; reloc_external PLTRel32Dbl %g 2
+;   brasl %r14, 0x2e ; reloc_external PLTRel32Dbl %g 2
 ;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 

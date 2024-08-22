@@ -60,28 +60,13 @@ fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
 /// This is intended to be used with things like `ValRaw` and the array calling
 /// convention.
 fn unbarriered_store_type_at_offset(
-    isa: &dyn TargetIsa,
     pos: &mut FuncCursor,
-    ty: WasmValType,
     flags: ir::MemFlags,
     base: ir::Value,
     offset: i32,
     value: ir::Value,
 ) {
-    let ir_ty = value_type(isa, ty);
-    if ir_ty.is_ref() {
-        let value = pos
-            .ins()
-            .bitcast(ir_ty.as_int(), ir::MemFlags::new(), value);
-        let truncated = match isa.pointer_bytes() {
-            4 => value,
-            8 => pos.ins().ireduce(ir::types::I32, value),
-            _ => unreachable!(),
-        };
-        pos.ins().store(flags, truncated, base, offset);
-    } else {
-        pos.ins().store(flags, value, base, offset);
-    }
+    pos.ins().store(flags, value, base, offset);
 }
 
 /// Emit code to do the following unbarriered memory read of the given type and
@@ -102,17 +87,7 @@ fn unbarriered_load_type_at_offset(
     offset: i32,
 ) -> ir::Value {
     let ir_ty = value_type(isa, ty);
-    if ir_ty.is_ref() {
-        let gc_ref = pos.ins().load(ir::types::I32, flags, base, offset);
-        let extended = match isa.pointer_bytes() {
-            4 => gc_ref,
-            8 => pos.ins().uextend(ir::types::I64, gc_ref),
-            _ => unreachable!(),
-        };
-        pos.ins().bitcast(ir_ty, ir::MemFlags::new(), extended)
-    } else {
-        pos.ins().load(ir_ty, flags, base, offset)
-    }
+    pos.ins().load(ir_ty, flags, base, offset)
 }
 
 /// Returns the corresponding cranelift type for the provided wasm type.

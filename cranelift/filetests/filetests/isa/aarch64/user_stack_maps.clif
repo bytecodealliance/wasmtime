@@ -59,7 +59,6 @@ block0:
 ;   add x13, sp, #4
 ;   mov x0, x22
 ;   str w0, [x13]
-;   mov x22, x0
 ;   mov x0, x24
 ;   bl 0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
@@ -105,16 +104,15 @@ block0:
 ;   add x13, sp, #4
 ;   mov x0, x22
 ;   str w0, [x13]
-;   mov x22, x0
 ;   mov x0, x24
-;   bl #0x6c ; reloc_external Call u0:0 0
+;   bl #0x68 ; reloc_external Call u0:0 0
 ;   mov x15, sp
 ;   mov x0, x22
 ;   str w0, [x15]
 ;   mov x0, x19
-;   bl #0x80 ; reloc_external Call u0:0 0
+;   bl #0x7c ; reloc_external Call u0:0 0
 ;   mov x0, x22
-;   bl #0x88 ; reloc_external Call u0:0 0
+;   bl #0x84 ; reloc_external Call u0:0 0
 ;   add sp, sp, #0x10
 ;   ldp x19, x22, [sp], #0x10
 ;   ldr x24, [sp], #0x10

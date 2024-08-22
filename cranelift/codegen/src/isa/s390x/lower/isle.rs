@@ -488,7 +488,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn gpr64_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I64 | R64 => Some(ty),
+            I64 => Some(ty),
             _ => None,
         }
     }

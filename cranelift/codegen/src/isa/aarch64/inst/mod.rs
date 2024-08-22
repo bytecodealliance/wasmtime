@@ -1,7 +1,7 @@
 //! This module defines aarch64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
+use crate::ir::types::{F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16};
 use crate::ir::{types, ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
@@ -271,12 +271,12 @@ impl Inst {
                 mem,
                 flags,
             },
-            I32 | R32 => Inst::ULoad32 {
+            I32 => Inst::ULoad32 {
                 rd: into_reg,
                 mem,
                 flags,
             },
-            I64 | R64 => Inst::ULoad64 {
+            I64 => Inst::ULoad64 {
                 rd: into_reg,
                 mem,
                 flags,
@@ -327,12 +327,12 @@ impl Inst {
                 mem,
                 flags,
             },
-            I32 | R32 => Inst::Store32 {
+            I32 => Inst::Store32 {
                 rd: from_reg,
                 mem,
                 flags,
             },
-            I64 | R64 => Inst::Store64 {
+            I64 => Inst::Store64 {
                 rd: from_reg,
                 mem,
                 flags,
@@ -1156,8 +1156,6 @@ impl MachInst for Inst {
             I16 => Ok((&[RegClass::Int], &[I16])),
             I32 => Ok((&[RegClass::Int], &[I32])),
             I64 => Ok((&[RegClass::Int], &[I64])),
-            R32 => panic!("32-bit reftype pointer should never be seen on AArch64"),
-            R64 => Ok((&[RegClass::Int], &[R64])),
             F16 => Ok((&[RegClass::Float], &[F16])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),

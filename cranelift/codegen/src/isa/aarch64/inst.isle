@@ -3527,27 +3527,6 @@
             (_ Unit (emit (MInst.AtomicCASLoop ty flags addr expect replace dst scratch))))
         dst))
 
-;; Copy a register of the given type to a new register.
-;;
-;; Generally, regalloc should take care of this kind of thing for us. This is
-;; only useful for implementing things like `bitcast` from an `r64` to an `i64`
-;; to avoid conflicting constraints on a single aliased value by splitting the
-;; value into two parts.
-(decl copy_reg (Type Reg) Reg)
-(rule (copy_reg $I32 src)
-      (let ((dst WritableReg (temp_writable_reg $I32))
-            (_ Unit (emit (MInst.Mov (OperandSize.Size32)
-                                     dst
-                                     src))))
-        dst))
-(rule (copy_reg $I64 src)
-      (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.Mov (OperandSize.Size64)
-                                     dst
-                                     src))))
-        dst))
-
-
 ;; Helper for emitting `MInst.MovPReg` instructions.
 (decl mov_from_preg (PReg) Reg)
 (rule (mov_from_preg src)

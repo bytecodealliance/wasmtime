@@ -457,7 +457,7 @@ impl GcCompiler for DrcCompiler {
         // into `dst`, or we are in unreachable code and should just trap.
         if let WasmHeapType::None = ty.heap_type {
             if ty.nullable {
-                let null = builder.ins().null(ref_ty);
+                let null = builder.ins().iconst(ref_ty, 0);
                 builder.ins().store(flags, null, dst, 0);
             } else {
                 // NB: Don't use an unconditional trap instruction, since that

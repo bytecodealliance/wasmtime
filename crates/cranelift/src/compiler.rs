@@ -702,11 +702,9 @@ impl Compiler {
             .with_endianness(ir::Endianness::Little);
 
         let value_size = mem::size_of::<u128>();
-        for (i, (val, ty)) in values.iter().copied().zip(types).enumerate() {
+        for (i, val) in values.iter().copied().enumerate() {
             crate::unbarriered_store_type_at_offset(
-                &*self.isa,
                 &mut builder.cursor(),
-                *ty,
                 flags,
                 values_vec_ptr,
                 i32::try_from(i * value_size).unwrap(),

@@ -1184,8 +1184,7 @@ impl LoadOP {
             I8 => Self::Lb,
             I16 => Self::Lh,
             I32 => Self::Lw,
-            R32 => Self::Lwu,
-            R64 | I64 => Self::Ld,
+            I64 => Self::Ld,
             _ => unreachable!(),
         }
     }
@@ -1242,8 +1241,8 @@ impl StoreOP {
             F64 => Self::Fsd,
             I8 => Self::Sb,
             I16 => Self::Sh,
-            I32 | R32 => Self::Sw,
-            I64 | R64 => Self::Sd,
+            I32 => Self::Sw,
+            I64 => Self::Sd,
             _ => unreachable!(),
         }
     }

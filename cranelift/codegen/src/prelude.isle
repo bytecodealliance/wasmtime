@@ -359,9 +359,6 @@
 (extern const $I64 Type)
 (extern const $I128 Type)
 
-(extern const $R32 Type)
-(extern const $R64 Type)
-
 (extern const $F16 Type)
 (extern const $F32 Type)
 (extern const $F64 Type)
@@ -444,11 +441,6 @@
 ;; Compare two types for equality.
 (decl pure ty_equal (Type Type) bool)
 (extern constructor ty_equal ty_equal)
-
-(decl pure is_ref_type (Type) bool)
-(rule 1 (is_ref_type $R32) $true)
-(rule 1 (is_ref_type $R64) $true)
-(rule 0 (is_ref_type _) $false)
 
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -562,7 +554,7 @@
 (decl int_fits_in_32 (Type) Type)
 (extern extractor int_fits_in_32 int_fits_in_32)
 
-;; An extractor that matches I64 or R64.
+;; An extractor that matches I64.
 (decl ty_int_ref_64 (Type) Type)
 (extern extractor ty_int_ref_64 ty_int_ref_64)
 

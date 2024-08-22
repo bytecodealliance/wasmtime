@@ -2096,37 +2096,27 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             reg, ty, extension, ..
                         } => {
                             let ext = M::get_ext_mode(ctx.sigs()[self.sig].call_conv, extension);
-                            let vreg = if ext != ir::ArgumentExtension::None
-                                && ty_bits(ty) < word_bits
-                            {
-                                assert_eq!(word_rc, reg.class());
-                                let signed = match ext {
-                                    ir::ArgumentExtension::Uext => false,
-                                    ir::ArgumentExtension::Sext => true,
-                                    _ => unreachable!(),
+                            let vreg =
+                                if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
+                                    assert_eq!(word_rc, reg.class());
+                                    let signed = match ext {
+                                        ir::ArgumentExtension::Uext => false,
+                                        ir::ArgumentExtension::Sext => true,
+                                        _ => unreachable!(),
+                                    };
+                                    let extend_result =
+                                        ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                                    ctx.emit(M::gen_extend(
+                                        extend_result,
+                                        *from_reg,
+                                        signed,
+                                        ty_bits(ty) as u8,
+                                        word_bits as u8,
+                                    ));
+                                    extend_result.to_reg()
+                                } else {
+                                    *from_reg
                                 };
-                                let extend_result =
-                                    ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
-                                ctx.emit(M::gen_extend(
-                                    extend_result,
-                                    *from_reg,
-                                    signed,
-                                    ty_bits(ty) as u8,
-                                    word_bits as u8,
-                                ));
-                                extend_result.to_reg()
-                            } else if ty.is_ref() {
-                                // Reference-typed args need to be
-                                // passed as a copy; the original vreg
-                                // is constrained to the stack and
-                                // this copy is in a reg.
-                                let ref_copy = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
-                                ctx.emit(M::gen_move(ref_copy, *from_reg, M::word_type()));
-
-                                ref_copy.to_reg()
-                            } else {
-                                *from_reg
-                            };
 
                             let preg = reg.into();
                             self.uses.push(CallArgPair { vreg, preg });

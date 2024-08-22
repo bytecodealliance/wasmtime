@@ -1,5 +1,5 @@
 function u0:0() fast {
-    sig0 = (f32, f64, i8, i16, i32, i64, i128, i8, i8, i128, r32, r64, i8x16, i16x4, f32x16) fast
+    sig0 = (f32, f64, i8, i16, i32, i64, i128, i8, i8, i128, i8x16, i16x4, f32x16) fast
     fn0 = u0:1 sig0
     const0 = 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
     const1 = 0x0000000000000000
@@ -18,11 +18,9 @@ block1:
     v8 = iconst.i8 0
     v15 = iconst.i64 0
     v9 = uextend.i128 v15  ; v15 = 0
-    v10 = null.r32 
-    v11 = null.r64 
     v12 = vconst.i8x16 const2
     v13 = vconst.i16x4 const1
     v14 = vconst.f32x16 const0
-    call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14)  ; v0 = 0.0, v1 = 0.0, v2 = 0, v3 = 0, v4 = 0, v5 = 0, v7 = 0, v8 = 0, v12 = const2, v13 = const1, v14 = const0
+    call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v12, v13, v14)  ; v0 = 0.0, v1 = 0.0, v2 = 0, v3 = 0, v4 = 0, v5 = 0, v7 = 0, v8 = 0, v12 = const2, v13 = const1, v14 = const0
     trap user0
 }

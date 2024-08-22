@@ -29,12 +29,6 @@
 (rule (lower (f64const (u64_from_ieee64 n)))
   (imm $F64 n))
 
-;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty (null)))
-  (imm ty 0))
-
-
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Base case, simply adding things in registers.
@@ -1847,18 +1841,6 @@
 (rule
   (lower (stack_addr ss offset))
   (gen_stack_addr ss offset))
-
-;;;;;  Rules for `is_null`;;;;;;;;;
-
-;; Null references are represented by the constant value `0`.
-(rule (lower (is_null v))
-  (rv_seqz v))
-
-;;;;;  Rules for `is_invalid`;;;;;;;;;
-
-;; Invalid references are represented by the constant value `-1`.
-(rule (lower (is_invalid v))
-  (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
 

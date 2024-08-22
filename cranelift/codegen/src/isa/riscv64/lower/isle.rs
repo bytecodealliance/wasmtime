@@ -191,8 +191,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         let supported = match ty {
             // Scalar integers are always supported
             ty if ty.is_int() => true,
-            // So are references
-            ty if ty.is_ref() => true,
             // Floating point types depend on certain extensions
             F16 => self.backend.isa_flags.has_zfh(),
             // F32 depends on the F extension

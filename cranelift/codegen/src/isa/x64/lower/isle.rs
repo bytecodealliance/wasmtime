@@ -607,8 +607,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn ty_int_bool_or_ref(&mut self, ty: Type) -> Option<()> {
         match ty {
-            types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => Some(()),
-            types::R32 => panic!("shouldn't have 32-bits refs on x64"),
+            types::I8 | types::I16 | types::I32 | types::I64 => Some(()),
             _ => None,
         }
     }

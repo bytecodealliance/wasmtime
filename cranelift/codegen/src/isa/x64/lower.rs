@@ -34,8 +34,7 @@ impl Lower<'_, Inst> {
 
 fn is_int_or_ref_ty(ty: Type) -> bool {
     match ty {
-        types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
-        types::R32 => panic!("shouldn't have 32-bits refs on x64"),
+        types::I8 | types::I16 | types::I32 | types::I64 => true,
         _ => false,
     }
 }

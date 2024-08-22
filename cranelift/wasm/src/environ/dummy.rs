@@ -194,11 +194,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     }
 
     fn reference_type(&self) -> ir::Type {
-        match self.pointer_type() {
-            ir::types::I32 => ir::types::R32,
-            ir::types::I64 => ir::types::R64,
-            _ => panic!("unsupported pointer type"),
-        }
+        self.pointer_type()
     }
 
     fn ensure_table_exists(&mut self, func: &mut ir::Function, index: TableIndex) {
@@ -279,7 +275,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
                 WasmValType::F32 => ir::types::F32,
                 WasmValType::F64 => ir::types::F64,
                 WasmValType::V128 => ir::types::I8X16,
-                WasmValType::Ref(_) => ir::types::R64,
+                WasmValType::Ref(_) => self.pointer_type(),
             },
         })
     }
@@ -687,18 +683,13 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     fn declare_type_func(&mut self, wasm: WasmFuncType) -> WasmResult<()> {
         let mut sig = ir::Signature::new(CallConv::Fast);
         let mut cvt = |ty: &WasmValType| {
-            let reference_type = match self.pointer_type() {
-                ir::types::I32 => ir::types::R32,
-                ir::types::I64 => ir::types::R64,
-                _ => panic!("unsupported pointer type"),
-            };
             ir::AbiParam::new(match ty {
                 WasmValType::I32 => ir::types::I32,
                 WasmValType::I64 => ir::types::I64,
                 WasmValType::F32 => ir::types::F32,
                 WasmValType::F64 => ir::types::F64,
                 WasmValType::V128 => ir::types::I8X16,
-                WasmValType::Ref(_) => reference_type,
+                WasmValType::Ref(_) => self.pointer_type(),
             })
         };
         sig.params.extend(wasm.params().iter().map(&mut cvt));

@@ -1867,10 +1867,6 @@
 (rule 6 (imm (ty_supported_float $F32) c) (gen_bitcast (imm $I32 c) $I32 $F32))
 (rule 6 (imm (ty_supported_float $F64) c) (gen_bitcast (imm $I64 c) $I64 $F64))
 
-;; Refs get loaded as integers.
-(rule 5 (imm $R32 c) (imm $I32 c))
-(rule 5 (imm $R64 c) (imm $I64 c))
-
 ;; Try to match just an imm12
 (rule 4 (imm (ty_int ty) c)
   (if-let (i64_generate_imm (imm20_is_zero) imm12) (i64_sextend_u64 ty c))
@@ -2938,8 +2934,6 @@
 (rule 1 (gen_bitcast r $I16 $F16) (rv_fmvhx r))
 (rule 1 (gen_bitcast r $I32 $F32) (rv_fmvwx r))
 (rule 1 (gen_bitcast r $I64 $F64) (rv_fmvdx r))
-(rule 1 (gen_bitcast r $I64 $R64) (copy_reg r $I64))
-(rule 1 (gen_bitcast r $R64 $I64) (copy_reg r $I64))
 (rule (gen_bitcast r _ _) r)
 
 (decl move_f_to_x (FReg Type) XReg)
@@ -3050,20 +3044,6 @@
   (let ((rd WritableXReg (temp_writable_xreg))
         (_ Unit (emit (MInst.MovFromPReg rd rm))))
     rd))
-
-;; Copy a register of the given type to a new register.
-;;
-;; Generally, regalloc should take care of this kind of thing for us. This is
-;; only useful for implementing things like `bitcast` from an `r64` to an `i64`
-;; to avoid conflicting constraints on a single aliased value by splitting the
-;; value into two parts.
-(decl copy_reg (XReg Type) XReg)
-(rule (copy_reg src ty)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Mov dst
-                                     src
-                                     ty))))
-        dst))
 
 (decl fp_reg () PReg)
 (extern constructor fp_reg fp_reg)
