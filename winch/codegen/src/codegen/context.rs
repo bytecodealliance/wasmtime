@@ -73,7 +73,9 @@ impl<'a> CodeGenContext<'a> {
             // All of our supported architectures use the float registers for vector operations.
             V128 => self.reg_for_class(RegClass::Float, masm),
             Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => self.reg_for_class(RegClass::Int, masm),
+                WasmHeapType::Func | WasmHeapType::Extern => {
+                    self.reg_for_class(RegClass::Int, masm)
+                }
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
         }

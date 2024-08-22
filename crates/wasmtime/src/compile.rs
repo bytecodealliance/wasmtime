@@ -70,7 +70,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     // validated. Afterwards `types` will have all the type information for
     // this module.
     let mut parser = wasmparser::Parser::new(0);
-    let mut validator = wasmparser::Validator::new_with_features(engine.config().features);
+    let mut validator = wasmparser::Validator::new_with_features(engine.features());
     parser.set_features(*validator.features());
     let mut types = ModuleTypesBuilder::new(&validator);
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
@@ -136,7 +136,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     let compiler = engine.compiler();
 
     let scope = ScopeVec::new();
-    let mut validator = wasmparser::Validator::new_with_features(engine.config().features);
+    let mut validator = wasmparser::Validator::new_with_features(engine.features());
     let mut types = ComponentTypesBuilder::new(&validator);
     let (component, mut module_translations) =
         Translator::new(tunables, &mut validator, &mut types, &scope)

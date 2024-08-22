@@ -170,7 +170,7 @@ impl ABI for X64ABI {
     fn sizeof(ty: &WasmValType) -> u8 {
         match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => Self::word_bytes(),
+                WasmHeapType::Func | WasmHeapType::Extern => Self::word_bytes(),
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
@@ -190,7 +190,7 @@ impl X64ABI {
     ) -> (ABIOperand, u32) {
         let (reg, ty) = match wasm_arg {
             ty @ WasmValType::Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => (
+                WasmHeapType::Func | WasmHeapType::Extern => (
                     Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
                     ty,
                 ),

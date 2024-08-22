@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use alloc::sync::Arc;
+use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
 use hashbrown::{HashMap, HashSet};
@@ -114,7 +115,15 @@ pub struct Config {
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
-    pub(crate) features: WasmFeatures,
+    /// Explicitly enabled features via `Config::wasm_*` methods. This is a
+    /// signal that the embedder specifically wants something turned on
+    /// regardless of the defaults that Wasmtime might otherwise have enabled.
+    ///
+    /// Note that this, and `disabled_features` below, start as the empty set of
+    /// features to only track explicit user requests.
+    pub(crate) enabled_features: WasmFeatures,
+    /// Same as `enabled_features`, but for those that are explicitly disabled.
+    pub(crate) disabled_features: WasmFeatures,
     pub(crate) wasm_backtrace: bool,
     pub(crate) wasm_backtrace_details_env_used: bool,
     pub(crate) native_unwind_info: Option<bool>,
@@ -234,7 +243,8 @@ impl Config {
             wasm_backtrace: true,
             wasm_backtrace_details_env_used: false,
             native_unwind_info: None,
-            features: WasmFeatures::default(),
+            enabled_features: WasmFeatures::empty(),
+            disabled_features: WasmFeatures::empty(),
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             #[cfg(feature = "async")]
@@ -259,30 +269,6 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
-        // Conditionally enabled features depending on compile-time crate
-        // features. Note that if these features are disabled then `Config` has
-        // no way of re-enabling them.
-        ret.features
-            .set(WasmFeatures::REFERENCE_TYPES, cfg!(feature = "gc"));
-        ret.features
-            .set(WasmFeatures::THREADS, cfg!(feature = "threads"));
-        ret.features.set(
-            WasmFeatures::COMPONENT_MODEL,
-            cfg!(feature = "component-model"),
-        );
-
-        // If GC is disabled at compile time also disable it in features
-        // forcibly irrespective of `wasmparser` defaults. Note that these also
-        // aren't yet fully implemented in Wasmtime.
-        if !cfg!(feature = "gc") {
-            ret.features.set(WasmFeatures::FUNCTION_REFERENCES, false);
-            ret.features.set(WasmFeatures::GC, false);
-        }
-
-        ret.wasm_multi_value(true);
-        ret.wasm_bulk_memory(true);
-        ret.wasm_simd(true);
-        ret.wasm_extended_const(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
         ret
@@ -701,6 +687,12 @@ impl Config {
         self
     }
 
+    fn wasm_feature(&mut self, flag: WasmFeatures, enable: bool) -> &mut Self {
+        self.enabled_features.set(flag, enable);
+        self.disabled_features.set(flag, !enable);
+        self
+    }
+
     /// Configures whether the WebAssembly tail calls proposal will be enabled
     /// for compilation or not.
     ///
@@ -713,7 +705,7 @@ impl Config {
     ///
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::TAIL_CALL, enable);
+        self.wasm_feature(WasmFeatures::TAIL_CALL, enable);
         self
     }
 
@@ -738,7 +730,7 @@ impl Config {
     ///
     /// [WebAssembly custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
     pub fn wasm_custom_page_sizes(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::CUSTOM_PAGE_SIZES, enable);
+        self.wasm_feature(WasmFeatures::CUSTOM_PAGE_SIZES, enable);
         self
     }
 
@@ -761,7 +753,7 @@ impl Config {
     /// [wasi-threads]: https://github.com/webassembly/wasi-threads
     #[cfg(feature = "threads")]
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::THREADS, enable);
+        self.wasm_feature(WasmFeatures::THREADS, enable);
         self
     }
 
@@ -783,7 +775,7 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/reference-types
     #[cfg(feature = "gc")]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::REFERENCE_TYPES, enable);
+        self.wasm_feature(WasmFeatures::REFERENCE_TYPES, enable);
         self
     }
 
@@ -802,7 +794,7 @@ impl Config {
     /// [proposal]: https://github.com/WebAssembly/function-references
     #[cfg(feature = "gc")]
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::FUNCTION_REFERENCES, enable);
+        self.wasm_feature(WasmFeatures::FUNCTION_REFERENCES, enable);
         self
     }
 
@@ -823,7 +815,7 @@ impl Config {
     /// [proposal]: https://github.com/WebAssembly/gc
     #[cfg(feature = "gc")]
     pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::GC, enable);
+        self.wasm_feature(WasmFeatures::GC, enable);
         self
     }
 
@@ -843,7 +835,7 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/simd
     /// [relaxed simd proposal]: https://github.com/WebAssembly/relaxed-simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::SIMD, enable);
+        self.wasm_feature(WasmFeatures::SIMD, enable);
         self
     }
 
@@ -870,7 +862,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/relaxed-simd
     pub fn wasm_relaxed_simd(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::RELAXED_SIMD, enable);
+        self.wasm_feature(WasmFeatures::RELAXED_SIMD, enable);
         self
     }
 
@@ -914,7 +906,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/bulk-memory-operations
     pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::BULK_MEMORY, enable);
+        self.wasm_feature(WasmFeatures::BULK_MEMORY, enable);
         self
     }
 
@@ -928,7 +920,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/multi-value
     pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::MULTI_VALUE, enable);
+        self.wasm_feature(WasmFeatures::MULTI_VALUE, enable);
         self
     }
 
@@ -942,7 +934,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/multi-memory
     pub fn wasm_multi_memory(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::MULTI_MEMORY, enable);
+        self.wasm_feature(WasmFeatures::MULTI_MEMORY, enable);
         self
     }
 
@@ -957,7 +949,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/memory64
     pub fn wasm_memory64(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::MEMORY64, enable);
+        self.wasm_feature(WasmFeatures::MEMORY64, enable);
         self
     }
 
@@ -968,7 +960,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/extended-const
     pub fn wasm_extended_const(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::EXTENDED_CONST, enable);
+        self.wasm_feature(WasmFeatures::EXTENDED_CONST, enable);
         self
     }
 
@@ -982,7 +974,7 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/component-model
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model(&mut self, enable: bool) -> &mut Self {
-        self.features.set(WasmFeatures::COMPONENT_MODEL, enable);
+        self.wasm_feature(WasmFeatures::COMPONENT_MODEL, enable);
         self
     }
 
@@ -993,8 +985,7 @@ impl Config {
     /// https://github.com/WebAssembly/component-model/issues/370.
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_more_flags(&mut self, enable: bool) -> &mut Self {
-        self.features
-            .set(WasmFeatures::COMPONENT_MODEL_MORE_FLAGS, enable);
+        self.wasm_feature(WasmFeatures::COMPONENT_MODEL_MORE_FLAGS, enable);
         self
     }
 
@@ -1004,8 +995,7 @@ impl Config {
     /// https://github.com/WebAssembly/component-model/pull/368.
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_multiple_returns(&mut self, enable: bool) -> &mut Self {
-        self.features
-            .set(WasmFeatures::COMPONENT_MODEL_MULTIPLE_RETURNS, enable);
+        self.wasm_feature(WasmFeatures::COMPONENT_MODEL_MULTIPLE_RETURNS, enable);
         self
     }
 
@@ -1732,24 +1722,164 @@ impl Config {
         self
     }
 
-    pub(crate) fn validate(&self) -> Result<Tunables> {
-        if self.features.contains(WasmFeatures::REFERENCE_TYPES)
-            && !self.features.contains(WasmFeatures::BULK_MEMORY)
+    /// Returns the set of features that the currently selected compiler backend
+    /// does not support at all and may panic on.
+    ///
+    /// Wasmtime strives to reject unknown modules or unsupported modules with
+    /// first-class errors instead of panics. Not all compiler backends have the
+    /// same level of feature support on all platforms as well. This method
+    /// returns a set of features that the currently selected compiler
+    /// configuration is known to not support and may panic on. This acts as a
+    /// first-level filter on incoming wasm modules/configuration to fail-fast
+    /// instead of panicking later on.
+    ///
+    /// Note that if a feature is not listed here it does not mean that the
+    /// backend fully supports the proposal. Instead that means that the backend
+    /// doesn't ever panic on the proposal, but errors during compilation may
+    /// still be returned. This means that features listed here are definitely
+    /// not supported at all, but features not listed here may still be
+    /// partially supported. For example at the time of this writing the Winch
+    /// backend partially supports simd so it's not listed here. Winch doesn't
+    /// fully support simd but unimplemented instructions just return errors.
+    fn compiler_panicking_wasm_features(&self) -> WasmFeatures {
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        match self.compiler_config.strategy {
+            None | Some(Strategy::Cranelift) => WasmFeatures::empty(),
+            Some(Strategy::Winch) => {
+                let mut unsupported = WasmFeatures::GC
+                    | WasmFeatures::FUNCTION_REFERENCES
+                    | WasmFeatures::THREADS
+                    | WasmFeatures::RELAXED_SIMD
+                    | WasmFeatures::TAIL_CALL;
+                match self.compiler_target().architecture {
+                    target_lexicon::Architecture::Aarch64(_) => {
+                        // no support for simd on aarch64
+                        unsupported |= WasmFeatures::SIMD;
+                        // technically this is mostly supported in the sense of
+                        // multi-tables work well enough but enough of MVP wasm
+                        // currently panics that this is used here instead to
+                        // disable most spec tests which require reference
+                        // types.
+                        unsupported |= WasmFeatures::REFERENCE_TYPES;
+                    }
+
+                    // Winch doesn't support other non-x64 architectures at this
+                    // time either but will return an first-class error for
+                    // them.
+                    _ => {}
+                }
+                unsupported
+            }
+            Some(Strategy::Auto) => unreachable!(),
+        }
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        return WasmFeatures::empty();
+    }
+
+    /// Calculates the set of features that are enabled for this `Config`.
+    ///
+    /// This method internally will start with the an empty set of features to
+    /// avoid being tied to wasmparser's defaults. Next Wasmtime's set of
+    /// default features are added to this set, some of which are conditional
+    /// depending on crate features. Finally explicitly requested features via
+    /// `wasm_*` methods on `Config` are applied. Everything is then validated
+    /// later in `Config::validate`.
+    fn features(&self) -> WasmFeatures {
+        let mut features = WasmFeatures::empty();
+
+        // On-by-default features that wasmtime has. Note that these are all
+        // subject to the criteria at
+        // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
+        features |= WasmFeatures::FLOATS;
+        features |= WasmFeatures::MULTI_VALUE;
+        features |= WasmFeatures::BULK_MEMORY;
+        features |= WasmFeatures::SIGN_EXTENSION;
+        features |= WasmFeatures::MUTABLE_GLOBAL;
+        features |= WasmFeatures::SATURATING_FLOAT_TO_INT;
+        features |= WasmFeatures::MULTI_MEMORY;
+        features |= WasmFeatures::SIMD;
+        features |= WasmFeatures::RELAXED_SIMD;
+        features |= WasmFeatures::TAIL_CALL;
+        features |= WasmFeatures::EXTENDED_CONST;
+        if cfg!(feature = "gc") {
+            features |= WasmFeatures::REFERENCE_TYPES;
+        }
+        if cfg!(feature = "threads") {
+            features |= WasmFeatures::THREADS;
+        }
+        if cfg!(feature = "component-model") {
+            features |= WasmFeatures::COMPONENT_MODEL;
+        }
+
+        // From the default set of proposals remove any that the current
+        // compiler backend may panic on if the module contains them.
+        features = features & !self.compiler_panicking_wasm_features();
+
+        // After wasmtime's defaults are configured then factor in user requests
+        // and disable/enable features. Note that the enable/disable sets should
+        // be disjoint.
+        debug_assert!((self.enabled_features & self.disabled_features).is_empty());
+        features &= !self.disabled_features;
+        features |= self.enabled_features;
+
+        features
+    }
+
+    fn compiler_target(&self) -> target_lexicon::Triple {
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            let host = target_lexicon::Triple::host();
+
+            self.compiler_config
+                .target
+                .as_ref()
+                .unwrap_or(&host)
+                .clone()
+        }
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        {
+            target_lexicon::Triple::host()
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Result<(Tunables, WasmFeatures)> {
+        let features = self.features();
+
+        // First validate that the selected compiler backend and configuration
+        // supports the set of `features` that are enabled. This will help
+        // provide more first class errors instead of panics about unsupported
+        // features and configurations.
+        let unsupported = features & self.compiler_panicking_wasm_features();
+        if !unsupported.is_empty() {
+            for flag in WasmFeatures::FLAGS.iter() {
+                if !unsupported.contains(*flag.value()) {
+                    continue;
+                }
+                bail!(
+                    "the wasm_{} feature is not supported on this compiler configuration",
+                    flag.name().to_lowercase()
+                );
+            }
+
+            panic!("should have returned an error by now")
+        }
+
+        if features.contains(WasmFeatures::REFERENCE_TYPES)
+            && !features.contains(WasmFeatures::BULK_MEMORY)
         {
             bail!("feature 'reference_types' requires 'bulk_memory' to be enabled");
         }
-        if self.features.contains(WasmFeatures::THREADS)
-            && !self.features.contains(WasmFeatures::BULK_MEMORY)
+        if features.contains(WasmFeatures::THREADS) && !features.contains(WasmFeatures::BULK_MEMORY)
         {
             bail!("feature 'threads' requires 'bulk_memory' to be enabled");
         }
-        if self.features.contains(WasmFeatures::FUNCTION_REFERENCES)
-            && !self.features.contains(WasmFeatures::REFERENCE_TYPES)
+        if features.contains(WasmFeatures::FUNCTION_REFERENCES)
+            && !features.contains(WasmFeatures::REFERENCE_TYPES)
         {
             bail!("feature 'function_references' requires 'reference_types' to be enabled");
         }
-        if self.features.contains(WasmFeatures::GC)
-            && !self.features.contains(WasmFeatures::FUNCTION_REFERENCES)
+        if features.contains(WasmFeatures::GC)
+            && !features.contains(WasmFeatures::FUNCTION_REFERENCES)
         {
             bail!("feature 'gc' requires 'function_references' to be enabled");
         }
@@ -1818,7 +1948,7 @@ impl Config {
             bail!("static memory guard size cannot be smaller than dynamic memory guard size");
         }
 
-        Ok(tunables)
+        Ok((tunables, features))
     }
 
     #[cfg(feature = "runtime")]
@@ -1877,6 +2007,7 @@ impl Config {
     pub(crate) fn build_compiler(
         mut self,
         tunables: &Tunables,
+        features: WasmFeatures,
     ) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
         let target = self.compiler_config.target.clone();
 
@@ -1904,13 +2035,7 @@ impl Config {
             .settings
             .insert("probestack_strategy".into(), "inline".into());
 
-        let host = target_lexicon::Triple::host();
-        let target = self
-            .compiler_config
-            .target
-            .as_ref()
-            .unwrap_or(&host)
-            .clone();
+        let target = self.compiler_target();
 
         // On supported targets, we enable stack probing by default.
         // This is required on Windows because of the way Windows
@@ -1949,7 +2074,7 @@ impl Config {
             .insert("preserve_frame_pointers".into(), "true".into());
 
         // check for incompatible compiler options and set required values
-        if self.features.contains(WasmFeatures::REFERENCE_TYPES) {
+        if features.contains(WasmFeatures::REFERENCE_TYPES) {
             if !self
                 .compiler_config
                 .ensure_setting_unset_or_given("enable_safepoints", "true")
@@ -1958,9 +2083,7 @@ impl Config {
             }
         }
 
-        if self.features.contains(WasmFeatures::RELAXED_SIMD)
-            && !self.features.contains(WasmFeatures::SIMD)
-        {
+        if features.contains(WasmFeatures::RELAXED_SIMD) && !features.contains(WasmFeatures::SIMD) {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
         }
 
@@ -2085,11 +2208,11 @@ impl fmt::Debug for Config {
         // enabled, and doesn't require maintenance by hand (which has become out
         // of date in the past), at the cost of possible confusion for why
         // a flag in this set doesn't have a Config setter.
-        use bitflags::Flags;
+        let features = self.features();
         for flag in WasmFeatures::FLAGS.iter() {
             f.field(
                 &format!("wasm_{}", flag.name().to_lowercase()),
-                &self.features.contains(*flag.value()),
+                &features.contains(*flag.value()),
             );
         }
 
