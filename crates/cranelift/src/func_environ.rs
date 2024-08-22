@@ -1734,6 +1734,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor,
         i31ref: ir::Value,
     ) -> WasmResult<ir::Value> {
+        pos.ins().trapz(i31ref, ir::TrapCode::NullI31Ref);
         Ok(pos.ins().sshr_imm(i31ref, 1))
     }
 
@@ -1742,6 +1743,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor,
         i31ref: ir::Value,
     ) -> WasmResult<ir::Value> {
+        pos.ins().trapz(i31ref, ir::TrapCode::NullI31Ref);
         Ok(pos.ins().ushr_imm(i31ref, 1))
     }
 
