@@ -504,14 +504,3 @@ opt-level = 's'
 inherits = "release"
 codegen-units = 1
 lto = true
-
-[patch.crates-io]
-wasmparser = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wat = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wast = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wasmprinter = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wasm-encoder = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wasm-smith = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wasm-mutate = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wit-parser = { git = 'https://github.com/bytecodealliance/wasm-tools' }
-wit-component = { git = 'https://github.com/bytecodealliance/wasm-tools' }
