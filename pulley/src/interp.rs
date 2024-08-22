@@ -271,6 +271,14 @@ impl From<VRegVal> for Val {
 #[derive(Copy, Clone)]
 pub struct XRegVal(XRegUnion);
 
+impl PartialEq for XRegVal {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_u64() == other.get_u64()
+    }
+}
+
+impl Eq for XRegVal {}
+
 impl fmt::Debug for XRegVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("XRegVal")
@@ -304,6 +312,9 @@ impl Default for XRegVal {
 
 #[allow(missing_docs)]
 impl XRegVal {
+    /// Sentinel return address that signals the end of the call stack.
+    pub const HOST_RETURN_ADDR: Self = Self(XRegUnion { i64: -1 });
+
     pub fn new_i32(x: i32) -> Self {
         let mut val = XRegVal::default();
         val.set_i32(x);
@@ -566,8 +577,8 @@ impl MachineState {
         let sp = sp.as_mut_ptr();
         let sp = unsafe { sp.add(len) };
         state[XReg::sp] = XRegVal::new_ptr(sp);
-        state[XReg::fp] = XRegVal::new_i64(-1);
-        state[XReg::lr] = XRegVal::new_i64(-1);
+        state[XReg::fp] = XRegVal::HOST_RETURN_ADDR;
+        state[XReg::lr] = XRegVal::HOST_RETURN_ADDR;
 
         state
     }
@@ -622,7 +633,7 @@ impl OpVisitor for InterpreterVisitor<'_> {
     type Return = Continuation;
 
     fn ret(&mut self) -> Self::Return {
-        if self.state[XReg::lr].get_u64() == u64::MAX {
+        if self.state[XReg::lr] == XRegVal::HOST_RETURN_ADDR {
             Continuation::ReturnToHost
         } else {
             let return_addr = self.state[XReg::lr].get_ptr();
