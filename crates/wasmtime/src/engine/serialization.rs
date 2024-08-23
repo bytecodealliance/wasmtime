@@ -484,28 +484,21 @@ impl Metadata<'_> {
         } = self.features;
 
         use wasmparser::WasmFeatures as F;
-        Self::check_cfg_bool(
-            cfg!(feature = "gc"),
-            "gc",
+        Self::check_bool(
             reference_types,
             other.contains(F::REFERENCE_TYPES),
             "WebAssembly reference types support",
         )?;
-        Self::check_cfg_bool(
-            cfg!(feature = "gc"),
-            "gc",
+        Self::check_bool(
             function_references,
             other.contains(F::FUNCTION_REFERENCES),
             "WebAssembly function-references support",
         )?;
-        Self::check_cfg_bool(
-            cfg!(feature = "gc"),
-            "gc",
+        Self::check_bool(
             gc,
             other.contains(F::GC),
             "WebAssembly garbage collection support",
         )?;
-
         Self::check_bool(
             multi_value,
             other.contains(F::MULTI_VALUE),
@@ -572,7 +565,9 @@ impl Metadata<'_> {
             other.contains(F::COMPONENT_MODEL_MULTIPLE_RETURNS),
             "WebAssembly component model support for multiple returns",
         )?;
-        Self::check_bool(
+        Self::check_cfg_bool(
+            cfg!(feature = "gc"),
+            "gc",
             gc_types,
             other.contains(F::GC_TYPES),
             "support for WebAssembly gc types",

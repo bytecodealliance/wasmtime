@@ -1750,16 +1750,16 @@ impl Config {
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::THREADS
                     | WasmFeatures::RELAXED_SIMD
-                    | WasmFeatures::TAIL_CALL;
+                    | WasmFeatures::TAIL_CALL
+                    | WasmFeatures::GC_TYPES;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         // no support for simd on aarch64
                         unsupported |= WasmFeatures::SIMD;
-                        // technically this is mostly supported in the sense of
-                        // multi-tables work well enough but enough of MVP wasm
-                        // currently panics that this is used here instead to
-                        // disable most spec tests which require reference
-                        // types.
+
+                        // things like multi-table are technically supported on
+                        // winch on aarch64 but this helps gate most spec tests
+                        // by default which otherwise currently cause panics.
                         unsupported |= WasmFeatures::REFERENCE_TYPES;
                     }
 
@@ -1791,7 +1791,6 @@ impl Config {
         // subject to the criteria at
         // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
         features |= WasmFeatures::FLOATS;
-        features |= WasmFeatures::GC_TYPES;
         features |= WasmFeatures::MULTI_VALUE;
         features |= WasmFeatures::BULK_MEMORY;
         features |= WasmFeatures::SIGN_EXTENSION;
@@ -1802,8 +1801,9 @@ impl Config {
         features |= WasmFeatures::RELAXED_SIMD;
         features |= WasmFeatures::TAIL_CALL;
         features |= WasmFeatures::EXTENDED_CONST;
+        features |= WasmFeatures::REFERENCE_TYPES;
         if cfg!(feature = "gc") {
-            features |= WasmFeatures::REFERENCE_TYPES;
+            features |= WasmFeatures::GC_TYPES;
         }
         if cfg!(feature = "threads") {
             features |= WasmFeatures::THREADS;
