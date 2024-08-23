@@ -1785,32 +1785,26 @@ impl Config {
     /// `wasm_*` methods on `Config` are applied. Everything is then validated
     /// later in `Config::validate`.
     fn features(&self) -> WasmFeatures {
-        let mut features = WasmFeatures::empty();
+        // Wasmtime by default supports all of the wasm 2.0 version of the
+        // specification.
+        let mut features = WasmFeatures::wasm2();
 
         // On-by-default features that wasmtime has. Note that these are all
         // subject to the criteria at
         // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
-        features |= WasmFeatures::FLOATS;
-        features |= WasmFeatures::MULTI_VALUE;
-        features |= WasmFeatures::BULK_MEMORY;
-        features |= WasmFeatures::SIGN_EXTENSION;
-        features |= WasmFeatures::MUTABLE_GLOBAL;
-        features |= WasmFeatures::SATURATING_FLOAT_TO_INT;
         features |= WasmFeatures::MULTI_MEMORY;
-        features |= WasmFeatures::SIMD;
         features |= WasmFeatures::RELAXED_SIMD;
         features |= WasmFeatures::TAIL_CALL;
         features |= WasmFeatures::EXTENDED_CONST;
-        features |= WasmFeatures::REFERENCE_TYPES;
-        if cfg!(feature = "gc") {
-            features |= WasmFeatures::GC_TYPES;
-        }
-        if cfg!(feature = "threads") {
-            features |= WasmFeatures::THREADS;
-        }
-        if cfg!(feature = "component-model") {
-            features |= WasmFeatures::COMPONENT_MODEL;
-        }
+
+        // Set some features to their conditionally-enabled defaults depending
+        // on crate compile-time features.
+        features.set(WasmFeatures::GC_TYPES, cfg!(feature = "gc"));
+        features.set(WasmFeatures::THREADS, cfg!(feature = "threads"));
+        features.set(
+            WasmFeatures::COMPONENT_MODEL,
+            cfg!(feature = "component-model"),
+        );
 
         // From the default set of proposals remove any that the current
         // compiler backend may panic on if the module contains them.
