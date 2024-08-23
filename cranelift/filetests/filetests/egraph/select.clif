@@ -208,3 +208,120 @@ block0(v0: i32, v1: i32):
 ; check: v6 = icmp sgt v0, v1
 ; check: v8 = bmask.i64 v6
 ; check: return v8
+
+;; select(cond, unop(x), unop(y)) => unop(select(cond, x, y))
+function %transpose_unop_gvn_1(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = ineg v1
+    v4 = ineg v2
+    v5 = select v0, v3, v4
+    return v5
+    ; check: v6 = select v0, v1, v2
+    ; check: v7 = ineg v6
+    ; check: return v7
+}
+
+;; select(cond, binop(x, z), binop(y, z)) => binop(select(cond, x, y), z)
+function %transpose_binop_gvn_1(i8, i32, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v1, v3
+    v5 = iadd v2, v3
+    v6 = select v0, v4, v5
+    return v6
+    ; check: v7 = select v0, v1, v2
+    ; check: v8 = iadd v7, v3
+    ; check: return v8
+}
+
+;; select(cond, binop(x, y), binop(x, z)) => binop(x, select(cond, y, z))
+function %transpose_binop_gvn_2(i8, i32, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v1, v2
+    v5 = iadd v1, v3
+    v6 = select v0, v4, v5
+    return v6
+    ; check: v7 = select v0, v2, v3
+    ; check: v8 = iadd v1, v7
+    ; check: return v8
+}
+
+;; select(cond, ternop(w, y, z), ternop(x, y, z)) => ternop(select(cond, w, x), y, z)
+function %transpose_ternop_gvn_1(i8, f32, f32, f32, f32) -> f32 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
+    v5 = fma v1, v3, v4
+    v6 = fma v2, v3, v4
+    v7 = select v0, v5, v6
+    return v6
+    ; check: v6 = fma v2, v3, v4
+    ; check: return v6
+}
+
+;; select(cond, ternop(w, x, z), ternop(w, y, z)) => ternop(w, select(cond, x, y), z)
+function %transpose_ternop_gvn_2(i8, f32, f32, f32, f32) -> f32 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
+    v5 = fma v1, v2, v4
+    v6 = fma v1, v3, v4
+    v7 = select v0, v5, v6
+    return v6
+    ; check: v6 = fma v1, v3, v4
+    ; check: return v6
+}
+
+;; select(cond, ternop(w, x, y), ternop(w, x, z)) => ternop(w, x, select(cond, y, z))
+function %transpose_ternop_gvn_3(i8, f32, f32, f32, f32) -> f32 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
+    v5 = fma v1, v2, v3
+    v6 = fma v1, v2, v4
+    v7 = select v0, v5, v6
+    return v6
+    ; check: v6 = fma v1, v2, v4
+    ; check: return v6
+}
+
+;; select(cond, icmp(cc, x, z), icmp(cc, y, z)) => icmp(cc, select(cond, x, y), z)
+function %transpose_icmp_gvn_1(i8, i32, i32, i32) -> i8 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v5 = icmp eq v1, v3
+    v6 = icmp eq v2, v3
+    v7 = select v0, v5, v6
+    return v7
+    ; check: v8 = select v0, v1, v2
+    ; check: v9 = icmp eq v8, v3
+    ; check: return v9
+}
+
+;; select(cond, icmp(cc, x, y), icmp(cc, x, z)) => icmp(cc, x, select(cond, y, z))
+function %transpose_icmp_gvn_2(i8, i32, i32, i32) -> i8 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v5 = icmp eq v1, v2
+    v6 = icmp eq v1, v3
+    v7 = select v0, v5, v6
+    return v7
+    ; check: v8 = select v0, v2, v3
+    ; check: v9 = icmp eq v1, v8
+    ; check: return v9
+}
+
+;; select(cond, fcmp(cc, x, z), fcmp(cc, y, z)) => fcmp(cc, select(cond, x, y), z)
+function %transpose_fcmp_gvn_1(i8, f32, f32, f32) -> i8 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32):
+    v5 = fcmp eq v1, v3
+    v6 = fcmp eq v2, v3
+    v7 = select v0, v5, v6
+    return v7
+    ; check: v8 = select v0, v1, v2
+    ; check: v9 = fcmp eq v8, v3
+    ; check: return v9
+}
+
+;; select(cond, fcmp(cc, x, y), fcmp(cc, x, z)) => fcmp(cc, x, select(cond, y, z))
+function %transpose_fcmp_gvn_2(i8, f32, f32, f32) -> i8 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32):
+    v5 = fcmp eq v1, v2
+    v6 = fcmp eq v1, v3
+    v7 = select v0, v5, v6
+    return v7
+    ; check: v8 = select v0, v2, v3
+    ; check: v9 = fcmp eq v1, v8
+    ; check: return v9
+}

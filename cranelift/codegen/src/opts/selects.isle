@@ -75,3 +75,44 @@
 (rule (simplify (bor (ty_vec128 ty) (band ty (bnot ty c) y) (band ty x c))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty c x))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty x c))) (bitselect ty c x y))
+
+;; transpose select on operation to operation on select when it increases sharing
+;; select(cond, unop(x), unop(y)) => unop(select(cond, x, y))
+(rule (simplify (select ty cond (unop _ op x) (unop _ op y)))
+      (unop ty op (select ty cond x y)))
+
+;; select(cond, binop(x, z), binop(y, z)) => binop(select(cond, x, y), z)
+(rule (simplify (select ty cond (binop _ op x z) (binop _ op y z)))
+      (binop ty op (select ty cond x y) z))
+
+;; select(cond, binop(x, y), binop(x, z)) => binop(x, select(cond, y, z))
+(rule (simplify (select ty cond (binop _ op x y) (binop _ op x z)))
+      (binop ty op x (select ty cond y z)))
+
+;; select(cond, ternop(w, y, z), ternop(x, y, z)) => ternop(select(cond, w, x), y, z)
+(rule (simplify (select ty cond (ternop ty op w y z) (ternop ty op x y z)))
+      (ternop ty op (select ty cond w x) y z))
+
+;; select(cond, ternop(w, x, z), ternop(w, y, z)) => ternop(w, select(cond, x, y), z)
+(rule (simplify (select ty cond (ternop _ op w x z) (ternop _ op w y z)))
+      (ternop ty op w (select ty cond x y) z))
+
+;; select(cond, ternop(w, x, y), ternop(w, x, z)) => ternop(w, x, select(cond, y, z))
+(rule (simplify (select ty cond (ternop _ op w x y) (ternop _ op w x z)))
+      (ternop ty op w x (select ty cond y z)))
+
+;; select(cond, icmp(cc, x, z), icmp(cc, y, z)) => icmp(cc, select(cond, x, y), z)
+(rule (simplify (select cmp_ty cond (icmp cmp_ty cc x @ (value_type sel_ty) z) (icmp cmp_ty cc y z)))
+      (icmp cmp_ty cc (select sel_ty cond x y) z))
+
+;; select(cond, icmp(cc, x, y), icmp(cc, x, z)) => icmp(cc, x, select(cond, y, z))
+(rule (simplify (select cmp_ty cond (icmp cmp_ty cc x @ (value_type sel_ty) y) (icmp cmp_ty cc x z)))
+      (icmp cmp_ty cc x (select sel_ty cond y z)))
+
+;; select(cond, fcmp(cc, x, z), fcmp(cc, y, z)) => fcmp(cc, select(cond, x, y), z)
+(rule (simplify (select cmp_ty cond (fcmp cmp_ty cc x @ (value_type sel_ty) z) (fcmp cmp_ty cc y z)))
+      (fcmp cmp_ty cc (select sel_ty cond x y) z))
+
+;; select(cond, fcmp(cc, x, y), fcmp(cc, x, z)) => fcmp(cc, x, select(cond, y, z))
+(rule (simplify (select cmp_ty cond (fcmp cmp_ty cc x @ (value_type sel_ty) y) (fcmp cmp_ty cc x z)))
+      (fcmp cmp_ty cc x (select sel_ty cond y z)))
