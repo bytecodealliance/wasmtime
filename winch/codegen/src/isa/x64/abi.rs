@@ -2,61 +2,9 @@ use super::regs;
 use crate::{
     abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI},
     isa::{reg::Reg, CallingConvention},
+    RegIndexEnv,
 };
 use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
-
-/// Helper environment to track argument-register
-/// assignment in x64.
-///
-/// The first element tracks the general purpose register index.
-/// The second element tracks the floating point register index.
-#[derive(Default)]
-struct RegIndexEnv {
-    /// General purpose register index or the field used for absolute
-    /// counts.
-    gpr_or_absolute_count: u8,
-    /// Floating point register index.
-    fpr: u8,
-    /// Whether the count should be absolute rather than per register class.
-    /// When this field is true, only the `gpr_or_absolute_count` field is
-    /// incremented.
-    absolute_count: bool,
-}
-
-impl RegIndexEnv {
-    fn with_absolute_count() -> Self {
-        Self {
-            gpr_or_absolute_count: 0,
-            fpr: 0,
-            absolute_count: true,
-        }
-    }
-}
-
-impl RegIndexEnv {
-    fn next_gpr(&mut self) -> Option<u8> {
-        Self::increment(&mut self.gpr_or_absolute_count)
-    }
-
-    fn next_fpr(&mut self) -> Option<u8> {
-        if self.absolute_count {
-            Self::increment(&mut self.gpr_or_absolute_count)
-        } else {
-            Self::increment(&mut self.fpr)
-        }
-    }
-
-    fn increment(index: &mut u8) -> Option<u8> {
-        let current = *index;
-        match index.checked_add(1) {
-            Some(next) => {
-                *index = next;
-                Some(current)
-            }
-            None => None,
-        }
-    }
-}
 
 #[derive(Default)]
 pub(crate) struct X64ABI;
@@ -99,9 +47,9 @@ impl ABI for X64ABI {
         // See
         // https://learn.microsoft.com/en-us/cpp/build/stack-usage?view=msvc-170#stack-allocation
         let (params_stack_offset, mut params_index_env) = if is_fastcall {
-            (32, RegIndexEnv::with_absolute_count())
+            (32, RegIndexEnv::with_absolute_limit(4))
         } else {
-            (0, RegIndexEnv::default())
+            (0, RegIndexEnv::with_limits_per_class(6, 8))
         };
 
         let results = Self::abi_results(returns, call_conv);
@@ -124,11 +72,13 @@ impl ABI for X64ABI {
     }
 
     fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults {
+        assert!(call_conv.is_default() || call_conv.is_fastcall() || call_conv.is_systemv());
         // Use absolute count for results given that for Winch's
         // default CallingConvention only one register is used for results
-        // independent of the register class. This also aligns with how
-        // multiple results are handled by Wasmtime.
-        let mut results_index_env = RegIndexEnv::with_absolute_count();
+        // independent of the register class.
+        // In the case of 2+ results, the rest are passed in the stack,
+        // similar to how Wasmtime handles multi-value returns.
+        let mut results_index_env = RegIndexEnv::with_absolute_limit(1);
         ABIResults::from(returns, call_conv, |ty, offset| {
             Self::to_abi_operand(
                 ty,
@@ -325,7 +275,7 @@ impl X64ABI {
 
 #[cfg(test)]
 mod tests {
-    use super::{RegIndexEnv, X64ABI};
+    use super::X64ABI;
     use crate::{
         abi::{ABIOperand, ABI},
         isa::{reg::Reg, x64::regs, CallingConvention},
@@ -334,26 +284,6 @@ mod tests {
         WasmFuncType,
         WasmValType::{self, *},
     };
-
-    #[test]
-    fn test_get_next_reg_index() {
-        let mut index_env = RegIndexEnv::default();
-        assert_eq!(index_env.next_fpr(), Some(0));
-        assert_eq!(index_env.next_gpr(), Some(0));
-        assert_eq!(index_env.next_fpr(), Some(1));
-        assert_eq!(index_env.next_gpr(), Some(1));
-        assert_eq!(index_env.next_fpr(), Some(2));
-        assert_eq!(index_env.next_gpr(), Some(2));
-    }
-
-    #[test]
-    fn test_reg_index_env_absolute_count() {
-        let mut e = RegIndexEnv::with_absolute_count();
-        assert!(e.next_gpr() == Some(0));
-        assert!(e.next_fpr() == Some(1));
-        assert!(e.next_gpr() == Some(2));
-        assert!(e.next_fpr() == Some(3));
-    }
 
     #[test]
     fn int_abi_sig() {

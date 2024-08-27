@@ -1,63 +1,11 @@
 use super::regs;
 use crate::abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
+use crate::RegIndexEnv;
 use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
-
-/// Helper environment to track argument-register
-/// assignment in aarch64.
-///
-/// The first element tracks the general purpose register index, capped at 7 (x0-x7).
-/// The second element tracks the floating point register index, capped at 7 (v0-v7).
-// Follows
-// https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing
-struct RegIndexEnv {
-    xregs: u8,
-    vregs: u8,
-    limit: u8,
-}
-
-impl Default for RegIndexEnv {
-    fn default() -> Self {
-        Self {
-            xregs: 0,
-            vregs: 0,
-            limit: 8,
-        }
-    }
-}
-
-impl RegIndexEnv {
-    fn with_limit(limit: u8) -> Self {
-        let mut default = Self::default();
-        default.limit = limit;
-        default
-    }
-
-    fn next_xreg(&mut self) -> Option<u8> {
-        if self.xregs < self.limit {
-            return Some(Self::increment(&mut self.xregs));
-        }
-
-        None
-    }
-
-    fn next_vreg(&mut self) -> Option<u8> {
-        if self.vregs < self.limit {
-            return Some(Self::increment(&mut self.vregs));
-        }
-
-        None
-    }
-
-    fn increment(index: &mut u8) -> u8 {
-        let current = *index;
-        *index += 1;
-        current
-    }
-}
 
 impl ABI for Aarch64ABI {
     // TODO change to 16 once SIMD is supported
@@ -84,7 +32,7 @@ impl ABI for Aarch64ABI {
     ) -> ABISig {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
 
-        let mut params_index_env = RegIndexEnv::default();
+        let mut params_index_env = RegIndexEnv::with_limits_per_class(8, 8);
         let results = Self::abi_results(returns, call_conv);
         let params =
             ABIParams::from::<_, Self>(params, 0, results.on_stack(), |ty, stack_offset| {
@@ -101,8 +49,13 @@ impl ABI for Aarch64ABI {
 
     fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
+        // Use absolute count for results given that for Winch's
+        // default CallingConvention only one register is used for results
+        // independent of the register class.
+        // In the case of 2+ results, the rest are passed in the stack,
+        // similar to how Wasmtime handles multi-value returns.
+        let mut returns_index_env = RegIndexEnv::with_absolute_limit(1);
 
-        let mut returns_index_env = RegIndexEnv::with_limit(1);
         ABIResults::from(returns, call_conv, |ty, stack_offset| {
             Self::to_abi_operand(
                 ty,
@@ -156,11 +109,11 @@ impl Aarch64ABI {
     ) -> (ABIOperand, u32) {
         let (reg, ty) = match wasm_arg {
             ty @ (WasmValType::I32 | WasmValType::I64) => {
-                (index_env.next_xreg().map(regs::xreg), ty)
+                (index_env.next_gpr().map(regs::xreg), ty)
             }
 
             ty @ (WasmValType::F32 | WasmValType::F64) => {
-                (index_env.next_vreg().map(regs::vreg), ty)
+                (index_env.next_fpr().map(regs::vreg), ty)
             }
 
             ty => unreachable!("Unsupported argument type {:?}", ty),
@@ -188,7 +141,7 @@ impl Aarch64ABI {
 
 #[cfg(test)]
 mod tests {
-    use super::{Aarch64ABI, RegIndexEnv};
+    use super::Aarch64ABI;
     use crate::{
         abi::{ABIOperand, ABI},
         isa::aarch64::regs,
@@ -199,17 +152,6 @@ mod tests {
         WasmFuncType,
         WasmValType::{self, *},
     };
-
-    #[test]
-    fn test_get_next_reg_index() {
-        let mut index_env = RegIndexEnv::default();
-        assert_eq!(index_env.next_xreg(), Some(0));
-        assert_eq!(index_env.next_vreg(), Some(0));
-        assert_eq!(index_env.next_xreg(), Some(1));
-        assert_eq!(index_env.next_vreg(), Some(1));
-        assert_eq!(index_env.next_xreg(), Some(2));
-        assert_eq!(index_env.next_vreg(), Some(2));
-    }
 
     #[test]
     fn xreg_abi_sig() {
@@ -272,6 +214,53 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::vreg(3));
         match_reg_arg(params.get(7).unwrap(), F32, regs::vreg(4));
         match_reg_arg(params.get(8).unwrap(), F64, regs::vreg(5));
+    }
+
+    #[test]
+    fn int_abi_sig_multi_returns() {
+        let wasm_sig = WasmFuncType::new(
+            [I32, I64, I32, I64, I32, I32].into(),
+            [I32, I32, I32].into(),
+        );
+
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let params = sig.params;
+        let results = sig.results;
+
+        match_reg_arg(params.get(0).unwrap(), I32, regs::xreg(0));
+        match_reg_arg(params.get(1).unwrap(), I64, regs::xreg(1));
+        match_reg_arg(params.get(2).unwrap(), I32, regs::xreg(2));
+        match_reg_arg(params.get(3).unwrap(), I64, regs::xreg(3));
+        match_reg_arg(params.get(4).unwrap(), I32, regs::xreg(4));
+        match_reg_arg(params.get(5).unwrap(), I32, regs::xreg(5));
+
+        match_stack_arg(results.get(0).unwrap(), I32, 4);
+        match_stack_arg(results.get(1).unwrap(), I32, 0);
+        match_reg_arg(results.get(2).unwrap(), I32, regs::xreg(0));
+    }
+
+    #[test]
+    fn mixed_abi_sig_multi_returns() {
+        let wasm_sig = WasmFuncType::new(
+            [F32, I32, I64, F64, I32].into(),
+            [I32, F32, I32, F32, I64].into(),
+        );
+
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let params = sig.params;
+        let results = sig.results;
+
+        match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));
+        match_reg_arg(params.get(1).unwrap(), I32, regs::xreg(0));
+        match_reg_arg(params.get(2).unwrap(), I64, regs::xreg(1));
+        match_reg_arg(params.get(3).unwrap(), F64, regs::vreg(1));
+        match_reg_arg(params.get(4).unwrap(), I32, regs::xreg(2));
+
+        match_stack_arg(results.get(0).unwrap(), I32, 12);
+        match_stack_arg(results.get(1).unwrap(), F32, 8);
+        match_stack_arg(results.get(2).unwrap(), I32, 4);
+        match_stack_arg(results.get(3).unwrap(), F32, 0);
+        match_reg_arg(results.get(4).unwrap(), I64, regs::xreg(0));
     }
 
     fn match_reg_arg(abi_arg: &ABIOperand, expected_ty: WasmValType, expected_reg: Reg) {
