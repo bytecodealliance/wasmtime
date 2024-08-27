@@ -4,71 +4,148 @@
 /// This structure is created through [`TheWorldPre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
+///
+/// For more information see [`TheWorld`] as well.
 pub struct TheWorldPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
-    interface0: exports::foo::foo::integers::GuestPre,
+    indices: TheWorldIndices,
 }
 impl<T> Clone for TheWorldPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
-            interface0: self.interface0.clone(),
+            indices: self.indices.clone(),
         }
     }
+}
+impl<_T> TheWorldPre<_T> {
+    /// Creates a new copy of `TheWorldPre` bindings which can then
+    /// be used to instantiate into a particular store.
+    ///
+    /// This method may fail if the component behind `instance_pre`
+    /// does not have the required exports.
+    pub fn new(
+        instance_pre: wasmtime::component::InstancePre<_T>,
+    ) -> wasmtime::Result<Self> {
+        let indices = TheWorldIndices::new(instance_pre.component())?;
+        Ok(Self { instance_pre, indices })
+    }
+    pub fn engine(&self) -> &wasmtime::Engine {
+        self.instance_pre.engine()
+    }
+    pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+        &self.instance_pre
+    }
+    /// Instantiates a new instance of [`TheWorld`] within the
+    /// `store` provided.
+    ///
+    /// This function will use `self` as the pre-instantiated
+    /// instance to perform instantiation. Afterwards the preloaded
+    /// indices in `self` are used to lookup all exports on the
+    /// resulting instance.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheWorld>
+    where
+        _T: Send,
+    {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+/// Auto-generated bindings for index of the exports of
+/// `the-world`.
+///
+/// This is an implementation detail of [`TheWorldPre`] and can
+/// be constructed if needed as well.
+///
+/// For more information see [`TheWorld`] as well.
+#[derive(Clone)]
+pub struct TheWorldIndices {
+    interface0: exports::foo::foo::integers::GuestIndices,
 }
 /// Auto-generated bindings for an instance a component which
 /// implements the world `the-world`.
 ///
-/// This structure is created through either
-/// [`TheWorld::instantiate_async`] or by first creating
-/// a [`TheWorldPre`] followed by using
-/// [`TheWorldPre::instantiate_async`].
+/// This structure can be created through a number of means
+/// depending on your requirements and what you have on hand:
+///
+/// * The most convenient way is to use
+///   [`TheWorld::instantiate_async`] which only needs a
+///   [`Store`], [`Component`], and [`Linker`].
+///
+/// * Alternatively you can create a [`TheWorldPre`] ahead of
+///   time with a [`Component`] to front-load string lookups
+///   of exports once instead of per-instantiation. This
+///   method then uses [`TheWorldPre::instantiate_async`] to
+///   create a [`TheWorld`].
+///
+/// * If you've instantiated the instance yourself already
+///   then you can use [`TheWorld::new_instance`]
+///
+/// * You can also access the guts of instantiation through
+///   [`TheWorldIndices::new_instance`] followed
+///   by [`TheWorldIndices::load`] to crate an instance of this
+///   type.
+///
+/// These methods are all equivalent to one another and move
+/// around the tradeoff of what work is performed when.
+///
+/// [`Store`]: wasmtime::Store
+/// [`Component`]: wasmtime::component::Component
+/// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {
     interface0: exports::foo::foo::integers::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
-    impl<_T> TheWorldPre<_T> {
-        /// Creates a new copy of `TheWorldPre` bindings which can then
+    impl TheWorldIndices {
+        /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
-        /// This method may fail if the component behind `instance_pre`
-        /// does not have the required exports.
+        /// This method may fail if the component does not have the
+        /// required exports.
         pub fn new(
-            instance_pre: wasmtime::component::InstancePre<_T>,
+            component: &wasmtime::component::Component,
         ) -> wasmtime::Result<Self> {
-            let _component = instance_pre.component();
-            let interface0 = exports::foo::foo::integers::GuestPre::new(_component)?;
-            Ok(TheWorldPre {
-                instance_pre,
-                interface0,
-            })
+            let _component = component;
+            let interface0 = exports::foo::foo::integers::GuestIndices::new(_component)?;
+            Ok(TheWorldIndices { interface0 })
         }
-        /// Instantiates a new instance of [`TheWorld`] within the
-        /// `store` provided.
+        /// Creates a new instance of [`TheWorldIndices`] from an
+        /// instantiated component.
         ///
-        /// This function will use `self` as the pre-instantiated
-        /// instance to perform instantiation. Afterwards the preloaded
-        /// indices in `self` are used to lookup all exports on the
-        /// resulting instance.
-        pub async fn instantiate_async(
+        /// This method of creating a [`TheWorld`] will perform string
+        /// lookups for all exports when this method is called. This
+        /// will only succeed if the provided instance matches the
+        /// requirements of [`TheWorld`].
+        pub fn new_instance(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Self> {
+            let _instance = instance;
+            let interface0 = exports::foo::foo::integers::GuestIndices::new_instance(
+                &mut store,
+                _instance,
+            )?;
+            Ok(TheWorldIndices { interface0 })
+        }
+        /// Uses the indices stored in `self` to load an instance
+        /// of [`TheWorld`] from the instance provided.
+        ///
+        /// Note that at this time this method will additionally
+        /// perform type-checks of all exports.
+        pub fn load(
             &self,
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
-        ) -> wasmtime::Result<TheWorld>
-        where
-            _T: Send,
-        {
-            let mut store = store.as_context_mut();
-            let _instance = self.instance_pre.instantiate_async(&mut store).await?;
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheWorld> {
+            let _instance = instance;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(TheWorld { interface0 })
-        }
-        pub fn engine(&self) -> &wasmtime::Engine {
-            self.instance_pre.engine()
-        }
-        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
-            &self.instance_pre
         }
     }
     impl TheWorld {
@@ -84,6 +161,15 @@ const _: () = {
         {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
+        }
+        /// Convenience wrapper around [`TheWorldIndices::new_instance`] and
+        /// [`TheWorldIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheWorld> {
+            let indices = TheWorldIndices::new_instance(&mut store, instance)?;
+            indices.load(store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
@@ -435,7 +521,7 @@ pub mod exports {
                     pair_ret: wasmtime::component::Func,
                 }
                 #[derive(Clone)]
-                pub struct GuestPre {
+                pub struct GuestIndices {
                     a1: wasmtime::component::ComponentExportIndex,
                     a2: wasmtime::component::ComponentExportIndex,
                     a3: wasmtime::component::ComponentExportIndex,
@@ -455,11 +541,16 @@ pub mod exports {
                     r8: wasmtime::component::ComponentExportIndex,
                     pair_ret: wasmtime::component::ComponentExportIndex,
                 }
-                impl GuestPre {
+                impl GuestIndices {
+                    /// Constructor for [`GuestIndices`] which takes a
+                    /// [`Component`](wasmtime::component::Component) as input and can be executed
+                    /// before instantiation.
+                    ///
+                    /// This constructor can be used to front-load string lookups to find exports
+                    /// within a component.
                     pub fn new(
                         component: &wasmtime::component::Component,
-                    ) -> wasmtime::Result<GuestPre> {
-                        let _component = component;
+                    ) -> wasmtime::Result<GuestIndices> {
                         let (_, instance) = component
                             .export_index(None, "foo:foo/integers")
                             .ok_or_else(|| {
@@ -467,10 +558,34 @@ pub mod exports {
                                     "no exported instance named `foo:foo/integers`"
                                 )
                             })?;
-                        let _lookup = |name: &str| {
-                            _component
-                                .export_index(Some(&instance), name)
-                                .map(|p| p.1)
+                        Self::_new(|name| {
+                            component.export_index(Some(&instance), name).map(|p| p.1)
+                        })
+                    }
+                    /// This constructor is similar to [`GuestIndices::new`] except that it
+                    /// performs string lookups after instantiation time.
+                    pub fn new_instance(
+                        mut store: impl wasmtime::AsContextMut,
+                        instance: &wasmtime::component::Instance,
+                    ) -> wasmtime::Result<GuestIndices> {
+                        let instance_export = instance
+                            .get_export(&mut store, None, "foo:foo/integers")
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no exported instance named `foo:foo/integers`"
+                                )
+                            })?;
+                        Self::_new(|name| {
+                            instance.get_export(&mut store, Some(&instance_export), name)
+                        })
+                    }
+                    fn _new(
+                        mut lookup: impl FnMut(
+                            &str,
+                        ) -> Option<wasmtime::component::ComponentExportIndex>,
+                    ) -> wasmtime::Result<GuestIndices> {
+                        let mut lookup = move |name| {
+                            lookup(name)
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/integers` does \
@@ -478,25 +593,26 @@ pub mod exports {
                                     )
                                 })
                         };
-                        let a1 = _lookup("a1")?;
-                        let a2 = _lookup("a2")?;
-                        let a3 = _lookup("a3")?;
-                        let a4 = _lookup("a4")?;
-                        let a5 = _lookup("a5")?;
-                        let a6 = _lookup("a6")?;
-                        let a7 = _lookup("a7")?;
-                        let a8 = _lookup("a8")?;
-                        let a9 = _lookup("a9")?;
-                        let r1 = _lookup("r1")?;
-                        let r2 = _lookup("r2")?;
-                        let r3 = _lookup("r3")?;
-                        let r4 = _lookup("r4")?;
-                        let r5 = _lookup("r5")?;
-                        let r6 = _lookup("r6")?;
-                        let r7 = _lookup("r7")?;
-                        let r8 = _lookup("r8")?;
-                        let pair_ret = _lookup("pair-ret")?;
-                        Ok(GuestPre {
+                        let _ = &mut lookup;
+                        let a1 = lookup("a1")?;
+                        let a2 = lookup("a2")?;
+                        let a3 = lookup("a3")?;
+                        let a4 = lookup("a4")?;
+                        let a5 = lookup("a5")?;
+                        let a6 = lookup("a6")?;
+                        let a7 = lookup("a7")?;
+                        let a8 = lookup("a8")?;
+                        let a9 = lookup("a9")?;
+                        let r1 = lookup("r1")?;
+                        let r2 = lookup("r2")?;
+                        let r3 = lookup("r3")?;
+                        let r4 = lookup("r4")?;
+                        let r5 = lookup("r5")?;
+                        let r6 = lookup("r6")?;
+                        let r7 = lookup("r7")?;
+                        let r8 = lookup("r8")?;
+                        let pair_ret = lookup("pair-ret")?;
+                        Ok(GuestIndices {
                             a1,
                             a2,
                             a3,

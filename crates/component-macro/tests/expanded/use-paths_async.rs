@@ -4,62 +4,138 @@
 /// This structure is created through [`DPre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
+///
+/// For more information see [`D`] as well.
 pub struct DPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
+    indices: DIndices,
 }
 impl<T> Clone for DPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
+            indices: self.indices.clone(),
         }
     }
 }
+impl<_T> DPre<_T> {
+    /// Creates a new copy of `DPre` bindings which can then
+    /// be used to instantiate into a particular store.
+    ///
+    /// This method may fail if the component behind `instance_pre`
+    /// does not have the required exports.
+    pub fn new(
+        instance_pre: wasmtime::component::InstancePre<_T>,
+    ) -> wasmtime::Result<Self> {
+        let indices = DIndices::new(instance_pre.component())?;
+        Ok(Self { instance_pre, indices })
+    }
+    pub fn engine(&self) -> &wasmtime::Engine {
+        self.instance_pre.engine()
+    }
+    pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+        &self.instance_pre
+    }
+    /// Instantiates a new instance of [`D`] within the
+    /// `store` provided.
+    ///
+    /// This function will use `self` as the pre-instantiated
+    /// instance to perform instantiation. Afterwards the preloaded
+    /// indices in `self` are used to lookup all exports on the
+    /// resulting instance.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<D>
+    where
+        _T: Send,
+    {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+/// Auto-generated bindings for index of the exports of
+/// `d`.
+///
+/// This is an implementation detail of [`DPre`] and can
+/// be constructed if needed as well.
+///
+/// For more information see [`D`] as well.
+#[derive(Clone)]
+pub struct DIndices {}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `d`.
 ///
-/// This structure is created through either
-/// [`D::instantiate_async`] or by first creating
-/// a [`DPre`] followed by using
-/// [`DPre::instantiate_async`].
+/// This structure can be created through a number of means
+/// depending on your requirements and what you have on hand:
+///
+/// * The most convenient way is to use
+///   [`D::instantiate_async`] which only needs a
+///   [`Store`], [`Component`], and [`Linker`].
+///
+/// * Alternatively you can create a [`DPre`] ahead of
+///   time with a [`Component`] to front-load string lookups
+///   of exports once instead of per-instantiation. This
+///   method then uses [`DPre::instantiate_async`] to
+///   create a [`D`].
+///
+/// * If you've instantiated the instance yourself already
+///   then you can use [`D::new_instance`]
+///
+/// * You can also access the guts of instantiation through
+///   [`DIndices::new_instance`] followed
+///   by [`DIndices::load`] to crate an instance of this
+///   type.
+///
+/// These methods are all equivalent to one another and move
+/// around the tradeoff of what work is performed when.
+///
+/// [`Store`]: wasmtime::Store
+/// [`Component`]: wasmtime::component::Component
+/// [`Linker`]: wasmtime::component::Linker
 pub struct D {}
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
-    impl<_T> DPre<_T> {
-        /// Creates a new copy of `DPre` bindings which can then
+    impl DIndices {
+        /// Creates a new copy of `DIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
-        /// This method may fail if the component behind `instance_pre`
-        /// does not have the required exports.
+        /// This method may fail if the component does not have the
+        /// required exports.
         pub fn new(
-            instance_pre: wasmtime::component::InstancePre<_T>,
+            component: &wasmtime::component::Component,
         ) -> wasmtime::Result<Self> {
-            let _component = instance_pre.component();
-            Ok(DPre { instance_pre })
+            let _component = component;
+            Ok(DIndices {})
         }
-        /// Instantiates a new instance of [`D`] within the
-        /// `store` provided.
+        /// Creates a new instance of [`DIndices`] from an
+        /// instantiated component.
         ///
-        /// This function will use `self` as the pre-instantiated
-        /// instance to perform instantiation. Afterwards the preloaded
-        /// indices in `self` are used to lookup all exports on the
-        /// resulting instance.
-        pub async fn instantiate_async(
+        /// This method of creating a [`D`] will perform string
+        /// lookups for all exports when this method is called. This
+        /// will only succeed if the provided instance matches the
+        /// requirements of [`D`].
+        pub fn new_instance(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Self> {
+            let _instance = instance;
+            Ok(DIndices {})
+        }
+        /// Uses the indices stored in `self` to load an instance
+        /// of [`D`] from the instance provided.
+        ///
+        /// Note that at this time this method will additionally
+        /// perform type-checks of all exports.
+        pub fn load(
             &self,
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
-        ) -> wasmtime::Result<D>
-        where
-            _T: Send,
-        {
-            let mut store = store.as_context_mut();
-            let _instance = self.instance_pre.instantiate_async(&mut store).await?;
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<D> {
+            let _instance = instance;
             Ok(D {})
-        }
-        pub fn engine(&self) -> &wasmtime::Engine {
-            self.instance_pre.engine()
-        }
-        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
-            &self.instance_pre
         }
     }
     impl D {
@@ -75,6 +151,15 @@ const _: () = {
         {
             let pre = linker.instantiate_pre(component)?;
             DPre::new(pre)?.instantiate_async(store).await
+        }
+        /// Convenience wrapper around [`DIndices::new_instance`] and
+        /// [`DIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<D> {
+            let indices = DIndices::new_instance(&mut store, instance)?;
+            indices.load(store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
