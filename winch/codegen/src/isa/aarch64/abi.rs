@@ -31,7 +31,10 @@ impl ABI for Aarch64ABI {
         call_conv: &CallingConvention,
     ) -> ABISig {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
-
+        // The first element tracks the general purpose register index, capped at 7 (x0-x7).
+        // The second element tracks the floating point register index, capped at 7 (v0-v7).
+        // Follows
+        // https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing
         let mut params_index_env = RegIndexEnv::with_limits_per_class(8, 8);
         let results = Self::abi_results(returns, call_conv);
         let params =
