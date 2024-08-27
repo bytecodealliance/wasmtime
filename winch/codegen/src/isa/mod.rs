@@ -221,3 +221,100 @@ impl Debug for &dyn TargetIsa {
         )
     }
 }
+
+/// Per-class register environment.
+pub(crate) struct RegClassEnv {
+    /// Float register class limit.
+    limit: u8,
+    /// Float register class index.
+    index: u8,
+}
+
+/// Helper environment to track register assignment for Winch's default calling
+/// convention.
+pub(crate) struct RegIndexEnv {
+    /// Int register environment.
+    int: RegClassEnv,
+    /// Float register environment.
+    float: Option<RegClassEnv>,
+}
+
+impl RegIndexEnv {
+    fn with_limits_per_class(int: u8, float: u8) -> Self {
+        let int = RegClassEnv {
+            limit: int,
+            index: 0,
+        };
+
+        let float = RegClassEnv {
+            limit: float,
+            index: 0,
+        };
+
+        Self {
+            int,
+            float: Some(float),
+        }
+    }
+
+    fn with_absolute_limit(limit: u8) -> Self {
+        let int = RegClassEnv { limit, index: 0 };
+
+        Self { int, float: None }
+    }
+}
+
+impl RegIndexEnv {
+    fn next_gpr(&mut self) -> Option<u8> {
+        (self.int.index < self.int.limit)
+            .then(|| Self::increment(&mut self.int.index))
+            .flatten()
+    }
+
+    fn next_fpr(&mut self) -> Option<u8> {
+        if let Some(f) = self.float.as_mut() {
+            (f.index < f.limit)
+                .then(|| Self::increment(&mut f.index))
+                .flatten()
+        } else {
+            // If a single `RegClassEnv` is used, it means that the count is
+            // absolute, so we default to calling `next_gpr`.
+            self.next_gpr()
+        }
+    }
+
+    fn increment(index: &mut u8) -> Option<u8> {
+        let current = *index;
+        match index.checked_add(1) {
+            Some(next) => {
+                *index = next;
+                Some(current)
+            }
+            None => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RegIndexEnv;
+    #[test]
+    fn test_get_next_reg_index() {
+        let mut index_env = RegIndexEnv::with_limits_per_class(3, 3);
+        assert_eq!(index_env.next_fpr(), Some(0));
+        assert_eq!(index_env.next_gpr(), Some(0));
+        assert_eq!(index_env.next_fpr(), Some(1));
+        assert_eq!(index_env.next_gpr(), Some(1));
+        assert_eq!(index_env.next_fpr(), Some(2));
+        assert_eq!(index_env.next_gpr(), Some(2));
+    }
+
+    #[test]
+    fn test_reg_index_env_absolute_count() {
+        let mut e = RegIndexEnv::with_absolute_limit(4);
+        assert!(e.next_gpr() == Some(0));
+        assert!(e.next_fpr() == Some(1));
+        assert!(e.next_gpr() == Some(2));
+        assert!(e.next_fpr() == Some(3));
+    }
+}
