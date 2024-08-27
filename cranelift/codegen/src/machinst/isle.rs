@@ -6,10 +6,7 @@ use std::cell::Cell;
 
 pub use super::MachLabel;
 use super::RetPair;
-pub use crate::ir::{
-    condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName, FuncRef,
-    GlobalValue, Immediate, SigRef, StackSlot,
-};
+pub use crate::ir::{condcodes::CondCode, *};
 pub use crate::isa::{unwind::UnwindInst, TargetIsa};
 pub use crate::machinst::{
     ABIArg, ABIArgSlot, ABIMachineSpec, CallSite, InputSourceInst, Lower, LowerBackend, RealReg,

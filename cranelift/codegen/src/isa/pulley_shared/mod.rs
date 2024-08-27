@@ -122,7 +122,7 @@ where
         let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
         let sigs = SigSet::new::<abi::PulleyMachineDeps<P>>(func, &self.flags)?;
         let abi = abi::PulleyCallee::new(func, self, &self.isa_flags, &sigs)?;
-        machinst::compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
+        machinst::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
     }
 }
 
