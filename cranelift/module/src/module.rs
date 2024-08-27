@@ -1094,7 +1094,7 @@ impl<M: Module + ?Sized> Module for &mut M {
     }
 }
 
-impl Module for Box<dyn Module> {
+impl<M: Module + ?Sized> Module for Box<M> {
     fn isa(&self) -> &dyn isa::TargetIsa {
         (**self).isa()
     }
