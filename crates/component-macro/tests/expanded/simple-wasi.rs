@@ -4,59 +4,135 @@
 /// This structure is created through [`WasiPre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
+///
+/// For more information see [`Wasi`] as well.
 pub struct WasiPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
+    indices: WasiIndices,
 }
 impl<T> Clone for WasiPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
+            indices: self.indices.clone(),
         }
     }
 }
+impl<_T> WasiPre<_T> {
+    /// Creates a new copy of `WasiPre` bindings which can then
+    /// be used to instantiate into a particular store.
+    ///
+    /// This method may fail if the component behind `instance_pre`
+    /// does not have the required exports.
+    pub fn new(
+        instance_pre: wasmtime::component::InstancePre<_T>,
+    ) -> wasmtime::Result<Self> {
+        let indices = WasiIndices::new(instance_pre.component())?;
+        Ok(Self { instance_pre, indices })
+    }
+    pub fn engine(&self) -> &wasmtime::Engine {
+        self.instance_pre.engine()
+    }
+    pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+        &self.instance_pre
+    }
+    /// Instantiates a new instance of [`Wasi`] within the
+    /// `store` provided.
+    ///
+    /// This function will use `self` as the pre-instantiated
+    /// instance to perform instantiation. Afterwards the preloaded
+    /// indices in `self` are used to lookup all exports on the
+    /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Wasi> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+/// Auto-generated bindings for index of the exports of
+/// `wasi`.
+///
+/// This is an implementation detail of [`WasiPre`] and can
+/// be constructed if needed as well.
+///
+/// For more information see [`Wasi`] as well.
+#[derive(Clone)]
+pub struct WasiIndices {}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `wasi`.
 ///
-/// This structure is created through either
-/// [`Wasi::instantiate`] or by first creating
-/// a [`WasiPre`] followed by using
-/// [`WasiPre::instantiate`].
+/// This structure can be created through a number of means
+/// depending on your requirements and what you have on hand:
+///
+/// * The most convenient way is to use
+///   [`Wasi::instantiate`] which only needs a
+///   [`Store`], [`Component`], and [`Linker`].
+///
+/// * Alternatively you can create a [`WasiPre`] ahead of
+///   time with a [`Component`] to front-load string lookups
+///   of exports once instead of per-instantiation. This
+///   method then uses [`WasiPre::instantiate`] to
+///   create a [`Wasi`].
+///
+/// * If you've instantiated the instance yourself already
+///   then you can use [`Wasi::new_instance`]
+///
+/// * You can also access the guts of instantiation through
+///   [`WasiIndices::new_instance`] followed
+///   by [`WasiIndices::load`] to crate an instance of this
+///   type.
+///
+/// These methods are all equivalent to one another and move
+/// around the tradeoff of what work is performed when.
+///
+/// [`Store`]: wasmtime::Store
+/// [`Component`]: wasmtime::component::Component
+/// [`Linker`]: wasmtime::component::Linker
 pub struct Wasi {}
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
-    impl<_T> WasiPre<_T> {
-        /// Creates a new copy of `WasiPre` bindings which can then
+    impl WasiIndices {
+        /// Creates a new copy of `WasiIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
-        /// This method may fail if the component behind `instance_pre`
-        /// does not have the required exports.
+        /// This method may fail if the component does not have the
+        /// required exports.
         pub fn new(
-            instance_pre: wasmtime::component::InstancePre<_T>,
+            component: &wasmtime::component::Component,
         ) -> wasmtime::Result<Self> {
-            let _component = instance_pre.component();
-            Ok(WasiPre { instance_pre })
+            let _component = component;
+            Ok(WasiIndices {})
         }
-        /// Instantiates a new instance of [`Wasi`] within the
-        /// `store` provided.
+        /// Creates a new instance of [`WasiIndices`] from an
+        /// instantiated component.
         ///
-        /// This function will use `self` as the pre-instantiated
-        /// instance to perform instantiation. Afterwards the preloaded
-        /// indices in `self` are used to lookup all exports on the
-        /// resulting instance.
-        pub fn instantiate(
+        /// This method of creating a [`Wasi`] will perform string
+        /// lookups for all exports when this method is called. This
+        /// will only succeed if the provided instance matches the
+        /// requirements of [`Wasi`].
+        pub fn new_instance(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Self> {
+            let _instance = instance;
+            Ok(WasiIndices {})
+        }
+        /// Uses the indices stored in `self` to load an instance
+        /// of [`Wasi`] from the instance provided.
+        ///
+        /// Note that at this time this method will additionally
+        /// perform type-checks of all exports.
+        pub fn load(
             &self,
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Wasi> {
-            let mut store = store.as_context_mut();
-            let _instance = self.instance_pre.instantiate(&mut store)?;
+            let _instance = instance;
             Ok(Wasi {})
-        }
-        pub fn engine(&self) -> &wasmtime::Engine {
-            self.instance_pre.engine()
-        }
-        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
-            &self.instance_pre
         }
     }
     impl Wasi {
@@ -69,6 +145,15 @@ const _: () = {
         ) -> wasmtime::Result<Wasi> {
             let pre = linker.instantiate_pre(component)?;
             WasiPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`WasiIndices::new_instance`] and
+        /// [`WasiIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Wasi> {
+            let indices = WasiIndices::new_instance(&mut store, instance)?;
+            indices.load(store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,

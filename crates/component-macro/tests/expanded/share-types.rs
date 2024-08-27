@@ -4,68 +4,145 @@
 /// This structure is created through [`HttpInterfacePre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
+///
+/// For more information see [`HttpInterface`] as well.
 pub struct HttpInterfacePre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
-    interface0: exports::http_handler::GuestPre,
+    indices: HttpInterfaceIndices,
 }
 impl<T> Clone for HttpInterfacePre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
-            interface0: self.interface0.clone(),
+            indices: self.indices.clone(),
         }
     }
+}
+impl<_T> HttpInterfacePre<_T> {
+    /// Creates a new copy of `HttpInterfacePre` bindings which can then
+    /// be used to instantiate into a particular store.
+    ///
+    /// This method may fail if the component behind `instance_pre`
+    /// does not have the required exports.
+    pub fn new(
+        instance_pre: wasmtime::component::InstancePre<_T>,
+    ) -> wasmtime::Result<Self> {
+        let indices = HttpInterfaceIndices::new(instance_pre.component())?;
+        Ok(Self { instance_pre, indices })
+    }
+    pub fn engine(&self) -> &wasmtime::Engine {
+        self.instance_pre.engine()
+    }
+    pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
+        &self.instance_pre
+    }
+    /// Instantiates a new instance of [`HttpInterface`] within the
+    /// `store` provided.
+    ///
+    /// This function will use `self` as the pre-instantiated
+    /// instance to perform instantiation. Afterwards the preloaded
+    /// indices in `self` are used to lookup all exports on the
+    /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<HttpInterface> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+/// Auto-generated bindings for index of the exports of
+/// `http-interface`.
+///
+/// This is an implementation detail of [`HttpInterfacePre`] and can
+/// be constructed if needed as well.
+///
+/// For more information see [`HttpInterface`] as well.
+#[derive(Clone)]
+pub struct HttpInterfaceIndices {
+    interface0: exports::http_handler::GuestIndices,
 }
 /// Auto-generated bindings for an instance a component which
 /// implements the world `http-interface`.
 ///
-/// This structure is created through either
-/// [`HttpInterface::instantiate`] or by first creating
-/// a [`HttpInterfacePre`] followed by using
-/// [`HttpInterfacePre::instantiate`].
+/// This structure can be created through a number of means
+/// depending on your requirements and what you have on hand:
+///
+/// * The most convenient way is to use
+///   [`HttpInterface::instantiate`] which only needs a
+///   [`Store`], [`Component`], and [`Linker`].
+///
+/// * Alternatively you can create a [`HttpInterfacePre`] ahead of
+///   time with a [`Component`] to front-load string lookups
+///   of exports once instead of per-instantiation. This
+///   method then uses [`HttpInterfacePre::instantiate`] to
+///   create a [`HttpInterface`].
+///
+/// * If you've instantiated the instance yourself already
+///   then you can use [`HttpInterface::new_instance`]
+///
+/// * You can also access the guts of instantiation through
+///   [`HttpInterfaceIndices::new_instance`] followed
+///   by [`HttpInterfaceIndices::load`] to crate an instance of this
+///   type.
+///
+/// These methods are all equivalent to one another and move
+/// around the tradeoff of what work is performed when.
+///
+/// [`Store`]: wasmtime::Store
+/// [`Component`]: wasmtime::component::Component
+/// [`Linker`]: wasmtime::component::Linker
 pub struct HttpInterface {
     interface0: exports::http_handler::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
-    impl<_T> HttpInterfacePre<_T> {
-        /// Creates a new copy of `HttpInterfacePre` bindings which can then
+    impl HttpInterfaceIndices {
+        /// Creates a new copy of `HttpInterfaceIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
-        /// This method may fail if the component behind `instance_pre`
-        /// does not have the required exports.
+        /// This method may fail if the component does not have the
+        /// required exports.
         pub fn new(
-            instance_pre: wasmtime::component::InstancePre<_T>,
+            component: &wasmtime::component::Component,
         ) -> wasmtime::Result<Self> {
-            let _component = instance_pre.component();
-            let interface0 = exports::http_handler::GuestPre::new(_component)?;
-            Ok(HttpInterfacePre {
-                instance_pre,
-                interface0,
-            })
+            let _component = component;
+            let interface0 = exports::http_handler::GuestIndices::new(_component)?;
+            Ok(HttpInterfaceIndices { interface0 })
         }
-        /// Instantiates a new instance of [`HttpInterface`] within the
-        /// `store` provided.
+        /// Creates a new instance of [`HttpInterfaceIndices`] from an
+        /// instantiated component.
         ///
-        /// This function will use `self` as the pre-instantiated
-        /// instance to perform instantiation. Afterwards the preloaded
-        /// indices in `self` are used to lookup all exports on the
-        /// resulting instance.
-        pub fn instantiate(
+        /// This method of creating a [`HttpInterface`] will perform string
+        /// lookups for all exports when this method is called. This
+        /// will only succeed if the provided instance matches the
+        /// requirements of [`HttpInterface`].
+        pub fn new_instance(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Self> {
+            let _instance = instance;
+            let interface0 = exports::http_handler::GuestIndices::new_instance(
+                &mut store,
+                _instance,
+            )?;
+            Ok(HttpInterfaceIndices { interface0 })
+        }
+        /// Uses the indices stored in `self` to load an instance
+        /// of [`HttpInterface`] from the instance provided.
+        ///
+        /// Note that at this time this method will additionally
+        /// perform type-checks of all exports.
+        pub fn load(
             &self,
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<HttpInterface> {
-            let mut store = store.as_context_mut();
-            let _instance = self.instance_pre.instantiate(&mut store)?;
+            let _instance = instance;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(HttpInterface { interface0 })
-        }
-        pub fn engine(&self) -> &wasmtime::Engine {
-            self.instance_pre.engine()
-        }
-        pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
-            &self.instance_pre
         }
     }
     impl HttpInterface {
@@ -78,6 +155,15 @@ const _: () = {
         ) -> wasmtime::Result<HttpInterface> {
             let pre = linker.instantiate_pre(component)?;
             HttpInterfacePre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`HttpInterfaceIndices::new_instance`] and
+        /// [`HttpInterfaceIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<HttpInterface> {
+            let indices = HttpInterfaceIndices::new_instance(&mut store, instance)?;
+            indices.load(store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
@@ -250,23 +336,50 @@ pub mod exports {
             handle_request: wasmtime::component::Func,
         }
         #[derive(Clone)]
-        pub struct GuestPre {
+        pub struct GuestIndices {
             handle_request: wasmtime::component::ComponentExportIndex,
         }
-        impl GuestPre {
+        impl GuestIndices {
+            /// Constructor for [`GuestIndices`] which takes a
+            /// [`Component`](wasmtime::component::Component) as input and can be executed
+            /// before instantiation.
+            ///
+            /// This constructor can be used to front-load string lookups to find exports
+            /// within a component.
             pub fn new(
                 component: &wasmtime::component::Component,
-            ) -> wasmtime::Result<GuestPre> {
-                let _component = component;
+            ) -> wasmtime::Result<GuestIndices> {
                 let (_, instance) = component
                     .export_index(None, "http-handler")
                     .ok_or_else(|| {
                         anyhow::anyhow!("no exported instance named `http-handler`")
                     })?;
-                let _lookup = |name: &str| {
-                    _component
-                        .export_index(Some(&instance), name)
-                        .map(|p| p.1)
+                Self::_new(|name| {
+                    component.export_index(Some(&instance), name).map(|p| p.1)
+                })
+            }
+            /// This constructor is similar to [`GuestIndices::new`] except that it
+            /// performs string lookups after instantiation time.
+            pub fn new_instance(
+                mut store: impl wasmtime::AsContextMut,
+                instance: &wasmtime::component::Instance,
+            ) -> wasmtime::Result<GuestIndices> {
+                let instance_export = instance
+                    .get_export(&mut store, None, "http-handler")
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("no exported instance named `http-handler`")
+                    })?;
+                Self::_new(|name| {
+                    instance.get_export(&mut store, Some(&instance_export), name)
+                })
+            }
+            fn _new(
+                mut lookup: impl FnMut(
+                    &str,
+                ) -> Option<wasmtime::component::ComponentExportIndex>,
+            ) -> wasmtime::Result<GuestIndices> {
+                let mut lookup = move |name| {
+                    lookup(name)
                         .ok_or_else(|| {
                             anyhow::anyhow!(
                                 "instance export `http-handler` does \
@@ -274,8 +387,9 @@ pub mod exports {
                             )
                         })
                 };
-                let handle_request = _lookup("handle-request")?;
-                Ok(GuestPre { handle_request })
+                let _ = &mut lookup;
+                let handle_request = lookup("handle-request")?;
+                Ok(GuestIndices { handle_request })
             }
             pub fn load(
                 &self,
