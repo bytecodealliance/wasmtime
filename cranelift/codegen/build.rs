@@ -36,7 +36,12 @@ fn main() {
         .iter()
         .cloned()
         .filter(|isa| {
-            let env_key = format!("CARGO_FEATURE_{}", isa.to_string().to_uppercase());
+            let env_key = match isa {
+                meta::isa::Isa::Pulley32 | meta::isa::Isa::Pulley64 => {
+                    "CARGO_FEATURE_PULLEY".to_string()
+                }
+                _ => format!("CARGO_FEATURE_{}", isa.to_string().to_uppercase()),
+            };
             all_arch || env::var(env_key).is_ok()
         })
         .collect::<Vec<_>>();

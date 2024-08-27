@@ -384,9 +384,10 @@ jobs:
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 
-          - name: cranelift-codegen benches
+          - name: cranelift-codegen
             checks: |
-              --benches -p cranelift-codegen
+              -p cranelift-codegen --benches
+              -p cranelift-codegen --no-default-features --features std,unwind,pulley
 
           - name: wasmtime-bench-api
             checks: |
