@@ -1871,7 +1871,9 @@ pub fn run_solver_with_static_widths(
         .map(|name| &typeenv.syms[name.index()])
         .unwrap_or(&unnamed_rule);
     let unit = "()".to_string();
-    let widthname = ctx.static_width(&rule_sem.lhs).map_or(unit, |s| format!("width {}", s));
+    let widthname = ctx
+        .static_width(&rule_sem.lhs)
+        .map_or(unit, |s| format!("width {}", s));
 
     // Check whether the assumptions are possible
     let feasibility =

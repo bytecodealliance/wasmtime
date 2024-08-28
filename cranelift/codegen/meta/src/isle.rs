@@ -40,9 +40,7 @@ impl IsleCompilation {
     }
 }
 
-pub fn shared_isle_lower_paths(
-    codegen_crate_dir: &std::path::Path,
-) -> Vec<std::path::PathBuf> {
+pub fn shared_isle_lower_paths(codegen_crate_dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
     let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
     let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");

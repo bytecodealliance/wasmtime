@@ -104,8 +104,8 @@ pub enum SpecExpr {
     },
     /// The Unit constant value.
     ConstUnit {
-            pos: Pos,
-        },
+        pos: Pos,
+    },
     // A variable
     Var {
         var: Ident,

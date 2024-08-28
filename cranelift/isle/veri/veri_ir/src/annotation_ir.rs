@@ -1,7 +1,6 @@
 /// A higher-level annotation IR that does not specify bitvector widths.
 /// This allows annotations to be generic over possible types, which
 /// corresponds to how ISLE rewrites are written.
-
 use std::fmt;
 /// A bound variable, including the VIR type
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,9 +109,9 @@ impl fmt::Display for Type {
             Type::BitVector => write!(f, "bv"),
             Type::BitVectorWithWidth(w) => write!(f, "bv{}", *w),
             Type::BitVectorUnknown(_) => write!(f, "bv"),
-            Type::Int =>  write!(f, "Int"),
-            Type::Bool =>  write!(f, "Bool"),
-            Type::Unit =>  write!(f, "Unit"),
+            Type::Int => write!(f, "Int"),
+            Type::Bool => write!(f, "Bool"),
+            Type::Unit => write!(f, "Unit"),
         }
     }
 }
@@ -234,7 +233,7 @@ pub enum Expr {
 
     LoadEffect(Box<Expr>, Box<Expr>, Box<Expr>),
 
-    StoreEffect(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>), 
+    StoreEffect(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 impl Expr {

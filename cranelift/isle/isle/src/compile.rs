@@ -67,7 +67,9 @@ pub fn from_files<P: AsRef<Path>>(
 
 /// Construct the ISLE type and term environments for further analysis
 /// (i.e., verification), without going all the way through codegen.
-pub fn create_envs(inputs: Vec<std::path::PathBuf>) -> Result<(sema::TypeEnv, sema::TermEnv, Vec<Def>), Errors> {
+pub fn create_envs(
+    inputs: Vec<std::path::PathBuf>,
+) -> Result<(sema::TypeEnv, sema::TermEnv, Vec<Def>), Errors> {
     let files = match Files::from_paths(inputs) {
         Ok(files) => files,
         Err((path, err)) => {

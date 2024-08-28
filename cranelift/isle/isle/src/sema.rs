@@ -1159,7 +1159,11 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &[ast::Def],expand_internal_extractors: bool) -> Result<TermEnv, Vec<Error>> {
+    pub fn from_ast(
+        tyenv: &mut TypeEnv,
+        defs: &[ast::Def],
+        expand_internal_extractors: bool,
+    ) -> Result<TermEnv, Vec<Error>> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),

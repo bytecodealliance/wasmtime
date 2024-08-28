@@ -86,8 +86,16 @@ pub struct TermSignature {
 
 impl fmt::Display for TermSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let args =  self.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(" ");
-        let canon = self.canonical_type.map(|c| format!("(canon {})", c)).unwrap_or_default();
+        let args = self
+            .args
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let canon = self
+            .canonical_type
+            .map(|c| format!("(canon {})", c))
+            .unwrap_or_default();
         write!(f, "((args {}) (ret {}) {})", args, self.ret, canon)
     }
 }
@@ -218,8 +226,8 @@ impl fmt::Display for Expr {
                 Terminal::Literal(v, _) => write!(f, "{}", v),
                 Terminal::Const(c, _) => write!(f, "{}", c),
                 Terminal::True => write!(f, "true"),
-                Terminal::False =>  write!(f, "false"),
-                Terminal::Wildcard(_) =>  write!(f, "_"),
+                Terminal::False => write!(f, "false"),
+                Terminal::Wildcard(_) => write!(f, "_"),
             },
             Expr::Unary(o, e) => {
                 let op = match o {
@@ -228,7 +236,7 @@ impl fmt::Display for Expr {
                     UnaryOp::BVNot => "bvnot",
                 };
                 write!(f, "({} {})", op, e)
-            },
+            }
             Expr::Binary(o, x, y) => {
                 let op = match o {
                     BinaryOp::And => "and",
@@ -263,32 +271,32 @@ impl fmt::Display for Expr {
                     BinaryOp::BVSaddo => "bvsaddo",
                 };
                 write!(f, "({} {} {})", op, x, y)
-        }
-            Expr::CLZ(e) => write!(f, "(clz {})", e), 
-            Expr::CLS(e) =>  write!(f, "(cls {})", e), 
-            Expr::Rev(e) => write!(f, "(rev {})", e), 
-            Expr::BVPopcnt(e) => write!(f, "(popcnt {})", e), 
-            Expr::BVSubs(t, x, y) =>  write!(f, "(subs {} {} {})", t, x, y), 
-            Expr::Conditional(c, t, e) => write!(f, "(if {} {} {})", c, t, e), 
+            }
+            Expr::CLZ(e) => write!(f, "(clz {})", e),
+            Expr::CLS(e) => write!(f, "(cls {})", e),
+            Expr::Rev(e) => write!(f, "(rev {})", e),
+            Expr::BVPopcnt(e) => write!(f, "(popcnt {})", e),
+            Expr::BVSubs(t, x, y) => write!(f, "(subs {} {} {})", t, x, y),
+            Expr::Conditional(c, t, e) => write!(f, "(if {} {} {})", c, t, e),
             Expr::Switch(m, cs) => {
-                let cases : Vec<String>= cs.iter().map(|(c, m)|  format!("({} {})", c, m)).collect();
+                let cases: Vec<String> = cs.iter().map(|(c, m)| format!("({} {})", c, m)).collect();
                 write!(f, "(switch {} {})", m, cases.join(""))
             }
             Expr::BVExtract(h, l, e) => write!(f, "(extract {} {} {})", *h, *l, e),
             Expr::BVConcat(es) => {
-                let vs : Vec<String>= es.iter().map(|v|  format!("{}", v)).collect();
+                let vs: Vec<String> = es.iter().map(|v| format!("{}", v)).collect();
                 write!(f, "(concat {})", vs.join(""))
             }
             Expr::BVIntToBV(t, e) => write!(f, "(int2bv {} {})", t, e),
             Expr::BVToInt(b) => write!(f, "(bv2int {})", b),
-            Expr::BVZeroExtTo(d, e) =>  write!(f, "(zero_ext {} {})", *d, e),
+            Expr::BVZeroExtTo(d, e) => write!(f, "(zero_ext {} {})", *d, e),
             Expr::BVZeroExtToVarWidth(d, e) => write!(f, "(zero_ext {} {})", d, e),
             Expr::BVSignExtTo(d, e) => write!(f, "(sign_ext {} {})", *d, e),
             Expr::BVSignExtToVarWidth(d, e) => write!(f, "(sign_ext {} {})", *d, e),
             Expr::BVConvTo(x, y) => write!(f, "(conv_to {} {})", x, y),
             Expr::WidthOf(e) => write!(f, "(widthof {})", e),
             Expr::LoadEffect(x, y, z) => write!(f, "(load_effect {} {} {})", x, y, z),
-            Expr::StoreEffect(w, x, y, z) =>  write!(f, "(store_effect {} {} {} {})", w, x, y, z),
+            Expr::StoreEffect(w, x, y, z) => write!(f, "(store_effect {} {} {} {})", w, x, y, z),
         }
     }
 }
