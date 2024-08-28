@@ -1,0 +1,30 @@
+[package]
+name = "veri_engine"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "veri_engine_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "crocus"
+path = "src/main.rs"
+
+[dependencies]
+cranelift-isle = { path = "../../isle" }
+cranelift-codegen = { path = "../../../codegen", features = ["all-arch"] }
+cranelift-codegen-meta = { path = "../../../codegen/meta" }
+veri_ir = { path = "../veri_ir" }
+easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
+clap = { version = "3.0.0", features = ["derive"] }
+itertools = "0.10.3"
+log = "0.4.17"
+env_logger = "0.10.0"
+anyhow = { workspace = true }
+
+[dev-dependencies]
+strum = "0.24.0"
+strum_macros = "0.24.0"

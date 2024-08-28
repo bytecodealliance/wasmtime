@@ -1,0 +1,28 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+(type ALUOp3
+  (enum
+    (MSub)
+))
+
+(spec (msub ty a b c)
+  (provide 
+    (= result
+       (if (<= ty 32) 
+           (conv_to 64 (bvsub (extract 31 0 c) (bvmul (extract 31 0 a) (extract 31 0 b))))
+           (bvsub c (bvmul a b))))))
+(decl msub (Type Reg Reg Reg) Reg)
+(rule (msub ty x y z) (alu_rrrr (ALUOp3.MSub) ty x y z))
+
+(decl alu_rrrr (ALUOp3 Type Reg Reg Reg) Reg)
+(extern constructor alu_rrrr alu_rrrr)
+
+(rule (lower (has_type (fits_in_64 ty) (isub (imul y z) x)))
+      (msub ty y z x))

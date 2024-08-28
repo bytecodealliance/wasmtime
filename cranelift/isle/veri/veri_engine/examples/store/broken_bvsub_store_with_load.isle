@@ -1,0 +1,104 @@
+(type MInst (enum))
+
+(type SinkableLoad extern (enum))
+
+(type OperandSize extern
+      (enum Size8
+            Size16
+            Size32
+            Size64))
+
+(type Amode (enum
+             ;; Immediate sign-extended and a register
+             (ImmReg (simm32 i32)
+                     (base Reg)
+                     (flags MemFlags))
+
+             ;; Sign-extend-32-to-64(simm32) + base + (index << shift)
+             (ImmRegRegShift (simm32 i32)
+                             (base Gpr)
+                             (index Gpr)
+                             (shift u8)
+                             (flags MemFlags))
+
+             ;; Sign-extend-32-to-64(immediate) + RIP (instruction
+             ;; pointer). The appropriate relocation is emitted so
+             ;; that the resulting immediate makes this Amode refer to
+             ;; the given MachLabel.
+             (RipRelative (target MachLabel))))
+
+(type Gpr (primitive Gpr))
+
+(type RegMemImm extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))
+       (Imm (simm32 u32))))
+
+(type SyntheticAmode extern (enum))
+
+(convert SinkableLoad RegMemImm sink_load_to_reg_mem_imm)
+
+(convert Value Gpr put_in_gpr)
+
+(decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
+(spec (x64_add_mem ty addr val)
+      (provide (= result (store_effect 
+                        (extract 79 64 addr) 
+                        ty 
+                        (conv_to ty (bvsub (load_effect (extract 79 64 addr) ty (extract 63 0 addr)) (conv_to ty val))) 
+                        (extract 63 0 addr))
+            )
+      )
+       (require (or (= ty 32) (= ty 64))) 
+)
+(extern constructor x64_add_mem x64_add_mem)
+
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(decl sinkable_load (SinkableLoad) Value)
+(spec (sinkable_load inst) 
+      (provide (= result inst)))
+(extern extractor sinkable_load sinkable_load)
+
+(decl sink_load_to_reg_mem_imm (SinkableLoad) RegMemImm)
+(spec (sink_load_to_reg_mem_imm load)
+      (provide (= result load)))
+(extern constructor sink_load_to_reg_mem_imm sink_load_to_reg_mem_imm)
+
+(spec (put_in_gpr arg) (provide (= result (conv_to 64 arg))))
+(decl put_in_gpr (Value) Gpr)
+(extern constructor put_in_gpr put_in_gpr)
+
+(spec (to_amode flags val offset)
+      (provide (= result (concat flags (bvadd val (sign_ext 64 offset)))))
+      (require
+            (= (widthof val) 64)))
+(decl to_amode (MemFlags Value Offset32) Amode)
+(extern constructor to_amode to_amode)
+
+(decl operand_size_of_type_32_64 (Type) OperandSize)
+(extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
+
+(form store
+    ((args (bv 16) (bv 8) (bv 64) (bv 32)) (ret Unit) (canon (bv 8)))
+    ((args (bv 16) (bv 16) (bv 64) (bv 32)) (ret Unit) (canon (bv 16)))
+    ((args (bv 16) (bv 32) (bv 64) (bv 32)) (ret Unit) (canon (bv 32)))
+    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret Unit) (canon (bv 64)))
+)
+
+
+(rule store_x64_add_mem 3 (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (iadd (and
+                               (sinkable_load sink)
+                               (load flags addr offset))
+                              src2))
+              addr
+              offset))
+      (let ((_ RegMemImm sink))
+        (side_effect
+         (x64_add_mem ty (to_amode flags addr offset) src2))))

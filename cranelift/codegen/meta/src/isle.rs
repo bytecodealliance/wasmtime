@@ -11,11 +11,47 @@ pub struct IsleCompilations {
     pub items: Vec<IsleCompilation>,
 }
 
+impl IsleCompilations {
+    pub fn lookup(&self, name: &str) -> Option<&IsleCompilation> {
+        for compilation in &self.items {
+            if compilation.name == name {
+                return Some(compilation);
+            }
+        }
+        None
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct IsleCompilation {
+    pub name: String,
     pub output: std::path::PathBuf,
     pub inputs: Vec<std::path::PathBuf>,
     pub untracked_inputs: Vec<std::path::PathBuf>,
+}
+
+impl IsleCompilation {
+    pub fn inputs(&self) -> Vec<std::path::PathBuf> {
+        self.inputs
+            .iter()
+            .chain(self.untracked_inputs.iter())
+            .cloned()
+            .collect()
+    }
+}
+
+pub fn shared_isle_lower_paths(
+    codegen_crate_dir: &std::path::Path,
+) -> Vec<std::path::PathBuf> {
+    let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
+    let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
+    let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");
+    // The shared instruction selector logic.
+    vec![
+        inst_specs_isle.clone(),
+        prelude_isle.clone(),
+        prelude_lower_isle.clone(),
+    ]
 }
 
 /// Construct the list of compilations (transformations from ISLE
@@ -61,6 +97,7 @@ pub fn get_isle_compilations(
         items: vec![
             // The mid-end optimization rules.
             IsleCompilation {
+                name: "opt".to_string(),
                 output: gen_dir.join("isle_opt.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
@@ -81,6 +118,7 @@ pub fn get_isle_compilations(
             },
             // The x86-64 instruction selector.
             IsleCompilation {
+                name: "x64".to_string(),
                 output: gen_dir.join("isle_x64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
@@ -92,6 +130,7 @@ pub fn get_isle_compilations(
             },
             // The aarch64 instruction selector.
             IsleCompilation {
+                name: "aarch64".to_string(),
                 output: gen_dir.join("isle_aarch64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
@@ -105,6 +144,7 @@ pub fn get_isle_compilations(
             },
             // The s390x instruction selector.
             IsleCompilation {
+                name: "s390x".to_string(),
                 output: gen_dir.join("isle_s390x.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
@@ -116,6 +156,7 @@ pub fn get_isle_compilations(
             },
             // The risc-v instruction selector.
             IsleCompilation {
+                name: "riscv64".to_string(),
                 output: gen_dir.join("isle_riscv64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
@@ -128,6 +169,7 @@ pub fn get_isle_compilations(
             },
             // The Pulley instruction selector.
             IsleCompilation {
+                name: "pulley".to_string(),
                 output: gen_dir.join("isle_pulley_shared.rs"),
                 inputs: vec![
                     prelude_isle.clone(),

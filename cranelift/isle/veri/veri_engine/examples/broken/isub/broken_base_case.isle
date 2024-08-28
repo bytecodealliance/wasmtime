@@ -1,0 +1,27 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+))
+
+(type ALUOp
+  (enum
+    (Sub)
+))
+
+(spec (sub ty a b)
+  (provide 
+    (= result 
+       (if (<= ty 32) 
+           (conv_to 64 (bvsub (extract 31 0 a) (extract 31 0 b)))
+           (bvsub a b)))))
+(decl sub (Type Reg Reg) Reg)
+(extern constructor sub sub)
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+(rule (lower (has_type (fits_in_64 ty) (isub x y)))
+      (sub ty y x))

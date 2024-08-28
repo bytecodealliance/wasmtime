@@ -23,4 +23,6 @@ vendor
 examples/build
 examples/.cache
 *.coredump
+*.smt2
+cranelift/isle/veri/veri_engine/test_output
 crates/explorer/node_modules

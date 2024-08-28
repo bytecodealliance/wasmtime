@@ -1,0 +1,28 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+    (BitRR
+        (op BitOp))
+))
+
+(type BitOp
+  (enum
+    (Clz)
+))
+
+(decl bit_rr (BitOp Type Reg) Reg)
+(extern constructor bit_rr bit_rr)
+
+;; Broken: no distinction on ty
+(spec (a64_clz ty a)
+  (provide 
+    (= result (clz a)))
+  (require (or (= ty 32) (= ty 64))))
+(decl a64_clz (Type Reg) Reg)
+(rule (a64_clz ty x) (bit_rr (BitOp.Clz) ty x))
+
+(rule (lower (has_type ty (clz x)))
+      (a64_clz ty x))

@@ -1,0 +1,76 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst (enum))
+
+(type ALUOp
+  (enum
+    (UDiv)
+))
+
+;; Model ImmExtend as an Int, where
+;; Sign == 1 and Zero == 0
+(type ImmExtend
+  (enum
+    (Zero)
+    (Sign)
+))
+
+(model ImmExtend
+  (enum
+    (Sign #b0)
+    (Zero #b1)))
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+(spec (a64_udiv ty a b) 
+  (provide 
+    (= result
+       (if (<= ty 32) 
+           (conv_to 64 (bvudiv (extract 31 0 a) (extract 31 0 b)))
+           (bvudiv a b)))))
+(decl a64_udiv (Type Reg Reg) Reg)
+(rule (a64_udiv ty x y) (alu_rrr (ALUOp.UDiv) ty x y))
+
+(spec (imm ty ext x) 
+  (provide 
+    (= result 
+       (switch ty
+         (8 (if (= ext #b1) (zero_ext 64 (extract 7 0 x)) (sign_ext 64 (extract 7 0 x))))
+         (16 (if (= ext #b1) (zero_ext 64 (extract 15 0 x)) (sign_ext 64 (extract 15 0 x))))
+         (32 (if (= ext #b1) (zero_ext 64 (extract 32 0 x)) (sign_ext 64 (extract 32 0 x))))
+         (64 x))))
+  (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+(decl imm (Type ImmExtend u64) Reg)
+(extern constructor imm imm)
+
+;; Place a `Value` into a register, sign extending it to 64-bits
+(spec (put_in_reg_sext64 x) (provide (= (sign_ext 64 x) result)))
+(decl put_in_reg_sext64 (Value) Reg)
+(extern constructor put_in_reg_sext64 put_in_reg_sext64)
+
+;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
+;; Broken: missing require
+ (spec (put_nonzero_in_reg_sext64 x)
+       (provide (= (sign_ext 64 x) result))
+      ;;  (require (not (= #x0000000000000000 result)))
+       )
+(decl put_nonzero_in_reg_sext64 (Value) Reg)
+(extern constructor put_nonzero_in_reg_sext64 put_nonzero_in_reg_sext64)
+
+;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
+;;  (spec (safe_divisor_from_imm64 x)
+;;        (provide (= (sign_ext 64 x) result))
+;;        (require (not (= #x0000000000000000 result))
+;;                 (not (= #x1111111111111111 result))))
+;; (decl safe_divisor_from_imm64 (u64) Imm64)
+;; (extern extractor safe_divisor_from_imm64 safe_divisor_from_imm64)
+
+;; Special case for `sdiv` where no checks are needed due to division by a
+;; constant meaning the checks are always passed.
+;; BROKEN: uses udiv instead of sdiv
+(rule sdiv_safe_divisor 1 (lower (has_type (fits_in_64 ty) (sdiv x (iconst imm))))
+      (if-let y (safe_divisor_from_imm64 ty imm))
+      (a64_udiv $I64 (put_in_reg_sext64 x) (imm ty (ImmExtend.Sign) y)))

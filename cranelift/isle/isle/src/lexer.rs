@@ -91,14 +91,14 @@ impl<'src> Lexer<'src> {
     fn next_token(&mut self) -> Result<Option<(Pos, Token)>> {
         fn is_sym_first_char(c: u8) -> bool {
             match c {
-                b'-' | b'0'..=b'9' | b'(' | b')' | b';' | b'<' | b'>' => false,
+                b'-' | b'0'..=b'9' | b'(' | b')' | b';' => false,
                 c if c.is_ascii_whitespace() => false,
                 _ => true,
             }
         }
         fn is_sym_other_char(c: u8) -> bool {
             match c {
-                b'(' | b')' | b';' | b'@' | b'<' => false,
+                b'(' | b')' | b';' | b'@' => false,
                 c if c.is_ascii_whitespace() => false,
                 _ => true,
             }

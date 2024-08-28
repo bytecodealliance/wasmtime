@@ -1,0 +1,80 @@
+
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+(model ALUOp (enum 
+      (Add #x00) ;; 0
+      (Sub #x01)
+      (Orr #x02)
+      (OrrNot #x03)
+      (And #x04)
+      (AndNot #x05)
+      (Eor #x06)
+      (EorNot #x07)
+      (SubS #x08)
+      (SDiv #x09)
+      (UDiv #x0a)
+      (RotR #x0b)
+      (Lsr #x0c)
+      (Asr #x0d)
+      (Lsl #x0e)))
+
+;; An ALU operation. This can be paired with several instruction formats
+;; below (see `Inst`) in any combination.
+(type ALUOp
+  (enum
+    (Add)
+    (Sub)
+    (Orr)
+    (OrrNot)
+    (And)
+    (AndS)
+    (AndNot)
+    ;; XOR (AArch64 calls this "EOR")
+    (Eor)
+    ;; XNOR (AArch64 calls this "EOR-NOT")
+    (EorNot)
+    ;; Add, setting flags
+    (AddS)
+    ;; Sub setting flags
+    (SubS)
+    ;; Signed multiplyhigh-word result
+    (SMulH)
+    ;; Unsigned multiplyhigh-word result
+    (UMulH)
+    (SDiv)
+    (UDiv)
+    (RotR)
+    (Lsr)
+    (Asr)
+    (Lsl)
+    ;; Add with carry
+    (Adc)
+    ;; Add with carrysettings flags
+    (AdcS)
+    ;; Subtract with carry
+    (Sbc)
+    ;; Subtract with carrysettings flags
+    (SbcS)
+))
+
+;; BROKEN: swapped AND and OR
+(spec (alu_rs_imm_logic_commutative op t a b)
+    (provide 
+      (= result
+         (conv_to 64
+           (switch op
+             ((ALUOp.And) (bvor a b))
+             ((ALUOp.Orr) (bvand a b))
+             ((ALUOp.Eor) (bvxor a b)))))))
+(decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
+(extern constructor alu_rs_imm_logic_commutative alu_rs_imm_logic_commutative)
+
+(rule -1 (lower (has_type (fits_in_32 ty) (band x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))

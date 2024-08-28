@@ -1,0 +1,108 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+(model ALUOp (enum
+      (Add #x00) ;; 0
+      (Sub #x01)
+      (Orr #x02)
+      (OrrNot #x03)
+      (And #x04)
+      (AndNot #x05)
+      (Eor #x06)
+      (EorNot #x07)
+      (SubS #x08)
+      (SDiv #x09)
+      (UDiv #x0a)
+      (RotR #x0b)
+      (Lsr #x0c)
+      (Asr #x0d)
+      (Lsl #x0e)))
+
+;; An ALU operation. This can be paired with several instruction formats
+;; below (see `Inst`) in any combination.
+(type ALUOp
+  (enum
+    (Add)
+    (Sub)
+    (Orr)
+    (OrrNot)
+    (And)
+    (AndS)
+    (AndNot)
+    ;; XOR (AArch64 calls this "EOR")
+    (Eor)
+    ;; XNOR (AArch64 calls this "EOR-NOT")
+    (EorNot)
+    ;; Add, setting flags
+    (AddS)
+    ;; Sub setting flags
+    (SubS)
+    ;; Signed multiplyhigh-word result
+    (SMulH)
+    ;; Unsigned multiplyhigh-word result
+    (UMulH)
+    (SDiv)
+    (UDiv)
+    (RotR)
+    (Lsr)
+    (Asr)
+    (Lsl)
+    ;; Add with carry
+    (Adc)
+    ;; Add with carrysettings flags
+    (AdcS)
+    ;; Subtract with carry
+    (Sbc)
+    ;; Subtract with carrysettings flags
+    (SbcS)
+))
+
+;; BROKEN: missing extension part of the spec
+ (spec (do_shift op t a b)
+   (provide
+     (= result
+        (switch op
+          ((ALUOp.Lsr) (conv_to 64
+            (bvlshr (conv_to t a)
+                 (conv_to t (zero_ext 64
+                   (bvand (conv_to (widthof b) (bvsub (int2bv 64 (widthof b)) #x0000000000000001)) b))))))
+          ((ALUOp.Asr) (conv_to 64
+            (bvashr (conv_to t a)
+                  (conv_to t (zero_ext 64
+                    (bvand (conv_to (widthof b) (bvsub (int2bv 64 (widthof b)) #x0000000000000001)) b))))))
+          ((ALUOp.Lsl) (conv_to 64
+            (bvshl (conv_to t a)
+                 (conv_to t (zero_ext 64
+                   (bvand (conv_to (widthof b) (bvsub (int2bv 64 (widthof b)) #x0000000000000001)) b)))))))))
+   (require
+     (or (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
+     (= t (widthof b))
+     (or (= t 8) (= t 16) (= t 32) (= t 64))))
+(instantiate do_shift
+    ((args (bv 8) Int (bv 64) (bv 8)) (ret (bv 64)) (canon (bv 8)))
+    ((args (bv 8) Int (bv 64) (bv 16)) (ret (bv 64)) (canon (bv 16)))
+    ((args (bv 8) Int (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 32)))
+    ((args (bv 8) Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(decl do_shift (ALUOp Type Reg Value) Reg)
+(extern constructor do_shift do_shift)
+
+(spec (put_in_reg_sext32 arg)
+  (provide
+    (= result
+       (if (<= (widthof arg) 32)
+           (conv_to 64 (sign_ext 32 arg))
+           (conv_to 64 arg)))))
+(decl put_in_reg_sext32 (Value) Reg)
+(extern constructor put_in_reg_sext32 put_in_reg_sext32)
+
+;; BROKEN: Wrong opcode
+;; Shift for i64.
+(rule -2 (lower (has_type (fits_in_32 ty) (sshr x y)))
+      (do_shift (ALUOp.Lsr) ty (put_in_reg_sext32 x) y))

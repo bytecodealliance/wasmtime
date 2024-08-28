@@ -13,6 +13,10 @@ pub enum Def {
     Rule(Rule),
     Extractor(Extractor),
     Decl(Decl),
+    Spec(Spec),
+    Model(Model),
+    Form(Form),
+    Instantiation(Instantiation),
     Extern(Extern),
     Converter(Converter),
 }
@@ -79,6 +83,195 @@ pub struct Decl {
     pub pos: Pos,
 }
 
+/// An expression used to specify term semantics, similar to SMT-LIB syntax.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum SpecExpr {
+    /// An operator that matches a constant integer value.
+    ConstInt {
+        val: i128,
+        pos: Pos,
+    },
+    /// An operator that matches a constant bitvector value.
+    ConstBitVec {
+        val: i128,
+        width: i8,
+        pos: Pos,
+    },
+    /// An operator that matches a constant boolean value.
+    ConstBool {
+        val: i8,
+        pos: Pos,
+    },
+    /// The Unit constant value.
+    ConstUnit {
+            pos: Pos,
+        },
+    // A variable
+    Var {
+        var: Ident,
+        pos: Pos,
+    },
+    /// An application of a type variant or term.
+    Op {
+        op: SpecOp,
+        args: Vec<SpecExpr>,
+        pos: Pos,
+    },
+    /// Pairs, currently used for switch statements.
+    Pair {
+        l: Box<SpecExpr>,
+        r: Box<SpecExpr>,
+    },
+    /// Enums variant values (enums defined by model)
+    Enum {
+        name: Ident,
+    },
+}
+
+/// An operation used to specify term semantics, similar to SMT-LIB syntax.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum SpecOp {
+    // Boolean operations
+    Eq,
+    And,
+    Or,
+    Not,
+    Imp,
+
+    // Integer comparisons
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+
+    // Bitwise bitvector operations (directly SMT-LIB)
+    BVNot,
+    BVAnd,
+    BVOr,
+    BVXor,
+
+    // Bitvector arithmetic operations  (directly SMT-LIB)
+    BVNeg,
+    BVAdd,
+    BVSub,
+    BVMul,
+    BVUdiv,
+    BVUrem,
+    BVSdiv,
+    BVSrem,
+    BVShl,
+    BVLshr,
+    BVAshr,
+
+    // Bitvector comparison operations  (directly SMT-LIB)
+    BVUle,
+    BVUlt,
+    BVUgt,
+    BVUge,
+    BVSlt,
+    BVSle,
+    BVSgt,
+    BVSge,
+
+    // Bitvector overflow checks (SMT-LIB pending standardization)
+    BVSaddo,
+
+    // Desugared bitvector arithmetic operations
+    Rotr,
+    Rotl,
+    Extract,
+    ZeroExt,
+    SignExt,
+    Concat,
+
+    // Custom encodings
+    Subs,
+    Popcnt,
+    Clz,
+    Cls,
+    Rev,
+
+    // Conversion operations
+    ConvTo,
+    Int2BV,
+    BV2Int,
+    WidthOf,
+
+    // Control operations
+    If,
+    Switch,
+
+    LoadEffect,
+    StoreEffect,
+}
+
+/// A specification of the semantics of a term.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Spec {
+    /// The term name (must match a (decl ...))
+    pub term: Ident,
+    /// Argument names
+    pub args: Vec<Ident>,
+    /// Provide statements, which give the semantics of the produces value
+    pub provides: Vec<SpecExpr>,
+    /// Require statements, which express preconditions on the term
+    pub requires: Vec<SpecExpr>,
+}
+
+/// A model of an SMT-LIB type.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ModelType {
+    /// SMT-LIB Int
+    Int,
+    /// SMT-LIB Bool
+    Bool,
+    /// SMT-LIB bitvector, but with a potentially-polymorphic width
+    BitVec(Option<usize>),
+    /// Unit (removed before conversion to SMT-LIB)
+    Unit,
+}
+
+/// A construct's value in SMT-LIB
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ModelValue {
+    /// Correspond to ISLE types
+    TypeValue(ModelType),
+    /// Correspond to ISLE enums, identifier is the enum variant name
+    EnumValues(Vec<(Ident, SpecExpr)>),
+}
+
+/// A model of a construct into SMT-LIB (currently, types or enums)
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Model {
+    /// The name of the type or enum
+    pub name: Ident,
+    /// The value of the type or enum (potentially multiple values)
+    pub val: ModelValue,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Signature {
+    pub args: Vec<ModelType>,
+    pub ret: ModelType,
+    pub canonical: ModelType,
+    pub pos: Pos,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Form {
+    pub name: Ident,
+    pub signatures: Vec<Signature>,
+    pub pos: Pos,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Instantiation {
+    pub term: Ident,
+    pub form: Option<Ident>,
+    pub signatures: Vec<Signature>,
+    pub pos: Pos,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Rule {
     pub pattern: Pattern,
@@ -86,6 +279,7 @@ pub struct Rule {
     pub expr: Expr,
     pub pos: Pos,
     pub prio: Option<i64>,
+    pub name: Option<Ident>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

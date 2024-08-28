@@ -1,0 +1,74 @@
+(type Type (primitive Type))
+(type Value (primitive Value))
+(type u64 (primitive u64))
+(type Imm64 (primitive Imm64))
+(type bool (primitive bool))
+(extern const $true bool)
+
+(spec (simplify x) (provide (= x result)))
+(instantiate simplify
+    ((args (bv 8)) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 16)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 32)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(decl simplify (Value) Value)
+
+(spec (bor ty x y)
+    (provide (= (bvor x y) result))
+    (require
+        (= ty (widthof x))
+        (= ty (widthof y))))
+(decl bor (Type Value Value) Value)
+(extern extractor bor bor)
+(extern constructor bor bor)
+
+(spec (bnot ty x)
+    (provide (= (bvnot x) result))
+    (require (= ty (widthof x))))
+(decl bnot (Type Value) Value)
+(extern extractor bnot bnot)
+(extern constructor bnot bnot)
+
+(spec (band ty x y)
+    (provide (= (bvand x y) result))
+    (require
+        (= ty (widthof x))
+        (= ty (widthof y))))
+(decl band (Type Value Value) Value)
+(extern extractor band band)
+(extern constructor band band)
+
+;; Specify to this rule with constants
+(spec (iconst ty arg)
+    (provide (= arg (zero_ext 64 result)))
+    (require (= ty (widthof arg))))
+(decl iconst (Type Imm64) Value)
+(extern constructor iconst iconst)
+(extern extractor iconst iconst)
+
+;; Extract a `u64` from an `Imm64`.
+(spec (u64_from_imm64 arg) (provide (= arg result)))
+(decl u64_from_imm64 (u64) Imm64)
+(extern extractor u64_from_imm64 u64_from_imm64)
+
+(spec (u64_eq x y)
+      (provide (= result (if (= x y) #x0000000000000000 #x0000000000000001))))
+(decl pure u64_eq (u64 u64) u64)
+(extern constructor u64_eq u64_eq)
+
+(spec (u64_not arg) (provide (= (bvnot arg) result)))
+(decl pure u64_not (u64) u64)
+(extern constructor u64_not u64_not)
+
+;; `or(and(x, y), noty) == or(x, not(y))` specialized for constants, since
+;; otherwise we may not know that `z == not(y)` since we don't generally expand
+;; constants in the e-graph.
+;;
+;; (No need to duplicate for commutative `bor` for this constant version because
+;; we move constants to the right.)
+(rule (simplify (bor ty
+                    (band ty x (iconst ty (u64_from_imm64 y)))
+                    z @ (iconst ty (u64_from_imm64 zk))))
+    (if (u64_eq zk (u64_not y)))
+    (bor ty x z))

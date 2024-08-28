@@ -29,6 +29,7 @@
 
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(model Reg (type (bv)))
 (type Reg (primitive Reg))
 (type WritableReg (primitive WritableReg))
 (type OptionWritableReg (primitive OptionWritableReg))
@@ -37,6 +38,8 @@
 (type PReg (primitive PReg))
 
 ;; Construct a `ValueRegs` of one register.
+(spec (value_reg arg)
+    (provide (= result arg)))
 (decl value_reg (Reg) ValueRegs)
 (extern constructor value_reg value_reg)
 
@@ -61,6 +64,8 @@
 (extern constructor output_none output_none)
 
 ;; Construct a single-element `InstOutput`.
+(spec (output arg)
+      (provide (= arg (conv_to (widthof arg) result))))
 (decl output (ValueRegs) InstOutput)
 (extern constructor output output)
 
@@ -69,8 +74,16 @@
 (extern constructor output_pair output_pair)
 
 ;; Construct a single-element `InstOutput` from a single register.
+(spec (output_reg arg)
+      (provide (= result (conv_to (widthof result) arg))))
+(instantiate output_reg
+    ((args (bv 64)) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 64)) (ret (bv 16)) (canon (bv 16)))
+    ((args (bv 64)) (ret (bv 32)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
 (decl output_reg (Reg) InstOutput)
-(rule (output_reg reg) (output (value_reg reg)))
+(rule output_reg (output_reg reg) (output (value_reg reg)))
 
 ;; Construct a single-element `InstOutput` from a value.
 (decl output_value (Value) InstOutput)
@@ -119,12 +132,15 @@
 ;; multiple registers for its representation (like `i128` on x64 for example).
 ;;
 ;; As a side effect, this marks the value as used.
+(spec (put_in_reg arg)
+      (provide (= result (conv_to 64 arg))))
 (decl put_in_reg (Value) Reg)
 (extern constructor put_in_reg put_in_reg)
 
 ;; Put the given value into one or more registers.
 ;;
 ;; As a side effect, this marks the value as used.
+(spec (put_in_regs arg) (provide (= (conv_to 64 arg) result)))
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
 
@@ -134,6 +150,8 @@
 (extern constructor ensure_in_vreg ensure_in_vreg)
 
 ;; Get the `n`th register inside a `ValueRegs`.
+(spec (value_regs_get arg i)
+    (provide (= arg result) (= (widthof i) 1)))
 (decl value_regs_get (ValueRegs usize) Reg)
 (extern constructor value_regs_get value_regs_get)
 
@@ -270,22 +288,30 @@
 
 ;; Extract the type of the instruction's first result and pass along the
 ;; instruction as well.
+(spec (has_type ty arg)
+      (provide (= result arg))
+      (require (= ty (widthof arg))))
 (decl has_type (Type Inst) Inst)
 (extractor (has_type ty inst)
            (and (result_type ty)
                 inst))
 
 ;; Match the instruction that defines the given value, if any.
+(spec (def_inst arg) (provide (= result arg)))
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
 
 ;; Extract a constant `u64` from a value defined by an `iconst`.
+(spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
 
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
+(spec (i32_from_iconst arg) 
+      (provide (= arg (extract 31 0 (sign_ext 64 result))))
+      (require (= result (sign_ext (widthof result) arg))))
 (decl i32_from_iconst (i32) Value)
 (extern extractor i32_from_iconst i32_from_iconst)
 
@@ -308,6 +334,10 @@
 (extern extractor maybe_uextend maybe_uextend)
 
 ;; Get an unsigned 8-bit immediate in a u8 from an Imm64, if possible.
+(spec (uimm8 arg)
+    (provide (= result (zero_ext 64 arg)))
+    (require (bvslt result #x0000000000000100)
+             (= (widthof arg) 8)))
 (decl uimm8 (u8) Imm64)
 (extern extractor uimm8 uimm8)
 
@@ -359,6 +389,8 @@
                                  (inst2 MInst)
                                  (inst3 MInst))))
 
+(model SideEffectNoResult (type Unit))
+
 ;; Emit given side-effectful instruction.
 (decl emit_side_effect (SideEffectNoResult) Unit)
 (rule (emit_side_effect (SideEffectNoResult.Inst inst))
@@ -374,6 +406,8 @@
 ;; Create an empty `InstOutput`, but do emit the given side-effectful
 ;; instruction.
 (decl side_effect (SideEffectNoResult) InstOutput)
+(spec (side_effect v)
+    (provide (= result v)))
 (rule (side_effect inst)
       (let ((_ Unit (emit_side_effect inst)))
         (output_none)))
@@ -969,6 +1003,11 @@
 (type RealReg (primitive RealReg))
 
 ;; Instruction on whether and how to extend an argument value.
+(model ArgumentExtension
+  (enum
+    (None)
+    (Uext)
+    (Sext)))
 (type ArgumentExtension extern
   (enum
     (None)
@@ -1063,6 +1102,10 @@
 (extern constructor gen_return_call_indirect gen_return_call_indirect)
 
 ;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
+ (spec (safe_divisor_from_imm64 t x)
+       (provide (= (sign_ext 64 x) result))
+       (require (not (= #x0000000000000000 result))
+                (not (= #x1111111111111111 result))))
 (decl pure partial safe_divisor_from_imm64 (Type Imm64) u64)
 (extern constructor safe_divisor_from_imm64 safe_divisor_from_imm64)
 

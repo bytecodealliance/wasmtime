@@ -1,0 +1,34 @@
+
+(spec (lower arg) (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+(spec (sub ty a b) 
+    (provide (= (bvsub a b) result)))
+(decl sub (Type Reg Reg) Reg)
+(extern constructor sub sub)
+
+(spec (zero_reg)
+    (provide (= (zero_ext 64 #x0000000000000000) result)))
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+(spec (a64_rotr ty x y) 
+    (provide (= result 
+                   (if (= ty 32)
+                       (zero_ext 64 (rotr (extract 31 0 x) (extract 31 0 y)))
+                       (rotr x y))))
+    (require (or (= ty 32) (= ty 64))))
+(decl a64_rotr (Type Reg Reg) Reg)
+(extern constructor a64_rotr a64_rotr)
+
+;; BROKEN: order of arguments to sub flipped
+;; General 32-bit case.
+(rule (lower (has_type $I32 (rotl x y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I32 amt (zero_reg))))
+        (a64_rotr $I32 x neg_shift)))

@@ -1,0 +1,85 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+       (AluRRRShift
+           (shiftop ShiftOpAndAmt))
+))
+
+;; ASSUMING 64 BIT MODE!!!
+;; annotations will interpret this as an 10 bit field
+;; the two msb encode the type of shift as follows:
+;;   00: lsl
+;;   01: lsr
+;;   10: asr
+;;   11: invalid
+;; the rest will encode a 8-bit shift amount
+(type ShiftOpAndAmt (primitive ShiftOpAndAmt))
+
+(model ALUOp (enum
+      (Add #x00) ;; 0
+      (Sub #x01)
+      (Orr #x02)
+      (OrrNot #x03)
+      (And #x04)
+      (AndNot #x05)
+      (Eor #x06)
+      (EorNot #x07)
+      (SubS #x08)
+      (SDiv #x09)
+      (UDiv #x0a)
+      (RotR #x0b)
+      (Lsr #x0c)
+      (Asr #x0d)
+      (Lsl #x0e)))
+
+(type ALUOp (enum
+      (Add)
+      (Sub)
+      (Orr)
+      (OrrNot)
+      (And)
+      (AndNot)
+      (Eor)
+      (EorNot)
+      (SubS)
+      (SDiv)
+      (UDiv)
+      (RotR)
+      (Lsr)
+      (Asr)
+      (Lsl)))
+
+(decl alu_rrr_shift (ALUOp Type Reg Reg ShiftOpAndAmt) Reg)
+(extern constructor alu_rrr_shift alu_rrr_shift)
+
+(spec (add_shift ty a b shift)
+  (provide
+    (= result (if (<= ty 32)
+      (conv_to 64 (bvadd (extract 31 0 a)
+      (switch (extract 15 8 shift)
+        ((ALUOp.Lsl) (bvshl (extract 31 0 b) (zero_ext 32 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
+        ((ALUOp.Lsr) (bvlshr (extract 31 0 b) (zero_ext 32 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
+        ((ALUOp.Asr) (bvashr (extract 31 0 b) (zero_ext 32 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift))))))))
+      (bvadd a
+      (switch (extract 15 8 shift)
+        ((ALUOp.Lsl) (bvshl b (zero_ext 64 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
+        ((ALUOp.Lsr) (bvlshr b (zero_ext 64 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
+        ((ALUOp.Asr) (bvashr b (zero_ext 64 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))))))))
+
+(decl add_shift (Type Reg Reg ShiftOpAndAmt) Reg)
+(rule (add_shift ty x y z) (alu_rrr_shift (ALUOp.Add) ty x y z))
+
+(spec (lshr_from_u64 ty a)
+    (provide (= result (concat (ALUOp.Lsr) (extract 7 0 a))))
+    (require (= (extract 63 8 a) #b00000000000000000000000000000000000000000000000000000000)))
+(decl pure lshr_from_u64 (Type Imm64) ShiftOpAndAmt)
+(extern constructor lshr_from_u64 lshr_from_u64)
+
+;; BROKEN: using lshr_from_u64 instead of lshr_from_u64
+(rule 6 (lower (has_type (fits_in_64 ty)
+                       (iadd (ishl x (iconst k)) y)))
+      (if-let amt (lshr_from_u64 ty k))
+      (add_shift ty y x amt))
