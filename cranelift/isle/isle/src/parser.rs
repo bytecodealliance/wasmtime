@@ -611,7 +611,7 @@ impl<'a> Parser<'a> {
                     None
                 } else if self.is_int() {
                     Some(usize::try_from(self.expect_int()?).map_err(|err| {
-                        self.error(pos, format!("Invalid BitVector width: {}", err))
+                        self.error(pos, format!("Invalid BitVector width: {err}"))
                     })?)
                 } else {
                     return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
@@ -669,7 +669,7 @@ impl<'a> Parser<'a> {
         if !self.eat_sym_str(tag)? {
             return Err(self.error(
                 pos,
-                format!("Invalid {}: expected ({} <arg> ...)", tag, tag),
+                format!("Invalid {tag}: expected ({tag} <arg> ...)"),
             ));
         };
         let mut params = vec![];
@@ -684,7 +684,7 @@ impl<'a> Parser<'a> {
         self.expect_lparen()?;
         let pos = self.pos();
         if !self.eat_sym_str(tag)? {
-            return Err(self.error(pos, format!("Invalid {}: expected ({} <arg>)", tag, tag)));
+            return Err(self.error(pos, format!("Invalid {tag}: expected ({tag} <arg>)")));
         };
         let ty = self.parse_model_type()?;
         self.expect_rparen()?;
@@ -771,7 +771,7 @@ impl<'a> Parser<'a> {
         let name = if self.is_sym() {
             Some(
                 self.parse_ident()
-                    .map_err(|err| self.error(pos, format!("Invalid rule name: {:?}", err)))?,
+                    .map_err(|err| self.error(pos, format!("Invalid rule name: {err:?}")))?,
             )
         } else {
             None
