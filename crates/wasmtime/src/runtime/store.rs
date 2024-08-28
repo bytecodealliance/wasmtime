@@ -1519,7 +1519,7 @@ impl StoreOpaque {
 
         #[cfg(feature = "gc")]
         fn allocate_gc_store(engine: &Engine) -> Result<GcStore> {
-            let (index, heap) = if engine.features().reference_types() {
+            let (index, heap) = if engine.features().gc_types() {
                 engine
                     .allocator()
                     .allocate_gc_heap(&**engine.gc_runtime())?
@@ -2713,11 +2713,11 @@ impl Drop for StoreOpaque {
 
             #[cfg(feature = "gc")]
             if let Some(gc_store) = self.gc_store.take() {
-                if self.engine.features().reference_types() {
+                if self.engine.features().gc_types() {
                     allocator.deallocate_gc_heap(gc_store.allocation_index, gc_store.gc_heap);
                 } else {
-                    // If reference types are not enabled, we are just dealing
-                    // with a dummy GC heap.
+                    // If GC types are not enabled, we are just dealing with a
+                    // dummy GC heap.
                     debug_assert_eq!(gc_store.allocation_index, GcHeapAllocationIndex::default());
                     debug_assert!(gc_store.gc_heap.as_any().is::<crate::vm::DisabledGcHeap>());
                 }
