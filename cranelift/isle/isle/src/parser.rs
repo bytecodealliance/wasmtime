@@ -667,10 +667,7 @@ impl<'a> Parser<'a> {
         self.expect_lparen()?;
         let pos = self.pos();
         if !self.eat_sym_str(tag)? {
-            return Err(self.error(
-                pos,
-                format!("Invalid {tag}: expected ({tag} <arg> ...)"),
-            ));
+            return Err(self.error(pos, format!("Invalid {tag}: expected ({tag} <arg> ...)")));
         };
         let mut params = vec![];
         while !self.is_rparen() {
