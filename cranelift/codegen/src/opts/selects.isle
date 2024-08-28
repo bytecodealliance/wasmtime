@@ -75,3 +75,14 @@
 (rule (simplify (bor (ty_vec128 ty) (band ty (bnot ty c) y) (band ty x c))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty c x))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty x c))) (bitselect ty c x y))
+
+;; Lift an extend operation outside of a `select` if the extend is happening
+;; on both the consequent and the alternative.
+(rule (simplify (select ty cond
+                           (uextend ty a @ (value_type small))
+                           (uextend ty b @ (value_type small))))
+      (uextend ty (select small cond a b)))
+(rule (simplify (select ty cond
+                           (sextend ty a @ (value_type small))
+                           (sextend ty b @ (value_type small))))
+      (sextend ty (select small cond a b)))
