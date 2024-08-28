@@ -15,14 +15,14 @@
 
 ;; Optimize icmp-of-icmp.
 ;; ne(icmp(ty, cc, x, y), 0) == icmp(ty, cc, x, y)
-;; e.g. neq(ugt(x, y), 0) == ugt(x, y) 
+;; e.g. neq(ugt(x, y), 0) == ugt(x, y)
 (rule (simplify (ne ty
                       (uextend_maybe _ inner @ (icmp ty _ _ _))
                       (iconst_u _ 0)))
       (subsume inner))
 
 ;; eq(icmp(ty, cc, x, y), 0) == icmp(ty, cc_complement, x, y)
-;; e.g. eq(ugt(x, y), 0) == ule(x, y) 
+;; e.g. eq(ugt(x, y), 0) == ule(x, y)
 (rule (simplify (eq ty
                       (uextend_maybe _ (icmp ty cc x y))
                       (iconst_u _ 0)))
@@ -213,3 +213,46 @@
 (rule (intcc_class (IntCC.SignedGreaterThanOrEqual)) 2)
 (rule (intcc_class (IntCC.Equal)) 3)
 (rule (intcc_class (IntCC.NotEqual)) 3)
+
+;; Pattern-match what LLVM emits today for 128-bit comparisons into actual
+;; 128-bit comparisons. Platforms like x64 and aarch64 have more optimal
+;; lowerings for 128-bit arithmetic than the default structure.
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (uge ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (uge ty a_hi b_hi)))
+      (uge ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (uge ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (sge ty a_hi b_hi)))
+      (sge ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ugt ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (ugt ty a_hi b_hi)))
+      (ugt ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ugt ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (sgt ty a_hi b_hi)))
+      (sgt ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ule ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (ule ty a_hi b_hi)))
+      (ule ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ule ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (sle ty a_hi b_hi)))
+      (sle ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ult ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (ult ty a_hi b_hi)))
+      (ult ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ult ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (slt ty a_hi b_hi)))
+      (slt ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
