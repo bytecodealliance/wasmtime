@@ -81,7 +81,7 @@ pub struct ImportsIndices {}
 ///   create a [`Imports`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Imports::new_instance`]
+///   then you can use [`Imports::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`ImportsIndices::new_instance`] followed

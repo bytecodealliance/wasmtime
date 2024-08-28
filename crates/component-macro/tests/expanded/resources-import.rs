@@ -108,7 +108,7 @@ pub struct TheWorldIndices {
 ///   create a [`TheWorld`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`TheWorld::new_instance`]
+///   then you can use [`TheWorld::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`TheWorldIndices::new_instance`] followed

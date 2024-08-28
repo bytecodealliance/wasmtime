@@ -80,7 +80,7 @@ pub struct HttpInterfaceIndices {
 ///   create a [`HttpInterface`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`HttpInterface::new_instance`]
+///   then you can use [`HttpInterface::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`HttpInterfaceIndices::new_instance`] followed

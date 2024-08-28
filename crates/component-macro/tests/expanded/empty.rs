@@ -78,7 +78,7 @@ pub struct EmptyIndices {}
 ///   create a [`Empty`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Empty::new_instance`]
+///   then you can use [`Empty::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`EmptyIndices::new_instance`] followed

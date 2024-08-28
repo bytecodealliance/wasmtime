@@ -83,7 +83,7 @@ pub struct WIndices {
 ///   create a [`W`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`W::new_instance`]
+///   then you can use [`W::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`WIndices::new_instance`] followed

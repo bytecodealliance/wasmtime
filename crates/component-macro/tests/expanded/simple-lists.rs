@@ -80,7 +80,7 @@ pub struct MyWorldIndices {
 ///   create a [`MyWorld`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`MyWorld::new_instance`]
+///   then you can use [`MyWorld::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`MyWorldIndices::new_instance`] followed

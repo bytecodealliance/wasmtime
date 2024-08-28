@@ -78,7 +78,7 @@ pub struct WasiIndices {}
 ///   create a [`Wasi`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Wasi::new_instance`]
+///   then you can use [`Wasi::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`WasiIndices::new_instance`] followed

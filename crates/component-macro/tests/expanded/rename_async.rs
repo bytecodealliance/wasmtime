@@ -81,7 +81,7 @@ pub struct NeptuneIndices {}
 ///   create a [`Neptune`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Neptune::new_instance`]
+///   then you can use [`Neptune::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`NeptuneIndices::new_instance`] followed

@@ -81,7 +81,7 @@ pub struct DIndices {}
 ///   create a [`D`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`D::new_instance`]
+///   then you can use [`D::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`DIndices::new_instance`] followed

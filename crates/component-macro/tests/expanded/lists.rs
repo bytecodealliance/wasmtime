@@ -80,7 +80,7 @@ pub struct TheListsIndices {
 ///   create a [`TheLists`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`TheLists::new_instance`]
+///   then you can use [`TheLists::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`TheListsIndices::new_instance`] followed

@@ -83,7 +83,7 @@ pub struct TheFlagsIndices {
 ///   create a [`TheFlags`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`TheFlags::new_instance`]
+///   then you can use [`TheFlags::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`TheFlagsIndices::new_instance`] followed

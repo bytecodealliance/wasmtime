@@ -80,7 +80,7 @@ pub struct ExampleIndices {
 ///   create a [`Example`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Example::new_instance`]
+///   then you can use [`Example::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`ExampleIndices::new_instance`] followed

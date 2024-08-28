@@ -78,7 +78,7 @@ pub struct NopeIndices {}
 ///   create a [`Nope`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Nope::new_instance`]
+///   then you can use [`Nope::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`NopeIndices::new_instance`] followed

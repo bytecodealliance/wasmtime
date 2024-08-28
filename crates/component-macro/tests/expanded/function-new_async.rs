@@ -83,7 +83,7 @@ pub struct FooIndices {
 ///   create a [`Foo`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Foo::new_instance`]
+///   then you can use [`Foo::new`].
 ///
 /// * You can also access the guts of instantiation through
 ///   [`FooIndices::new_instance`] followed
