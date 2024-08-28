@@ -111,7 +111,7 @@ test-programs-artifacts = { workspace = true }
 bytesize = "1.3.0"
 wit-component = { workspace = true }
 cranelift-filetests = { workspace = true }
-cranelift-codegen = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["disas", "trace-log", "timing"] }
 cranelift-reader = { workspace = true }
 toml = { workspace = true }
 similar = { workspace = true }
