@@ -92,9 +92,10 @@ struct Exports {
 
 struct ExportField {
     ty: String,
-    ty_pre: String,
-    getter: String,
-    getter_pre: String,
+    ty_index: String,
+    load: String,
+    get_index_from_component: String,
+    get_index_from_instance: String,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -518,22 +519,28 @@ impl Wasmtime {
         let mut gen = InterfaceGenerator::new(self, resolve);
         let field;
         let ty;
-        let ty_pre;
-        let getter;
-        let getter_pre;
+        let ty_index;
+        let load;
+        let get_index_from_component;
+        let get_index_from_instance;
         match item {
             WorldItem::Function(func) => {
                 gen.define_rust_guest_export(resolve, None, func);
                 let body = mem::take(&mut gen.src).into();
-                getter = gen.extract_typed_function(func).1;
+                load = gen.extract_typed_function(func).1;
                 assert!(gen.src.is_empty());
                 self.exports.funcs.push(body);
-                ty_pre = format!("{wt}::component::ComponentExportIndex");
+                ty_index = format!("{wt}::component::ComponentExportIndex");
                 field = func_field_name(resolve, func);
                 ty = format!("{wt}::component::Func");
-                getter_pre = format!(
+                get_index_from_component = format!(
                     "_component.export_index(None, \"{}\")
                         .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?.1",
+                    func.name
+                );
+                get_index_from_instance = format!(
+                    "_instance.get_export(&mut store, None, \"{}\")
+                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?",
                     func.name
                 );
             }
@@ -560,7 +567,7 @@ impl Wasmtime {
                 uwriteln!(gen.src, "}}");
 
                 uwriteln!(gen.src, "#[derive(Clone)]");
-                uwriteln!(gen.src, "pub struct {struct_name}Pre {{");
+                uwriteln!(gen.src, "pub struct {struct_name}Indices {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
                         gen.src,
@@ -570,41 +577,67 @@ impl Wasmtime {
                 }
                 uwriteln!(gen.src, "}}");
 
-                uwriteln!(gen.src, "impl {struct_name}Pre {{");
+                uwriteln!(gen.src, "impl {struct_name}Indices {{");
                 let instance_name = resolve.name_world_key(name);
                 uwrite!(
                     gen.src,
                     "
+/// Constructor for [`{struct_name}Indices`] which takes a
+/// [`Component`]({wt}::component::Component) as input and can be executed
+/// before instantiation.
+///
+/// This constructor can be used to front-load string lookups to find exports
+/// within a component.
 pub fn new(
     component: &{wt}::component::Component,
-) -> {wt}::Result<{struct_name}Pre> {{
-    let _component = component;
+) -> {wt}::Result<{struct_name}Indices> {{
     let (_, instance) = component.export_index(None, \"{instance_name}\")
         .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
-    let _lookup = |name: &str| {{
-        _component.export_index(Some(&instance), name)
+    Self::_new(|name| {{
+        component.export_index(Some(&instance), name)
             .map(|p| p.1)
-            .ok_or_else(|| {{
-                anyhow::anyhow!(
-                    \"instance export `{instance_name}` does \\
-                      not have export `{{name}}`\"
-                )
-            }})
+    }})
+}}
+
+/// This constructor is similar to [`{struct_name}Indices::new`] except that it
+/// performs string lookups after instantiation time.
+pub fn new_instance(
+    mut store: impl {wt}::AsContextMut,
+    instance: &{wt}::component::Instance,
+) -> {wt}::Result<{struct_name}Indices> {{
+    let instance_export = instance.get_export(&mut store, None, \"{instance_name}\")
+        .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
+    Self::_new(|name| {{
+        instance.get_export(&mut store, Some(&instance_export), name)
+    }})
+}}
+
+fn _new(
+    mut lookup: impl FnMut (&str) -> Option<{wt}::component::ComponentExportIndex>,
+) -> {wt}::Result<{struct_name}Indices> {{
+    let mut lookup = move |name| {{
+        lookup(name).ok_or_else(|| {{
+            anyhow::anyhow!(
+                \"instance export `{instance_name}` does \\
+                  not have export `{{name}}`\"
+            )
+        }})
     }};
+    let _ = &mut lookup;
                     "
                 );
                 let mut fields = Vec::new();
                 for (_, func) in iface.functions.iter() {
                     let name = func_field_name(resolve, func);
-                    uwriteln!(gen.src, "let {name} = _lookup(\"{}\")?;", func.name);
+                    uwriteln!(gen.src, "let {name} = lookup(\"{}\")?;", func.name);
                     fields.push(name);
                 }
-                uwriteln!(gen.src, "Ok({struct_name}Pre {{");
+                uwriteln!(gen.src, "Ok({struct_name}Indices {{");
                 for name in fields {
                     uwriteln!(gen.src, "{name},");
                 }
                 uwriteln!(gen.src, "}})");
-                uwriteln!(gen.src, "}}");
+                uwriteln!(gen.src, "}}"); // end `fn _new`
 
                 uwrite!(
                     gen.src,
@@ -631,7 +664,7 @@ pub fn new(
                 }
                 uwriteln!(gen.src, "}})");
                 uwriteln!(gen.src, "}}"); // end `fn new`
-                uwriteln!(gen.src, "}}"); // end `impl {struct_name}Pre`
+                uwriteln!(gen.src, "}}"); // end `impl {struct_name}Indices`
 
                 uwriteln!(gen.src, "impl {struct_name} {{");
                 let mut resource_methods = IndexMap::new();
@@ -713,7 +746,7 @@ pub fn new(
                     None => (format!("exports::{snake}::{struct_name}"), snake.clone()),
                 };
                 field = format!("interface{}", self.exports.fields.len());
-                getter = format!("self.{field}.load(&mut store, &_instance)?");
+                load = format!("self.{field}.load(&mut store, &_instance)?");
                 self.exports.funcs.push(format!(
                     "
                         pub fn {method_name}(&self) -> &{path} {{
@@ -721,18 +754,21 @@ pub fn new(
                         }}
                     ",
                 ));
-                ty_pre = format!("{path}Pre");
+                ty_index = format!("{path}Indices");
                 ty = path;
-                getter_pre = format!("{ty_pre}::new(_component)?");
+                get_index_from_component = format!("{ty_index}::new(_component)?");
+                get_index_from_instance =
+                    format!("{ty_index}::new_instance(&mut store, _instance)?");
             }
         }
         let prev = self.exports.fields.insert(
             field,
             ExportField {
                 ty,
-                ty_pre,
-                getter,
-                getter_pre,
+                ty_index,
+                load,
+                get_index_from_component,
+                get_index_from_instance,
             },
         );
         assert!(prev.is_none());
@@ -750,29 +786,85 @@ pub fn new(
         uwriteln!(
             self.src,
             "
-            /// Auto-generated bindings for a pre-instantiated version of a
-            /// component which implements the world `{world_name}`.
-            ///
-            /// This structure is created through [`{camel}Pre::new`] which
-            /// takes a [`InstancePre`]({wt}::component::InstancePre) that
-            /// has been created through a [`Linker`]({wt}::component::Linker).
-            pub struct {camel}Pre<T> {{"
+/// Auto-generated bindings for a pre-instantiated version of a
+/// component which implements the world `{world_name}`.
+///
+/// This structure is created through [`{camel}Pre::new`] which
+/// takes a [`InstancePre`]({wt}::component::InstancePre) that
+/// has been created through a [`Linker`]({wt}::component::Linker).
+///
+/// For more information see [`{camel}`] as well.
+pub struct {camel}Pre<T> {{
+    instance_pre: {wt}::component::InstancePre<T>,
+    indices: {camel}Indices,
+}}
+
+impl<T> Clone for {camel}Pre<T> {{
+    fn clone(&self) -> Self {{
+        Self {{
+            instance_pre: self.instance_pre.clone(),
+            indices: self.indices.clone(),
+        }}
+    }}
+}}
+
+impl<_T> {camel}Pre<_T> {{
+    /// Creates a new copy of `{camel}Pre` bindings which can then
+    /// be used to instantiate into a particular store.
+    ///
+    /// This method may fail if the component behind `instance_pre`
+    /// does not have the required exports.
+    pub fn new(instance_pre: {wt}::component::InstancePre<_T>) -> {wt}::Result<Self> {{
+        let indices = {camel}Indices::new(instance_pre.component())?;
+        Ok(Self {{ instance_pre, indices }})
+    }}
+
+    pub fn engine(&self) -> &{wt}::Engine {{
+        self.instance_pre.engine()
+    }}
+
+    pub fn instance_pre(&self) -> &{wt}::component::InstancePre<_T> {{
+        &self.instance_pre
+    }}
+
+    /// Instantiates a new instance of [`{camel}`] within the
+    /// `store` provided.
+    ///
+    /// This function will use `self` as the pre-instantiated
+    /// instance to perform instantiation. Afterwards the preloaded
+    /// indices in `self` are used to lookup all exports on the
+    /// resulting instance.
+    pub {async_} fn instantiate{async__}(
+        &self,
+        mut store: impl {wt}::AsContextMut<Data = _T>,
+    ) -> {wt}::Result<{camel}>
+        {where_clause}
+    {{
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate{async__}(&mut store){await_}?;
+        self.indices.load(&mut store, &instance)
+    }}
+}}
+"
         );
-        uwriteln!(self.src, "instance_pre: {wt}::component::InstancePre<T>,");
+
+        uwriteln!(
+            self.src,
+            "
+            /// Auto-generated bindings for index of the exports of
+            /// `{world_name}`.
+            ///
+            /// This is an implementation detail of [`{camel}Pre`] and can
+            /// be constructed if needed as well.
+            ///
+            /// For more information see [`{camel}`] as well.
+            #[derive(Clone)]
+            pub struct {camel}Indices {{"
+        );
         for (name, field) in self.exports.fields.iter() {
-            uwriteln!(self.src, "{name}: {},", field.ty_pre);
+            uwriteln!(self.src, "{name}: {},", field.ty_index);
         }
         self.src.push_str("}\n");
-
-        uwriteln!(self.src, "impl<T> Clone for {camel}Pre<T> {{");
-        uwriteln!(self.src, "fn clone(&self) -> Self {{");
-        uwriteln!(self.src, "Self {{ instance_pre: self.instance_pre.clone(),");
-        for (name, _field) in self.exports.fields.iter() {
-            uwriteln!(self.src, "{name}: self.{name}.clone(),");
-        }
-        uwriteln!(self.src, "}}"); // `Self ...
-        uwriteln!(self.src, "}}"); // `fn clone`
-        uwriteln!(self.src, "}}"); // `impl Clone`
 
         uwriteln!(
             self.src,
@@ -780,10 +872,33 @@ pub fn new(
                 /// Auto-generated bindings for an instance a component which
                 /// implements the world `{world_name}`.
                 ///
-                /// This structure is created through either
-                /// [`{camel}::instantiate{async__}`] or by first creating
-                /// a [`{camel}Pre`] followed by using
-                /// [`{camel}Pre::instantiate{async__}`].
+                /// This structure can be created through a number of means
+                /// depending on your requirements and what you have on hand:
+                ///
+                /// * The most convenient way is to use
+                ///   [`{camel}::instantiate{async__}`] which only needs a
+                ///   [`Store`], [`Component`], and [`Linker`].
+                ///
+                /// * Alternatively you can create a [`{camel}Pre`] ahead of
+                ///   time with a [`Component`] to front-load string lookups
+                ///   of exports once instead of per-instantiation. This
+                ///   method then uses [`{camel}Pre::instantiate{async__}`] to
+                ///   create a [`{camel}`].
+                ///
+                /// * If you've instantiated the instance yourself already
+                ///   then you can use [`{camel}::new`].
+                ///
+                /// * You can also access the guts of instantiation through
+                ///   [`{camel}Indices::new_instance`] followed
+                ///   by [`{camel}Indices::load`] to crate an instance of this
+                ///   type.
+                ///
+                /// These methods are all equivalent to one another and move
+                /// around the tradeoff of what work is performed when.
+                ///
+                /// [`Store`]: {wt}::Store
+                /// [`Component`]: {wt}::component::Component
+                /// [`Linker`]: {wt}::component::Linker
                 pub struct {camel} {{"
         );
         for (name, field) in self.exports.fields.iter() {
@@ -804,23 +919,20 @@ pub fn new(
 
         uwriteln!(
             self.src,
-            "impl<_T> {camel}Pre<_T> {{
-                /// Creates a new copy of `{camel}Pre` bindings which can then
+            "impl {camel}Indices {{
+                /// Creates a new copy of `{camel}Indices` bindings which can then
                 /// be used to instantiate into a particular store.
                 ///
-                /// This method may fail if the component behind `instance_pre`
-                /// does not have the required exports.
-                pub fn new(
-                    instance_pre: {wt}::component::InstancePre<_T>,
-                ) -> {wt}::Result<Self> {{
-                    let _component = instance_pre.component();
+                /// This method may fail if the component does not have the
+                /// required exports.
+                pub fn new(component: &{wt}::component::Component) -> {wt}::Result<Self> {{
+                    let _component = component;
             ",
         );
         for (name, field) in self.exports.fields.iter() {
-            uwriteln!(self.src, "let {name} = {};", field.getter_pre);
+            uwriteln!(self.src, "let {name} = {};", field.get_index_from_component);
         }
-        uwriteln!(self.src, "Ok({camel}Pre {{");
-        uwriteln!(self.src, "instance_pre,");
+        uwriteln!(self.src, "Ok({camel}Indices {{");
         for (name, _) in self.exports.fields.iter() {
             uwriteln!(self.src, "{name},");
         }
@@ -830,46 +942,56 @@ pub fn new(
         uwriteln!(
             self.src,
             "
-                /// Instantiates a new instance of [`{camel}`] within the
-                /// `store` provided.
+                /// Creates a new instance of [`{camel}Indices`] from an
+                /// instantiated component.
                 ///
-                /// This function will use `self` as the pre-instantiated
-                /// instance to perform instantiation. Afterwards the preloaded
-                /// indices in `self` are used to lookup all exports on the
-                /// resulting instance.
-                pub {async_} fn instantiate{async__}(
-                    &self,
-                    mut store: impl {wt}::AsContextMut<Data = _T>,
-                ) -> {wt}::Result<{camel}>
-                    {where_clause}
-                {{
-                    let mut store = store.as_context_mut();
-                    let _instance = self.instance_pre.instantiate{async__}(&mut store){await_}?;
+                /// This method of creating a [`{camel}`] will perform string
+                /// lookups for all exports when this method is called. This
+                /// will only succeed if the provided instance matches the
+                /// requirements of [`{camel}`].
+                pub fn new_instance(
+                    mut store: impl {wt}::AsContextMut,
+                    instance: &{wt}::component::Instance,
+                ) -> {wt}::Result<Self> {{
+                    let _instance = instance;
             ",
         );
         for (name, field) in self.exports.fields.iter() {
-            uwriteln!(self.src, "let {name} = {};", field.getter);
+            uwriteln!(self.src, "let {name} = {};", field.get_index_from_instance);
+        }
+        uwriteln!(self.src, "Ok({camel}Indices {{");
+        for (name, _) in self.exports.fields.iter() {
+            uwriteln!(self.src, "{name},");
+        }
+        uwriteln!(self.src, "}})");
+        uwriteln!(self.src, "}}"); // close `fn new_instance`
+
+        uwriteln!(
+            self.src,
+            "
+                /// Uses the indices stored in `self` to load an instance
+                /// of [`{camel}`] from the instance provided.
+                ///
+                /// Note that at this time this method will additionally
+                /// perform type-checks of all exports.
+                pub fn load(
+                    &self,
+                    mut store: impl {wt}::AsContextMut,
+                    instance: &{wt}::component::Instance,
+                ) -> {wt}::Result<{camel}> {{
+                    let _instance = instance;
+            ",
+        );
+        for (name, field) in self.exports.fields.iter() {
+            uwriteln!(self.src, "let {name} = {};", field.load);
         }
         uwriteln!(self.src, "Ok({camel} {{");
         for (name, _) in self.exports.fields.iter() {
             uwriteln!(self.src, "{name},");
         }
         uwriteln!(self.src, "}})");
-        uwriteln!(self.src, "}}"); // close `fn new`
-        uwriteln!(
-            self.src,
-            "
-                pub fn engine(&self) -> &{wt}::Engine {{
-                    self.instance_pre.engine()
-                }}
-
-                pub fn instance_pre(&self) -> &{wt}::component::InstancePre<_T> {{
-                    &self.instance_pre
-                }}
-            ",
-        );
-
-        uwriteln!(self.src, "}}");
+        uwriteln!(self.src, "}}"); // close `fn load`
+        uwriteln!(self.src, "}}"); // close `impl {camel}Indices`
 
         uwriteln!(
             self.src,
@@ -885,6 +1007,16 @@ pub fn new(
                 {{
                     let pre = linker.instantiate_pre(component)?;
                     {camel}Pre::new(pre)?.instantiate{async__}(store){await_}
+                }}
+
+                /// Convenience wrapper around [`{camel}Indices::new_instance`] and
+                /// [`{camel}Indices::load`].
+                pub fn new(
+                    mut store: impl {wt}::AsContextMut,
+                    instance: &{wt}::component::Instance,
+                ) -> {wt}::Result<{camel}> {{
+                    let indices = {camel}Indices::new_instance(&mut store, instance)?;
+                    indices.load(store, instance)
                 }}
             ",
         );
