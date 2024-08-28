@@ -1961,7 +1961,6 @@ pub enum ExtMode {
 
 impl ExtMode {
     /// Calculate the `ExtMode` from passed bit lengths of the from/to types.
-    /// AVH TODO: remove 1, convert to ISLE?
     pub(crate) fn new(from_bits: u16, to_bits: u16) -> Option<ExtMode> {
         match (from_bits, to_bits) {
             (1, 8) | (1, 16) | (1, 32) | (8, 16) | (8, 32) => Some(ExtMode::BL),
