@@ -59,6 +59,7 @@ impl GcHeapPool {
                     self.max_gc_heaps
                 )
             })?;
+        debug_assert_ne!(allocation_index, GcHeapAllocationIndex::default());
 
         let heap = match {
             let mut heaps = self.heaps.lock().unwrap();
@@ -76,6 +77,7 @@ impl GcHeapPool {
 
     /// Deallocate a previously-allocated GC heap.
     pub fn deallocate(&self, allocation_index: GcHeapAllocationIndex, mut heap: Box<dyn GcHeap>) {
+        debug_assert_ne!(allocation_index, GcHeapAllocationIndex::default());
         heap.reset();
 
         // NB: Replace the heap before freeing the index. If we did it in the
