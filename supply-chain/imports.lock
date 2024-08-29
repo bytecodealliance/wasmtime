@@ -753,6 +753,13 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.io-lifetimes]]
+version = "1.0.11"
+when = "2023-05-24"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.io-lifetimes]]
 version = "2.0.3"
 when = "2023-12-01"
 user-id = 6825
@@ -786,6 +793,13 @@ when = "2023-05-15"
 user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
+
+[[publisher.linux-raw-sys]]
+version = "0.3.8"
+when = "2023-05-19"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
 
 [[publisher.linux-raw-sys]]
 version = "0.4.12"
@@ -877,6 +891,13 @@ when = "2023-07-11"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
+
+[[publisher.rustix]]
+version = "0.37.27"
+when = "2023-10-26"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
 
 [[publisher.rustix]]
 version = "0.38.31"

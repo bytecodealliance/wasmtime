@@ -388,6 +388,7 @@ default = [
   # cost, so allow disabling this through disabling of our own `default`
   # feature.
   "clap/default",
+  "clap/wrap_help",
 ]
 
 # ========================================
