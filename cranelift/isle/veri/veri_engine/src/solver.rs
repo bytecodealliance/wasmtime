@@ -10,6 +10,7 @@ use crate::solver::encoded_ops::popcnt::popcnt;
 use crate::type_inference::RuleSemantics;
 use crate::Config;
 use easy_smt::{Response, SExpr};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use veri_ir::{
     BinaryOp, ConcreteTest, Counterexample, Expr, TermSignature, Terminal, Type, TypeContext,
@@ -43,6 +44,14 @@ pub struct SolverCtx {
     rhs_store_args: Option<Vec<SExpr>>,
     load_return: Option<SExpr>,
     lhs_flag: bool,
+}
+
+pub struct RuleCtx<'a> {
+    rule_sem: &'a RuleSemantics,
+    rule: &'a Rule,
+    termenv: &'a TermEnv,
+    typeenv: &'a TypeEnv,
+    config: &'a Config,
 }
 
 impl SolverCtx {
@@ -639,13 +648,12 @@ impl SolverCtx {
                         | BinaryOp::BVShr
                         | BinaryOp::BVAShr
                         | BinaryOp::BVRotl
-                        | BinaryOp::BVRotr => {
-                            self.assume_same_width_from_sexpr(width.unwrap(), &x)
+                        | BinaryOp::BVRotr => self.assume_same_width_from_sexpr(width.unwrap(), &x),
+                        BinaryOp::Eq => {
+                            if let Some(Type::BitVector(_)) = self.get_type(&x) {
+                                self.assume_comparable_types(&x, &y)
+                            }
                         }
-                        BinaryOp::Eq => match self.get_type(&x) {
-                            Some(Type::BitVector(_)) => self.assume_comparable_types(&x, &y),
-                            _ => (),
-                        },
                         _ => (),
                     };
                     self.assume_comparable_types(&x, &y);
@@ -917,20 +925,20 @@ impl SolverCtx {
                 } else {
                     let arg_width = self.static_width(&y).unwrap();
                     match ty {
-                        Some(Type::BitVector(Some(w))) => {
-                            if arg_width < *w {
+                        Some(Type::BitVector(Some(w))) => match arg_width.cmp(w) {
+                            Ordering::Less => {
                                 let padding =
                                     self.new_fresh_bits(w.checked_sub(arg_width).unwrap());
                                 let ys = self.vir_expr_to_sexp(*y);
                                 self.smt.concat(padding, ys)
-                            } else if *w < arg_width {
+                            }
+                            Ordering::Greater => {
                                 let new = (w - 1).try_into().unwrap();
                                 let ys = self.vir_expr_to_sexp(*y);
                                 self.smt.extract(new, 0, ys)
-                            } else {
-                                self.vir_expr_to_sexp(*y)
                             }
-                        }
+                            Ordering::Equal => self.vir_expr_to_sexp(*y),
+                        },
                         _ => unreachable!("{:?}, {:?}", x, y),
                     }
                 }
@@ -1204,8 +1212,8 @@ impl SolverCtx {
     // Checks whether the assumption list is always false
     fn check_assumptions_feasibility(
         &mut self,
-        assumptions: &Vec<SExpr>,
-        term_input_bs: &Vec<String>,
+        assumptions: &[SExpr],
+        term_input_bs: &[String],
         config: &Config,
     ) -> VerificationResult {
         log::debug!("Checking assumption feasibility");
@@ -1231,12 +1239,10 @@ impl SolverCtx {
                 for (variable, value) in solution {
                     not_all_same.push(self.smt.not(self.smt.eq(variable, value)));
                 }
-                if not_all_same.len() == 1 {
-                    self.smt.assert(not_all_same[0]).unwrap();
-                } else if not_all_same.len() > 1 {
-                    self.smt.assert(self.smt.and_many(not_all_same)).unwrap();
-                } else {
-                    unreachable!("must have some BV inputs");
+                match not_all_same.len().cmp(&1) {
+                    Ordering::Equal => self.smt.assert(not_all_same[0]).unwrap(),
+                    Ordering::Greater => self.smt.assert(self.smt.and_many(not_all_same)).unwrap(),
+                    Ordering::Less => unreachable!("must have some BV inputs"),
                 }
                 match self.smt.check() {
                     Ok(Response::Sat) => {
@@ -1656,35 +1662,40 @@ pub fn run_solver(
     // and add assumptions for known widths
     for (_e, t) in &ctx.tyctx.tyvars {
         let ty = &ctx.tyctx.tymap[t];
-        match ty {
-            Type::BitVector(w) => {
-                let width_name = format!("width__{}", t);
-                ctx.additional_decls
-                    .push((width_name.clone(), ctx.smt.int_sort()));
-                match *w {
-                    Some(bitwidth) => {
-                        let eq = ctx
-                            .smt
-                            .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
-                        ctx.width_assumptions.push(eq);
-                    }
-                    None => {
-                        log::debug!("Unresolved width: {:?} ({})", &_e, *t);
-                        ctx.width_assumptions
-                            .push(ctx.smt.gt(ctx.smt.atom(&width_name), ctx.smt.numeral(0)));
-                        unresolved_widths.push(width_name.clone());
-                    }
-                };
-                ctx.width_vars.insert(*t, width_name.clone());
-            }
-            _ => (),
+        if let Type::BitVector(w) = ty {
+            let width_name = format!("width__{}", t);
+            ctx.additional_decls
+                .push((width_name.clone(), ctx.smt.int_sort()));
+            match *w {
+                Some(bitwidth) => {
+                    let eq = ctx
+                        .smt
+                        .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
+                    ctx.width_assumptions.push(eq);
+                }
+                None => {
+                    log::debug!("Unresolved width: {:?} ({})", &_e, *t);
+                    ctx.width_assumptions
+                        .push(ctx.smt.gt(ctx.smt.atom(&width_name), ctx.smt.numeral(0)));
+                    unresolved_widths.push(width_name.clone());
+                }
+            };
+            ctx.width_vars.insert(*t, width_name.clone());
         }
     }
 
     if unresolved_widths.is_empty() {
         log::debug!("All widths resolved after basic type inference");
         return run_solver_with_static_widths(
-            rule_sem, rule, termenv, typeenv, &ctx.tyctx, concrete, config,
+            &RuleCtx {
+                rule_sem,
+                rule,
+                termenv,
+                typeenv,
+                config,
+            },
+            &ctx.tyctx,
+            concrete,
         );
     }
 
@@ -1700,12 +1711,14 @@ pub fn run_solver(
     }
 
     resolve_dynamic_widths(
-        rule_sem,
-        rule,
-        termenv,
-        typeenv,
+        RuleCtx {
+            rule_sem,
+            rule,
+            termenv,
+            typeenv,
+            config,
+        },
         concrete,
-        config,
         &mut ctx,
         unresolved_widths,
         0,
@@ -1713,12 +1726,8 @@ pub fn run_solver(
 }
 
 fn resolve_dynamic_widths(
-    rule_sem: &RuleSemantics,
-    rule: &Rule,
-    termenv: &TermEnv,
-    typeenv: &TypeEnv,
+    rulectx: RuleCtx,
     concrete: &Option<ConcreteTest>,
-    config: &Config,
     ctx: &mut SolverCtx,
     unresolved_widths: Vec<String>,
     attempt: usize,
@@ -1732,40 +1741,32 @@ fn resolve_dynamic_widths(
             let mut width_resolutions = HashMap::new();
             for (e, t) in &ctx.tyctx.tyvars {
                 let ty = &ctx.tyctx.tymap[t];
-                match ty {
-                    Type::BitVector(w) => {
-                        let width_name = format!("width__{}", t);
-                        let atom = ctx.smt.atom(&width_name);
-                        let width = ctx.smt.get_value(vec![atom]).unwrap().first().unwrap().1;
-                        let width_int = u8::try_from(ctx.smt.get(width)).unwrap();
+                if let Type::BitVector(w) = ty {
+                    let width_name = format!("width__{}", t);
+                    let atom = ctx.smt.atom(&width_name);
+                    let width = ctx.smt.get_value(vec![atom]).unwrap().first().unwrap().1;
+                    let width_int = u8::try_from(ctx.smt.get(width)).unwrap();
 
-                        // Check that we haven't contradicted previous widths
-                        match w {
-                            Some(before_width) => {
-                                assert_eq!(*before_width, width_int as usize)
-                            }
-                            _ => (),
-                        };
+                    // Check that we haven't contradicted previous widths
+                    if let Some(before_width) = w {
+                        assert_eq!(*before_width, width_int as usize)
+                    };
 
-                        // Check that the width is nonzero
-                        if width_int <= 0 {
-                            panic!("Unexpected, zero width! {} {:?}", t, e);
-                        }
-
-                        if unresolved_widths.contains(&width_name) {
-                            log::debug!("\tResolved width: {}, {}", width_name, width_int);
-                            width_resolutions.insert(width_name, width_int);
-                            cur_tyctx
-                                .tymap
-                                .insert(*t, Type::BitVector(Some(width_int as usize)));
-                        }
+                    // Check that the width is nonzero
+                    if width_int == 0 {
+                        panic!("Unexpected, zero width! {} {:?}", t, e);
                     }
-                    _ => (),
+
+                    if unresolved_widths.contains(&width_name) {
+                        log::debug!("\tResolved width: {}, {}", width_name, width_int);
+                        width_resolutions.insert(width_name, width_int);
+                        cur_tyctx
+                            .tymap
+                            .insert(*t, Type::BitVector(Some(width_int as usize)));
+                    }
                 }
             }
-            let static_result = run_solver_with_static_widths(
-                rule_sem, rule, termenv, typeenv, &cur_tyctx, concrete, config,
-            );
+            let static_result = run_solver_with_static_widths(&rulectx, &cur_tyctx, concrete);
 
             // If we have a failure or unknown, return right away
             if !matches!(static_result, VerificationResult::Success) {
@@ -1783,12 +1784,8 @@ fn resolve_dynamic_widths(
             ctx.smt.assert(ctx.smt.or_many(not_equals)).unwrap();
 
             resolve_dynamic_widths(
-                rule_sem,
-                rule,
-                termenv,
-                typeenv,
+                rulectx,
                 concrete,
-                config,
                 ctx,
                 unresolved_widths,
                 attempt + 1,
@@ -1818,13 +1815,9 @@ fn resolve_dynamic_widths(
 }
 
 pub fn run_solver_with_static_widths(
-    rule_sem: &RuleSemantics,
-    rule: &Rule,
-    termenv: &TermEnv,
-    typeenv: &TypeEnv,
+    rulectx: &RuleCtx,
     tyctx: &TypeContext,
     concrete: &Option<ConcreteTest>,
-    config: &Config,
 ) -> VerificationResult {
     // Declare variables again, this time with all static widths
     let mut solver = easy_smt::ContextBuilder::new()
@@ -1854,26 +1847,26 @@ pub fn run_solver_with_static_widths(
         load_return: None,
         lhs_flag: true,
     };
-    let (assumptions, mut assertions) = ctx.declare_variables(rule_sem, config);
+    let (assumptions, mut assertions) = ctx.declare_variables(rulectx.rule_sem, rulectx.config);
 
-    let lhs = ctx.vir_expr_to_sexp(rule_sem.lhs.clone());
+    let lhs = ctx.vir_expr_to_sexp(rulectx.rule_sem.lhs.clone());
     ctx.lhs_flag = false;
-    let rhs = ctx.vir_expr_to_sexp(rule_sem.rhs.clone());
+    let rhs = ctx.vir_expr_to_sexp(rulectx.rule_sem.rhs.clone());
 
     // For debugging
     let unnamed_rule = String::from("<unnamed rule>");
-    let rulename = rule
+    let rulename = rulectx.rule
         .name
-        .map(|name| &typeenv.syms[name.index()])
+        .map(|name| &rulectx.typeenv.syms[name.index()])
         .unwrap_or(&unnamed_rule);
     let unit = "()".to_string();
     let widthname = ctx
-        .static_width(&rule_sem.lhs)
+        .static_width(&rulectx.rule_sem.lhs)
         .map_or(unit, |s| format!("width {}", s));
 
     // Check whether the assumptions are possible
     let feasibility =
-        ctx.check_assumptions_feasibility(&assumptions, &rule_sem.term_input_bvs, config);
+        ctx.check_assumptions_feasibility(&assumptions, &rulectx.rule_sem.term_input_bvs, rulectx.config);
     if feasibility != VerificationResult::Success {
         log::warn!("Rule not applicable as written for rule assumptions, skipping full query");
         return feasibility;
@@ -1883,10 +1876,7 @@ pub fn run_solver_with_static_widths(
     // Verification condition: first rule's LHS and RHS are equal
     if let Some(concrete) = concrete {
         return test_concrete_with_static_widths(
-            rule_sem,
-            rule,
-            termenv,
-            typeenv,
+            rulectx,
             concrete,
             lhs,
             rhs,
@@ -1895,8 +1885,8 @@ pub fn run_solver_with_static_widths(
         );
     }
 
-    let condition = if let Some(condition) = &config.custom_verification_condition {
-        let term_args = rule_sem.term_args.iter().map(|s| ctx.smt.atom(s)).collect();
+    let condition = if let Some(condition) = &rulectx.config.custom_verification_condition {
+        let term_args = rulectx.rule_sem.term_args.iter().map(|s| ctx.smt.atom(s)).collect();
         let custom_condition = condition(&ctx.smt, term_args, lhs, rhs);
         log::debug!(
             "Custom verification condition:\n\t{}\n",
@@ -1991,7 +1981,7 @@ pub fn run_solver_with_static_widths(
     match ctx.smt.check() {
         Ok(Response::Sat) => {
             println!("Verification failed for {}, {}", rulename, widthname);
-            ctx.display_model(termenv, typeenv, rule, lhs, rhs);
+            ctx.display_model(rulectx.termenv, rulectx.typeenv, rulectx.rule, lhs, rhs);
             let vals = ctx.smt.get_value(vec![condition]).unwrap();
             for (variable, value) in vals {
                 if value == ctx.smt.false_() {
@@ -2034,10 +2024,7 @@ pub fn run_solver_with_static_widths(
 }
 
 pub fn test_concrete_with_static_widths(
-    rule_sem: &RuleSemantics,
-    rule: &Rule,
-    termenv: &TermEnv,
-    typeenv: &TypeEnv,
+    rulectx : &RuleCtx,
     concrete: &ConcreteTest,
     lhs: SExpr,
     rhs: SExpr,
@@ -2065,7 +2052,7 @@ pub fn test_concrete_with_static_widths(
         .assert(ctx.smt.named("conceq".to_string(), eq))
         .unwrap();
 
-    for (i, a) in rule_sem.rhs_assertions.iter().enumerate() {
+    for (i, a) in rulectx.rule_sem.rhs_assertions.iter().enumerate() {
         let p = ctx.vir_expr_to_sexp(a.clone());
         ctx.smt
             .assert(ctx.smt.named(format!("rhs_assert{i}"), p))
@@ -2080,7 +2067,7 @@ pub fn test_concrete_with_static_widths(
         assert!(matches!(ctx.smt.check(), Ok(Response::Sat)));
         // Get the value for what output is to panic with a useful message
         let val = ctx.smt.get_value(vec![rhs]).unwrap()[0].1;
-        ctx.display_model(termenv, typeenv, rule, lhs, rhs);
+        ctx.display_model(rulectx.termenv, rulectx.typeenv, rulectx.rule, lhs, rhs);
         panic!(
             "Expected {}, got {}",
             concrete.output.literal,
@@ -2107,7 +2094,7 @@ pub fn test_concrete_with_static_widths(
     if !matches!(ctx.smt.check(), Ok(Response::Unsat)) {
         // Get the value for what output is to panic with a useful message
         let val = ctx.smt.get_value(vec![rhs]).unwrap()[0].1;
-        ctx.display_model(termenv, typeenv, rule, lhs, rhs);
+        ctx.display_model(rulectx.termenv, rulectx.typeenv, rulectx.rule, lhs, rhs);
         // AVH TODO: should probably elevate back to an error with custom verification condition
         log::error!(
             "WARNING: Expected ONLY {}, got POSSIBLE {}",

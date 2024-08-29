@@ -66,10 +66,10 @@ fn spec_to_usize(s: &SpecExpr) -> Option<usize> {
     }
 }
 
-fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv) -> Expr {
+fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -> Expr {
     fn unop<F: Fn(Box<Expr>) -> Expr>(
         u: F,
-        args: &Vec<SpecExpr>,
+        args: &[SpecExpr],
         pos: &Pos,
         env: &ParsingEnv,
     ) -> Expr {
@@ -83,7 +83,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
     }
     fn binop<F: Fn(Box<Expr>, Box<Expr>) -> Expr>(
         b: F,
-        args: &Vec<SpecExpr>,
+        args: &[SpecExpr],
         _pos: &Pos,
         env: &ParsingEnv,
     ) -> Expr {
@@ -101,7 +101,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
 
     fn variadic_binop<F: Fn(Box<Expr>, Box<Expr>) -> Expr>(
         b: F,
-        args: &Vec<SpecExpr>,
+        args: &[SpecExpr],
         pos: &Pos,
         env: &ParsingEnv,
     ) -> Expr {
@@ -355,8 +355,8 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
 
     // Traverse models to process spec annotations for enums
     for def in defs {
-        match def {
-            &ast::Def::Model(Model { ref name, ref val }) => match val {
+        if let &ast::Def::Model(Model { ref name, ref val }) = def {
+            match val {
                 ast::ModelValue::TypeValue(model_type) => {
                     let type_id = typeenv.get_type_by_name(name).unwrap();
                     let ir_type = match model_type {
@@ -399,88 +399,75 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
                         annotation_map.insert(term_id, annotation);
                     }
                 }
-            },
-            _ => (),
+            }
         }
     }
 
     // Traverse defs to process spec annotations
     for def in defs {
-        match def {
-            ast::Def::Spec(spec) => {
-                let termname = spec.term.0.clone();
-                let term_id = termenv.get_term_by_name(typeenv, &spec.term)
+        if let ast::Def::Spec(spec) = def {
+            let termname = spec.term.0.clone();
+            let term_id = termenv
+                .get_term_by_name(typeenv, &spec.term)
                 .unwrap_or_else(|| panic!("Spec provided for unknown decl {termname}"));
-                assert!(
-                    !annotation_map.contains_key(&term_id),
-                    "duplicate spec for {}",
-                    termname
-                );
-                let sig = TermSignature {
-                    args: spec
-                        .args
-                        .iter()
-                        .map(spec_to_annotation_bound_var)
-                        .collect(),
-                    ret: BoundVar {
-                        name: RESULT.to_string(),
-                        ty: None,
-                    },
-                };
+            assert!(
+                !annotation_map.contains_key(&term_id),
+                "duplicate spec for {}",
+                termname
+            );
+            let sig = TermSignature {
+                args: spec.args.iter().map(spec_to_annotation_bound_var).collect(),
+                ret: BoundVar {
+                    name: RESULT.to_string(),
+                    ty: None,
+                },
+            };
 
-                let mut assumptions = vec![];
-                let mut assertions = vec![];
-                for a in &spec.provides {
-                    assumptions.push(Box::new(spec_to_expr(a, &env)));
-                }
-
-                for a in &spec.requires {
-                    assertions.push(Box::new(spec_to_expr(a, &env)));
-                }
-
-                let annotation = TermAnnotation {
-                    sig,
-                    assumptions,
-                    assertions,
-                };
-                annotation_map.insert(term_id, annotation);
+            let mut assumptions = vec![];
+            let mut assertions = vec![];
+            for a in &spec.provides {
+                assumptions.push(Box::new(spec_to_expr(a, &env)));
             }
-            _ => {}
+
+            for a in &spec.requires {
+                assertions.push(Box::new(spec_to_expr(a, &env)));
+            }
+
+            let annotation = TermAnnotation {
+                sig,
+                assumptions,
+                assertions,
+            };
+            annotation_map.insert(term_id, annotation);
         }
     }
 
     // Collect term instantiations.
     let mut forms_map = HashMap::new();
     for def in defs {
-        match def {
-            ast::Def::Form(form) => {
-                let term_type_signatures: Vec<_> = form
-                    .signatures
-                    .iter()
-                    .map(signature_to_term_type_signature)
-                    .collect();
-                forms_map.insert(form.name.0.clone(), term_type_signatures);
-            }
-            _ => {}
+        if let ast::Def::Form(form) = def {
+            let term_type_signatures: Vec<_> = form
+                .signatures
+                .iter()
+                .map(signature_to_term_type_signature)
+                .collect();
+            forms_map.insert(form.name.0.clone(), term_type_signatures);
         }
     }
 
     let mut instantiations_map = HashMap::new();
     for def in defs {
-        match def {
-            ast::Def::Instantiation(inst) => {
-                let term_id = termenv.get_term_by_name(typeenv, &inst.term).unwrap();
-                let sigs = match &inst.form {
-                    Some(form) => forms_map[&form.0].clone(),
-                    None => inst
-                        .signatures
-                        .iter()
-                        .map(signature_to_term_type_signature)
-                        .collect(),
-                };
-                instantiations_map.insert(term_id, sigs);
-            }
-            _ => {}
+        if let ast::Def::Instantiation(inst) = def {
+            let term_id = termenv.get_term_by_name(typeenv, &inst.term).unwrap();
+            let sigs = match &inst.form {
+                Some(form) => forms_map[&form.0].clone(),
+                None => inst
+                    .signatures
+                    .iter()
+                    .map(signature_to_term_type_signature)
+                    .collect(),
+            };
+            instantiations_map.insert(term_id, sigs);
         }
     }
 

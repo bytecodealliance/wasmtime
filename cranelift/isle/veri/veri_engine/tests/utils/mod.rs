@@ -247,10 +247,7 @@ pub fn test_from_file_with_config(file: &str, config: Config, tr: TestResult) {
     test_rules_with_term(inputs, tr, config);
 }
 
-pub fn test_aarch64_with_config_simple(
-    config: Config,
-    tr: Vec<(Bitwidth, VerificationResult)>,
-) {
+pub fn test_aarch64_with_config_simple(config: Config, tr: Vec<(Bitwidth, VerificationResult)>) {
     test_aarch64_with_config(config, TestResult::Simple(tr))
 }
 

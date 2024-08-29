@@ -1992,11 +1992,8 @@ fn test_named_do_shift_imm() {
         distinct_check: true,
         custom_assumptions: None,
         custom_verification_condition: Some(Box::new(|smt, _args, lhs, rhs| {
-            
-            {
-                let mask = smt.atom("#x00000000000000FF");
-                smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
-            }
+            let mask = smt.atom("#x00000000000000FF");
+            smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
         })),
         names: Some(vec!["do_shift_imm".to_string()]),
     };
@@ -2006,11 +2003,8 @@ fn test_named_do_shift_imm() {
         distinct_check: true,
         custom_assumptions: None,
         custom_verification_condition: Some(Box::new(|smt, _args, lhs, rhs| {
-            
-            {
-                let mask = smt.atom("#x000000000000FFFF");
-                smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
-            }
+            let mask = smt.atom("#x000000000000FFFF");
+            smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
         })),
         names: Some(vec!["do_shift_imm".to_string()]),
     };
@@ -2020,11 +2014,8 @@ fn test_named_do_shift_imm() {
         distinct_check: true,
         custom_assumptions: None,
         custom_verification_condition: Some(Box::new(|smt, _args, lhs, rhs| {
-            
-            {
-                let mask = smt.atom("#x00000000FFFFFFFF");
-                smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
-            }
+            let mask = smt.atom("#x00000000FFFFFFFF");
+            smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
         })),
         names: Some(vec!["do_shift_imm".to_string()]),
     };
@@ -2131,11 +2122,8 @@ fn test_named_do_shift_32_base_case() {
         distinct_check: true,
         custom_assumptions: None,
         custom_verification_condition: Some(Box::new(|smt, _args, lhs, rhs| {
-            
-            {
-                let mask = smt.atom("#x00000000FFFFFFFF");
-                smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
-            }
+            let mask = smt.atom("#x00000000FFFFFFFF");
+            smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
         })),
         names: Some(vec!["do_shift_32_base_case".to_string()]),
     };
@@ -2158,11 +2146,8 @@ fn test_broken_do_shift_32() {
         distinct_check: true,
         custom_assumptions: None,
         custom_verification_condition: Some(Box::new(|smt, _args, lhs, rhs| {
-            
-            {
-                let mask = smt.atom("#x00000000FFFFFFFF");
-                smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
-            }
+            let mask = smt.atom("#x00000000FFFFFFFF");
+            smt.eq(smt.bvand(mask, lhs), smt.bvand(mask, rhs))
         })),
         names: None,
     };
