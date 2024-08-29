@@ -62,4 +62,7 @@ skip-tree = [
 
     # criterion is on old version, will update on next release.
     { name = "itertools" },
+
+    # right now terminal_size pulls in an older version of io-lifetimes
+    { name = "io-lifetimes" },
 ]
