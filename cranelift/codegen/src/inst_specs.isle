@@ -37,15 +37,6 @@
     ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
 )
 
-(spec (null)
-    (provide (= result (conv_to (widthof result) #x0000000000000000))))
-(instantiate null
-    ((args) (ret (bv 8)) (canon (bv 8)))
-    ((args) (ret (bv 16)) (canon (bv 16)))
-    ((args) (ret (bv 32)) (canon (bv 32)))
-    ((args) (ret (bv 64)) (canon (bv 64)))
-)
-
 (spec (bitselect c x y)
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)
