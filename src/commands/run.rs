@@ -420,7 +420,9 @@ impl RunCommand {
                 // If `_initialize` is present, meaning a reactor, then invoke
                 // the function.
                 if let Some(func) = instance.get_func(&mut *store, "_initialize") {
-                    func.typed::<(), ()>(&store)?.call_async(&mut *store, ()).await?;
+                    func.typed::<(), ()>(&store)?
+                        .call_async(&mut *store, ())
+                        .await?;
                 }
 
                 // Look for the specific function provided or otherwise look for
