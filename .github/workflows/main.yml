@@ -686,6 +686,11 @@ jobs:
           echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (\`cargo run --example mpk-available\`)."
         fi
 
+    # Install VTune, see `cli_tests::profile_with_vtune`.
+    - name: Install VTune
+      if: matrix.os == 'ubuntu-latest' && contains(matrix.bucket, 'wasmtime-cli')
+      uses: abrown/install-vtune-action@v1
+
     # Build and test all features
     - run: ./ci/run-tests.sh --locked ${{ matrix.bucket }}
       env:
