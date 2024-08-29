@@ -1443,6 +1443,28 @@ mod test_programs {
         Ok(())
     }
 
+    #[test]
+    fn cli_sleep_forever() -> Result<()> {
+        for timeout in [
+            // Tests still pass when we race with going to sleep.
+            "-Wtimeout=1ns",
+            // Tests pass when we wait till the Wasm has (likely) gone to sleep.
+            "-Wtimeout=250ms",
+        ] {
+            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER]).unwrap_err();
+            let e = e.to_string();
+            println!("Got error: {e}");
+            assert!(e.contains("interrupt"));
+
+            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER_COMPONENT]).unwrap_err();
+            let e = e.to_string();
+            println!("Got error: {e}");
+            assert!(e.contains("interrupt"));
+        }
+
+        Ok(())
+    }
+
     /// Helper structure to manage an invocation of `wasmtime serve`
     struct WasmtimeServe {
         child: Option<Child>,
