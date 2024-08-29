@@ -61,7 +61,14 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
             let result = catch_unwind(AssertUnwindSafe(|| {
                 // Each new instance is created in its own store.
                 let mut store = Store::new(&instance_pre.module().engine(), host);
-                let instance = instance_pre.instantiate(&mut store).unwrap();
+
+                let instance = if instance_pre.module().engine().is_async() {
+                    wasmtime_wasi::runtime::in_tokio(instance_pre.instantiate_async(&mut store))
+                } else {
+                    instance_pre.instantiate(&mut store)
+                }
+                .unwrap();
+
                 let thread_entry_point = instance
                     .get_typed_func::<(i32, i32), ()>(&mut store, WASI_ENTRY_POINT)
                     .unwrap();
@@ -77,7 +84,15 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                     WASI_ENTRY_POINT,
                     thread_start_arg
                 );
-                match thread_entry_point.call(&mut store, (wasi_thread_id, thread_start_arg)) {
+                let res = if instance_pre.module().engine().is_async() {
+                    wasmtime_wasi::runtime::in_tokio(
+                        thread_entry_point
+                            .call_async(&mut store, (wasi_thread_id, thread_start_arg)),
+                    )
+                } else {
+                    thread_entry_point.call(&mut store, (wasi_thread_id, thread_start_arg))
+                };
+                match res {
                     Ok(_) => log::trace!("exiting thread id = {} normally", wasi_thread_id),
                     Err(e) => {
                         log::trace!("exiting thread id = {} due to error", wasi_thread_id);
