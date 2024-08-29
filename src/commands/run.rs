@@ -157,59 +157,71 @@ impl RunCommand {
             .enable_io()
             .build()?;
 
+        let dur = self
+            .run
+            .common
+            .wasm
+            .timeout
+            .unwrap_or(std::time::Duration::MAX);
         let result = runtime.block_on(async {
-            // Load the preload wasm modules.
-            let mut modules = Vec::new();
-            if let RunTarget::Core(m) = &main {
-                modules.push((String::new(), m.clone()));
-            }
-            for (name, path) in self.preloads.iter() {
-                // Read the wasm module binary either as `*.wat` or a raw binary
-                let module = match self.run.load_module(&engine, path)? {
-                    RunTarget::Core(m) => m,
-                    #[cfg(feature = "component-model")]
-                    RunTarget::Component(_) => {
-                        bail!("components cannot be loaded with `--preload`")
-                    }
-                };
-                modules.push((name.clone(), module.clone()));
+            tokio::time::timeout(dur, async {
+                // Load the preload wasm modules.
+                let mut modules = Vec::new();
+                if let RunTarget::Core(m) = &main {
+                    modules.push((String::new(), m.clone()));
+                }
+                for (name, path) in self.preloads.iter() {
+                    // Read the wasm module binary either as `*.wat` or a raw binary
+                    let module = match self.run.load_module(&engine, path)? {
+                        RunTarget::Core(m) => m,
+                        #[cfg(feature = "component-model")]
+                        RunTarget::Component(_) => {
+                            bail!("components cannot be loaded with `--preload`")
+                        }
+                    };
+                    modules.push((name.clone(), module.clone()));
 
-                // Add the module's functions to the linker.
-                match &mut linker {
-                    #[cfg(feature = "cranelift")]
-                    CliLinker::Core(linker) => {
-                        linker
-                            .module_async(&mut store, name, &module)
-                            .await
-                            .context(format!(
-                                "failed to process preload `{}` at `{}`",
-                                name,
-                                path.display()
-                            ))?;
-                    }
-                    #[cfg(not(feature = "cranelift"))]
-                    CliLinker::Core(_) => {
-                        bail!("support for --preload disabled at compile time");
-                    }
-                    #[cfg(feature = "component-model")]
-                    CliLinker::Component(_) => {
-                        bail!("--preload cannot be used with components");
+                    // Add the module's functions to the linker.
+                    match &mut linker {
+                        #[cfg(feature = "cranelift")]
+                        CliLinker::Core(linker) => {
+                            linker
+                                .module_async(&mut store, name, &module)
+                                .await
+                                .context(format!(
+                                    "failed to process preload `{}` at `{}`",
+                                    name,
+                                    path.display()
+                                ))?;
+                        }
+                        #[cfg(not(feature = "cranelift"))]
+                        CliLinker::Core(_) => {
+                            bail!("support for --preload disabled at compile time");
+                        }
+                        #[cfg(feature = "component-model")]
+                        CliLinker::Component(_) => {
+                            bail!("--preload cannot be used with components");
+                        }
                     }
                 }
-            }
 
-            self.load_main_module(&mut store, &mut linker, &main, modules)
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to run main module `{}`",
-                        self.module_and_args[0].to_string_lossy()
-                    )
-                })
+                self.load_main_module(&mut store, &mut linker, &main, modules)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "failed to run main module `{}`",
+                            self.module_and_args[0].to_string_lossy()
+                        )
+                    })
+            })
+            .await
         });
 
         // Load the main wasm module.
-        match result {
+        match result.unwrap_or_else(|elapsed| {
+            Err(anyhow::Error::from(wasmtime::Trap::Interrupt))
+                .with_context(|| format!("timed out after {elapsed}"))
+        }) {
             Ok(()) => (),
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
