@@ -10,8 +10,8 @@ How to use:
 
 1. When building Wasmtime, add the CLI flag "--features wmemcheck" to compile with wmemcheck configured.
     > cargo build --features wmemcheck
-2. When running your wasm module, add the CLI flag "--wmemcheck".
-    > wasmtime run --wmemcheck test.wasm
+2. When running your wasm module, add the CLI flag "-W wmemcheck".
+    > wasmtime run -W wmemcheck test.wasm
 
 If your program executes an invalid operation (load or store to non-allocated
 address, double-free, or an internal error in malloc that allocates the same
@@ -37,7 +37,7 @@ $ /opt/wasi-sdk/bin/clang -o test.wasm test.c
 you can observe the memory checker working like so:
 
 ```plain
-$ wasmtime run --wmemcheck ./test.wasm
+$ wasmtime run -W wmemcheck ./test.wasm
 Error: failed to run main module `./test.wasm`
 
 Caused by:
