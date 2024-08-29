@@ -408,11 +408,13 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
     for def in defs {
         match def {
             &ast::Def::Spec(ref spec) => {
-                let term_id = termenv.get_term_by_name(typeenv, &spec.term).unwrap();
+                let termname = spec.term.0.clone();
+                let term_id = termenv.get_term_by_name(typeenv, &spec.term)
+                .unwrap_or_else(|| panic!("Spec provided for unknown decl {termname}"));
                 assert!(
                     !annotation_map.contains_key(&term_id),
                     "duplicate spec for {}",
-                    spec.term.0
+                    termname
                 );
                 let sig = TermSignature {
                     args: spec

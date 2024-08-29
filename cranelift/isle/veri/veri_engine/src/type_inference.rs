@@ -1718,12 +1718,12 @@ fn solve_constraints(
                     if !union_find.contains_key(t) {
                         union_find.insert(t.clone(), HashSet::new());
                     }
-                    if let Some(group) = union_find.get_mut(&t) {
+                    if let Some(group) = union_find.get_mut(t) {
                         group.insert(*v);
                     }
                 }
                 TypeExpr::WidthInt(v, w) => {
-                    if let Some(c) = vals.get(&w) {
+                    if let Some(c) = vals.get(w) {
                         let width: usize = (*c).try_into().unwrap();
                         let ty = annotation_ir::Type::BitVectorWithWidth(width);
                         if !union_find.contains_key(&ty) {
@@ -2056,7 +2056,7 @@ fn create_parse_tree_pattern(
 
             TypeVarNode {
                 ident: format!("{}__{}", name, type_var),
-                construct: TypeVarConstruct::Term(term_id.clone()),
+                construct: TypeVarConstruct::Term(*term_id),
                 type_var,
                 children,
                 assertions,
@@ -2241,10 +2241,10 @@ fn create_parse_tree_expr(
             let mut ident = var_id.0.to_string();
             if var_id.index() < rule.vars.len() {
                 let sym = rule.vars[var_id.index()].name;
-                ident = typeenv.syms[sym.index()].clone();
+                ident.clone_from(&typeenv.syms[sym.index()])
             } else {
                 println!("var {} not found, using var id instead", var_id.0);
-                ident = format!("v{}", ident);
+                ident = format!("v{ident}");
             }
 
             let type_var = tree

@@ -16,16 +16,19 @@ pub const FLAGS_WIDTH: usize = 4;
 
 pub const WIDTHS: [usize; 4] = [8, 16, 32, 64];
 
+// Closure arguments: SMT context, arguments to the term, lhs, rhs
+type CustomCondition = dyn Fn(&easy_smt::Context, Vec<SExpr>, SExpr, SExpr) -> SExpr;
+
+// Closure arguments: SMT context, arguments to the term
+type CustomAssumption = dyn Fn(&easy_smt::Context, Vec<SExpr>) -> SExpr;
+
 pub struct Config {
     pub term: String,
     pub names: Option<Vec<String>>,
     pub distinct_check: bool,
 
-    // Closure arguments: SMT context, arguments to the term, lhs, rhs
-    pub custom_verification_condition:
-        Option<Box<dyn Fn(&easy_smt::Context, Vec<SExpr>, SExpr, SExpr) -> SExpr>>,
-    // Closure arguments: SMT context, arguments to the term
-    pub custom_assumptions: Option<Box<dyn Fn(&easy_smt::Context, Vec<SExpr>) -> SExpr>>,
+    pub custom_verification_condition: Option<Box<CustomCondition>>,
+    pub custom_assumptions: Option<Box<CustomAssumption>>,
 }
 
 impl Config {
