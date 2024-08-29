@@ -254,11 +254,11 @@ impl SolverCtx {
         let shift = self.smt.sub(dest_width, source_width);
 
         let mut some_match = vec![];
-        let mut ite_str = source.clone();
+        let mut ite_str = source;
 
         // Special case: if we are asked to extend by 0, just return the source
         let matching = self.smt.eq(self.smt.numeral(0), shift);
-        some_match.push(matching.clone());
+        some_match.push(matching);
         ite_str = self.smt.ite(matching, source, ite_str);
 
         // Possible amounts to extend by
@@ -276,7 +276,7 @@ impl SolverCtx {
                     self.smt.eq(self.smt.numeral(possible_delta), shift),
                     self.smt.eq(self.smt.numeral(possible_source), source_width),
                 );
-                some_match.push(matching.clone());
+                some_match.push(matching);
                 let extend = self.extend_concrete(
                     possible_source + possible_delta,
                     source,
@@ -390,11 +390,11 @@ impl SolverCtx {
             return source;
         }
         let mut some_match = vec![];
-        let mut ite_str = source.clone();
+        let mut ite_str = source;
 
         // Special case: if we are asked to rotate by 0, just return the source
         let matching = self.smt.eq(self.bv(0, self.bitwidth), amount);
-        some_match.push(matching.clone());
+        some_match.push(matching);
         ite_str = self.smt.ite(matching, source, ite_str);
 
         // Possible starting widths
@@ -518,11 +518,7 @@ impl SolverCtx {
 
     pub fn get_expr_value(&self, e: &Expr) -> Option<i128> {
         if let Some(tyvar) = self.tyctx.tyvars.get(e) {
-            if let Some(v) = self.tyctx.tyvals.get(tyvar) {
-                Some(*v)
-            } else {
-                None
-            }
+            self.tyctx.tyvals.get(tyvar).copied()
         } else {
             None
         }
@@ -536,13 +532,13 @@ impl SolverCtx {
     }
 
     pub fn assume_same_width(&mut self, x: &Expr, y: &Expr) {
-        let xw = self.get_expr_width_var(&x).unwrap().clone();
-        let yw = self.get_expr_width_var(&y).unwrap().clone();
+        let xw = self.get_expr_width_var(x).unwrap();
+        let yw = self.get_expr_width_var(y).unwrap();
         self.width_assumptions.push(self.smt.eq(xw, yw));
     }
 
     pub fn assume_same_width_from_sexpr(&mut self, x: SExpr, y: &Expr) {
-        let yw = self.get_expr_width_var(&y).unwrap().clone();
+        let yw = self.get_expr_width_var(y).unwrap();
         self.width_assumptions.push(self.smt.eq(x, yw));
     }
 
@@ -562,7 +558,7 @@ impl SolverCtx {
     pub fn vir_expr_to_sexp(&mut self, e: Expr) -> SExpr {
         let tyvar = self.tyctx.tyvars.get(&e);
         let ty = self.get_type(&e);
-        let width = self.get_expr_width_var(&e).map(|s| s.clone());
+        let width = self.get_expr_width_var(&e);
         let static_expr_width = self.static_width(&e);
         match e {
             Expr::Terminal(t) => match t {
@@ -613,13 +609,13 @@ impl SolverCtx {
                     UnaryOp::Not => "not",
                     UnaryOp::BVNeg => {
                         if self.find_widths {
-                            self.assume_same_width_from_sexpr(width.unwrap(), &*arg);
+                            self.assume_same_width_from_sexpr(width.unwrap(), &arg);
                         }
                         "bvneg"
                     }
                     UnaryOp::BVNot => {
                         if self.find_widths {
-                            self.assume_same_width_from_sexpr(width.unwrap(), &*arg);
+                            self.assume_same_width_from_sexpr(width.unwrap(), &arg);
                         }
                         "bvnot"
                     }
@@ -644,19 +640,19 @@ impl SolverCtx {
                         | BinaryOp::BVAShr
                         | BinaryOp::BVRotl
                         | BinaryOp::BVRotr => {
-                            self.assume_same_width_from_sexpr(width.unwrap(), &*x)
+                            self.assume_same_width_from_sexpr(width.unwrap(), &x)
                         }
                         BinaryOp::Eq => match self.get_type(&x) {
-                            Some(Type::BitVector(_)) => self.assume_comparable_types(&*x, &*y),
+                            Some(Type::BitVector(_)) => self.assume_comparable_types(&x, &y),
                             _ => (),
                         },
                         _ => (),
                     };
-                    self.assume_comparable_types(&*x, &*y);
+                    self.assume_comparable_types(&x, &y);
                 }
                 match op {
                     BinaryOp::BVRotl => {
-                        let source_width = self.static_width(&*x);
+                        let source_width = self.static_width(&x);
                         match source_width {
                             Some(w) => {
                                 let xs = self.vir_expr_to_sexp(*x);
@@ -664,7 +660,7 @@ impl SolverCtx {
                                 return self.rotate_symbolic(xs, w, ys, "rotate_left");
                             }
                             None => {
-                                let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                                let arg_width = self.get_expr_width_var(&x).unwrap();
                                 let xs = self.vir_expr_to_sexp(*x);
                                 let ys = self.vir_expr_to_sexp(*y);
                                 return self.rotate_symbolic_dyn_source_width(
@@ -677,7 +673,7 @@ impl SolverCtx {
                         }
                     }
                     BinaryOp::BVRotr => {
-                        let source_width = self.static_width(&*x);
+                        let source_width = self.static_width(&x);
                         match source_width {
                             Some(w) => {
                                 let xs = self.vir_expr_to_sexp(*x);
@@ -685,7 +681,7 @@ impl SolverCtx {
                                 return self.rotate_symbolic(xs, w, ys, "rotate_right");
                             }
                             None => {
-                                let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                                let arg_width = self.get_expr_width_var(&x).unwrap();
                                 let xs = self.vir_expr_to_sexp(*x);
                                 let ys = self.vir_expr_to_sexp(*y);
                                 return self.rotate_symbolic_dyn_source_width(
@@ -700,9 +696,9 @@ impl SolverCtx {
                     // To shift right, we need to make sure the bits to the right get zeroed. Shift left first.
                     BinaryOp::BVShr => {
                         let arg_width = if self.find_widths {
-                            self.get_expr_width_var(&*x).unwrap().clone()
+                            self.get_expr_width_var(&x).unwrap()
                         } else {
-                            self.smt.numeral(self.static_width(&*x).unwrap())
+                            self.smt.numeral(self.static_width(&x).unwrap())
                         };
                         let xs = self.vir_expr_to_sexp(*x);
 
@@ -738,9 +734,9 @@ impl SolverCtx {
                     }
                     BinaryOp::BVAShr => {
                         let arg_width = if self.find_widths {
-                            self.get_expr_width_var(&*x).unwrap().clone()
+                            self.get_expr_width_var(&x).unwrap()
                         } else {
-                            self.smt.numeral(self.static_width(&*x).unwrap())
+                            self.smt.numeral(self.static_width(&x).unwrap())
                         };
                         let xs = self.vir_expr_to_sexp(*x);
 
@@ -849,77 +845,77 @@ impl SolverCtx {
             }
             Expr::BVZeroExtTo(i, x) => {
                 let arg_width = if self.find_widths {
-                    let expr_width = width.unwrap().clone();
+                    let expr_width = width.unwrap();
                     self.width_assumptions
                         .push(self.smt.eq(expr_width, self.smt.numeral(i)));
-                    self.get_expr_width_var(&*x).unwrap().clone()
+                    self.get_expr_width_var(&x).unwrap()
                 } else {
-                    self.smt.numeral(self.static_width(&*x).unwrap())
+                    self.smt.numeral(self.static_width(&x).unwrap())
                 };
-                let static_width = self.static_width(&*x);
+                let static_width = self.static_width(&x);
                 let xs = self.vir_expr_to_sexp(*x);
                 if let Some(size) = static_width {
-                    self.extend_concrete(i, xs, size, &"zero_extend")
+                    self.extend_concrete(i, xs, size, "zero_extend")
                 } else {
-                    self.extend_symbolic(self.smt.numeral(i), xs, arg_width, &"zero_extend")
+                    self.extend_symbolic(self.smt.numeral(i), xs, arg_width, "zero_extend")
                 }
             }
             Expr::BVZeroExtToVarWidth(i, x) => {
-                let static_arg_width = self.static_width(&*x);
-                let arg_width = self.get_expr_width_var(&*x);
+                let static_arg_width = self.static_width(&x);
+                let arg_width = self.get_expr_width_var(&x);
                 let is = self.vir_expr_to_sexp(*i);
                 let xs = self.vir_expr_to_sexp(*x);
                 if self.find_widths {
-                    let expr_width = width.unwrap().clone();
+                    let expr_width = width.unwrap();
                     self.width_assumptions.push(self.smt.eq(expr_width, is));
                 }
                 if let (Some(arg_size), Some(e_size)) = (static_arg_width, static_expr_width) {
-                    self.extend_concrete(e_size, xs, arg_size, &"zero_extend")
+                    self.extend_concrete(e_size, xs, arg_size, "zero_extend")
                 } else {
-                    self.extend_symbolic(is, xs, arg_width.unwrap(), &"zero_extend")
+                    self.extend_symbolic(is, xs, arg_width.unwrap(), "zero_extend")
                 }
             }
             Expr::BVSignExtTo(i, x) => {
                 let arg_width = if self.find_widths {
-                    let expr_width = width.unwrap().clone();
+                    let expr_width = width.unwrap();
                     self.width_assumptions
                         .push(self.smt.eq(expr_width, self.smt.numeral(i)));
-                    self.get_expr_width_var(&*x).unwrap().clone()
+                    self.get_expr_width_var(&x).unwrap()
                 } else {
-                    self.smt.numeral(self.static_width(&*x).unwrap())
+                    self.smt.numeral(self.static_width(&x).unwrap())
                 };
-                let static_width = self.static_width(&*x);
+                let static_width = self.static_width(&x);
                 let xs = self.vir_expr_to_sexp(*x);
                 if let Some(size) = static_width {
-                    self.extend_concrete(i, xs, size, &"sign_extend")
+                    self.extend_concrete(i, xs, size, "sign_extend")
                 } else {
                     self.extend_symbolic(self.smt.numeral(i), xs, arg_width, "sign_extend")
                 }
             }
             Expr::BVSignExtToVarWidth(i, x) => {
-                let static_arg_width = self.static_width(&*x);
-                let arg_width = self.get_expr_width_var(&*x);
+                let static_arg_width = self.static_width(&x);
+                let arg_width = self.get_expr_width_var(&x);
                 let is = self.vir_expr_to_sexp(*i);
                 let xs = self.vir_expr_to_sexp(*x);
                 if self.find_widths {
-                    let expr_width = width.unwrap().clone();
+                    let expr_width = width.unwrap();
                     self.width_assumptions.push(self.smt.eq(expr_width, is));
                 }
                 if let (Some(arg_size), Some(e_size)) = (static_arg_width, static_expr_width) {
-                    self.extend_concrete(e_size, xs, arg_size, &"sign_extend")
+                    self.extend_concrete(e_size, xs, arg_size, "sign_extend")
                 } else {
-                    self.extend_symbolic(is, xs, arg_width.unwrap(), &"sign_extend")
+                    self.extend_symbolic(is, xs, arg_width.unwrap(), "sign_extend")
                 }
             }
             Expr::BVConvTo(x, y) => {
                 if self.find_widths {
-                    let expr_width = width.unwrap().clone();
+                    let expr_width = width.unwrap();
                     let dyn_width = self.vir_expr_to_sexp(*x);
                     let eq = self.smt.eq(expr_width, dyn_width);
                     self.width_assumptions.push(eq);
                     self.vir_expr_to_sexp(*y)
                 } else {
-                    let arg_width = self.static_width(&*y).unwrap();
+                    let arg_width = self.static_width(&y).unwrap();
                     match ty {
                         Some(Type::BitVector(Some(w))) => {
                             if arg_width < *w {
@@ -941,9 +937,9 @@ impl SolverCtx {
             }
             Expr::WidthOf(x) => {
                 if self.find_widths {
-                    self.get_expr_width_var(&*x).unwrap().clone()
+                    self.get_expr_width_var(&x).unwrap()
                 } else {
-                    self.smt.numeral(self.static_width(&*x).unwrap())
+                    self.smt.numeral(self.static_width(&x).unwrap())
                 }
             }
             Expr::BVExtract(i, j, x) => {
@@ -971,8 +967,8 @@ impl SolverCtx {
             }
             Expr::Conditional(c, t, e) => {
                 if self.find_widths && matches!(ty, Some(Type::BitVector(_))) {
-                    self.assume_same_width_from_sexpr(width.clone().unwrap(), &*t);
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
+                    self.assume_same_width_from_sexpr(width.unwrap(), &t);
+                    self.assume_same_width_from_sexpr(width.unwrap(), &e);
                 }
                 let cs = self.vir_expr_to_sexp(*c);
                 let ts = self.vir_expr_to_sexp(*t);
@@ -983,14 +979,14 @@ impl SolverCtx {
                 if self.find_widths {
                     if matches!(ty, Some(Type::BitVector(_))) {
                         for (_, b) in &cases {
-                            self.assume_same_width_from_sexpr(width.clone().unwrap(), b);
+                            self.assume_same_width_from_sexpr(width.unwrap(), b);
                         }
                     }
                     let cty = self.get_type(&c);
                     if matches!(cty, Some(Type::BitVector(_))) {
-                        let cwidth = self.get_expr_width_var(&c).map(|s| s.clone());
+                        let cwidth = self.get_expr_width_var(&c);
                         for (m, _) in &cases {
-                            self.assume_same_width_from_sexpr(cwidth.clone().unwrap(), m);
+                            self.assume_same_width_from_sexpr(cwidth.unwrap(), m);
                         }
                     }
                 }
@@ -1022,7 +1018,7 @@ impl SolverCtx {
             Expr::CLZ(e) => {
                 let tyvar = *tyvar.unwrap();
                 if self.find_widths {
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
+                    self.assume_same_width_from_sexpr(width.unwrap(), &e);
                 }
                 let es = self.vir_expr_to_sexp(*e);
                 match static_expr_width {
@@ -1038,7 +1034,7 @@ impl SolverCtx {
             Expr::CLS(e) => {
                 let tyvar = *tyvar.unwrap();
                 if self.find_widths {
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
+                    self.assume_same_width_from_sexpr(width.unwrap(), &e);
                 }
                 let es = self.vir_expr_to_sexp(*e);
                 match static_expr_width {
@@ -1054,7 +1050,7 @@ impl SolverCtx {
             Expr::Rev(e) => {
                 let tyvar = *tyvar.unwrap();
                 if self.find_widths {
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
+                    self.assume_same_width_from_sexpr(width.unwrap(), &e);
                 }
                 let es = self.vir_expr_to_sexp(*e);
                 match static_expr_width {
@@ -1070,7 +1066,7 @@ impl SolverCtx {
             Expr::BVSubs(ty, x, y) => {
                 let tyvar = *tyvar.unwrap();
                 if self.find_widths {
-                    self.assume_comparable_types(&*x, &*y);
+                    self.assume_comparable_types(&x, &y);
                 }
                 let ety = self.vir_expr_to_sexp(*ty);
                 let ex = self.vir_expr_to_sexp(*x);
@@ -1088,7 +1084,7 @@ impl SolverCtx {
             Expr::BVPopcnt(x) => {
                 let tyvar = *tyvar.unwrap();
                 if self.find_widths {
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*x);
+                    self.assume_same_width_from_sexpr(width.unwrap(), &x);
                 }
                 let ex = self.vir_expr_to_sexp(*x);
 
@@ -1133,7 +1129,7 @@ impl SolverCtx {
                 if self.find_widths {
                     let widths: Vec<SExpr> = xs
                         .iter()
-                        .map(|x| self.get_expr_width_var(&x).unwrap().clone())
+                        .map(|x| self.get_expr_width_var(x).unwrap())
                         .collect();
                     let sum = self.smt.plus_many(widths);
                     self.width_assumptions
@@ -1222,7 +1218,7 @@ impl SolverCtx {
 
         let res = match self.smt.check() {
             Ok(Response::Sat) => {
-                if !config.distinct_check || term_input_bs.len() < 1 {
+                if !config.distinct_check || term_input_bs.is_empty() {
                     log::debug!("Assertion list is feasible for at least one input!");
                     self.smt.pop().unwrap();
                     return VerificationResult::Success;
@@ -1321,7 +1317,7 @@ impl SolverCtx {
                 let sym = termenv.terms[term_id.index()].name;
                 let name = typeenv.syms[sym.index()].clone();
 
-                let mut sexprs = args.iter().map(|a| to_sexpr(a)).collect::<Vec<SExpr>>();
+                let mut sexprs = args.iter().map(&mut to_sexpr).collect::<Vec<SExpr>>();
 
                 sexprs.insert(0, self.smt.atom(name));
                 self.smt.list(sexprs)
@@ -1360,7 +1356,7 @@ impl SolverCtx {
                 self.smt.list(vec![self.smt.atom(num.to_string())])
             }
             isle::sema::Pattern::And(_, subpats) => {
-                let mut sexprs = subpats.iter().map(|a| to_sexpr(a)).collect::<Vec<SExpr>>();
+                let mut sexprs = subpats.iter().map(to_sexpr).collect::<Vec<SExpr>>();
 
                 sexprs.insert(0, self.smt.atom("and"));
                 self.smt.list(sexprs)
@@ -1376,7 +1372,7 @@ impl SolverCtx {
     ) -> String {
         let matches: Vec<&(String, String)> =
             vars.iter().filter(|(v, _)| v.starts_with(prefix)).collect();
-        if matches.len() == 0 {
+        if matches.is_empty() {
             panic!("Can't find match for: {}\n{:?}", prefix, vars);
         } else if matches.len() == 3 {
             assert!(
@@ -1412,7 +1408,7 @@ impl SolverCtx {
                 let sym = termenv.terms[term_id.index()].name;
                 let name = typeenv.syms[sym.index()].clone();
 
-                let mut sexprs = args.iter().map(|a| to_sexpr(a)).collect::<Vec<SExpr>>();
+                let mut sexprs = args.iter().map(to_sexpr).collect::<Vec<SExpr>>();
 
                 sexprs.insert(0, self.smt.atom(name));
                 self.smt.list(sexprs)
@@ -1510,17 +1506,17 @@ impl SolverCtx {
             let if_lhs = &if_let_struct.lhs;
             let if_rhs: &cranelift_isle::sema::Expr = &if_let_struct.rhs;
 
-            let if_lhs_expr = self.display_isle_pattern(termenv, typeenv, &vars, rule, &if_lhs);
+            let if_lhs_expr = self.display_isle_pattern(termenv, typeenv, &vars, rule, if_lhs);
 
-            let if_rhs_expr = self.display_isle_expr(termenv, typeenv, &vars, rule, &if_rhs);
+            let if_rhs_expr = self.display_isle_expr(termenv, typeenv, &vars, rule, if_rhs);
 
-            print!(
-                "({} {})\n",
+            println!(
+                "({} {})",
                 self.smt.display(if_lhs_expr),
                 self.smt.display(if_rhs_expr)
             );
         }
-        print!(")\n");
+        println!(")");
 
         println!("=>");
         let rhs = self.display_isle_expr(termenv, typeenv, &vars, rule, &rule.rhs);
@@ -1538,7 +1534,7 @@ impl SolverCtx {
         log::trace!("Declaring quantified variables");
         for v in &rule_sem.quantified_vars {
             let name = &v.name;
-            let ty = self.tyctx.tymap[&v.tyvar].clone();
+            let ty = self.tyctx.tymap[&v.tyvar];
             let var_ty = self.vir_to_smt_ty(&ty);
             log::trace!("\t{} : {}", name, self.smt.display(var_ty));
             if let Type::BitVector(w) = ty {
@@ -1570,12 +1566,12 @@ impl SolverCtx {
         }
         if self.find_widths {
             for a in &self.width_assumptions {
-                assumptions.push(a.clone());
+                assumptions.push(*a);
             }
         }
-        if self.additional_assumptions.len() > 0 {}
+        self.additional_assumptions.is_empty();
         for a in &self.additional_assumptions {
-            assumptions.push(a.clone());
+            assumptions.push(*a);
         }
         // Look at RHS assertions, which are checked, not trusted
         let assertions: Vec<SExpr> = rule_sem
@@ -1659,7 +1655,7 @@ pub fn run_solver(
     // Check whether the non-solver type inference was able to resolve all bitvector widths,
     // and add assumptions for known widths
     for (_e, t) in &ctx.tyctx.tyvars {
-        let ty = &ctx.tyctx.tymap[&t];
+        let ty = &ctx.tyctx.tymap[t];
         match ty {
             Type::BitVector(w) => {
                 let width_name = format!("width__{}", t);
@@ -1685,7 +1681,7 @@ pub fn run_solver(
         }
     }
 
-    if unresolved_widths.len() == 0 {
+    if unresolved_widths.is_empty() {
         log::debug!("All widths resolved after basic type inference");
         return run_solver_with_static_widths(
             rule_sem, rule, termenv, typeenv, &ctx.tyctx, concrete, config,
@@ -1695,7 +1691,7 @@ pub fn run_solver(
     log::debug!("Some unresolved widths after basic type inference");
     log::debug!("Finding widths from the solver");
     ctx.find_widths = true;
-    let (assumptions, _) = ctx.declare_variables(&rule_sem, config);
+    let (assumptions, _) = ctx.declare_variables(rule_sem, config);
     ctx.smt.push().unwrap();
     for (i, a) in assumptions.iter().enumerate() {
         ctx.smt
@@ -1703,7 +1699,7 @@ pub fn run_solver(
             .unwrap();
     }
 
-    return resolve_dynamic_widths(
+    resolve_dynamic_widths(
         rule_sem,
         rule,
         termenv,
@@ -1713,7 +1709,7 @@ pub fn run_solver(
         &mut ctx,
         unresolved_widths,
         0,
-    );
+    )
 }
 
 fn resolve_dynamic_widths(
@@ -1735,7 +1731,7 @@ fn resolve_dynamic_widths(
             let mut cur_tyctx = ctx.tyctx.clone();
             let mut width_resolutions = HashMap::new();
             for (e, t) in &ctx.tyctx.tyvars {
-                let ty = &ctx.tyctx.tymap[&t];
+                let ty = &ctx.tyctx.tymap[t];
                 match ty {
                     Type::BitVector(w) => {
                         let width_name = format!("width__{}", t);
@@ -1805,11 +1801,11 @@ fn resolve_dynamic_widths(
                 );
                 let unsat = ctx.smt.get_unsat_core().unwrap();
                 log::warn!("Unsat core:\n{}", ctx.smt.display(unsat));
-                return VerificationResult::InapplicableRule;
+                VerificationResult::InapplicableRule
             } else {
                 // If this is not the first attempt, some previous width assignment must
                 // have succeeded.
-                return VerificationResult::Success;
+                VerificationResult::Success
             }
         }
         Ok(Response::Unknown) => {
@@ -1858,7 +1854,7 @@ pub fn run_solver_with_static_widths(
         load_return: None,
         lhs_flag: true,
     };
-    let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
+    let (assumptions, mut assertions) = ctx.declare_variables(rule_sem, config);
 
     let lhs = ctx.vir_expr_to_sexp(rule_sem.lhs.clone());
     ctx.lhs_flag = false;
@@ -1922,7 +1918,7 @@ pub fn run_solver_with_static_widths(
     }
 
     let assumption_conjunction = ctx.smt.and_many(assumptions);
-    let mut full_condition = if assertions.len() > 0 {
+    let mut full_condition = if !assertions.is_empty() {
         let assertion_conjunction = ctx.smt.and_many(assertions.clone());
         ctx.smt.and(condition, assertion_conjunction)
     } else {
@@ -2005,7 +2001,7 @@ pub fn run_solver_with_static_widths(
                 }
             }
 
-            if assertions.len() > 0 {
+            if !assertions.is_empty() {
                 let vals = ctx.smt.get_value(assertions).unwrap();
                 for (variable, value) in vals {
                     if value == ctx.smt.false_() {
@@ -2014,7 +2010,7 @@ pub fn run_solver_with_static_widths(
                 }
             }
 
-            if load_conditions.len() > 0 {
+            if !load_conditions.is_empty() {
                 let vals = ctx.smt.get_value(load_conditions).unwrap();
                 for (variable, value) in vals {
                     if value == ctx.smt.false_() {
@@ -2066,7 +2062,7 @@ pub fn test_concrete_with_static_widths(
         .eq(rhs, ctx.smt.atom(concrete.output.literal.clone()));
 
     ctx.smt
-        .assert(ctx.smt.named(format!("conceq"), eq))
+        .assert(ctx.smt.named("conceq".to_string(), eq))
         .unwrap();
 
     for (i, a) in rule_sem.rhs_assertions.iter().enumerate() {
@@ -2120,5 +2116,5 @@ pub fn test_concrete_with_static_widths(
         );
     }
     ctx.smt.pop().unwrap();
-    return VerificationResult::Success;
+    VerificationResult::Success
 }

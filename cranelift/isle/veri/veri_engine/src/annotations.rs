@@ -79,7 +79,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
             "Unexpected number of args for unary operator {:?}",
             pos
         );
-        return u(Box::new(spec_to_expr(&args[0], env)));
+        u(Box::new(spec_to_expr(&args[0], env)))
     }
     fn binop<F: Fn(Box<Expr>, Box<Expr>) -> Expr>(
         b: F,
@@ -106,11 +106,11 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         env: &ParsingEnv,
     ) -> Expr {
         assert!(
-            args.len() >= 1,
+            !args.is_empty(),
             "Unexpected number of args for variadic binary operator {:?}",
             pos
         );
-        let mut expr_args: Vec<Expr> = args.iter().map(|a| spec_to_expr(&a, env)).collect();
+        let mut expr_args: Vec<Expr> = args.iter().map(|a| spec_to_expr(a, env)).collect();
         let last = expr_args.remove(expr_args.len() - 1);
 
         // Reverse to keep the order of the original list
@@ -122,65 +122,65 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
 
     match s {
         // Unary
-        SpecOp::Not => unop(|x| Expr::Not(x), args, pos, env),
-        SpecOp::BVNot => unop(|x| Expr::BVNot(x), args, pos, env),
-        SpecOp::BVNeg => unop(|x| Expr::BVNeg(x), args, pos, env),
-        SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
-        SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
-        SpecOp::Cls => unop(|x| Expr::CLS(x), args, pos, env),
-        SpecOp::Popcnt => unop(|x| Expr::BVPopcnt(x), args, pos, env),
-        SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
+        SpecOp::Not => unop(Expr::Not, args, pos, env),
+        SpecOp::BVNot => unop(Expr::BVNot, args, pos, env),
+        SpecOp::BVNeg => unop(Expr::BVNeg, args, pos, env),
+        SpecOp::Rev => unop(Expr::Rev, args, pos, env),
+        SpecOp::Clz => unop(Expr::CLZ, args, pos, env),
+        SpecOp::Cls => unop(Expr::CLS, args, pos, env),
+        SpecOp::Popcnt => unop(Expr::BVPopcnt, args, pos, env),
+        SpecOp::BV2Int => unop(Expr::BVToInt, args, pos, env),
 
         // Variadic binops
-        SpecOp::And => variadic_binop(|x, y| Expr::And(x, y), args, pos, env),
-        SpecOp::Or => variadic_binop(|x, y| Expr::Or(x, y), args, pos, env),
+        SpecOp::And => variadic_binop(Expr::And, args, pos, env),
+        SpecOp::Or => variadic_binop(Expr::Or, args, pos, env),
 
         // Binary
-        SpecOp::Eq => binop(|x, y| Expr::Eq(x, y), args, pos, env),
-        SpecOp::Lt => binop(|x, y| Expr::Lt(x, y), args, pos, env),
-        SpecOp::Lte => binop(|x, y| Expr::Lte(x, y), args, pos, env),
+        SpecOp::Eq => binop(Expr::Eq, args, pos, env),
+        SpecOp::Lt => binop(Expr::Lt, args, pos, env),
+        SpecOp::Lte => binop(Expr::Lte, args, pos, env),
         SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
         SpecOp::Gte => binop(|x, y| Expr::Lte(y, x), args, pos, env),
-        SpecOp::Imp => binop(|x, y| Expr::Imp(x, y), args, pos, env),
-        SpecOp::BVAnd => binop(|x, y| Expr::BVAnd(x, y), args, pos, env),
-        SpecOp::BVOr => binop(|x, y| Expr::BVOr(x, y), args, pos, env),
-        SpecOp::BVXor => binop(|x, y| Expr::BVXor(x, y), args, pos, env),
-        SpecOp::BVAdd => binop(|x, y| Expr::BVAdd(x, y), args, pos, env),
-        SpecOp::BVSub => binop(|x, y| Expr::BVSub(x, y), args, pos, env),
-        SpecOp::BVMul => binop(|x, y| Expr::BVMul(x, y), args, pos, env),
-        SpecOp::BVUdiv => binop(|x, y| Expr::BVUDiv(x, y), args, pos, env),
-        SpecOp::BVUrem => binop(|x, y| Expr::BVUrem(x, y), args, pos, env),
-        SpecOp::BVSdiv => binop(|x, y| Expr::BVSDiv(x, y), args, pos, env),
-        SpecOp::BVSrem => binop(|x, y| Expr::BVSrem(x, y), args, pos, env),
-        SpecOp::BVShl => binop(|x, y| Expr::BVShl(x, y), args, pos, env),
-        SpecOp::BVLshr => binop(|x, y| Expr::BVShr(x, y), args, pos, env),
-        SpecOp::BVAshr => binop(|x, y| Expr::BVAShr(x, y), args, pos, env),
-        SpecOp::BVSaddo => binop(|x, y| Expr::BVSaddo(x, y), args, pos, env),
-        SpecOp::BVUle => binop(|x, y| Expr::BVUlte(x, y), args, pos, env),
-        SpecOp::BVUlt => binop(|x, y| Expr::BVUlt(x, y), args, pos, env),
-        SpecOp::BVUgt => binop(|x, y| Expr::BVUgt(x, y), args, pos, env),
-        SpecOp::BVUge => binop(|x, y| Expr::BVUgte(x, y), args, pos, env),
-        SpecOp::BVSlt => binop(|x, y| Expr::BVSlt(x, y), args, pos, env),
-        SpecOp::BVSle => binop(|x, y| Expr::BVSlte(x, y), args, pos, env),
-        SpecOp::BVSgt => binop(|x, y| Expr::BVSgt(x, y), args, pos, env),
-        SpecOp::BVSge => binop(|x, y| Expr::BVSgte(x, y), args, pos, env),
-        SpecOp::Rotr => binop(|x, y| Expr::BVRotr(x, y), args, pos, env),
-        SpecOp::Rotl => binop(|x, y| Expr::BVRotl(x, y), args, pos, env),
+        SpecOp::Imp => binop(Expr::Imp, args, pos, env),
+        SpecOp::BVAnd => binop(Expr::BVAnd, args, pos, env),
+        SpecOp::BVOr => binop(Expr::BVOr, args, pos, env),
+        SpecOp::BVXor => binop(Expr::BVXor, args, pos, env),
+        SpecOp::BVAdd => binop(Expr::BVAdd, args, pos, env),
+        SpecOp::BVSub => binop(Expr::BVSub, args, pos, env),
+        SpecOp::BVMul => binop(Expr::BVMul, args, pos, env),
+        SpecOp::BVUdiv => binop(Expr::BVUDiv, args, pos, env),
+        SpecOp::BVUrem => binop(Expr::BVUrem, args, pos, env),
+        SpecOp::BVSdiv => binop(Expr::BVSDiv, args, pos, env),
+        SpecOp::BVSrem => binop(Expr::BVSrem, args, pos, env),
+        SpecOp::BVShl => binop(Expr::BVShl, args, pos, env),
+        SpecOp::BVLshr => binop(Expr::BVShr, args, pos, env),
+        SpecOp::BVAshr => binop(Expr::BVAShr, args, pos, env),
+        SpecOp::BVSaddo => binop(Expr::BVSaddo, args, pos, env),
+        SpecOp::BVUle => binop(Expr::BVUlte, args, pos, env),
+        SpecOp::BVUlt => binop(Expr::BVUlt, args, pos, env),
+        SpecOp::BVUgt => binop(Expr::BVUgt, args, pos, env),
+        SpecOp::BVUge => binop(Expr::BVUgte, args, pos, env),
+        SpecOp::BVSlt => binop(Expr::BVSlt, args, pos, env),
+        SpecOp::BVSle => binop(Expr::BVSlte, args, pos, env),
+        SpecOp::BVSgt => binop(Expr::BVSgt, args, pos, env),
+        SpecOp::BVSge => binop(Expr::BVSgte, args, pos, env),
+        SpecOp::Rotr => binop(Expr::BVRotr, args, pos, env),
+        SpecOp::Rotl => binop(Expr::BVRotl, args, pos, env),
         SpecOp::ZeroExt => match spec_to_usize(&args[0]) {
             Some(i) => Expr::BVZeroExtTo(
                 Box::new(Width::Const(i)),
                 Box::new(spec_to_expr(&args[1], env)),
             ),
-            None => binop(|x, y| Expr::BVZeroExtToVarWidth(x, y), args, pos, env),
+            None => binop(Expr::BVZeroExtToVarWidth, args, pos, env),
         },
         SpecOp::SignExt => match spec_to_usize(&args[0]) {
             Some(i) => Expr::BVSignExtTo(
                 Box::new(Width::Const(i)),
                 Box::new(spec_to_expr(&args[1], env)),
             ),
-            None => binop(|x, y| Expr::BVSignExtToVarWidth(x, y), args, pos, env),
+            None => binop(Expr::BVSignExtToVarWidth, args, pos, env),
         },
-        SpecOp::ConvTo => binop(|x, y| Expr::BVConvTo(x, y), args, pos, env),
+        SpecOp::ConvTo => binop(Expr::BVConvTo, args, pos, env),
         SpecOp::Concat => {
             let cases: Vec<Expr> = args.iter().map(|a| spec_to_expr(a, env)).collect();
             Expr::BVConcat(cases)
@@ -223,7 +223,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                 Box::new(spec_to_expr(&args[2], env)),
             )
         }
-        SpecOp::WidthOf => unop(|x| Expr::WidthOf(x), args, pos, env),
+        SpecOp::WidthOf => unop(Expr::WidthOf, args, pos, env),
         SpecOp::If => {
             assert_eq!(
                 args.len(),
@@ -358,7 +358,7 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
         match def {
             &ast::Def::Model(Model { ref name, ref val }) => match val {
                 ast::ModelValue::TypeValue(model_type) => {
-                    let type_id = typeenv.get_type_by_name(&name).unwrap();
+                    let type_id = typeenv.get_type_by_name(name).unwrap();
                     let ir_type = match model_type {
                         ModelType::Int => annotation_ir::Type::Int,
                         ModelType::Unit => annotation_ir::Type::Unit,
@@ -407,7 +407,7 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
     // Traverse defs to process spec annotations
     for def in defs {
         match def {
-            &ast::Def::Spec(ref spec) => {
+            ast::Def::Spec(spec) => {
                 let termname = spec.term.0.clone();
                 let term_id = termenv.get_term_by_name(typeenv, &spec.term)
                 .unwrap_or_else(|| panic!("Spec provided for unknown decl {termname}"));
@@ -420,7 +420,7 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
                     args: spec
                         .args
                         .iter()
-                        .map(|a| spec_to_annotation_bound_var(a))
+                        .map(spec_to_annotation_bound_var)
                         .collect(),
                     ret: BoundVar {
                         name: RESULT.to_string(),
@@ -453,7 +453,7 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
     let mut forms_map = HashMap::new();
     for def in defs {
         match def {
-            &ast::Def::Form(ref form) => {
+            ast::Def::Form(form) => {
                 let term_type_signatures: Vec<_> = form
                     .signatures
                     .iter()
@@ -468,7 +468,7 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
     let mut instantiations_map = HashMap::new();
     for def in defs {
         match def {
-            &ast::Def::Instantiation(ref inst) => {
+            ast::Def::Instantiation(inst) => {
                 let term_id = termenv.get_term_by_name(typeenv, &inst.term).unwrap();
                 let sigs = match &inst.form {
                     Some(form) => forms_map[&form.0].clone(),

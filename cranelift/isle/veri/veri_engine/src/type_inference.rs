@@ -136,7 +136,7 @@ pub fn type_rules_with_term_and_types(
             typeenv,
             termenv,
             &config.term,
-            &types,
+            types,
             concrete,
         ) {
             solutions.insert(rule.id, s);
@@ -208,9 +208,7 @@ fn type_annotations_using_rule<'a>(
                 &mut annotation_infos,
                 false,
             );
-            if iflet_lhs_expr.is_none() {
-                return None;
-            }
+            iflet_lhs_expr.as_ref()?;
 
             let iflet_rhs_expr = add_rule_constraints(
                 &mut parse_tree,
@@ -221,9 +219,7 @@ fn type_annotations_using_rule<'a>(
                 &mut annotation_infos,
                 false,
             );
-            if iflet_rhs_expr.is_none() {
-                return None;
-            }
+            iflet_rhs_expr.as_ref()?;
             parse_tree
                 .var_constraints
                 .insert(TypeExpr::Variable(iflet_lhs.type_var, iflet_rhs.type_var));
@@ -261,9 +257,7 @@ fn type_annotations_using_rule<'a>(
         &mut annotation_infos,
         false,
     );
-    if lhs_expr.is_none() {
-        return None;
-    }
+    lhs_expr.as_ref()?;
     log::trace!("\n\tRHS:");
     let rhs_expr = add_rule_constraints(
         &mut parse_tree,
@@ -274,9 +268,7 @@ fn type_annotations_using_rule<'a>(
         &mut annotation_infos,
         true,
     );
-    if rhs_expr.is_none() {
-        return None;
-    }
+    rhs_expr.as_ref()?;
 
     match (lhs_expr, rhs_expr) {
         (Some(lhs_expr), Some(rhs_expr)) => {
@@ -295,7 +287,7 @@ fn type_annotations_using_rule<'a>(
             let mut tymap = HashMap::new();
 
             for (expr, t) in &parse_tree.ty_vars {
-                if let Some(ty) = solution.get(&t) {
+                if let Some(ty) = solution.get(t) {
                     tymap.insert(*t, convert_type(ty));
                 } else {
                     panic!("missing type variable {} in solution for: {:?}", t, expr);
@@ -307,7 +299,7 @@ fn type_annotations_using_rule<'a>(
                 if let Some(ty) = solution.get(t) {
                     let ty = convert_type(ty);
                     parse_tree.ty_vars.insert(expr, *t);
-                    tymap.insert(*t, ty.clone());
+                    tymap.insert(*t, ty);
                     quantified_vars.push(veri_ir::BoundVar {
                         name: s.clone(),
                         tyvar: *t,
@@ -322,7 +314,7 @@ fn type_annotations_using_rule<'a>(
                 if let Some(ty) = solution.get(&t) {
                     let ty = convert_type(ty);
                     parse_tree.ty_vars.insert(expr, t);
-                    tymap.insert(t, ty.clone());
+                    tymap.insert(t, ty);
                     free_vars.push(veri_ir::BoundVar { name: s, tyvar: t });
                 } else {
                     panic!("missing type variable {} in solution for: {:?}", t, expr);
@@ -1367,9 +1359,9 @@ fn add_isle_constraints(
 
     let mut isle_types = vec![];
     for arg_ty in term.arg_tys.iter() {
-        isle_types.push(arg_ty.clone());
+        isle_types.push(*arg_ty);
     }
-    isle_types.push(term.ret_ty.clone());
+    isle_types.push(term.ret_ty);
     assert_eq!(annotation_vars.len(), isle_types.len());
 
     for (isle_type_id, annotation_var) in isle_types.iter().zip(annotation_vars) {
@@ -2126,7 +2118,7 @@ fn create_parse_tree_pattern(
             TypeVarNode {
                 ident,
                 construct: TypeVarConstruct::BindPattern,
-                type_var: type_var,
+                type_var,
                 children: vec![var_node, subpat_node],
                 assertions: vec![],
             }
@@ -2137,7 +2129,7 @@ fn create_parse_tree_pattern(
             TypeVarNode {
                 ident: format!("wildcard__{}", type_var),
                 construct: TypeVarConstruct::Wildcard(type_var),
-                type_var: type_var,
+                type_var,
                 children: vec![],
                 assertions: vec![],
             }

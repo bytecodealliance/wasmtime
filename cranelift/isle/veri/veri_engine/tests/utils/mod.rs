@@ -105,17 +105,17 @@ pub fn all_failure_result() -> Vec<(Bitwidth, VerificationResult)> {
 /// Specify a custom set expected result (helpful if you want to test all the bitwidths and expect
 /// a range of different success, failure, and inapplicable outcomes)
 pub fn custom_result(f: &TestResultBuilder) -> Vec<(Bitwidth, VerificationResult)> {
-    Bitwidth::iter().map(|w| f(w)).collect()
+    Bitwidth::iter().map(f).collect()
 }
 
-fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) -> () {
+fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) {
     let (typeenv, termenv, defs) = create_envs(inputs).unwrap();
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     let term_signatures = annotation_env
         .get_term_signatures_by_name(&termenv, &typeenv)
         .get(config.term.as_str())
-        .expect(format!("Missing term type instantiation for {}", config.term).as_str())
+        .unwrap_or_else(|| panic!("Missing term type instantiation for {}", config.term))
         .clone();
     let instantiations = match tr {
         TestResult::Simple(s) => {
@@ -132,7 +132,7 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) ->
                     .iter()
                     .filter(|sig| sig.canonical_type.unwrap() == ty)
                     .collect();
-                if all_instantiations.len() < 1 {
+                if all_instantiations.is_empty() {
                     panic!("Missing type instantiation for width {:?}", width);
                 }
                 for i in all_instantiations {
@@ -173,11 +173,11 @@ pub fn test_from_file_with_lhs_termname_simple(
     file: &str,
     termname: String,
     tr: Vec<(Bitwidth, VerificationResult)>,
-) -> () {
+) {
     test_from_file_with_lhs_termname(file, termname, TestResult::Simple(tr))
 }
 
-pub fn test_from_file_with_lhs_termname(file: &str, termname: String, tr: TestResult) -> () {
+pub fn test_from_file_with_lhs_termname(file: &str, termname: String, tr: TestResult) {
     println!("Verifying {} rules in file: {}", termname, file);
     let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
@@ -195,11 +195,11 @@ pub fn test_aarch64_rule_with_lhs_termname_simple(
     rulename: &str,
     termname: &str,
     tr: Vec<(Bitwidth, VerificationResult)>,
-) -> () {
+) {
     test_aarch64_rule_with_lhs_termname(rulename, termname, TestResult::Simple(tr))
 }
 
-pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) -> () {
+pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) {
     println!("Verifying rule `{}` with termname {} ", rulename, termname);
     let inputs = get_isle_files("aarch64");
     let config = Config {
@@ -216,11 +216,11 @@ pub fn test_x64_rule_with_lhs_termname_simple(
     rulename: &str,
     termname: &str,
     tr: Vec<(Bitwidth, VerificationResult)>,
-) -> () {
+) {
     test_x64_rule_with_lhs_termname(rulename, termname, TestResult::Simple(tr))
 }
 
-pub fn test_x64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) -> () {
+pub fn test_x64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) {
     println!("Verifying rule `{}` with termname {} ", rulename, termname);
     let inputs = get_isle_files("x64");
     let config = Config {
@@ -237,10 +237,10 @@ pub fn test_from_file_with_config_simple(
     file: &str,
     config: Config,
     tr: Vec<(Bitwidth, VerificationResult)>,
-) -> () {
+) {
     test_from_file_with_config(file, config, TestResult::Simple(tr))
 }
-pub fn test_from_file_with_config(file: &str, config: Config, tr: TestResult) -> () {
+pub fn test_from_file_with_config(file: &str, config: Config, tr: TestResult) {
     println!("Verifying {} rules in file: {}", config.term, file);
     let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
@@ -250,11 +250,11 @@ pub fn test_from_file_with_config(file: &str, config: Config, tr: TestResult) ->
 pub fn test_aarch64_with_config_simple(
     config: Config,
     tr: Vec<(Bitwidth, VerificationResult)>,
-) -> () {
+) {
     test_aarch64_with_config(config, TestResult::Simple(tr))
 }
 
-pub fn test_aarch64_with_config(config: Config, tr: TestResult) -> () {
+pub fn test_aarch64_with_config(config: Config, tr: TestResult) {
     println!(
         "Verifying rules {:?} with termname {}",
         config.names, config.term
@@ -267,7 +267,7 @@ pub fn test_concrete_aarch64_rule_with_lhs_termname(
     rulename: &str,
     termname: &str,
     concrete: ConcreteTest,
-) -> () {
+) {
     println!(
         "Verifying concrete input rule `{}` with termname {} ",
         rulename, termname
@@ -285,7 +285,7 @@ pub fn test_concrete_aarch64_rule_with_lhs_termname(
     };
 
     // Get the types/widths for this particular term
-    let args = concrete.args.iter().map(|i| i.ty.clone()).collect();
+    let args = concrete.args.iter().map(|i| i.ty).collect();
     let ret = concrete.output.ty;
     let t = TermSignature {
         args,
@@ -309,7 +309,7 @@ pub fn test_concrete_input_from_file_with_lhs_termname(
     file: &str,
     termname: String,
     concrete: ConcreteTest,
-) -> () {
+) {
     println!(
         "Verifying concrete input {} rule in file: {}",
         termname, file
@@ -329,7 +329,7 @@ pub fn test_concrete_input_from_file_with_lhs_termname(
     };
 
     // Get the types/widths for this particular term
-    let args = concrete.args.iter().map(|i| i.ty.clone()).collect();
+    let args = concrete.args.iter().map(|i| i.ty).collect();
     let ret = concrete.output.ty;
     let t = TermSignature {
         args,

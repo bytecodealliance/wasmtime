@@ -19,7 +19,7 @@ mod tests {
             .build()
             .unwrap();
         SolverCtx {
-            smt: smt,
+            smt,
             find_widths: false,
             tyctx: TypeContext {
                 tyvars: HashMap::new(),

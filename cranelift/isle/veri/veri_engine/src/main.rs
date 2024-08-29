@@ -109,7 +109,7 @@ fn main() -> anyhow::Result<()> {
 
     let config = Config {
         term: args.term,
-        names: names,
+        names,
         distinct_check: !args.nodistinct,
         custom_verification_condition: None,
         custom_assumptions: None,
