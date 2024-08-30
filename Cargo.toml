@@ -50,7 +50,7 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
-wasi-common = { workspace = true, default-features = true, features = ["exit"], optional = true }
+wasi-common = { workspace = true, default-features = true, features = ["exit", "tokio"], optional = true }
 wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-runtime-config = { workspace = true, optional = true }
@@ -111,7 +111,7 @@ test-programs-artifacts = { workspace = true }
 bytesize = "1.3.0"
 wit-component = { workspace = true }
 cranelift-filetests = { workspace = true }
-cranelift-codegen = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["disas", "trace-log", "timing"] }
 cranelift-reader = { workspace = true }
 toml = { workspace = true }
 similar = { workspace = true }
@@ -248,7 +248,7 @@ byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-arra
 
 # Bytecode Alliance maintained dependencies:
 # ---------------------------
-regalloc2 = "0.9.3"
+regalloc2 = "0.9.4"
 
 # cap-std family:
 target-lexicon = "0.12.16"
@@ -390,6 +390,7 @@ default = [
   # cost, so allow disabling this through disabling of our own `default`
   # feature.
   "clap/default",
+  "clap/wrap_help",
 ]
 
 # ========================================
@@ -441,7 +442,7 @@ explore = ["dep:wasmtime-explorer", "dep:tempfile"]
 wast = ["dep:wasmtime-wast"]
 config = ["cache"]
 compile = ["cranelift"]
-run = ["dep:wasmtime-wasi", "wasmtime/runtime", "dep:listenfd", "dep:wasi-common"]
+run = ["dep:wasmtime-wasi", "wasmtime/runtime", "dep:listenfd", "dep:wasi-common", "dep:tokio"]
 
 [[test]]
 name = "host_segfault"

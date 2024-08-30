@@ -47,7 +47,7 @@ pub use self::generated::wasi::*;
 pub use self::generated::exports;
 
 /// Bindings to the `wasi:http/proxy` world.
-pub use self::generated::{Proxy, ProxyPre};
+pub use self::generated::{Proxy, ProxyIndices, ProxyPre};
 
 /// Sync implementation of the `wasi:http/proxy` world.
 pub mod sync {
@@ -73,5 +73,5 @@ pub mod sync {
     pub use self::generated::exports;
 
     /// Bindings to the `wasi:http/proxy` world.
-    pub use self::generated::{Proxy, ProxyPre};
+    pub use self::generated::{Proxy, ProxyIndices, ProxyPre};
 }

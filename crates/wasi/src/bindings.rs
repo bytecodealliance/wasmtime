@@ -318,6 +318,8 @@ pub mod sync {
     ///
     /// ---
     pub use self::generated::CommandPre;
+
+    pub use self::generated::CommandIndices;
 }
 
 mod async_io {
@@ -557,3 +559,5 @@ pub use self::async_io::Command;
 ///
 /// ---
 pub use self::async_io::CommandPre;
+
+pub use self::async_io::CommandIndices;

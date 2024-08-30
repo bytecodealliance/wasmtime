@@ -587,21 +587,19 @@ block0(v0: i128, v1: i128):
 ; VCode:
 ; block0:
 ;   sub a5,a0,a2
-;   mv a4,a5
-;   sltu a2,a0,a4
-;   mv a0,a4
+;   sltu a2,a0,a5
 ;   sub a3,a1,a3
 ;   sub a1,a3,a2
+;   mv a0,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sub a5, a0, a2
-;   mv a4, a5
-;   sltu a2, a0, a4
-;   mv a0, a4
+;   sltu a2, a0, a5
 ;   sub a3, a1, a3
 ;   sub a1, a3, a2
+;   mv a0, a5
 ;   ret
 
 function %add_mul_2(i32, i32, i32) -> i32 {

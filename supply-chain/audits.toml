@@ -171,7 +171,7 @@ notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-deve
 [[wildcard-audits.regalloc2]]
 who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
-user-id = 187138
+user-id = 187138 # Trevor Elliott (elliottt)
 start = "2022-11-29"
 end = "2025-07-30"
 notes = """
@@ -2592,6 +2592,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "3.5.0 -> 3.6.0"
 notes = "Dependency updates and new optimized trait implementations, but otherwise everything looks normal."
+
+[[audits.terminal_size]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.17 -> 0.2.6"
+notes = "Minor updates around using some utilities from the standard library, nothing major."
 
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"

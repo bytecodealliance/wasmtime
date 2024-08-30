@@ -32,73 +32,67 @@ block0:
 }
 
 ; VCode:
-;   stmg %r7, %r15, 56(%r15)
+;   stmg %r6, %r15, 48(%r15)
 ;   aghi %r15, -176
 ; block0:
-;   lhi %r2, 0
-;   lgr %r11, %r2
-;   lhi %r2, 1
-;   lgr %r7, %r2
-;   lhi %r2, 2
-;   lgr %r9, %r2
+;   lhi %r8, 0
+;   lhi %r6, 1
+;   lhi %r7, 2
 ;   la %r2, 160(%r15)
 ;   mvhi 0(%r2), 0
 ;   la %r3, 164(%r15)
 ;   mvhi 0(%r3), 1
 ;   la %r4, 168(%r15)
 ;   mvhi 0(%r4), 2
-;   lgr %r2, %r11
+;   lgr %r2, %r8
 ;   brasl %r14, userextname0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
 ;   la %r2, 160(%r15)
 ;   mvhi 0(%r2), 1
 ;   la %r3, 164(%r15)
 ;   mvhi 0(%r3), 2
-;   lgr %r2, %r11
+;   lgr %r2, %r8
 ;   brasl %r14, userextname0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
 ;   la %r5, 160(%r15)
 ;   mvhi 0(%r5), 2
-;   lgr %r2, %r7
+;   lgr %r2, %r6
 ;   brasl %r14, userextname0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
-;   lgr %r2, %r9
+;   lgr %r2, %r7
 ;   brasl %r14, userextname0
-;   lmg %r7, %r15, 232(%r15)
+;   lmg %r6, %r15, 224(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r7, %r15, 0x38(%r15)
+;   stmg %r6, %r15, 0x30(%r15)
 ;   aghi %r15, -0xb0
 ; block1: ; offset 0xa
-;   lhi %r2, 0
-;   lgr %r11, %r2
-;   lhi %r2, 1
-;   lgr %r7, %r2
-;   lhi %r2, 2
-;   lgr %r9, %r2
+;   lhi %r8, 0
+;   lhi %r6, 1
+;   lhi %r7, 2
 ;   la %r2, 0xa0(%r15)
 ;   mvhi 0(%r2), 0
 ;   la %r3, 0xa4(%r15)
 ;   mvhi 0(%r3), 1
 ;   la %r4, 0xa8(%r15)
 ;   mvhi 0(%r4), 2
-;   lgr %r2, %r11
-;   brasl %r14, 0x44 ; reloc_external PLTRel32Dbl u0:0 2
+;   lgr %r2, %r8
+;   brasl %r14, 0x38 ; reloc_external PLTRel32Dbl u0:0 2
 ;   la %r2, 0xa0(%r15)
 ;   mvhi 0(%r2), 1
 ;   la %r3, 0xa4(%r15)
 ;   mvhi 0(%r3), 2
-;   lgr %r2, %r11
-;   brasl %r14, 0x62 ; reloc_external PLTRel32Dbl u0:0 2
+;   lgr %r2, %r8
+;   brasl %r14, 0x56 ; reloc_external PLTRel32Dbl u0:0 2
 ;   la %r5, 0xa0(%r15)
 ;   mvhi 0(%r5), 2
+;   lgr %r2, %r6
+;   brasl %r14, 0x6a ; reloc_external PLTRel32Dbl u0:0 2
 ;   lgr %r2, %r7
-;   brasl %r14, 0x76 ; reloc_external PLTRel32Dbl u0:0 2
-;   lgr %r2, %r9
-;   brasl %r14, 0x80 ; reloc_external PLTRel32Dbl u0:0 2
-;   lmg %r7, %r15, 0xe8(%r15)
+;   brasl %r14, 0x74 ; reloc_external PLTRel32Dbl u0:0 2
+;   lmg %r6, %r15, 0xe0(%r15)
 ;   br %r14
 
 function %different_types(i8, i16, i32, i64, f32, f64) -> i8, i16, i32, i64, f32, f64 {
@@ -135,28 +129,28 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ; block0:
 ;   la %r9, 160(%r15)
 ;   stc %r2, 0(%r9)
-;   lgr %r11, %r2
+;   lgr %r9, %r2
 ;   la %r2, 168(%r15)
 ;   sth %r3, 0(%r2)
-;   lgr %r9, %r3
+;   lgr %r6, %r3
 ;   la %r2, 176(%r15)
 ;   st %r4, 0(%r2)
-;   lgr %r7, %r4
+;   lgr %r11, %r4
 ;   la %r2, 180(%r15)
 ;   ste %f0, 0(%r2)
 ;   vst %v0, 256(%r15)
 ;   la %r2, 184(%r15)
 ;   stg %r5, 0(%r2)
-;   lgr %r6, %r5
+;   lgr %r8, %r5
 ;   la %r3, 192(%r15)
 ;   std %f2, 0(%r3)
 ;   vst %v2, 272(%r15)
 ;   brasl %r14, userextname0
 ;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})], sp_to_sized_stack_slots: None }
-;   lgr %r2, %r11
-;   lgr %r3, %r9
-;   lgr %r4, %r7
-;   lgr %r5, %r6
+;   lgr %r2, %r9
+;   lgr %r3, %r6
+;   lgr %r4, %r11
+;   lgr %r5, %r8
 ;   vl %v0, 256(%r15)
 ;   vl %v2, 272(%r15)
 ;   ld %f8, 288(%r15)
@@ -185,27 +179,27 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ; block1: ; offset 0x2a
 ;   la %r9, 0xa0(%r15)
 ;   stc %r2, 0(%r9)
-;   lgr %r11, %r2
+;   lgr %r9, %r2
 ;   la %r2, 0xa8(%r15)
 ;   sth %r3, 0(%r2)
-;   lgr %r9, %r3
+;   lgr %r6, %r3
 ;   la %r2, 0xb0(%r15)
 ;   st %r4, 0(%r2)
-;   lgr %r7, %r4
+;   lgr %r11, %r4
 ;   la %r2, 0xb4(%r15)
 ;   ste %f0, 0(%r2)
 ;   vst %v0, 0x100(%r15)
 ;   la %r2, 0xb8(%r15)
 ;   stg %r5, 0(%r2)
-;   lgr %r6, %r5
+;   lgr %r8, %r5
 ;   la %r3, 0xc0(%r15)
 ;   std %f2, 0(%r3)
 ;   vst %v2, 0x110(%r15)
 ;   brasl %r14, 0x78 ; reloc_external PLTRel32Dbl u0:0 2
-;   lgr %r2, %r11
-;   lgr %r3, %r9
-;   lgr %r4, %r7
-;   lgr %r5, %r6
+;   lgr %r2, %r9
+;   lgr %r3, %r6
+;   lgr %r4, %r11
+;   lgr %r5, %r8
 ;   vl %v0, 0x100(%r15)
 ;   vl %v2, 0x110(%r15)
 ;   ld %f8, 0x120(%r15)

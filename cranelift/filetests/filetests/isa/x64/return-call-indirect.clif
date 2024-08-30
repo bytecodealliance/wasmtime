@@ -260,16 +260,16 @@ block0:
 ;   movq    %r14, 136(%rsp)
 ;   movq    %r15, 144(%rsp)
 ; block0:
-;   movl    $10, %edi
-;   movq    %rdi, rsp(104 + virtual offset)
-;   movl    $15, %esi
-;   movq    %rsi, rsp(96 + virtual offset)
-;   movl    $20, %edx
-;   movq    %rdx, rsp(88 + virtual offset)
-;   movl    $25, %ecx
-;   movq    %rcx, rsp(80 + virtual offset)
-;   movl    $30, %r8d
-;   movq    %r8, rsp(72 + virtual offset)
+;   movl    $10, %esi
+;   movq    %rsi, rsp(104 + virtual offset)
+;   movl    $15, %edx
+;   movq    %rdx, rsp(96 + virtual offset)
+;   movl    $20, %ecx
+;   movq    %rcx, rsp(88 + virtual offset)
+;   movl    $25, %r8d
+;   movq    %r8, rsp(80 + virtual offset)
+;   movl    $30, %r9d
+;   movq    %r9, rsp(72 + virtual offset)
 ;   movl    $35, %r9d
 ;   movq    %r9, rsp(64 + virtual offset)
 ;   movl    $40, %eax
@@ -354,16 +354,16 @@ block0:
 ;   movq %r14, 0x88(%rsp)
 ;   movq %r15, 0x90(%rsp)
 ; block1: ; offset 0x50
-;   movl $0xa, %edi
-;   movq %rdi, 0x68(%rsp)
-;   movl $0xf, %esi
-;   movq %rsi, 0x60(%rsp)
-;   movl $0x14, %edx
-;   movq %rdx, 0x58(%rsp)
-;   movl $0x19, %ecx
-;   movq %rcx, 0x50(%rsp)
-;   movl $0x1e, %r8d
-;   movq %r8, 0x48(%rsp)
+;   movl $0xa, %esi
+;   movq %rsi, 0x68(%rsp)
+;   movl $0xf, %edx
+;   movq %rdx, 0x60(%rsp)
+;   movl $0x14, %ecx
+;   movq %rcx, 0x58(%rsp)
+;   movl $0x19, %r8d
+;   movq %r8, 0x50(%rsp)
+;   movl $0x1e, %r9d
+;   movq %r9, 0x48(%rsp)
 ;   movl $0x23, %r9d
 ;   movq %r9, 0x40(%rsp)
 ;   movl $0x28, %eax

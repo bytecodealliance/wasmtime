@@ -463,18 +463,18 @@ block2:
 ;   stp x19, x20, [sp, #-16]!
 ;   sub sp, sp, #16
 ; block0:
-;   movz x14, #10
-;   str x14, [sp]
+;   movz x3, #10
+;   str x3, [sp]
 ;   movz x3, #15
 ;   movz x4, #20
 ;   movz x5, #25
 ;   movz x6, #30
 ;   movz x7, #35
-;   movz x21, #40
-;   movz x28, #45
-;   movz x27, #50
-;   movz x26, #55
-;   movz x25, #60
+;   movz x25, #40
+;   movz x21, #45
+;   movz x28, #50
+;   movz x27, #55
+;   movz x26, #60
 ;   movz x24, #65
 ;   movz x23, #70
 ;   movz x22, #75
@@ -493,11 +493,11 @@ block2:
 ;   cbnz x2, label2 ; b label1
 ; block1:
 ;   movz x2, #140
-;   str x21, [sp, #112]
-;   str x28, [sp, #120]
-;   str x27, [sp, #128]
-;   str x26, [sp, #136]
-;   str x25, [sp, #144]
+;   str x25, [sp, #112]
+;   str x21, [sp, #120]
+;   str x28, [sp, #128]
+;   str x27, [sp, #136]
+;   str x26, [sp, #144]
 ;   str x24, [sp, #152]
 ;   str x23, [sp, #160]
 ;   str x22, [sp, #168]
@@ -519,11 +519,11 @@ block2:
 ;   return_call_ind x1 new_stack_arg_size:176 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7
 ; block2:
 ;   ldr x2, [sp]
-;   str x21, [sp, #128]
-;   str x28, [sp, #136]
-;   str x27, [sp, #144]
-;   str x26, [sp, #152]
-;   str x25, [sp, #160]
+;   str x25, [sp, #128]
+;   str x21, [sp, #136]
+;   str x28, [sp, #144]
+;   str x27, [sp, #152]
+;   str x26, [sp, #160]
 ;   str x24, [sp, #168]
 ;   str x23, [sp, #176]
 ;   str x22, [sp, #184]
@@ -557,18 +557,18 @@ block2:
 ;   stp x19, x20, [sp, #-0x10]!
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0x30
-;   mov x14, #0xa
-;   stur x14, [sp]
+;   mov x3, #0xa
+;   stur x3, [sp]
 ;   mov x3, #0xf
 ;   mov x4, #0x14
 ;   mov x5, #0x19
 ;   mov x6, #0x1e
 ;   mov x7, #0x23
-;   mov x21, #0x28
-;   mov x28, #0x2d
-;   mov x27, #0x32
-;   mov x26, #0x37
-;   mov x25, #0x3c
+;   mov x25, #0x28
+;   mov x21, #0x2d
+;   mov x28, #0x32
+;   mov x27, #0x37
+;   mov x26, #0x3c
 ;   mov x24, #0x41
 ;   mov x23, #0x46
 ;   mov x22, #0x4b
@@ -587,11 +587,11 @@ block2:
 ;   cbnz x2, #0x12c
 ; block2: ; offset 0xa0
 ;   mov x2, #0x8c
-;   stur x21, [sp, #0x70]
-;   stur x28, [sp, #0x78]
-;   stur x27, [sp, #0x80]
-;   stur x26, [sp, #0x88]
-;   stur x25, [sp, #0x90]
+;   stur x25, [sp, #0x70]
+;   stur x21, [sp, #0x78]
+;   stur x28, [sp, #0x80]
+;   stur x27, [sp, #0x88]
+;   stur x26, [sp, #0x90]
 ;   stur x24, [sp, #0x98]
 ;   stur x23, [sp, #0xa0]
 ;   stur x22, [sp, #0xa8]
@@ -623,11 +623,11 @@ block2:
 ;   br x1
 ; block3: ; offset 0x12c
 ;   ldur x2, [sp]
-;   stur x21, [sp, #0x80]
-;   stur x28, [sp, #0x88]
-;   stur x27, [sp, #0x90]
-;   stur x26, [sp, #0x98]
-;   stur x25, [sp, #0xa0]
+;   stur x25, [sp, #0x80]
+;   stur x21, [sp, #0x88]
+;   stur x28, [sp, #0x90]
+;   stur x27, [sp, #0x98]
+;   stur x26, [sp, #0xa0]
 ;   stur x24, [sp, #0xa8]
 ;   stur x23, [sp, #0xb0]
 ;   stur x22, [sp, #0xb8]
