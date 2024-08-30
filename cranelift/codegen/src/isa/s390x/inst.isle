@@ -893,13 +893,15 @@
 
     ;; A machine call instruction.
     (Call
+      (dest ExternalName)
       (link WritableReg)
       (info BoxCallInfo))
 
     ;; A machine indirect-call instruction.
     (CallInd
+      (rn Reg)
       (link WritableReg)
-      (info BoxCallIndInfo))
+      (info BoxCallInfo))
 
     ;; A machine tail call instruction.
     (ReturnCall
@@ -1014,12 +1016,20 @@
     ;; machine at this program point.
     (Unwind
       (inst UnwindInst))
+
+    ;; Pseudo-instruction used for `tls_value` to call the libcall of the same
+    ;; name.
+    (ElfTlsGetOffset
+      (tls_offset WritableReg)
+      (got Reg)
+      (got_offset Reg)
+      (link WritableReg)
+      (symbol SymbolReloc))
 ))
 
 ;; Primitive types used in instruction formats.
 
 (type BoxCallInfo (primitive BoxCallInfo))
-(type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
 (type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
@@ -2690,14 +2700,14 @@
         dst))
 
 ;; Helper for emitting `MInst.Call` instructions.
-(decl call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
-(rule (call_impl reg info)
-      (SideEffectNoResult.Inst (MInst.Call reg info)))
+(decl call_impl (ExternalName WritableReg BoxCallInfo) SideEffectNoResult)
+(rule (call_impl dest reg info)
+      (SideEffectNoResult.Inst (MInst.Call dest reg info)))
 
 ;; Helper for emitting `MInst.CallInd` instructions.
-(decl call_ind_impl (WritableReg BoxCallIndInfo) SideEffectNoResult)
-(rule (call_ind_impl reg info)
-      (SideEffectNoResult.Inst (MInst.CallInd reg info)))
+(decl call_ind_impl (Reg WritableReg BoxCallInfo) SideEffectNoResult)
+(rule (call_ind_impl rn reg info)
+      (SideEffectNoResult.Inst (MInst.CallInd rn reg info)))
 
 ;; Helper for emitting `MInst.ReturnCall` instructions.
 (decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)
@@ -2912,7 +2922,9 @@
 (rule 1 (memcpy dst src (len_minus_one len))
       (mvc (memarg_pair dst) (memarg_pair src) len))
 (rule (memcpy dst src len)
-      (lib_call (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len))))
+      (lib_call
+        (LibCall.Memcpy)
+        (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len))))
 
 ;; Prepare a stack copy of a single (oversized) argument.
 (decl copy_to_buffer (MemArg ABIArg Value) InstOutput)
@@ -3557,11 +3569,8 @@
 (decl abi_first_ret (SigRef Sig) usize)
 (extern constructor abi_first_ret abi_first_ret)
 
-(decl abi_call_info (Sig ExternalName CallArgList CallRetList) BoxCallInfo)
+(decl abi_call_info (Sig CallArgList CallRetList) BoxCallInfo)
 (extern constructor abi_call_info abi_call_info)
-
-(decl abi_call_ind_info (Sig Reg CallArgList CallRetList) BoxCallIndInfo)
-(extern constructor abi_call_ind_info abi_call_ind_info)
 
 (decl abi_return_call_info (Sig ExternalName CallArgList) BoxReturnCallInfo)
 (extern constructor abi_return_call_info abi_return_call_info)
@@ -3583,11 +3592,11 @@
 
 (decl abi_call (Sig ExternalName CallArgList CallRetList) SideEffectNoResult)
 (rule (abi_call abi name uses defs)
-      (call_impl (writable_link_reg) (abi_call_info abi name uses defs)))
+      (call_impl name (writable_link_reg) (abi_call_info abi uses defs)))
 
 (decl abi_call_ind (Sig Reg CallArgList CallRetList) SideEffectNoResult)
 (rule (abi_call_ind abi target uses defs)
-      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target uses defs)))
+      (call_ind_impl target (writable_link_reg) (abi_call_info abi uses defs)))
 
 (decl abi_return_call (Sig ExternalName CallArgList) SideEffectNoResult)
 (rule (abi_return_call abi name uses)
@@ -3605,18 +3614,19 @@
 
 (type LibCallInfo extern (enum))
 
-(decl lib_call_info_memcpy (Reg Reg Reg) LibCallInfo)
+(type LibCall extern
+      (enum
+        Memcpy))
+
+(decl lib_call_info_memcpy (Reg Reg Reg) BoxCallInfo)
 (extern constructor lib_call_info_memcpy lib_call_info_memcpy)
 
-(decl lib_call_info_tls_get_offset (WritableReg Reg Reg SymbolReloc) LibCallInfo)
-(extern constructor lib_call_info_tls_get_offset lib_call_info_tls_get_offset)
+(decl libcall_name (LibCall) ExternalName)
+(extern constructor libcall_name libcall_name)
 
-(decl lib_call_info (LibCallInfo) BoxCallInfo)
-(extern constructor lib_call_info lib_call_info)
-
-(decl lib_call (LibCallInfo) SideEffectNoResult)
-(rule (lib_call libcall)
-      (call_impl (writable_link_reg) (lib_call_info libcall)))
+(decl lib_call (LibCall BoxCallInfo) SideEffectNoResult)
+(rule (lib_call libcall info)
+      (call_impl (libcall_name libcall) (writable_link_reg) info))
 
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;

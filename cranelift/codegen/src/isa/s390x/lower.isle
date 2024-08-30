@@ -2269,9 +2269,12 @@
 (decl lib_call_tls_get_offset (Reg Reg SymbolReloc) Reg)
 (rule (lib_call_tls_get_offset got got_offset symbol)
       (let ((tls_offset WritableReg (temp_writable_reg $I64))
-            (libcall LibCallInfo (lib_call_info_tls_get_offset tls_offset got got_offset symbol))
-            (_ InstOutput (side_effect (lib_call libcall))))
+            (_ Unit (abi_for_elf_tls_get_offset))
+            (_ Unit (emit (MInst.ElfTlsGetOffset tls_offset got got_offset (writable_link_reg) symbol))))
         tls_offset))
+
+(decl abi_for_elf_tls_get_offset () Unit)
+(extern constructor abi_for_elf_tls_get_offset abi_for_elf_tls_get_offset)
 
 ;; Helper to extract the current thread pointer from %a0/%a1.
 (decl thread_pointer () Reg)

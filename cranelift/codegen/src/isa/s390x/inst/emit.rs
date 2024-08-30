@@ -1,6 +1,6 @@
 //! S390x ISA: binary code emission.
 
-use crate::ir::{self, MemFlags, TrapCode};
+use crate::ir::{self, LibCall, MemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use cranelift_control::ControlPlane;
@@ -3257,7 +3257,11 @@ impl Inst {
                 inst.emit(sink, emit_info, state);
                 state.nominal_sp_offset += size;
             }
-            &Inst::Call { link, ref info } => {
+            &Inst::Call {
+                ref dest,
+                link,
+                ref info,
+            } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
 
                 let opcode = 0xc05; // BRASL
@@ -3265,16 +3269,7 @@ impl Inst {
                 // Add relocation for target function.  This has to be done *before*
                 // the S390xTlsGdCall relocation if any, to ensure linker relaxation
                 // works correctly.
-                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
-
-                // Add relocation for TLS libcalls to enable linker optimizations.
-                match &info.tls_symbol {
-                    None => {}
-                    Some(SymbolReloc::TlsGd { name }) => {
-                        sink.add_reloc(Reloc::S390xTlsGdCall, name, 0)
-                    }
-                    _ => unreachable!(),
-                }
+                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, dest, 2);
 
                 if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 6;
@@ -3286,9 +3281,8 @@ impl Inst {
 
                 state.nominal_sp_offset -= info.callee_pop_size;
             }
-            &Inst::CallInd { link, ref info } => {
+            &Inst::CallInd { rn, link, ref info } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
-                let rn = info.rn;
 
                 if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 2;
@@ -3327,6 +3321,26 @@ impl Inst {
 
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), rn));
+                sink.add_call_site();
+            }
+            &Inst::ElfTlsGetOffset {
+                ref symbol, link, ..
+            } => {
+                debug_assert_eq!(link.to_reg(), gpr(14));
+
+                let opcode = 0xc05; // BRASL
+
+                // Add relocation for target function. This has to be done
+                // *before* the S390xTlsGdCall, to ensure linker relaxation
+                // works correctly.
+                let dest = ExternalName::LibCall(LibCall::ElfTlsGetOffset);
+                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &dest, 2);
+                match symbol {
+                    SymbolReloc::TlsGd { name } => sink.add_reloc(Reloc::S390xTlsGdCall, name, 0),
+                    _ => unreachable!(),
+                }
+
+                put(sink, &enc_ril_b(opcode, gpr(14), 0));
                 sink.add_call_site();
             }
             &Inst::Args { .. } => {}
