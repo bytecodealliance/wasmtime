@@ -114,16 +114,16 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $80, %rsp
-;   movq    %r14, 64(%rsp)
+;   movq    %r13, 64(%rsp)
 ; block0:
-;   movq    %rdi, %r14
+;   movq    %rdi, %r13
 ;   lea     0(%rsp), %rdi
 ;   movl    $64, %edx
 ;   load_ext_name %Memcpy+0, %r10
 ;   call    *%r10
-;   movq    %r14, %rdi
+;   movq    %r13, %rdi
 ;   call    User(userextname0)
-;   movq    64(%rsp), %r14
+;   movq    64(%rsp), %r13
 ;   addq    %rsp, $80, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -134,16 +134,16 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x50, %rsp
-;   movq %r14, 0x40(%rsp)
+;   movq %r13, 0x40(%rsp)
 ; block1: ; offset 0xd
-;   movq %rdi, %r14
+;   movq %rdi, %r13
 ;   leaq (%rsp), %rdi
 ;   movl $0x40, %edx
 ;   movabsq $0, %r10 ; reloc_external Abs8 %Memcpy 0
 ;   callq *%r10
-;   movq %r14, %rdi
+;   movq %r13, %rdi
 ;   callq 0x2e ; reloc_external CallPCRel4 u0:0 -4
-;   movq 0x40(%rsp), %r14
+;   movq 0x40(%rsp), %r13
 ;   addq $0x50, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -196,11 +196,11 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $208, %rsp
-;   movq    %rbx, 192(%rsp)
-;   movq    %r13, 200(%rsp)
+;   movq    %r12, 192(%rsp)
+;   movq    %r14, 200(%rsp)
 ; block0:
-;   movq    %rdx, %rbx
-;   movq    %rdi, %r13
+;   movq    %rdi, %r12
+;   movq    %rdx, %r14
 ;   lea     0(%rsp), %rdi
 ;   movl    $128, %edx
 ;   load_ext_name %Memcpy+0, %r11
@@ -208,12 +208,12 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lea     128(%rsp), %rdi
 ;   movl    $64, %edx
 ;   load_ext_name %Memcpy+0, %r9
-;   movq    %rbx, %rsi
+;   movq    %r14, %rsi
 ;   call    *%r9
-;   movq    %r13, %rdi
+;   movq    %r12, %rdi
 ;   call    User(userextname0)
-;   movq    192(%rsp), %rbx
-;   movq    200(%rsp), %r13
+;   movq    192(%rsp), %r12
+;   movq    200(%rsp), %r14
 ;   addq    %rsp, $208, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -224,11 +224,11 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0xd0, %rsp
-;   movq %rbx, 0xc0(%rsp)
-;   movq %r13, 0xc8(%rsp)
+;   movq %r12, 0xc0(%rsp)
+;   movq %r14, 0xc8(%rsp)
 ; block1: ; offset 0x1b
-;   movq %rdx, %rbx
-;   movq %rdi, %r13
+;   movq %rdi, %r12
+;   movq %rdx, %r14
 ;   leaq (%rsp), %rdi
 ;   movl $0x80, %edx
 ;   movabsq $0, %r11 ; reloc_external Abs8 %Memcpy 0
@@ -236,12 +236,12 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   leaq 0x80(%rsp), %rdi
 ;   movl $0x40, %edx
 ;   movabsq $0, %r9 ; reloc_external Abs8 %Memcpy 0
-;   movq %rbx, %rsi
+;   movq %r14, %rsi
 ;   callq *%r9
-;   movq %r13, %rdi
+;   movq %r12, %rdi
 ;   callq 0x5c ; reloc_external CallPCRel4 u0:0 -4
-;   movq 0xc0(%rsp), %rbx
-;   movq 0xc8(%rsp), %r13
+;   movq 0xc0(%rsp), %r12
+;   movq 0xc8(%rsp), %r14
 ;   addq $0xd0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

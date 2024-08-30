@@ -127,15 +127,17 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   lbu a3,0(a0)
+;   mv a4,a3
 ;   lbu a1,3(a0)
-;   mv a0,a3
+;   mv a0,a4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x14, 0x81 ; trap: heap_oob
+;   c.mv a4, a3
 ;   .byte 0x6c, 0x81 ; trap: heap_oob
-;   c.mv a0, a3
+;   c.mv a0, a4
 ;   c.jr ra
 
 function %c_lhu(i64) -> i32, i64 {
@@ -148,15 +150,17 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   lhu a3,0(a0)
+;   mv a4,a3
 ;   lhu a1,2(a0)
-;   mv a0,a3
+;   mv a0,a4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x14, 0x85 ; trap: heap_oob
+;   c.mv a4, a3
 ;   .byte 0x2c, 0x85 ; trap: heap_oob
-;   c.mv a0, a3
+;   c.mv a0, a4
 ;   c.jr ra
 
 function %c_lh(i64) -> i16, i16 {
@@ -169,15 +173,17 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   lh a3,0(a0)
+;   mv a4,a3
 ;   lh a1,2(a0)
-;   mv a0,a3
+;   mv a0,a4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x54, 0x85 ; trap: heap_oob
+;   c.mv a4, a3
 ;   .byte 0x6c, 0x85 ; trap: heap_oob
-;   c.mv a0, a3
+;   c.mv a0, a4
 ;   c.jr ra
 
 function %c_sb(i64, i8) {

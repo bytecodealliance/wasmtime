@@ -40,15 +40,16 @@ block1:
 ; VCode:
 ;   stmg %r6, %r15, 48(%r15)
 ; block0:
-;   lghi %r13, 1
+;   lghi %r5, 1
+;   lgr %r6, %r5
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r14, 5
-;   lghi %r6, 6
-;   stg %r14, 0(%r2)
-;   stg %r6, 8(%r2)
-;   lgr %r2, %r13
+;   lghi %r13, 5
+;   lghi %r14, 6
+;   stg %r13, 0(%r2)
+;   stg %r14, 8(%r2)
+;   lgr %r2, %r6
 ;   lmg %r6, %r15, 48(%r15)
 ;   br %r14
 ;
@@ -56,15 +57,16 @@ block1:
 ; block0: ; offset 0x0
 ;   stmg %r6, %r15, 0x30(%r15)
 ; block1: ; offset 0x6
-;   lghi %r13, 1
+;   lghi %r5, 1
+;   lgr %r6, %r5
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r14, 5
-;   lghi %r6, 6
-;   stg %r14, 0(%r2)
-;   stg %r6, 8(%r2)
-;   lgr %r2, %r13
+;   lghi %r13, 5
+;   lghi %r14, 6
+;   stg %r13, 0(%r2)
+;   stg %r14, 8(%r2)
+;   lgr %r2, %r6
 ;   lmg %r6, %r15, 0x30(%r15)
 ;   br %r14
 

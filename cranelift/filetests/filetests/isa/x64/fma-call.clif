@@ -187,9 +187,9 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   pshufd  $238, %xmm2, %xmm2
 ;   load_ext_name %FmaF64+0, %r9
 ;   call    *%r9
-;   movdqa  %xmm0, %xmm6
+;   movdqa  %xmm0, %xmm7
 ;   movdqu  rsp(48 + virtual offset), %xmm0
-;   movlhps %xmm0, %xmm6, %xmm0
+;   movlhps %xmm0, %xmm7, %xmm0
 ;   addq    %rsp, $64, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -215,9 +215,9 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   pshufd $0xee, %xmm2, %xmm2
 ;   movabsq $0, %r9 ; reloc_external Abs8 %FmaF64 0
 ;   callq *%r9
-;   movdqa %xmm0, %xmm6
+;   movdqa %xmm0, %xmm7
 ;   movdqu 0x30(%rsp), %xmm0
-;   movlhps %xmm6, %xmm0
+;   movlhps %xmm7, %xmm0
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
