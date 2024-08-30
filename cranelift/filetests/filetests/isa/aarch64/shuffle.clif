@@ -10,17 +10,17 @@ block0(v0: i8x16, v1: i8x16):
 
 ; VCode:
 ; block0:
+;   ldr q3, [const(0)]
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, [const(0)]
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   ldr q3, #0x20
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, #0x20
 ;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
 ;   ret
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -541,17 +541,17 @@ block0(v0: i8x16, v1: i8x16):
 
 ; VCode:
 ; block0:
+;   ldr q3, [const(0)]
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, [const(0)]
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   ldr q3, #0x20
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, #0x20
 ;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
 ;   ret
 ;   .byte 0x00, 0x00, 0x00, 0x00

@@ -449,16 +449,15 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-2048
 ; block0:
-;   load_addr a1,1020(slot)
-;   mv a5,a1
+;   load_addr a2,1020(slot)
 ;   load_addr a1,4(slot)
-;   load_addr a2,512(slot)
-;   load_addr a3,256(slot)
-;   load_addr a4,64(slot)
-;   sd a2,0(a0)
-;   sd a3,8(a0)
-;   sd a4,16(a0)
-;   mv a0,a5
+;   load_addr a3,512(slot)
+;   load_addr a4,256(slot)
+;   load_addr a5,64(slot)
+;   sd a3,0(a0)
+;   sd a4,8(a0)
+;   sd a5,16(a0)
+;   mv a0,a2
 ;   lui t6,1
 ;   addi t6,t6,-2048
 ;   add sp,sp,t6
@@ -475,16 +474,15 @@ block0:
 ;   c.mv s0, sp
 ;   addi sp, sp, -0x800
 ; block1: ; offset 0xc
-;   c.addi4spn a1, sp, 0x3fc
-;   c.mv a5, a1
+;   c.addi4spn a2, sp, 0x3fc
 ;   c.addi4spn a1, sp, 4
-;   c.addi4spn a2, sp, 0x200
-;   c.addi4spn a3, sp, 0x100
-;   c.addi4spn a4, sp, 0x40
-;   c.sd a2, 0(a0)
-;   c.sd a3, 8(a0)
-;   c.sd a4, 0x10(a0)
-;   c.mv a0, a5
+;   c.addi4spn a3, sp, 0x200
+;   c.addi4spn a4, sp, 0x100
+;   c.addi4spn a5, sp, 0x40
+;   c.sd a3, 0(a0)
+;   c.sd a4, 8(a0)
+;   c.sd a5, 0x10(a0)
+;   c.mv a0, a2
 ;   c.lui t6, 1
 ;   addi t6, t6, -0x800
 ;   c.add sp, t6
@@ -586,30 +584,28 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a1,0
-;   mv a5,a1
+;   li a2,0
 ;   li a1,1
-;   li a2,-1
-;   li a3,-32
-;   li a4,31
-;   sd a2,0(a0)
-;   sd a3,8(a0)
-;   sd a4,16(a0)
-;   mv a0,a5
+;   li a3,-1
+;   li a4,-32
+;   li a5,31
+;   sd a3,0(a0)
+;   sd a4,8(a0)
+;   sd a5,16(a0)
+;   mv a0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.li a1, 0
-;   c.mv a5, a1
+;   c.li a2, 0
 ;   c.li a1, 1
-;   c.li a2, -1
-;   c.li a3, -0x20
-;   c.li a4, 0x1f
-;   c.sd a2, 0(a0)
-;   c.sd a3, 8(a0)
-;   c.sd a4, 0x10(a0)
-;   c.mv a0, a5
+;   c.li a3, -1
+;   c.li a4, -0x20
+;   c.li a5, 0x1f
+;   c.sd a3, 0(a0)
+;   c.sd a4, 8(a0)
+;   c.sd a5, 0x10(a0)
+;   c.mv a0, a2
 ;   c.jr ra
 
 function %c_lui() -> i64, i64, i64 {
