@@ -2,19 +2,20 @@ use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
-use crate::prelude::*;
 use crate::runtime::vm::component::{
     InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
+use crate::vm::component::ComponentInstance;
+use crate::{prelude::*, CallHook};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, StringEncoding, TypeFuncIndex, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, TypeFuncIndex,
+    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 
 pub struct HostFunc {
@@ -55,9 +56,11 @@ impl HostFunc {
     {
         let data = data as *const F;
         unsafe {
-            handle_result(|| {
+            call_host_and_handle_result::<T>(cx, |instance, types, store| {
                 call_host::<_, _, _, _>(
-                    cx,
+                    instance,
+                    types,
+                    store,
                     ty,
                     flags,
                     memory,
@@ -131,7 +134,9 @@ where
 /// must be upheld. Generally that's done by ensuring this is only called from
 /// the select few places it's intended to be called from.
 unsafe fn call_host<T, Params, Return, F>(
-    cx: *mut VMOpaqueContext,
+    instance: *mut ComponentInstance,
+    types: &Arc<ComponentTypes>,
+    mut cx: StoreContextMut<'_, T>,
     ty: TypeFuncIndex,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
@@ -163,10 +168,6 @@ where
         ret: U,
     }
 
-    let cx = VMComponentContext::from_opaque(cx);
-    let instance = (*cx).instance();
-    let mut cx = StoreContextMut::from_raw((*instance).store());
-
     let options = Options::new(
         cx.0.id(),
         NonNull::new(memory),
@@ -181,7 +182,6 @@ where
         bail!("cannot leave component instance");
     }
 
-    let types = (*instance).component_types();
     let ty = &types[ty];
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
@@ -289,15 +289,40 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
     Ok(ptr)
 }
 
-unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
-    match crate::runtime::vm::catch_unwind_and_longjmp(func) {
+unsafe fn call_host_and_handle_result<T>(
+    cx: *mut VMOpaqueContext,
+    func: impl FnOnce(
+        *mut ComponentInstance,
+        &Arc<ComponentTypes>,
+        StoreContextMut<'_, T>,
+    ) -> Result<()>,
+) {
+    let cx = VMComponentContext::from_opaque(cx);
+    let instance = (*cx).instance();
+    let types = (*instance).component_types();
+    let raw_store = (*instance).store();
+    let store = StoreContextMut::from_raw(raw_store);
+
+    let res = store
+        .0
+        .call_hook(CallHook::CallingHost)
+        .and_then(|_| crate::runtime::vm::catch_unwind_and_longjmp(|| func(instance, types, store)))
+        .and_then(|res| {
+            let store = StoreContextMut::<T>::from_raw(raw_store);
+            store.0.call_hook(CallHook::ReturningFromHost)?;
+            Ok(res)
+        });
+
+    match res {
         Ok(()) => {}
         Err(e) => crate::trap::raise(e),
     }
 }
 
 unsafe fn call_host_dynamic<T, F>(
-    cx: *mut VMOpaqueContext,
+    instance: *mut ComponentInstance,
+    types: &Arc<ComponentTypes>,
+    mut store: StoreContextMut<'_, T>,
     ty: TypeFuncIndex,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
@@ -309,10 +334,6 @@ unsafe fn call_host_dynamic<T, F>(
 where
     F: FnOnce(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()>,
 {
-    let cx = VMComponentContext::from_opaque(cx);
-    let instance = (*cx).instance();
-    let mut store = StoreContextMut::from_raw((*instance).store());
-    let types = (*instance).component_types();
     let options = Options::new(
         store.0.id(),
         NonNull::new(memory),
@@ -423,9 +444,11 @@ extern "C" fn dynamic_entrypoint<T, F>(
 {
     let data = data as *const F;
     unsafe {
-        handle_result(|| {
+        call_host_and_handle_result(cx, |instance, types, store| {
             call_host_dynamic::<T, _>(
-                cx,
+                instance,
+                types,
+                store,
                 ty,
                 flags,
                 memory,
