@@ -112,11 +112,13 @@
       (to_bits u8))
 
     (Call
+      (dest ExternalName)
       (info BoxCallInfo))
 
       ;; A machine indirect-call instruction.
     (CallInd
-      (info BoxCallIndInfo))
+      (rn Reg)
+      (info BoxCallInfo))
 
     ;; A direct return-call macro instruction.
     (ReturnCall

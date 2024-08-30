@@ -14,7 +14,7 @@ use crate::isa::riscv64::lower::args::{
 };
 use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
-use crate::machinst::{isle::*, MachInst};
+use crate::machinst::{isle::*, CallInfo, MachInst};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
@@ -29,7 +29,6 @@ use std::boxed::Box;
 use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;
-type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;

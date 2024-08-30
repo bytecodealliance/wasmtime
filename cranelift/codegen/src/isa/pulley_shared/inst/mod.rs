@@ -10,7 +10,7 @@ use crate::isa::FunctionAlignment;
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::string::{String, ToString};
-use regalloc2::{PRegSet, RegClass};
+use regalloc2::RegClass;
 use smallvec::SmallVec;
 
 pub mod regs;
@@ -26,17 +26,6 @@ pub use self::emit::*;
 pub use crate::isa::pulley_shared::lower::isle::generated_code::MInst as Inst;
 
 use super::PulleyTargetKind;
-
-/// Additional information for direct and indirect call instructions.
-///
-/// Left out of line to lower the size of the `Inst` enum.
-#[derive(Clone, Debug)]
-pub struct CallInfo {
-    pub uses: CallArgList,
-    pub defs: CallRetList,
-    pub clobbers: PRegSet,
-    pub callee_pop_size: u32,
-}
 
 impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).

@@ -9,13 +9,13 @@ use inst::InstAndKind;
 use crate::ir::{condcodes::*, immediates::*, types::*, *};
 use crate::isa::pulley_shared::{
     abi::*,
-    inst::{CallInfo, FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg},
+    inst::{FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg},
     *,
 };
 use crate::machinst::{
     abi::{ArgPair, RetPair, StackAMode},
     isle::*,
-    IsTailCall, MachInst, Reg, VCodeConstant, VCodeConstantData,
+    CallInfo, IsTailCall, MachInst, Reg, VCodeConstant, VCodeConstantData,
 };
 use alloc::boxed::Box;
 use regalloc2::PReg;

@@ -11,7 +11,6 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
-use regalloc2::PRegSet;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -32,23 +31,6 @@ use args::*;
 
 // `Inst` is defined inside ISLE as `MInst`. We publicly re-export it here.
 pub use super::lower::isle::generated_code::MInst as Inst;
-
-/// Out-of-line data for calls, to keep the size of `Inst` down.
-#[derive(Clone, Debug)]
-pub struct CallInfo {
-    /// Register uses of this call.
-    pub uses: CallArgList,
-    /// Register defs of this call.
-    pub defs: CallRetList,
-    /// Registers clobbered by this call, as per its calling convention.
-    pub clobbers: PRegSet,
-    /// The number of bytes that the callee will pop from the stack for the
-    /// caller, if any. (Used for popping stack arguments with the `tail`
-    /// calling convention.)
-    pub callee_pop_size: u32,
-    /// The calling convention of the callee.
-    pub callee_conv: CallConv,
-}
 
 /// Out-of-line data for return-calls, to keep the size of `Inst` down.
 #[derive(Clone, Debug)]
@@ -538,44 +520,18 @@ impl Inst {
         Inst::Pop64 { dst }
     }
 
-    pub(crate) fn call_known(
-        dest: ExternalName,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        callee_pop_size: u32,
-        callee_conv: CallConv,
-    ) -> Inst {
+    pub(crate) fn call_known(dest: ExternalName, info: Box<CallInfo>) -> Inst {
         Inst::CallKnown {
             dest,
-            info: Some(Box::new(CallInfo {
-                uses,
-                defs,
-                clobbers,
-                callee_pop_size,
-                callee_conv,
-            })),
+            info: Some(info),
         }
     }
 
-    pub(crate) fn call_unknown(
-        dest: RegMem,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        callee_pop_size: u32,
-        callee_conv: CallConv,
-    ) -> Inst {
+    pub(crate) fn call_unknown(dest: RegMem, info: Box<CallInfo>) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
             dest,
-            info: Some(Box::new(CallInfo {
-                uses,
-                defs,
-                clobbers,
-                callee_pop_size,
-                callee_conv,
-            })),
+            info: Some(info),
         }
     }
 

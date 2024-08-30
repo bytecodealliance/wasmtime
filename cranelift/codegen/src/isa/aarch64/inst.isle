@@ -807,11 +807,13 @@
        ;; code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
        ;; target.
        (Call
+        (dest ExternalName)
         (info BoxCallInfo))
 
        ;; A machine indirect-call instruction.
        (CallInd
-        (info BoxCallIndInfo))
+        (rn Reg)
+        (info BoxCallInfo))
 
        ;; A return-call macro instruction.
        (ReturnCall
@@ -1071,7 +1073,6 @@
 (type SImm7Scaled (primitive SImm7Scaled))
 
 (type BoxCallInfo (primitive BoxCallInfo))
-(type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
 (type CondBrKind (primitive CondBrKind))
 (type BranchTarget (primitive BranchTarget))

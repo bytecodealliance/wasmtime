@@ -626,6 +626,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 clobbers: PRegSet::empty(),
                 callee_pop_size: 0,
                 callee_conv: CallConv::Probestack,
+                caller_conv: CallConv::Probestack,
             })),
         });
     }
@@ -822,27 +823,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     /// Generate a call instruction/sequence.
-    fn gen_call(
-        dest: &CallDest,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        tmp: Writable<Reg>,
-        callee_conv: isa::CallConv,
-        _caller_conv: isa::CallConv,
-        callee_pop_size: u32,
-    ) -> SmallVec<[Self::I; 2]> {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Self::I; 2]> {
+        let info = Box::new(info);
         let mut insts = SmallVec::new();
         match dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                insts.push(Inst::call_known(
-                    name.clone(),
-                    uses,
-                    defs,
-                    clobbers,
-                    callee_pop_size,
-                    callee_conv,
-                ));
+                insts.push(Inst::call_known(name.clone(), info));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
@@ -851,24 +837,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     offset: 0,
                     distance: RelocDistance::Far,
                 });
-                insts.push(Inst::call_unknown(
-                    RegMem::reg(tmp.to_reg()),
-                    uses,
-                    defs,
-                    clobbers,
-                    callee_pop_size,
-                    callee_conv,
-                ));
+                insts.push(Inst::call_unknown(RegMem::reg(tmp.to_reg()), info));
             }
             &CallDest::Reg(reg) => {
-                insts.push(Inst::call_unknown(
-                    RegMem::reg(reg),
-                    uses,
-                    defs,
-                    clobbers,
-                    callee_pop_size,
-                    callee_conv,
-                ));
+                insts.push(Inst::call_unknown(RegMem::reg(reg), info));
             }
         }
         insts
@@ -900,25 +872,27 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let callee_pop_size = 0;
         insts.push(Inst::call_unknown(
             RegMem::reg(temp2.to_reg()),
-            /* uses = */
-            smallvec![
-                CallArgPair {
-                    vreg: dst,
-                    preg: arg0
-                },
-                CallArgPair {
-                    vreg: src,
-                    preg: arg1
-                },
-                CallArgPair {
-                    vreg: temp.to_reg(),
-                    preg: arg2
-                },
-            ],
-            /* defs = */ smallvec![],
-            /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
-            callee_pop_size,
-            call_conv,
+            Box::new(CallInfo {
+                uses: smallvec![
+                    CallArgPair {
+                        vreg: dst,
+                        preg: arg0
+                    },
+                    CallArgPair {
+                        vreg: src,
+                        preg: arg1
+                    },
+                    CallArgPair {
+                        vreg: temp.to_reg(),
+                        preg: arg2
+                    },
+                ],
+                defs: smallvec![],
+                clobbers: Self::get_regs_clobbered_by_call(call_conv),
+                callee_pop_size,
+                callee_conv: call_conv,
+                caller_conv: call_conv,
+            }),
         ));
         insts
     }

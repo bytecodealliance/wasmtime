@@ -19,10 +19,10 @@ use crate::{
     },
     isa::x64::{
         abi::X64CallSite,
-        inst::{args::*, regs, CallInfo, ReturnCallInfo},
+        inst::{args::*, regs, ReturnCallInfo},
     },
     machinst::{
-        isle::*, ArgPair, InsnInput, InstOutput, IsTailCall, MachAtomicRmwOp, MachInst,
+        isle::*, ArgPair, CallInfo, InsnInput, InstOutput, IsTailCall, MachAtomicRmwOp, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };

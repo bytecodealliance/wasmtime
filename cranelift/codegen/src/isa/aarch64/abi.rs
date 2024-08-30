@@ -1014,29 +1014,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_call(
-        dest: &CallDest,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        tmp: Writable<Reg>,
-        callee_conv: isa::CallConv,
-        caller_conv: isa::CallConv,
-        callee_pop_size: u32,
-    ) -> SmallVec<[Inst; 2]> {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
-                info: Box::new(CallInfo {
+            &CallDest::ExtName(ref name, RelocDistance::Near) => {
+                insts.push(Inst::Call {
                     dest: name.clone(),
-                    uses,
-                    defs,
-                    clobbers,
-                    caller_callconv: caller_conv,
-                    callee_callconv: callee_conv,
-                    callee_pop_size,
-                }),
-            }),
+                    info: Box::new(info),
+                });
+            }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
                     rd: tmp,
@@ -1044,27 +1030,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     offset: 0,
                 });
                 insts.push(Inst::CallInd {
-                    info: Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses,
-                        defs,
-                        clobbers,
-                        caller_callconv: caller_conv,
-                        callee_callconv: callee_conv,
-                        callee_pop_size,
-                    }),
+                    rn: tmp.to_reg(),
+                    info: Box::new(info),
                 });
             }
             &CallDest::Reg(reg) => insts.push(Inst::CallInd {
-                info: Box::new(CallIndInfo {
-                    rn: *reg,
-                    uses,
-                    defs,
-                    clobbers,
-                    caller_callconv: caller_conv,
-                    callee_callconv: callee_conv,
-                    callee_pop_size,
-                }),
+                rn: *reg,
+                info: Box::new(info),
             }),
         }
 
@@ -1085,8 +1057,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let tmp = alloc_tmp(Self::word_type());
         insts.extend(Inst::load_constant(tmp, size as u64, &mut alloc_tmp));
         insts.push(Inst::Call {
+            dest: ExternalName::LibCall(LibCall::Memcpy),
             info: Box::new(CallInfo {
-                dest: ExternalName::LibCall(LibCall::Memcpy),
                 uses: smallvec![
                     CallArgPair {
                         vreg: dst,
@@ -1103,8 +1075,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 ],
                 defs: smallvec![],
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
-                caller_callconv: call_conv,
-                callee_callconv: call_conv,
+                caller_conv: call_conv,
+                callee_conv: call_conv,
                 callee_pop_size: 0,
             }),
         });

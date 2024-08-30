@@ -2,7 +2,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16};
-use crate::ir::{types, ExternalName, MemFlags, Type};
+use crate::ir::{types, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -10,7 +10,6 @@ use crate::{settings, CodegenError, CodegenResult};
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
-use regalloc2::PRegSet;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Write;
 use std::string::{String, ToString};
@@ -72,50 +71,6 @@ impl BitOp {
             BitOp::Rev64 => "rev64",
         }
     }
-}
-
-/// Additional information for (direct) Call instructions, left out of line to lower the size of
-/// the Inst enum.
-#[derive(Clone, Debug)]
-pub struct CallInfo {
-    /// Call destination.
-    pub dest: ExternalName,
-    /// Arguments to the call instruction.
-    pub uses: CallArgList,
-    /// Return values from the call instruction.
-    pub defs: CallRetList,
-    /// Clobbers register set.
-    pub clobbers: PRegSet,
-    /// Caller calling convention.
-    pub caller_callconv: CallConv,
-    /// Callee calling convention.
-    pub callee_callconv: CallConv,
-    /// The number of bytes that the callee will pop from the stack for the
-    /// caller, if any. (Used for popping stack arguments with the `tail`
-    /// calling convention.)
-    pub callee_pop_size: u32,
-}
-
-/// Additional information for CallInd instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct CallIndInfo {
-    /// Function pointer for indirect call.
-    pub rn: Reg,
-    /// Arguments to the call instruction.
-    pub uses: SmallVec<[CallArgPair; 8]>,
-    /// Return values from the call instruction.
-    pub defs: SmallVec<[CallRetPair; 8]>,
-    /// Clobbers register set.
-    pub clobbers: PRegSet,
-    /// Caller calling convention.
-    pub caller_callconv: CallConv,
-    /// Callee calling convention.
-    pub callee_callconv: CallConv,
-    /// The number of bytes that the callee will pop from the stack for the
-    /// caller, if any. (Used for popping stack arguments with the `tail`
-    /// calling convention.)
-    pub callee_pop_size: u32,
 }
 
 /// Additional information for `return_call[_ind]` instructions, left out of
@@ -894,8 +849,8 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
-        Inst::CallInd { info, .. } => {
-            let CallIndInfo { rn, uses, defs, .. } = &mut **info;
+        Inst::CallInd { rn, info, .. } => {
+            let CallInfo { uses, defs, .. } = &mut **info;
             collector.reg_use(rn);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -1019,10 +974,10 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        let (caller_callconv, callee_callconv) = match self {
+        let info = match self {
             Inst::Args { .. } => return false,
-            Inst::Call { info } => (info.caller_callconv, info.callee_callconv),
-            Inst::CallInd { info } => (info.caller_callconv, info.callee_callconv),
+            Inst::Call { info, .. } => info,
+            Inst::CallInd { info, .. } => info,
             _ => return true,
         };
 
@@ -1037,8 +992,8 @@ impl MachInst for Inst {
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller_callconv);
-        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee_callconv);
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(info.caller_conv);
+        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(info.callee_conv);
 
         let mut all_clobbers = caller_clobbers;
         all_clobbers.union_from(callee_clobbers);
@@ -2608,8 +2563,8 @@ impl Inst {
                 }
             }
             &Inst::Call { .. } => format!("bl 0"),
-            &Inst::CallInd { ref info, .. } => {
-                let rn = pretty_print_reg(info.rn);
+            &Inst::CallInd { rn, .. } => {
+                let rn = pretty_print_reg(rn);
                 format!("blr {rn}")
             }
             &Inst::ReturnCall {

@@ -424,19 +424,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
         insts.extend(Inst::load_constant_u32(writable_a0(), frame_size as u64));
+        let mut info = CallInfo::empty(CallConv::SystemV);
+        info.uses.push(CallArgPair {
+            vreg: a0(),
+            preg: a0(),
+        });
         insts.push(Inst::Call {
-            info: Box::new(CallInfo {
-                dest: ExternalName::LibCall(LibCall::Probestack),
-                uses: smallvec![CallArgPair {
-                    vreg: a0(),
-                    preg: a0(),
-                }],
-                defs: smallvec![],
-                clobbers: PRegSet::empty(),
-                callee_callconv: CallConv::SystemV,
-                caller_callconv: CallConv::SystemV,
-                callee_pop_size: 0,
-            }),
+            dest: ExternalName::LibCall(LibCall::Probestack),
+            info: Box::new(info),
         });
     }
 
@@ -567,28 +562,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_call(
-        dest: &CallDest,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        tmp: Writable<Reg>,
-        callee_conv: isa::CallConv,
-        caller_conv: isa::CallConv,
-        callee_pop_size: u32,
-    ) -> SmallVec<[Self::I; 2]> {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
-                info: Box::new(CallInfo {
-                    dest: name.clone(),
-                    uses,
-                    defs,
-                    clobbers,
-                    caller_callconv: caller_conv,
-                    callee_callconv: callee_conv,
-                    callee_pop_size,
-                }),
+                dest: name.clone(),
+                info: Box::new(info),
             }),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
@@ -597,27 +576,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     offset: 0,
                 });
                 insts.push(Inst::CallInd {
-                    info: Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses,
-                        defs,
-                        clobbers,
-                        caller_callconv: caller_conv,
-                        callee_callconv: callee_conv,
-                        callee_pop_size,
-                    }),
+                    rn: tmp.to_reg(),
+                    info: Box::new(info),
                 });
             }
             &CallDest::Reg(reg) => insts.push(Inst::CallInd {
-                info: Box::new(CallIndInfo {
-                    rn: *reg,
-                    uses,
-                    defs,
-                    clobbers,
-                    caller_callconv: caller_conv,
-                    callee_callconv: callee_conv,
-                    callee_pop_size,
-                }),
+                rn: *reg,
+                info: Box::new(info),
             }),
         }
         insts
@@ -637,8 +602,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let tmp = alloc_tmp(Self::word_type());
         insts.extend(Inst::load_constant_u64(tmp, size as u64).into_iter());
         insts.push(Inst::Call {
+            dest: ExternalName::LibCall(LibCall::Memcpy),
             info: Box::new(CallInfo {
-                dest: ExternalName::LibCall(LibCall::Memcpy),
                 uses: smallvec![
                     CallArgPair {
                         vreg: dst,
@@ -655,8 +620,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 ],
                 defs: smallvec![],
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
-                caller_callconv: call_conv,
-                callee_callconv: call_conv,
+                caller_conv: call_conv,
+                callee_conv: call_conv,
                 callee_pop_size: 0,
             }),
         });

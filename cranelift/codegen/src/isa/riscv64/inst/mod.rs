@@ -13,7 +13,7 @@ use crate::{settings, CodegenError, CodegenResult};
 pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
-use regalloc2::{PRegSet, RegClass};
+use regalloc2::RegClass;
 use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
 use std::fmt::Write;
@@ -50,32 +50,6 @@ pub use crate::isa::riscv64::lower::isle::generated_code::{
     FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
-
-/// Additional information for (direct) Call instructions, left out of line to lower the size of
-/// the Inst enum.
-#[derive(Clone, Debug)]
-pub struct CallInfo {
-    pub dest: ExternalName,
-    pub uses: CallArgList,
-    pub defs: CallRetList,
-    pub caller_callconv: CallConv,
-    pub callee_callconv: CallConv,
-    pub clobbers: PRegSet,
-    pub callee_pop_size: u32,
-}
-
-/// Additional information for CallInd instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct CallIndInfo {
-    pub rn: Reg,
-    pub uses: CallArgList,
-    pub defs: CallRetList,
-    pub caller_callconv: CallConv,
-    pub callee_callconv: CallConv,
-    pub clobbers: PRegSet,
-    pub callee_pop_size: u32,
-}
 
 /// Additional information for `return_call[_ind]` instructions, left out of
 /// line to lower the size of the `Inst` enum.
@@ -355,7 +329,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        Inst::Call { info } => {
+        Inst::Call { info, .. } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -365,8 +339,8 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
-        Inst::CallInd { info } => {
-            let CallIndInfo { rn, uses, defs, .. } = &mut **info;
+        Inst::CallInd { rn, info } => {
+            let CallInfo { uses, defs, .. } = &mut **info;
             collector.reg_use(rn);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -1321,9 +1295,9 @@ impl Inst {
                     format!("slli {rd},{rn},{shift_bits}; {op} {rd},{rd},{shift_bits}")
                 };
             }
-            &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
-            &MInst::CallInd { ref info } => {
-                let rd = format_reg(info.rn);
+            &MInst::Call { ref dest, .. } => format!("call {}", dest.display(None)),
+            &MInst::CallInd { rn, .. } => {
+                let rd = format_reg(rn);
                 format!("callind {rd}")
             }
             &MInst::ReturnCall {

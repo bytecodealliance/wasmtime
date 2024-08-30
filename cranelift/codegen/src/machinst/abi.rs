@@ -541,16 +541,7 @@ pub trait ABIMachineSpec {
 
     /// Generate a call instruction/sequence. This method is provided one
     /// temporary register to use to synthesize the called address, if needed.
-    fn gen_call(
-        dest: &CallDest,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        tmp: Writable<Reg>,
-        callee_conv: isa::CallConv,
-        caller_conv: isa::CallConv,
-        callee_pop_size: u32,
-    ) -> SmallVec<[Self::I; 2]>;
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
@@ -586,6 +577,40 @@ pub trait ABIMachineSpec {
         call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension;
+}
+
+/// Out-of-line data for calls, to keep the size of `Inst` down.
+#[derive(Clone, Debug)]
+pub struct CallInfo {
+    /// Register uses of this call.
+    pub uses: CallArgList,
+    /// Register defs of this call.
+    pub defs: CallRetList,
+    /// Registers clobbered by this call, as per its calling convention.
+    pub clobbers: PRegSet,
+    /// The calling convention of the callee.
+    pub callee_conv: isa::CallConv,
+    /// The calling convention of the caller.
+    pub caller_conv: isa::CallConv,
+    /// The number of bytes that the callee will pop from the stack for the
+    /// caller, if any. (Used for popping stack arguments with the `tail`
+    /// calling convention.)
+    pub callee_pop_size: u32,
+}
+
+impl CallInfo {
+    /// Creates an empty set of info with no clobbers/uses/etc with the
+    /// specified ABI
+    pub fn empty(call_conv: isa::CallConv) -> CallInfo {
+        CallInfo {
+            uses: smallvec![],
+            defs: smallvec![],
+            clobbers: PRegSet::empty(),
+            caller_conv: call_conv,
+            callee_conv: call_conv,
+            callee_pop_size: 0,
+        }
+    }
 }
 
 /// The id of an ABI signature within the `SigSet`.
@@ -2345,13 +2370,15 @@ impl<M: ABIMachineSpec> CallSite<M> {
         // references to SP offsets.)
         for inst in M::gen_call(
             &self.dest,
-            uses,
-            defs,
-            clobbers,
             tmp,
-            call_conv,
-            self.caller_conv,
-            callee_pop_size,
+            CallInfo {
+                uses,
+                defs,
+                clobbers,
+                callee_conv: call_conv,
+                caller_conv: self.caller_conv,
+                callee_pop_size,
+            },
         )
         .into_iter()
         {

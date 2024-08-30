@@ -1114,9 +1114,9 @@ impl Inst {
                     .for_each(|i| i.emit(sink, emit_info, state));
             }
 
-            &Inst::Call { ref info } => {
+            &Inst::Call { ref info, ref dest } => {
                 sink.add_call_site();
-                sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
+                sink.add_reloc(Reloc::RiscvCallPlt, dest, 0);
 
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
@@ -1134,10 +1134,10 @@ impl Inst {
                     }
                 }
             }
-            &Inst::CallInd { ref info } => {
+            &Inst::CallInd { rn, ref info } => {
                 Inst::Jalr {
                     rd: writable_link_reg(),
-                    base: info.rn,
+                    base: rn,
                     offset: Imm12::ZERO,
                 }
                 .emit(sink, emit_info, state);
@@ -1986,15 +1986,8 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
                 Inst::Call {
-                    info: Box::new(CallInfo {
-                        dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        caller_callconv: CallConv::SystemV,
-                        callee_callconv: CallConv::SystemV,
-                        callee_pop_size: 0,
-                        clobbers: PRegSet::empty(),
-                    }),
+                    dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                    info: Box::new(CallInfo::empty(CallConv::SystemV)),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }

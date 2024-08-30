@@ -2923,9 +2923,9 @@ impl MachInstEmit for Inst {
                     sink.put4(0xd65f0bff | (op2 << 9)); // reta{key}
                 }
             }
-            &Inst::Call { ref info } => {
+            &Inst::Call { ref dest, ref info } => {
                 let user_stack_map = state.take_stack_map();
-                sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
+                sink.add_reloc(Reloc::Arm64Call, dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
                 if let Some(s) = user_stack_map {
                     let offset = sink.cur_offset();
@@ -2941,9 +2941,8 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::CallInd { ref info } => {
+            &Inst::CallInd { rn, ref info } => {
                 let user_stack_map = state.take_stack_map();
-                let rn = info.rn;
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
                 if let Some(s) = user_stack_map {
                     let offset = sink.cur_offset();
@@ -3372,15 +3371,8 @@ impl MachInstEmit for Inst {
                 // blr tmp
                 sink.add_reloc(Reloc::Aarch64TlsDescCall, &**symbol, 0);
                 Inst::CallInd {
-                    info: crate::isa::Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: PRegSet::empty(),
-                        caller_callconv: CallConv::SystemV,
-                        callee_callconv: CallConv::SystemV,
-                        callee_pop_size: 0,
-                    }),
+                    rn: tmp.to_reg(),
+                    info: crate::isa::Box::new(CallInfo::empty(CallConv::SystemV)),
                 }
                 .emit(sink, emit_info, state);
 
@@ -3432,15 +3424,8 @@ impl MachInstEmit for Inst {
 
                 // call function pointer in temp register
                 Inst::CallInd {
-                    info: crate::isa::Box::new(CallIndInfo {
-                        rn: rtmp.to_reg(),
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: PRegSet::empty(),
-                        caller_callconv: CallConv::AppleAarch64,
-                        callee_callconv: CallConv::AppleAarch64,
-                        callee_pop_size: 0,
-                    }),
+                    rn: rtmp.to_reg(),
+                    info: crate::isa::Box::new(CallInfo::empty(CallConv::AppleAarch64)),
                 }
                 .emit(sink, emit_info, state);
             }
