@@ -41,8 +41,8 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rsi, %rdi
 ;   load_ext_name %f2+0, %rcx
+;   movq    %rsi, %rdi
 ;   call    *%rcx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
@@ -54,8 +54,8 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rsi, %rdi
 ;   movabsq $0, %rcx ; reloc_external Abs8 %f2 0
+;   movq %rsi, %rdi
 ;   callq *%rcx
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
