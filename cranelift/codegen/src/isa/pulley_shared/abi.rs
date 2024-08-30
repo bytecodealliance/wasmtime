@@ -522,12 +522,16 @@ where
         insts
     }
 
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Self::I; 2]> {
+    fn gen_call(
+        dest: &CallDest,
+        tmp: Writable<Reg>,
+        info: Box<CallInfo>,
+    ) -> SmallVec<[Self::I; 2]> {
         if info.callee_conv == isa::CallConv::Tail || info.callee_conv == isa::CallConv::Fast {
             match &dest {
                 &CallDest::ExtName(ref name, RelocDistance::Near) => smallvec![Inst::Call {
                     callee: Box::new(name.clone()),
-                    info: Box::new(info),
+                    info,
                 }
                 .into()],
                 &CallDest::ExtName(ref name, RelocDistance::Far) => smallvec![
@@ -539,13 +543,13 @@ where
                     .into(),
                     Inst::IndirectCall {
                         callee: XReg::new(tmp.to_reg()).unwrap(),
-                        info: Box::new(info),
+                        info,
                     }
                     .into(),
                 ],
                 &CallDest::Reg(reg) => smallvec![Inst::IndirectCall {
                     callee: XReg::new(*reg).unwrap(),
-                    info: Box::new(info),
+                    info,
                 }
                 .into()],
             }

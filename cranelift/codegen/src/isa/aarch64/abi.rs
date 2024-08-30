@@ -1014,13 +1014,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Inst; 2]> {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: Box<CallInfo>) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
                 insts.push(Inst::Call {
                     dest: name.clone(),
-                    info: Box::new(info),
+                    info,
                 });
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
@@ -1031,13 +1031,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 });
                 insts.push(Inst::CallInd {
                     rn: tmp.to_reg(),
-                    info: Box::new(info),
+                    info,
                 });
             }
-            &CallDest::Reg(reg) => insts.push(Inst::CallInd {
-                rn: *reg,
-                info: Box::new(info),
-            }),
+            &CallDest::Reg(reg) => insts.push(Inst::CallInd { rn: *reg, info }),
         }
 
         insts

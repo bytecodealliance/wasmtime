@@ -109,6 +109,7 @@ use crate::{machinst::*, trace};
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
+use std::boxed::Box;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
@@ -541,7 +542,8 @@ pub trait ABIMachineSpec {
 
     /// Generate a call instruction/sequence. This method is provided one
     /// temporary register to use to synthesize the called address, if needed.
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Self::I; 2]>;
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: Box<CallInfo>)
+        -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
@@ -2371,14 +2373,14 @@ impl<M: ABIMachineSpec> CallSite<M> {
         for inst in M::gen_call(
             &self.dest,
             tmp,
-            CallInfo {
+            Box::new(CallInfo {
                 uses,
                 defs,
                 clobbers,
                 callee_conv: call_conv,
                 caller_conv: self.caller_conv,
                 callee_pop_size,
-            },
+            }),
         )
         .into_iter()
         {

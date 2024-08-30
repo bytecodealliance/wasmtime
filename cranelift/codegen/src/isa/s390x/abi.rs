@@ -147,6 +147,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::boxed::Box;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
@@ -804,7 +805,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn gen_call(
         _dest: &CallDest,
         _tmp: Writable<Reg>,
-        _info: crate::machinst::CallInfo,
+        _info: Box<crate::machinst::CallInfo>,
     ) -> SmallVec<[Inst; 2]> {
         unreachable!();
     }

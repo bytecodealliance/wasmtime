@@ -823,8 +823,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     /// Generate a call instruction/sequence.
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo) -> SmallVec<[Self::I; 2]> {
-        let info = Box::new(info);
+    fn gen_call(
+        dest: &CallDest,
+        tmp: Writable<Reg>,
+        info: Box<CallInfo>,
+    ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {

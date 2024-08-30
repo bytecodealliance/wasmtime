@@ -1,5 +1,5 @@
 use crate::ir::types::*;
-use crate::ir::TrapCode;
+use crate::ir::{ExternalName, TrapCode};
 use crate::isa::aarch64::inst::*;
 
 use alloc::boxed::Box;
@@ -6056,15 +6056,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::Call {
-            info: Box::new(CallInfo {
-                dest: ExternalName::testcase("test0"),
-                uses: smallvec![],
-                defs: smallvec![],
-                clobbers: PRegSet::empty(),
-                caller_callconv: CallConv::SystemV,
-                callee_callconv: CallConv::SystemV,
-                callee_pop_size: 0,
-            }),
+            dest: ExternalName::testcase("test0"),
+            info: Box::new(CallInfo::empty(CallConv::SystemV)),
         },
         "00000094",
         "bl 0",
@@ -6072,15 +6065,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::CallInd {
-            info: Box::new(CallIndInfo {
-                rn: xreg(10),
-                uses: smallvec![],
-                defs: smallvec![],
-                clobbers: PRegSet::empty(),
-                caller_callconv: CallConv::SystemV,
-                callee_callconv: CallConv::SystemV,
-                callee_pop_size: 0,
-            }),
+            rn: xreg(10),
+            info: Box::new(CallInfo::empty(CallConv::SystemV)),
         },
         "40013FD6",
         "blr x10",
