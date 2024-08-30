@@ -1783,13 +1783,7 @@ fn resolve_dynamic_widths(
             });
             ctx.smt.assert(ctx.smt.or_many(not_equals)).unwrap();
 
-            resolve_dynamic_widths(
-                rulectx,
-                concrete,
-                ctx,
-                unresolved_widths,
-                attempt + 1,
-            )
+            resolve_dynamic_widths(rulectx, concrete, ctx, unresolved_widths, attempt + 1)
         }
         Ok(Response::Unsat) => {
             if attempt == 0 {
@@ -1855,7 +1849,8 @@ pub fn run_solver_with_static_widths(
 
     // For debugging
     let unnamed_rule = String::from("<unnamed rule>");
-    let rulename = rulectx.rule
+    let rulename = rulectx
+        .rule
         .name
         .map(|name| &rulectx.typeenv.syms[name.index()])
         .unwrap_or(&unnamed_rule);
@@ -1865,8 +1860,11 @@ pub fn run_solver_with_static_widths(
         .map_or(unit, |s| format!("width {}", s));
 
     // Check whether the assumptions are possible
-    let feasibility =
-        ctx.check_assumptions_feasibility(&assumptions, &rulectx.rule_sem.term_input_bvs, rulectx.config);
+    let feasibility = ctx.check_assumptions_feasibility(
+        &assumptions,
+        &rulectx.rule_sem.term_input_bvs,
+        rulectx.config,
+    );
     if feasibility != VerificationResult::Success {
         log::warn!("Rule not applicable as written for rule assumptions, skipping full query");
         return feasibility;
@@ -1886,7 +1884,12 @@ pub fn run_solver_with_static_widths(
     }
 
     let condition = if let Some(condition) = &rulectx.config.custom_verification_condition {
-        let term_args = rulectx.rule_sem.term_args.iter().map(|s| ctx.smt.atom(s)).collect();
+        let term_args = rulectx
+            .rule_sem
+            .term_args
+            .iter()
+            .map(|s| ctx.smt.atom(s))
+            .collect();
         let custom_condition = condition(&ctx.smt, term_args, lhs, rhs);
         log::debug!(
             "Custom verification condition:\n\t{}\n",
@@ -2024,7 +2027,7 @@ pub fn run_solver_with_static_widths(
 }
 
 pub fn test_concrete_with_static_widths(
-    rulectx : &RuleCtx,
+    rulectx: &RuleCtx,
     concrete: &ConcreteTest,
     lhs: SExpr,
     rhs: SExpr,
