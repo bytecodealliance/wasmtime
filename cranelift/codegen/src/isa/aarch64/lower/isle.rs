@@ -34,8 +34,10 @@ use regalloc2::PReg;
 use std::boxed::Box;
 use std::vec::Vec;
 
-type BoxCallInfo = Box<CallInfo>;
-type BoxReturnCallInfo = Box<ReturnCallInfo>;
+type BoxCallInfo = Box<CallInfo<ExternalName>>;
+type BoxCallIndInfo = Box<CallInfo<Reg>>;
+type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
+type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
 type VecArgPair = Vec<ArgPair>;

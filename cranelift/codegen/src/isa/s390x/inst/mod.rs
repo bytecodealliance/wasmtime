@@ -37,17 +37,8 @@ pub use crate::isa::s390x::lower::isle::generated_code::{
 /// Additional information for (direct) ReturnCall instructions, left out of line to lower the size of
 /// the Inst enum.
 #[derive(Clone, Debug)]
-pub struct ReturnCallInfo {
-    pub dest: ExternalName,
-    pub uses: CallArgList,
-    pub callee_pop_size: u32,
-}
-
-/// Additional information for ReturnCallInd instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct ReturnCallIndInfo {
-    pub rn: Reg,
+pub struct ReturnCallInfo<T> {
+    pub dest: T,
     pub uses: CallArgList,
     pub callee_pop_size: u32,
 }
@@ -900,14 +891,15 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             }
             collector.reg_clobbers(clobbers);
         }
-        Inst::CallInd { rn, link, info } => {
+        Inst::CallInd { link, info } => {
             let CallInfo {
+                dest,
                 uses,
                 defs,
                 clobbers,
                 ..
             } = &mut **info;
-            collector.reg_use(rn);
+            collector.reg_use(dest);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -926,8 +918,8 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             }
         }
         Inst::ReturnCallInd { info } => {
-            let ReturnCallIndInfo { rn, uses, .. } = &mut **info;
-            collector.reg_use(rn);
+            let ReturnCallInfo { dest, uses, .. } = &mut **info;
+            collector.reg_use(dest);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -3149,11 +3141,7 @@ impl Inst {
                     format!("slgfi {}, {}", show_reg(stack_reg()), size)
                 }
             }
-            &Inst::Call {
-                ref dest,
-                link,
-                ref info,
-            } => {
+            &Inst::Call { link, ref info } => {
                 let link = link.to_reg();
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
@@ -3164,15 +3152,13 @@ impl Inst {
                 format!(
                     "brasl {}, {}{}",
                     show_reg(link),
-                    dest.display(None),
+                    info.dest.display(None),
                     callee_pop_size
                 )
             }
-            &Inst::CallInd {
-                rn, link, ref info, ..
-            } => {
+            &Inst::CallInd { link, ref info, .. } => {
                 let link = link.to_reg();
-                let rn = pretty_print_reg(rn);
+                let rn = pretty_print_reg(info.dest);
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
@@ -3181,7 +3167,7 @@ impl Inst {
                 debug_assert_eq!(link, gpr(14));
                 format!("basr {}, {}{}", show_reg(link), rn, callee_pop_size)
             }
-            &Inst::ReturnCall { ref info, .. } => {
+            &Inst::ReturnCall { ref info } => {
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
@@ -3189,8 +3175,8 @@ impl Inst {
                 };
                 format!("return_call {}{}", info.dest.display(None), callee_pop_size)
             }
-            &Inst::ReturnCallInd { ref info, .. } => {
-                let rn = pretty_print_reg(info.rn);
+            &Inst::ReturnCallInd { ref info } => {
+                let rn = pretty_print_reg(info.dest);
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
@@ -3204,7 +3190,7 @@ impl Inst {
                 ..
             } => {
                 let link = link.to_reg();
-                let dest = match symbol {
+                let dest = match &**symbol {
                     SymbolReloc::TlsGd { name } => {
                         format!("tls_gdcall:{}", name.display(None))
                     }

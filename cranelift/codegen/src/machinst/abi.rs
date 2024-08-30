@@ -109,7 +109,6 @@ use crate::{machinst::*, trace};
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
-use std::boxed::Box;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
@@ -542,8 +541,7 @@ pub trait ABIMachineSpec {
 
     /// Generate a call instruction/sequence. This method is provided one
     /// temporary register to use to synthesize the called address, if needed.
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: Box<CallInfo>)
-        -> SmallVec<[Self::I; 2]>;
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
@@ -583,7 +581,9 @@ pub trait ABIMachineSpec {
 
 /// Out-of-line data for calls, to keep the size of `Inst` down.
 #[derive(Clone, Debug)]
-pub struct CallInfo {
+pub struct CallInfo<T> {
+    /// Receiver of this call
+    pub dest: T,
     /// Register uses of this call.
     pub uses: CallArgList,
     /// Register defs of this call.
@@ -600,17 +600,31 @@ pub struct CallInfo {
     pub callee_pop_size: u32,
 }
 
-impl CallInfo {
+impl<T> CallInfo<T> {
     /// Creates an empty set of info with no clobbers/uses/etc with the
     /// specified ABI
-    pub fn empty(call_conv: isa::CallConv) -> CallInfo {
+    pub fn empty(dest: T, call_conv: isa::CallConv) -> CallInfo<T> {
         CallInfo {
+            dest,
             uses: smallvec![],
             defs: smallvec![],
             clobbers: PRegSet::empty(),
             caller_conv: call_conv,
             callee_conv: call_conv,
             callee_pop_size: 0,
+        }
+    }
+
+    /// Change the `T` payload on this info to `U`.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> CallInfo<U> {
+        CallInfo {
+            dest: f(self.dest),
+            uses: self.uses,
+            defs: self.defs,
+            clobbers: self.clobbers,
+            caller_conv: self.caller_conv,
+            callee_conv: self.callee_conv,
+            callee_pop_size: self.callee_pop_size,
         }
     }
 }
@@ -2373,14 +2387,15 @@ impl<M: ABIMachineSpec> CallSite<M> {
         for inst in M::gen_call(
             &self.dest,
             tmp,
-            Box::new(CallInfo {
+            CallInfo {
+                dest: (),
                 uses,
                 defs,
                 clobbers,
                 callee_conv: call_conv,
                 caller_conv: self.caller_conv,
                 callee_pop_size,
-            }),
+            },
         )
         .into_iter()
         {

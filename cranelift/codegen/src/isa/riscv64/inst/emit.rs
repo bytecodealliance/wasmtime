@@ -1114,9 +1114,9 @@ impl Inst {
                     .for_each(|i| i.emit(sink, emit_info, state));
             }
 
-            &Inst::Call { ref info, ref dest } => {
+            &Inst::Call { ref info } => {
                 sink.add_call_site();
-                sink.add_reloc(Reloc::RiscvCallPlt, dest, 0);
+                sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
 
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
@@ -1134,10 +1134,10 @@ impl Inst {
                     }
                 }
             }
-            &Inst::CallInd { rn, ref info } => {
+            &Inst::CallInd { ref info } => {
                 Inst::Jalr {
                     rd: writable_link_reg(),
-                    base: rn,
+                    base: info.dest,
                     offset: Imm12::ZERO,
                 }
                 .emit(sink, emit_info, state);
@@ -1157,25 +1157,22 @@ impl Inst {
                 }
             }
 
-            &Inst::ReturnCall {
-                ref callee,
-                ref info,
-            } => {
+            &Inst::ReturnCall { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
                 sink.add_call_site();
-                sink.add_reloc(Reloc::RiscvCallPlt, &**callee, 0);
+                sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
             }
 
-            &Inst::ReturnCallInd { callee, ref info } => {
+            &Inst::ReturnCallInd { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, &info);
 
                 Inst::Jalr {
                     rd: writable_zero_reg(),
-                    base: callee,
+                    base: info.dest,
                     offset: Imm12::ZERO,
                 }
                 .emit(sink, emit_info, state);
@@ -1986,8 +1983,10 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
                 Inst::Call {
-                    dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
-                    info: Box::new(CallInfo::empty(CallConv::SystemV)),
+                    info: Box::new(CallInfo::empty(
+                        ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                        CallConv::SystemV,
+                    )),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }
@@ -2582,11 +2581,11 @@ impl Inst {
     }
 }
 
-fn emit_return_call_common_sequence(
+fn emit_return_call_common_sequence<T>(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    info: &ReturnCallInfo,
+    info: &ReturnCallInfo<T>,
 ) {
     // The return call sequence can potentially emit a lot of instructions (up to 634 bytes!)
     // So lets emit an island here if we need it.
@@ -2616,11 +2615,11 @@ fn emit_return_call_common_sequence(
 }
 
 /// This should not be called directly, Instead prefer to call [emit_return_call_common_sequence].
-fn return_call_emit_impl(
+fn return_call_emit_impl<T>(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    info: &ReturnCallInfo,
+    info: &ReturnCallInfo<T>,
 ) {
     let sp_to_fp_offset = {
         let frame_layout = state.frame_layout();

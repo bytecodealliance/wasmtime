@@ -34,8 +34,10 @@ use std::boxed::Box;
 /// call instruction is also used by Winch to emit calls, but the
 /// `Box<CallInfo>` field is not used, it's only used by Cranelift. By making it
 /// optional, we reduce the number of heap allocations in Winch.
-type BoxCallInfo = Option<Box<CallInfo>>;
-type BoxReturnCallInfo = Box<ReturnCallInfo>;
+type BoxCallInfo = Box<CallInfo<ExternalName>>;
+type BoxCallIndInfo = Box<CallInfo<RegMem>>;
+type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
+type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecArgPair = Vec<ArgPair>;
 
 pub struct SinkableLoad {

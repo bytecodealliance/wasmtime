@@ -6983,8 +6983,10 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::Call {
             link: writable_gpr(14),
-            dest: ExternalName::testcase("test0"),
-            info: Box::new(CallInfo::empty(CallConv::SystemV)),
+            info: Box::new(CallInfo::empty(
+                ExternalName::testcase("test0"),
+                CallConv::SystemV,
+            )),
         },
         "C0E500000000",
         "brasl %r14, %test0",
@@ -6993,8 +6995,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::CallInd {
             link: writable_gpr(14),
-            rn: gpr(1),
-            info: Box::new(CallInfo::empty(CallConv::SystemV)),
+            info: Box::new(CallInfo::empty(gpr(1), CallConv::SystemV)),
         },
         "0DE1",
         "basr %r14, %r1",

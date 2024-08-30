@@ -80,7 +80,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
         }
 
-        Inst::Call { callee: _, info } => {
+        Inst::Call { info } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -90,8 +90,8 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
-        Inst::IndirectCall { callee, info } => {
-            collector.reg_use(callee);
+        Inst::IndirectCall { info } => {
+            collector.reg_use(&mut info.dest);
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -537,12 +537,12 @@ impl Inst {
                 format!("{dst} = load_ext_name {name:?}, {offset}")
             }
 
-            Inst::Call { callee, info } => {
-                format!("call {callee:?}, {info:?}")
+            Inst::Call { info } => {
+                format!("call {info:?}")
             }
 
-            Inst::IndirectCall { callee, info } => {
-                let callee = format_reg(**callee);
+            Inst::IndirectCall { info } => {
+                let callee = format_reg(*info.dest);
                 format!("indirect_call {callee}, {info:?}")
             }
 

@@ -1593,11 +1593,7 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
         }
 
-        Inst::CallKnown {
-            dest,
-            info: call_info,
-            ..
-        } => {
+        Inst::CallKnown { info: call_info } => {
             if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset() + 5;
                 sink.push_user_stack_map(state, offset, s);
@@ -1606,29 +1602,24 @@ pub(crate) fn emit(
             sink.put1(0xE8);
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
-            emit_reloc(sink, Reloc::X86CallPCRel4, &dest, -4);
+            emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.put4(0);
             sink.add_call_site();
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
-            if let Some(call_info) = call_info {
-                if call_info.callee_pop_size > 0 {
-                    Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::imm(call_info.callee_pop_size),
-                        Writable::from_reg(regs::rsp()),
-                    )
-                    .emit(sink, info, state);
-                }
+            if call_info.callee_pop_size > 0 {
+                Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::imm(call_info.callee_pop_size),
+                    Writable::from_reg(regs::rsp()),
+                )
+                .emit(sink, info, state);
             }
         }
 
-        Inst::ReturnCallKnown {
-            callee,
-            info: call_info,
-        } => {
+        Inst::ReturnCallKnown { info: call_info } => {
             emit_return_call_common_sequence(sink, info, state, &call_info);
 
             // Finally, jump to the callee!
@@ -1639,16 +1630,13 @@ pub(crate) fn emit(
             sink.put1(0xE9);
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
-            emit_reloc(sink, Reloc::X86CallPCRel4, &callee, -4);
+            emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.put4(0);
             sink.add_call_site();
         }
 
-        Inst::ReturnCallUnknown {
-            callee,
-            info: call_info,
-        } => {
-            let callee = *callee;
+        Inst::ReturnCallUnknown { info: call_info } => {
+            let callee = call_info.dest;
 
             emit_return_call_common_sequence(sink, info, state, &call_info);
 
@@ -1660,11 +1648,9 @@ pub(crate) fn emit(
         }
 
         Inst::CallUnknown {
-            dest,
-            info: call_info,
-            ..
+            info: call_info, ..
         } => {
-            let dest = dest.clone();
+            let dest = call_info.dest.clone();
 
             match dest {
                 RegMem::Reg { reg } => {
@@ -1704,16 +1690,14 @@ pub(crate) fn emit(
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
-            if let Some(call_info) = call_info {
-                if call_info.callee_pop_size > 0 {
-                    Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::imm(call_info.callee_pop_size),
-                        Writable::from_reg(regs::rsp()),
-                    )
-                    .emit(sink, info, state);
-                }
+            if call_info.callee_pop_size > 0 {
+                Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::imm(call_info.callee_pop_size),
+                    Writable::from_reg(regs::rsp()),
+                )
+                .emit(sink, info, state);
             }
         }
 
@@ -4364,11 +4348,11 @@ pub(crate) fn emit(
 ///   arguments).
 ///
 /// * Move the return address into its stack slot.
-fn emit_return_call_common_sequence(
+fn emit_return_call_common_sequence<T>(
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
-    call_info: &ReturnCallInfo,
+    call_info: &ReturnCallInfo<T>,
 ) {
     assert!(
         info.flags.preserve_frame_pointers(),

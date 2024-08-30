@@ -6056,8 +6056,10 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::Call {
-            dest: ExternalName::testcase("test0"),
-            info: Box::new(CallInfo::empty(CallConv::SystemV)),
+            info: Box::new(CallInfo::empty(
+                ExternalName::testcase("test0"),
+                CallConv::SystemV,
+            )),
         },
         "00000094",
         "bl 0",
@@ -6065,8 +6067,7 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::CallInd {
-            rn: xreg(10),
-            info: Box::new(CallInfo::empty(CallConv::SystemV)),
+            info: Box::new(CallInfo::empty(xreg(10), CallConv::SystemV)),
         },
         "40013FD6",
         "blr x10",

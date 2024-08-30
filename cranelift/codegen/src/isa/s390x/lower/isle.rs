@@ -8,8 +8,7 @@ use crate::ir::ExternalName;
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
     gpr, stack_reg, writable_gpr, zero_reg, Cond, Inst as MInst, LaneOrder, MemArg, MemArgPair,
-    RegPair, ReturnCallIndInfo, ReturnCallInfo, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
-    WritableRegPair,
+    RegPair, ReturnCallInfo, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair,
 };
 use crate::isa::s390x::S390xBackend;
 use crate::machinst::isle::*;
@@ -33,9 +32,10 @@ use std::boxed::Box;
 use std::cell::Cell;
 use std::vec::Vec;
 
-type BoxCallInfo = Box<CallInfo>;
-type BoxReturnCallInfo = Box<ReturnCallInfo>;
-type BoxReturnCallIndInfo = Box<ReturnCallIndInfo>;
+type BoxCallInfo = Box<CallInfo<ExternalName>>;
+type BoxCallIndInfo = Box<CallInfo<Reg>>;
+type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
+type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
 type BoxSymbolReloc = Box<SymbolReloc>;
@@ -259,24 +259,24 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         MemArg::InitialSPOffset { off: 0 }
     }
 
-    fn abi_call_info(&mut self, abi: Sig, uses: &CallArgList, defs: &CallRetList) -> BoxCallInfo {
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        // Get clobbers: all caller-saves. These may include return value
-        // regs, which we will remove from the clobber set later.
-        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
-        let callee_pop_size = if sig_data.call_conv() == CallConv::Tail {
-            sig_data.sized_stack_arg_space() as u32
-        } else {
-            0
-        };
-        Box::new(CallInfo {
-            uses: uses.clone(),
-            defs: defs.clone(),
-            clobbers,
-            callee_pop_size,
-            caller_conv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            callee_conv: self.lower_ctx.sigs()[abi].call_conv(),
-        })
+    fn abi_call_info(
+        &mut self,
+        abi: Sig,
+        dest: ExternalName,
+        uses: &CallArgList,
+        defs: &CallRetList,
+    ) -> BoxCallInfo {
+        Box::new(self.abi_call_info_no_dest(abi, uses, defs).map(|()| dest))
+    }
+
+    fn abi_call_ind_info(
+        &mut self,
+        abi: Sig,
+        dest: Reg,
+        uses: &CallArgList,
+        defs: &CallRetList,
+    ) -> BoxCallIndInfo {
+        Box::new(self.abi_call_info_no_dest(abi, uses, defs).map(|()| dest))
     }
 
     fn abi_return_call_info(
@@ -302,14 +302,19 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     ) -> BoxReturnCallIndInfo {
         let sig_data = &self.lower_ctx.sigs()[abi];
         let callee_pop_size = sig_data.sized_stack_arg_space() as u32;
-        Box::new(ReturnCallIndInfo {
-            rn: target,
+        Box::new(ReturnCallInfo {
+            dest: target,
             uses: uses.clone(),
             callee_pop_size,
         })
     }
 
-    fn lib_call_info_memcpy(&mut self, dst: Reg, src: Reg, len: Reg) -> Box<CallInfo> {
+    fn lib_call_info_memcpy(
+        &mut self,
+        dst: Reg,
+        src: Reg,
+        len: Reg,
+    ) -> Box<CallInfo<ExternalName>> {
         let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let callee_conv = CallConv::for_libcall(&self.backend.flags, caller_conv);
 
@@ -322,6 +327,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE);
 
         Box::new(CallInfo {
+            dest: ExternalName::LibCall(LibCall::Memcpy),
             uses: smallvec![
                 CallArgPair {
                     vreg: dst,
@@ -342,10 +348,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             callee_conv,
             callee_pop_size: 0,
         })
-    }
-
-    fn libcall_name(&mut self, libcall: &libcall::LibCall) -> ExternalName {
-        ExternalName::LibCall(*libcall)
     }
 
     fn abi_for_elf_tls_get_offset(&mut self) {
@@ -1023,6 +1025,34 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn regpair_lo(&mut self, w: RegPair) -> Reg {
         w.lo
+    }
+}
+
+impl IsleContext<'_, '_, MInst, S390xBackend> {
+    fn abi_call_info_no_dest(
+        &mut self,
+        abi: Sig,
+        uses: &CallArgList,
+        defs: &CallRetList,
+    ) -> CallInfo<()> {
+        let sig_data = &self.lower_ctx.sigs()[abi];
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set later.
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
+        let callee_pop_size = if sig_data.call_conv() == CallConv::Tail {
+            sig_data.sized_stack_arg_space() as u32
+        } else {
+            0
+        };
+        CallInfo {
+            dest: (),
+            uses: uses.clone(),
+            defs: defs.clone(),
+            clobbers,
+            callee_pop_size,
+            caller_conv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+            callee_conv: self.lower_ctx.sigs()[abi].call_conv(),
+        }
     }
 }
 

@@ -76,7 +76,9 @@ impl BitOp {
 /// Additional information for `return_call[_ind]` instructions, left out of
 /// line to lower the size of the `Inst` enum.
 #[derive(Clone, Debug)]
-pub struct ReturnCallInfo {
+pub struct ReturnCallInfo<T> {
+    /// Where this call is going to
+    pub dest: T,
     /// Arguments to the call instruction.
     pub uses: CallArgList,
     /// The size of the new stack frame's stack arguments. This is necessary
@@ -849,9 +851,11 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
-        Inst::CallInd { rn, info, .. } => {
-            let CallInfo { uses, defs, .. } = &mut **info;
-            collector.reg_use(rn);
+        Inst::CallInd { info, .. } => {
+            let CallInfo {
+                dest, uses, defs, ..
+            } = &mut **info;
+            collector.reg_use(dest);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -860,17 +864,17 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
-        Inst::ReturnCall { info, callee: _ } => {
+        Inst::ReturnCall { info } => {
             for CallArgPair { vreg, preg } in &mut info.uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
         }
-        Inst::ReturnCallInd { info, callee } => {
+        Inst::ReturnCallInd { info } => {
             // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
             // This shouldn't be a fixed register constraint, but it's not clear how to pick a
             // register that won't be clobbered by the callee-save restore code emitted with a
             // return_call_indirect.
-            collector.reg_fixed_use(callee, xreg(1));
+            collector.reg_fixed_use(&mut info.dest, xreg(1));
             for CallArgPair { vreg, preg } in &mut info.uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -974,10 +978,10 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        let info = match self {
+        let (caller, callee) = match self {
             Inst::Args { .. } => return false,
-            Inst::Call { info, .. } => info,
-            Inst::CallInd { info, .. } => info,
+            Inst::Call { info } => (info.caller_conv, info.callee_conv),
+            Inst::CallInd { info } => (info.caller_conv, info.callee_conv),
             _ => return true,
         };
 
@@ -992,8 +996,8 @@ impl MachInst for Inst {
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(info.caller_conv);
-        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(info.callee_conv);
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller);
+        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee);
 
         let mut all_clobbers = caller_clobbers;
         all_clobbers.union_from(callee_clobbers);
@@ -2563,17 +2567,14 @@ impl Inst {
                 }
             }
             &Inst::Call { .. } => format!("bl 0"),
-            &Inst::CallInd { rn, .. } => {
-                let rn = pretty_print_reg(rn);
+            &Inst::CallInd { ref info } => {
+                let rn = pretty_print_reg(info.dest);
                 format!("blr {rn}")
             }
-            &Inst::ReturnCall {
-                ref callee,
-                ref info,
-            } => {
+            &Inst::ReturnCall { ref info } => {
                 let mut s = format!(
-                    "return_call {callee:?} new_stack_arg_size:{}",
-                    info.new_stack_arg_size
+                    "return_call {:?} new_stack_arg_size:{}",
+                    info.dest, info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = pretty_print_reg(ret.preg);
@@ -2582,8 +2583,8 @@ impl Inst {
                 }
                 s
             }
-            &Inst::ReturnCallInd { callee, ref info } => {
-                let callee = pretty_print_reg(callee);
+            &Inst::ReturnCallInd { ref info } => {
+                let callee = pretty_print_reg(info.dest);
                 let mut s = format!(
                     "return_call_ind {callee} new_stack_arg_size:{}",
                     info.new_stack_arg_size

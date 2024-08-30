@@ -54,7 +54,8 @@ use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRIm
 /// Additional information for `return_call[_ind]` instructions, left out of
 /// line to lower the size of the `Inst` enum.
 #[derive(Clone, Debug)]
-pub struct ReturnCallInfo {
+pub struct ReturnCallInfo<T> {
+    pub dest: T,
     pub uses: CallArgList,
     pub new_stack_arg_size: u32,
 }
@@ -339,9 +340,11 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
-        Inst::CallInd { rn, info } => {
-            let CallInfo { uses, defs, .. } = &mut **info;
-            collector.reg_use(rn);
+        Inst::CallInd { info } => {
+            let CallInfo {
+                dest, uses, defs, ..
+            } = &mut **info;
+            collector.reg_use(dest);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -350,15 +353,15 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
-        Inst::ReturnCall { info, .. } => {
+        Inst::ReturnCall { info } => {
             for CallArgPair { vreg, preg } in &mut info.uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
         }
-        Inst::ReturnCallInd { info, callee } => {
+        Inst::ReturnCallInd { info } => {
             // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
             // This shouldn't be a fixed register constraint.
-            collector.reg_fixed_use(callee, x_reg(5));
+            collector.reg_fixed_use(&mut info.dest, x_reg(5));
 
             for CallArgPair { vreg, preg } in &mut info.uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -1295,18 +1298,15 @@ impl Inst {
                     format!("slli {rd},{rn},{shift_bits}; {op} {rd},{rd},{shift_bits}")
                 };
             }
-            &MInst::Call { ref dest, .. } => format!("call {}", dest.display(None)),
-            &MInst::CallInd { rn, .. } => {
-                let rd = format_reg(rn);
+            &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
+            &MInst::CallInd { ref info } => {
+                let rd = format_reg(info.dest);
                 format!("callind {rd}")
             }
-            &MInst::ReturnCall {
-                ref callee,
-                ref info,
-            } => {
+            &MInst::ReturnCall { ref info } => {
                 let mut s = format!(
-                    "return_call {callee:?} new_stack_arg_size:{}",
-                    info.new_stack_arg_size
+                    "return_call {:?} new_stack_arg_size:{}",
+                    info.dest, info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = format_reg(ret.preg);
@@ -1315,8 +1315,8 @@ impl Inst {
                 }
                 s
             }
-            &MInst::ReturnCallInd { callee, ref info } => {
-                let callee = format_reg(callee);
+            &MInst::ReturnCallInd { ref info } => {
+                let callee = format_reg(info.dest);
                 let mut s = format!(
                     "return_call_ind {callee} new_stack_arg_size:{}",
                     info.new_stack_arg_size

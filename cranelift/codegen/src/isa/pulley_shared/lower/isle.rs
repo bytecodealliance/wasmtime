@@ -22,7 +22,8 @@ use regalloc2::PReg;
 type Unit = ();
 type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
-type BoxCallInfo = Box<CallInfo>;
+type BoxCallInfo = Box<CallInfo<ExternalName>>;
+type BoxCallIndInfo = Box<CallInfo<XReg>>;
 type BoxExternalName = Box<ExternalName>;
 
 pub(crate) struct PulleyIsleContext<'a, 'b, I, B>

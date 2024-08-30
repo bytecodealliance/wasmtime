@@ -424,13 +424,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
         insts.extend(Inst::load_constant_u32(writable_a0(), frame_size as u64));
-        let mut info = CallInfo::empty(CallConv::SystemV);
+        let mut info = CallInfo::empty(
+            ExternalName::LibCall(LibCall::Probestack),
+            CallConv::SystemV,
+        );
         info.uses.push(CallArgPair {
             vreg: a0(),
             preg: a0(),
         });
         insts.push(Inst::Call {
-            dest: ExternalName::LibCall(LibCall::Probestack),
             info: Box::new(info),
         });
     }
@@ -562,29 +564,26 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_call(
-        dest: &CallDest,
-        tmp: Writable<Reg>,
-        info: Box<CallInfo>,
-    ) -> SmallVec<[Self::I; 2]> {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
-                dest: name.clone(),
-                info,
-            }),
+            &CallDest::ExtName(ref name, RelocDistance::Near) => {
+                let info = Box::new(info.map(|()| name.clone()));
+                insts.push(Inst::Call { info })
+            }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
                     rd: tmp,
                     name: Box::new(name.clone()),
                     offset: 0,
                 });
-                insts.push(Inst::CallInd {
-                    rn: tmp.to_reg(),
-                    info,
-                });
+                let info = Box::new(info.map(|()| tmp.to_reg()));
+                insts.push(Inst::CallInd { info });
             }
-            &CallDest::Reg(reg) => insts.push(Inst::CallInd { rn: *reg, info }),
+            &CallDest::Reg(reg) => {
+                let info = Box::new(info.map(|()| *reg));
+                insts.push(Inst::CallInd { info });
+            }
         }
         insts
     }
@@ -603,8 +602,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let tmp = alloc_tmp(Self::word_type());
         insts.extend(Inst::load_constant_u64(tmp, size as u64).into_iter());
         insts.push(Inst::Call {
-            dest: ExternalName::LibCall(LibCall::Memcpy),
             info: Box::new(CallInfo {
+                dest: ExternalName::LibCall(LibCall::Memcpy),
                 uses: smallvec![
                     CallArgPair {
                         vreg: dst,
@@ -739,17 +738,15 @@ impl Riscv64ABICallSite {
 
         let dest = self.dest().clone();
         let uses = self.take_uses();
-        let info = Box::new(ReturnCallInfo {
-            uses,
-            new_stack_arg_size,
-        });
 
         match dest {
             CallDest::ExtName(name, RelocDistance::Near) => {
-                ctx.emit(Inst::ReturnCall {
-                    callee: Box::new(name),
-                    info,
+                let info = Box::new(ReturnCallInfo {
+                    dest: name,
+                    uses,
+                    new_stack_arg_size,
                 });
+                ctx.emit(Inst::ReturnCall { info });
             }
             CallDest::ExtName(name, RelocDistance::Far) => {
                 let callee = ctx.alloc_tmp(ir::types::I64).only_reg().unwrap();
@@ -758,12 +755,21 @@ impl Riscv64ABICallSite {
                     name: Box::new(name),
                     offset: 0,
                 });
-                ctx.emit(Inst::ReturnCallInd {
-                    callee: callee.to_reg(),
-                    info,
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee.to_reg(),
+                    uses,
+                    new_stack_arg_size,
                 });
+                ctx.emit(Inst::ReturnCallInd { info });
             }
-            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallInd { callee, info }),
+            CallDest::Reg(callee) => {
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee,
+                    uses,
+                    new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCallInd { info });
+            }
         }
     }
 }

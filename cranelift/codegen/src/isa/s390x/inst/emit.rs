@@ -3257,11 +3257,7 @@ impl Inst {
                 inst.emit(sink, emit_info, state);
                 state.nominal_sp_offset += size;
             }
-            &Inst::Call {
-                ref dest,
-                link,
-                ref info,
-            } => {
+            &Inst::Call { link, ref info } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
 
                 let opcode = 0xc05; // BRASL
@@ -3269,7 +3265,7 @@ impl Inst {
                 // Add relocation for target function.  This has to be done *before*
                 // the S390xTlsGdCall relocation if any, to ensure linker relaxation
                 // works correctly.
-                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, dest, 2);
+                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
 
                 if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 6;
@@ -3281,7 +3277,7 @@ impl Inst {
 
                 state.nominal_sp_offset -= info.callee_pop_size;
             }
-            &Inst::CallInd { rn, link, ref info } => {
+            &Inst::CallInd { link, ref info } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
 
                 if let Some(s) = state.take_stack_map() {
@@ -3290,7 +3286,7 @@ impl Inst {
                 }
 
                 let opcode = 0x0d; // BASR
-                put(sink, &enc_rr(opcode, link.to_reg(), rn));
+                put(sink, &enc_rr(opcode, link.to_reg(), info.dest));
                 sink.add_call_site();
 
                 state.nominal_sp_offset -= info.callee_pop_size;
@@ -3310,7 +3306,7 @@ impl Inst {
                 sink.add_call_site();
             }
             &Inst::ReturnCallInd { ref info } => {
-                let mut rn = info.rn;
+                let mut rn = info.dest;
                 for inst in S390xMachineDeps::gen_tail_epilogue(
                     state.frame_layout(),
                     info.callee_pop_size,
@@ -3335,7 +3331,7 @@ impl Inst {
                 // works correctly.
                 let dest = ExternalName::LibCall(LibCall::ElfTlsGetOffset);
                 sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &dest, 2);
-                match symbol {
+                match &**symbol {
                     SymbolReloc::TlsGd { name } => sink.add_reloc(Reloc::S390xTlsGdCall, name, 0),
                     _ => unreachable!(),
                 }

@@ -1014,14 +1014,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: Box<CallInfo>) -> SmallVec<[Inst; 2]> {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                insts.push(Inst::Call {
-                    dest: name.clone(),
-                    info,
-                });
+                let info = Box::new(info.map(|()| name.clone()));
+                insts.push(Inst::Call { info });
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
@@ -1029,12 +1027,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     name: Box::new(name.clone()),
                     offset: 0,
                 });
-                insts.push(Inst::CallInd {
-                    rn: tmp.to_reg(),
-                    info,
-                });
+                let info = Box::new(info.map(|()| tmp.to_reg()));
+                insts.push(Inst::CallInd { info });
             }
-            &CallDest::Reg(reg) => insts.push(Inst::CallInd { rn: *reg, info }),
+            &CallDest::Reg(reg) => {
+                let info = Box::new(info.map(|()| *reg));
+                insts.push(Inst::CallInd { info });
+            }
         }
 
         insts
@@ -1054,8 +1053,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let tmp = alloc_tmp(Self::word_type());
         insts.extend(Inst::load_constant(tmp, size as u64, &mut alloc_tmp));
         insts.push(Inst::Call {
-            dest: ExternalName::LibCall(LibCall::Memcpy),
             info: Box::new(CallInfo {
+                dest: ExternalName::LibCall(LibCall::Memcpy),
                 uses: smallvec![
                     CallArgPair {
                         vreg: dst,
@@ -1264,16 +1263,17 @@ impl AArch64CallSite {
 
         let dest = self.dest().clone();
         let uses = self.take_uses();
-        let info = Box::new(ReturnCallInfo {
-            uses,
-            new_stack_arg_size,
-            key: select_api_key(isa_flags, isa::CallConv::Tail, true),
-        });
+        let key = select_api_key(isa_flags, isa::CallConv::Tail, true);
 
         match dest {
             CallDest::ExtName(callee, RelocDistance::Near) => {
-                let callee = Box::new(callee);
-                ctx.emit(Inst::ReturnCall { callee, info });
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee,
+                    uses,
+                    key,
+                    new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCall { info });
             }
             CallDest::ExtName(name, RelocDistance::Far) => {
                 let callee = ctx.alloc_tmp(types::I64).only_reg().unwrap();
@@ -1282,12 +1282,23 @@ impl AArch64CallSite {
                     name: Box::new(name),
                     offset: 0,
                 });
-                ctx.emit(Inst::ReturnCallInd {
-                    callee: callee.to_reg(),
-                    info,
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee.to_reg(),
+                    uses,
+                    key,
+                    new_stack_arg_size,
                 });
+                ctx.emit(Inst::ReturnCallInd { info });
             }
-            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallInd { callee, info }),
+            CallDest::Reg(callee) => {
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee,
+                    uses,
+                    key,
+                    new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCallInd { info });
+            }
         }
     }
 }

@@ -60,7 +60,7 @@ pub use crate::machinst::buffer::{
     MachTrap, OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
-    CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
+    CallInfo, CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
     MachInstEmitState, MachLabel, RealReg, Reg, RelocDistance, TextSectionBuilder,
     VCodeConstantData, VCodeConstants, Writable,
 };
