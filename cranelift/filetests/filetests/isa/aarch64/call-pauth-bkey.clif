@@ -63,8 +63,8 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
 ;   mov x0, x2
+;   load_ext_name x3, TestCase(%g)+0
 ;   blr x3
 ;   mov x2, x0
 ;   ldp fp, lr, [sp], #16
@@ -76,11 +76,11 @@ block0(v0: i64):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0xc
-;   ldr x3, #0x14
-;   b #0x1c
+;   mov x0, x2
+;   ldr x3, #0x18
+;   b #0x20
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mov x0, x2
 ;   blr x3
 ;   mov x2, x0
 ;   ldp x29, x30, [sp], #0x10

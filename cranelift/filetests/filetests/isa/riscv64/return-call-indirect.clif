@@ -267,12 +267,12 @@ block0:
 ;   sd s10,48(sp)
 ;   sd s11,40(sp)
 ; block0:
-;   li a1,10
-;   sd a1,16(slot)
-;   li a2,15
-;   sd a2,8(slot)
-;   li a3,20
-;   sd a3,0(slot)
+;   li a0,10
+;   sd a0,16(slot)
+;   li a1,15
+;   sd a1,8(slot)
+;   li a2,20
+;   sd a2,0(slot)
 ;   li a3,25
 ;   li a4,30
 ;   li a5,35
@@ -345,12 +345,12 @@ block0:
 ;   sd s10, 0x30(sp)
 ;   sd s11, 0x28(sp)
 ; block1: ; offset 0x54
-;   addi a1, zero, 0xa
-;   sd a1, 0x10(sp)
-;   addi a2, zero, 0xf
-;   sd a2, 8(sp)
-;   addi a3, zero, 0x14
-;   sd a3, 0(sp)
+;   addi a0, zero, 0xa
+;   sd a0, 0x10(sp)
+;   addi a1, zero, 0xf
+;   sd a1, 8(sp)
+;   addi a2, zero, 0x14
+;   sd a2, 0(sp)
 ;   addi a3, zero, 0x19
 ;   addi a4, zero, 0x1e
 ;   addi a5, zero, 0x23

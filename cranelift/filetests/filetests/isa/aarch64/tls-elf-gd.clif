@@ -14,10 +14,10 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x6, x0
+;   mov x5, x0
 ;   elf_tls_get_addr x0, x3, userextname0
 ;   mov x1, x0
-;   mov x0, x6
+;   mov x0, x5
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -26,7 +26,7 @@ block0(v0: i32):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   mov x6, x0
+;   mov x5, x0
 ;   adrp x0, #0 ; reloc_external Aarch64TlsDescAdrPage21 u1:0 0
 ;   ldr x3, [x0] ; reloc_external Aarch64TlsDescLd64Lo12 u1:0 0
 ;   add x0, x0, #0 ; reloc_external Aarch64TlsDescAddLo12 u1:0 0
@@ -34,7 +34,7 @@ block0(v0: i32):
 ;   mrs x3, tpidr_el0
 ;   add x0, x0, x3
 ;   mov x1, x0
-;   mov x0, x6
+;   mov x0, x5
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 

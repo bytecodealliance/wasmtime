@@ -358,28 +358,28 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 
 ; VCode:
 ; block0:
+;   mov v31.16b, v1.16b
 ;   movz w6, #7452
 ;   movk w6, w6, #7966, LSL #16
 ;   dup v17.4s, w6
-;   mov v31.16b, v1.16b
 ;   mov v30.16b, v31.16b
 ;   tbl v19.16b, { v30.16b, v31.16b }, v17.16b
-;   mov v22.16b, v0.16b
+;   mov v23.16b, v0.16b
 ;   mov v0.16b, v2.16b
-;   fmla v0.4s, v0.4s, v22.4s, v19.4s
+;   fmla v0.4s, v0.4s, v23.4s, v19.4s
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   mov v31.16b, v1.16b
 ;   mov w6, #0x1d1c
 ;   movk w6, #0x1f1e, lsl #16
 ;   dup v17.4s, w6
-;   mov v31.16b, v1.16b
 ;   mov v30.16b, v31.16b
 ;   tbl v19.16b, {v30.16b, v31.16b}, v17.16b
-;   mov v22.16b, v0.16b
+;   mov v23.16b, v0.16b
 ;   mov v0.16b, v2.16b
-;   fmla v0.4s, v22.4s, v19.4s
+;   fmla v0.4s, v23.4s, v19.4s
 ;   ret
 
 function %f64x2_splat0(f64x2, f64x2, f64x2) -> f64x2 {

@@ -291,7 +291,7 @@ block0:
 ;   addi sp,sp,-32
 ;   fsd fs0,24(sp)
 ;   fsd fs2,16(sp)
-;   fsd fs4,8(sp)
+;   fsd fs3,8(sp)
 ; block0:
 ;   load_sym a3,%g0+0
 ;   callind a3
@@ -301,7 +301,7 @@ block0:
 ;   fmv.d fs2,fa0
 ;   load_sym a3,%g1+0
 ;   callind a3
-;   fmv.d fs4,fa0
+;   fmv.d fs3,fa0
 ;   load_sym a3,%g2+0
 ;   callind a3
 ;   load_sym a4,%g3+0
@@ -311,11 +311,11 @@ block0:
 ;   fmv.d fa0,fs2
 ;   callind a5
 ;   load_sym a0,%g4+0
-;   fmv.d fa0,fs4
+;   fmv.d fa0,fs3
 ;   callind a0
 ;   fld fs0,24(sp)
 ;   fld fs2,16(sp)
-;   fld fs4,8(sp)
+;   fld fs3,8(sp)
 ;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -331,7 +331,7 @@ block0:
 ;   addi sp, sp, -0x20
 ;   fsd fs0, 0x18(sp)
 ;   fsd fs2, 0x10(sp)
-;   fsd fs4, 8(sp)
+;   fsd fs3, 8(sp)
 ; block1: ; offset 0x20
 ;   auipc a3, 0
 ;   ld a3, 0xc(a3)
@@ -353,7 +353,7 @@ block0:
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   jalr a3
-;   fmv.d fs4, fa0
+;   fmv.d fs3, fa0
 ;   auipc a3, 0
 ;   ld a3, 0xc(a3)
 ;   j 0xc
@@ -379,11 +379,11 @@ block0:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g4 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   fmv.d fa0, fs4
+;   fmv.d fa0, fs3
 ;   jalr a0
 ;   fld fs0, 0x18(sp)
 ;   fld fs2, 0x10(sp)
-;   fld fs4, 8(sp)
+;   fld fs3, 8(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -422,9 +422,9 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
+;   mv a1,a0
 ;   li a2,42
 ;   load_sym a4,%f11+0
-;   mv a1,a0
 ;   mv a0,a2
 ;   callind a4
 ;   ld ra,8(sp)
@@ -439,13 +439,13 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
+;   mv a1, a0
 ;   addi a2, zero, 0x2a
 ;   auipc a4, 0
 ;   ld a4, 0xc(a4)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f11 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv a1, a0
 ;   mv a0, a2
 ;   jalr a4
 ;   ld ra, 8(sp)
@@ -485,9 +485,9 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
+;   mv a1,a0
 ;   li a2,42
 ;   load_sym a4,%f12+0
-;   mv a1,a0
 ;   mv a0,a2
 ;   callind a4
 ;   ld ra,8(sp)
@@ -502,13 +502,13 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
+;   mv a1, a0
 ;   addi a2, zero, 0x2a
 ;   auipc a4, 0
 ;   ld a4, 0xc(a4)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f12 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv a1, a0
 ;   mv a0, a2
 ;   jalr a4
 ;   ld ra, 8(sp)
@@ -548,9 +548,9 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
+;   mv a1,a0
 ;   li a2,42
 ;   load_sym a4,%f13+0
-;   mv a1,a0
 ;   mv a0,a2
 ;   callind a4
 ;   ld ra,8(sp)
@@ -565,13 +565,13 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
+;   mv a1, a0
 ;   addi a2, zero, 0x2a
 ;   auipc a4, 0
 ;   ld a4, 0xc(a4)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f13 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv a1, a0
 ;   mv a0, a2
 ;   jalr a4
 ;   ld ra, 8(sp)
@@ -590,8 +590,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a1,-16(incoming_arg)
 ;   mv a0,a7
+;   ld a1,-16(incoming_arg)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -604,8 +604,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   ld a1, 0x10(sp)
 ;   mv a0, a7
+;   ld a1, 0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -627,11 +627,11 @@ block0(v0: i128, v1: i64):
 ;   addi sp,sp,-32
 ;   sd s1,24(sp)
 ; block0:
-;   sd a1,0(sp)
-;   load_sym s1,%f14+0
-;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0
+;   sd a1,0(sp)
+;   mv a5,a1
+;   load_sym s1,%f14+0
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
@@ -652,15 +652,15 @@ block0(v0: i128, v1: i64):
 ;   addi sp, sp, -0x20
 ;   sd s1, 0x18(sp)
 ; block1: ; offset 0x18
+;   mv a6, a2
+;   mv a7, a0
 ;   sd a1, 0(sp)
+;   mv a5, a1
 ;   auipc s1, 0
 ;   ld s1, 0xc(s1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f14 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv a5, a1
-;   mv a6, a2
-;   mv a7, a0
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7
@@ -683,8 +683,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a1,-16(incoming_arg)
 ;   mv a0,a7
+;   ld a1,-16(incoming_arg)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -697,8 +697,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   ld a1, 0x10(sp)
 ;   mv a0, a7
+;   ld a1, 0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -720,11 +720,11 @@ block0(v0: i128, v1: i64):
 ;   addi sp,sp,-32
 ;   sd s1,24(sp)
 ; block0:
-;   sd a1,0(sp)
-;   load_sym s1,%f15+0
-;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0
+;   sd a1,0(sp)
+;   mv a5,a1
+;   load_sym s1,%f15+0
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
@@ -745,15 +745,15 @@ block0(v0: i128, v1: i64):
 ;   addi sp, sp, -0x20
 ;   sd s1, 0x18(sp)
 ; block1: ; offset 0x18
+;   mv a6, a2
+;   mv a7, a0
 ;   sd a1, 0(sp)
+;   mv a5, a1
 ;   auipc s1, 0
 ;   ld s1, 0xc(s1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f15 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv a5, a1
-;   mv a6, a2
-;   mv a7, a0
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7

@@ -245,15 +245,15 @@ block0(v0: i64):
 ; block0:
 ;   lgr %r10, %r2
 ;   brasl %r14, %f
-;   lgr %r13, %r2
-;   brasl %r14, %f
-;   lgr %r9, %r2
-;   brasl %r14, %f
 ;   lgr %r12, %r2
 ;   brasl %r14, %f
 ;   lgr %r8, %r2
 ;   brasl %r14, %f
+;   lgr %r9, %r2
+;   brasl %r14, %f
 ;   lgr %r11, %r2
+;   brasl %r14, %f
+;   lgr %r13, %r2
 ;   brasl %r14, %f
 ;   stg %r2, 184(%r15)
 ;   brasl %r14, %f
@@ -266,11 +266,11 @@ block0(v0: i64):
 ;   lg %r2, 352(%r15)
 ;   stg %r2, 168(%r15)
 ;   lgr %r2, %r10
-;   lgr %r3, %r13
-;   lgr %r4, %r9
-;   lgr %r5, %r12
-;   lgr %r6, %r8
-;   lgr %r7, %r11
+;   lgr %r3, %r12
+;   lgr %r4, %r8
+;   lgr %r5, %r9
+;   lgr %r6, %r11
+;   lgr %r7, %r13
 ;   brasl %r14, %g ; callee_pop_size 176
 ;   lg %r2, 168(%r15)
 ;   lmg %r8, %r15, 256(%r15)
@@ -283,15 +283,15 @@ block0(v0: i64):
 ; block1: ; offset 0xa
 ;   lgr %r10, %r2
 ;   brasl %r14, 0xe ; reloc_external PLTRel32Dbl %f 2
-;   lgr %r13, %r2
-;   brasl %r14, 0x18 ; reloc_external PLTRel32Dbl %f 2
-;   lgr %r9, %r2
-;   brasl %r14, 0x22 ; reloc_external PLTRel32Dbl %f 2
 ;   lgr %r12, %r2
-;   brasl %r14, 0x2c ; reloc_external PLTRel32Dbl %f 2
+;   brasl %r14, 0x18 ; reloc_external PLTRel32Dbl %f 2
 ;   lgr %r8, %r2
-;   brasl %r14, 0x36 ; reloc_external PLTRel32Dbl %f 2
+;   brasl %r14, 0x22 ; reloc_external PLTRel32Dbl %f 2
+;   lgr %r9, %r2
+;   brasl %r14, 0x2c ; reloc_external PLTRel32Dbl %f 2
 ;   lgr %r11, %r2
+;   brasl %r14, 0x36 ; reloc_external PLTRel32Dbl %f 2
+;   lgr %r13, %r2
 ;   brasl %r14, 0x40 ; reloc_external PLTRel32Dbl %f 2
 ;   stg %r2, 0xb8(%r15)
 ;   brasl %r14, 0x4c ; reloc_external PLTRel32Dbl %f 2
@@ -304,11 +304,11 @@ block0(v0: i64):
 ;   lg %r2, 0x160(%r15)
 ;   stg %r2, 0xa8(%r15)
 ;   lgr %r2, %r10
-;   lgr %r3, %r13
-;   lgr %r4, %r9
-;   lgr %r5, %r12
-;   lgr %r6, %r8
-;   lgr %r7, %r11
+;   lgr %r3, %r12
+;   lgr %r4, %r8
+;   lgr %r5, %r9
+;   lgr %r6, %r11
+;   lgr %r7, %r13
 ;   brasl %r14, 0x98 ; reloc_external PLTRel32Dbl %g 2
 ;   lg %r2, 0xa8(%r15)
 ;   lmg %r8, %r15, 0x100(%r15)

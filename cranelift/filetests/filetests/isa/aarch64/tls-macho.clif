@@ -13,21 +13,21 @@ block0(v0: i32):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   str x25, [sp, #-16]!
+;   str x24, [sp, #-16]!
 ;   stp d14, d15, [sp, #-16]!
 ;   stp d12, d13, [sp, #-16]!
 ;   stp d10, d11, [sp, #-16]!
 ;   stp d8, d9, [sp, #-16]!
 ; block0:
-;   mov x25, x0
+;   mov x24, x0
 ;   macho_tls_get_addr x0, userextname0
 ;   mov x1, x0
-;   mov x0, x25
+;   mov x0, x24
 ;   ldp d8, d9, [sp], #16
 ;   ldp d10, d11, [sp], #16
 ;   ldp d12, d13, [sp], #16
 ;   ldp d14, d15, [sp], #16
-;   ldr x25, [sp], #16
+;   ldr x24, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -35,24 +35,24 @@ block0(v0: i32):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   str x25, [sp, #-0x10]!
+;   str x24, [sp, #-0x10]!
 ;   stp d14, d15, [sp, #-0x10]!
 ;   stp d12, d13, [sp, #-0x10]!
 ;   stp d10, d11, [sp, #-0x10]!
 ;   stp d8, d9, [sp, #-0x10]!
 ; block1: ; offset 0x1c
-;   mov x25, x0
+;   mov x24, x0
 ;   adrp x0, #0 ; reloc_external MachOAarch64TlsAdrPage21 u1:0 0
 ;   ldr x0, [x0] ; reloc_external MachOAarch64TlsAdrPageOff12 u1:0 0
 ;   ldr x1, [x0]
 ;   blr x1
 ;   mov x1, x0
-;   mov x0, x25
+;   mov x0, x24
 ;   ldp d8, d9, [sp], #0x10
 ;   ldp d10, d11, [sp], #0x10
 ;   ldp d12, d13, [sp], #0x10
 ;   ldp d14, d15, [sp], #0x10
-;   ldr x25, [sp], #0x10
+;   ldr x24, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
