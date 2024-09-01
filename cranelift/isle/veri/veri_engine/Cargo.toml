@@ -18,7 +18,7 @@ cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { path = "../../../codegen", features = ["all-arch"] }
 cranelift-codegen-meta = { path = "../../../codegen/meta" }
 veri_ir = { path = "../veri_ir" }
-easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
+easy-smt = "0.2.2"
 clap = { workspace = true }
 itertools = "0.10.5"
 log = { workspace = true }

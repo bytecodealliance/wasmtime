@@ -1049,7 +1049,8 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 [[package]]
 name = "easy-smt"
 version = "0.2.2"
-source = "git+https://github.com/elliottt/easy-smt.git#023a92263508061d367f120cf70595780270c591"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cc74633db03a8b18de7c933fbd72402d45dfaf2d1736c1fd8ff9bbe461b4572"
 dependencies = [
  "log",
  "unicode-segmentation",
