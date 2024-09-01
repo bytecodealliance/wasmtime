@@ -41,21 +41,27 @@ block0:
 ;   sd s2,32(sp)
 ;   sd s3,24(sp)
 ; block0:
-;   li s3,0
-;   li s1,1
-;   li s2,2
+;   li a0,0
+;   mv s3,a0
+;   li a0,1
+;   li a2,2
 ;   sw zero,0(slot)
-;   sw s1,4(slot)
-;   sw s2,8(slot)
+;   sw a0,4(slot)
+;   mv s1,a0
+;   sw a2,8(slot)
+;   mv s2,a2
 ;   mv a0,s3
 ;   call userextname0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
-;   sw s1,0(slot)
-;   sw s2,4(slot)
+;   mv a0,s1
+;   sw a0,0(slot)
+;   mv a0,s2
+;   sw a0,4(slot)
 ;   mv a0,s3
 ;   call userextname0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
-;   sw s2,0(slot)
+;   mv a0,s2
+;   sw a0,0(slot)
 ;   mv a0,s1
 ;   call userextname0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
@@ -81,21 +87,27 @@ block0:
 ;   sd s2, 0x20(sp)
 ;   sd s3, 0x18(sp)
 ; block1: ; offset 0x20
-;   mv s3, zero
-;   addi s1, zero, 1
-;   addi s2, zero, 2
+;   mv a0, zero
+;   mv s3, a0
+;   addi a0, zero, 1
+;   addi a2, zero, 2
 ;   sw zero, 0(sp)
-;   sw s1, 4(sp)
-;   sw s2, 8(sp)
+;   sw a0, 4(sp)
+;   mv s1, a0
+;   sw a2, 8(sp)
+;   mv s2, a2
 ;   mv a0, s3
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
 ;   jalr ra
-;   sw s1, 0(sp)
-;   sw s2, 4(sp)
+;   mv a0, s1
+;   sw a0, 0(sp)
+;   mv a0, s2
+;   sw a0, 4(sp)
 ;   mv a0, s3
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
 ;   jalr ra
-;   sw s2, 0(sp)
+;   mv a0, s2
+;   sw a0, 0(sp)
 ;   mv a0, s1
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
 ;   jalr ra
@@ -139,41 +151,41 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   addi sp,sp,-160
 ;   sd s1,152(sp)
 ;   sd s2,144(sp)
-;   sd s3,136(sp)
-;   sd s4,128(sp)
-;   sd s9,120(sp)
+;   sd s6,136(sp)
+;   sd s8,128(sp)
+;   sd s10,120(sp)
 ;   fsd fs0,112(sp)
 ;   fsd fs2,104(sp)
 ; block0:
-;   mv s2,a4
+;   mv s10,a4
 ;   sb a0,0(slot)
-;   mv s1,a0
+;   mv s8,a0
 ;   sh a1,8(slot)
-;   mv s9,a1
+;   mv s6,a1
 ;   sw a2,16(slot)
-;   mv s4,a2
+;   mv s2,a2
 ;   fsw fa0,20(slot)
 ;   fmv.d fs2,fa0
 ;   sd a3,24(slot)
-;   mv s3,a3
+;   mv s1,a3
 ;   fsd fa1,32(slot)
 ;   fmv.d fs0,fa1
 ;   call userextname0
 ;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})], sp_to_sized_stack_slots: None }
-;   mv a2,s4
-;   mv a4,s2
+;   mv a2,s2
+;   mv a4,s10
 ;   sw a2,0(a4)
-;   mv a3,s3
+;   mv a3,s1
 ;   sd a3,8(a4)
-;   mv a0,s1
-;   mv a1,s9
+;   mv a0,s8
+;   mv a1,s6
 ;   fmv.d fa0,fs2
 ;   fmv.d fa1,fs0
 ;   ld s1,152(sp)
 ;   ld s2,144(sp)
-;   ld s3,136(sp)
-;   ld s4,128(sp)
-;   ld s9,120(sp)
+;   ld s6,136(sp)
+;   ld s8,128(sp)
+;   ld s10,120(sp)
 ;   fld fs0,112(sp)
 ;   fld fs2,104(sp)
 ;   addi sp,sp,160
@@ -191,41 +203,41 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   addi sp, sp, -0xa0
 ;   sd s1, 0x98(sp)
 ;   sd s2, 0x90(sp)
-;   sd s3, 0x88(sp)
-;   sd s4, 0x80(sp)
-;   sd s9, 0x78(sp)
+;   sd s6, 0x88(sp)
+;   sd s8, 0x80(sp)
+;   sd s10, 0x78(sp)
 ;   fsd fs0, 0x70(sp)
 ;   fsd fs2, 0x68(sp)
 ; block1: ; offset 0x30
-;   mv s2, a4
+;   mv s10, a4
 ;   sb a0, 0(sp)
-;   mv s1, a0
+;   mv s8, a0
 ;   sh a1, 8(sp)
-;   mv s9, a1
+;   mv s6, a1
 ;   sw a2, 0x10(sp)
-;   mv s4, a2
+;   mv s2, a2
 ;   fsw fa0, 0x14(sp)
 ;   fmv.d fs2, fa0
 ;   sd a3, 0x18(sp)
-;   mv s3, a3
+;   mv s1, a3
 ;   fsd fa1, 0x20(sp)
 ;   fmv.d fs0, fa1
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
 ;   jalr ra
-;   mv a2, s4
-;   mv a4, s2
+;   mv a2, s2
+;   mv a4, s10
 ;   sw a2, 0(a4)
-;   mv a3, s3
+;   mv a3, s1
 ;   sd a3, 8(a4)
-;   mv a0, s1
-;   mv a1, s9
+;   mv a0, s8
+;   mv a1, s6
 ;   fmv.d fa0, fs2
 ;   fmv.d fa1, fs0
 ;   ld s1, 0x98(sp)
 ;   ld s2, 0x90(sp)
-;   ld s3, 0x88(sp)
-;   ld s4, 0x80(sp)
-;   ld s9, 0x78(sp)
+;   ld s6, 0x88(sp)
+;   ld s8, 0x80(sp)
+;   ld s10, 0x78(sp)
 ;   fld fs0, 0x70(sp)
 ;   fld fs2, 0x68(sp)
 ;   addi sp, sp, 0xa0

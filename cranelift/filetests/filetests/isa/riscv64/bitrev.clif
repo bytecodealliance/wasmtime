@@ -361,6 +361,12 @@ block0(v0: i128):
 }
 
 ; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s3,8(sp)
 ; block0:
 ;   slli a3,a1,8
 ;   srli a5,a1,8
@@ -398,47 +404,60 @@ block0(v0: i128):
 ;   srli a4,a1,32
 ;   or a5,a3,a4
 ;   brev8 a4,a5##tmp=a1 tmp2=a2 step=a3 ty=i64
+;   mv s3,a4
 ;   slli a1,a0,8
 ;   srli a2,a0,8
-;   slli a5,a2,56
-;   srli a2,a5,56
+;   slli a4,a2,56
+;   srli a2,a4,56
 ;   or a2,a1,a2
-;   slli a5,a2,16
+;   slli a4,a2,16
 ;   srli a1,a0,16
 ;   slli a2,a1,8
-;   srli a1,a1,8
-;   slli a1,a1,56
+;   srli a5,a1,8
+;   slli a1,a5,56
 ;   srli a3,a1,56
-;   or a1,a2,a3
-;   slli a1,a1,48
+;   or a5,a2,a3
+;   slli a1,a5,48
 ;   srli a2,a1,48
-;   or a5,a5,a2
-;   slli a1,a5,32
+;   or a4,a4,a2
+;   slli a1,a4,32
 ;   srli a3,a0,32
-;   slli a5,a3,8
+;   slli a4,a3,8
 ;   srli a0,a3,8
 ;   slli a2,a0,56
-;   srli a0,a2,56
-;   or a0,a5,a0
+;   srli a5,a2,56
+;   or a0,a4,a5
 ;   slli a2,a0,16
-;   srli a5,a3,16
-;   slli a0,a5,8
-;   srli a3,a5,8
-;   slli a5,a3,56
-;   srli a3,a5,56
+;   srli a4,a3,16
+;   slli a0,a4,8
+;   srli a3,a4,8
+;   slli a4,a3,56
+;   srli a3,a4,56
 ;   or a3,a0,a3
-;   slli a5,a3,48
-;   srli a0,a5,48
+;   slli a4,a3,48
+;   srli a0,a4,48
 ;   or a2,a2,a0
-;   slli a5,a2,32
-;   srli a0,a5,32
-;   or a3,a1,a0
-;   brev8 a1,a3##tmp=a2 tmp2=a5 step=a0 ty=i64
-;   mv a0,a4
+;   slli a4,a2,32
+;   srli a0,a4,32
+;   or a2,a1,a0
+;   brev8 a1,a2##tmp=a4 tmp2=a5 step=a0 ty=i64
+;   mv a0,s3
+;   ld s3,8(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s3, 8(sp)
+; block1: ; offset 0x18
 ;   slli a3, a1, 8
 ;   srli a5, a1, 8
 ;   slli a2, a5, 0x38
@@ -493,53 +512,54 @@ block0(v0: i128):
 ;   j -0x28
 ;   slli a2, a2, 1
 ;   j -0x30
+;   mv s3, a4
 ;   slli a1, a0, 8
 ;   srli a2, a0, 8
-;   slli a5, a2, 0x38
-;   srli a2, a5, 0x38
+;   slli a4, a2, 0x38
+;   srli a2, a4, 0x38
 ;   or a2, a1, a2
-;   slli a5, a2, 0x10
+;   slli a4, a2, 0x10
 ;   srli a1, a0, 0x10
 ;   slli a2, a1, 8
-;   srli a1, a1, 8
-;   slli a1, a1, 0x38
+;   srli a5, a1, 8
+;   slli a1, a5, 0x38
 ;   srli a3, a1, 0x38
-;   or a1, a2, a3
-;   slli a1, a1, 0x30
+;   or a5, a2, a3
+;   slli a1, a5, 0x30
 ;   srli a2, a1, 0x30
-;   or a5, a5, a2
-;   slli a1, a5, 0x20
+;   or a4, a4, a2
+;   slli a1, a4, 0x20
 ;   srli a3, a0, 0x20
-;   slli a5, a3, 8
+;   slli a4, a3, 8
 ;   srli a0, a3, 8
 ;   slli a2, a0, 0x38
-;   srli a0, a2, 0x38
-;   or a0, a5, a0
+;   srli a5, a2, 0x38
+;   or a0, a4, a5
 ;   slli a2, a0, 0x10
-;   srli a5, a3, 0x10
-;   slli a0, a5, 8
-;   srli a3, a5, 8
-;   slli a5, a3, 0x38
-;   srli a3, a5, 0x38
+;   srli a4, a3, 0x10
+;   slli a0, a4, 8
+;   srli a3, a4, 8
+;   slli a4, a3, 0x38
+;   srli a3, a4, 0x38
 ;   or a3, a0, a3
-;   slli a5, a3, 0x30
-;   srli a0, a5, 0x30
+;   slli a4, a3, 0x30
+;   srli a0, a4, 0x30
 ;   or a2, a2, a0
-;   slli a5, a2, 0x20
-;   srli a0, a5, 0x20
-;   or a3, a1, a0
+;   slli a4, a2, 0x20
+;   srli a0, a4, 0x20
+;   or a2, a1, a0
 ;   mv a1, zero
 ;   addi a0, zero, 0x40
-;   addi a2, zero, 1
-;   slli a2, a2, 0x3f
+;   addi a4, zero, 1
+;   slli a4, a4, 0x3f
 ;   addi a5, zero, 1
 ;   slli a5, a5, 0x38
 ;   blez a0, 0x34
-;   and t5, a2, a3
+;   and t5, a4, a2
 ;   beq zero, t5, 8
 ;   or a1, a1, a5
 ;   addi a0, a0, -1
-;   srli a2, a2, 1
+;   srli a4, a4, 1
 ;   addi t5, zero, 8
 ;   rem t5, a0, t5
 ;   bnez t5, 0xc
@@ -547,6 +567,11 @@ block0(v0: i128):
 ;   j -0x28
 ;   slli a5, a5, 1
 ;   j -0x30
-;   mv a0, a4
+;   mv a0, s3
+;   ld s3, 8(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 

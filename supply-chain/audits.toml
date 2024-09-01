@@ -171,7 +171,7 @@ notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-deve
 [[wildcard-audits.regalloc2]]
 who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
-user-id = 187138 # Trevor Elliott (elliottt)
+user-id = 187138
 start = "2022-11-29"
 end = "2025-07-30"
 notes = """

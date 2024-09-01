@@ -1297,7 +1297,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn block_insns(&self, block: BlockIndex) -> InstRange {
         let range = self.block_ranges.get(block.index());
-        InstRange::new(InsnIndex::new(range.start), InsnIndex::new(range.end))
+        InstRange::forward(InsnIndex::new(range.start), InsnIndex::new(range.end))
     }
 
     fn block_succs(&self, block: BlockIndex) -> &[BlockIndex] {
