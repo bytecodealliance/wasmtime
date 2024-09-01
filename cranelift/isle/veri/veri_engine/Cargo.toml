@@ -19,10 +19,10 @@ cranelift-codegen = { path = "../../../codegen", features = ["all-arch"] }
 cranelift-codegen-meta = { path = "../../../codegen/meta" }
 veri_ir = { path = "../veri_ir" }
 easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
-clap = { version = "3.0.0", features = ["derive"] }
+clap = { workspace = true }
 itertools = "0.10.3"
-log = "0.4.17"
-env_logger = "0.10.0"
+log = { workspace = true }
+env_logger = { workspace = true }
 anyhow = { workspace = true }
 
 [dev-dependencies]
