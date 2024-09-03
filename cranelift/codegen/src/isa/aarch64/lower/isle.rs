@@ -7,9 +7,9 @@ use generated_code::Context;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
     fp_reg, lower_condcode, lower_fp_condcode, stack_reg, writable_link_reg, writable_zero_reg,
-    zero_reg, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind,
-    ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC,
-    MachLabel, MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
+    zero_reg, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallInfo, Cond, CondBrKind, ExtendOp,
+    FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, MachLabel,
+    MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
     ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::ir::{condcodes, ArgumentExtension};
@@ -34,9 +34,10 @@ use regalloc2::PReg;
 use std::boxed::Box;
 use std::vec::Vec;
 
-type BoxCallInfo = Box<CallInfo>;
-type BoxCallIndInfo = Box<CallIndInfo>;
-type BoxReturnCallInfo = Box<ReturnCallInfo>;
+type BoxCallInfo = Box<CallInfo<ExternalName>>;
+type BoxCallIndInfo = Box<CallInfo<Reg>>;
+type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
+type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
 type VecArgPair = Vec<ArgPair>;

@@ -16,7 +16,7 @@ block0(v0: i32):
 ; block0:
 ;   larl %r12, %ElfGlobalOffsetTable + 0
 ;   bras %r1, 12 ; data userextname0@tlsgd ; lg %r2, 0(%r1)
-;   brasl %r14, %ElfTlsGetOffset:tls_gdcall:userextname0
+;   brasl %r14, tls_gdcall:userextname0
 ;   ear %r4, %a0
 ;   sllg %r3, %r4, 32
 ;   ear %r3, %a1

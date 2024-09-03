@@ -11,7 +11,6 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
-use regalloc2::PRegSet;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -33,26 +32,12 @@ use args::*;
 // `Inst` is defined inside ISLE as `MInst`. We publicly re-export it here.
 pub use super::lower::isle::generated_code::MInst as Inst;
 
-/// Out-of-line data for calls, to keep the size of `Inst` down.
-#[derive(Clone, Debug)]
-pub struct CallInfo {
-    /// Register uses of this call.
-    pub uses: CallArgList,
-    /// Register defs of this call.
-    pub defs: CallRetList,
-    /// Registers clobbered by this call, as per its calling convention.
-    pub clobbers: PRegSet,
-    /// The number of bytes that the callee will pop from the stack for the
-    /// caller, if any. (Used for popping stack arguments with the `tail`
-    /// calling convention.)
-    pub callee_pop_size: u32,
-    /// The calling convention of the callee.
-    pub callee_conv: CallConv,
-}
-
 /// Out-of-line data for return-calls, to keep the size of `Inst` down.
 #[derive(Clone, Debug)]
-pub struct ReturnCallInfo {
+pub struct ReturnCallInfo<T> {
+    /// Where this call is going.
+    pub dest: T,
+
     /// The size of the argument area for this return-call, potentially smaller than that of the
     /// caller, but never larger.
     pub new_stack_arg_size: u32,
@@ -538,45 +523,13 @@ impl Inst {
         Inst::Pop64 { dst }
     }
 
-    pub(crate) fn call_known(
-        dest: ExternalName,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        callee_pop_size: u32,
-        callee_conv: CallConv,
-    ) -> Inst {
-        Inst::CallKnown {
-            dest,
-            info: Some(Box::new(CallInfo {
-                uses,
-                defs,
-                clobbers,
-                callee_pop_size,
-                callee_conv,
-            })),
-        }
+    pub(crate) fn call_known(info: Box<CallInfo<ExternalName>>) -> Inst {
+        Inst::CallKnown { info }
     }
 
-    pub(crate) fn call_unknown(
-        dest: RegMem,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        callee_pop_size: u32,
-        callee_conv: CallConv,
-    ) -> Inst {
-        dest.assert_regclass_is(RegClass::Int);
-        Inst::CallUnknown {
-            dest,
-            info: Some(Box::new(CallInfo {
-                uses,
-                defs,
-                clobbers,
-                callee_pop_size,
-                callee_conv,
-            })),
-        }
+    pub(crate) fn call_unknown(info: Box<CallInfo<RegMem>>) -> Inst {
+        info.dest.assert_regclass_is(RegClass::Int);
+        Inst::CallUnknown { info }
     }
 
     pub(crate) fn ret(stack_bytes_to_pop: u32) -> Inst {
@@ -1660,26 +1613,26 @@ impl PrettyPrint for Inst {
                 format!("{op} {dst}")
             }
 
-            Inst::CallKnown { dest, .. } => {
+            Inst::CallKnown { info } => {
                 let op = ljustify("call".to_string());
-                format!("{op} {dest:?}")
+                format!("{op} {:?}", info.dest)
             }
 
-            Inst::CallUnknown { dest, .. } => {
-                let dest = dest.pretty_print(8);
+            Inst::CallUnknown { info } => {
+                let dest = info.dest.pretty_print(8);
                 let op = ljustify("call".to_string());
                 format!("{op} *{dest}")
             }
 
-            Inst::ReturnCallKnown { callee, info } => {
+            Inst::ReturnCallKnown { info } => {
                 let ReturnCallInfo {
                     uses,
                     new_stack_arg_size,
                     tmp,
+                    dest,
                 } = &**info;
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
-                let mut s =
-                    format!("return_call_known {callee:?} ({new_stack_arg_size}) tmp={tmp}");
+                let mut s = format!("return_call_known {dest:?} ({new_stack_arg_size}) tmp={tmp}");
                 for ret in uses {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8);
@@ -1688,13 +1641,14 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::ReturnCallUnknown { callee, info } => {
+            Inst::ReturnCallUnknown { info } => {
                 let ReturnCallInfo {
                     uses,
                     new_stack_arg_size,
                     tmp,
+                    dest,
                 } = &**info;
-                let callee = pretty_print_reg(*callee, 8);
+                let callee = pretty_print_reg(*dest, 8);
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
                 let mut s =
                     format!("return_call_unknown {callee} ({new_stack_arg_size}) tmp={tmp}");
@@ -2340,7 +2294,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp);
         }
 
-        Inst::CallKnown { dest, info, .. } => {
+        Inst::CallKnown { info } => {
             // Probestack is special and is only inserted after
             // regalloc, so we do not need to represent its ABI to the
             // register allocator. Assert that we don't alter that
@@ -2349,8 +2303,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 uses,
                 defs,
                 clobbers,
+                dest,
                 ..
-            } = &mut **info.as_mut().expect("CallInfo is expected in this path");
+            } = &mut **info;
             debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -2361,14 +2316,15 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_clobbers(*clobbers);
         }
 
-        Inst::CallUnknown { info, dest, .. } => {
+        Inst::CallUnknown { info } => {
             let CallInfo {
                 uses,
                 defs,
                 clobbers,
                 callee_conv,
+                dest,
                 ..
-            } = &mut **info.as_mut().expect("CallInfo is expected in this path");
+            } = &mut **info;
             match dest {
                 RegMem::Reg { reg } if *callee_conv == CallConv::Winch => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
@@ -2408,25 +2364,29 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_clobbers(clobbers);
         }
 
-        Inst::ReturnCallKnown { callee, info } => {
-            let ReturnCallInfo { uses, tmp, .. } = &mut **info;
+        Inst::ReturnCallKnown { info } => {
+            let ReturnCallInfo {
+                dest, uses, tmp, ..
+            } = &mut **info;
             collector.reg_fixed_def(tmp, regs::r11());
             // Same as in the `Inst::CallKnown` branch.
-            debug_assert_ne!(*callee, ExternalName::LibCall(LibCall::Probestack));
+            debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
         }
 
-        Inst::ReturnCallUnknown { callee, info } => {
-            let ReturnCallInfo { uses, tmp, .. } = &mut **info;
+        Inst::ReturnCallUnknown { info } => {
+            let ReturnCallInfo {
+                dest, uses, tmp, ..
+            } = &mut **info;
 
             // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
             // This shouldn't be a fixed register constraint, but it's not clear how to
             // pick a register that won't be clobbered by the callee-save restore code
             // emitted with a return_call_indirect. r10 is caller-saved, so this should be
             // safe to use.
-            collector.reg_fixed_use(callee, regs::r10());
+            collector.reg_fixed_use(dest, regs::r10());
 
             collector.reg_fixed_def(tmp, regs::r11());
             for CallArgPair { vreg, preg } in uses {

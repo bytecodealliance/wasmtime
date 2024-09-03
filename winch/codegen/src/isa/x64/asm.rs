@@ -21,9 +21,10 @@ use cranelift_codegen::{
             encoding::rex::{encode_modrm, RexFlags},
             settings as x64_settings, EmitInfo, EmitState, Inst,
         },
+        CallConv,
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
+    settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
+    MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
 };
 
 use super::address::Address;
@@ -1250,15 +1251,18 @@ impl Assembler {
     /// Emit a call to an unknown location through a register.
     pub fn call_with_reg(&mut self, callee: Reg) {
         self.emit(Inst::CallUnknown {
-            dest: RegMem::reg(callee.into()),
-            info: None,
+            info: Box::new(CallInfo::empty(
+                RegMem::reg(callee.into()),
+                CallConv::SystemV,
+            )),
         });
     }
 
     /// Emit a call to a locally defined function through an index.
     pub fn call_with_name(&mut self, name: UserExternalNameRef) {
-        let dest = ExternalName::user(name);
-        self.emit(Inst::CallKnown { dest, info: None });
+        self.emit(Inst::CallKnown {
+            info: Box::new(CallInfo::empty(ExternalName::user(name), CallConv::SystemV)),
+        });
     }
 
     /// Emit a call to a well-known libcall.

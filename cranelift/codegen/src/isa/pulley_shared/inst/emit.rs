@@ -147,12 +147,12 @@ fn pulley_emit<P>(
 
         Inst::LoadExtName { .. } => todo!(),
 
-        Inst::Call { callee, info } => {
+        Inst::Call { info } => {
             sink.put1(pulley_interpreter::Opcode::Call as u8);
             sink.add_reloc(
                 // TODO: is it actually okay to reuse this reloc here?
                 Reloc::X86CallPCRel4,
-                &**callee,
+                &info.dest,
                 // This addend adjusts for the difference between the start of
                 // the instruction and the beginning of the immediate field.
                 -1,
