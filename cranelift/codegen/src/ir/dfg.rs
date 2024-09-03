@@ -330,7 +330,7 @@ impl DataFlowGraph {
     }
 
     /// Get an iterator over all values.
-    pub fn values<'a>(&'a self) -> Values {
+    pub fn values<'a>(&'a self) -> Values<'a> {
         Values {
             inner: self.values.iter(),
         }

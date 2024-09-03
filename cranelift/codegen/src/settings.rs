@@ -482,13 +482,13 @@ pub struct FlagsOrIsa<'a> {
 }
 
 impl<'a> From<&'a Flags> for FlagsOrIsa<'a> {
-    fn from(flags: &'a Flags) -> FlagsOrIsa {
+    fn from(flags: &'a Flags) -> FlagsOrIsa<'a> {
         FlagsOrIsa { flags, isa: None }
     }
 }
 
 impl<'a> From<&'a dyn TargetIsa> for FlagsOrIsa<'a> {
-    fn from(isa: &'a dyn TargetIsa) -> FlagsOrIsa {
+    fn from(isa: &'a dyn TargetIsa) -> FlagsOrIsa<'a> {
         FlagsOrIsa {
             flags: isa.flags(),
             isa: Some(isa),
