@@ -119,7 +119,7 @@ fn gen_arguments_method(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter, 
 
     fmtln!(
         fmt,
-        "pub fn {}<'a>(&'a {}self, pool: &'a {}ir::ValueListPool) -> &{}[Value] {{",
+        "pub fn {}<'a>(&'a {}self, pool: &'a {}ir::ValueListPool) -> &'a {}[Value] {{",
         method,
         mut_,
         mut_,

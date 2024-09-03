@@ -532,7 +532,7 @@ impl CallThreadState {
         Some(unsafe { Backtrace::new_with_trap_state(limits, self, trap_pc_and_fp) })
     }
 
-    pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &Self> + 'a {
+    pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &'a Self> + 'a {
         let mut state = Some(self);
         core::iter::from_fn(move || {
             let this = state?;
