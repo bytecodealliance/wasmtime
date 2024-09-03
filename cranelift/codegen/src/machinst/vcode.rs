@@ -884,30 +884,6 @@ impl<I: VCodeInst> VCode<I> {
                         // If this is a safepoint, compute a stack map
                         // and pass it to the emit state.
                         let stack_map_disasm = if self.insts[iix.index()].is_safepoint() {
-                            let mut safepoint_slots: SmallVec<[SpillSlot; 8]> = smallvec![];
-                            // Find the contiguous range of
-                            // (progpoint, allocation) safepoint slot
-                            // records in `regalloc.safepoint_slots`
-                            // for this instruction index.
-                            let safepoint_slots_start = regalloc
-                                .safepoint_slots
-                                .binary_search_by(|(progpoint, _alloc)| {
-                                    if progpoint.inst() >= iix {
-                                        std::cmp::Ordering::Greater
-                                    } else {
-                                        std::cmp::Ordering::Less
-                                    }
-                                })
-                                .unwrap_err();
-
-                            for (_, alloc) in regalloc.safepoint_slots[safepoint_slots_start..]
-                                .iter()
-                                .take_while(|(progpoint, _)| progpoint.inst() == iix)
-                            {
-                                let slot = alloc.as_stack().unwrap();
-                                safepoint_slots.push(slot);
-                            }
-
                             let (user_stack_map, user_stack_map_disasm) = {
                                 // The `user_stack_maps` is keyed by reverse
                                 // instruction index, so we must flip the
@@ -1342,10 +1318,6 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
             MachTerminator::Cond | MachTerminator::Uncond | MachTerminator::Indirect => true,
             _ => false,
         }
-    }
-
-    fn requires_refs_on_stack(&self, _insn: InsnIndex) -> bool {
-        false
     }
 
     fn inst_operands(&self, insn: InsnIndex) -> &[Operand] {

@@ -864,6 +864,13 @@ user-id = 187138
 user-login = "elliottt"
 user-name = "Trevor Elliott"
 
+[[publisher.regalloc2]]
+version = "0.10.0"
+when = "2024-09-03"
+user-id = 187138
+user-login = "elliottt"
+user-name = "Trevor Elliott"
+
 [[publisher.regex]]
 version = "1.9.1"
 when = "2023-07-07"
