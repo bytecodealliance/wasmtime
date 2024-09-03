@@ -285,10 +285,10 @@ block0:
 ;   sd s10,32(sp)
 ;   sd s11,24(sp)
 ; block0:
-;   li a0,10
-;   sd a0,8(slot)
-;   li a1,15
-;   sd a1,0(slot)
+;   li a1,10
+;   sd a1,8(slot)
+;   li a2,15
+;   sd a2,0(slot)
 ;   li a2,20
 ;   li a3,25
 ;   li a4,30
@@ -360,10 +360,10 @@ block0:
 ;   sd s10, 0x20(sp)
 ;   sd s11, 0x18(sp)
 ; block1: ; offset 0x54
-;   addi a0, zero, 0xa
-;   sd a0, 8(sp)
-;   addi a1, zero, 0xf
-;   sd a1, 0(sp)
+;   addi a1, zero, 0xa
+;   sd a1, 8(sp)
+;   addi a2, zero, 0xf
+;   sd a2, 0(sp)
 ;   addi a2, zero, 0x14
 ;   addi a3, zero, 0x19
 ;   addi a4, zero, 0x1e
@@ -561,10 +561,10 @@ block2:
 ; block0:
 ;   li a1,10
 ;   sd a1,16(slot)
-;   li a1,15
-;   sd a1,8(slot)
-;   li a2,20
-;   sd a2,0(slot)
+;   li a2,15
+;   sd a2,8(slot)
+;   li a3,20
+;   sd a3,0(slot)
 ;   li a3,25
 ;   li a4,30
 ;   li a5,35
@@ -572,11 +572,11 @@ block2:
 ;   li a7,45
 ;   li a2,50
 ;   li a1,55
-;   li s5,60
-;   li s4,65
-;   li s3,70
-;   li s2,75
-;   li s1,80
+;   li s1,60
+;   li s5,65
+;   li s4,70
+;   li s3,75
+;   li s2,80
 ;   li t4,85
 ;   li t3,90
 ;   li t2,95
@@ -593,11 +593,11 @@ block2:
 ;   li a0,140
 ;   sd a2,-160(incoming_arg)
 ;   sd a1,-152(incoming_arg)
-;   sd s5,-144(incoming_arg)
-;   sd s4,-136(incoming_arg)
-;   sd s3,-128(incoming_arg)
-;   sd s2,-120(incoming_arg)
-;   sd s1,-112(incoming_arg)
+;   sd s1,-144(incoming_arg)
+;   sd s5,-136(incoming_arg)
+;   sd s4,-128(incoming_arg)
+;   sd s3,-120(incoming_arg)
+;   sd s2,-112(incoming_arg)
 ;   sd t4,-104(incoming_arg)
 ;   sd t3,-96(incoming_arg)
 ;   sd t2,-88(incoming_arg)
@@ -619,11 +619,11 @@ block2:
 ;   ld a0,16(slot)
 ;   sd a2,-144(incoming_arg)
 ;   sd a1,-136(incoming_arg)
-;   sd s5,-128(incoming_arg)
-;   sd s4,-120(incoming_arg)
-;   sd s3,-112(incoming_arg)
-;   sd s2,-104(incoming_arg)
-;   sd s1,-96(incoming_arg)
+;   sd s1,-128(incoming_arg)
+;   sd s5,-120(incoming_arg)
+;   sd s4,-112(incoming_arg)
+;   sd s3,-104(incoming_arg)
+;   sd s2,-96(incoming_arg)
 ;   sd t4,-88(incoming_arg)
 ;   sd t3,-80(incoming_arg)
 ;   sd t2,-72(incoming_arg)
@@ -666,10 +666,10 @@ block2:
 ; block1: ; offset 0x54
 ;   addi a1, zero, 0xa
 ;   sd a1, 0x10(sp)
-;   addi a1, zero, 0xf
-;   sd a1, 8(sp)
-;   addi a2, zero, 0x14
-;   sd a2, 0(sp)
+;   addi a2, zero, 0xf
+;   sd a2, 8(sp)
+;   addi a3, zero, 0x14
+;   sd a3, 0(sp)
 ;   addi a3, zero, 0x19
 ;   addi a4, zero, 0x1e
 ;   addi a5, zero, 0x23
@@ -677,11 +677,11 @@ block2:
 ;   addi a7, zero, 0x2d
 ;   addi a2, zero, 0x32
 ;   addi a1, zero, 0x37
-;   addi s5, zero, 0x3c
-;   addi s4, zero, 0x41
-;   addi s3, zero, 0x46
-;   addi s2, zero, 0x4b
-;   addi s1, zero, 0x50
+;   addi s1, zero, 0x3c
+;   addi s5, zero, 0x41
+;   addi s4, zero, 0x46
+;   addi s3, zero, 0x4b
+;   addi s2, zero, 0x50
 ;   addi t4, zero, 0x55
 ;   addi t3, zero, 0x5a
 ;   addi t2, zero, 0x5f
@@ -698,11 +698,11 @@ block2:
 ;   addi a0, zero, 0x8c
 ;   sd a2, 0x90(sp)
 ;   sd a1, 0x98(sp)
-;   sd s5, 0xa0(sp)
-;   sd s4, 0xa8(sp)
-;   sd s3, 0xb0(sp)
-;   sd s2, 0xb8(sp)
-;   sd s1, 0xc0(sp)
+;   sd s1, 0xa0(sp)
+;   sd s5, 0xa8(sp)
+;   sd s4, 0xb0(sp)
+;   sd s3, 0xb8(sp)
+;   sd s2, 0xc0(sp)
 ;   sd t4, 0xc8(sp)
 ;   sd t3, 0xd0(sp)
 ;   sd t2, 0xd8(sp)
@@ -742,11 +742,11 @@ block2:
 ;   ld a0, 0x10(sp)
 ;   sd a2, 0xa0(sp)
 ;   sd a1, 0xa8(sp)
-;   sd s5, 0xb0(sp)
-;   sd s4, 0xb8(sp)
-;   sd s3, 0xc0(sp)
-;   sd s2, 0xc8(sp)
-;   sd s1, 0xd0(sp)
+;   sd s1, 0xb0(sp)
+;   sd s5, 0xb8(sp)
+;   sd s4, 0xc0(sp)
+;   sd s3, 0xc8(sp)
+;   sd s2, 0xd0(sp)
 ;   sd t4, 0xd8(sp)
 ;   sd t3, 0xe0(sp)
 ;   sd t2, 0xe8(sp)
