@@ -303,15 +303,18 @@ unsafe fn call_host_and_handle_result<T>(
     let store = StoreContextMut::from_raw(raw_store);
 
     let res = crate::runtime::vm::catch_unwind_and_longjmp(|| {
-        store
-            .0
-            .call_hook(CallHook::CallingHost)
-            .and_then(|_| func(instance, types, store))
-            .and_then(|res| {
-                let store = StoreContextMut::<T>::from_raw(raw_store);
-                store.0.call_hook(CallHook::ReturningFromHost)?;
-                Ok(res)
-            })
+        if let Err(e) = store.0.call_hook(CallHook::CallingHost) {
+            return Err(e);
+        }
+
+        let res = func(instance, types, store);
+
+        let store = StoreContextMut::<T>::from_raw(raw_store);
+        if let Err(e) = store.0.call_hook(CallHook::ReturningFromHost) {
+            return Err(e);
+        }
+
+        res
     });
 
     match res {

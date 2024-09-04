@@ -234,9 +234,9 @@ fn trapping() -> Result<()> {
     let (s, e) = run(TRAP_IN_F, false);
     assert!(format!("{:?}", e.unwrap()).contains("trapping in f"));
     assert_eq!(s.calls_into_host, 1);
-    assert_eq!(s.returns_from_host, 0);
+    assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
-    assert_eq!(s.returns_from_wasm, 0);
+    assert_eq!(s.returns_from_wasm, 1);
 
     // // trap in next call to host. No calls after the bit is set, so this trap shouldn't happen
     let (s, e) = run(TRAP_NEXT_CALL_HOST, false);
@@ -646,11 +646,10 @@ impl State {
                         bail!("call_hook: trapping on ReturningFromHost");
                     }
                 }
-                // c => panic!(
-                //     "illegal context: expected Some(Host), got {:?}. remaining: {:?}",
-                //     c, self.context
-                // ),
-                _ => {}
+                c => panic!(
+                    "illegal context: expected Some(Host), got {:?}. remaining: {:?}",
+                    c, self.context
+                ),
             },
             CallHook::CallingWasm => {
                 self.calls_into_wasm += 1;
@@ -667,11 +666,10 @@ impl State {
                         bail!("call_hook: trapping on ReturningFromWasm");
                     }
                 }
-                // c => panic!(
-                //     "illegal context: expected Some(Wasm), got {:?}. remaining: {:?}",
-                //     c, self.context
-                // ),
-                _ => {}
+                c => panic!(
+                    "illegal context: expected Some(Wasm), got {:?}. remaining: {:?}",
+                    c, self.context
+                ),
             },
         }
         Ok(())
