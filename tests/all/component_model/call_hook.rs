@@ -143,8 +143,8 @@ fn call_func_with_realloc() -> Result<()> {
 // Call a guest function that also defines a post-return.
 #[test]
 fn call_func_with_post_return() -> Result<()> {
-    let wat =
-        r#"(component
+    let wat = r#"
+        (component
             (core module $m
                 (func (export "roundtrip"))
                 (func (export "post-return"))
