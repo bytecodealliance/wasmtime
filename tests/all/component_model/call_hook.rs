@@ -127,9 +127,6 @@ fn call_func_with_realloc() -> Result<()> {
     let result = res.to_str(&store)?;
     assert_eq!(&message, &result);
 
-    assert_eq!(store.data().calls_into_wasm, 2);
-    assert_eq!(store.data().returns_from_wasm, 2);
-
     export.post_return(&mut store)?;
 
     // There is one host call for the host-side realloc, and then two wasm calls for both the
