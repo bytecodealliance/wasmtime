@@ -71,9 +71,9 @@ fn call_wrapped_func() -> Result<()> {
     Ok(())
 }
 
-// Crate a synchronous func that returns a `list<u8>`, and call it from wasm.
+// Call a func that turns a `list<u8>` into a `string`, to ensure that `realloc` calls are counted.
 #[test]
-fn call_wrapped_func_with_realloc() -> Result<()> {
+fn call_func_with_realloc() -> Result<()> {
     let wat = format!(
         r#"(component
             (core module $m
@@ -127,6 +127,9 @@ fn call_wrapped_func_with_realloc() -> Result<()> {
     let result = res.to_str(&store)?;
     assert_eq!(&message, &result);
 
+    assert_eq!(store.data().calls_into_wasm, 2);
+    assert_eq!(store.data().returns_from_wasm, 2);
+
     export.post_return(&mut store)?;
 
     // There is one host call for the host-side realloc, and then two wasm calls for both the
@@ -134,6 +137,57 @@ fn call_wrapped_func_with_realloc() -> Result<()> {
     let s = store.into_data();
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
+    assert_eq!(s.calls_into_wasm, 2);
+    assert_eq!(s.returns_from_wasm, 2);
+
+    Ok(())
+}
+
+// Call a guest function that also defines a post-return.
+#[test]
+fn call_func_with_post_return() -> Result<()> {
+    let wat =
+        r#"(component
+            (core module $m
+                (func (export "roundtrip"))
+                (func (export "post-return"))
+            )
+            (core instance $i (instantiate $m))
+
+            (func (export "export")
+                (canon lift
+                    (core func $i "roundtrip")
+                    (post-return (func $i "post-return"))
+                )
+            )
+        )"#;
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, wat)?;
+    let linker = Linker::<State>::new(&engine);
+    let mut store = Store::new(&engine, State::default());
+    store.call_hook(sync_call_hook);
+    let inst = linker
+        .instantiate(&mut store, &component)
+        .expect("instantiate");
+
+    let export = inst
+        .get_typed_func::<(), ()>(&mut store, "export")
+        .expect("looking up `export`");
+
+    export.call(&mut store, ())?;
+
+    // Before post-return, there will only have been one call into wasm.
+    assert_eq!(store.data().calls_into_wasm, 1);
+    assert_eq!(store.data().returns_from_wasm, 1);
+
+    export.post_return(&mut store)?;
+
+    // There are no host calls in this example, but the post-return does increment the count of
+    // wasm calls by 1, putting the total number of wasm calls at 2.
+    let s = store.into_data();
+    assert_eq!(s.calls_into_host, 0);
+    assert_eq!(s.returns_from_host, 0);
     assert_eq!(s.calls_into_wasm, 2);
     assert_eq!(s.returns_from_wasm, 2);
 
