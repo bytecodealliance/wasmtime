@@ -1,5 +1,6 @@
 #![cfg(not(miri))]
 
+use crate::call_hook::{sync_call_hook, Context, State};
 use anyhow::{bail, Result};
 use std::future::Future;
 use std::pin::Pin;
@@ -589,93 +590,4 @@ async fn drop_suspended_async_hook() -> Result<()> {
             *self.0 -= 1;
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum Context {
-    Host,
-    Wasm,
-}
-
-struct State {
-    context: Vec<Context>,
-
-    calls_into_host: usize,
-    returns_from_host: usize,
-    calls_into_wasm: usize,
-    returns_from_wasm: usize,
-
-    trap_next_call_host: bool,
-    trap_next_return_host: bool,
-    trap_next_call_wasm: bool,
-    trap_next_return_wasm: bool,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State {
-            context: Vec::new(),
-            calls_into_host: 0,
-            returns_from_host: 0,
-            calls_into_wasm: 0,
-            returns_from_wasm: 0,
-            trap_next_call_host: false,
-            trap_next_return_host: false,
-            trap_next_call_wasm: false,
-            trap_next_return_wasm: false,
-        }
-    }
-}
-
-impl State {
-    // This implementation asserts that hooks are always called in a stack-like manner.
-    fn call_hook(&mut self, s: CallHook) -> Result<()> {
-        match s {
-            CallHook::CallingHost => {
-                self.calls_into_host += 1;
-                if self.trap_next_call_host {
-                    bail!("call_hook: trapping on CallingHost");
-                } else {
-                    self.context.push(Context::Host);
-                }
-            }
-            CallHook::ReturningFromHost => match self.context.pop() {
-                Some(Context::Host) => {
-                    self.returns_from_host += 1;
-                    if self.trap_next_return_host {
-                        bail!("call_hook: trapping on ReturningFromHost");
-                    }
-                }
-                c => panic!(
-                    "illegal context: expected Some(Host), got {:?}. remaining: {:?}",
-                    c, self.context
-                ),
-            },
-            CallHook::CallingWasm => {
-                self.calls_into_wasm += 1;
-                if self.trap_next_call_wasm {
-                    bail!("call_hook: trapping on CallingWasm");
-                } else {
-                    self.context.push(Context::Wasm);
-                }
-            }
-            CallHook::ReturningFromWasm => match self.context.pop() {
-                Some(Context::Wasm) => {
-                    self.returns_from_wasm += 1;
-                    if self.trap_next_return_wasm {
-                        bail!("call_hook: trapping on ReturningFromWasm");
-                    }
-                }
-                c => panic!(
-                    "illegal context: expected Some(Wasm), got {:?}. remaining: {:?}",
-                    c, self.context
-                ),
-            },
-        }
-        Ok(())
-    }
-}
-
-fn sync_call_hook(mut ctx: StoreContextMut<'_, State>, transition: CallHook) -> Result<()> {
-    ctx.data_mut().call_hook(transition)
 }
