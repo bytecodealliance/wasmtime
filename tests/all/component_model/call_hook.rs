@@ -71,64 +71,47 @@ fn call_wrapped_func() -> Result<()> {
     Ok(())
 }
 
-// Crate a synchronous Func, call it directly:
+// Crate a synchronous func that returns a `list<u8>`, and call it from wasm.
 #[test]
 fn call_wrapped_func_with_realloc() -> Result<()> {
     let wat = format!(
-        r#"
-        (component
-            (import "f" (func $f (param "list" (list u8))))
-
-            (core module $libc
-              (memory (export "memory") 1)
-              {REALLOC_AND_FREE}
-            )
-            (core instance $libc (instantiate $libc))
-
-            (core func $f_lower
-                (canon lower (func $f) (memory $libc "memory"))
-            )
+        r#"(component
             (core module $m
-                (import "" "" (func $f (param i32 i32)))
-
                 (memory (export "memory") 1)
-
-                (func $export (param i32) (param i32)
-                    (call $f (local.get 0) (local.get 1))
+                (func (export "roundtrip") (param i32 i32) (result i32)
+                    (local $base i32)
+                    (local.set $base
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const 4)
+                            (i32.const 8)))
+                    (i32.store offset=0
+                        (local.get $base)
+                        (local.get 0))
+                    (i32.store offset=4
+                        (local.get $base)
+                        (local.get 1))
+                    (local.get $base)
                 )
 
-                (export "export" (func $export))
-
-                (func (export "realloc") (param i32 i32 i32 i32) (result i32)
-                    i32.const 65532)
+                {REALLOC_AND_FREE}
             )
-            (core instance $i (instantiate $m
-                (with "" (instance
-                    (export "" (func $f_lower))
-                ))
-            ))
-            (func (export "export") (param "list" (list u8))
+            (core instance $i (instantiate $m))
+
+            (func (export "list8-to-str") (param "a" (list u8)) (result string)
                 (canon lift
-                    (core func $i "export") (memory $i "memory") (realloc (func $i "realloc"))
+                    (core func $i "roundtrip")
+                    (memory $i "memory")
+                    (realloc (func $i "realloc"))
                 )
             )
-        )
-    "#
+        )"#
     );
 
     let engine = Engine::default();
     let component = Component::new(&engine, wat)?;
-
-    let mut linker = Linker::<State>::new(&engine);
-    linker
-        .root()
-        .func_wrap("f", |_, (xs,): (Vec<u8>,)| -> Result<()> {
-            if xs.len() != 3 {
-                bail!("list should have length 3");
-            }
-            Ok(())
-        })?;
-
+    let linker = Linker::<State>::new(&engine);
     let mut store = Store::new(&engine, State::default());
     store.call_hook(sync_call_hook);
     let inst = linker
@@ -136,16 +119,21 @@ fn call_wrapped_func_with_realloc() -> Result<()> {
         .expect("instantiate");
 
     let export = inst
-        .get_typed_func::<(Vec<u8>,), ()>(&mut store, "export")
-        .expect("looking up `export`");
+        .get_typed_func::<(&[u8],), (WasmStr,)>(&mut store, "list8-to-str")
+        .expect("looking up `list8-to-str`");
 
-    export.call(&mut store, (vec![10, 20, 30],))?;
+    let message = String::from("hello, world!");
+    let res = export.call(&mut store, (message.as_bytes(),))?.0;
+    let result = res.to_str(&store)?;
+    assert_eq!(&message, &result);
+
     export.post_return(&mut store)?;
+
 
     // Calling `realloc` will cause an additional wasm call to happen.
     let s = store.into_data();
-    assert_eq!(s.calls_into_host, 1);
-    assert_eq!(s.returns_from_host, 1);
+    assert_eq!(s.calls_into_host, 0);
+    assert_eq!(s.returns_from_host, 0);
     assert_eq!(s.calls_into_wasm, 2);
     assert_eq!(s.returns_from_wasm, 2);
 
