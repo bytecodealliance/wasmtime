@@ -1,5 +1,6 @@
 #![cfg(not(miri))]
 
+use super::REALLOC_AND_FREE;
 use crate::call_hook::{sync_call_hook, Context, State};
 use anyhow::{bail, Result};
 use std::future::Future;
@@ -66,6 +67,87 @@ fn call_wrapped_func() -> Result<()> {
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
     assert_eq!(s.returns_from_wasm, 1);
+
+    Ok(())
+}
+
+// Crate a synchronous Func, call it directly:
+#[test]
+fn call_wrapped_func_with_realloc() -> Result<()> {
+    let wat = format!(
+        r#"
+        (component
+            (import "f" (func $f (param "list" (list u8))))
+
+            (core module $libc
+              (memory (export "memory") 1)
+              {REALLOC_AND_FREE}
+            )
+            (core instance $libc (instantiate $libc))
+
+            (core func $f_lower
+                (canon lower (func $f) (memory $libc "memory"))
+            )
+            (core module $m
+                (import "" "" (func $f (param i32 i32)))
+
+                (memory (export "memory") 1)
+
+                (func $export (param i32) (param i32)
+                    (call $f (local.get 0) (local.get 1))
+                )
+
+                (export "export" (func $export))
+
+                (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+                    i32.const 65532)
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "" (func $f_lower))
+                ))
+            ))
+            (func (export "export") (param "list" (list u8))
+                (canon lift
+                    (core func $i "export") (memory $i "memory") (realloc (func $i "realloc"))
+                )
+            )
+        )
+    "#
+    );
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, wat)?;
+
+    let mut linker = Linker::<State>::new(&engine);
+    linker
+        .root()
+        .func_wrap("f", |_, (xs,): (Vec<u8>,)| -> Result<()> {
+            if xs.len() != 3 {
+                bail!("list should have length 3");
+            }
+            Ok(())
+        })?;
+
+    let mut store = Store::new(&engine, State::default());
+    store.call_hook(sync_call_hook);
+    let inst = linker
+        .instantiate(&mut store, &component)
+        .expect("instantiate");
+
+    let export = inst
+        .get_typed_func::<(Vec<u8>,), ()>(&mut store, "export")
+        .expect("looking up `export`");
+
+    export.call(&mut store, (vec![10, 20, 30],))?;
+    export.post_return(&mut store)?;
+
+    // Calling `realloc` will cause an additional wasm call to happen.
+    let s = store.into_data();
+    assert_eq!(s.calls_into_host, 1);
+    assert_eq!(s.returns_from_host, 1);
+    assert_eq!(s.calls_into_wasm, 2);
+    assert_eq!(s.returns_from_wasm, 2);
 
     Ok(())
 }
