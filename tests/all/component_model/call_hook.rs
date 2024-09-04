@@ -231,7 +231,6 @@ fn trapping() -> Result<()> {
     assert_eq!(s.calls_into_wasm, 2);
     assert_eq!(s.returns_from_wasm, 2);
 
-    // TODO: this one is surprising
     let (s, e) = run(TRAP_IN_F, false);
     assert!(format!("{:?}", e.unwrap()).contains("trapping in f"));
     assert_eq!(s.calls_into_host, 1);
