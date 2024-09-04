@@ -225,7 +225,7 @@ fn trapping() -> Result<()> {
     assert_eq!(s.returns_from_wasm, 1);
 
     let (s, e) = run(DO_NOTHING, true);
-    assert!(e.is_none(), "{:?}", e);
+    assert!(e.is_none());
     assert_eq!(s.calls_into_host, 2);
     assert_eq!(s.returns_from_host, 2);
     assert_eq!(s.calls_into_wasm, 2);
