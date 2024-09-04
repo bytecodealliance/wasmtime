@@ -7,7 +7,7 @@ use crate::runtime::vm::component::{
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
-use crate::{FuncType, StoreContextMut};
+use crate::{CallHook, FuncType, StoreContextMut};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
@@ -248,7 +248,11 @@ impl<'a, T> LowerContext<'a, T> {
     ) -> Result<usize> {
         let realloc_func_ty = Arc::clone(unsafe { (*self.instance).realloc_func_ty() });
         let realloc_func_ty = realloc_func_ty.downcast_ref::<FuncType>().unwrap();
-        self.options
+
+        self.store.0.call_hook(CallHook::CallingHost)?;
+
+        let res = self
+            .options
             .realloc(
                 &mut self.store,
                 &realloc_func_ty,
@@ -257,7 +261,11 @@ impl<'a, T> LowerContext<'a, T> {
                 old_align,
                 new_size,
             )
-            .map(|(_, ptr)| ptr)
+            .map(|(_, ptr)| ptr);
+
+        self.store.0.call_hook(CallHook::ReturningFromHost)?;
+
+        res
     }
 
     /// Returns a fixed mutable slice of memory `N` bytes large starting at
