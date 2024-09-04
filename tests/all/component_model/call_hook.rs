@@ -129,11 +129,11 @@ fn call_wrapped_func_with_realloc() -> Result<()> {
 
     export.post_return(&mut store)?;
 
-
-    // Calling `realloc` will cause an additional wasm call to happen.
+    // There is one host call for the host-side realloc, and then two wasm calls for both the
+    // `list8-to-str` call and the guest realloc call for the list argument.
     let s = store.into_data();
-    assert_eq!(s.calls_into_host, 0);
-    assert_eq!(s.returns_from_host, 0);
+    assert_eq!(s.calls_into_host, 1);
+    assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 2);
     assert_eq!(s.returns_from_wasm, 2);
 
