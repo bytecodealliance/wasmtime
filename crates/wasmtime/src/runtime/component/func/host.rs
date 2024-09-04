@@ -2,13 +2,12 @@ use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
+use crate::prelude::*;
 use crate::runtime::vm::component::{
-    InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
+    ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
-use crate::vm::component::ComponentInstance;
-use crate::{prelude::*, CallHook};
-use crate::{AsContextMut, StoreContextMut, ValRaw};
+use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
