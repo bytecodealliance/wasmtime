@@ -522,26 +522,11 @@ where
         insts
     }
 
-    fn gen_call(
-        dest: &CallDest,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        tmp: Writable<Reg>,
-        callee_conv: isa::CallConv,
-        caller_conv: isa::CallConv,
-        callee_pop_size: u32,
-    ) -> SmallVec<[Self::I; 2]> {
-        if callee_conv == isa::CallConv::Tail || callee_conv == isa::CallConv::Fast {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
+        if info.callee_conv == isa::CallConv::Tail || info.callee_conv == isa::CallConv::Fast {
             match &dest {
                 &CallDest::ExtName(ref name, RelocDistance::Near) => smallvec![Inst::Call {
-                    callee: Box::new(name.clone()),
-                    info: Box::new(CallInfo {
-                        uses,
-                        defs,
-                        clobbers,
-                        callee_pop_size,
-                    }),
+                    info: Box::new(info.map(|()| name.clone()))
                 }
                 .into()],
                 &CallDest::ExtName(ref name, RelocDistance::Far) => smallvec![
@@ -552,29 +537,21 @@ where
                     }
                     .into(),
                     Inst::IndirectCall {
-                        callee: XReg::new(tmp.to_reg()).unwrap(),
-                        info: Box::new(CallInfo {
-                            uses,
-                            defs,
-                            clobbers,
-                            callee_pop_size,
-                        }),
+                        info: Box::new(info.map(|()| XReg::new(tmp.to_reg()).unwrap()))
                     }
                     .into(),
                 ],
                 &CallDest::Reg(reg) => smallvec![Inst::IndirectCall {
-                    callee: XReg::new(*reg).unwrap(),
-                    info: Box::new(CallInfo {
-                        uses,
-                        defs,
-                        clobbers,
-                        callee_pop_size,
-                    }),
+                    info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
                 }
                 .into()],
             }
         } else {
-            todo!("host calls? callee_conv = {callee_conv:?}; caller_conv = {caller_conv:?}")
+            todo!(
+                "host calls? callee_conv = {:?}; caller_conv = {:?}",
+                info.callee_conv,
+                info.caller_conv,
+            )
         }
     }
 

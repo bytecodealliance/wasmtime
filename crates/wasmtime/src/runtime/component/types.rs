@@ -733,7 +733,7 @@ impl Module {
     pub fn imports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = ((&str, &str), ExternType)> + 'a {
+    ) -> impl ExactSizeIterator<Item = ((&'a str, &'a str), ExternType)> + 'a {
         self.0.types[self.0.index]
             .imports
             .iter()
@@ -749,7 +749,7 @@ impl Module {
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&str, ExternType)> + 'a {
+    ) -> impl ExactSizeIterator<Item = (&'a str, ExternType)> + 'a {
         self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
             (
                 name.as_str(),
@@ -780,7 +780,7 @@ impl Component {
     pub fn imports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> + 'a {
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentItem)> + 'a {
         self.0.types[self.0.index].imports.iter().map(|(name, ty)| {
             (
                 name.as_str(),
@@ -801,7 +801,7 @@ impl Component {
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> + 'a {
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentItem)> + 'a {
         self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
             (
                 name.as_str(),
@@ -832,7 +832,7 @@ impl ComponentInstance {
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentItem)> {
         self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
             (
                 name.as_str(),

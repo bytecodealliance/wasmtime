@@ -278,16 +278,16 @@ block0:
 ;   aghi %r15, -600
 ;   stg %r1, 0(%r15)
 ; block0:
-;   lghi %r2, 10
-;   stg %r2, 272(%r15)
-;   lghi %r3, 15
-;   stg %r3, 264(%r15)
-;   lghi %r4, 20
-;   stg %r4, 256(%r15)
-;   lghi %r5, 25
-;   stg %r5, 248(%r15)
-;   lghi %r6, 30
-;   stg %r6, 240(%r15)
+;   lghi %r3, 10
+;   stg %r3, 272(%r15)
+;   lghi %r4, 15
+;   stg %r4, 264(%r15)
+;   lghi %r5, 20
+;   stg %r5, 256(%r15)
+;   lghi %r6, 25
+;   stg %r6, 248(%r15)
+;   lghi %r7, 30
+;   stg %r7, 240(%r15)
 ;   lghi %r7, 35
 ;   stg %r7, 232(%r15)
 ;   lghi %r14, 40
@@ -356,8 +356,8 @@ block0:
 ;   lg %r5, 248(%r15)
 ;   lg %r6, 240(%r15)
 ;   lg %r7, 232(%r15)
-;   lg %r13, 160(%r15)
-;   return_call_ind %r13 ; callee_pop_size 320
+;   lg %r12, 160(%r15)
+;   return_call_ind %r12 ; callee_pop_size 320
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -366,16 +366,16 @@ block0:
 ;   aghi %r15, -0x258
 ;   stg %r1, 0(%r15)
 ; block1: ; offset 0x14
-;   lghi %r2, 0xa
-;   stg %r2, 0x110(%r15)
-;   lghi %r3, 0xf
-;   stg %r3, 0x108(%r15)
-;   lghi %r4, 0x14
-;   stg %r4, 0x100(%r15)
-;   lghi %r5, 0x19
-;   stg %r5, 0xf8(%r15)
-;   lghi %r6, 0x1e
-;   stg %r6, 0xf0(%r15)
+;   lghi %r3, 0xa
+;   stg %r3, 0x110(%r15)
+;   lghi %r4, 0xf
+;   stg %r4, 0x108(%r15)
+;   lghi %r5, 0x14
+;   stg %r5, 0x100(%r15)
+;   lghi %r6, 0x19
+;   stg %r6, 0xf8(%r15)
+;   lghi %r7, 0x1e
+;   stg %r7, 0xf0(%r15)
 ;   lghi %r7, 0x23
 ;   stg %r7, 0xe8(%r15)
 ;   lghi %r14, 0x28
@@ -449,8 +449,8 @@ block0:
 ;   lg %r5, 0xf8(%r15)
 ;   lg %r6, 0xf0(%r15)
 ;   lg %r7, 0xe8(%r15)
-;   lg %r13, 0xa0(%r15)
-;   lgr %r1, %r13
+;   lg %r12, 0xa0(%r15)
+;   lgr %r1, %r12
 ;   aghi %r15, 0x118
 ;   lmg %r8, %r14, 0x180(%r15)
 ;   br %r1

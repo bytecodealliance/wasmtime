@@ -35,12 +35,10 @@
                  (offset i64))
 
     ;; A direct call to a known callee.
-    (Call (callee BoxExternalName)
-          (info BoxCallInfo))
+    (Call (info BoxCallInfo))
 
     ;; An indirect call to an unknown callee.
-    (IndirectCall (callee XReg)
-                  (info BoxCallInfo))
+    (IndirectCall (info BoxCallIndInfo))
 
     ;; Unconditional jumps.
     (Jump (label MachLabel))
@@ -103,6 +101,7 @@
 )
 
 (type BoxCallInfo (primitive BoxCallInfo))
+(type BoxCallIndInfo (primitive BoxCallIndInfo))
 
 ;;;; Address Modes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

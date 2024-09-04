@@ -531,20 +531,16 @@
        ;; Control flow instructions.
 
        ;; Direct call: call simm32.
-       (CallKnown (dest ExternalName)
-                  (info BoxCallInfo))
+       (CallKnown (info BoxCallInfo))
 
        ;; Indirect call: callq (reg mem)
-       (CallUnknown (dest RegMem)
-                    (info BoxCallInfo))
+       (CallUnknown (info BoxCallIndInfo))
 
        ;; Tail call to a direct destination.
-       (ReturnCallKnown (callee ExternalName)
-                        (info BoxReturnCallInfo))
+       (ReturnCallKnown (info BoxReturnCallInfo))
 
        ;; Tail call to an indirect destination.
-       (ReturnCallUnknown (callee Reg)
-                          (info BoxReturnCallInfo))
+       (ReturnCallUnknown (info BoxReturnCallIndInfo))
 
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
@@ -748,7 +744,9 @@
             SFence))
 
 (type BoxCallInfo extern (enum))
+(type BoxCallIndInfo extern (enum))
 (type BoxReturnCallInfo extern (enum))
+(type BoxReturnCallIndInfo extern (enum))
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)

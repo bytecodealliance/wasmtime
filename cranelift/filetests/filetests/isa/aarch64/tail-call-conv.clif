@@ -243,8 +243,8 @@ block0:
 ;   stp x19, x20, [sp, #-16]!
 ;   sub sp, sp, #16
 ; block0:
-;   movz x2, #10
-;   str x2, [sp]
+;   movz x3, #10
+;   str x3, [sp]
 ;   movz x3, #15
 ;   movz x4, #20
 ;   movz x5, #25
@@ -311,8 +311,8 @@ block0:
 ;   stp x19, x20, [sp, #-0x10]!
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0x20
-;   mov x2, #0xa
-;   stur x2, [sp]
+;   mov x3, #0xa
+;   stur x3, [sp]
 ;   mov x3, #0xf
 ;   mov x4, #0x14
 ;   mov x5, #0x19

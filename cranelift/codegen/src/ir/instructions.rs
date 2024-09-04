@@ -305,7 +305,7 @@ impl InstructionData {
     /// Get the destinations of this instruction, if it's a branch.
     ///
     /// `br_table` returns the empty slice.
-    pub fn branch_destination<'a>(&'a self, jump_tables: &'a ir::JumpTables) -> &[BlockCall] {
+    pub fn branch_destination<'a>(&'a self, jump_tables: &'a ir::JumpTables) -> &'a [BlockCall] {
         match self {
             Self::Jump {
                 ref destination, ..
@@ -325,7 +325,7 @@ impl InstructionData {
     pub fn branch_destination_mut<'a>(
         &'a mut self,
         jump_tables: &'a mut ir::JumpTables,
-    ) -> &mut [BlockCall] {
+    ) -> &'a mut [BlockCall] {
         match self {
             Self::Jump {
                 ref mut destination,

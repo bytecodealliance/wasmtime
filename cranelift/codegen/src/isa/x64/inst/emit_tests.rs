@@ -3747,14 +3747,10 @@ fn test_x64_emit() {
     // ========================================================
     // CallKnown
     insns.push((
-        Inst::call_known(
+        Inst::call_known(Box::new(CallInfo::empty(
             ExternalName::User(UserExternalNameRef::new(0)),
-            smallvec![],
-            smallvec![],
-            PRegSet::default(),
-            0,
             CallConv::SystemV,
-        ),
+        ))),
         "E800000000",
         "call    User(userextname0)",
     ));
@@ -3762,14 +3758,7 @@ fn test_x64_emit() {
     // ========================================================
     // CallUnknown
     fn call_unknown(rm: RegMem) -> Inst {
-        Inst::call_unknown(
-            rm,
-            smallvec![],
-            smallvec![],
-            PRegSet::default(),
-            0,
-            CallConv::SystemV,
-        )
+        Inst::call_unknown(Box::new(CallInfo::empty(rm, CallConv::SystemV)))
     }
 
     insns.push((call_unknown(RegMem::reg(rbp)), "FFD5", "call    *%rbp"));

@@ -2943,8 +2943,9 @@ impl MachInstEmit for Inst {
             }
             &Inst::CallInd { ref info } => {
                 let user_stack_map = state.take_stack_map();
-                let rn = info.rn;
-                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
+                sink.put4(
+                    0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.dest) << 5),
+                );
                 if let Some(s) = user_stack_map {
                     let offset = sink.cur_offset();
                     sink.push_user_stack_map(state, offset, s);
@@ -2959,16 +2960,13 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::ReturnCall {
-                ref callee,
-                ref info,
-            } => {
+            &Inst::ReturnCall { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
                 // Note: this is not `Inst::Jump { .. }.emit(..)` because we
                 // have different metadata in this case: we don't have a label
                 // for the target, but rather a function relocation.
-                sink.add_reloc(Reloc::Arm64Call, &**callee, 0);
+                sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b000101, 0));
                 sink.add_call_site();
 
@@ -2977,11 +2975,11 @@ impl MachInstEmit for Inst {
                 // in this case.
                 start_off = sink.cur_offset();
             }
-            &Inst::ReturnCallInd { callee, ref info } => {
+            &Inst::ReturnCallInd { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
                 Inst::IndirectBr {
-                    rn: callee,
+                    rn: info.dest,
                     targets: vec![],
                 }
                 .emit(sink, emit_info, state);
@@ -3372,15 +3370,7 @@ impl MachInstEmit for Inst {
                 // blr tmp
                 sink.add_reloc(Reloc::Aarch64TlsDescCall, &**symbol, 0);
                 Inst::CallInd {
-                    info: crate::isa::Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: PRegSet::empty(),
-                        caller_callconv: CallConv::SystemV,
-                        callee_callconv: CallConv::SystemV,
-                        callee_pop_size: 0,
-                    }),
+                    info: crate::isa::Box::new(CallInfo::empty(tmp.to_reg(), CallConv::SystemV)),
                 }
                 .emit(sink, emit_info, state);
 
@@ -3432,15 +3422,10 @@ impl MachInstEmit for Inst {
 
                 // call function pointer in temp register
                 Inst::CallInd {
-                    info: crate::isa::Box::new(CallIndInfo {
-                        rn: rtmp.to_reg(),
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: PRegSet::empty(),
-                        caller_callconv: CallConv::AppleAarch64,
-                        callee_callconv: CallConv::AppleAarch64,
-                        callee_pop_size: 0,
-                    }),
+                    info: crate::isa::Box::new(CallInfo::empty(
+                        rtmp.to_reg(),
+                        CallConv::AppleAarch64,
+                    )),
                 }
                 .emit(sink, emit_info, state);
             }
@@ -3533,11 +3518,11 @@ impl MachInstEmit for Inst {
     }
 }
 
-fn emit_return_call_common_sequence(
+fn emit_return_call_common_sequence<T>(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    info: &ReturnCallInfo,
+    info: &ReturnCallInfo<T>,
 ) {
     for inst in
         AArch64MachineDeps::gen_clobber_restore(CallConv::Tail, &emit_info.0, state.frame_layout())

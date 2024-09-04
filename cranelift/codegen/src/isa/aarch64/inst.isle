@@ -806,22 +806,16 @@
        ;; of type `Reloc::Arm64Call`); if the destination distance is not `RelocDistance::Near`, the
        ;; code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
        ;; target.
-       (Call
-        (info BoxCallInfo))
+       (Call (info BoxCallInfo))
 
        ;; A machine indirect-call instruction.
-       (CallInd
-        (info BoxCallIndInfo))
+       (CallInd (info BoxCallIndInfo))
 
        ;; A return-call macro instruction.
-       (ReturnCall
-        (callee BoxExternalName)
-        (info BoxReturnCallInfo))
+       (ReturnCall (info BoxReturnCallInfo))
 
        ;; An indirect return-call macro instruction.
-       (ReturnCallInd
-        (callee Reg)
-        (info BoxReturnCallInfo))
+       (ReturnCallInd (info BoxReturnCallIndInfo))
 
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
@@ -1095,6 +1089,7 @@
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
+(type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type CondBrKind (primitive CondBrKind))
 (type BranchTarget (primitive BranchTarget))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))

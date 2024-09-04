@@ -801,16 +801,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_call(
-        _dest: &CallDest,
-        _uses: CallArgList,
-        _defs: CallRetList,
-        _clobbers: PRegSet,
-        _tmp: Writable<Reg>,
-        _callee_conv: isa::CallConv,
-        _caller_conv: isa::CallConv,
-        _callee_pop_size: u32,
-    ) -> SmallVec<[Inst; 2]> {
+    fn gen_call(_dest: &CallDest, _tmp: Writable<Reg>, _info: CallInfo<()>) -> SmallVec<[Inst; 2]> {
         unreachable!();
     }
 

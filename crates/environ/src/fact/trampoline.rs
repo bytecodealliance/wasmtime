@@ -3073,7 +3073,7 @@ impl<'a> Destination<'a> {
         &'b self,
         types: &'b ComponentTypesBuilder,
         fields: impl IntoIterator<Item = InterfaceType> + 'b,
-    ) -> impl Iterator<Item = Destination> + 'b
+    ) -> impl Iterator<Item = Destination<'b>> + 'b
     where
         'a: 'b,
     {

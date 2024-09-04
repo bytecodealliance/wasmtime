@@ -1014,6 +1014,15 @@
     ;; machine at this program point.
     (Unwind
       (inst UnwindInst))
+
+    ;; Pseudo-instruction used for `tls_value` to call the libcall of the same
+    ;; name.
+    (ElfTlsGetOffset
+      (tls_offset WritableReg)
+      (got Reg)
+      (got_offset Reg)
+      (link WritableReg)
+      (symbol BoxSymbolReloc))
 ))
 
 ;; Primitive types used in instruction formats.
@@ -2912,7 +2921,8 @@
 (rule 1 (memcpy dst src (len_minus_one len))
       (mvc (memarg_pair dst) (memarg_pair src) len))
 (rule (memcpy dst src len)
-      (lib_call (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len))))
+      (lib_call
+        (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len))))
 
 ;; Prepare a stack copy of a single (oversized) argument.
 (decl copy_to_buffer (MemArg ABIArg Value) InstOutput)
@@ -3605,18 +3615,12 @@
 
 (type LibCallInfo extern (enum))
 
-(decl lib_call_info_memcpy (Reg Reg Reg) LibCallInfo)
+(decl lib_call_info_memcpy (Reg Reg Reg) BoxCallInfo)
 (extern constructor lib_call_info_memcpy lib_call_info_memcpy)
 
-(decl lib_call_info_tls_get_offset (WritableReg Reg Reg SymbolReloc) LibCallInfo)
-(extern constructor lib_call_info_tls_get_offset lib_call_info_tls_get_offset)
-
-(decl lib_call_info (LibCallInfo) BoxCallInfo)
-(extern constructor lib_call_info lib_call_info)
-
-(decl lib_call (LibCallInfo) SideEffectNoResult)
-(rule (lib_call libcall)
-      (call_impl (writable_link_reg) (lib_call_info libcall)))
+(decl lib_call (BoxCallInfo) SideEffectNoResult)
+(rule (lib_call info)
+      (call_impl (writable_link_reg) info))
 
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;

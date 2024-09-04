@@ -34,47 +34,11 @@ pub use crate::isa::s390x::lower::isle::generated_code::{
     VecUnaryOp,
 };
 
-/// Additional information for (direct) Call instructions, left out of line to lower the size of
-/// the Inst enum.
-#[derive(Clone, Debug)]
-pub struct CallInfo {
-    pub dest: ExternalName,
-    pub uses: CallArgList,
-    pub defs: CallRetList,
-    pub clobbers: PRegSet,
-    pub callee_pop_size: u32,
-    pub caller_callconv: CallConv,
-    pub callee_callconv: CallConv,
-    pub tls_symbol: Option<SymbolReloc>,
-}
-
-/// Additional information for CallInd instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct CallIndInfo {
-    pub rn: Reg,
-    pub uses: CallArgList,
-    pub defs: CallRetList,
-    pub clobbers: PRegSet,
-    pub callee_pop_size: u32,
-    pub caller_callconv: CallConv,
-    pub callee_callconv: CallConv,
-}
-
 /// Additional information for (direct) ReturnCall instructions, left out of line to lower the size of
 /// the Inst enum.
 #[derive(Clone, Debug)]
-pub struct ReturnCallInfo {
-    pub dest: ExternalName,
-    pub uses: CallArgList,
-    pub callee_pop_size: u32,
-}
-
-/// Additional information for ReturnCallInd instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct ReturnCallIndInfo {
-    pub rn: Reg,
+pub struct ReturnCallInfo<T> {
+    pub dest: T,
     pub uses: CallArgList,
     pub callee_pop_size: u32,
 }
@@ -267,7 +231,8 @@ impl Inst {
             | Inst::LoadAddr { .. }
             | Inst::Loop { .. }
             | Inst::CondBreak { .. }
-            | Inst::Unwind { .. } => InstructionSet::Base,
+            | Inst::Unwind { .. }
+            | Inst::ElfTlsGetOffset { .. } => InstructionSet::Base,
 
             // These depend on the opcode
             Inst::AluRRR { alu_op, .. } => match alu_op {
@@ -908,7 +873,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(rn);
         }
         Inst::AllocateArgs { .. } => {}
-        Inst::Call { link, info } => {
+        Inst::Call { link, info, .. } => {
             let CallInfo {
                 uses,
                 defs,
@@ -927,14 +892,14 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_clobbers(clobbers);
         }
         Inst::CallInd { link, info } => {
-            let CallIndInfo {
-                rn,
+            let CallInfo {
+                dest,
                 uses,
                 defs,
                 clobbers,
                 ..
             } = &mut **info;
-            collector.reg_use(rn);
+            collector.reg_use(dest);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -953,11 +918,27 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             }
         }
         Inst::ReturnCallInd { info } => {
-            let ReturnCallIndInfo { rn, uses, .. } = &mut **info;
-            collector.reg_use(rn);
+            let ReturnCallInfo { dest, uses, .. } = &mut **info;
+            collector.reg_use(dest);
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
+        }
+        Inst::ElfTlsGetOffset {
+            tls_offset,
+            got,
+            got_offset,
+            link,
+            ..
+        } => {
+            collector.reg_fixed_use(got, gpr(12));
+            collector.reg_fixed_use(got_offset, gpr(2));
+            collector.reg_fixed_def(tls_offset, gpr(2));
+
+            let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            clobbers.remove(gpr_preg(2));
+            collector.reg_clobbers(clobbers);
         }
         Inst::Args { args } => {
             for ArgPair { vreg, preg } in args {
@@ -1082,8 +1063,9 @@ impl MachInst for Inst {
         // registers.
         match self {
             &Inst::Args { .. } => false,
-            &Inst::Call { ref info, .. } => info.caller_callconv != info.callee_callconv,
-            &Inst::CallInd { ref info, .. } => info.caller_callconv != info.callee_callconv,
+            &Inst::Call { ref info, .. } => info.caller_conv != info.callee_conv,
+            &Inst::CallInd { ref info, .. } => info.caller_conv != info.callee_conv,
+            &Inst::ElfTlsGetOffset { .. } => false,
             _ => true,
         }
     }
@@ -3159,15 +3141,8 @@ impl Inst {
                     format!("slgfi {}, {}", show_reg(stack_reg()), size)
                 }
             }
-            &Inst::Call { link, ref info, .. } => {
+            &Inst::Call { link, ref info } => {
                 let link = link.to_reg();
-                let tls_symbol = match &info.tls_symbol {
-                    None => "".to_string(),
-                    Some(SymbolReloc::TlsGd { name }) => {
-                        format!(":tls_gdcall:{}", name.display(None))
-                    }
-                    _ => unreachable!(),
-                };
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
@@ -3175,16 +3150,15 @@ impl Inst {
                 };
                 debug_assert_eq!(link, gpr(14));
                 format!(
-                    "brasl {}, {}{}{}",
+                    "brasl {}, {}{}",
                     show_reg(link),
                     info.dest.display(None),
-                    tls_symbol,
                     callee_pop_size
                 )
             }
             &Inst::CallInd { link, ref info, .. } => {
                 let link = link.to_reg();
-                let rn = pretty_print_reg(info.rn);
+                let rn = pretty_print_reg(info.dest);
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
@@ -3193,7 +3167,7 @@ impl Inst {
                 debug_assert_eq!(link, gpr(14));
                 format!("basr {}, {}{}", show_reg(link), rn, callee_pop_size)
             }
-            &Inst::ReturnCall { ref info, .. } => {
+            &Inst::ReturnCall { ref info } => {
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
@@ -3201,14 +3175,29 @@ impl Inst {
                 };
                 format!("return_call {}{}", info.dest.display(None), callee_pop_size)
             }
-            &Inst::ReturnCallInd { ref info, .. } => {
-                let rn = pretty_print_reg(info.rn);
+            &Inst::ReturnCallInd { ref info } => {
+                let rn = pretty_print_reg(info.dest);
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
                     "".to_string()
                 };
                 format!("return_call_ind {rn}{callee_pop_size}")
+            }
+            &Inst::ElfTlsGetOffset {
+                ref symbol,
+                ref link,
+                ..
+            } => {
+                let link = link.to_reg();
+                let dest = match &**symbol {
+                    SymbolReloc::TlsGd { name } => {
+                        format!("tls_gdcall:{}", name.display(None))
+                    }
+                    _ => unreachable!(),
+                };
+                debug_assert_eq!(link, gpr(14));
+                format!("brasl {}, {}", show_reg(link), dest)
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();

@@ -111,22 +111,16 @@
       (from_bits u8)
       (to_bits u8))
 
-    (Call
-      (info BoxCallInfo))
+    (Call (info BoxCallInfo))
 
       ;; A machine indirect-call instruction.
-    (CallInd
-      (info BoxCallIndInfo))
+    (CallInd (info BoxCallIndInfo))
 
     ;; A direct return-call macro instruction.
-    (ReturnCall
-      (callee BoxExternalName)
-      (info BoxReturnCallInfo))
+    (ReturnCall (info BoxReturnCallInfo))
 
     ;; An indirect return-call macro instruction.
-    (ReturnCallInd
-      (callee Reg)
-      (info BoxReturnCallInfo))
+    (ReturnCallInd (info BoxReturnCallIndInfo))
 
     ;; Emits a trap with the given trap code if the comparison succeeds
     (TrapIf
@@ -780,6 +774,7 @@
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
+(type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type IntegerCompare (primitive IntegerCompare))
 (type AMode (primitive AMode))
 (type OptionReg (primitive OptionReg))

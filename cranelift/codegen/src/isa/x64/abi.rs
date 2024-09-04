@@ -617,16 +617,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::rax()),
         ));
         insts.push(Inst::CallKnown {
-            dest: ExternalName::LibCall(LibCall::Probestack),
-            info: Some(Box::new(CallInfo {
-                // No need to include arg here: we are post-regalloc
-                // so no constraints will be seen anyway.
-                uses: smallvec![],
-                defs: smallvec![],
-                clobbers: PRegSet::empty(),
-                callee_pop_size: 0,
-                callee_conv: CallConv::Probestack,
-            })),
+            // No need to include arg here: we are post-regalloc
+            // so no constraints will be seen anyway.
+            info: Box::new(CallInfo::empty(
+                ExternalName::LibCall(LibCall::Probestack),
+                CallConv::Probestack,
+            )),
         });
     }
 
@@ -822,27 +818,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     /// Generate a call instruction/sequence.
-    fn gen_call(
-        dest: &CallDest,
-        uses: CallArgList,
-        defs: CallRetList,
-        clobbers: PRegSet,
-        tmp: Writable<Reg>,
-        callee_conv: isa::CallConv,
-        _caller_conv: isa::CallConv,
-        callee_pop_size: u32,
-    ) -> SmallVec<[Self::I; 2]> {
+    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                insts.push(Inst::call_known(
-                    name.clone(),
-                    uses,
-                    defs,
-                    clobbers,
-                    callee_pop_size,
-                    callee_conv,
-                ));
+                let info = Box::new(info.map(|()| name.clone()));
+                insts.push(Inst::call_known(info));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
@@ -851,24 +832,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     offset: 0,
                     distance: RelocDistance::Far,
                 });
-                insts.push(Inst::call_unknown(
-                    RegMem::reg(tmp.to_reg()),
-                    uses,
-                    defs,
-                    clobbers,
-                    callee_pop_size,
-                    callee_conv,
-                ));
+                let info = Box::new(info.map(|()| RegMem::reg(tmp.to_reg())));
+                insts.push(Inst::call_unknown(info));
             }
             &CallDest::Reg(reg) => {
-                insts.push(Inst::call_unknown(
-                    RegMem::reg(reg),
-                    uses,
-                    defs,
-                    clobbers,
-                    callee_pop_size,
-                    callee_conv,
-                ));
+                let info = Box::new(info.map(|()| RegMem::reg(reg)));
+                insts.push(Inst::call_unknown(info));
             }
         }
         insts
@@ -898,10 +867,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             distance: RelocDistance::Far,
         });
         let callee_pop_size = 0;
-        insts.push(Inst::call_unknown(
-            RegMem::reg(temp2.to_reg()),
-            /* uses = */
-            smallvec![
+        insts.push(Inst::call_unknown(Box::new(CallInfo {
+            dest: RegMem::reg(temp2.to_reg()),
+            uses: smallvec![
                 CallArgPair {
                     vreg: dst,
                     preg: arg0
@@ -915,11 +883,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     preg: arg2
                 },
             ],
-            /* defs = */ smallvec![],
-            /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
+            defs: smallvec![],
+            clobbers: Self::get_regs_clobbered_by_call(call_conv),
             callee_pop_size,
-            call_conv,
-        ));
+            callee_conv: call_conv,
+            caller_conv: call_conv,
+        })));
         insts
     }
 
@@ -1028,14 +997,17 @@ impl X64CallSite {
 
         // Finally, do the actual tail call!
         let dest = self.dest().clone();
-        let info = Box::new(ReturnCallInfo {
-            new_stack_arg_size,
-            uses: self.take_uses(),
-            tmp: ctx.temp_writable_gpr(),
-        });
+        let uses = self.take_uses();
+        let tmp = ctx.temp_writable_gpr();
         match dest {
             CallDest::ExtName(callee, RelocDistance::Near) => {
-                ctx.emit(Inst::ReturnCallKnown { callee, info });
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee,
+                    uses,
+                    tmp,
+                    new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCallKnown { info });
             }
             CallDest::ExtName(callee, RelocDistance::Far) => {
                 let tmp2 = ctx.temp_writable_gpr();
@@ -1045,15 +1017,23 @@ impl X64CallSite {
                     offset: 0,
                     distance: RelocDistance::Far,
                 });
-                ctx.emit(Inst::ReturnCallUnknown {
-                    callee: tmp2.to_reg().to_reg(),
-                    info,
+                let info = Box::new(ReturnCallInfo {
+                    dest: tmp2.to_reg().to_reg().into(),
+                    uses,
+                    tmp,
+                    new_stack_arg_size,
                 });
+                ctx.emit(Inst::ReturnCallUnknown { info });
             }
-            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallUnknown {
-                callee: callee.into(),
-                info,
-            }),
+            CallDest::Reg(callee) => {
+                let info = Box::new(ReturnCallInfo {
+                    dest: callee.into(),
+                    uses,
+                    tmp,
+                    new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCallUnknown { info });
+            }
         }
     }
 }
