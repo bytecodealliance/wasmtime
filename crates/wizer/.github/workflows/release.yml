@@ -24,6 +24,7 @@ jobs:
           os: ubuntu-latest
         - build: x86_64-macos
           os: macos-latest
+          target: x86_64-apple-darwin
         - build: aarch64-macos
           os: macos-latest
           target: aarch64-apple-darwin
@@ -57,7 +58,7 @@ jobs:
     # Assemble release artifats appropriate for this platform, then upload them
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
-    - uses: actions/upload-artifact@v1
+    - uses: actions/upload-artifact@v4
       with:
         name: bins-${{ matrix.build }}
         path: dist
@@ -69,31 +70,31 @@ jobs:
       # Download all the artifacts that we'll be publishing. Should keep an eye on
       # the `download-artifact` repository to see if we can ever get something
       # like "download all artifacts" or "download this list of artifacts"
-      - uses: actions/download-artifact@v1
+      - uses: actions/download-artifact@v4
         with:
           name: bins-x86_64-macos
           path: dist
-      - uses: actions/download-artifact@v1
+      - uses: actions/download-artifact@v4
         with:
           name: bins-aarch64-macos
           path: dist
-      - uses: actions/download-artifact@v1
+      - uses: actions/download-artifact@v4
         with:
           name: bins-x86_64-windows
           path: dist
-      - uses: actions/download-artifact@v1
+      - uses: actions/download-artifact@v4
         with:
           name: bins-x86_64-mingw
           path: dist
-      - uses: actions/download-artifact@v1
+      - uses: actions/download-artifact@v4
         with:
           name: bins-x86_64-linux
           path: dist
-      - uses: actions/download-artifact@v1
+      - uses: actions/download-artifact@v4
         with:
           name: bins-aarch64-linux
           path: dist
-      - uses: actions/download-artifact@v1
+      - uses: actions/download-artifact@v4
         with:
           name: bins-s390x-linux
           path: dist
