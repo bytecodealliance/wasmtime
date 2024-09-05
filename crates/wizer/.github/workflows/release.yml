@@ -8,6 +8,8 @@ defaults:
   run:
     shell: bash
 
+permissions: write-all
+
 # Cancel any in-flight jobs for the same PR/branch so there's only one active
 # at a time
 concurrency:
