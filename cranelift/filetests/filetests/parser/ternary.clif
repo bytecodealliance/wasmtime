@@ -12,10 +12,10 @@ function %add_i96(i32, i32, i32, i32, i32, i32) -> i32, i32, i32 {
 block1(v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
     v10, v11 = uadd_overflow v1, v4
     ;check: v10, v11 = uadd_overflow v1, v4
-    v20, v21 = iadd_carry v2, v5, v11
-    ; check: v20, v21 = iadd_carry v2, v5, v11
-    v30 = iadd_cin v3, v6, v21
-    ; check: v30 = iadd_cin v3, v6, v21
+    v20, v21 = sadd_carry v2, v5, v11
+    ; check: v20, v21 = sadd_carry v2, v5, v11
+    v30, v31 = uadd_carry v3, v6, v21
+    ; check: v30, v31 = uadd_carry v3, v6, v21
     return v10, v20, v30
 }
 
@@ -23,9 +23,9 @@ function %sub_i96(i32, i32, i32, i32, i32, i32) -> i32, i32, i32 {
 block1(v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
     v10, v11 = usub_overflow v1, v4
     ;check: v10, v11 = usub_overflow v1, v4
-    v20, v21 = isub_borrow v2, v5, v11
-    ; check: v20, v21 = isub_borrow v2, v5, v11
-    v30 = isub_bin v3, v6, v21
-    ; check: v30 = isub_bin v3, v6, v21
+    v20, v21 = ssub_borrow v2, v5, v11
+    ; check: v20, v21 = ssub_borrow v2, v5, v11
+    v30, v31 = usub_borrow v3, v6, v21
+    ; check: v30, v31 = usub_borrow v3, v6, v21
     return v10, v20, v30
 }

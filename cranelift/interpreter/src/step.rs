@@ -718,24 +718,24 @@ where
             let (sum, carry) = arg(0).smul_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
-        Opcode::IaddCin => choose(
-            DataValueExt::into_bool(arg(2))?,
-            DataValueExt::add(
-                DataValueExt::add(arg(0), arg(1))?,
-                DataValueExt::int(1, ctrl_ty)?,
-            )?,
-            DataValueExt::add(arg(0), arg(1))?,
-        ),
-        Opcode::IaddCarry => {
-            let mut sum = DataValueExt::add(arg(0), arg(1))?;
-            let mut carry = arg(0).sadd_checked(arg(1))?.is_none();
+        Opcode::SaddCarry => {
+            let (mut sum, mut carry) = arg(0).sadd_overflow(arg(1))?;
 
             if DataValueExt::into_bool(arg(2))? {
-                carry |= sum
-                    .clone()
-                    .sadd_checked(DataValueExt::int(1, ctrl_ty)?)?
-                    .is_none();
-                sum = DataValueExt::add(sum, DataValueExt::int(1, ctrl_ty)?)?;
+                let (sum2, carry2) = sum.sadd_overflow(DataValueExt::int(1, ctrl_ty)?)?;
+                carry |= carry2;
+                sum = sum2;
+            }
+
+            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
+        }
+        Opcode::UaddCarry => {
+            let (mut sum, mut carry) = arg(0).uadd_overflow(arg(1))?;
+
+            if DataValueExt::into_bool(arg(2))? {
+                let (sum2, carry2) = sum.uadd_overflow(DataValueExt::int(1, ctrl_ty)?)?;
+                carry |= carry2;
+                sum = sum2;
             }
 
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
@@ -749,23 +749,27 @@ where
                 assign(sum)
             }
         }
-        Opcode::IsubBin => choose(
-            DataValueExt::into_bool(arg(2))?,
-            DataValueExt::sub(
-                arg(0),
-                DataValueExt::add(arg(1), DataValueExt::int(1, ctrl_ty)?)?,
-            )?,
-            DataValueExt::sub(arg(0), arg(1))?,
-        ),
-        Opcode::IsubBorrow => {
-            let rhs = if DataValueExt::into_bool(arg(2))? {
-                DataValueExt::add(arg(1), DataValueExt::int(1, ctrl_ty)?)?
-            } else {
-                arg(1)
-            };
-            let borrow = arg(0) < rhs;
-            let sum = DataValueExt::sub(arg(0), rhs)?;
-            assign_multiple(&[sum, DataValueExt::bool(borrow, false, types::I8)?])
+        Opcode::SsubBorrow => {
+            let (mut sub, mut carry) = arg(0).ssub_overflow(arg(1))?;
+
+            if DataValueExt::into_bool(arg(2))? {
+                let (sub2, carry2) = sub.ssub_overflow(DataValueExt::int(1, ctrl_ty)?)?;
+                carry |= carry2;
+                sub = sub2;
+            }
+
+            assign_multiple(&[sub, DataValueExt::bool(carry, false, types::I8)?])
+        }
+        Opcode::UsubBorrow => {
+            let (mut sub, mut carry) = arg(0).usub_overflow(arg(1))?;
+
+            if DataValueExt::into_bool(arg(2))? {
+                let (sub2, carry2) = sub.usub_overflow(DataValueExt::int(1, ctrl_ty)?)?;
+                carry |= carry2;
+                sub = sub2;
+            }
+
+            assign_multiple(&[sub, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::Band => binary(DataValueExt::and, arg(0), arg(1))?,
         Opcode::Bor => binary(DataValueExt::or, arg(0), arg(1))?,

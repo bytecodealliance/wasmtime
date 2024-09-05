@@ -2008,34 +2008,9 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "iadd_cin",
+            "sadd_carry",
             r#"
-        Add integers with carry in.
-
-        Same as `iadd` with an additional carry input. Computes:
-
-        ```text
-            a = x + y + c_{in} \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![
-            Operand::new("x", iB),
-            Operand::new("y", iB),
-            Operand::new("c_in", i8).with_doc("Input carry flag"),
-        ])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "iadd_carry",
-            r#"
-        Add integers with carry in and out.
+        Add signed integers with carry in and out.
 
         Same as `iadd` with an additional carry input and output.
 
@@ -2046,6 +2021,41 @@ pub(crate) fn define(
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
+
+        The `c_in` type is interpreted as 1 if it's nonzero or 0 if it's zero.
+        The `c_out` value is guaranteed to be either 0 or 1.
+        "#,
+            &formats.ternary,
+        )
+        .operands_in(vec![
+            Operand::new("x", iB),
+            Operand::new("y", iB),
+            Operand::new("c_in", i8).with_doc("Input carry flag"),
+        ])
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("c_out", i8).with_doc("Output carry flag"),
+        ]),
+    );
+
+    ig.push(
+        Inst::new(
+            "uadd_carry",
+            r#"
+        Add signed integers with carry in and out.
+
+        Same as `iadd` with an additional carry input and output.
+
+        ```text
+            a &= x + y + c_{in} \pmod 2^B \\
+            c_{out} &= x + y + c_{in} >= 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+
+        The `c_in` type is interpreted as 1 if it's nonzero or 0 if it's zero.
+        The `c_out` value is guaranteed to be either 0 or 1.
         "#,
             &formats.ternary,
         )
@@ -2207,34 +2217,9 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "isub_bin",
+            "ssub_borrow",
             r#"
-        Subtract integers with borrow in.
-
-        Same as `isub` with an additional borrow flag input. Computes:
-
-        ```text
-            a = x - (y + b_{in}) \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![
-            Operand::new("x", iB),
-            Operand::new("y", iB),
-            Operand::new("b_in", i8).with_doc("Input borrow flag"),
-        ])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "isub_borrow",
-            r#"
-        Subtract integers with borrow in and out.
+        Subtract signed integers with borrow in and out.
 
         Same as `isub` with an additional borrow flag input and output.
 
@@ -2245,6 +2230,41 @@ pub(crate) fn define(
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
+
+        The `b_in` type is interpreted as 1 if it's nonzero or 0 if it's zero.
+        The `b_out` value is guaranteed to be either 0 or 1.
+        "#,
+            &formats.ternary,
+        )
+        .operands_in(vec![
+            Operand::new("x", iB),
+            Operand::new("y", iB),
+            Operand::new("b_in", i8).with_doc("Input borrow flag"),
+        ])
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("b_out", i8).with_doc("Output borrow flag"),
+        ]),
+    );
+
+    ig.push(
+        Inst::new(
+            "usub_borrow",
+            r#"
+        Subtract unsigned integers with borrow in and out.
+
+        Same as `isub` with an additional borrow flag input and output.
+
+        ```text
+            a &= x - (y + b_{in}) \pmod 2^B \\
+            b_{out} &= x < y + b_{in}
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+
+        The `b_in` type is interpreted as 1 if it's nonzero or 0 if it's zero.
+        The `b_out` value is guaranteed to be either 0 or 1.
         "#,
             &formats.ternary,
         )
