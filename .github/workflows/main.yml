@@ -688,7 +688,7 @@ jobs:
 
     # Install VTune, see `cli_tests::profile_with_vtune`.
     - name: Install VTune
-      if: matrix.os == 'ubuntu-latest' && contains(matrix.bucket, 'wasmtime-cli')
+      if: matrix.filter == 'linux-x64' && contains(matrix.bucket, 'wasmtime-cli')
       uses: abrown/install-vtune-action@v1
 
     # Build and test all features
