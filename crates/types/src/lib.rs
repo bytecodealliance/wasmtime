@@ -1521,15 +1521,30 @@ impl ConstOp {
     }
 }
 
+/// The type that can be used to index into [Memory] and [Table].
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub enum IndexType {
+    I32,
+    I64,
+}
+
+/// The size range of resizeable storage associated with [Memory] types and [Table] types.
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Limits {
+    pub min: u64,
+    pub max: Option<u64>,
+}
+
 /// WebAssembly table.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Table {
+    /// The type of the index used to access the table.
+    pub idx_type: IndexType,
+    /// Tables are constrained by limits for their minimum and optionally maximum size.
+    /// The limits are given in numbers of entries.
+    pub limits: Limits,
     /// The table elements' Wasm type.
-    pub wasm_ty: WasmRefType,
-    /// The minimum number of elements in the table.
-    pub minimum: u32,
-    /// The maximum number of elements in the table.
-    pub maximum: Option<u32>,
+    pub ref_type: WasmRefType,
 }
 
 impl TypeTrace for Table {
@@ -1538,9 +1553,9 @@ impl TypeTrace for Table {
         F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
     {
         let Table {
-            wasm_ty,
-            minimum: _,
-            maximum: _,
+            ref_type: wasm_ty,
+            idx_type: _,
+            limits: _,
         } = self;
         wasm_ty.trace(func)
     }
@@ -1550,9 +1565,9 @@ impl TypeTrace for Table {
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
     {
         let Table {
-            wasm_ty,
-            minimum: _,
-            maximum: _,
+            ref_type: wasm_ty,
+            idx_type: _,
+            limits: _,
         } = self;
         wasm_ty.trace_mut(func)
     }
@@ -1561,14 +1576,13 @@ impl TypeTrace for Table {
 /// WebAssembly linear memory.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Memory {
-    /// The minimum number of pages in the memory.
-    pub minimum: u64,
-    /// The maximum number of pages in the memory.
-    pub maximum: Option<u64>,
+    /// The type of the index used to access the memory.
+    pub idx_type: IndexType,
+    /// The limits constrain the minimum and optionally the maximum size of a memory.
+    /// The limits are given in units of page size.
+    pub limits: Limits,
     /// Whether the memory may be shared between multiple threads.
     pub shared: bool,
-    /// Whether or not this is a 64-bit memory
-    pub memory64: bool,
     /// The log2 of this memory's page size, in bytes.
     ///
     /// By default the page size is 64KiB (0x10000; 2**16; 1<<16; 65536) but the
@@ -1598,7 +1612,8 @@ impl Memory {
     /// `u64` return type. This means that the memory can't be allocated but
     /// it's deferred to the caller to how to deal with that.
     pub fn minimum_byte_size(&self) -> Result<u64, SizeOverflow> {
-        self.minimum
+        self.limits
+            .min
             .checked_mul(self.page_size())
             .ok_or(SizeOverflow)
     }
@@ -1618,7 +1633,7 @@ impl Memory {
     /// `u64` return type. This means that the memory can't be allocated but
     /// it's deferred to the caller to how to deal with that.
     pub fn maximum_byte_size(&self) -> Result<u64, SizeOverflow> {
-        match self.maximum {
+        match self.limits.max {
             Some(max) => max.checked_mul(self.page_size()).ok_or(SizeOverflow),
             None => {
                 let min = self.minimum_byte_size()?;
@@ -1642,7 +1657,8 @@ impl Memory {
     ///
     /// For example 32-bit linear memories return `1<<32` from this method.
     pub fn max_size_based_on_index_type(&self) -> u64 {
-        if self.memory64 {
+        match self.idx_type {
+            IndexType::I64 =>
             // Note that the true maximum size of a 64-bit linear memory, in
             // bytes, cannot be represented in a `u64`. That would require a u65
             // to store `1<<64`. Despite that no system can actually allocate a
@@ -1650,9 +1666,10 @@ impl Memory {
             // the kernel fit in a single Wasm page of linear memory". Shouldn't
             // ever actually be possible but it provides a number to serve as an
             // effective maximum.
-            0_u64.wrapping_sub(self.page_size())
-        } else {
-            WASM32_MAX_SIZE
+            {
+                0_u64.wrapping_sub(self.page_size())
+            }
+            IndexType::I32 => WASM32_MAX_SIZE,
         }
     }
 }
@@ -1671,16 +1688,23 @@ impl std::error::Error for SizeOverflow {}
 
 impl From<wasmparser::MemoryType> for Memory {
     fn from(ty: wasmparser::MemoryType) -> Memory {
+        let idx_type = match ty.memory64 {
+            false => IndexType::I32,
+            true => IndexType::I64,
+        };
+        let limits = Limits {
+            min: ty.initial,
+            max: ty.maximum,
+        };
         let page_size_log2 = u8::try_from(ty.page_size_log2.unwrap_or(16)).unwrap();
         debug_assert!(
             page_size_log2 == 16 || page_size_log2 == 0,
             "invalid page_size_log2: {page_size_log2}; must be 16 or 0"
         );
         Memory {
-            minimum: ty.initial,
-            maximum: ty.maximum,
+            idx_type,
+            limits,
             shared: ty.shared,
-            memory64: ty.memory64,
             page_size_log2,
         }
     }
@@ -1715,13 +1739,18 @@ pub trait TypeConvert {
 
     /// Converts a wasmparser table type into a wasmtime type
     fn convert_table_type(&self, ty: &wasmparser::TableType) -> WasmResult<Table> {
-        if ty.table64 {
-            return Err(wasm_unsupported!("wasm memory64: 64-bit table type"));
-        }
+        let idx_type = match ty.table64 {
+            false => IndexType::I32,
+            true => IndexType::I64,
+        };
+        let limits = Limits {
+            min: ty.initial.try_into().unwrap(),
+            max: ty.maximum.map(|i| i.try_into().unwrap()),
+        };
         Ok(Table {
-            wasm_ty: self.convert_ref_type(ty.element_type),
-            minimum: ty.initial.try_into().unwrap(),
-            maximum: ty.maximum.map(|i| i.try_into().unwrap()),
+            idx_type,
+            limits,
+            ref_type: self.convert_ref_type(ty.element_type),
         })
     }
 

@@ -48,6 +48,7 @@
 use crate::component::translate::*;
 use std::borrow::Cow;
 use wasmparser::types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
+use wasmtime_types::IndexType;
 
 pub(super) fn run(
     types: &mut ComponentTypesBuilder,
@@ -966,13 +967,19 @@ impl<'a> Inliner<'a> {
                 InstanceModule::Static(idx) => match &memory.item {
                     ExportItem::Index(i) => {
                         let plan = &self.nested_modules[*idx].module.memory_plans[*i];
-                        plan.memory.memory64
+                        match plan.memory.idx_type {
+                            IndexType::I32 => false,
+                            IndexType::I64 => true,
+                        }
                     }
                     ExportItem::Name(_) => unreachable!(),
                 },
                 InstanceModule::Import(ty) => match &memory.item {
                     ExportItem::Name(name) => match types[*ty].exports[name] {
-                        wasmtime_types::EntityType::Memory(m) => m.memory64,
+                        wasmtime_types::EntityType::Memory(m) => match m.idx_type {
+                            IndexType::I32 => false,
+                            IndexType::I64 => true,
+                        },
                         _ => unreachable!(),
                     },
                     ExportItem::Index(_) => unreachable!(),

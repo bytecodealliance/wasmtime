@@ -17,7 +17,7 @@ pub struct ResourcesRequired {
     /// The number of tables that are required.
     pub num_tables: u32,
     /// The maximum initial size required by any table.
-    pub max_initial_table_size: Option<u32>,
+    pub max_initial_table_size: Option<u64>,
 }
 
 impl ResourcesRequired {

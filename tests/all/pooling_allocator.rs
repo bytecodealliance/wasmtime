@@ -234,7 +234,7 @@ fn memory_zeroed() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn table_limit() -> Result<()> {
-    const TABLE_ELEMENTS: u32 = 10;
+    const TABLE_ELEMENTS: usize = 10;
     let mut pool = crate::small_pool_config();
     pool.table_elements(TABLE_ELEMENTS);
     let mut config = Config::new();
@@ -299,16 +299,16 @@ fn table_limit() -> Result<()> {
     let table = instance.get_table(&mut store, "t").unwrap();
 
     for i in 0..TABLE_ELEMENTS {
-        assert_eq!(table.size(&store), i);
+        assert_eq!(table.size(&store), i as u64);
         assert_eq!(
             table
                 .grow(&mut store, 1, Ref::Func(None))
                 .expect("table should grow"),
-            i
+            i as u64
         );
     }
 
-    assert_eq!(table.size(&store), TABLE_ELEMENTS);
+    assert_eq!(table.size(&store), TABLE_ELEMENTS as u64);
     assert!(table.grow(&mut store, 1, Ref::Func(None)).is_err());
 
     Ok(())
@@ -527,7 +527,7 @@ fn drop_externref_global_during_module_init() -> Result<()> {
             Ok(false)
         }
 
-        fn table_growing(&mut self, _: u32, _: u32, _: Option<u32>) -> Result<bool> {
+        fn table_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
             Ok(false)
         }
     }

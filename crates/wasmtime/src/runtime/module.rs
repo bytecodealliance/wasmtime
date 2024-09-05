@@ -881,14 +881,14 @@ impl Module {
             .memory_plans
             .values()
             .skip(em.num_imported_memories)
-            .map(|plan| plan.memory.minimum)
+            .map(|plan| plan.memory.limits.min)
             .max();
         let num_tables = u32::try_from(em.table_plans.len() - em.num_imported_tables).unwrap();
         let max_initial_table_size = em
             .table_plans
             .values()
             .skip(em.num_imported_tables)
-            .map(|plan| plan.table.minimum)
+            .map(|plan| plan.table.limits.min)
             .max();
         ResourcesRequired {
             num_memories,

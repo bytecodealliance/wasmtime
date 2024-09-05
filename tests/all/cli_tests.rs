@@ -926,7 +926,7 @@ fn table_growth_failure2() -> Result<()> {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("forcing a table growth failure to be a trap"),
+        stderr.contains("forcing trap when growing table to 4294967296 elements"),
         "bad stderr: {stderr}"
     );
     Ok(())

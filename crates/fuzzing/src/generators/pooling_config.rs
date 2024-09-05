@@ -14,7 +14,7 @@ pub struct PoolingAllocationConfig {
     pub total_stacks: u32,
 
     pub max_memory_size: usize,
-    pub table_elements: u32,
+    pub table_elements: usize,
 
     pub component_instance_size: usize,
     pub max_memories_per_component: u32,
@@ -79,7 +79,7 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
         const MAX_COUNT: u32 = 100;
         const MAX_TABLES: u32 = 100;
         const MAX_MEMORIES: u32 = 100;
-        const MAX_ELEMENTS: u32 = 1000;
+        const MAX_ELEMENTS: usize = 1000;
         const MAX_MEMORY_SIZE: usize = 10 * (1 << 20); // 10 MiB
         const MAX_SIZE: usize = 1 << 20; // 1 MiB
         const MAX_INSTANCE_MEMORIES: u32 = 10;

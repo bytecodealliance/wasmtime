@@ -833,7 +833,7 @@ pub trait ModuleEnvironment<'data>: TypeConvert {
         &mut self,
         table_index: TableIndex,
         base: Option<GlobalIndex>,
-        offset: u32,
+        offset: u64,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()>;
 

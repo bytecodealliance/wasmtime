@@ -584,7 +584,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// The size of the `current_elements` field.
     #[inline]
     pub fn size_of_vmtable_definition_current_elements(&self) -> u8 {
-        4
+        self.pointer_size()
     }
 
     /// Return the size of `VMTableDefinition`.

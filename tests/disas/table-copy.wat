@@ -67,15 +67,18 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext, i32 uext, i32 uext) system_v
+;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i64, i64, i64) system_v
 ;;     fn0 = colocated u1:1 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @0090                               v7 = iconst.i32 0
-;; @0090                               v8 = iconst.i32 1
-;; @0090                               v9 = global_value.i64 gv3
-;; @0090                               call fn0(v9, v7, v8, v3, v4, v5)  ; v7 = 0, v8 = 1
+;; @0090                               v7 = uextend.i64 v3
+;; @0090                               v8 = uextend.i64 v4
+;; @0090                               v9 = uextend.i64 v5
+;; @0090                               v10 = iconst.i32 0
+;; @0090                               v11 = iconst.i32 1
+;; @0090                               v12 = global_value.i64 gv3
+;; @0090                               call fn0(v12, v10, v11, v7, v8, v9)  ; v10 = 0, v11 = 1
 ;; @0094                               jump block1(v2)
 ;;
 ;;                                 block1(v6: i32):
@@ -87,15 +90,18 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext, i32 uext, i32 uext) system_v
+;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i64, i64, i64) system_v
 ;;     fn0 = colocated u1:1 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @009f                               v7 = iconst.i32 1
-;; @009f                               v8 = iconst.i32 0
-;; @009f                               v9 = global_value.i64 gv3
-;; @009f                               call fn0(v9, v7, v8, v3, v4, v5)  ; v7 = 1, v8 = 0
+;; @009f                               v7 = uextend.i64 v3
+;; @009f                               v8 = uextend.i64 v4
+;; @009f                               v9 = uextend.i64 v5
+;; @009f                               v10 = iconst.i32 1
+;; @009f                               v11 = iconst.i32 0
+;; @009f                               v12 = global_value.i64 gv3
+;; @009f                               call fn0(v12, v10, v11, v7, v8, v9)  ; v10 = 1, v11 = 0
 ;; @00a3                               jump block1(v2)
 ;;
 ;;                                 block1(v6: i32):

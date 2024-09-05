@@ -623,4 +623,5 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
         // for this scenario
         || (expected == "unknown global" && actual.contains("global.get of locally defined global"))
         || (expected == "immutable global" && actual.contains("global is immutable: cannot modify it with `global.set`"))
+        || (expected == "table size must be at most 2^32-1" && actual.contains("invalid u32 number: constant out of range"))
 }

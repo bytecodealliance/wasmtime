@@ -298,10 +298,9 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     import_from,
                     current_length_offset,
                     style,
-                    ty: if plan.memory.memory64 {
-                        WasmValType::I64
-                    } else {
-                        WasmValType::I32
+                    ty: match plan.memory.idx_type {
+                        wasmtime_environ::IndexType::I32 => WasmValType::I32,
+                        wasmtime_environ::IndexType::I64 => WasmValType::I64,
                     },
                     min_size,
                     max_size,

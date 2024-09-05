@@ -116,8 +116,13 @@ impl ResourceLimiter for StoreLimits {
         Ok(self.alloc(desired - current))
     }
 
-    fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> Result<bool> {
-        let delta = (desired - current) as usize * std::mem::size_of::<usize>();
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool> {
+        let delta = (desired - current) * std::mem::size_of::<usize>();
         Ok(self.alloc(delta))
     }
 }
