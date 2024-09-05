@@ -32,6 +32,9 @@ on:
         required: false
         default: 'cut'
 
+permissions:
+  contents: write
+
 jobs:
   release_process:
     if: "github.repository == 'bytecodealliance/wasmtime' || !github.event.schedule"
