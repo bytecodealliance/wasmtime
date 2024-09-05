@@ -718,7 +718,7 @@ where
             let (sum, carry) = arg(0).smul_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
-        Opcode::SaddCarry => {
+        Opcode::SaddOverflowCin => {
             let (mut sum, mut carry) = arg(0).sadd_overflow(arg(1))?;
 
             if DataValueExt::into_bool(arg(2))? {
@@ -729,7 +729,7 @@ where
 
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
-        Opcode::UaddCarry => {
+        Opcode::UaddOverflowCin => {
             let (mut sum, mut carry) = arg(0).uadd_overflow(arg(1))?;
 
             if DataValueExt::into_bool(arg(2))? {
@@ -749,7 +749,7 @@ where
                 assign(sum)
             }
         }
-        Opcode::SsubBorrow => {
+        Opcode::SsubOverflowBin => {
             let (mut sub, mut carry) = arg(0).ssub_overflow(arg(1))?;
 
             if DataValueExt::into_bool(arg(2))? {
@@ -760,7 +760,7 @@ where
 
             assign_multiple(&[sub, DataValueExt::bool(carry, false, types::I8)?])
         }
-        Opcode::UsubBorrow => {
+        Opcode::UsubOverflowBin => {
             let (mut sub, mut carry) = arg(0).usub_overflow(arg(1))?;
 
             if DataValueExt::into_bool(arg(2))? {

@@ -1,115 +1,115 @@
 test interpret
 
-function %saddcarry_i8(i8, i8, i8) -> i8, i8 {
+function %sadd_overflow_cin_i8(i8, i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8, v2: i8):
-    v3, v4 = sadd_carry v0, v1, v2
+    v3, v4 = sadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %saddcarry_i8(0, 1, 1) == [2, 0]
-; run: %saddcarry_i8(0, 1, 10) == [2, 0]
-; run: %saddcarry_i8(0, 1, 0) == [1, 0]
-; run: %saddcarry_i8(100, 27, 1) == [-128, 1]
-; run: %saddcarry_i8(100, 27, 0) == [127, 0]
-; run: %saddcarry_i8(127, 127, 1) == [-1, 1]
-; run: %saddcarry_i8(127, 127, 0) == [-2, 1]
-; run: %saddcarry_i8(-128, -128, 0) == [0, 1]
+; run: %sadd_overflow_cin_i8(0, 1, 1) == [2, 0]
+; run: %sadd_overflow_cin_i8(0, 1, 10) == [2, 0]
+; run: %sadd_overflow_cin_i8(0, 1, 0) == [1, 0]
+; run: %sadd_overflow_cin_i8(100, 27, 1) == [-128, 1]
+; run: %sadd_overflow_cin_i8(100, 27, 0) == [127, 0]
+; run: %sadd_overflow_cin_i8(127, 127, 1) == [-1, 1]
+; run: %sadd_overflow_cin_i8(127, 127, 0) == [-2, 1]
+; run: %sadd_overflow_cin_i8(-128, -128, 0) == [0, 1]
 
-function %saddcarry_i16(i16, i16, i8) -> i16, i8 {
+function %sadd_overflow_cin_i16(i16, i16, i8) -> i16, i8 {
 block0(v0: i16, v1: i16, v2: i8):
-    v3, v4 = sadd_carry v0, v1, v2
+    v3, v4 = sadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %saddcarry_i16(0, 1, 1) == [2, 0]
-; run: %saddcarry_i16(0, 1, 10) == [2, 0]
-; run: %saddcarry_i16(0, 1, 0) == [1, 0]
-; run: %saddcarry_i16(100, 27, 1) == [128, 0]
-; run: %saddcarry_i16(100, 27, 0) == [127, 0]
-; run: %saddcarry_i16(32000, 767, 1) == [-32768, 1]
-; run: %saddcarry_i16(32000, 767, 0) == [32767, 0]
+; run: %sadd_overflow_cin_i16(0, 1, 1) == [2, 0]
+; run: %sadd_overflow_cin_i16(0, 1, 10) == [2, 0]
+; run: %sadd_overflow_cin_i16(0, 1, 0) == [1, 0]
+; run: %sadd_overflow_cin_i16(100, 27, 1) == [128, 0]
+; run: %sadd_overflow_cin_i16(100, 27, 0) == [127, 0]
+; run: %sadd_overflow_cin_i16(32000, 767, 1) == [-32768, 1]
+; run: %sadd_overflow_cin_i16(32000, 767, 0) == [32767, 0]
 
-function %saddcarry_i32(i32, i32, i8) -> i32, i8 {
+function %sadd_overflow_cin_i32(i32, i32, i8) -> i32, i8 {
 block0(v0: i32, v1: i32, v2: i8):
-    v3, v4 = sadd_carry v0, v1, v2
+    v3, v4 = sadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %saddcarry_i32(0, 1, 1) == [2, 0]
-; run: %saddcarry_i32(0, 1, 10) == [2, 0]
-; run: %saddcarry_i32(0, 1, 0) == [1, 0]
-; run: %saddcarry_i32(100, 27, 1) == [128, 0]
-; run: %saddcarry_i32(100, 27, 0) == [127, 0]
-; run: %saddcarry_i32(2000000000, 147483647, 1) == [-2147483648, 1]
-; run: %saddcarry_i32(2000000000, 147483647, 0) == [2147483647, 0]
+; run: %sadd_overflow_cin_i32(0, 1, 1) == [2, 0]
+; run: %sadd_overflow_cin_i32(0, 1, 10) == [2, 0]
+; run: %sadd_overflow_cin_i32(0, 1, 0) == [1, 0]
+; run: %sadd_overflow_cin_i32(100, 27, 1) == [128, 0]
+; run: %sadd_overflow_cin_i32(100, 27, 0) == [127, 0]
+; run: %sadd_overflow_cin_i32(2000000000, 147483647, 1) == [-2147483648, 1]
+; run: %sadd_overflow_cin_i32(2000000000, 147483647, 0) == [2147483647, 0]
 
-function %saddcarry_i64(i64, i64, i8) -> i64, i8 {
+function %sadd_overflow_cin_i64(i64, i64, i8) -> i64, i8 {
 block0(v0: i64, v1: i64, v2: i8):
-    v3, v4 = sadd_carry v0, v1, v2
+    v3, v4 = sadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %saddcarry_i64(0, 1, 1) == [2, 0]
-; run: %saddcarry_i64(0, 1, 10) == [2, 0]
-; run: %saddcarry_i64(0, 1, 0) == [1, 0]
-; run: %saddcarry_i64(100, 27, 1) == [128, 0]
-; run: %saddcarry_i64(100, 27, 0) == [127, 0]
-; run: %saddcarry_i64(9000000000000000000, 223372036854775807, 1) == [-9223372036854775808, 1]
-; run: %saddcarry_i64(9000000000000000000, 223372036854775807, 0) == [9223372036854775807, 0]
+; run: %sadd_overflow_cin_i64(0, 1, 1) == [2, 0]
+; run: %sadd_overflow_cin_i64(0, 1, 10) == [2, 0]
+; run: %sadd_overflow_cin_i64(0, 1, 0) == [1, 0]
+; run: %sadd_overflow_cin_i64(100, 27, 1) == [128, 0]
+; run: %sadd_overflow_cin_i64(100, 27, 0) == [127, 0]
+; run: %sadd_overflow_cin_i64(9000000000000000000, 223372036854775807, 1) == [-9223372036854775808, 1]
+; run: %sadd_overflow_cin_i64(9000000000000000000, 223372036854775807, 0) == [9223372036854775807, 0]
 
-function %uaddcarry_i8(i8, i8, i8) -> i8, i8 {
+function %uadd_overflow_cin_i8(i8, i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8, v2: i8):
-    v3, v4 = uadd_carry v0, v1, v2
+    v3, v4 = uadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %uaddcarry_i8(0, 1, 1) == [2, 0]
-; run: %uaddcarry_i8(0, 1, 10) == [2, 0]
-; run: %uaddcarry_i8(0, 1, 0) == [1, 0]
-; run: %uaddcarry_i8(100, 27, 1) == [-128, 0]
-; run: %uaddcarry_i8(100, 27, 0) == [127, 0]
-; run: %uaddcarry_i8(127, 127, 1) == [-1, 0]
-; run: %uaddcarry_i8(127, 127, 0) == [-2, 0]
-; run: %uaddcarry_i8(-128, -128, 0) == [0, 1]
-; run: %uaddcarry_i8(-1, -1, 0) == [-2, 1]
-; run: %uaddcarry_i8(-1, -1, 1) == [-1, 1]
+; run: %uadd_overflow_cin_i8(0, 1, 1) == [2, 0]
+; run: %uadd_overflow_cin_i8(0, 1, 10) == [2, 0]
+; run: %uadd_overflow_cin_i8(0, 1, 0) == [1, 0]
+; run: %uadd_overflow_cin_i8(100, 27, 1) == [-128, 0]
+; run: %uadd_overflow_cin_i8(100, 27, 0) == [127, 0]
+; run: %uadd_overflow_cin_i8(127, 127, 1) == [-1, 0]
+; run: %uadd_overflow_cin_i8(127, 127, 0) == [-2, 0]
+; run: %uadd_overflow_cin_i8(-128, -128, 0) == [0, 1]
+; run: %uadd_overflow_cin_i8(-1, -1, 0) == [-2, 1]
+; run: %uadd_overflow_cin_i8(-1, -1, 1) == [-1, 1]
 
-function %uaddcarry_i16(i16, i16, i8) -> i16, i8 {
+function %uadd_overflow_cin_i16(i16, i16, i8) -> i16, i8 {
 block0(v0: i16, v1: i16, v2: i8):
-    v3, v4 = uadd_carry v0, v1, v2
+    v3, v4 = uadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %uaddcarry_i16(0, 1, 1) == [2, 0]
-; run: %uaddcarry_i16(0, 1, 10) == [2, 0]
-; run: %uaddcarry_i16(0, 1, 0) == [1, 0]
-; run: %uaddcarry_i16(100, 27, 1) == [128, 0]
-; run: %uaddcarry_i16(100, 27, 0) == [127, 0]
-; run: %uaddcarry_i16(32000, 767, 1) == [-32768, 0]
-; run: %uaddcarry_i16(32000, 767, 0) == [32767, 0]
-; run: %uaddcarry_i16(-1, -1, 0) == [-2, 1]
-; run: %uaddcarry_i16(-1, -1, 1) == [-1, 1]
+; run: %uadd_overflow_cin_i16(0, 1, 1) == [2, 0]
+; run: %uadd_overflow_cin_i16(0, 1, 10) == [2, 0]
+; run: %uadd_overflow_cin_i16(0, 1, 0) == [1, 0]
+; run: %uadd_overflow_cin_i16(100, 27, 1) == [128, 0]
+; run: %uadd_overflow_cin_i16(100, 27, 0) == [127, 0]
+; run: %uadd_overflow_cin_i16(32000, 767, 1) == [-32768, 0]
+; run: %uadd_overflow_cin_i16(32000, 767, 0) == [32767, 0]
+; run: %uadd_overflow_cin_i16(-1, -1, 0) == [-2, 1]
+; run: %uadd_overflow_cin_i16(-1, -1, 1) == [-1, 1]
 
-function %uaddcarry_i32(i32, i32, i8) -> i32, i8 {
+function %uadd_overflow_cin_i32(i32, i32, i8) -> i32, i8 {
 block0(v0: i32, v1: i32, v2: i8):
-    v3, v4 = uadd_carry v0, v1, v2
+    v3, v4 = uadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %uaddcarry_i32(0, 1, 1) == [2, 0]
-; run: %uaddcarry_i32(0, 1, 10) == [2, 0]
-; run: %uaddcarry_i32(0, 1, 0) == [1, 0]
-; run: %uaddcarry_i32(100, 27, 1) == [128, 0]
-; run: %uaddcarry_i32(100, 27, 0) == [127, 0]
-; run: %uaddcarry_i32(2000000000, 147483647, 1) == [-2147483648, 0]
-; run: %uaddcarry_i32(2000000000, 147483647, 0) == [2147483647, 0]
-; run: %uaddcarry_i32(-1, -1, 0) == [-2, 1]
-; run: %uaddcarry_i32(-1, -1, 1) == [-1, 1]
+; run: %uadd_overflow_cin_i32(0, 1, 1) == [2, 0]
+; run: %uadd_overflow_cin_i32(0, 1, 10) == [2, 0]
+; run: %uadd_overflow_cin_i32(0, 1, 0) == [1, 0]
+; run: %uadd_overflow_cin_i32(100, 27, 1) == [128, 0]
+; run: %uadd_overflow_cin_i32(100, 27, 0) == [127, 0]
+; run: %uadd_overflow_cin_i32(2000000000, 147483647, 1) == [-2147483648, 0]
+; run: %uadd_overflow_cin_i32(2000000000, 147483647, 0) == [2147483647, 0]
+; run: %uadd_overflow_cin_i32(-1, -1, 0) == [-2, 1]
+; run: %uadd_overflow_cin_i32(-1, -1, 1) == [-1, 1]
 
-function %uaddcarry_i64(i64, i64, i8) -> i64, i8 {
+function %uadd_overflow_cin_i64(i64, i64, i8) -> i64, i8 {
 block0(v0: i64, v1: i64, v2: i8):
-    v3, v4 = uadd_carry v0, v1, v2
+    v3, v4 = uadd_overflow_cin v0, v1, v2
     return v3, v4
 }
-; run: %uaddcarry_i64(0, 1, 1) == [2, 0]
-; run: %uaddcarry_i64(0, 1, 10) == [2, 0]
-; run: %uaddcarry_i64(0, 1, 0) == [1, 0]
-; run: %uaddcarry_i64(100, 27, 1) == [128, 0]
-; run: %uaddcarry_i64(100, 27, 0) == [127, 0]
-; run: %uaddcarry_i64(9000000000000000000, 223372036854775807, 1) == [-9223372036854775808, 0]
-; run: %uaddcarry_i64(9000000000000000000, 223372036854775807, 0) == [9223372036854775807, 0]
-; run: %uaddcarry_i64(-1, -1, 0) == [-2, 1]
-; run: %uaddcarry_i64(-1, -1, 1) == [-1, 1]
+; run: %uadd_overflow_cin_i64(0, 1, 1) == [2, 0]
+; run: %uadd_overflow_cin_i64(0, 1, 10) == [2, 0]
+; run: %uadd_overflow_cin_i64(0, 1, 0) == [1, 0]
+; run: %uadd_overflow_cin_i64(100, 27, 1) == [128, 0]
+; run: %uadd_overflow_cin_i64(100, 27, 0) == [127, 0]
+; run: %uadd_overflow_cin_i64(9000000000000000000, 223372036854775807, 1) == [-9223372036854775808, 0]
+; run: %uadd_overflow_cin_i64(9000000000000000000, 223372036854775807, 0) == [9223372036854775807, 0]
+; run: %uadd_overflow_cin_i64(-1, -1, 0) == [-2, 1]
+; run: %uadd_overflow_cin_i64(-1, -1, 1) == [-1, 1]
