@@ -491,9 +491,9 @@ mod test {
     fn test_next_available_allocation_strategy() {
         for size in 0..20 {
             let state = ModuleAffinityIndexAllocator::new(size, 0);
-            assert_eq!(state.num_empty_slots() as u32, size);
+            assert_eq!(state.num_empty_slots(), usize::try_from(size).unwrap());
             for i in 0..size {
-                assert_eq!(state.num_empty_slots() as u32, size - i);
+                assert_eq!(state.num_empty_slots(), usize::try_from(size - i).unwrap());
                 assert_eq!(state.alloc(None).unwrap().index(), i as usize);
             }
             assert!(state.alloc(None).is_none());
