@@ -347,12 +347,9 @@ impl Subscribe for HostFutureTrailers {
                 // were reached. It's up to us now to complete the body.
                 Ok(StreamEnd::Remaining(b)) => body.body = IncomingBodyState::Start(b),
 
-                // Technically this shouldn't be possible as the sender
-                // shouldn't get destroyed without receiving a message. Handle
-                // this just in case though.
+                // This means there were no trailers present.
                 Err(_) => {
-                    debug_assert!(false, "should be unreachable");
-                    *self = HostFutureTrailers::Done(Err(types::ErrorCode::ConnectionTerminated));
+                    *self = HostFutureTrailers::Done(Ok(None));
                 }
             }
         }
