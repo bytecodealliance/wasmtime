@@ -23,6 +23,8 @@ use sptr::Strict;
 use wasmtime_environ::component::*;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
+#[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
+                                           // 32-bit platforms
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod libcalls;

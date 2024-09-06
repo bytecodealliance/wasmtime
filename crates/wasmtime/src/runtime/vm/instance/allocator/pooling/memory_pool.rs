@@ -378,7 +378,8 @@ impl MemoryPool {
             // the process to continue, because we never perform a
             // mmap that would leave an open space for someone
             // else to come in and map something.
-            slot.instantiate(initial_size as usize, image, memory_plan)?;
+            let initial_size = usize::try_from(initial_size).unwrap();
+            slot.instantiate(initial_size, image, memory_plan)?;
 
             Memory::new_static(
                 memory_plan,

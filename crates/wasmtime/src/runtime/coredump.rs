@@ -137,16 +137,18 @@ impl WasmCoreDump {
                 // to balance these conflicting desires, we break the memory up
                 // into reasonably-sized chunks and then trim runs of zeroes
                 // from the start and end of each chunk.
-                const CHUNK_SIZE: u32 = 4096;
-                for (i, chunk) in mem
-                    .data(&store)
-                    .chunks_exact(CHUNK_SIZE as usize)
-                    .enumerate()
-                {
+                const CHUNK_SIZE: usize = 4096;
+                for (i, chunk) in mem.data(&store).chunks_exact(CHUNK_SIZE).enumerate() {
                     if let Some(start) = chunk.iter().position(|byte| *byte != 0) {
                         let end = chunk.iter().rposition(|byte| *byte != 0).unwrap() + 1;
-                        let offset = (i as u32) * CHUNK_SIZE + (start as u32);
-                        let offset = wasm_encoder::ConstExpr::i32_const(offset as i32);
+                        let offset = i * CHUNK_SIZE + start;
+                        let offset = if ty.is_64() {
+                            let offset = u64::try_from(offset).unwrap();
+                            wasm_encoder::ConstExpr::i64_const(offset as i64)
+                        } else {
+                            let offset = u32::try_from(offset).unwrap();
+                            wasm_encoder::ConstExpr::i32_const(offset as i32)
+                        };
                         data.active(memory_idx, &offset, chunk[start..end].iter().copied());
                     }
                 }

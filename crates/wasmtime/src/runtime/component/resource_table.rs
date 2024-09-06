@@ -161,7 +161,7 @@ impl ResourceTable {
     fn push_(&mut self, e: TableEntry) -> Result<u32, ResourceTableError> {
         if let Some(free) = self.pop_free_list() {
             self.entries[free] = Entry::Occupied { entry: e };
-            Ok(free as u32)
+            Ok(free.try_into().unwrap())
         } else {
             let ix = self
                 .entries
