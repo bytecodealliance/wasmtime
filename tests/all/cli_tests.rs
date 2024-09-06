@@ -1953,6 +1953,7 @@ fn settings_command() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn profile_with_vtune() -> Result<()> {
     if !is_vtune_available() {
@@ -1987,6 +1988,7 @@ fn profile_with_vtune() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_arch = "x86_64")]
 fn is_vtune_available() -> bool {
     Command::new("vtune").arg("-version").output().is_ok()
 }
