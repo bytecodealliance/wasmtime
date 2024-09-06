@@ -822,23 +822,23 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Context {
+pub enum Context {
     Host,
     Wasm,
 }
 
-struct State {
-    context: Vec<Context>,
+pub struct State {
+    pub context: Vec<Context>,
 
-    calls_into_host: usize,
-    returns_from_host: usize,
-    calls_into_wasm: usize,
-    returns_from_wasm: usize,
+    pub calls_into_host: usize,
+    pub returns_from_host: usize,
+    pub calls_into_wasm: usize,
+    pub returns_from_wasm: usize,
 
-    trap_next_call_host: bool,
-    trap_next_return_host: bool,
-    trap_next_call_wasm: bool,
-    trap_next_return_wasm: bool,
+    pub trap_next_call_host: bool,
+    pub trap_next_return_host: bool,
+    pub trap_next_call_wasm: bool,
+    pub trap_next_return_wasm: bool,
 }
 
 impl Default for State {
@@ -906,6 +906,6 @@ impl State {
     }
 }
 
-fn sync_call_hook(mut ctx: StoreContextMut<'_, State>, transition: CallHook) -> Result<()> {
+pub fn sync_call_hook(mut ctx: StoreContextMut<'_, State>, transition: CallHook) -> Result<()> {
     ctx.data_mut().call_hook(transition)
 }
