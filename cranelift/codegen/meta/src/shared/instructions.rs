@@ -2010,7 +2010,7 @@ pub(crate) fn define(
         Inst::new(
             "sadd_overflow_cin",
             r#"
-        Add signed integers with carry in and out.
+        Add signed integers with carry in and overflow out.
 
         Same as `sadd_overflow` with an additional carry input. The `c_in` type
         is interpreted as 1 if it's nonzero or 0 if it's zero.
@@ -2032,7 +2032,7 @@ pub(crate) fn define(
         Inst::new(
             "uadd_overflow_cin",
             r#"
-        Add unsigned integers with carry in and out.
+        Add unsigned integers with carry in and overflow out.
 
         Same as `uadd_overflow` with an additional carry input. The `c_in` type
         is interpreted as 1 if it's nonzero or 0 if it's zero.
@@ -2199,9 +2199,9 @@ pub(crate) fn define(
         Inst::new(
             "ssub_overflow_bin",
             r#"
-        Subtract signed integers with carry in and out.
+        Subtract signed integers with borrow in and overflow out.
 
-        Same as `ssub_overflow` with an additional carry input. The `c_in` type
+        Same as `ssub_overflow` with an additional borrow input. The `b_in` type
         is interpreted as 1 if it's nonzero or 0 if it's zero. The computation
         performed here is `x - (y + (b_in != 0))`.
         "#,
@@ -2222,9 +2222,9 @@ pub(crate) fn define(
         Inst::new(
             "usub_overflow_bin",
             r#"
-        Subtract unsigned integers with carry in and out.
+        Subtract unsigned integers with borrow in and overflow out.
 
-        Same as `usub_overflow` with an additional carry input. The `c_in` type
+        Same as `usub_overflow` with an additional borrow input. The `b_in` type
         is interpreted as 1 if it's nonzero or 0 if it's zero. The computation
         performed here is `x - (y + (b_in != 0))`.
         "#,
