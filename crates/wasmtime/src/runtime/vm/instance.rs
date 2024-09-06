@@ -944,6 +944,7 @@ impl Instance {
 
         let src = self.validate_inbounds(src_mem.current_length(), src, len)?;
         let dst = self.validate_inbounds(dst_mem.current_length(), dst, len)?;
+        let len = usize::try_from(len).unwrap();
 
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
@@ -952,7 +953,7 @@ impl Instance {
             let src = src_mem.base.add(src);
             // FIXME audit whether this is safe in the presence of shared memory
             // (https://github.com/bytecodealliance/wasmtime/issues/4203).
-            ptr::copy(src, dst, len as usize);
+            ptr::copy(src, dst, len);
         }
 
         Ok(())
@@ -967,7 +968,7 @@ impl Instance {
         if end > max {
             Err(oob())
         } else {
-            Ok(ptr as usize)
+            Ok(ptr.try_into().unwrap())
         }
     }
 
@@ -985,6 +986,7 @@ impl Instance {
     ) -> Result<(), Trap> {
         let memory = self.get_memory(memory_index);
         let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
+        let len = usize::try_from(len).unwrap();
 
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
@@ -992,7 +994,7 @@ impl Instance {
             let dst = memory.base.add(dst);
             // FIXME audit whether this is safe in the presence of shared memory
             // (https://github.com/bytecodealliance/wasmtime/issues/4203).
-            ptr::write_bytes(dst, val, len as usize);
+            ptr::write_bytes(dst, val, len);
         }
 
         Ok(())

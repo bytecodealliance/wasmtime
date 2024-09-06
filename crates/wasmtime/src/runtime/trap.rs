@@ -4,9 +4,7 @@ use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
 use core::fmt;
-use wasmtime_environ::{
-    demangle_function_name, demangle_function_name_or_index, EntityRef, FilePos,
-};
+use wasmtime_environ::{demangle_function_name, demangle_function_name_or_index, FilePos};
 
 /// Representation of a WebAssembly trap and what caused it to occur.
 ///
@@ -451,7 +449,7 @@ impl FrameInfo {
             text_offset,
         );
         let index = compiled_module.module().func_index(index);
-        let func_index = index.index() as u32;
+        let func_index = index.as_u32();
         let func_name = compiled_module.func_name(index).map(|s| s.to_string());
 
         // In debug mode for now assert that we found a mapping for `pc` within

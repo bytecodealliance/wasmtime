@@ -346,6 +346,7 @@ fn memory_fill(
     len: u64,
 ) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
+    #[allow(clippy::cast_possible_truncation)]
     instance.memory_fill(memory_index, dst, val as u8, len)
 }
 

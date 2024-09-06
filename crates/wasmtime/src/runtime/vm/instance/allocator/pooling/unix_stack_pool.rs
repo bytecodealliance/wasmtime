@@ -205,8 +205,9 @@ impl StackPool {
 
         let index = (start_of_stack - base) / self.stack_size;
         assert!(index < self.max_stacks);
+        let index = u32::try_from(index).unwrap();
 
-        self.index_allocator.free(SlotId(index as u32));
+        self.index_allocator.free(SlotId(index));
     }
 }
 

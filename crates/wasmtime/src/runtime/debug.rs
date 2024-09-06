@@ -63,8 +63,11 @@ fn relocate_dwarf_sections(bytes: &mut [u8], code_region: (*const u8, usize)) ->
     }
 
     for (offset, value) in relocations {
-        let (loc, _) = object::from_bytes_mut::<U64Bytes<NE>>(&mut bytes[offset as usize..])
-            .map_err(|()| anyhow!("invalid dwarf relocations"))?;
+        let (loc, _) = offset
+            .try_into()
+            .ok()
+            .and_then(|offset| object::from_bytes_mut::<U64Bytes<NE>>(&mut bytes[offset..]).ok())
+            .ok_or_else(|| anyhow!("invalid dwarf relocations"))?;
         loc.set(NE, value);
     }
     Ok(())
@@ -126,7 +129,8 @@ fn convert_object_elf_to_loadable_file<E: Endian>(
     let text_range = match sections.section_by_name(e, b".text") {
         Some((i, text)) => {
             let range = text.file_range(e);
-            let off = header.e_shoff.get(e) as usize + i.0 * header.e_shentsize.get(e) as usize;
+            let e_shoff = usize::try_from(header.e_shoff.get(e)).unwrap();
+            let off = e_shoff + i.0 * header.e_shentsize.get(e) as usize;
 
             let section: &mut SectionHeader64<E> =
                 object::from_bytes_mut(&mut bytes[off..]).unwrap().0;
@@ -160,6 +164,8 @@ fn convert_object_elf_to_loadable_file<E: Endian>(
     let header: &mut FileHeader64<E> = object::from_bytes_mut(bytes).unwrap().0;
     header.e_type.set(e, ET_DYN);
     header.e_phoff.set(e, ph_off as u64);
-    header.e_phentsize.set(e, e_phentsize as u16);
-    header.e_phnum.set(e, e_phnum as u16);
+    header
+        .e_phentsize
+        .set(e, u16::try_from(e_phentsize).unwrap());
+    header.e_phnum.set(e, u16::try_from(e_phnum).unwrap());
 }

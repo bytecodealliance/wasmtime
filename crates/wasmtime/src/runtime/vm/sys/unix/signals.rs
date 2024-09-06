@@ -248,6 +248,8 @@ unsafe extern "C" fn trap_handler(
     }
 }
 
+#[allow(clippy::cast_possible_truncation)] // too fiddly to handle and wouldn't
+                                           // help much anyway
 unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
     cfg_if::cfg_if! {
         if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "x86_64"))] {
