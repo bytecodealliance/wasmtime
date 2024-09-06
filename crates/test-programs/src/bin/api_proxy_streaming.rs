@@ -526,19 +526,21 @@ mod executor {
 
                         Inner::Trailers(trailers) => {
                             match trailers.get() {
-                                Some(Ok(Ok(Some(_)))) => {
-                                    // Currently, we just ignore any trailers.  TODO: Add a test that expects
-                                    // trailers and verify they match the expected contents.
+                                Some(Ok(trailers)) => {
                                     incoming.0 = Inner::Closed;
-                                }
-                                Some(Ok(Ok(None))) => {
-                                    // No trailers; nothing else to do.
-                                    incoming.0 = Inner::Closed;
-                                }
-                                Some(Ok(Err(error))) => {
-                                    // Error reading the trailers: pass it on to the application.
-                                    incoming.0 = Inner::Closed;
-                                    return Poll::Ready(Some(Err(anyhow!("{error:?}"))));
+                                    match trailers {
+                                        Ok(Some(_)) => {
+                                            // Currently, we just ignore any trailers.  TODO: Add a test that
+                                            // expects trailers and verify they match the expected contents.
+                                        }
+                                        Ok(None) => {
+                                            // No trailers; nothing else to do.
+                                        }
+                                        Err(error) => {
+                                            // Error reading the trailers: pass it on to the application.
+                                            return Poll::Ready(Some(Err(anyhow!("{error:?}"))));
+                                        }
+                                    }
                                 }
                                 Some(Err(_)) => {
                                     // Should only happen if we try to retrieve the trailers twice, i.e. a bug in
