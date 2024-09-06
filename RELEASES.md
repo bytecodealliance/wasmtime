@@ -6,6 +6,11 @@ Unreleased.
 
 ### Changed
 
+### Fixed
+
+* Completed support for the `CallHook` API when using the component model.
+  [9196](https://github.com/bytecodealliance/wasmtime/pull/9196)
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
