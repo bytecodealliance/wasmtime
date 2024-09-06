@@ -820,6 +820,26 @@
            (dst_lo Reg (madd $I64 x_lo y_lo (zero_reg))))
         (value_regs dst_lo dst_hi)))
 
+;; Special cases where the upper bits are sign-or-zero extended of the lower bits
+;; so the calculation here is much simpler with just a `umulh` or `smulh`
+;; instead of the additions above as well.
+(rule (lower (has_type $I128 (imul (uextend x) (uextend y))))
+      (let (
+          (x Reg (put_in_reg_zext64 x))
+          (y Reg (put_in_reg_zext64 y))
+        )
+        (value_regs
+          (madd $I64 x y (zero_reg))
+          (umulh $I64 x y))))
+(rule (lower (has_type $I128 (imul (sextend x) (sextend y))))
+      (let (
+          (x Reg (put_in_reg_sext64 x))
+          (y Reg (put_in_reg_sext64 y))
+        )
+        (value_regs
+          (madd $I64 x y (zero_reg))
+          (smulh $I64 x y))))
+
 ;; Case for i8x16, i16x8, and i32x4.
 (rule -2 (lower (has_type (ty_vec128 ty @ (not_i64x2)) (imul x y)))
       (mul x y (vector_size ty)))
