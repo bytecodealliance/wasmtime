@@ -1311,8 +1311,11 @@ block0(v0: i8, v1: i64):
 
 function %umulhi_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = umulhi.i64 v0, v1
-  return v2
+  v2 = uextend.i128 v0
+  v3 = uextend.i128 v1
+  v4 = imul v2, v3
+  v5, v6 = isplit v4
+  return v6
 }
 
 ; VCode:
@@ -1331,74 +1334,91 @@ block0(v0: i64, v1: i64):
 
 function %umulhi_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-  v2 = umulhi.i32 v0, v1
-  return v2
+  v2 = uextend.i64 v0
+  v3 = uextend.i64 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 32
+  v6 = ireduce.i32 v5
+  return v6
 }
 
 ; VCode:
 ; block0:
-;   llgfr %r5, %r2
-;   llgfr %r3, %r3
-;   msgr %r5, %r3
-;   srlg %r2, %r5, 32
+;   llgfr %r4, %r2
+;   llgfr %r5, %r3
+;   msgr %r4, %r5
+;   srag %r2, %r4, 32
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llgfr %r5, %r2
-;   llgfr %r3, %r3
-;   msgr %r5, %r3
-;   srlg %r2, %r5, 0x20
+;   llgfr %r4, %r2
+;   llgfr %r5, %r3
+;   msgr %r4, %r5
+;   srag %r2, %r4, 0x20
 ;   br %r14
 
 function %umulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
-  v2 = umulhi.i16 v0, v1
-  return v2
+  v2 = uextend.i32 v0
+  v3 = uextend.i32 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 16
+  v6 = ireduce.i16 v5
+  return v6
 }
 
 ; VCode:
 ; block0:
-;   llhr %r5, %r2
-;   llhr %r3, %r3
-;   msr %r5, %r3
-;   srlk %r2, %r5, 16
+;   llhr %r4, %r2
+;   llhr %r5, %r3
+;   msr %r4, %r5
+;   srak %r2, %r4, 16
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llhr %r5, %r2
-;   llhr %r3, %r3
-;   msr %r5, %r3
-;   srlk %r2, %r5, 0x10
+;   llhr %r4, %r2
+;   llhr %r5, %r3
+;   msr %r4, %r5
+;   srak %r2, %r4, 0x10
 ;   br %r14
 
 function %umulhi_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-  v2 = umulhi.i8 v0, v1
-  return v2
+  v2 = uextend.i16 v0
+  v3 = uextend.i16 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 8
+  v6 = ireduce.i8 v5
+  return v6
 }
 
 ; VCode:
 ; block0:
 ;   llcr %r5, %r2
-;   llcr %r3, %r3
-;   msr %r5, %r3
-;   srlk %r2, %r5, 8
+;   llcr %r2, %r3
+;   msr %r5, %r2
+;   lhr %r4, %r5
+;   srak %r2, %r4, 8
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llcr %r5, %r2
-;   llcr %r3, %r3
-;   msr %r5, %r3
-;   srlk %r2, %r5, 8
+;   llcr %r2, %r3
+;   msr %r5, %r2
+;   lhr %r4, %r5
+;   srak %r2, %r4, 8
 ;   br %r14
 
 function %smulhi_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = smulhi.i64 v0, v1
-  return v2
+  v2 = sextend.i128 v0
+  v3 = sextend.i128 v1
+  v4 = imul v2, v3
+  v5, v6 = isplit v4
+  return v6
 }
 
 ; VCode:
@@ -1413,68 +1433,80 @@ block0(v0: i64, v1: i64):
 
 function %smulhi_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-  v2 = smulhi.i32 v0, v1
-  return v2
+  v2 = sextend.i64 v0
+  v3 = sextend.i64 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 32
+  v6 = ireduce.i32 v5
+  return v6
 }
 
 ; VCode:
 ; block0:
-;   lgfr %r5, %r2
 ;   lgfr %r3, %r3
-;   msgr %r5, %r3
-;   srag %r2, %r5, 32
+;   msgfr %r3, %r2
+;   srag %r2, %r3, 32
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgfr %r5, %r2
 ;   lgfr %r3, %r3
-;   msgr %r5, %r3
-;   srag %r2, %r5, 0x20
+;   msgfr %r3, %r2
+;   srag %r2, %r3, 0x20
 ;   br %r14
 
 function %smulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
-  v2 = smulhi.i16 v0, v1
-  return v2
+  v2 = sextend.i32 v0
+  v3 = sextend.i32 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 16
+  v6 = ireduce.i16 v5
+  return v6
 }
 
 ; VCode:
 ; block0:
-;   lhr %r5, %r2
-;   lhr %r3, %r3
-;   msr %r5, %r3
-;   srak %r2, %r5, 16
+;   lhr %r4, %r2
+;   lhr %r5, %r3
+;   msr %r4, %r5
+;   srak %r2, %r4, 16
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhr %r5, %r2
-;   lhr %r3, %r3
-;   msr %r5, %r3
-;   srak %r2, %r5, 0x10
+;   lhr %r4, %r2
+;   lhr %r5, %r3
+;   msr %r4, %r5
+;   srak %r2, %r4, 0x10
 ;   br %r14
 
 function %smulhi_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-  v2 = smulhi.i8 v0, v1
-  return v2
+  v2 = sextend.i16 v0
+  v3 = sextend.i16 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 8
+  v6 = ireduce.i8 v5
+  return v6
 }
 
 ; VCode:
 ; block0:
 ;   lbr %r5, %r2
-;   lbr %r3, %r3
-;   msr %r5, %r3
-;   srak %r2, %r5, 8
+;   lbr %r2, %r3
+;   msr %r5, %r2
+;   lhr %r4, %r5
+;   srak %r2, %r4, 8
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lbr %r5, %r2
-;   lbr %r3, %r3
-;   msr %r5, %r3
-;   srak %r2, %r5, 8
+;   lbr %r2, %r3
+;   msr %r5, %r2
+;   lhr %r4, %r5
+;   srak %r2, %r4, 8
 ;   br %r14
 
 function %sdiv_i64(i64, i64) -> i64 {

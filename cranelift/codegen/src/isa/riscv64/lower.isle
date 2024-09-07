@@ -489,36 +489,6 @@
 (rule 5 (lower (has_type (ty_supported_vec ty) (imul x (splat y))))
   (rv_vmul_vx x y (unmasked) ty))
 
-;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (smulhi x y)))
-  (lower_smlhi ty (sext x) (sext y)))
-
-(rule 1 (lower (has_type (ty_supported_vec ty) (smulhi x y)))
-  (rv_vmulh_vv x y (unmasked) ty))
-
-(rule 2 (lower (has_type (ty_supported_vec ty) (smulhi (splat x) y)))
-  (rv_vmulh_vx y x (unmasked) ty))
-
-(rule 3 (lower (has_type (ty_supported_vec ty) (smulhi x (splat y))))
-  (rv_vmulh_vx x y (unmasked) ty))
-
-;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (fits_in_32 ty) (umulhi x y)))
-  (let ((tmp XReg (rv_mul (zext x) (zext y))))
-    (rv_srli tmp (imm12_const (ty_bits ty)))))
-
-(rule 1 (lower (has_type $I64 (umulhi x y)))
-  (rv_mulhu x y))
-
-(rule 2 (lower (has_type (ty_supported_vec ty) (umulhi x y)))
-  (rv_vmulhu_vv x y (unmasked) ty))
-
-(rule 3 (lower (has_type (ty_supported_vec ty) (umulhi (splat x) y)))
-  (rv_vmulhu_vx y x (unmasked) ty))
-
-(rule 4 (lower (has_type (ty_supported_vec ty) (umulhi x (splat y))))
-  (rv_vmulhu_vx x y (unmasked) ty))
-
 ;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_16 ty) (udiv x y)))
@@ -1922,6 +1892,21 @@
     ((t1 XReg (value_regs_get x 0))
       (t2 XReg (value_regs_get x 1)))
     (output_pair t1 t2)))
+
+;; Special-case the lowering of an `isplit` of a 128-bit multiply where the
+;; lower bits of the result are discarded and the operands are sign or zero
+;; extended. This maps directly to `umulh` and `smulh`.
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (uextend x) (uextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (output_pair (invalid_reg)
+               (rv_mulhu (zext x) (zext y))))
+
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (sextend x) (sextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (output_pair (invalid_reg)
+               (rv_mulh (sext x) (sext y))))
 
 ;;;;;  Rules for `iconcat`;;;;;;;;;
 (rule

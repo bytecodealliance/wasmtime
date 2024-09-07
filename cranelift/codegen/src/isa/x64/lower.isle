@@ -1001,20 +1001,28 @@
 
 ;; 8-bit base case, needs a special instruction encoding and additionally
 ;; move sinkable loads to the right.
-(rule -7 (lower (has_type $I8 (imul x y))) (x64_mul8 $false x y))
-(rule -6 (lower (has_type $I8 (imul (sinkable_load x) y))) (x64_mul8 $false y x))
+(rule -8 (lower (has_type $I8 (imul x y))) (x64_mul8 $false x y))
+(rule -7 (lower (has_type $I8 (imul (sinkable_load x) y))) (x64_mul8 $false y x))
 
 ;; 16-to-64-bit base cases, same as above by moving sinkable loads to the right.
-(rule -5 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x y)))
+(rule -6 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x y)))
          (x64_imul ty x y))
-(rule -4 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (sinkable_load x) y)))
+(rule -5 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (sinkable_load x) y)))
          (x64_imul ty y x))
 
 ;; lift out constants to use 3-operand form
-(rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (i32_from_iconst y))))
+(rule -4 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (i32_from_iconst y))))
          (x64_imul_imm ty x y))
-(rule -2 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (i32_from_iconst x) y)))
+(rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (i32_from_iconst x) y)))
          (x64_imul_imm ty y x))
+
+;; Special case widening multiplication from 8-to-16-bits with a single
+;; instruction since the 8-bit-multiply places both the high and low halves in
+;; the same register
+(rule -2 (lower (has_type $I16 (imul (sextend x) (sextend y))))
+  (x64_mul8 $true x y))
+(rule -2 (lower (has_type $I16 (imul (uextend x) (uextend y))))
+  (x64_mul8 $false x y))
 
 ;; `i128`.
 
@@ -2543,6 +2551,39 @@
 ;; them be.
 (rule 1 (lower (has_type (fits_in_64 ty) (ireduce src)))
       (value_regs_get_gpr src 0))
+
+;; Special-case a widening multiply that discards the lower bits. For
+;; 16-to-64 bit operands that matches exactly the `x64_mul` instruction where
+;; one register is discarded.
+;;
+;; Here the pattern is that a multiplication of two widened operands is then
+;; itself shifted to the right by the width of the operands and reduced down
+;; to the original type.
+(rule 2
+  (lower (has_type (ty_int_ref_16_to_64 half)
+    (ireduce (has_type wide
+      (sshr
+        (imul (uextend x @ (value_type half)) (uextend y @ (value_type half)))
+        (iconst (u64_from_imm64 amt))
+      )
+    ))
+  ))
+  (if-let $true (ty_equal half (ty_half_width wide)))
+  (if-let $true (u64_eq amt (ty_bits_u64 half)))
+  (value_regs_get_gpr (x64_mul half $false x y) 1))
+
+(rule 2
+  (lower (has_type (ty_int_ref_16_to_64 half)
+    (ireduce (has_type wide
+      (sshr
+        (imul (sextend x @ (value_type half)) (sextend y @ (value_type half)))
+        (iconst (u64_from_imm64 amt))
+      )
+    ))
+  ))
+  (if-let $true (ty_equal half (ty_half_width wide)))
+  (if-let $true (u64_eq amt (ty_bits_u64 half)))
+  (value_regs_get_gpr (x64_mul half $true x y) 1))
 
 ;; Rules for `debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4337,22 +4378,6 @@
           (tmp ValueRegs (x64_checked_srem_seq size a hi b))
         )
         (value_regs_get tmp 1)))
-
-;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 0 (lower (umulhi a @ (value_type $I8) b))
-        (x64_shr $I16 (x64_mul8 $false a b) (imm8_to_imm8_gpr 8)))
-
-(rule 1 (lower (umulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
-        (value_regs_get_gpr (x64_mul ty $false a b) 1))
-
-;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 0 (lower (smulhi a @ (value_type $I8) b))
-        (x64_sar $I16 (x64_mul8 $true a b) (imm8_to_imm8_gpr 8)))
-
-(rule 1 (lower (smulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
-        (value_regs_get_gpr (x64_mul ty $true a b) 1))
 
 ;; Rules for `get_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

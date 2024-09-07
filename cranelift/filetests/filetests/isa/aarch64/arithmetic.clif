@@ -50,10 +50,13 @@ block0(v0: i64, v1: i64):
 ;   mul x0, x0, x1
 ;   ret
 
-function %f4(i64, i64) -> i64 {
+function %umulhi_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = umulhi.i64 v0, v1
-  return v2
+  v2 = uextend.i128 v0
+  v3 = uextend.i128 v1
+  v4 = imul v2, v3
+  v5, v6 = isplit v4
+  return v6
 }
 
 ; VCode:
@@ -66,10 +69,13 @@ block0(v0: i64, v1: i64):
 ;   umulh x0, x0, x1
 ;   ret
 
-function %f5(i64, i64) -> i64 {
+function %smulhi_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = smulhi.i64 v0, v1
-  return v2
+  v2 = sextend.i128 v0
+  v3 = sextend.i128 v1
+  v4 = imul v2, v3
+  v5, v6 = isplit v4
+  return v6
 }
 
 ; VCode:

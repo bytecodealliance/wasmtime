@@ -10,8 +10,12 @@ target riscv64 has_c has_zcb
 
 function %smulhi_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-    v2 = smulhi v0, v1
-    return v2
+  v2 = sextend.i16 v0
+  v3 = sextend.i16 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 8
+  v6 = ireduce.i8 v5
+  return v6
 }
 ; run: %smulhi_i8(-2, -4) == 0
 ; run: %smulhi_i8(2, -4) == -1
@@ -19,8 +23,12 @@ block0(v0: i8, v1: i8):
 
 function %smulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
-    v2 = smulhi v0, v1
-    return v2
+  v2 = sextend.i32 v0
+  v3 = sextend.i32 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 16
+  v6 = ireduce.i16 v5
+  return v6
 }
 ; run: %smulhi_i16(-2, -4) == 0
 ; run: %smulhi_i16(2, -4) == -1
@@ -28,8 +36,12 @@ block0(v0: i16, v1: i16):
 
 function %smulhi_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = smulhi v0, v1
-    return v2
+  v2 = sextend.i64 v0
+  v3 = sextend.i64 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 32
+  v6 = ireduce.i32 v5
+  return v6
 }
 ; run: %smulhi_i32(-500, -700) == 0
 ; run: %smulhi_i32(500, -700) == -1
@@ -37,8 +49,11 @@ block0(v0: i32, v1: i32):
 
 function %smulhi_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = smulhi v0, v1
-    return v2
+  v2 = sextend.i128 v0
+  v3 = sextend.i128 v1
+  v4 = imul v2, v3
+  v5, v6 = isplit v4
+  return v6
 }
 ; run: %smulhi_i64(-4294967295, -4294967295) == 0
 ; run: %smulhi_i64(4294967295, -4294967295) == -1

@@ -2302,17 +2302,6 @@
       (high XReg (alu_rrr op (value_regs_get a 1) (value_regs_get b 1))))
     (value_regs low high)))
 
-(decl lower_smlhi (Type XReg XReg) XReg)
-(rule 1
-  (lower_smlhi $I64 rs1 rs2)
-  (rv_mulh rs1 rs2))
-
-(rule
-  (lower_smlhi ty rs1 rs2)
-  (let
-    ((tmp XReg (rv_mul rs1 rs2)))
-    (rv_srli tmp (imm12_const (ty_bits ty)))))
-
 ;;;; construct shift amount.rotl on i128 will use shift to implement. So can call this function.
 ;;;; this will return shift amount and (ty_bits - "shift amount")
 ;;;; if ty_bits is greater than 64 like i128, then shmat will fallback to 64.because We are 64 bit platform.

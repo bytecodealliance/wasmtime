@@ -37,12 +37,6 @@
 (rule (simplify (imul ty (splat ty x) (splat ty y)))
       (splat ty (imul (lane_type ty) x y)))
 
-(rule (simplify (smulhi ty (splat ty x) (splat ty y)))
-      (splat ty (smulhi (lane_type ty) x y)))
-
-(rule (simplify (umulhi ty (splat ty x) (splat ty y)))
-      (splat ty (umulhi (lane_type ty) x y)))
-
 (rule (simplify (ineg ty (splat ty x)))
       (splat ty (ineg (lane_type ty) x)))
 

@@ -653,36 +653,6 @@ where
             assign(vectorizelanes(&new_vec, ctrl_ty)?)
         }
         Opcode::Imul => binary(DataValueExt::mul, arg(0), arg(1))?,
-        Opcode::Umulhi | Opcode::Smulhi => {
-            let double_length = match ctrl_ty.lane_bits() {
-                8 => types::I16,
-                16 => types::I32,
-                32 => types::I64,
-                64 => types::I128,
-                _ => unimplemented!("Unsupported integer length {}", ctrl_ty.bits()),
-            };
-            let conv_type = if inst.opcode() == Opcode::Umulhi {
-                ValueConversionKind::ZeroExtend(double_length)
-            } else {
-                ValueConversionKind::SignExtend(double_length)
-            };
-            let arg0 = extractlanes(&arg(0), ctrl_ty)?;
-            let arg1 = extractlanes(&arg(1), ctrl_ty)?;
-
-            let res = arg0
-                .into_iter()
-                .zip(arg1)
-                .map(|(x, y)| {
-                    let x = x.convert(conv_type.clone())?;
-                    let y = y.convert(conv_type.clone())?;
-
-                    Ok(DataValueExt::mul(x, y)?
-                        .convert(ValueConversionKind::ExtractUpper(ctrl_ty.lane_type()))?)
-                })
-                .collect::<ValueResult<SimdVec<DataValue>>>()?;
-
-            assign(vectorizelanes(&res, ctrl_ty)?)
-        }
         Opcode::Udiv => binary_can_trap(DataValueExt::udiv, arg(0), arg(1))?,
         Opcode::Sdiv => binary_can_trap(DataValueExt::sdiv, arg(0), arg(1))?,
         Opcode::Urem => binary_can_trap(DataValueExt::urem, arg(0), arg(1))?,

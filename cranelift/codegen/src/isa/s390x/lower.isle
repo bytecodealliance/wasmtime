@@ -54,6 +54,20 @@
             (x_lo Reg (vec_extract_lane $I64X2 x_reg 1 (zero_reg))))
         (output_pair x_lo x_hi)))
 
+;; Special-case the lowering of an `isplit` of a 128-bit multiply where the
+;; lower bits of the result are discarded and the operands are sign or zero
+;; extended. This maps directly to `umulh` and `smulh`.
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (uextend x) (uextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (let ((pair RegPair (umul_wide x y)))
+    (output_pair (invalid_reg) (regpair_hi pair))))
+
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (sextend x) (sextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (let ((pair RegPair (smul_wide x y)))
+    (output_pair (invalid_reg) (regpair_hi pair))))
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -409,82 +423,15 @@
             (res_hi Reg (add_reg $I64 res_hi_3 (add_reg $I64 res_hi_2 res_hi_1))))
         (mov_to_vec128 $I64X2 res_hi res_lo)))
 
+;; Special-case the lowering of a 128-bit multiply where the operands are sign
+;; or zero extended. This maps directly to `umul_wide` and `smul_wide`.
+(rule 16 (lower (has_type $I128 (imul (uextend x) (uextend y))))
+  (let ((pair RegPair (umul_wide x y)))
+    (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair))))
 
-;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Multiply high part unsigned, 8-bit or 16-bit types.  (Uses 32-bit multiply.)
-(rule -1 (lower (has_type (ty_8_or_16 ty) (umulhi x y)))
-      (let ((ext_reg_x Reg (put_in_reg_zext32 x))
-            (ext_reg_y Reg (put_in_reg_zext32 y))
-            (ext_mul Reg (mul_reg $I32 ext_reg_x ext_reg_y)))
-        (lshr_imm $I32 ext_mul (ty_bits ty))))
-
-;; Multiply high part unsigned, 32-bit types.  (Uses 64-bit multiply.)
-(rule (lower (has_type $I32 (umulhi x y)))
-      (let ((ext_reg_x Reg (put_in_reg_zext64 x))
-            (ext_reg_y Reg (put_in_reg_zext64 y))
-            (ext_mul Reg (mul_reg $I64 ext_reg_x ext_reg_y)))
-        (lshr_imm $I64 ext_mul 32)))
-
-;; Multiply high part unsigned, 64-bit types.  (Uses umul_wide.)
-(rule (lower (has_type $I64 (umulhi x y)))
-      (let ((pair RegPair (umul_wide x y)))
-        (regpair_hi pair)))
-
-;; Multiply high part unsigned, vector types with 8-, 16-, or 32-bit elements.
-(rule (lower (has_type $I8X16 (umulhi x y))) (vec_umulhi $I8X16 x y))
-(rule (lower (has_type $I16X8 (umulhi x y))) (vec_umulhi $I16X8 x y))
-(rule (lower (has_type $I32X4 (umulhi x y))) (vec_umulhi $I32X4 x y))
-
-;; Multiply high part unsigned, vector types with 64-bit elements.
-;; Has to be scalarized.
-(rule (lower (has_type $I64X2 (umulhi x y)))
-      (let ((pair_0 RegPair (umul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
-                                       (vec_extract_lane $I64X2 y 0 (zero_reg))))
-            (res_0 Reg (regpair_hi pair_0))
-            (pair_1 RegPair (umul_wide (vec_extract_lane $I64X2 x 1 (zero_reg))
-                                       (vec_extract_lane $I64X2 y 1 (zero_reg))))
-            (res_1 Reg (regpair_hi pair_1)))
-        (mov_to_vec128 $I64X2 res_0 res_1)))
-
-
-;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Multiply high part signed, 8-bit or 16-bit types.  (Uses 32-bit multiply.)
-(rule -1 (lower (has_type (ty_8_or_16 ty) (smulhi x y)))
-      (let ((ext_reg_x Reg (put_in_reg_sext32 x))
-            (ext_reg_y Reg (put_in_reg_sext32 y))
-            (ext_mul Reg (mul_reg $I32 ext_reg_x ext_reg_y)))
-        (ashr_imm $I32 ext_mul (ty_bits ty))))
-
-;; Multiply high part signed, 32-bit types.  (Uses 64-bit multiply.)
-(rule (lower (has_type $I32 (smulhi x y)))
-      (let ((ext_reg_x Reg (put_in_reg_sext64 x))
-            (ext_reg_y Reg (put_in_reg_sext64 y))
-            (ext_mul Reg (mul_reg $I64 ext_reg_x ext_reg_y)))
-        (ashr_imm $I64 ext_mul 32)))
-
-;; Multiply high part signed, 64-bit types.  (Uses smul_wide.)
-(rule (lower (has_type $I64 (smulhi x y)))
-      (let ((pair RegPair (smul_wide x y)))
-        (regpair_hi pair)))
-
-;; Multiply high part signed, vector types with 8-, 16-, or 32-bit elements.
-(rule (lower (has_type $I8X16 (smulhi x y))) (vec_smulhi $I8X16 x y))
-(rule (lower (has_type $I16X8 (smulhi x y))) (vec_smulhi $I16X8 x y))
-(rule (lower (has_type $I32X4 (smulhi x y))) (vec_smulhi $I32X4 x y))
-
-;; Multiply high part unsigned, vector types with 64-bit elements.
-;; Has to be scalarized.
-(rule (lower (has_type $I64X2 (smulhi x y)))
-      (let ((pair_0 RegPair (smul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
-                                       (vec_extract_lane $I64X2 y 0 (zero_reg))))
-            (res_0 Reg (copy_reg $I64 (regpair_hi pair_0)))
-            (pair_1 RegPair (smul_wide (vec_extract_lane $I64X2 x 1 (zero_reg))
-                                       (vec_extract_lane $I64X2 y 1 (zero_reg))))
-            (res_1 Reg (regpair_hi pair_1)))
-        (mov_to_vec128 $I64X2 res_0 res_1)))
-
+(rule 16 (lower (has_type $I128 (imul (sextend x) (sextend y))))
+  (let ((pair RegPair (smul_wide x y)))
+    (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair))))
 
 ;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

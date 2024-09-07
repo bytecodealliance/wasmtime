@@ -8,8 +8,12 @@ target s390x
 
 function %smulhi_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-    v2 = smulhi v0, v1
-    return v2
+  v2 = sextend.i16 v0
+  v3 = sextend.i16 v1
+  v4 = imul v2, v3
+  v5 = sshr_imm v4, 8
+  v6 = ireduce.i8 v5
+  return v6
 }
 ; run: %smulhi_i8(-2, -4) == 0
 ; run: %smulhi_i8(2, -4) == -1

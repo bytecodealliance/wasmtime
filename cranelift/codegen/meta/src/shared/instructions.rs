@@ -1747,36 +1747,6 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("a", Int)]),
     );
 
-    ig.push(
-        Inst::new(
-            "umulhi",
-            r#"
-        Unsigned integer multiplication, producing the high half of a
-        double-length result.
-
-        Polymorphic over all integer types (vector and scalar).
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "smulhi",
-            r#"
-        Signed integer multiplication, producing the high half of a
-        double-length result.
-
-        Polymorphic over all integer types (vector and scalar).
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
     let I16or32 = &TypeVar::new(
         "I16or32",
         "A vector integer type with 16- or 32-bit numbers",
