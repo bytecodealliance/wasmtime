@@ -311,6 +311,28 @@
         (_ InstOutput (gen_trapif (IntCC.UnsignedLessThan) tmp x tc)))
     tmp))
 
+;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;
+(rule 0 (lower (has_type (fits_in_32 ty) (uadd_overflow x y)))
+  (let ((tmp_x XReg (zext x))
+        (tmp_y XReg (zext y))
+        (sum XReg (rv_add tmp_x tmp_y))
+        (test XReg (rv_srli sum (imm12_const (ty_bits ty)))))
+    (output_pair
+         (value_reg sum)
+         (value_reg test))))
+
+;;; Rules for `umul_overflow` ;;;;;;;;;;;;;
+(rule 0 (lower (has_type (fits_in_32 ty) (umul_overflow x y)))
+  (let ((tmp_x XReg (zext x))
+        (tmp_y XReg (zext y))
+        (res XReg (rv_mulhu tmp_x tmp_y))
+        (hi XReg (rv_mul tmp_x tmp_y))
+        (one XReg (imm $I32 1))
+        (of XReg (gen_select_xreg (cmp_eqz res) one (zero_reg))))
+    (output_pair
+         (value_reg res)
+         (value_reg of))))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
