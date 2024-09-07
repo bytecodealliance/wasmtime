@@ -2871,6 +2871,19 @@
 ;; zero-extension for the `Value` input.
 (decl put_value_in_reg_for_icmp (IntCC Value) XReg)
 
+(decl madd_overflow64 (XReg XReg XReg) ValueRegs)
+
+(rule (madd_overflow64 x y z)
+  (let ((one XReg (imm $I8 1))
+        (hi XReg (rv_mulhu x y))
+        (m XReg (rv_mul x y))
+        (of_mul XReg (gen_select_xreg (cmp_eqz hi) (zero_reg) one))
+        (sum XReg (rv_add m z))
+        (of_add XReg (gen_select_xreg (int_compare (IntCC.UnsignedLessThan) sum m) one (zero_reg)))
+        (of XReg (rv_or of_mul of_add)))
+    (value_regs sum of)))
+
+
 ;; Base cases, use the `cc` to determine whether to zero or sign extend.
 (rule 0 (put_value_in_reg_for_icmp cc val)
   (zext val))
