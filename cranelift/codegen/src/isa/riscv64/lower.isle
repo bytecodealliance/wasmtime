@@ -321,6 +321,28 @@
          (value_reg sum)
          (value_reg test))))
 
+(rule 1 (lower (has_type $I64 (uadd_overflow x y)))
+  (let ((sum XReg (rv_add x y))
+        (one XReg (imm $I8 1))
+        (of XReg (gen_select_xreg (int_compare (IntCC.UnsignedLessThan) sum x) one (zero_reg))))
+    (output_pair
+         (value_reg sum)
+         (value_reg of))))
+
+(rule 2 (lower (has_type $I128 (uadd_overflow x y)))
+  (let ((one XReg (imm $I8 1))
+        (low XReg (rv_add (value_regs_get x 0) (value_regs_get y 0)))
+        ;; compute carry.
+        (carry XReg (rv_sltu low (value_regs_get y 0)))
+        ;;
+        (high_tmp XReg (rv_add (value_regs_get x 1) (value_regs_get y 1)))
+        ;; add carry.
+        (high XReg (rv_add high_tmp carry))
+        (of XReg (gen_select_xreg (int_compare (IntCC.UnsignedLessThan) high carry) one (zero_reg))))
+    (output_pair
+         (value_regs low high)
+         (value_reg of))))
+
 ;;; Rules for `umul_overflow` ;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_32 ty) (umul_overflow x y)))
   (let ((tmp_x XReg (zext x))
