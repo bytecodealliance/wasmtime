@@ -726,13 +726,13 @@ const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
 struct TcpWriteStream {
     stream: Arc<tokio::net::TcpStream>,
-    last_write: LastWrite,
+    state: WriteState,
 }
 
-enum LastWrite {
-    Waiting(AbortOnDropJoinHandle<Result<()>>),
+enum WriteState {
+    Ready,
+    Writing(AbortOnDropJoinHandle<Result<()>>),
     Error(Error),
-    Done,
     Closed,
 }
 
@@ -740,7 +740,7 @@ impl TcpWriteStream {
     fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
-            last_write: LastWrite::Done,
+            state: WriteState::Ready,
         }
     }
 
@@ -761,10 +761,10 @@ impl TcpWriteStream {
     /// Write `bytes` in a background task, remembering the task handle for use in a future call to
     /// `write_ready`
     fn background_write(&mut self, mut bytes: bytes::Bytes) {
-        assert!(matches!(self.last_write, LastWrite::Done));
+        assert!(matches!(self.state, WriteState::Ready));
 
         let stream = self.stream.clone();
-        self.last_write = LastWrite::Waiting(crate::runtime::spawn(async move {
+        self.state = WriteState::Writing(crate::runtime::spawn(async move {
             // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
             // primitive try_write, which goes directly to attempt a write with mio. This has
             // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream
@@ -789,9 +789,9 @@ impl TcpWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
-        match self.last_write {
-            LastWrite::Done => {}
-            LastWrite::Waiting(_) | LastWrite::Error(_) | LastWrite::Closed => {
+        match self.state {
+            WriteState::Ready => {}
+            WriteState::Writing(_) | WriteState::Error(_) | WriteState::Closed => {
                 return Err(StreamError::Trap(anyhow::anyhow!(
                     "unpermitted: must call check_write first"
                 )));
@@ -812,7 +812,7 @@ impl HostOutputStream for TcpWriteStream {
                 }
 
                 Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
-                    self.last_write = LastWrite::Closed;
+                    self.state = WriteState::Closed;
                     return Err(StreamError::Closed);
                 }
 
@@ -827,23 +827,23 @@ impl HostOutputStream for TcpWriteStream {
         // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
         // `write_ready` will join the background write task if it's active, so following `flush`
         // with `write_ready` will have the desired effect.
-        match self.last_write {
-            LastWrite::Done | LastWrite::Waiting(_) | LastWrite::Error(_) => Ok(()),
-            LastWrite::Closed => Err(StreamError::Closed),
+        match self.state {
+            WriteState::Ready | WriteState::Writing(_) | WriteState::Error(_) => Ok(()),
+            WriteState::Closed => Err(StreamError::Closed),
         }
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        match mem::replace(&mut self.last_write, LastWrite::Closed) {
-            LastWrite::Waiting(task) => {
-                self.last_write = LastWrite::Waiting(task);
+        match mem::replace(&mut self.state, WriteState::Closed) {
+            WriteState::Writing(task) => {
+                self.state = WriteState::Writing(task);
                 return Ok(0);
             }
-            LastWrite::Done => {
-                self.last_write = LastWrite::Done;
+            WriteState::Ready => {
+                self.state = WriteState::Ready;
             }
-            LastWrite::Closed => return Err(StreamError::Closed),
-            LastWrite::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
+            WriteState::Closed => return Err(StreamError::Closed),
+            WriteState::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
         }
 
         let writable = self.stream.writable();
@@ -854,8 +854,8 @@ impl HostOutputStream for TcpWriteStream {
         Ok(SOCKET_READY_SIZE)
     }
     async fn cancel(&mut self) {
-        match mem::replace(&mut self.last_write, LastWrite::Closed) {
-            LastWrite::Waiting(task) => _ = task.abort_wait().await,
+        match mem::replace(&mut self.state, WriteState::Closed) {
+            WriteState::Writing(task) => _ = task.abort_wait().await,
             _ => {}
         }
     }
@@ -864,13 +864,13 @@ impl HostOutputStream for TcpWriteStream {
 #[async_trait::async_trait]
 impl Subscribe for TcpWriteStream {
     async fn ready(&mut self) {
-        if let LastWrite::Waiting(task) = &mut self.last_write {
-            self.last_write = match task.await {
-                Ok(()) => LastWrite::Done,
-                Err(e) => LastWrite::Error(e),
+        if let WriteState::Writing(task) = &mut self.state {
+            self.state = match task.await {
+                Ok(()) => WriteState::Ready,
+                Err(e) => WriteState::Error(e),
             };
         }
-        if let LastWrite::Done = self.last_write {
+        if let WriteState::Ready = self.state {
             self.stream.writable().await.unwrap();
         }
     }
