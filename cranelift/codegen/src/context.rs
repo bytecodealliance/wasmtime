@@ -10,7 +10,7 @@
 //! single ISA instance.
 
 use crate::alias_analysis::AliasAnalysis;
-use crate::dominator_tree::DominatorTree;
+use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
@@ -46,6 +46,9 @@ pub struct Context {
     /// Dominator tree for `func`.
     pub domtree: DominatorTree,
 
+    /// Domniator tree preorder, be on look out to merge with domtree, although unlikely
+    pub domtree_preorder: DominatorTreePreorder,
+
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
 
@@ -74,6 +77,7 @@ impl Context {
             func,
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
+            domtree_preorder: DominatorTreePreorder::new(),
             loop_analysis: LoopAnalysis::new(),
             compiled_code: None,
             want_disasm: false,
@@ -300,7 +304,9 @@ impl Context {
 
     /// Compute dominator tree.
     pub fn compute_domtree(&mut self) {
-        self.domtree.compute(&self.func, &self.cfg)
+        self.domtree.compute(&self.func, &self.cfg);
+        self.domtree_preorder
+            .compute(&self.domtree, &self.func.layout);
     }
 
     /// Compute the loop analysis.
@@ -330,7 +336,7 @@ impl Context {
     /// by a store instruction to the same instruction (so-called
     /// "store-to-load forwarding").
     pub fn replace_redundant_loads(&mut self) -> CodegenResult<()> {
-        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree_preorder);
         analysis.compute_and_update_aliases(&mut self.func);
         Ok(())
     }
@@ -362,7 +368,8 @@ impl Context {
         );
         let fisa = fisa.into();
         self.compute_loop_analysis();
-        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree_preorder);
+
         let mut pass = EgraphPass::new(
             &mut self.func,
             &self.domtree,

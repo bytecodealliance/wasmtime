@@ -482,7 +482,41 @@ impl DominatorTreePreorder {
     pub fn dominates(&self, a: Block, b: Block) -> bool {
         let na = &self.nodes[a];
         let nb = &self.nodes[b];
-        na.pre_number <= nb.pre_number && na.pre_max >= nb.pre_max
+        // debug_assert!(na.pre_number != 0);
+        // debug_assert!(nb.pre_number != 0);
+        if a == b {
+            // check first if they're the same block
+            // if they are then they dominate themselves
+            true
+        } else if nb.pre_number == 0 {
+            // if the supposedly dominated is not reachable (pre_number = 0), is it
+            // really being dominated though ?
+            false
+        } else {
+            na.pre_number <= nb.pre_number && na.pre_max >= nb.pre_max
+        }
+    }
+
+    /// Checks if one instruction dominates another.
+    ///
+    /// Instruction a dominates instruction b if either of these conditions are true:
+    ///  -  a and b are in the same block, and a is not after b.
+    ///  -  The block containing a dominates the block containing b.
+    ///
+    /// This helper function is placed next to `fn dominates` for spatial locality of usages
+    pub fn dominates_inst(&self, a: Inst, b: Inst, layout: &Layout) -> bool {
+        match (layout.inst_block(a), layout.inst_block(b)) {
+            (Some(block_a), Some(block_b)) => {
+                if block_a == block_b {
+                    // Case 1
+                    layout.pp_cmp(a, b) != Ordering::Greater
+                } else {
+                    // Case 2
+                    self.dominates(block_a, block_b)
+                }
+            }
+            _ => false,
+        }
     }
 
     /// Compare two blocks according to the dominator pre-order.
