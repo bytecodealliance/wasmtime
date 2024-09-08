@@ -3190,7 +3190,7 @@ dependencies = [
  "cranelift-isle",
  "easy-smt",
  "env_logger",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "log",
  "strum",
  "strum_macros",
