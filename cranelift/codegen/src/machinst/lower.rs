@@ -13,6 +13,7 @@ use crate::ir::{
     GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
     Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
+use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
     writable_value_regs, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, Callee, InsnIndex,
     LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
@@ -702,8 +703,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 debug_assert_eq!(temp_regs.len(), results.len());
                 for (regs, &result) in temp_regs.iter().zip(results) {
                     let dsts = self.value_regs[result];
-                    debug_assert_eq!(regs.len(), dsts.len());
-                    for (&dst, &temp) in dsts.regs().iter().zip(regs.regs()) {
+                    let mut regs = regs.regs().iter();
+                    for &dst in dsts.regs().iter() {
+                        let temp = regs.next().copied().unwrap_or(Reg::invalid_sentinel());
                         trace!("set vreg alias: {result:?} = {dst:?}, lowering = {temp:?}");
                         self.vregs.set_vreg_alias(dst, temp);
                     }
@@ -1041,6 +1043,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let vcode = self.vcode.build(self.vregs);
 
         Ok(vcode)
+    }
+
+    pub fn value_is_unused(&self, val: Value) -> bool {
+        match self.value_ir_uses[val] {
+            ValueUseState::Unused => true,
+            _ => false,
+        }
     }
 }
 

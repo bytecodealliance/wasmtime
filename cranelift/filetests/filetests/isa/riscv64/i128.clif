@@ -12,30 +12,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   li a5,0
-;   li a2,0
-;   mulhu a3,a0,a1
-;   mul a2,a0,a2
-;   add a3,a2,a3
-;   mul a5,a5,a1
-;   mv a2,a1
-;   add a1,a5,a3
-;   mul a3,a0,a2
-;   add a0,a3,zero
+;   mul a3,a0,a1
+;   mulhu a1,a0,a1
+;   mv a0,a3
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, zero
-;   mv a2, zero
-;   mulhu a3, a0, a1
-;   mul a2, a0, a2
-;   add a3, a2, a3
-;   mul a5, a5, a1
-;   mv a2, a1
-;   add a1, a5, a3
-;   mul a3, a0, a2
-;   add a0, a3, zero
+;   mul a3, a0, a1
+;   mulhu a1, a0, a1
+;   mv a0, a3
 ;   ret
 
 function %mul_sextend_i64(i64, i64) -> i128 {
@@ -48,30 +34,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   srai a5,a0,63
-;   srai a2,a1,63
-;   mulhu a3,a0,a1
-;   mul a2,a0,a2
-;   add a3,a2,a3
-;   mul a5,a5,a1
-;   mv a2,a1
-;   add a1,a5,a3
-;   mul a3,a0,a2
-;   add a0,a3,zero
+;   mul a3,a0,a1
+;   mulh a1,a0,a1
+;   mv a0,a3
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   srai a5, a0, 0x3f
-;   srai a2, a1, 0x3f
-;   mulhu a3, a0, a1
-;   mul a2, a0, a2
-;   add a3, a2, a3
-;   mul a5, a5, a1
-;   mv a2, a1
-;   add a1, a5, a3
-;   mul a3, a0, a2
-;   add a0, a3, zero
+;   mul a3, a0, a1
+;   mulh a1, a0, a1
+;   mv a0, a3
 ;   ret
 
 function %smul_high_i64_pattern(i64, i64) -> i64 {
@@ -105,32 +77,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   srai a5,a0,63
-;   srai a2,a1,63
-;   mulhu a3,a0,a1
-;   mul a2,a0,a2
-;   mv a4,a0
-;   add a3,a2,a3
-;   mul a5,a5,a1
-;   add a0,a5,a3
-;   mv a2,a4
-;   mul a3,a2,a1
-;   add a5,a3,zero
+;   mulh a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   srai a5, a0, 0x3f
-;   srai a2, a1, 0x3f
-;   mulhu a3, a0, a1
-;   mul a2, a0, a2
-;   mv a4, a0
-;   add a3, a2, a3
-;   mul a5, a5, a1
-;   add a0, a5, a3
-;   mv a2, a4
-;   mul a3, a2, a1
-;   add a5, a3, zero
+;   mulh a0, a0, a1
 ;   ret
 
 function %umul_high_i64_pattern(i64, i64) -> i64 {
@@ -164,31 +116,11 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   li a5,0
-;   li a2,0
-;   mulhu a3,a0,a1
-;   mul a2,a0,a2
-;   mv a4,a0
-;   add a3,a2,a3
-;   mul a5,a5,a1
-;   add a0,a5,a3
-;   mv a2,a4
-;   mul a3,a2,a1
-;   add a5,a3,zero
+;   mulhu a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, zero
-;   mv a2, zero
-;   mulhu a3, a0, a1
-;   mul a2, a0, a2
-;   mv a4, a0
-;   add a3, a2, a3
-;   mul a5, a5, a1
-;   add a0, a5, a3
-;   mv a2, a4
-;   mul a3, a2, a1
-;   add a5, a3, zero
+;   mulhu a0, a0, a1
 ;   ret
 

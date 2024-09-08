@@ -409,6 +409,15 @@
             (res_hi Reg (add_reg $I64 res_hi_3 (add_reg $I64 res_hi_2 res_hi_1))))
         (mov_to_vec128 $I64X2 res_hi res_lo)))
 
+;; Special-case the lowering of a 128-bit multiply where the operands are sign
+;; or zero extended. This maps directly to `umul_wide` and `smul_wide`.
+(rule 16 (lower (has_type $I128 (imul (uextend x) (uextend y))))
+  (let ((pair RegPair (umul_wide (put_in_reg_zext64 x) (put_in_reg_zext64 y))))
+    (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair))))
+
+(rule 16 (lower (has_type $I128 (imul (sextend x) (sextend y))))
+  (let ((pair RegPair (smul_wide (put_in_reg_sext64 x) (put_in_reg_sext64 y))))
+    (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair))))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

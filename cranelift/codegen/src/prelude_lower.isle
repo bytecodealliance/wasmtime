@@ -255,6 +255,11 @@
 (decl inst_results (ValueSlice) Inst)
 (extern extractor infallible inst_results inst_results)
 
+;; Returns whether the given value is unused in this function and is a dead
+;; result.
+(decl pure value_is_unused (Value) bool)
+(extern constructor value_is_unused value_is_unused)
+
 ;; Extract the first result value of the given instruction.
 (decl first_result (Value) Inst)
 (extern extractor first_result first_result)

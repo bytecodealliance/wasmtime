@@ -78,16 +78,13 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
 ;   smulh x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
 ;   smulh x0, x0, x1
 ;   ret
-
 
 function %umul_high_i64_pattern(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -120,13 +117,11 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
 ;   umulh x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
 ;   umulh x0, x0, x1
 ;   ret
 

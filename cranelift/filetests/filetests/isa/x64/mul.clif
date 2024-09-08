@@ -500,9 +500,8 @@ block0(v0: i8, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsbl  %dil, %eax
-;   movsbl  %sil, %r8d
-;   imulw   %ax, %r8w, %ax
+;   movq    %rdi, %rax
+;   imulb   %al, %sil, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -512,9 +511,8 @@ block0(v0: i8, v1: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movsbl %dil, %eax
-;   movsbl %sil, %r8d
-;   imull %r8d, %eax
+;   movq %rdi, %rax
+;   imulb %sil
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -531,9 +529,8 @@ block0(v0: i8, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbl  %dil, %eax
-;   movzbl  %sil, %r8d
-;   imulw   %ax, %r8w, %ax
+;   movq    %rdi, %rax
+;   mulb    %al, %sil, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -543,9 +540,8 @@ block0(v0: i8, v1: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movzbl %dil, %eax
-;   movzbl %sil, %r8d
-;   imull %r8d, %eax
+;   movq %rdi, %rax
+;   mulb %sil
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
