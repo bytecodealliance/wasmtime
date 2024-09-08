@@ -487,3 +487,66 @@ block0(v0: i64):
 ;   popq %rbp
 ;   retq
 
+
+function %widening_smul_from_8bit(i8, i8) -> i16 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i16 v0
+    v3 = sextend.i16 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsbl  %dil, %eax
+;   movsbl  %sil, %r8d
+;   imulw   %ax, %r8w, %ax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movsbl %dil, %eax
+;   movsbl %sil, %r8d
+;   imull %r8d, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %widening_umul_from_8bit(i8, i8) -> i16 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i16 v0
+    v3 = uextend.i16 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbl  %dil, %eax
+;   movzbl  %sil, %r8d
+;   imulw   %ax, %r8w, %ax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbl %dil, %eax
+;   movzbl %sil, %r8d
+;   imull %r8d, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

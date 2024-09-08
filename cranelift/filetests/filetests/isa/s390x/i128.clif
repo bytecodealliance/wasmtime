@@ -1,0 +1,274 @@
+test compile precise-output
+set opt_level=speed
+target s390x
+
+function %mul_uextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   stmg %r7, %r15, 56(%r15)
+; block0:
+;   lgr %r7, %r2
+;   vgbm %v26, 0
+;   vlvgg %v26, %r3, 1
+;   vgbm %v27, 0
+;   vlvgg %v27, %r4, 1
+;   vlgvg %r4, %v26, 0
+;   vlgvg %r5, %v26, 1
+;   vlgvg %r9, %v27, 0
+;   vlgvg %r11, %v27, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r11
+;   msgr %r5, %r9
+;   msgr %r4, %r11
+;   agr %r5, %r2
+;   agr %r4, %r5
+;   vlvgp %v3, %r4, %r3
+;   lgr %r2, %r7
+;   vst %v3, 0(%r2)
+;   lmg %r7, %r15, 56(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r7, %r15, 0x38(%r15)
+; block1: ; offset 0x6
+;   lgr %r7, %r2
+;   vzero %v26
+;   vlvgg %v26, %r3, 1
+;   vzero %v27
+;   vlvgg %v27, %r4, 1
+;   vlgvg %r4, %v26, 0
+;   vlgvg %r5, %v26, 1
+;   vlgvg %r9, %v27, 0
+;   vlgvg %r11, %v27, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r11
+;   msgr %r5, %r9
+;   msgr %r4, %r11
+;   agr %r5, %r2
+;   agr %r4, %r5
+;   vlvgp %v3, %r4, %r3
+;   lgr %r2, %r7
+;   vst %v3, 0(%r2)
+;   lmg %r7, %r15, 0x38(%r15)
+;   br %r14
+
+function %mul_sextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+;   stmg %r7, %r15, 56(%r15)
+; block0:
+;   lgr %r7, %r2
+;   srag %r5, %r3, 63
+;   vlvgp %v27, %r5, %r3
+;   srag %r3, %r4, 63
+;   vlvgp %v28, %r3, %r4
+;   vlgvg %r4, %v27, 0
+;   vlgvg %r5, %v27, 1
+;   vlgvg %r9, %v28, 0
+;   vlgvg %r11, %v28, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r11
+;   msgr %r5, %r9
+;   msgr %r4, %r11
+;   agr %r5, %r2
+;   agr %r4, %r5
+;   vlvgp %v3, %r4, %r3
+;   lgr %r2, %r7
+;   vst %v3, 0(%r2)
+;   lmg %r7, %r15, 56(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r7, %r15, 0x38(%r15)
+; block1: ; offset 0x6
+;   lgr %r7, %r2
+;   srag %r5, %r3, 0x3f
+;   vlvgp %v27, %r5, %r3
+;   srag %r3, %r4, 0x3f
+;   vlvgp %v28, %r3, %r4
+;   vlgvg %r4, %v27, 0
+;   vlgvg %r5, %v27, 1
+;   vlgvg %r9, %v28, 0
+;   vlgvg %r11, %v28, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r11
+;   msgr %r5, %r9
+;   msgr %r4, %r11
+;   agr %r5, %r2
+;   agr %r4, %r5
+;   vlvgp %v3, %r4, %r3
+;   lgr %r2, %r7
+;   vst %v3, 0(%r2)
+;   lmg %r7, %r15, 0x38(%r15)
+;   br %r14
+
+function %smul_high_i64_pattern(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    v5 = sshr_imm v4, 64
+    v6 = ireduce.i64 v5
+    return v6
+}
+
+; VCode:
+; block0:
+;   mgrk %r2, %r2, %r3
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mgrk %r2, %r2, %r3
+;   br %r14
+
+function %smul_high_i64_isplit(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    v5, v6 = isplit v4
+    return v6
+}
+
+; VCode:
+;   stmg %r10, %r15, 80(%r15)
+; block0:
+;   srag %r4, %r2, 63
+;   vlvgp %v28, %r4, %r2
+;   srag %r4, %r3, 63
+;   vlvgp %v29, %r4, %r3
+;   vlgvg %r4, %v28, 0
+;   vlgvg %r5, %v28, 1
+;   vlgvg %r10, %v29, 0
+;   vlgvg %r12, %v29, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r12
+;   msgr %r5, %r10
+;   msgr %r4, %r12
+;   agrk %r2, %r5, %r2
+;   agr %r4, %r2
+;   vlvgp %v4, %r4, %r3
+;   lgdr %r2, %f4
+;   vlgvg %r5, %v4, 1
+;   lmg %r10, %r15, 80(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r10, %r15, 0x50(%r15)
+; block1: ; offset 0x6
+;   srag %r4, %r2, 0x3f
+;   vlvgp %v28, %r4, %r2
+;   srag %r4, %r3, 0x3f
+;   vlvgp %v29, %r4, %r3
+;   vlgvg %r4, %v28, 0
+;   vlgvg %r5, %v28, 1
+;   vlgvg %r10, %v29, 0
+;   vlgvg %r12, %v29, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r12
+;   msgr %r5, %r10
+;   msgr %r4, %r12
+;   agrk %r2, %r5, %r2
+;   agr %r4, %r2
+;   vlvgp %v4, %r4, %r3
+;   lgdr %r2, %f4
+;   vlgvg %r5, %v4, 1
+;   lmg %r10, %r15, 0x50(%r15)
+;   br %r14
+
+function %umul_high_i64_pattern(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    v5 = ushr_imm v4, 64
+    v6 = ireduce.i64 v5
+    return v6
+}
+
+; VCode:
+; block0:
+;   lgr %r4, %r3
+;   lgr %r3, %r2
+;   mlgr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgr %r4, %r3
+;   lgr %r3, %r2
+;   mlgr %r2, %r4
+;   br %r14
+
+function %umul_high_i64_isplit(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    v5, v6 = isplit v4
+    return v6
+}
+
+; VCode:
+;   stmg %r10, %r15, 80(%r15)
+; block0:
+;   vgbm %v27, 0
+;   vlvgg %v27, %r2, 1
+;   vgbm %v28, 0
+;   vlvgg %v28, %r3, 1
+;   vlgvg %r4, %v27, 0
+;   vlgvg %r5, %v27, 1
+;   vlgvg %r10, %v28, 0
+;   vlgvg %r12, %v28, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r12
+;   msgr %r5, %r10
+;   msgr %r4, %r12
+;   agrk %r2, %r5, %r2
+;   agr %r4, %r2
+;   vlvgp %v4, %r4, %r3
+;   lgdr %r2, %f4
+;   vlgvg %r5, %v4, 1
+;   lmg %r10, %r15, 80(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r10, %r15, 0x50(%r15)
+; block1: ; offset 0x6
+;   vzero %v27
+;   vlvgg %v27, %r2, 1
+;   vzero %v28
+;   vlvgg %v28, %r3, 1
+;   vlgvg %r4, %v27, 0
+;   vlgvg %r5, %v27, 1
+;   vlgvg %r10, %v28, 0
+;   vlgvg %r12, %v28, 1
+;   lgr %r3, %r5
+;   mlgr %r2, %r12
+;   msgr %r5, %r10
+;   msgr %r4, %r12
+;   agrk %r2, %r5, %r2
+;   agr %r4, %r2
+;   vlvgp %v4, %r4, %r3
+;   lgdr %r2, %f4
+;   vlgvg %r5, %v4, 1
+;   lmg %r10, %r15, 0x50(%r15)
+;   br %r14
+

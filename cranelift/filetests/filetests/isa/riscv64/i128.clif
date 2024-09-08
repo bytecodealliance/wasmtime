@@ -1,7 +1,6 @@
 test compile precise-output
-set enable_llvm_abi_extensions=true
 set opt_level=speed
-target aarch64
+target riscv64
 
 function %mul_uextend_i64(i64, i64) -> i128 {
 block0(v0: i64, v1: i64):
@@ -13,16 +12,30 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
-;   umulh x1, x0, x1
-;   mov x0, x3
+;   li a5,0
+;   li a2,0
+;   mulhu a3,a0,a1
+;   mul a2,a0,a2
+;   add a3,a2,a3
+;   mul a5,a5,a1
+;   mv a2,a1
+;   add a1,a5,a3
+;   mul a3,a0,a2
+;   add a0,a3,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
-;   umulh x1, x0, x1
-;   mov x0, x3
+;   mv a5, zero
+;   mv a2, zero
+;   mulhu a3, a0, a1
+;   mul a2, a0, a2
+;   add a3, a2, a3
+;   mul a5, a5, a1
+;   mv a2, a1
+;   add a1, a5, a3
+;   mul a3, a0, a2
+;   add a0, a3, zero
 ;   ret
 
 function %mul_sextend_i64(i64, i64) -> i128 {
@@ -35,16 +48,30 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
-;   smulh x1, x0, x1
-;   mov x0, x3
+;   srai a5,a0,63
+;   srai a2,a1,63
+;   mulhu a3,a0,a1
+;   mul a2,a0,a2
+;   add a3,a2,a3
+;   mul a5,a5,a1
+;   mv a2,a1
+;   add a1,a5,a3
+;   mul a3,a0,a2
+;   add a0,a3,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
-;   smulh x1, x0, x1
-;   mov x0, x3
+;   srai a5, a0, 0x3f
+;   srai a2, a1, 0x3f
+;   mulhu a3, a0, a1
+;   mul a2, a0, a2
+;   add a3, a2, a3
+;   mul a5, a5, a1
+;   mv a2, a1
+;   add a1, a5, a3
+;   mul a3, a0, a2
+;   add a0, a3, zero
 ;   ret
 
 function %smul_high_i64_pattern(i64, i64) -> i64 {
@@ -59,12 +86,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   smulh x0, x0, x1
+;   mulh a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   smulh x0, x0, x1
+;   mulh a0, a0, a1
 ;   ret
 
 function %smul_high_i64_isplit(i64, i64) -> i64 {
@@ -78,16 +105,33 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
-;   smulh x0, x0, x1
+;   srai a5,a0,63
+;   srai a2,a1,63
+;   mulhu a3,a0,a1
+;   mul a2,a0,a2
+;   mv a4,a0
+;   add a3,a2,a3
+;   mul a5,a5,a1
+;   add a0,a5,a3
+;   mv a2,a4
+;   mul a3,a2,a1
+;   add a5,a3,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
-;   smulh x0, x0, x1
+;   srai a5, a0, 0x3f
+;   srai a2, a1, 0x3f
+;   mulhu a3, a0, a1
+;   mul a2, a0, a2
+;   mv a4, a0
+;   add a3, a2, a3
+;   mul a5, a5, a1
+;   add a0, a5, a3
+;   mv a2, a4
+;   mul a3, a2, a1
+;   add a5, a3, zero
 ;   ret
-
 
 function %umul_high_i64_pattern(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -101,12 +145,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   umulh x0, x0, x1
+;   mulhu a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   umulh x0, x0, x1
+;   mulhu a0, a0, a1
 ;   ret
 
 function %umul_high_i64_isplit(i64, i64) -> i64 {
@@ -120,13 +164,31 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
-;   umulh x0, x0, x1
+;   li a5,0
+;   li a2,0
+;   mulhu a3,a0,a1
+;   mul a2,a0,a2
+;   mv a4,a0
+;   add a3,a2,a3
+;   mul a5,a5,a1
+;   add a0,a5,a3
+;   mv a2,a4
+;   mul a3,a2,a1
+;   add a5,a3,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
-;   umulh x0, x0, x1
+;   mv a5, zero
+;   mv a2, zero
+;   mulhu a3, a0, a1
+;   mul a2, a0, a2
+;   mv a4, a0
+;   add a3, a2, a3
+;   mul a5, a5, a1
+;   add a0, a5, a3
+;   mv a2, a4
+;   mul a3, a2, a1
+;   add a5, a3, zero
 ;   ret
 
