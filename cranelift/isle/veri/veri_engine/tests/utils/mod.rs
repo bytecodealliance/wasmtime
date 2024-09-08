@@ -5,13 +5,15 @@ use cranelift_codegen_meta::{
 use cranelift_isle::compile::create_envs;
 use std::env;
 use std::path::PathBuf;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use veri_engine_lib::annotations::parse_annotations;
 use veri_engine_lib::type_inference::type_rules_with_term_and_types;
 use veri_engine_lib::verify::verify_rules_for_term;
 use veri_engine_lib::Config;
 use veri_ir::{ConcreteTest, Counterexample, TermSignature, VerificationResult};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
+#[derive(Debug, EnumIter, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
 #[repr(usize)]
 pub enum Bitwidth {
     I8 = 8,
@@ -103,8 +105,7 @@ pub fn all_failure_result() -> Vec<(Bitwidth, VerificationResult)> {
 /// Specify a custom set expected result (helpful if you want to test all the bitwidths and expect
 /// a range of different success, failure, and inapplicable outcomes)
 pub fn custom_result(f: &TestResultBuilder) -> Vec<(Bitwidth, VerificationResult)> {
-    static WIDTHS: [Bitwidth; 4] = [Bitwidth::I8, Bitwidth::I16, Bitwidth::I32, Bitwidth::I64];
-    WIDTHS.iter().map(|w| f(*w)).collect()
+    Bitwidth::iter().map(f).collect()
 }
 
 fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) {

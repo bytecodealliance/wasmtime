@@ -21,7 +21,7 @@ cranelift-codegen-meta = { path = "../../../codegen/meta" }
 veri_ir = { path = "../veri_ir" }
 easy-smt = "0.2.2"
 clap = { workspace = true }
-itertools = "0.10.5"
+itertools = "0.10.3"
 log = { workspace = true }
 env_logger = { workspace = true }
 anyhow = { workspace = true }
