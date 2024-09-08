@@ -2871,9 +2871,9 @@
 ;; zero-extension for the `Value` input.
 (decl put_value_in_reg_for_icmp (IntCC Value) XReg)
 
-(decl madd_overflow64 (XReg XReg XReg) ValueRegs)
+(decl umadd_overflow64 (XReg XReg XReg) ValueRegs)
 
-(rule (madd_overflow64 x y z)
+(rule (umadd_overflow64 x y z)
   (let ((one XReg (imm $I8 1))
         (hi XReg (rv_mulhu x y))
         (m XReg (rv_mul x y))
@@ -2883,6 +2883,24 @@
         (of XReg (rv_or of_mul of_add)))
     (value_regs sum of)))
 
+(decl smadd_overflow64 (XReg XReg XReg) ValueRegs)
+
+(rule (smadd_overflow64 x y z)
+  (let ((mul_lo XReg (rv_mul x y))
+        (mul_hi XReg (rv_mulh x y))
+        (sign_mul_lo XReg (rv_srai mul_lo (imm12_const 63)))
+        (sign_mul_hi XReg (rv_srai mul_hi (imm12_const 63)))
+        (mul_overflow XReg (rv_xor sign_mul_lo sign_mul_hi))
+
+        (sum XReg (rv_add mul_lo z))
+        (sign_sum XReg (rv_srai sum (imm12_const 63)))
+        (sign_z XReg (rv_srai z (imm12_const 63)))
+        (same_signs_add XReg (rv_xor sign_mul_lo sign_z))
+        (diff_sign_add XReg (rv_xor sign_mul_lo sign_sum))
+        (add_overflow XReg (rv_and diff_sign_add (rv_xnor same_signs_add (zero_reg))))
+
+        (overflow XReg (rv_or mul_overflow add_overflow)))
+    (value_regs sum overflow)))
 
 ;; Base cases, use the `cc` to determine whether to zero or sign extend.
 (rule 0 (put_value_in_reg_for_icmp cc val)

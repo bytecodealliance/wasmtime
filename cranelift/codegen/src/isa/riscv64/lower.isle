@@ -364,7 +364,6 @@
          (value_reg res)
          (value_reg of))))
 
-;; TODO
 (rule 2 (lower (has_type $I128 (umul_overflow x y)))
   (let
     ((x_regs ValueRegs x)
@@ -387,8 +386,8 @@
       ;; madd    dst_lo, x_lo, y_lo, zero
       (dst_hi1 XReg (rv_mulhu x_lo y_lo))
       (one XReg (imm $I32 1))
-      (dst_hi2 ValueRegs (madd_overflow64 x_lo y_hi (value_regs_get dst_hi1 0)))
-      (dst_hi ValueRegs (madd_overflow64 x_hi y_lo (value_regs_get dst_hi2 0)))
+      (dst_hi2 ValueRegs (umadd_overflow64 x_lo y_hi (value_regs_get dst_hi1 0)))
+      (dst_hi ValueRegs (umadd_overflow64 x_hi y_lo (value_regs_get dst_hi2 0)))
       (dst_lo XReg (madd x_lo y_lo (zero_reg)))
 
       (of_res1 XReg (rv_or (value_regs_get dst_hi1 1) (value_regs_get dst_hi2 1)))
@@ -396,6 +395,106 @@
     (output_pair
          (value_regs dst_lo (value_regs_get dst_hi 0))
      (value_reg of_res))))
+
+;;; Rules for `smul_overflow` ;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_32 ty) (smul_overflow x y)))
+  (let ((tmp_x XReg (sext x))
+        (tmp_y XReg (sext y))
+        (res XReg (rv_mul tmp_x tmp_y))
+        (hi XReg (rv_srai res (imm12_const (ty_bits ty))))
+        (one XReg (imm $I8 1))
+        (of XReg (gen_select_xreg (cmp_eqz hi) (zero_reg) one)))
+    (output_pair
+         (value_reg res)
+         (value_reg of))))
+
+(rule 1 (lower (has_type $I64 (smul_overflow x y)))
+  (let ((hi XReg (rv_mulh x y))
+        (res XReg (rv_mul x y))
+        (one XReg (imm $I8 1))
+        (of XReg (gen_select_xreg (cmp_eqz hi) (zero_reg) one)))
+    (output_pair
+         (value_reg res)
+         (value_reg of))))
+
+(rule 2 (lower (has_type $I128 (smul_overflow x y)))
+  (let
+    ((x_regs ValueRegs x)
+      (x_lo XReg (value_regs_get x_regs 0))
+      (x_hi XReg (value_regs_get x_regs 1))
+
+      ;; Get the high/low registers for `y`.
+      (y_regs ValueRegs y)
+      (y_lo XReg (value_regs_get y_regs 0))
+      (y_hi XReg (value_regs_get y_regs 1))
+
+      ;; 128bit mul formula:
+      ;;   dst_lo = x_lo * y_lo
+      ;;   dst_hi = mulhu(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
+      ;;
+      ;; We can convert the above formula into the following
+      ;; mulhu   dst_hi, x_lo, y_lo
+      ;; madd    dst_hi, x_lo, y_hi, dst_hi
+      ;; madd    dst_hi, x_hi, y_lo, dst_hi
+      ;; madd    dst_lo, x_lo, y_lo, zero
+      (dst_hi1 XReg (rv_mulhu x_lo y_lo))
+      (one XReg (imm $I32 1))
+      (dst_hi2 ValueRegs (smadd_overflow64 x_lo y_hi (value_regs_get dst_hi1 0)))
+      (dst_hi ValueRegs (smadd_overflow64 x_hi y_lo (value_regs_get dst_hi2 0)))
+      (dst_lo XReg (madd x_lo y_lo (zero_reg)))
+
+      (of_res1 XReg (rv_or (value_regs_get dst_hi1 1) (value_regs_get dst_hi2 1)))
+      (of_res XReg (rv_or of_res1 (value_regs_get dst_hi 1))))
+    (output_pair
+         (value_regs dst_lo (value_regs_get dst_hi 0))
+     (value_reg of_res))))
+
+;;; Rules for `sadd_overflow` ;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_32 ty) (sadd_overflow x y)))
+  (let ((tmp_x XReg (sext x))
+        (tmp_y XReg (sext y))
+        (one XReg (imm $I8 1))
+        (sum XReg (rv_add tmp_x tmp_y))
+        (sign_x XReg (rv_srai tmp_x (imm12_const (ty_bits ty))))
+        (sign_y XReg (rv_srai tmp_y (imm12_const (ty_bits ty))))
+        (sign_sum XReg (rv_srai sum (imm12_const (ty_bits ty))))
+        (same_signs XReg (rv_xor sign_x sign_y))
+        (diff_sign XReg (rv_xor sign_x sign_sum))
+        (overflow XReg (rv_and diff_sign (rv_xnor same_signs (zero_reg)))))
+    (output_pair
+         (value_reg sum)
+         (value_reg overflow))))
+
+(rule 1 (lower (has_type $I64 (sadd_overflow x y)))
+  (let ((sum XReg (rv_add x y))
+        (one XReg (imm $I8 1))
+        (sign_x XReg (rv_srai x (imm12_const 63)))
+        (sign_y XReg (rv_srai y (imm12_const 63)))
+        (sign_sum XReg (rv_srai sum (imm12_const 63)))
+        (same_signs XReg (rv_xor sign_x sign_y))
+        (diff_sign XReg (rv_xor sign_x sign_sum))
+        (overflow XReg (rv_and diff_sign (rv_xnor same_signs (zero_reg)))))
+    (output_pair
+         (value_reg sum)
+         (value_reg overflow))))
+
+(rule 2 (lower (has_type $I128 (sadd_overflow x y)))
+  (let ((one XReg (imm $I8 1))
+        (low XReg (rv_add (value_regs_get x 0) (value_regs_get y 0)))
+        (carry XReg (rv_slt low (value_regs_get y 0)))
+        (high_tmp XReg (rv_add (value_regs_get x 1) (value_regs_get y 1)))
+        (high XReg (rv_add high_tmp carry))
+        (sign_x XReg (rv_srai (value_regs_get x 1) (imm12_const 63)))
+        (sign_y XReg (rv_srai (value_regs_get y 1) (imm12_const 63)))
+        (sign_sum XReg (rv_srai high (imm12_const 63)))
+        (same_signs XReg (rv_xor sign_x sign_y))
+        (diff_sign XReg (rv_xor sign_x sign_sum))
+        (overflow XReg (rv_and diff_sign (rv_xnor same_signs (zero_reg)))))
+    (output_pair
+         (value_regs low high)
+         (value_reg overflow))))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
