@@ -6,19 +6,20 @@ use crate::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, SocketResult, StreamError,
     Subscribe,
 };
-use anyhow::{Error, Result};
+use anyhow::Result;
 use cap_net_ext::AddressFamily;
 use futures::Future;
 use io_lifetimes::views::SocketlikeView;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
+use std::future::poll_fn;
 use std::io;
 use std::mem;
 use std::net::SocketAddr;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::Poll;
+use std::pin::{pin, Pin};
+use std::sync::{Arc, Mutex};
+use std::task::{ready, Context, Poll};
 
 /// Value taken from rust std library.
 const DEFAULT_BACKLOG: u32 = 128;
@@ -277,9 +278,11 @@ impl TcpSocket {
         match result {
             Ok(stream) => {
                 let stream = Arc::new(stream);
-                self.tcp_state = TcpState::Connected(stream.clone());
-                let input: InputStream = Box::new(TcpReadStream::new(stream.clone()));
-                let output: OutputStream = Box::new(TcpWriteStream::new(stream));
+                let reader = Arc::new(Mutex::new(TcpReader::new(stream.clone())));
+                let writer = Arc::new(Mutex::new(TcpWriter::new(stream.clone())));
+                self.tcp_state = TcpState::Connected(stream);
+                let input: InputStream = Box::new(TcpReadStream(reader));
+                let output: OutputStream = Box::new(TcpWriteStream(writer));
                 Ok((input, output))
             }
             Err(err) => {
@@ -427,8 +430,11 @@ impl TcpSocket {
 
         let client = Arc::new(client);
 
-        let input: InputStream = Box::new(TcpReadStream::new(client.clone()));
-        let output: OutputStream = Box::new(TcpWriteStream::new(client.clone()));
+        let reader = Arc::new(Mutex::new(TcpReader::new(client.clone())));
+        let writer = Arc::new(Mutex::new(TcpWriter::new(client.clone())));
+
+        let input: InputStream = Box::new(TcpReadStream(reader));
+        let output: OutputStream = Box::new(TcpWriteStream(writer));
         let tcp_socket = TcpSocket::from_state(TcpState::Connected(client), self.family)?;
 
         Ok((tcp_socket, input, output))
@@ -664,22 +670,18 @@ impl Subscribe for TcpSocket {
     }
 }
 
-struct TcpReadStream {
+struct TcpReader {
     stream: Arc<tokio::net::TcpStream>,
     closed: bool,
 }
 
-impl TcpReadStream {
+impl TcpReader {
     fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             closed: false,
         }
     }
-}
-
-#[async_trait::async_trait]
-impl HostInputStream for TcpReadStream {
     fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
         if self.closed {
             return Err(StreamError::Closed);
@@ -710,33 +712,47 @@ impl HostInputStream for TcpReadStream {
         buf.truncate(n);
         Ok(buf.freeze())
     }
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        if self.closed {
+            return Poll::Ready(());
+        }
+        self.stream.poll_read_ready(cx).map(|_| ())
+    }
+}
+
+struct TcpReadStream(Arc<Mutex<TcpReader>>);
+
+#[async_trait::async_trait]
+impl HostInputStream for TcpReadStream {
+    fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
+        self.0.lock().unwrap().read(size)
+    }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for TcpReadStream {
     async fn ready(&mut self) {
-        if self.closed {
-            return;
-        }
-        self.stream.readable().await.unwrap();
+        poll_fn(move |cx| self.0.lock().unwrap().poll_ready(cx)).await;
     }
 }
 
 const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
-struct TcpWriteStream {
+struct TcpWriter {
     stream: Arc<tokio::net::TcpStream>,
     state: WriteState,
 }
 
 enum WriteState {
     Ready,
-    Writing(AbortOnDropJoinHandle<Result<()>>),
-    Error(Error),
+    Writing(AbortOnDropJoinHandle<io::Result<()>>),
+    Closing(AbortOnDropJoinHandle<io::Result<()>>),
     Closed,
+    Error(io::Error),
 }
 
-impl TcpWriteStream {
+impl TcpWriter {
     fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
@@ -784,14 +800,14 @@ impl TcpWriteStream {
             Ok(())
         }));
     }
-}
 
-#[async_trait::async_trait]
-impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
         match self.state {
             WriteState::Ready => {}
-            WriteState::Writing(_) | WriteState::Error(_) | WriteState::Closed => {
+            WriteState::Writing(_)
+            | WriteState::Closing(_)
+            | WriteState::Error(_)
+            | WriteState::Closed => {
                 return Err(StreamError::Trap(anyhow::anyhow!(
                     "unpermitted: must call check_write first"
                 )));
@@ -828,7 +844,10 @@ impl HostOutputStream for TcpWriteStream {
         // `write_ready` will join the background write task if it's active, so following `flush`
         // with `write_ready` will have the desired effect.
         match self.state {
-            WriteState::Ready | WriteState::Writing(_) | WriteState::Error(_) => Ok(()),
+            WriteState::Ready
+            | WriteState::Writing(_)
+            | WriteState::Closing(_)
+            | WriteState::Error(_) => Ok(()),
             WriteState::Closed => Err(StreamError::Closed),
         }
     }
@@ -837,6 +856,10 @@ impl HostOutputStream for TcpWriteStream {
         match mem::replace(&mut self.state, WriteState::Closed) {
             WriteState::Writing(task) => {
                 self.state = WriteState::Writing(task);
+                return Ok(0);
+            }
+            WriteState::Closing(task) => {
+                self.state = WriteState::Closing(task);
                 return Ok(0);
             }
             WriteState::Ready => {
@@ -853,25 +876,57 @@ impl HostOutputStream for TcpWriteStream {
         }
         Ok(SOCKET_READY_SIZE)
     }
-    async fn cancel(&mut self) {
-        match mem::replace(&mut self.state, WriteState::Closed) {
-            WriteState::Writing(task) => _ = task.abort_wait().await,
-            _ => {}
+
+    fn poll_cancel(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        self.state = match mem::replace(&mut self.state, WriteState::Closed) {
+            WriteState::Writing(task) | WriteState::Closing(task) => WriteState::Closing(task),
+            _ => WriteState::Closed,
+        };
+
+        match &mut self.state {
+            WriteState::Closing(task) => task.poll_cancel(cx).map(|_| ()),
+            WriteState::Closed => Poll::Ready(()),
+            _ => unreachable!(),
         }
+    }
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        if let WriteState::Writing(task) = &mut self.state {
+            self.state = match ready!(pin!(task).poll(cx)) {
+                Ok(()) => WriteState::Ready,
+                Err(e) => WriteState::Error(e),
+            };
+        }
+        if let WriteState::Ready = self.state {
+            ready!(self.stream.poll_write_ready(cx)).unwrap();
+        }
+        Poll::Ready(())
+    }
+}
+
+struct TcpWriteStream(Arc<Mutex<TcpWriter>>);
+
+#[async_trait::async_trait]
+impl HostOutputStream for TcpWriteStream {
+    fn write(&mut self, bytes: bytes::Bytes) -> Result<(), StreamError> {
+        self.0.lock().unwrap().write(bytes)
+    }
+
+    fn flush(&mut self) -> Result<(), StreamError> {
+        self.0.lock().unwrap().flush()
+    }
+
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        self.0.lock().unwrap().check_write()
+    }
+    async fn cancel(&mut self) {
+        poll_fn(move |cx| self.0.lock().unwrap().poll_cancel(cx)).await;
     }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for TcpWriteStream {
     async fn ready(&mut self) {
-        if let WriteState::Writing(task) = &mut self.state {
-            self.state = match task.await {
-                Ok(()) => WriteState::Ready,
-                Err(e) => WriteState::Error(e),
-            };
-        }
-        if let WriteState::Ready = self.state {
-            self.stream.writable().await.unwrap();
-        }
+        poll_fn(move |cx| self.0.lock().unwrap().poll_ready(cx)).await;
     }
 }

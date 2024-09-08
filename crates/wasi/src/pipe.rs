@@ -193,7 +193,7 @@ impl HostInputStream for AsyncReadStream {
 
     async fn cancel(&mut self) {
         match self.join_handle.take() {
-            Some(task) => _ = task.abort_wait().await,
+            Some(task) => _ = task.cancel().await,
             None => {}
         }
     }

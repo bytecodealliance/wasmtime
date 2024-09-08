@@ -361,7 +361,7 @@ impl HostInputStream for FileInputStream {
                 // background tasks. Also, the guest is only blocked if
                 // the stream was dropped mid-read, which we don't expect to
                 // occur frequently.
-                task.abort_wait().await;
+                task.cancel().await;
             }
             _ => {}
         }
@@ -558,7 +558,7 @@ impl HostOutputStream for FileOutputStream {
                 // background tasks. Also, the guest is only blocked if
                 // the stream was dropped mid-write, which we don't expect to
                 // occur frequently.
-                task.abort_wait().await;
+                task.cancel().await;
             }
             _ => {}
         }
