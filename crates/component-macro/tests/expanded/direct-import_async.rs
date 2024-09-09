@@ -194,11 +194,13 @@ const _: () = {
             linker
                 .func_wrap_async(
                     "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = FooImports::foo(host).await;
-                        Ok(r)
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = FooImports::foo(host).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
             Ok(())
         }

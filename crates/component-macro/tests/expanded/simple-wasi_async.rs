@@ -269,19 +269,23 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
                 inst.func_wrap_async(
                     "create-directory-at",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::create_directory_at(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::create_directory_at(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "stat",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::stat(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::stat(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 Ok(())
             }

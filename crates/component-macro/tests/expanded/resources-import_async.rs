@@ -277,11 +277,13 @@ const _: () = {
             linker
                 .func_wrap_async(
                     "[constructor]world-resource",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostWorldResource::new(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = HostWorldResource::new(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
             linker
                 .func_wrap_async(
@@ -289,29 +291,35 @@ const _: () = {
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<WorldResource>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostWorldResource::foo(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = HostWorldResource::foo(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
             linker
                 .func_wrap_async(
                     "[static]world-resource.static-foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostWorldResource::static_foo(host).await;
-                        Ok(r)
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = HostWorldResource::static_foo(host).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
             linker
                 .func_wrap_async(
                     "some-world-func",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = TheWorldImports::some_world_func(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = TheWorldImports::some_world_func(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
             Ok(())
         }
@@ -557,150 +565,180 @@ pub mod foo {
                 )?;
                 inst.func_wrap_async(
                     "[constructor]bar",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostBar::new(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = HostBar::new(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "[static]bar.static-a",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostBar::static_a(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = HostBar::static_a(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "[method]bar.method-a",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostBar::method_a(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = HostBar::method_a(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "bar-own-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::bar_own_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::bar_own_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "bar-borrow-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::bar_borrow_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::bar_borrow_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "bar-result",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::bar_result(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::bar_result(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "tuple-own-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): ((wasmtime::component::Resource<Bar>, u32),)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::tuple_own_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::tuple_own_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "tuple-borrow-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): ((wasmtime::component::Resource<Bar>, u32),)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::tuple_borrow_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::tuple_borrow_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "tuple-result",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::tuple_result(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::tuple_result(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "option-own-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Option<wasmtime::component::Resource<Bar>>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::option_own_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::option_own_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "option-borrow-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Option<wasmtime::component::Resource<Bar>>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::option_borrow_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::option_borrow_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "option-result",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::option_result(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::option_result(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "result-own-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Result<wasmtime::component::Resource<Bar>, ()>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::result_own_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::result_own_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "result-borrow-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Result<wasmtime::component::Resource<Bar>, ()>,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::result_borrow_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::result_borrow_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "result-result",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::result_result(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::result_result(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "list-own-arg",
@@ -713,11 +751,13 @@ pub mod foo {
                                 wasmtime::component::Resource<Bar>,
                             >,
                         )|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::list_own_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::list_own_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "list-borrow-arg",
@@ -730,60 +770,72 @@ pub mod foo {
                                 wasmtime::component::Resource<Bar>,
                             >,
                         )|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::list_borrow_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::list_borrow_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "list-result",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::list_result(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::list_result(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "record-own-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (NestedOwn,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::record_own_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::record_own_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "record-borrow-arg",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (NestedBorrow,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::record_borrow_arg(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::record_borrow_arg(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "record-result",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::record_result(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::record_result(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "func-with-handle-typedef",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (SomeHandle,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::func_with_handle_typedef(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::func_with_handle_typedef(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 Ok(())
             }
@@ -1088,11 +1140,13 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
                 inst.func_wrap_async(
                     "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::foo(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::foo(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 Ok(())
             }
