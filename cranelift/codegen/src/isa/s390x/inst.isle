@@ -2082,12 +2082,24 @@
             (_ Unit (emit (MInst.AluRSImm16 op dst src imm))))
         dst))
 
+(decl alu_rsimm16_with_flags_paired (Type ALUOp Reg i16) ProducesFlags)
+(rule (alu_rsimm16_with_flags_paired ty op src imm)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRSImm16 op dst src imm) dst)))
+
 ;; Helper for emitting `MInst.AluRSImm32` instructions.
 (decl alu_rsimm32 (Type ALUOp Reg i32) Reg)
 (rule (alu_rsimm32 ty op src imm)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRSImm32 op dst src imm))))
         dst))
+
+(decl alu_rsimm32_with_flags_paired (Type ALUOp Reg i32) ProducesFlags)
+(rule (alu_rsimm32_with_flags_paired ty op src imm)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRSImm32 op dst src imm) dst)))
 
 ;; Helper for emitting `MInst.AluRUImm32` instructions.
 (decl alu_ruimm32 (Type ALUOp Reg u32) Reg)
@@ -3371,6 +3383,7 @@
       (bool producer (invert_cond cond)))
 
 ;; Use a boolean condition to select between two registers.
+; important
 (decl select_bool_reg (Type ProducesBool Reg Reg) Reg)
 (rule (select_bool_reg ty (ProducesBool.ProducesBool producer cond) reg_true reg_false)
       (with_flags_reg producer (cmov_reg_reg ty cond reg_true reg_false)))
@@ -4060,23 +4073,51 @@
 (decl mul_reg (Type Reg Reg) Reg)
 (rule (mul_reg ty x y) (alu_rrr ty (aluop_mul ty) x y))
 
+(decl mul_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (mul_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_mul ty) x y))
+
 (decl mul_reg_sext32 (Type Reg Reg) Reg)
 (rule (mul_reg_sext32 ty x y) (alu_rr ty (aluop_mul_sext32 ty) x y))
 
+(decl mul_reg_sext32_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (mul_reg_sext32_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_mul_sext32 ty) x y))
+ 
 (decl mul_simm16 (Type Reg i16) Reg)
 (rule (mul_simm16 ty x y) (alu_rsimm16 ty (aluop_mul ty) x y))
+
+(decl mul_simm16_with_flags_paired (Type Reg i16) ProducesFlags)
+(rule (mul_simm16_with_flags_paired ty x y)
+      (alu_rsimm16_with_flags_paired ty (aluop_mul ty) x y))
 
 (decl mul_simm32 (Type Reg i32) Reg)
 (rule (mul_simm32 ty x y) (alu_rsimm32 ty (aluop_mul ty) x y))
 
+(decl mul_simm32_with_flags_paired (Type Reg i32) ProducesFlags)
+(rule (mul_simm32_with_flags_paired ty x y)
+      (alu_rsimm32_with_flags_paired ty (aluop_mul ty) x y))
+
 (decl mul_mem (Type Reg MemArg) Reg)
 (rule (mul_mem ty x y) (alu_rx ty (aluop_mul ty) x y))
+
+(decl mul_mem_with_flags_paired (Type Reg MemArg) ProducesFlags)
+(rule (mul_mem_with_flags_paired ty x y)
+      (alu_rx_with_flags_paired ty (aluop_mul ty) x y))
 
 (decl mul_mem_sext16 (Type Reg MemArg) Reg)
 (rule (mul_mem_sext16 ty x y) (alu_rx ty (aluop_mul_sext16 ty) x y))
 
+(decl mul_mem_sext16_with_flags_paired (Type Reg MemArg) ProducesFlags)
+(rule (mul_mem_sext16_with_flags_paired ty x y)
+      (alu_rx_with_flags_paired ty (aluop_mul_sext16 ty) x y))
+
 (decl mul_mem_sext32 (Type Reg MemArg) Reg)
 (rule (mul_mem_sext32 ty x y) (alu_rx ty (aluop_mul_sext32 ty) x y))
+
+(decl mul_mem_sext32_with_flags_paired (Type Reg MemArg) ProducesFlags)
+(rule (mul_mem_sext32_with_flags_paired ty x y)
+      (alu_rx_with_flags_paired ty (aluop_mul_sext32 ty) x y))
 
 (decl vecop_mul (Type) VecBinaryOp)
 (rule (vecop_mul $I8X16) (VecBinaryOp.Mul8x16))
