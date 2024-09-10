@@ -1,6 +1,6 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
-    abi::{self, local::LocalSlot},
+    abi::local::LocalSlot,
     codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv},
     isa::reg::Reg,
     masm::{
@@ -113,12 +113,12 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn address_from_sp(&self, _offset: SPOffset) -> Self::Address {
-        todo!()
+    fn address_from_sp(&self, offset: SPOffset) -> Self::Address {
+        Address::from_shadow_sp((self.sp_offset - offset.as_u32()) as i64)
     }
 
-    fn address_at_sp(&self, _offset: SPOffset) -> Self::Address {
-        todo!()
+    fn address_at_sp(&self, offset: SPOffset) -> Self::Address {
+        Address::from_shadow_sp(offset.as_u32() as i64)
     }
 
     fn address_at_vmctx(&self, _offset: u32) -> Self::Address {
@@ -133,13 +133,19 @@ impl Masm for MacroAssembler {
         let src = match src {
             RegImm::Imm(v) => {
                 let imm = match v {
-                    I::I32(v) => v as u64,
-                    I::I64(v) => v,
-                    _ => unreachable!(),
+                    I::I32(v) | I::F32(v) => v as u64,
+                    I::F64(v) | I::I64(v) => v,
+                    I::V128(_) => unreachable!(),
                 };
                 let scratch = regs::scratch();
                 self.asm.load_constant(imm, scratch);
-                scratch
+                if v.is_float() {
+                    let float_scratch = regs::float_scratch();
+                    self.asm.mov_to_fpu(scratch, float_scratch, v.size());
+                    float_scratch
+                } else {
+                    scratch
+                }
             }
             RegImm::Reg(reg) => reg,
         };
@@ -187,8 +193,10 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn pop(&mut self, _dst: Reg, _size: OperandSize) {
-        todo!()
+    fn pop(&mut self, dst: Reg, size: OperandSize) {
+        let addr = self.address_from_sp(SPOffset::from_u32(self.sp_offset));
+        self.asm.uload(addr, dst, size);
+        self.free_stack(size.bytes());
     }
 
     fn sp_offset(&self) -> SPOffset {
@@ -508,15 +516,14 @@ impl Masm for MacroAssembler {
             .cvt_float_to_float(src.into(), dst.into(), OperandSize::S32, OperandSize::S64);
     }
 
-    fn push(&mut self, reg: Reg, _size: OperandSize) -> StackSlot {
-        let size = <Self::ABI as abi::ABI>::word_bytes();
-        self.reserve_stack(size as u32);
-        let address = Address::from_shadow_sp(size as i64);
-        self.asm.str(reg, address, OperandSize::S64);
+    fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
+        self.reserve_stack(size.bytes());
+        let address = self.address_from_sp(SPOffset::from_u32(self.sp_offset));
+        self.asm.str(reg, address, size);
 
         StackSlot {
             offset: SPOffset::from_u32(self.sp_offset),
-            size: size as u32,
+            size: size.bytes(),
         }
     }
 

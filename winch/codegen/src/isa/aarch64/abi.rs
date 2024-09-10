@@ -43,6 +43,7 @@ impl ABI for Aarch64ABI {
                     ty,
                     stack_offset,
                     &mut params_index_env,
+                    call_conv,
                     ParamsOrReturns::Params,
                 )
             });
@@ -64,6 +65,7 @@ impl ABI for Aarch64ABI {
                 ty,
                 stack_offset,
                 &mut returns_index_env,
+                call_conv,
                 ParamsOrReturns::Returns,
             )
         })
@@ -108,6 +110,7 @@ impl Aarch64ABI {
         wasm_arg: &WasmValType,
         stack_offset: u32,
         index_env: &mut RegIndexEnv,
+        call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> (ABIOperand, u32) {
         let (reg, ty) = match wasm_arg {
@@ -128,9 +131,15 @@ impl Aarch64ABI {
             let slot_size = Self::stack_slot_size();
             // Stack slots for parameters are aligned to a fixed slot size,
             // in the case of Aarch64, 8 bytes.
-            // Stack slots for returns are type-size aligned.
+            // For the non-default calling convention, stack slots for
+            // return values are type-sized aligned.
+            // For the default calling convention, we don't type-size align,
+            // given that results on the stack must match spills generated
+            // from within the compiler, which are not type-size aligned.
             let next_stack = if params_or_returns == ParamsOrReturns::Params {
                 align_to(stack_offset, slot_size as u32) + (slot_size as u32)
+            } else if call_conv.is_default() {
+                stack_offset + (ty_size as u32)
             } else {
                 align_to(stack_offset, ty_size as u32) + (ty_size as u32)
             };

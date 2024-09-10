@@ -319,6 +319,23 @@ impl Imm {
             _ => None,
         }
     }
+
+    /// Returns true if the [`Imm`] is float.
+    pub fn is_float(&self) -> bool {
+        match self {
+            Self::F32(_) | Self::F64(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Get the operand size of the immediate.
+    pub fn size(&self) -> OperandSize {
+        match self {
+            Self::I32(_) | Self::F32(_) => OperandSize::S32,
+            Self::I64(_) | Self::F64(_) => OperandSize::S64,
+            Self::V128(_) => OperandSize::S128,
+        }
+    }
 }
 
 /// The location of the [VMcontext] used for function calls.
