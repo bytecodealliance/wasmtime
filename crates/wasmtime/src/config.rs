@@ -1805,7 +1805,7 @@ impl Config {
     fn features(&self) -> WasmFeatures {
         // Wasmtime by default supports all of the wasm 2.0 version of the
         // specification.
-        let mut features = WasmFeatures::wasm2();
+        let mut features = WasmFeatures::WASM2;
 
         // On-by-default features that wasmtime has. Note that these are all
         // subject to the criteria at
