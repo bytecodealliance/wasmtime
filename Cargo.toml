@@ -266,15 +266,15 @@ wit-bindgen = { version = "0.30.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.30.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.216.0", default-features = false }
-wat = "1.216.0"
-wast = "216.0.0"
-wasmprinter = "0.216.0"
-wasm-encoder = "0.216.0"
-wasm-smith = "0.216.0"
-wasm-mutate = "0.216.0"
-wit-parser = "0.216.0"
-wit-component = "0.216.0"
+wasmparser = { version = "0.217.0", default-features = false }
+wat = "1.217.0"
+wast = "217.0.0"
+wasmprinter = "0.217.0"
+wasm-encoder = "0.217.0"
+wasm-smith = "0.217.0"
+wasm-mutate = "0.217.0"
+wit-parser = "0.217.0"
+wit-component = "0.217.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
