@@ -356,41 +356,45 @@ pub mod foo {
                             u64,
                             u64,
                         )|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::many_args(
-                                host,
-                                arg0,
-                                arg1,
-                                arg2,
-                                arg3,
-                                arg4,
-                                arg5,
-                                arg6,
-                                arg7,
-                                arg8,
-                                arg9,
-                                arg10,
-                                arg11,
-                                arg12,
-                                arg13,
-                                arg14,
-                                arg15,
-                            )
-                            .await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::many_args(
+                                    host,
+                                    arg0,
+                                    arg1,
+                                    arg2,
+                                    arg3,
+                                    arg4,
+                                    arg5,
+                                    arg6,
+                                    arg7,
+                                    arg8,
+                                    arg9,
+                                    arg10,
+                                    arg11,
+                                    arg12,
+                                    arg13,
+                                    arg14,
+                                    arg15,
+                                )
+                                .await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "big-argument",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (BigStruct,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::big_argument(host, arg0).await;
-                        Ok(r)
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::big_argument(host, arg0).await;
+                            Ok(r)
+                        })
+                    },
                 )?;
                 Ok(())
             }
