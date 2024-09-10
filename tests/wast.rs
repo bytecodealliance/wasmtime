@@ -284,12 +284,14 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
 
     let wast = Path::new(wast);
 
+    let misc = feature_found(wast, "misc_testsuite");
     let memory64 = feature_found(wast, "memory64");
     let custom_page_sizes = feature_found(wast, "custom-page-sizes");
     let multi_memory = feature_found(wast, "multi-memory")
         || feature_found(wast, "component-model")
         || custom_page_sizes
-        || memory64;
+        || memory64
+        || misc;
     let threads = feature_found(wast, "threads");
     let gc = feature_found(wast, "gc") || memory64;
     let function_references = gc || memory64 || feature_found(wast, "function-references");
