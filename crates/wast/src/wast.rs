@@ -19,6 +19,7 @@ pub struct WastContext<T> {
     /// recently defined.
     current: Option<InstanceKind>,
     core_linker: Linker<T>,
+    modules: HashMap<String, ModuleKind>,
     #[cfg(feature = "component-model")]
     component_linker: component::Linker<T>,
     store: Store<T>,
@@ -50,6 +51,13 @@ enum Results {
     Core(Vec<Val>),
     #[cfg(feature = "component-model")]
     Component(Vec<component::Val>),
+}
+
+#[derive(Clone)]
+enum ModuleKind {
+    Core(Module),
+    #[cfg(feature = "component-model")]
+    Component(component::Component),
 }
 
 enum InstanceKind {
@@ -85,6 +93,7 @@ where
                 linker
             },
             store,
+            modules: Default::default(),
         }
     }
 
@@ -114,8 +123,7 @@ where
         })
     }
 
-    fn instantiate_module(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
-        let module = Module::new(self.store.engine(), module)?;
+    fn instantiate_module(&mut self, module: &Module) -> Result<Outcome<Instance>> {
         Ok(
             match self.core_linker.instantiate(&mut self.store, &module) {
                 Ok(i) => Outcome::Ok(i),
@@ -127,16 +135,14 @@ where
     #[cfg(feature = "component-model")]
     fn instantiate_component(
         &mut self,
-        component: &[u8],
+        component: &component::Component,
     ) -> Result<Outcome<(component::Component, component::Instance)>> {
-        let engine = self.store.engine();
-        let component = component::Component::new(engine, component)?;
         Ok(
             match self
                 .component_linker
                 .instantiate(&mut self.store, &component)
             {
-                Ok(i) => Outcome::Ok((component, i)),
+                Ok(i) => Outcome::Ok((component.clone(), i)),
                 Err(e) => Outcome::Trap(e),
             },
         )
@@ -154,17 +160,17 @@ where
     fn perform_execute(&mut self, exec: WastExecute<'_>) -> Result<Outcome> {
         match exec {
             WastExecute::Invoke(invoke) => self.perform_invoke(invoke),
-            WastExecute::Wat(mut module) => Ok(match &mut module {
-                Wat::Module(m) => self
-                    .instantiate_module(&m.encode()?)?
-                    .map(|_| Results::Core(Vec::new())),
-                #[cfg(feature = "component-model")]
-                Wat::Component(m) => self
-                    .instantiate_component(&m.encode()?)?
-                    .map(|_| Results::Component(Vec::new())),
-                #[cfg(not(feature = "component-model"))]
-                Wat::Component(_) => bail!("component-model support not enabled"),
-            }),
+            WastExecute::Wat(module) => {
+                Ok(match self.module_definition(QuoteWat::Wat(module))? {
+                    (_, ModuleKind::Core(module)) => self
+                        .instantiate_module(&module)?
+                        .map(|_| Results::Core(Vec::new())),
+                    #[cfg(feature = "component-model")]
+                    (_, ModuleKind::Component(component)) => self
+                        .instantiate_component(&component)?
+                        .map(|_| Results::Component(Vec::new())),
+                })
+            }
             WastExecute::Get { module, global, .. } => self.get(module.map(|s| s.name()), global),
         }
     }
@@ -214,8 +220,65 @@ where
         }
     }
 
-    /// Define a module and register it.
-    fn module(&mut self, mut wat: QuoteWat<'_>) -> Result<()> {
+    /// Instantiates the `module` provided and registers the instance under the
+    /// `name` provided if successful.
+    fn module(&mut self, name: Option<&str>, module: &ModuleKind) -> Result<()> {
+        match module {
+            ModuleKind::Core(module) => {
+                let instance = match self.instantiate_module(&module)? {
+                    Outcome::Ok(i) => i,
+                    Outcome::Trap(e) => return Err(e).context("instantiation failed"),
+                };
+                if let Some(name) = name {
+                    self.core_linker.instance(&mut self.store, name, instance)?;
+                }
+                self.current = Some(InstanceKind::Core(instance));
+            }
+            #[cfg(feature = "component-model")]
+            ModuleKind::Component(module) => {
+                let (component, instance) = match self.instantiate_component(&module)? {
+                    Outcome::Ok(i) => i,
+                    Outcome::Trap(e) => return Err(e).context("instantiation failed"),
+                };
+                if let Some(name) = name {
+                    let ty = component.component_type();
+                    let mut linker = self.component_linker.instance(name)?;
+                    let engine = self.store.engine().clone();
+                    for (name, item) in ty.exports(&engine) {
+                        match item {
+                            component::types::ComponentItem::Module(_) => {
+                                let module = instance.get_module(&mut self.store, name).unwrap();
+                                linker.module(name, &module)?;
+                            }
+                            component::types::ComponentItem::Resource(_) => {
+                                let resource =
+                                    instance.get_resource(&mut self.store, name).unwrap();
+                                linker.resource(name, resource, |_, _| Ok(()))?;
+                            }
+                            // TODO: should ideally reflect more than just
+                            // modules/resources into the linker's namespace
+                            // but that's not easily supported today for host
+                            // functions due to the inability to take a
+                            // function from one instance and put it into the
+                            // linker (must go through the host right now).
+                            _ => {}
+                        }
+                    }
+                }
+                self.current = Some(InstanceKind::Component(instance));
+            }
+        }
+        Ok(())
+    }
+
+    /// Compiles the module `wat` into binary and returns the name found within
+    /// it, if any.
+    ///
+    /// This will not register the name within `self.modules`.
+    fn module_definition<'a>(
+        &mut self,
+        mut wat: QuoteWat<'a>,
+    ) -> Result<(Option<&'a str>, ModuleKind)> {
         let (is_module, name) = match &wat {
             QuoteWat::Wat(Wat::Module(m)) => (true, m.id),
             QuoteWat::QuoteModule(..) => (true, None),
@@ -224,48 +287,17 @@ where
         };
         let bytes = wat.encode()?;
         if is_module {
-            let instance = match self.instantiate_module(&bytes)? {
-                Outcome::Ok(i) => i,
-                Outcome::Trap(e) => return Err(e).context("instantiation failed"),
-            };
-            if let Some(name) = name {
-                self.core_linker
-                    .instance(&mut self.store, name.name(), instance)?;
-            }
-            self.current = Some(InstanceKind::Core(instance));
+            let module = Module::new(self.store.engine(), &bytes)?;
+            Ok((name.map(|n| n.name()), ModuleKind::Core(module)))
         } else {
             #[cfg(feature = "component-model")]
             {
-                let (component, instance) = match self.instantiate_component(&bytes)? {
-                    Outcome::Ok(i) => i,
-                    Outcome::Trap(e) => return Err(e).context("instantiation failed"),
-                };
-                if let Some(name) = name {
-                    let ty = component.component_type();
-                    let mut linker = self.component_linker.instance(name.name())?;
-                    let engine = self.store.engine().clone();
-                    for (name, item) in ty.exports(&engine) {
-                        match item {
-                            component::types::ComponentItem::Module(_) => {
-                                let module = instance.get_module(&mut self.store, name).unwrap();
-                                linker.module(name, &module)?;
-                            }
-                            // TODO: should ideally reflect more than just
-                            // modules into the linker's namespace but that's
-                            // not easily supported today for host functions due
-                            // to the inability to take a function from one
-                            // instance and put it into the linker (must go
-                            // through the host right now).
-                            _ => {}
-                        }
-                    }
-                }
-                self.current = Some(InstanceKind::Component(instance));
+                let component = component::Component::new(self.store.engine(), &bytes)?;
+                Ok((name.map(|n| n.name()), ModuleKind::Component(component)))
             }
             #[cfg(not(feature = "component-model"))]
             bail!("component-model support not enabled");
         }
-        Ok(())
     }
 
     /// Register an instance to make it available for performing actions.
@@ -428,9 +460,27 @@ where
         use wast::WastDirective::*;
 
         match directive {
-            Module(module) => self.module(module)?,
-            ModuleDefinition(_) => bail!("module definition not implemented yet"),
-            ModuleInstance { .. } => bail!("module instance not implemented yet"),
+            Module(module) => {
+                let (name, module) = self.module_definition(module)?;
+                self.module(name, &module)?;
+            }
+            ModuleDefinition(module) => {
+                let (name, module) = self.module_definition(module)?;
+                if let Some(name) = name {
+                    self.modules.insert(name.to_string(), module.clone());
+                }
+            }
+            ModuleInstance {
+                instance,
+                module,
+                span: _,
+            } => {
+                let module = module
+                    .and_then(|n| self.modules.get(n.name()))
+                    .cloned()
+                    .ok_or_else(|| anyhow!("no module named {module:?}"))?;
+                self.module(instance.map(|n| n.name()), &module)?;
+            }
             Register {
                 span: _,
                 name,
@@ -470,8 +520,8 @@ where
                 module,
                 message,
             } => {
-                let err = match self.module(module) {
-                    Ok(()) => bail!("expected module to fail to build"),
+                let err = match self.module_definition(module) {
+                    Ok(_) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
                 let error_message = format!("{err:?}");
@@ -488,7 +538,7 @@ where
                 span: _,
                 message: _,
             } => {
-                if let Ok(_) = self.module(module) {
+                if let Ok(_) = self.module_definition(module) {
                     bail!("expected malformed module to fail to instantiate");
                 }
             }
@@ -497,8 +547,9 @@ where
                 module,
                 message,
             } => {
-                let err = match self.module(QuoteWat::Wat(module)) {
-                    Ok(()) => bail!("expected module to fail to link"),
+                let (name, module) = self.module_definition(QuoteWat::Wat(module))?;
+                let err = match self.module(name, &module) {
+                    Ok(_) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };
                 let error_message = format!("{err:?}");
@@ -530,6 +581,7 @@ where
                     #[cfg(feature = "component-model")]
                     component_linker: component::Linker::new(self.store.engine()),
                     store: Store::new(self.store.engine(), self.store.data().clone()),
+                    modules: self.modules.clone(),
                 };
                 let name = thread.name.name();
                 let child =

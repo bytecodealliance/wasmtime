@@ -267,3 +267,61 @@
   (export "i" (instance $i))
 )
 
+
+(component definition $C1
+  (type $r1 (resource (rep i32)))
+  (export "r" (type $r1))
+)
+(component definition $C2
+  (type $r1 (resource (rep i32)))
+  (export "r" (type $r1))
+)
+
+(component instance $I1 $C1)
+(component instance $I2 $C1)
+(component instance $I3 $C2)
+(component instance $I4 $C2)
+
+;; all instances have different resource types
+(assert_unlinkable
+  (component
+    (import "I1" (instance $i1 (export "r" (type (sub resource)))))
+    (alias export $i1 "r" (type $r))
+    (import "I2" (instance $i2 (export "r" (type (eq $r)))))
+  )
+  "mismatched resource types")
+(assert_unlinkable
+  (component
+    (import "I1" (instance $i1 (export "r" (type (sub resource)))))
+    (alias export $i1 "r" (type $r))
+    (import "I3" (instance $i2 (export "r" (type (eq $r)))))
+  )
+  "mismatched resource types")
+(assert_unlinkable
+  (component
+    (import "I1" (instance $i1 (export "r" (type (sub resource)))))
+    (alias export $i1 "r" (type $r))
+    (import "I4" (instance $i2 (export "r" (type (eq $r)))))
+  )
+  "mismatched resource types")
+(assert_unlinkable
+  (component
+    (import "I2" (instance $i1 (export "r" (type (sub resource)))))
+    (alias export $i1 "r" (type $r))
+    (import "I3" (instance $i2 (export "r" (type (eq $r)))))
+  )
+  "mismatched resource types")
+(assert_unlinkable
+  (component
+    (import "I2" (instance $i1 (export "r" (type (sub resource)))))
+    (alias export $i1 "r" (type $r))
+    (import "I4" (instance $i2 (export "r" (type (eq $r)))))
+  )
+  "mismatched resource types")
+(assert_unlinkable
+  (component
+    (import "I3" (instance $i1 (export "r" (type (sub resource)))))
+    (alias export $i1 "r" (type $r))
+    (import "I4" (instance $i2 (export "r" (type (eq $r)))))
+  )
+  "mismatched resource types")
