@@ -2,7 +2,7 @@
 
 set -e
 cd $(dirname "$0")
-out=parameterized-icmp.clif
+out=icmp-parameterized.clif
 CCS="eq ne ult ule ugt uge slt sle sgt sge"
 
 function main {
@@ -42,9 +42,23 @@ block0(v0: i32):
     return v2
 }
 
+function %icmp_${cc}_1(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
 function %icmp_${cc}_umax(i32) -> i8 {
 block0(v0: i32):
     v1 = iconst.i32 0xFFFF_FFFF
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
+function %icmp_${cc}_umax_minus_1(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0xFFFF_FFFE
     v2 = icmp ${cc} v0, v1
     return v2
 }
@@ -56,9 +70,23 @@ block0(v0: i32):
     return v2
 }
 
+function %icmp_${cc}_smin_plus_1(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x8000_0001
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
 function %icmp_${cc}_smax(i32) -> i8 {
 block0(v0: i32):
     v1 = iconst.i32 0x7FFF_FFFF
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
+function %icmp_${cc}_smax_minus_1(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x7FFF_FFFE
     v2 = icmp ${cc} v0, v1
     return v2
 }
