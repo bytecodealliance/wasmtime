@@ -281,8 +281,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
                 let push_to_reg =
                     if call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
+                        // Winch uses the first registry to return the last result
                         i == params.len() - 1
                     } else {
+                        // Use max_per_class_reg_vals & remaining_reg_vals otherwise
                         *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0
                     };
 
@@ -318,7 +320,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             let size = if is_apple_cc
                 || (call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets)
             {
-                // MacOS aarch64 allows stack slots with
+                // MacOS and Winch aarch64 allows stack slots with
                 // sizes less than 8 bytes. They still need to be
                 // properly aligned on their natural data alignment,
                 // though.
