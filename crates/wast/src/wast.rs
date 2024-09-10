@@ -250,12 +250,17 @@ where
                                 let module = instance.get_module(&mut self.store, name).unwrap();
                                 linker.module(name, &module)?;
                             }
+                            component::types::ComponentItem::Resource(_) => {
+                                let resource =
+                                    instance.get_resource(&mut self.store, name).unwrap();
+                                linker.resource(name, resource, |_, _| Ok(()))?;
+                            }
                             // TODO: should ideally reflect more than just
-                            // modules into the linker's namespace but that's
-                            // not easily supported today for host functions due
-                            // to the inability to take a function from one
-                            // instance and put it into the linker (must go
-                            // through the host right now).
+                            // modules/resources into the linker's namespace
+                            // but that's not easily supported today for host
+                            // functions due to the inability to take a
+                            // function from one instance and put it into the
+                            // linker (must go through the host right now).
                             _ => {}
                         }
                     }
