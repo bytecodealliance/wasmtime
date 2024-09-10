@@ -542,7 +542,8 @@ where
                 module,
                 message,
             } => {
-                let err = match self.module_definition(QuoteWat::Wat(module)) {
+                let (name, module) = self.module_definition(QuoteWat::Wat(module))?;
+                let err = match self.module(name, &module) {
                     Ok(_) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };
