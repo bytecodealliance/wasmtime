@@ -25,14 +25,14 @@
 ;;       mov     x16, #0
 ;;       stur    x16, [x28]
 ;;       ldur    w16, [x28, #4]
-;;       sub     sp, sp, #8
+;;       sub     sp, sp, #4
 ;;       mov     x28, sp
-;;       stur    x16, [x28, #8]
-;;       ldur    w16, [x28, #0xc]
-;;       sub     sp, sp, #8
+;;       stur    w16, [x28]
+;;       ldur    w16, [x28, #8]
+;;       sub     sp, sp, #4
 ;;       mov     x28, sp
-;;       stur    x16, [x28, #8]
-;;       add     sp, sp, #8
+;;       stur    w16, [x28]
+;;       add     sp, sp, #4
 ;;       mov     x28, sp
 ;;       b       #0x38
 ;;   54: add     sp, sp, #0x18
