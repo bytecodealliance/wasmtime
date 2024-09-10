@@ -4,12 +4,90 @@ Unreleased.
 
 ### Added
 
+* The WinML backend of wasmtime-wasi-nn now supports FP16 and I64.
+  [#8964](https://github.com/bytecodealliance/wasmtime/pull/8964)
+
+* Pooling allocator configuration options for table elements and core instance
+  size can now be changed on the CLI.
+  [#9138](https://github.com/bytecodealliance/wasmtime/pull/9138)
+
+* Wasmtime now supports the extended-const WebAssembly proposal.
+  [#9141](https://github.com/bytecodealliance/wasmtime/pull/9141)
+
+* The `wasmtime` crate embedding API now has `ArrayRef` for allocating wasm GC
+  arrays.
+  [#9145](https://github.com/bytecodealliance/wasmtime/pull/9145)
+
+* Cranelift now has a `stack_switch` CLIF instruction to be used with the
+  WebAssembly stack switching proposal.
+  [#9078](https://github.com/bytecodealliance/wasmtime/pull/9078)
+
+* There are now more constructors available on `bindgen!`-generated structures
+  for component exports now which use instantiated components rather than
+  pre-instantiated components.
+  [#9177](https://github.com/bytecodealliance/wasmtime/pull/9177)
+
 ### Changed
+
+* Wasmtime's support for WASI is now listed with the 0.2.1 version instead of
+  0.2.0. This is expected to not cause fallout or breakage, but please open an
+  issue if you see any problems.
+  [#9063](https://github.com/bytecodealliance/wasmtime/pull/9063)
+
+* Work continues on Winch's AArch64 backend.
+  [#9114](https://github.com/bytecodealliance/wasmtime/pull/9114)
+  [#9092](https://github.com/bytecodealliance/wasmtime/pull/9092)
+  [#9171](https://github.com/bytecodealliance/wasmtime/pull/9171)
+
+* Component model resource methods can now be generated as `async` and will do
+  so by default if async is enabled for all functions.
+  [#9091](https://github.com/bytecodealliance/wasmtime/pull/9091)
+
+* Work has continued on Wasmtime's interpreter backend, Pulley.
+  [#9089](https://github.com/bytecodealliance/wasmtime/pull/9089)
+
+* The internal implementation of `input-stream` and `output-stream` for
+  filesystems in `wasmtime-wasi` have been refactored to directly implement
+  the corresponding host traits. This additionally helps cleanup the internal
+  organization of host-side resources in `wasmtime-wasi`.
+  [#9129](https://github.com/bytecodealliance/wasmtime/pull/9129)
+
+* Wasmtime now uses the new "user" stack maps in Cranelift rather than the old
+  regalloc-based stack maps for GC references.
+  [#9082](https://github.com/bytecodealliance/wasmtime/pull/9082)
+
+* Wasmtime's handling of WebAssembly features now works slightly differently
+  from before to provide better error messages and fewer panics on unsupported
+  WebAssembly features depending on compiler and target selection. Additionally
+  the reference-types WebAssembly proposal is always on-by-default regardless of
+  crate features.
+  [#9158](https://github.com/bytecodealliance/wasmtime/pull/9158)
+  [#9162](https://github.com/bytecodealliance/wasmtime/pull/9162)
+
+* The `wasmtime` CLI will now use the async version of I/O where possible to
+  properly support `-Wtimeout` and timing out instances blocked in I/O.
+  [#9184](https://github.com/bytecodealliance/wasmtime/pull/9184)
 
 ### Fixed
 
 * Completed support for the `CallHook` API when using the component model.
-  [9196](https://github.com/bytecodealliance/wasmtime/pull/9196)
+  [#9196](https://github.com/bytecodealliance/wasmtime/pull/9196)
+
+* The compile time for a component model `enum` type with many cases should be
+  much improved now.
+  [#9122](https://github.com/bytecodealliance/wasmtime/pull/9122)
+
+* Some minor bugfixes have been made for when Wasmtime is working with split
+  DWARF in WebAssembly files.
+  [#9109](https://github.com/bytecodealliance/wasmtime/pull/9109)
+  [#9132](https://github.com/bytecodealliance/wasmtime/pull/9132)
+  [#9134](https://github.com/bytecodealliance/wasmtime/pull/9134)
+  [#9139](https://github.com/bytecodealliance/wasmtime/pull/9139)
+  [#9151](https://github.com/bytecodealliance/wasmtime/pull/9151)
+
+* An issue with bounds checks and dynamic checks has been fixed in Winch to
+  ensure bounds checks are correctly implemented.
+  [#9156](https://github.com/bytecodealliance/wasmtime/pull/9156)
 
 --------------------------------------------------------------------------------
 
