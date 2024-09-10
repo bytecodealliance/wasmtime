@@ -215,7 +215,7 @@ where
     }
 
     /// Define a module and register it.
-    fn wat(&mut self, mut wat: QuoteWat<'_>) -> Result<()> {
+    fn module(&mut self, mut wat: QuoteWat<'_>) -> Result<()> {
         let (is_module, name) = match &wat {
             QuoteWat::Wat(Wat::Module(m)) => (true, m.id),
             QuoteWat::QuoteModule(..) => (true, None),
@@ -428,7 +428,9 @@ where
         use wast::WastDirective::*;
 
         match directive {
-            Wat(module) => self.wat(module)?,
+            Module(module) => self.module(module)?,
+            ModuleDefinition(_) => bail!("module definition not implemented yet"),
+            ModuleInstance { .. } => bail!("module instance not implemented yet"),
             Register {
                 span: _,
                 name,
@@ -468,7 +470,7 @@ where
                 module,
                 message,
             } => {
-                let err = match self.wat(module) {
+                let err = match self.module(module) {
                     Ok(()) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
@@ -486,7 +488,7 @@ where
                 span: _,
                 message: _,
             } => {
-                if let Ok(_) = self.wat(module) {
+                if let Ok(_) = self.module(module) {
                     bail!("expected malformed module to fail to instantiate");
                 }
             }
@@ -495,7 +497,7 @@ where
                 module,
                 message,
             } => {
-                let err = match self.wat(QuoteWat::Wat(module)) {
+                let err = match self.module(QuoteWat::Wat(module)) {
                     Ok(()) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };
