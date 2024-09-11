@@ -916,13 +916,14 @@ impl TcpWriter {
     fn poll_cancel(&mut self, cx: &mut Context<'_>) -> Poll<()> {
         self.state = match mem::replace(&mut self.state, WriteState::Closed) {
             WriteState::Writing(task) | WriteState::Closing(task) => WriteState::Closing(task),
-            _ => WriteState::Closed,
+            WriteState::Ready | WriteState::Closed => WriteState::Closed,
+            WriteState::Error(e) => WriteState::Error(e),
         };
 
-        match &mut self.state {
-            WriteState::Closing(task) => task.poll_cancel(cx).map(|_| ()),
-            WriteState::Closed => Poll::Ready(()),
-            _ => unreachable!(),
+        if let WriteState::Closing(task) = &mut self.state {
+            task.poll_cancel(cx).map(|_| ())
+        } else {
+            Poll::Ready(())
         }
     }
 
