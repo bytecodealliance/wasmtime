@@ -1,7 +1,6 @@
 test compile precise-output
-set enable_llvm_abi_extensions=true
 set opt_level=speed
-target aarch64
+target riscv64
 
 function %mul_uextend_i64(i64, i64) -> i128 {
 block0(v0: i64, v1: i64):
@@ -13,16 +12,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
-;   umulh x1, x0, x1
-;   mov x0, x3
+;   mul a3,a0,a1
+;   mulhu a1,a0,a1
+;   mv a0,a3
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
-;   umulh x1, x0, x1
-;   mov x0, x3
+;   mul a3, a0, a1
+;   mulhu a1, a0, a1
+;   mv a0, a3
 ;   ret
 
 function %mul_sextend_i64(i64, i64) -> i128 {
@@ -35,16 +34,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   madd x3, x0, x1, xzr
-;   smulh x1, x0, x1
-;   mov x0, x3
+;   mul a3,a0,a1
+;   mulh a1,a0,a1
+;   mv a0,a3
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul x3, x0, x1
-;   smulh x1, x0, x1
-;   mov x0, x3
+;   mul a3, a0, a1
+;   mulh a1, a0, a1
+;   mv a0, a3
 ;   ret
 
 function %smul_high_i64_pattern(i64, i64) -> i64 {
@@ -59,12 +58,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   smulh x0, x0, x1
+;   mulh a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   smulh x0, x0, x1
+;   mulh a0, a0, a1
 ;   ret
 
 function %smul_high_i64_isplit(i64, i64) -> i64 {
@@ -78,12 +77,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   smulh x0, x0, x1
+;   mulh a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   smulh x0, x0, x1
+;   mulh a0, a0, a1
 ;   ret
 
 function %umul_high_i64_pattern(i64, i64) -> i64 {
@@ -98,12 +97,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   umulh x0, x0, x1
+;   mulhu a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   umulh x0, x0, x1
+;   mulhu a0, a0, a1
 ;   ret
 
 function %umul_high_i64_isplit(i64, i64) -> i64 {
@@ -117,11 +116,11 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   umulh x0, x0, x1
+;   mulhu a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   umulh x0, x0, x1
+;   mulhu a0, a0, a1
 ;   ret
 

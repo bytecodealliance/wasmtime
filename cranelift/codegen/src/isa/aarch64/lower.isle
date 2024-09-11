@@ -255,6 +255,21 @@
            (x_hi ValueRegs (value_regs_get x_regs 1)))
         (output_pair x_lo x_hi)))
 
+;; Special-case the lowering of an `isplit` of a 128-bit multiply where the
+;; lower bits of the result are discarded and the operands are sign or zero
+;; extended. This maps directly to `umulh` and `smulh`.
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (uextend x) (uextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (output_pair (invalid_reg)
+               (umulh $I64 (put_in_reg_zext64 x) (put_in_reg_zext64 y))))
+
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (sextend x) (sextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (output_pair (invalid_reg)
+               (smulh $I64 (put_in_reg_sext64 x) (put_in_reg_sext64 y))))
+
 ;;;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I128 (iconcat lo hi)))

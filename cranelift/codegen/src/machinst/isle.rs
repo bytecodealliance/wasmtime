@@ -724,6 +724,10 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.add_range_fact(reg, bits, min, max);
             reg
         }
+
+        fn value_is_unused(&mut self, val: Value) -> bool {
+            self.lower_ctx.value_is_unused(val)
+        }
     };
 }
 
