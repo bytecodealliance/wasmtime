@@ -1,3 +1,8 @@
+// When using _FORTIFY_SOURCE with `longjmp` causes longjmp_chk to be used
+// instead. longjmp_chk ensures that the jump target is on the existing stack.
+// For our use case of jumping between stacks we need to disable it.
+#undef _FORTIFY_SOURCE
+
 #include <setjmp.h>
 #include <stdint.h>
 #include <stdlib.h>
