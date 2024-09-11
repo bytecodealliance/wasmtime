@@ -3,8 +3,8 @@ use crate::host::network;
 use crate::network::SocketAddressFamily;
 use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
 use crate::{
-    HostInputStream, HostOutputStream, InputStream, OutputStream, SocketResult, StreamError,
-    Subscribe,
+    HostInputStream, HostOutputStream, InputStream, OutputStream, SocketError, SocketResult,
+    StreamError, Subscribe,
 };
 use anyhow::Result;
 use cap_net_ext::AddressFamily;
@@ -13,13 +13,13 @@ use io_lifetimes::views::SocketlikeView;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
-use std::future::poll_fn;
 use std::io;
 use std::mem;
 use std::net::{Shutdown, SocketAddr};
-use std::pin::{pin, Pin};
-use std::sync::{Arc, Mutex};
-use std::task::{ready, Context, Poll};
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Poll;
+use tokio::sync::Mutex;
 
 /// Value taken from rust std library.
 const DEFAULT_BACKLOG: u32 = 128;
@@ -638,20 +638,17 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn shutdown(&self, how: Shutdown) -> io::Result<()> {
+    pub fn shutdown(&self, how: Shutdown) -> SocketResult<()> {
         let TcpState::Connected { reader, writer, .. } = &self.tcp_state else {
-            return Err(io::Error::new(
-                io::ErrorKind::NotConnected,
-                "socket not connected",
-            ));
+            return Err(ErrorCode::InvalidState.into());
         };
 
         if let Shutdown::Both | Shutdown::Read = how {
-            reader.lock().unwrap().shutdown();
+            try_lock_for_socket(reader)?.shutdown();
         }
 
         if let Shutdown::Both | Shutdown::Write = how {
-            writer.lock().unwrap().shutdown();
+            try_lock_for_socket(writer)?.shutdown();
         }
 
         Ok(())
@@ -739,11 +736,12 @@ impl TcpReader {
         self.closed = true;
     }
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+    async fn ready(&mut self) {
         if self.closed {
-            return Poll::Ready(());
+            return;
         }
-        self.stream.poll_read_ready(cx).map(|_| ())
+
+        self.stream.readable().await.unwrap();
     }
 }
 
@@ -752,14 +750,14 @@ struct TcpReadStream(Arc<Mutex<TcpReader>>);
 #[async_trait::async_trait]
 impl HostInputStream for TcpReadStream {
     fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
-        self.0.lock().unwrap().read(size)
+        try_lock_for_stream(&self.0)?.read(size)
     }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for TcpReadStream {
     async fn ready(&mut self) {
-        poll_fn(move |cx| self.0.lock().unwrap().poll_ready(cx)).await;
+        self.0.lock().await.ready().await
     }
 }
 
@@ -923,25 +921,23 @@ impl TcpWriter {
         };
     }
 
-    fn poll_cancel(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        match &mut self.state {
-            WriteState::Writing(task) | WriteState::Closing(task) => {
-                task.poll_cancel(cx).map(|_| ())
-            }
-            _ => Poll::Ready(()),
+    async fn cancel(&mut self) {
+        match mem::replace(&mut self.state, WriteState::Closed) {
+            WriteState::Writing(task) | WriteState::Closing(task) => _ = task.cancel().await,
+            _ => {}
         }
     }
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+    async fn ready(&mut self) {
         match &mut self.state {
             WriteState::Writing(task) => {
-                self.state = match ready!(pin!(task).poll(cx)) {
+                self.state = match task.await {
                     Ok(()) => WriteState::Ready,
                     Err(e) => WriteState::Error(e),
                 }
             }
             WriteState::Closing(task) => {
-                self.state = match ready!(pin!(task).poll(cx)) {
+                self.state = match task.await {
                     Ok(()) => WriteState::Closed,
                     Err(e) => WriteState::Error(e),
                 }
@@ -950,9 +946,8 @@ impl TcpWriter {
         }
 
         if let WriteState::Ready = self.state {
-            ready!(self.stream.poll_write_ready(cx)).unwrap();
+            self.stream.writable().await.unwrap();
         }
-        Poll::Ready(())
     }
 }
 
@@ -961,25 +956,26 @@ struct TcpWriteStream(Arc<Mutex<TcpWriter>>);
 #[async_trait::async_trait]
 impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, bytes: bytes::Bytes) -> Result<(), StreamError> {
-        self.0.lock().unwrap().write(bytes)
+        try_lock_for_stream(&self.0)?.write(bytes)
     }
 
     fn flush(&mut self) -> Result<(), StreamError> {
-        self.0.lock().unwrap().flush()
+        try_lock_for_stream(&self.0)?.flush()
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        self.0.lock().unwrap().check_write()
+        try_lock_for_stream(&self.0)?.check_write()
     }
+
     async fn cancel(&mut self) {
-        poll_fn(move |cx| self.0.lock().unwrap().poll_cancel(cx)).await;
+        self.0.lock().await.cancel().await
     }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for TcpWriteStream {
     async fn ready(&mut self) {
-        poll_fn(move |cx| self.0.lock().unwrap().poll_ready(cx)).await;
+        self.0.lock().await.ready().await
     }
 }
 
@@ -987,4 +983,18 @@ fn native_shutdown(stream: &tokio::net::TcpStream, how: Shutdown) {
     _ = stream
         .as_socketlike_view::<std::net::TcpStream>()
         .shutdown(how);
+}
+
+fn try_lock_for_stream<T>(mutex: &Mutex<T>) -> Result<tokio::sync::MutexGuard<'_, T>, StreamError> {
+    mutex
+        .try_lock()
+        .map_err(|_| StreamError::trap("concurrent access to resource not supported"))
+}
+
+fn try_lock_for_socket<T>(mutex: &Mutex<T>) -> Result<tokio::sync::MutexGuard<'_, T>, SocketError> {
+    mutex.try_lock().map_err(|_| {
+        SocketError::trap(anyhow::anyhow!(
+            "concurrent access to resource not supported"
+        ))
+    })
 }

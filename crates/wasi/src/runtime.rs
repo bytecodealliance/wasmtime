@@ -43,21 +43,13 @@ impl<T> AbortOnDropJoinHandle<T> {
     /// Abort the task and wait for it to finish. Optionally returns the result
     /// of the task if it ran to completion prior to being aborted.
     pub(crate) async fn cancel(mut self) -> Option<T> {
-        std::future::poll_fn(move |cx| self.poll_cancel(cx)).await
-    }
-
-    /// Abort the task and wait for it to finish. Optionally returns the result
-    /// of the task if it ran to completion prior to being aborted.
-    pub(crate) fn poll_cancel(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
         self.0.abort();
 
-        Poll::Ready(
-            match std::task::ready!(std::pin::pin!(&mut self.0).poll(cx)) {
-                Ok(value) => Some(value),
-                Err(err) if err.is_cancelled() => None,
-                Err(err) => std::panic::resume_unwind(err.into_panic()),
-            },
-        )
+        match (&mut self.0).await {
+            Ok(value) => Some(value),
+            Err(err) if err.is_cancelled() => None,
+            Err(err) => std::panic::resume_unwind(err.into_panic()),
+        }
     }
 }
 impl<T> Drop for AbortOnDropJoinHandle<T> {
