@@ -123,6 +123,9 @@ wasmtime_option_group! {
         /// The maximum size, in bytes, allocated for a core instance's metadata
         /// when using the pooling allocator.
         pub pooling_max_core_instance_size: Option<usize>,
+
+        /// Enable or disable the use of host trap handlers.
+        pub host_trap_handlers: Option<bool>,
     }
 
     enum Optimize {
@@ -592,6 +595,9 @@ impl CommonOptions {
         }
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
+        }
+        if let Some(enable) = self.opts.host_trap_handlers {
+            config.host_trap_handlers(enable);
         }
 
         match_feature! {

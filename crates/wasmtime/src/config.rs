@@ -159,6 +159,7 @@ struct ConfigTunables {
     generate_address_map: Option<bool>,
     debug_adapter_modules: Option<bool>,
     relaxed_simd_deterministic: Option<bool>,
+    host_trap_handlers: Option<bool>,
 }
 
 /// User-provided configuration for the compiler.
@@ -1945,6 +1946,7 @@ impl Config {
             generate_address_map
             debug_adapter_modules
             relaxed_simd_deterministic
+            host_trap_handlers
         }
 
         // If we're going to compile with winch, we must use the winch calling convention.
@@ -1954,6 +1956,10 @@ impl Config {
 
             if tunables.winch_callable && !tunables.table_lazy_init {
                 bail!("Winch requires the table-lazy-init configuration option");
+            }
+
+            if tunables.winch_callable && !tunables.host_trap_handlers {
+                bail!("Winch requires host trap handles to be enabled");
             }
         }
 
@@ -2086,6 +2092,17 @@ impl Config {
             .settings
             .insert("preserve_frame_pointers".into(), "true".into());
 
+        if !tunables.host_trap_handlers {
+            self.compiler_config.ensure_setting_unset_or_given(
+                "enable_table_access_spectre_mitigation".into(),
+                "false".into(),
+            );
+            self.compiler_config.ensure_setting_unset_or_given(
+                "enable_heap_access_spectre_mitigation".into(),
+                "false".into(),
+            );
+        }
+
         // check for incompatible compiler options and set required values
         if features.contains(WasmFeatures::REFERENCE_TYPES) {
             if !self
@@ -2201,6 +2218,36 @@ impl Config {
     /// `detect` must be correct for memory safe execution at runtime.
     pub unsafe fn detect_host_feature(&mut self, detect: fn(&str) -> Option<bool>) -> &mut Self {
         self.detect_host_feature = Some(detect);
+        self
+    }
+
+    /// Configures Wasmtime to not use host-based trap handlers, for example
+    /// disables signal-handler registration on Unix platforms.
+    ///
+    /// Wasmtime will by default leverage host-based trap handlers to make
+    /// generated code more efficient. For example an out-of-bounds load in
+    /// WebAssembly will result in a segfault that is caught by a signal handler
+    /// in Wasmtime by default. Another example is divide-by-zero is reported by
+    /// hardware rather than explicitly checked and Wasmtime turns that into a
+    /// trap. Registering signal handlers can be a portability hazard though in
+    /// some environments so this option exists to disable this behavior.
+    ///
+    /// When host-based trap handlers are disabled then generated code will
+    /// never rely on segfaults for example. Generated code will be slower
+    /// because bounds checks must be explicit along with other operations like
+    /// integer division which must check for zero.
+    ///
+    /// When this option is disable it additionally requires that the
+    /// `enable_heap_access_spectre_mitigation` and
+    /// `enable_table_access_spectre_mitigation` Cranelift settings are
+    /// disabled. This means that generated code must have spectre mitigations
+    /// disabled. This is because spectre mitigations rely on faults from
+    /// loading from the null address to implement bounds checks.
+    ///
+    /// This option defaults to `true` meaning that host trap handlers are
+    /// enabled by default.
+    pub fn host_trap_handlers(&mut self, enable: bool) -> &mut Self {
+        self.tunables.host_trap_handlers = Some(enable);
         self
     }
 }

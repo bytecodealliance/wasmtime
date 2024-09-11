@@ -15,7 +15,7 @@ use crate::{
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder, Type};
-use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
@@ -503,10 +503,18 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn translate_ref_i31(&mut self, pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value>;
 
     /// Sign-extend an `i31ref` into an `i32`.
-    fn translate_i31_get_s(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
+    fn translate_i31_get_s(
+        &mut self,
+        pos: &mut FunctionBuilder,
+        i31ref: ir::Value,
+    ) -> WasmResult<ir::Value>;
 
     /// Zero-extend an `i31ref` into an `i32`.
-    fn translate_i31_get_u(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
+    fn translate_i31_get_u(
+        &mut self,
+        pos: &mut FunctionBuilder,
+        i31ref: ir::Value,
+    ) -> WasmResult<ir::Value>;
 
     /// Emit code at the beginning of every wasm loop.
     ///
@@ -656,6 +664,101 @@ pub trait FuncEnvironment: TargetEnvironment {
         _num_bytes: ir::Value,
         _mem_index: MemoryIndex,
     ) {
+    }
+
+    /// Optional hook for customizing how `trap` is lowered.
+    fn trap(&mut self, builder: &mut FunctionBuilder, code: ir::TrapCode) {
+        builder.ins().trap(code);
+    }
+
+    /// Optional hook for customizing how `trapz` is lowered.
+    fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, code: ir::TrapCode) {
+        builder.ins().trapz(value, code);
+    }
+
+    /// Optional hook for customizing how `trapnz` is lowered.
+    fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, code: ir::TrapCode) {
+        builder.ins().trapnz(value, code);
+    }
+
+    /// Optional hook for customizing how `uadd_overflow_trap` is lowered.
+    fn uadd_overflow_trap(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+        code: ir::TrapCode,
+    ) -> ir::Value {
+        builder.ins().uadd_overflow_trap(lhs, rhs, code)
+    }
+
+    /// Accesses the ISA that is being compiled for.
+    fn isa(&self) -> &dyn TargetIsa;
+
+    /// Embedder-defined hook for indicating whether virtual memory should not
+    /// be used which forces more explicit bounds checks for example.
+    fn can_use_virtual_memory_traps(&self) -> bool {
+        true
+    }
+
+    /// Optional hook for customizing `sdiv` instruction lowering.
+    fn translate_sdiv(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        builder.ins().sdiv(lhs, rhs)
+    }
+
+    /// Optional hook for customizing `udiv` instruction lowering.
+    fn translate_udiv(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        builder.ins().udiv(lhs, rhs)
+    }
+
+    /// Optional hook for customizing `srem` instruction lowering.
+    fn translate_srem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        builder.ins().srem(lhs, rhs)
+    }
+
+    /// Optional hook for customizing `urem` instruction lowering.
+    fn translate_urem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        builder.ins().urem(lhs, rhs)
+    }
+
+    /// Optional hook for customizing `fcvt_to_sint` instruction lowering.
+    fn translate_fcvt_to_sint(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        ty: ir::Type,
+        val: ir::Value,
+    ) -> ir::Value {
+        builder.ins().fcvt_to_sint(ty, val)
+    }
+
+    /// Optional hook for customizing `fcvt_to_uint` instruction lowering.
+    fn translate_fcvt_to_uint(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        ty: ir::Type,
+        val: ir::Value,
+    ) -> ir::Value {
+        builder.ins().fcvt_to_uint(ty, val)
     }
 }
 

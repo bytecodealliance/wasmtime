@@ -1,5 +1,6 @@
 use crate::component::{AllCallFunc, ComponentTranslation, ComponentTypesBuilder, TrampolineIndex};
 use crate::prelude::*;
+use crate::Tunables;
 use anyhow::Result;
 use std::any::Any;
 
@@ -16,5 +17,6 @@ pub trait ComponentCompiler: Send + Sync {
         component: &ComponentTranslation,
         types: &ComponentTypesBuilder,
         trampoline: TrampolineIndex,
+        tunables: &Tunables,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 }

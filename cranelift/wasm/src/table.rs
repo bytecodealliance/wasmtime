@@ -1,3 +1,4 @@
+use crate::FuncEnvironment;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, condcodes::IntCC, immediates::Imm64, InstBuilder};
 use cranelift_codegen::isa::TargetIsa;
@@ -58,23 +59,23 @@ impl TableData {
     /// given index within this table.
     pub fn prepare_table_addr(
         &self,
-        isa: &dyn TargetIsa,
+        env: &mut dyn FuncEnvironment,
         pos: &mut FunctionBuilder,
         mut index: ir::Value,
     ) -> (ir::Value, ir::MemFlags) {
         let index_ty = pos.func.dfg.value_type(index);
-        let addr_ty = isa.pointer_type();
+        let addr_ty = env.pointer_type();
 
         // Start with the bounds check. Trap if `index + 1 > bound`.
-        let bound = self.bound.bound(isa, pos.cursor(), index_ty);
+        let bound = self.bound.bound(env.isa(), pos.cursor(), index_ty);
 
         // `index > bound - 1` is the same as `index >= bound`.
         let oob = pos
             .ins()
             .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
 
-        if !isa.flags().enable_table_access_spectre_mitigation() {
-            pos.ins().trapnz(oob, ir::TrapCode::TableOutOfBounds);
+        if !env.isa().flags().enable_table_access_spectre_mitigation() {
+            env.trapnz(pos, oob, ir::TrapCode::TableOutOfBounds);
         }
 
         // Convert `index` to `addr_ty`.
@@ -100,7 +101,7 @@ impl TableData {
         let base_flags = ir::MemFlags::new()
             .with_aligned()
             .with_alias_region(Some(ir::AliasRegion::Table));
-        if isa.flags().enable_table_access_spectre_mitigation() {
+        if env.isa().flags().enable_table_access_spectre_mitigation() {
             // Short-circuit the computed table element address to a null pointer
             // when out-of-bounds. The consumer of this address will trap when
             // trying to access it.

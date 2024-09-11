@@ -206,7 +206,11 @@ impl wasmtime_environ::Compiler for Compiler {
             global_type: isa.pointer_type(),
             flags: MemFlags::trusted(),
         });
-        context.func.stack_limit = Some(stack_limit);
+        if func_env.use_libcall_traps() {
+            func_env.stack_limit_at_function_entry = Some(stack_limit);
+        } else {
+            context.func.stack_limit = Some(stack_limit);
+        }
         let FunctionBodyData { validator, body } = input;
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));

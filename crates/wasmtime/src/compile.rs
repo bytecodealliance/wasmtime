@@ -145,7 +145,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
             .context("failed to parse WebAssembly module")?;
 
     let compile_inputs = CompileInputs::for_component(
-        engine.compiler().triple(),
+        engine,
         &types,
         &component,
         module_translations.iter_mut().map(|(i, translation)| {
@@ -357,7 +357,7 @@ impl<'a> CompileInputs<'a> {
     /// Create a `CompileInputs` for a component.
     #[cfg(feature = "component-model")]
     fn for_component(
-        triple: &target_lexicon::Triple,
+        engine: &'a Engine,
         types: &'a wasmtime_environ::component::ComponentTypesBuilder,
         component: &'a wasmtime_environ::component::ComponentTranslation,
         module_translations: impl IntoIterator<
@@ -368,6 +368,7 @@ impl<'a> CompileInputs<'a> {
             ),
         >,
     ) -> Self {
+        let triple = engine.compiler().triple();
         let mut ret = CompileInputs {
             need_wasm_to_array_trampolines: !matches!(
                 triple.architecture,
@@ -377,6 +378,7 @@ impl<'a> CompileInputs<'a> {
         };
 
         ret.collect_inputs_in_translations(types.module_types_builder(), module_translations);
+        let tunables = engine.tunables();
 
         for (idx, trampoline) in component.trampolines.iter() {
             ret.push_input(move |compiler| {
@@ -385,7 +387,7 @@ impl<'a> CompileInputs<'a> {
                     symbol: trampoline.symbol_name(),
                     function: compiler
                         .component_compiler()
-                        .compile_trampoline(component, types, idx)?
+                        .compile_trampoline(component, types, idx, tunables)?
                         .into(),
                     info: None,
                 })

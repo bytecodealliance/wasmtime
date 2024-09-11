@@ -732,6 +732,7 @@ macro_rules! define_builtin_array {
 
     (@ty i32) => (u32);
     (@ty i64) => (u64);
+    (@ty f64) => (f64);
     (@ty reference) => (u32);
     (@ty pointer) => (*mut u8);
     (@ty vmctx) => (*mut VMContext);

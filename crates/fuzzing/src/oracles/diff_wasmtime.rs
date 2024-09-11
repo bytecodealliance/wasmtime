@@ -24,11 +24,9 @@ impl WasmtimeEngine {
         config: &mut generators::Config,
         compiler_strategy: CompilerStrategy,
     ) -> arbitrary::Result<Self> {
-        if let CompilerStrategy::Winch = compiler_strategy {
-            config.disable_unimplemented_winch_proposals();
-        }
         let mut new_config = u.arbitrary::<WasmtimeConfig>()?;
         new_config.compiler_strategy = compiler_strategy;
+        new_config.update_module_config(&mut config.module_config.config, u)?;
         new_config.make_compatible_with(&config.wasmtime);
 
         let config = generators::Config {

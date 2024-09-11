@@ -139,6 +139,7 @@ pub mod raw {
 
         (@ty i32) => (u32);
         (@ty i64) => (u64);
+        (@ty f64) => (f64);
         (@ty reference) => (u32);
         (@ty pointer) => (*mut u8);
         (@ty vmctx) => (*mut VMContext);
@@ -653,6 +654,56 @@ fn update_mem_size(instance: &mut Instance, num_pages: u32) {
         let num_bytes = num_pages as usize * 64 * KIB;
         wmemcheck_state.update_mem_size(num_bytes);
     }
+}
+
+fn trap(_instance: &mut Instance, code: u32) -> Result<(), TrapReason> {
+    Err(TrapReason::Wasm(
+        wasmtime_environ::Trap::from_u8(code.try_into().unwrap()).unwrap(),
+    ))
+}
+
+fn f64_to_i64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
+    if val.is_nan() {
+        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
+    }
+    let val = val.trunc();
+    if val <= -9223372036854777856.0 || val >= 9223372036854775808.0 {
+        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
+    }
+    Ok(val as i64 as u64)
+}
+
+fn f64_to_u64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
+    if val.is_nan() {
+        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
+    }
+    let val = val.trunc();
+    if val <= -1.0 || val >= 18446744073709551616.0 {
+        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
+    }
+    Ok(val as u64)
+}
+
+fn f64_to_i32(_instance: &mut Instance, val: f64) -> Result<u32, TrapReason> {
+    if val.is_nan() {
+        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
+    }
+    let val = val.trunc();
+    if val <= -2147483649.0 || val >= 2147483648.0 {
+        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
+    }
+    Ok(val as i32 as u32)
+}
+
+fn f64_to_u32(_instance: &mut Instance, val: f64) -> Result<u32, TrapReason> {
+    if val.is_nan() {
+        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
+    }
+    let val = val.trunc();
+    if val <= -1.0 || val >= 4294967296.0 {
+        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
+    }
+    Ok(val as u32)
 }
 
 /// This module contains functions which are used for resolving relocations at
