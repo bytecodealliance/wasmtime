@@ -3,6 +3,7 @@
 use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
+use crate::isa::winch;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
 use crate::machinst::abi::*;
 use crate::machinst::*;
@@ -389,23 +390,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // Winch writes the first result to the highest offset, so we need to iterate through the
         // args and adjust the offsets down.
         if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
-            for arg in args.args_mut() {
-                if let ABIArg::Slots { slots, .. } = arg {
-                    for slot in slots.iter_mut() {
-                        if let ABIArgSlot::Stack { offset, ty, .. } = slot {
-                            let size = if uses_extension {
-                                i64::from(std::cmp::max(ty.bytes(), 8))
-                            } else {
-                                i64::from(ty.bytes())
-                            };
-
-                            *offset = i64::from(next_stack) - *offset - size;
-                        }
-                    }
-                } else {
-                    unreachable!("Winch cannot handle {arg:?}");
-                }
-            }
+            winch::reverse_stack(args, next_stack, uses_extension);
         }
 
         next_stack = align_to(next_stack, 16);
