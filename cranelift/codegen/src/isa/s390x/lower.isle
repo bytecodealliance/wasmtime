@@ -409,6 +409,82 @@
             (res_hi Reg (add_reg $I64 res_hi_3 (add_reg $I64 res_hi_2 res_hi_1))))
         (mov_to_vec128 $I64X2 res_hi res_lo)))
 
+;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_64 ty) (smul_overflow x y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_reg_with_flags_paired ty x y) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 1 (lower (has_type (fits_in_64 ty) (smul_overflow x (sext32_value y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_reg_sext32_with_flags_paired ty x y) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 2 (lower (has_type (fits_in_64 ty) (smul_overflow (sext32_value x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_reg_sext32_with_flags_paired ty y x) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 3 (lower (has_type (fits_in_64 ty) (smul_overflow x (i16_from_value y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_simm16_with_flags_paired ty x y) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 4 (lower (has_type (fits_in_64 ty) (smul_overflow (i16_from_value x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_simm16_with_flags_paired ty y x) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 5 (lower (has_type (fits_in_64 ty) (smul_overflow x (i32_from_value y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_simm32_with_flags_paired ty x y) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 6 (lower (has_type (fits_in_64 ty) (smul_overflow (i32_from_value x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_simm32_with_flags_paired ty y x) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 7 (lower (has_type (fits_in_64 ty) (smul_overflow x (sinkable_load_32_64 y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_with_flags_paired ty x (sink_load y)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 8 (lower (has_type (fits_in_64 ty) (smul_overflow (sinkable_load_32_64 x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_with_flags_paired ty y (sink_load x)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 9 (lower (has_type (fits_in_64 ty) (smul_overflow x (sinkable_load_16 y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_sext16_with_flags_paired ty x (sink_load y)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 10 (lower (has_type (fits_in_64 ty) (smul_overflow (sinkable_load_16 x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_sext16_with_flags_paired ty y (sink_load x)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 11 (lower (has_type (fits_in_64 ty) (smul_overflow x (sinkable_sload16 y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_sext16_with_flags_paired ty x (sink_sload16 y)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 12 (lower (has_type (fits_in_64 ty) (smul_overflow (sinkable_sload16 x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_sext16_with_flags_paired ty y (sink_sload16 x)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 13 (lower (has_type (fits_in_64 ty) (smul_overflow x (sinkable_sload32 y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_sext32_with_flags_paired ty x (sink_sload32 y)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 14 (lower (has_type (fits_in_64 ty) (smul_overflow (sinkable_sload32 x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (mul_mem_sext32_with_flags_paired ty y (sink_sload32 x)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3843,6 +3919,53 @@
       (with_flags
         (add_logical_mem_zext32_with_flags_paired ty y (sink_uload32 x))
         (trap_if_impl (mask_as_cond 3) tc)))
+
+;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_64 ty) (uadd_overflow x y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_reg_with_flags_paired ty x y) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 4 (lower (has_type (fits_in_64 ty) (uadd_overflow x (zext32_value y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_reg_zext32_with_flags_paired ty x y) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 8 (lower (has_type (fits_in_64 ty) (uadd_overflow (zext32_value x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_reg_zext32_with_flags_paired ty y x) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 3 (lower (has_type (fits_in_64 ty) (uadd_overflow x (u32_from_value y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_zimm32_with_flags_paired ty x y) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 7 (lower (has_type (fits_in_64 ty) (uadd_overflow (u32_from_value x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_zimm32_with_flags_paired ty y x) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 2 (lower (has_type (fits_in_64 ty) (uadd_overflow x (sinkable_load_32_64 y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_mem_with_flags_paired ty x (sink_load y)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 6 (lower (has_type (fits_in_64 ty) (uadd_overflow (sinkable_load_32_64 x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_mem_with_flags_paired ty y (sink_load x)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 1 (lower (has_type (fits_in_64 ty) (uadd_overflow x (sinkable_uload32 y))))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_mem_zext32_with_flags_paired ty x (sink_uload32 y)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
+
+(rule 5 (lower (has_type (fits_in_64 ty) (uadd_overflow (sinkable_uload32 x) y)))
+  (let ((one Reg (imm $I8 1))
+        (overflow Reg (select_bool_reg ty (bool (add_logical_mem_zext32_with_flags_paired ty y (sink_uload32 x)) (mask_as_cond 3)) one (zero_reg))))
+       (value_reg overflow)))
 
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
