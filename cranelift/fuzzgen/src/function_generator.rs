@@ -512,6 +512,10 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
             }
         }
 
+        // This requires precise runtime integration so it's not supported at
+        // all in fuzzgen just yet.
+        Opcode::StackSwitch => return false,
+
         _ => {}
     }
 
