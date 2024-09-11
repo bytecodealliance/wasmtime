@@ -8,6 +8,7 @@ use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
 use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
 use crate::isa::unwind::UnwindInst;
+use crate::isa::winch;
 use crate::machinst::*;
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
@@ -392,21 +393,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
             None
         };
 
-        // Winch writes the first result to the highest offset, so we need to iterate through the
-        // args and adjust the offsets down.
         if is_winch_return {
-            for arg in args.args_mut() {
-                if let ABIArg::Slots { slots, .. } = arg {
-                    for slot in slots.iter_mut() {
-                        if let ABIArgSlot::Stack { offset, ty, .. } = slot {
-                            let size = i64::from(ty.bytes());
-                            *offset = i64::from(next_stack) - *offset - size;
-                        }
-                    }
-                } else {
-                    unreachable!("Winch cannot handle {arg:?}");
-                }
-            }
+            winch::reverse_stack(args, next_stack, false);
         }
 
         next_stack = align_to(next_stack, 16);
