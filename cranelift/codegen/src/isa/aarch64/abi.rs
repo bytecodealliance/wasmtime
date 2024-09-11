@@ -109,6 +109,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
         let is_apple_cc = call_conv.extends_apple_aarch64();
+        let is_winch_return = call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets;
 
         // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
         //
@@ -279,14 +280,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     RegClass::Vector => unreachable!(),
                 };
 
-                let push_to_reg =
-                    if call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
-                        // Winch uses the first registry to return the last result
-                        i == params.len() - 1
-                    } else {
-                        // Use max_per_class_reg_vals & remaining_reg_vals otherwise
-                        *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0
-                    };
+                let push_to_reg = if is_winch_return {
+                    // Winch uses the first registry to return the last result
+                    i == params.len() - 1
+                } else {
+                    // Use max_per_class_reg_vals & remaining_reg_vals otherwise
+                    *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0
+                };
 
                 if push_to_reg {
                     let reg = match rc {
@@ -317,9 +317,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Compute the stack slot's size.
             let size = (ty_bits(param.value_type) / 8) as u32;
 
-            let size = if is_apple_cc
-                || (call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets)
-            {
+            let size = if is_apple_cc || is_winch_return {
                 // MacOS and Winch aarch64 allows stack slots with
                 // sizes less than 8 bytes. They still need to be
                 // properly aligned on their natural data alignment,
@@ -331,7 +329,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 std::cmp::max(size, 8)
             };
 
-            if call_conv != isa::CallConv::Winch || args_or_rets != ArgsOrRets::Rets {
+            if !is_winch_return {
                 // Align the stack slot.
                 debug_assert!(size.is_power_of_two());
                 next_stack = align_to(next_stack, size);
@@ -396,7 +394,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         // Winch writes the first result to the highest offset, so we need to iterate through the
         // args and adjust the offsets down.
-        if call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
+        if is_winch_return {
             for arg in args.args_mut() {
                 if let ABIArg::Slots { slots, .. } = arg {
                     for slot in slots.iter_mut() {
