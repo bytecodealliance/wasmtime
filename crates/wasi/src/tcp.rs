@@ -735,10 +735,7 @@ impl TcpReader {
     }
 
     fn shutdown(&mut self) {
-        _ = self
-            .stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(Shutdown::Read);
+        native_shutdown(&self.stream, Shutdown::Read);
         self.closed = true;
     }
 
@@ -833,10 +830,8 @@ impl TcpWriter {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
         match self.state {
             WriteState::Ready => {}
-            WriteState::Writing(_)
-            | WriteState::Closing(_)
-            | WriteState::Error(_)
-            | WriteState::Closed => {
+            WriteState::Closed => return Err(StreamError::Closed),
+            WriteState::Writing(_) | WriteState::Closing(_) | WriteState::Error(_) => {
                 return Err(StreamError::Trap(anyhow::anyhow!(
                     "unpermitted: must call check_write first"
                 )));
@@ -907,10 +902,25 @@ impl TcpWriter {
     }
 
     fn shutdown(&mut self) {
-        _ = self
-            .stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(Shutdown::Write);
+        self.state = match mem::replace(&mut self.state, WriteState::Closed) {
+            // No write in progress, immediately shut down:
+            WriteState::Ready => {
+                native_shutdown(&self.stream, Shutdown::Write);
+                WriteState::Closed
+            }
+
+            // Schedule the shutdown after the current write has finished:
+            WriteState::Writing(write) => {
+                let stream = self.stream.clone();
+                WriteState::Closing(crate::runtime::spawn(async move {
+                    let result = write.await;
+                    native_shutdown(&stream, Shutdown::Write);
+                    result
+                }))
+            }
+
+            s => s,
+        };
     }
 
     fn poll_cancel(&mut self, cx: &mut Context<'_>) -> Poll<()> {
@@ -928,12 +938,22 @@ impl TcpWriter {
     }
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        if let WriteState::Writing(task) = &mut self.state {
-            self.state = match ready!(pin!(task).poll(cx)) {
-                Ok(()) => WriteState::Ready,
-                Err(e) => WriteState::Error(e),
-            };
+        match &mut self.state {
+            WriteState::Writing(task) => {
+                self.state = match ready!(pin!(task).poll(cx)) {
+                    Ok(()) => WriteState::Ready,
+                    Err(e) => WriteState::Error(e),
+                }
+            }
+            WriteState::Closing(task) => {
+                self.state = match ready!(pin!(task).poll(cx)) {
+                    Ok(()) => WriteState::Closed,
+                    Err(e) => WriteState::Error(e),
+                }
+            }
+            _ => {}
         }
+
         if let WriteState::Ready = self.state {
             ready!(self.stream.poll_write_ready(cx)).unwrap();
         }
@@ -966,4 +986,10 @@ impl Subscribe for TcpWriteStream {
     async fn ready(&mut self) {
         poll_fn(move |cx| self.0.lock().unwrap().poll_ready(cx)).await;
     }
+}
+
+fn native_shutdown(stream: &tokio::net::TcpStream, how: Shutdown) {
+    _ = stream
+        .as_socketlike_view::<std::net::TcpStream>()
+        .shutdown(how);
 }
