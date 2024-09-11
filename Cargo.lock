@@ -612,7 +612,7 @@ dependencies = [
  "postcard",
  "pulley-interpreter",
  "regalloc2",
- "rustc-hash 1.1.0",
+ "rustc-hash",
  "serde",
  "serde_derive",
  "sha2",
@@ -829,7 +829,7 @@ dependencies = [
  "pretty_env_logger",
  "rayon",
  "regalloc2",
- "rustc-hash 1.1.0",
+ "rustc-hash",
  "serde",
  "similar",
  "target-lexicon",
@@ -2289,7 +2289,7 @@ checksum = "12908dbeb234370af84d0579b9f68258a0f67e201412dd9a2814e6f45b2fc0f0"
 dependencies = [
  "hashbrown 0.14.3",
  "log",
- "rustc-hash 2.0.0",
+ "rustc-hash",
  "serde",
  "slice-group-by",
  "smallvec",
@@ -2370,12 +2370,6 @@ name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
-
-[[package]]
-name = "rustc-hash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc-hash"
