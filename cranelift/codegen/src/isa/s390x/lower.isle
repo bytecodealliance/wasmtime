@@ -409,7 +409,7 @@
             (res_hi Reg (add_reg $I64 res_hi_3 (add_reg $I64 res_hi_2 res_hi_1))))
         (mov_to_vec128 $I64X2 res_hi res_lo)))
 
-;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (smul_overflow x y)))
   (let ((one Reg (imm $I8 1))
@@ -485,7 +485,6 @@
   (let ((one Reg (imm $I8 1))
         (overflow Reg (select_bool_reg ty (bool (mul_mem_sext32_with_flags_paired ty y (sink_sload32 x)) (mask_as_cond 3)) one (zero_reg))))
        (value_reg overflow)))
-
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
