@@ -756,7 +756,7 @@ mod test {
     use crate::runtime::vm::mmap::Mmap;
     use crate::runtime::vm::sys::vm::decommit_pages;
     use std::sync::Arc;
-    use wasmtime_environ::Memory;
+    use wasmtime_environ::{IndexType, Limits, Memory};
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
@@ -778,10 +778,9 @@ mod test {
         MemoryPlan {
             style,
             memory: Memory {
-                minimum: 0,
-                maximum: None,
+                idx_type: IndexType::I32,
+                limits: Limits { min: 0, max: None },
                 shared: false,
-                memory64: false,
                 page_size_log2: Memory::DEFAULT_PAGE_SIZE_LOG2,
             },
             pre_guard_size: 0,

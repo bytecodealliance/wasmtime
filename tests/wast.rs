@@ -234,17 +234,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
 
         if part == "memory64" {
             if [
-                // Wasmtime doesn't implement the table64 extension yet.
-                "call_indirect.wast",
-                "table_copy.wast",
-                "table_get.wast",
-                "table_set.wast",
-                "table_fill.wast",
-                "table.wast",
-                "table_init.wast",
-                "table_copy_mixed.wast",
-                "table_grow.wast",
-                "table_size.wast",
                 // wasmtime doesn't implement exceptions yet
                 "imports.wast",
                 "ref_null.wast",

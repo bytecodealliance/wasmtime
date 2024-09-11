@@ -543,7 +543,7 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
         match end {
-            Some(end) if end <= table.size() as usize => {
+            Some(end) if end <= table.size() => {
                 // Initializer is in bounds
             }
             _ => {
@@ -572,7 +572,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 };
                 let idx = module.table_index(table);
                 let table = unsafe { instance.get_defined_table(table).as_mut().unwrap() };
-                match module.table_plans[idx].table.wasm_ty.heap_type.top() {
+                match module.table_plans[idx].table.ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
                         let gc_store = unsafe { (*instance.store()).gc_store() };
@@ -618,7 +618,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 &mut const_evaluator,
                 segment.table_index,
                 &segment.elements,
-                start.get_u32(),
+                start.get_u64(),
                 0,
                 segment.elements.len(),
             )
@@ -633,16 +633,15 @@ fn get_memory_init_start(
     instance: &mut Instance,
     module: &Module,
 ) -> Result<u64> {
-    let mem64 = instance.module().memory_plans[init.memory_index]
-        .memory
-        .memory64;
     let mut context = ConstEvalContext::new(instance, module);
     let mut const_evaluator = ConstExprEvaluator::default();
     unsafe { const_evaluator.eval(&mut context, &init.offset) }.map(|v| {
-        if mem64 {
-            v.get_u64()
-        } else {
-            v.get_u32().into()
+        match instance.module().memory_plans[init.memory_index]
+            .memory
+            .idx_type
+        {
+            wasmtime_environ::IndexType::I32 => v.get_u32().into(),
+            wasmtime_environ::IndexType::I64 => v.get_u64(),
         }
     })
 }
@@ -703,15 +702,15 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
             memory: wasmtime_environ::MemoryIndex,
             expr: &wasmtime_environ::ConstExpr,
         ) -> Option<u64> {
-            let mem64 = self.instance.module().memory_plans[memory].memory.memory64;
             let mut context = ConstEvalContext::new(self.instance, self.module);
             let val = unsafe { self.const_evaluator.eval(&mut context, expr) }
                 .expect("const expression should be valid");
-            Some(if mem64 {
-                val.get_u64()
-            } else {
-                val.get_u32().into()
-            })
+            Some(
+                match self.instance.module().memory_plans[memory].memory.idx_type {
+                    wasmtime_environ::IndexType::I32 => val.get_u32().into(),
+                    wasmtime_environ::IndexType::I64 => val.get_u64(),
+                },
+            )
         }
 
         fn write(

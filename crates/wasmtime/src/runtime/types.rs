@@ -1,9 +1,9 @@
 use crate::prelude::*;
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
-    VMSharedTypeIndex, WasmArrayType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
-    WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
+    TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeType, WasmFieldType, WasmFuncType,
+    WasmHeapType, WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
 };
 
 use crate::{type_registry::RegisteredType, Engine};
@@ -2456,21 +2456,56 @@ impl TableType {
     /// Creates a new table descriptor which will contain the specified
     /// `element` and have the `limits` applied to its length.
     pub fn new(element: RefType, min: u32, max: Option<u32>) -> TableType {
-        let wasm_ty = element.to_wasm_type();
+        let ref_type = element.to_wasm_type();
 
         debug_assert!(
-            wasm_ty.is_canonicalized_for_runtime_usage(),
-            "should be canonicalized for runtime usage: {wasm_ty:?}"
+            ref_type.is_canonicalized_for_runtime_usage(),
+            "should be canonicalized for runtime usage: {ref_type:?}"
+        );
+
+        let limits = Limits {
+            min: u64::from(min),
+            max: max.map(|x| u64::from(x)),
+        };
+
+        TableType {
+            element,
+            ty: Table {
+                idx_type: IndexType::I32,
+                limits,
+                ref_type,
+            },
+        }
+    }
+
+    /// Crates a new descriptor for a 64-bit table.
+    ///
+    /// Note that 64-bit tables are part of the memory64 proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn new64(element: RefType, min: u64, max: Option<u64>) -> TableType {
+        let ref_type = element.to_wasm_type();
+
+        debug_assert!(
+            ref_type.is_canonicalized_for_runtime_usage(),
+            "should be canonicalized for runtime usage: {ref_type:?}"
         );
 
         TableType {
             element,
             ty: Table {
-                wasm_ty,
-                minimum: min,
-                maximum: max,
+                ref_type,
+                idx_type: IndexType::I64,
+                limits: Limits { min, max },
             },
         }
+    }
+
+    /// Returns whether or not this table is a 64-bit table.
+    ///
+    /// Note that 64-bit tables are part of the memory64 proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn is_64(&self) -> bool {
+        matches!(self.ty.idx_type, IndexType::I64)
     }
 
     /// Returns the element value type of this table.
@@ -2479,20 +2514,20 @@ impl TableType {
     }
 
     /// Returns minimum number of elements this table must have
-    pub fn minimum(&self) -> u32 {
-        self.ty.minimum
+    pub fn minimum(&self) -> u64 {
+        self.ty.limits.min
     }
 
     /// Returns the optionally-specified maximum number of elements this table
     /// can have.
     ///
     /// If this returns `None` then the table is not limited in size.
-    pub fn maximum(&self) -> Option<u32> {
-        self.ty.maximum
+    pub fn maximum(&self) -> Option<u64> {
+        self.ty.limits.max
     }
 
     pub(crate) fn from_wasmtime_table(engine: &Engine, table: &Table) -> TableType {
-        let element = RefType::from_wasm_type(engine, &table.wasm_ty);
+        let element = RefType::from_wasm_type(engine, &table.ref_type);
         TableType {
             element,
             ty: *table,
@@ -2540,10 +2575,9 @@ impl Default for MemoryTypeBuilder {
     fn default() -> Self {
         MemoryTypeBuilder {
             ty: Memory {
-                minimum: 0,
-                maximum: None,
+                idx_type: IndexType::I32,
+                limits: Limits { min: 0, max: None },
                 shared: false,
-                memory64: false,
                 page_size_log2: Memory::DEFAULT_PAGE_SIZE_LOG2,
             },
         }
@@ -2552,7 +2586,12 @@ impl Default for MemoryTypeBuilder {
 
 impl MemoryTypeBuilder {
     fn validate(&self) -> Result<()> {
-        if self.ty.maximum.map_or(false, |max| max < self.ty.minimum) {
+        if self
+            .ty
+            .limits
+            .max
+            .map_or(false, |max| max < self.ty.limits.min)
+        {
             bail!("maximum page size cannot be smaller than the minimum page size");
         }
 
@@ -2565,7 +2604,7 @@ impl MemoryTypeBuilder {
             ),
         }
 
-        if self.ty.shared && self.ty.maximum.is_none() {
+        if self.ty.shared && self.ty.limits.max.is_none() {
             bail!("shared memories must have a maximum size");
         }
 
@@ -2594,7 +2633,7 @@ impl MemoryTypeBuilder {
     ///
     /// The default minimum is `0`.
     pub fn min(&mut self, minimum: u64) -> &mut Self {
-        self.ty.minimum = minimum;
+        self.ty.limits.min = minimum;
         self
     }
 
@@ -2603,7 +2642,7 @@ impl MemoryTypeBuilder {
     ///
     /// The default maximum is `None`.
     pub fn max(&mut self, maximum: Option<u64>) -> &mut Self {
-        self.ty.maximum = maximum;
+        self.ty.limits.max = maximum;
         self
     }
 
@@ -2617,7 +2656,10 @@ impl MemoryTypeBuilder {
     /// proposal](https://github.com/WebAssembly/memory64) for WebAssembly which
     /// is not fully standardized yet.
     pub fn memory64(&mut self, memory64: bool) -> &mut Self {
-        self.ty.memory64 = memory64;
+        self.ty.idx_type = match memory64 {
+            true => IndexType::I64,
+            false => IndexType::I32,
+        };
         self
     }
 
@@ -2757,7 +2799,7 @@ impl MemoryType {
     /// Note that 64-bit memories are part of the memory64 proposal for
     /// WebAssembly which is not standardized yet.
     pub fn is_64(&self) -> bool {
-        self.ty.memory64
+        matches!(self.ty.idx_type, IndexType::I64)
     }
 
     /// Returns whether this is a shared memory or not.
@@ -2773,7 +2815,7 @@ impl MemoryType {
     /// Note that the return value, while a `u64`, will always fit into a `u32`
     /// for 32-bit memories.
     pub fn minimum(&self) -> u64 {
-        self.ty.minimum
+        self.ty.limits.min
     }
 
     /// Returns the optionally-specified maximum number of pages this memory
@@ -2784,7 +2826,7 @@ impl MemoryType {
     /// Note that the return value, while a `u64`, will always fit into a `u32`
     /// for 32-bit memories.
     pub fn maximum(&self) -> Option<u64> {
-        self.ty.maximum
+        self.ty.limits.max
     }
 
     /// This memory's page size, in bytes.

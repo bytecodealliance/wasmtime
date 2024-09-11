@@ -375,9 +375,9 @@ fn massive_64_bit_still_limited() -> Result<()> {
         }
         fn table_growing(
             &mut self,
-            _current: u32,
-            _request: u32,
-            _max: Option<u32>,
+            _current: usize,
+            _request: usize,
+            _max: Option<usize>,
         ) -> Result<bool> {
             unreachable!()
         }

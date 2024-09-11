@@ -133,9 +133,9 @@ pub unsafe trait Store {
     /// table grow operation.
     fn table_growing(
         &mut self,
-        current: u32,
-        desired: u32,
-        maximum: Option<u32>,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
     ) -> Result<bool, Error>;
 
     /// Callback invoked to notify the store's resource limiter that a table

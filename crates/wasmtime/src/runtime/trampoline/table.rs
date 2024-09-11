@@ -11,9 +11,9 @@ pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<Instan
     let tunables = store.engine().tunables();
 
     debug_assert!(
-        wasmtime_table.wasm_ty.is_canonicalized_for_runtime_usage(),
+        wasmtime_table.ref_type.is_canonicalized_for_runtime_usage(),
         "should be canonicalized for runtime usage: {:?}",
-        wasmtime_table.wasm_ty
+        wasmtime_table.ref_type
     );
 
     let table_plan = wasmtime_environ::TablePlan::for_table(wasmtime_table, tunables);

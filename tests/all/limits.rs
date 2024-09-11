@@ -103,7 +103,7 @@ async fn test_limits_async() -> Result<()> {
 
     struct LimitsAsync {
         memory_size: usize,
-        table_elements: u32,
+        table_elements: usize,
     }
     #[async_trait::async_trait]
     impl ResourceLimiterAsync for LimitsAsync {
@@ -117,9 +117,9 @@ async fn test_limits_async() -> Result<()> {
         }
         async fn table_growing(
             &mut self,
-            _current: u32,
-            desired: u32,
-            _maximum: Option<u32>,
+            _current: usize,
+            desired: usize,
+            _maximum: Option<usize>,
         ) -> Result<bool> {
             Ok(desired <= self.table_elements)
         }
@@ -419,9 +419,9 @@ impl ResourceLimiter for MemoryContext {
     }
     fn table_growing(
         &mut self,
-        _current: u32,
-        _desired: u32,
-        _maximum: Option<u32>,
+        _current: usize,
+        _desired: usize,
+        _maximum: Option<usize>,
     ) -> Result<bool> {
         Ok(true)
     }
@@ -533,9 +533,9 @@ impl ResourceLimiterAsync for MemoryContext {
     }
     async fn table_growing(
         &mut self,
-        _current: u32,
-        _desired: u32,
-        _maximum: Option<u32>,
+        _current: usize,
+        _desired: usize,
+        _maximum: Option<usize>,
     ) -> Result<bool> {
         Ok(true)
     }
@@ -626,8 +626,8 @@ async fn test_custom_memory_limiter_async() -> Result<()> {
 }
 
 struct TableContext {
-    elements_used: u32,
-    element_limit: u32,
+    elements_used: usize,
+    element_limit: usize,
     limit_exceeded: bool,
 }
 
@@ -640,9 +640,14 @@ impl ResourceLimiter for TableContext {
     ) -> Result<bool> {
         Ok(true)
     }
-    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> Result<bool> {
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool> {
         // Check if the desired exceeds a maximum (either from Wasm or from the host)
-        assert!(desired < maximum.unwrap_or(u32::MAX));
+        assert!(desired < maximum.unwrap_or(usize::MAX));
         assert_eq!(current, self.elements_used);
         Ok(if desired > self.element_limit {
             self.limit_exceeded = true;
@@ -704,8 +709,8 @@ struct FailureDetector {
     /// Display impl of most recent call to memory_grow_failed
     memory_error: Option<String>,
     /// Arguments of most recent call to table_growing
-    table_current: u32,
-    table_desired: u32,
+    table_current: usize,
+    table_desired: usize,
     /// Display impl of most recent call to table_grow_failed
     table_error: Option<String>,
 }
@@ -725,7 +730,12 @@ impl ResourceLimiter for FailureDetector {
         self.memory_error = Some(err.to_string());
         Ok(())
     }
-    fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> Result<bool> {
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool> {
         self.table_current = current;
         self.table_desired = desired;
         Ok(true)
@@ -832,9 +842,9 @@ impl ResourceLimiterAsync for FailureDetector {
 
     async fn table_growing(
         &mut self,
-        current: u32,
-        desired: u32,
-        _maximum: Option<u32>,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
     ) -> Result<bool> {
         self.table_current = current;
         self.table_desired = desired;
@@ -941,9 +951,9 @@ impl ResourceLimiter for Panic {
     }
     fn table_growing(
         &mut self,
-        _current: u32,
-        _desired: u32,
-        _maximum: Option<u32>,
+        _current: usize,
+        _desired: usize,
+        _maximum: Option<usize>,
     ) -> Result<bool> {
         panic!("resource limiter table growing");
     }
@@ -960,9 +970,9 @@ impl ResourceLimiterAsync for Panic {
     }
     async fn table_growing(
         &mut self,
-        _current: u32,
-        _desired: u32,
-        _maximum: Option<u32>,
+        _current: usize,
+        _desired: usize,
+        _maximum: Option<usize>,
     ) -> Result<bool> {
         panic!("async resource limiter table growing");
     }

@@ -118,7 +118,7 @@ wasmtime_option_group! {
 
         /// The maximum table elements for any table defined in a module when
         /// using the pooling allocator.
-        pub pooling_table_elements: Option<u32>,
+        pub pooling_table_elements: Option<usize>,
 
         /// The maximum size, in bytes, allocated for a core instance's metadata
         /// when using the pooling allocator.
@@ -215,7 +215,7 @@ wasmtime_option_group! {
         /// WebAssembly modules to return -1 and fail.
         pub max_memory_size: Option<usize>,
         /// Maximum size, in table elements, that a table is allowed to reach.
-        pub max_table_elements: Option<u32>,
+        pub max_table_elements: Option<usize>,
         /// Maximum number of WebAssembly instances allowed to be created.
         pub max_instances: Option<usize>,
         /// Maximum number of WebAssembly tables allowed to be created.

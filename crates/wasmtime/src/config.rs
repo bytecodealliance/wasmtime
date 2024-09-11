@@ -2813,7 +2813,7 @@ impl PoolingAllocationConfig {
     /// table; table elements are pointer-sized in the Wasmtime runtime.
     /// Therefore, the space reserved for each instance is `tables *
     /// table_elements * sizeof::<*const ()>`.
-    pub fn table_elements(&mut self, elements: u32) -> &mut Self {
+    pub fn table_elements(&mut self, elements: usize) -> &mut Self {
         self.config.limits.table_elements = elements;
         self
     }

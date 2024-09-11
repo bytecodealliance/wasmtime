@@ -404,11 +404,6 @@ impl<'a> Arbitrary<'a> for Config {
             config.disable_unimplemented_winch_proposals();
         }
 
-        // Wasm-smith implements the most up-to-date version of memory64 where
-        // it supports 64-bit tables as well, but Wasmtime doesn't support that
-        // yet, so disable the memory64 proposal in fuzzing for now.
-        config.module_config.config.memory64_enabled = false;
-
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {

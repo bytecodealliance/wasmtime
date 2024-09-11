@@ -1424,7 +1424,7 @@ where
     fn visit_table_get(&mut self, table: u32) {
         let table_index = TableIndex::from_u32(table);
         let plan = self.env.table_plan(table_index);
-        let heap_type = plan.table.wasm_ty.heap_type;
+        let heap_type = plan.table.ref_type.heap_type;
         let style = &plan.style;
 
         match heap_type {
@@ -1447,7 +1447,7 @@ where
     fn visit_table_grow(&mut self, table: u32) {
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
-        let builtin = match table_plan.table.wasm_ty.heap_type {
+        let builtin = match table_plan.table.ref_type.heap_type {
             WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI, M::Ptr>(),
             ty => unimplemented!("Support for HeapType: {ty}"),
         };
@@ -1485,7 +1485,7 @@ where
     fn visit_table_fill(&mut self, table: u32) {
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
-        let builtin = match table_plan.table.wasm_ty.heap_type {
+        let builtin = match table_plan.table.ref_type.heap_type {
             WasmHeapType::Func => self.env.builtins.table_fill_func_ref::<M::ABI, M::Ptr>(),
             ty => unimplemented!("Support for heap type: {ty}"),
         };
@@ -1509,7 +1509,7 @@ where
         let table_index = TableIndex::from_u32(table);
         let table_data = self.env.resolve_table_data(table_index);
         let plan = self.env.table_plan(table_index);
-        match plan.table.wasm_ty.heap_type {
+        match plan.table.ref_type.heap_type {
             WasmHeapType::Func => match plan.style {
                 TableStyle::CallerChecksSignature { lazy_init: true } => {
                     let value = self.context.pop_to_reg(self.masm, None);
