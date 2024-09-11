@@ -16,7 +16,7 @@ use rustix::net::sockopt;
 use std::future::poll_fn;
 use std::io;
 use std::mem;
-use std::net::SocketAddr;
+use std::net::{Shutdown, SocketAddr};
 use std::pin::{pin, Pin};
 use std::sync::{Arc, Mutex};
 use std::task::{ready, Context, Poll};
@@ -55,7 +55,13 @@ enum TcpState {
     ConnectReady(io::Result<tokio::net::TcpStream>),
 
     /// An outgoing connection has been established.
-    Connected(Arc<tokio::net::TcpStream>),
+    Connected {
+        stream: Arc<tokio::net::TcpStream>,
+
+        // WASI is single threaded, so in practice these Mutexes should never be contended:
+        reader: Arc<Mutex<TcpReader>>,
+        writer: Arc<Mutex<TcpWriter>>,
+    },
 
     Closed,
 }
@@ -73,7 +79,7 @@ impl std::fmt::Debug for TcpState {
                 .finish(),
             Self::Connecting(_) => f.debug_tuple("Connecting").finish(),
             Self::ConnectReady(_) => f.debug_tuple("ConnectReady").finish(),
-            Self::Connected(_) => f.debug_tuple("Connected").finish(),
+            Self::Connected { .. } => f.debug_tuple("Connected").finish(),
             Self::Closed => write!(f, "Closed"),
         }
     }
@@ -146,7 +152,9 @@ impl TcpSocket {
             TcpState::Default(socket) | TcpState::Bound(socket) => {
                 Ok(socket.as_socketlike_view::<std::net::TcpStream>())
             }
-            TcpState::Connected(stream) => Ok(stream.as_socketlike_view::<std::net::TcpStream>()),
+            TcpState::Connected { stream, .. } => {
+                Ok(stream.as_socketlike_view::<std::net::TcpStream>())
+            }
             TcpState::Listening { listener, .. } => {
                 Ok(listener.as_socketlike_view::<std::net::TcpStream>())
             }
@@ -280,7 +288,11 @@ impl TcpSocket {
                 let stream = Arc::new(stream);
                 let reader = Arc::new(Mutex::new(TcpReader::new(stream.clone())));
                 let writer = Arc::new(Mutex::new(TcpWriter::new(stream.clone())));
-                self.tcp_state = TcpState::Connected(stream);
+                self.tcp_state = TcpState::Connected {
+                    stream,
+                    reader: reader.clone(),
+                    writer: writer.clone(),
+                };
                 let input: InputStream = Box::new(TcpReadStream(reader));
                 let output: OutputStream = Box::new(TcpWriteStream(writer));
                 Ok((input, output))
@@ -433,9 +445,16 @@ impl TcpSocket {
         let reader = Arc::new(Mutex::new(TcpReader::new(client.clone())));
         let writer = Arc::new(Mutex::new(TcpWriter::new(client.clone())));
 
-        let input: InputStream = Box::new(TcpReadStream(reader));
-        let output: OutputStream = Box::new(TcpWriteStream(writer));
-        let tcp_socket = TcpSocket::from_state(TcpState::Connected(client), self.family)?;
+        let input: InputStream = Box::new(TcpReadStream(reader.clone()));
+        let output: OutputStream = Box::new(TcpWriteStream(writer.clone()));
+        let tcp_socket = TcpSocket::from_state(
+            TcpState::Connected {
+                stream: client,
+                reader,
+                writer,
+            },
+            self.family,
+        )?;
 
         Ok((tcp_socket, input, output))
     }
@@ -452,7 +471,7 @@ impl TcpSocket {
 
     pub fn remote_address(&self) -> SocketResult<SocketAddr> {
         let view = match self.tcp_state {
-            TcpState::Connected(..) => self.as_std_view()?,
+            TcpState::Connected { .. } => self.as_std_view()?,
             TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
             }
@@ -619,20 +638,22 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn shutdown(&self, how: std::net::Shutdown) -> io::Result<()> {
-        let stream = match &self.tcp_state {
-            TcpState::Connected(stream) => stream,
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotConnected,
-                    "socket not connected",
-                ))
-            }
+    pub fn shutdown(&self, how: Shutdown) -> io::Result<()> {
+        let TcpState::Connected { reader, writer, .. } = &self.tcp_state else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotConnected,
+                "socket not connected",
+            ));
         };
 
-        stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(how)?;
+        if let Shutdown::Both | Shutdown::Read = how {
+            reader.lock().unwrap().shutdown();
+        }
+
+        if let Shutdown::Both | Shutdown::Write = how {
+            writer.lock().unwrap().shutdown();
+        }
+
         Ok(())
     }
 }
@@ -647,7 +668,7 @@ impl Subscribe for TcpSocket {
             | TcpState::ListenStarted(..)
             | TcpState::ConnectReady(..)
             | TcpState::Closed
-            | TcpState::Connected(..) => {
+            | TcpState::Connected { .. } => {
                 // No async operation in progress.
             }
             TcpState::Connecting(future) => {
@@ -711,6 +732,13 @@ impl TcpReader {
 
         buf.truncate(n);
         Ok(buf.freeze())
+    }
+
+    fn shutdown(&mut self) {
+        _ = self
+            .stream
+            .as_socketlike_view::<std::net::TcpStream>()
+            .shutdown(Shutdown::Read);
     }
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
@@ -875,6 +903,13 @@ impl TcpWriter {
             return Ok(0);
         }
         Ok(SOCKET_READY_SIZE)
+    }
+
+    fn shutdown(&mut self) {
+        _ = self
+            .stream
+            .as_socketlike_view::<std::net::TcpStream>()
+            .shutdown(Shutdown::Write);
     }
 
     fn poll_cancel(&mut self, cx: &mut Context<'_>) -> Poll<()> {
