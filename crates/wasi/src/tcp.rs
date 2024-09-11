@@ -739,6 +739,7 @@ impl TcpReader {
             .stream
             .as_socketlike_view::<std::net::TcpStream>()
             .shutdown(Shutdown::Read);
+        self.closed = true;
     }
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {

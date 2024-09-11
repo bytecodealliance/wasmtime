@@ -25,6 +25,31 @@ fn test_tcp_input_stream_should_be_closed_by_remote_shutdown(
     });
 }
 
+/// InputStream::read should return `StreamError::Closed` after the connection has been shut down locally.
+fn test_tcp_input_stream_should_be_closed_by_local_shutdown(
+    net: &Network,
+    family: IpAddressFamily,
+) {
+    setup(net, family, |server, client| {
+        // On Linux, `recv` continues to work even after `shutdown(sock, SHUT_RD)`
+        // has been called. To properly test that this behavior doesn't happen in
+        // WASI, we make sure there's some data to read by the client:
+        server.output.blocking_write_util(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.").unwrap();
+
+        // Wait for the data to reach the client:
+        client.input.subscribe().block();
+
+        // Shut down socket locally:
+        client.socket.shutdown(ShutdownType::Receive).unwrap();
+
+        // The input stream should immediately signal StreamError::Closed.
+        assert!(matches!(client.input.read(10), Err(StreamError::Closed)));
+
+        // Stream should still be closed, even when requesting 0 bytes:
+        assert!(matches!(client.input.read(0), Err(StreamError::Closed)));
+    });
+}
+
 /// OutputStream should return `StreamError::Closed` after the connection has been locally shut down for sending.
 fn test_tcp_output_stream_should_be_closed_by_local_shutdown(
     net: &Network,
@@ -59,6 +84,9 @@ fn main() {
 
     test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv6);
+
+    test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
+    test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
 
     test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
