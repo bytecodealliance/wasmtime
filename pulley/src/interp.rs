@@ -718,6 +718,66 @@ impl OpVisitor for InterpreterVisitor<'_> {
         }
     }
 
+    fn br_if_xeq64(&mut self, a: XReg, b: XReg, offset: PcRelOffset) -> Self::Return {
+        let a = self.state[a].get_u64();
+        let b = self.state[b].get_u64();
+        if a == b {
+            self.pc_rel_jump(offset, 7)
+        } else {
+            Continuation::Continue
+        }
+    }
+
+    fn br_if_xneq64(&mut self, a: XReg, b: XReg, offset: PcRelOffset) -> Self::Return {
+        let a = self.state[a].get_u64();
+        let b = self.state[b].get_u64();
+        if a != b {
+            self.pc_rel_jump(offset, 7)
+        } else {
+            Continuation::Continue
+        }
+    }
+
+    fn br_if_xslt64(&mut self, a: XReg, b: XReg, offset: PcRelOffset) -> Self::Return {
+        let a = self.state[a].get_i64();
+        let b = self.state[b].get_i64();
+        if a < b {
+            self.pc_rel_jump(offset, 7)
+        } else {
+            Continuation::Continue
+        }
+    }
+
+    fn br_if_xslteq64(&mut self, a: XReg, b: XReg, offset: PcRelOffset) -> Self::Return {
+        let a = self.state[a].get_i64();
+        let b = self.state[b].get_i64();
+        if a <= b {
+            self.pc_rel_jump(offset, 7)
+        } else {
+            Continuation::Continue
+        }
+    }
+
+    fn br_if_xult64(&mut self, a: XReg, b: XReg, offset: PcRelOffset) -> Self::Return {
+        let a = self.state[a].get_u64();
+        let b = self.state[b].get_u64();
+        if a < b {
+            self.pc_rel_jump(offset, 7)
+        } else {
+            Continuation::Continue
+        }
+    }
+
+    fn br_if_xulteq64(&mut self, a: XReg, b: XReg, offset: PcRelOffset) -> Self::Return {
+        let a = self.state[a].get_u64();
+        let b = self.state[b].get_u64();
+        if a <= b {
+            self.pc_rel_jump(offset, 7)
+        } else {
+            Continuation::Continue
+        }
+    }
+
     fn xmov(&mut self, dst: XReg, src: XReg) -> Self::Return {
         let val = self.state[src];
         self.state[dst] = val;
