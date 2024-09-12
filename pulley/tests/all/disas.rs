@@ -49,9 +49,9 @@ fn simple() {
             Op::Ret(Ret {}),
         ],
         r#"
-       0: 2f                              push_frame
-       1: 12 00 04                        xadd32 x0, x0, x1
-       4: 30                              pop_frame
+       0: 35                              push_frame
+       1: 18 00 04                        xadd32 x0, x0, x1
+       4: 36                              pop_frame
        5: 00                              ret
         "#,
     );
@@ -82,11 +82,11 @@ fn push_pop_many() {
             Op::Ret(Ret {}),
         ],
         r#"
-       0: 2f                              push_frame
-       1: 32 1f 00 00 00                  xpush32_many x0, x1, x2, x3, x4
-       6: 12 00 04                        xadd32 x0, x0, x1
-       9: 36 1f 00 00 00                  xpop32_many x0, x1, x2, x3, x4
-       e: 30                              pop_frame
+       0: 35                              push_frame
+       1: 38 1f 00 00 00                  xpush32_many x0, x1, x2, x3, x4
+       6: 18 00 04                        xadd32 x0, x0, x1
+       9: 3c 1f 00 00 00                  xpop32_many x0, x1, x2, x3, x4
+       e: 36                              pop_frame
        f: 00                              ret
         "#,
     );
@@ -113,9 +113,9 @@ fn no_offsets() {
     assert_disas_with_disassembler(
         disas::Disassembler::new(&bytecode).offsets(false),
         r#"
-2f                              push_frame
-12 00 04                        xadd32 x0, x0, x1
-30                              pop_frame
+35                              push_frame
+18 00 04                        xadd32 x0, x0, x1
+36                              pop_frame
 00                              ret
         "#,
     );

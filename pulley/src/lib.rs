@@ -45,6 +45,18 @@ macro_rules! for_each_op {
             br_if_xult32 = BrIfXult32 { a: XReg, b: XReg, offset: PcRelOffset };
             /// Branch if unsigned `a <= b`.
             br_if_xulteq32 = BrIfXulteq32 { a: XReg, b: XReg, offset: PcRelOffset };
+            /// Branch if `a == b`.
+            br_if_xeq64 = BrIfXeq64 { a: XReg, b: XReg, offset: PcRelOffset };
+            /// Branch if `a != `b.
+            br_if_xneq64 = BrIfXneq64 { a: XReg, b: XReg, offset: PcRelOffset };
+            /// Branch if signed `a < b`.
+            br_if_xslt64 = BrIfXslt64 { a: XReg, b: XReg, offset: PcRelOffset };
+            /// Branch if signed `a <= b`.
+            br_if_xslteq64 = BrIfXslteq64 { a: XReg, b: XReg, offset: PcRelOffset };
+            /// Branch if unsigned `a < b`.
+            br_if_xult64 = BrIfXult64 { a: XReg, b: XReg, offset: PcRelOffset };
+            /// Branch if unsigned `a <= b`.
+            br_if_xulteq64 = BrIfXulteq64 { a: XReg, b: XReg, offset: PcRelOffset };
 
             /// Move between `x` registers.
             xmov = Xmov { dst: XReg, src: XReg };

@@ -11,7 +11,7 @@ block0:
 ;   trap // code = User(0)
 ;
 ; Disassembled:
-;        0: 3d 00 00                        trap
+;        0: 43 00 00                        trap
 
 function %trapnz(i64) {
 block0(v0: i64):
@@ -32,11 +32,11 @@ block0(v0: i64):
 ;   trap // code = User(0)
 ;
 ; Disassembled:
-;        0: 0e 03 2a                        xconst8 x3, 42
-;        3: 14 03 0c                        xeq64 x3, x0, x3
+;        0: 14 03 2a                        xconst8 x3, 42
+;        3: 1a 03 0c                        xeq64 x3, x0, x3
 ;        6: 03 03 07 00 00 00               br_if x3, 0x7    // target = 0xd
 ;        c: 00                              ret
-;        d: 3d 00 00                        trap
+;        d: 43 00 00                        trap
 
 function %trapz(i64) {
 block0(v0: i64):
@@ -57,8 +57,9 @@ block0(v0: i64):
 ;   trap // code = User(0)
 ;
 ; Disassembled:
-;        0: 0e 03 2a                        xconst8 x3, 42
-;        3: 14 03 0c                        xeq64 x3, x0, x3
+;        0: 14 03 2a                        xconst8 x3, 42
+;        3: 1a 03 0c                        xeq64 x3, x0, x3
 ;        6: 04 03 07 00 00 00               br_if_not x3, 0x7    // target = 0xd
 ;        c: 00                              ret
-;        d: 3d 00 00                        trap
+;        d: 43 00 00                        trap
+
