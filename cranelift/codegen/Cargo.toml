@@ -88,11 +88,17 @@ host-arch = []
 
 # Option to enable all architectures.
 all-arch = [
+    "all-native-arch",
+    "pulley",
+]
+
+# Option to enable all architectures that correspond to an actual native target
+# (that is, exclude Pulley).
+all-native-arch = [
     "x86",
     "arm64",
     "s390x",
     "riscv64",
-    "pulley",
 ]
 
 # For dependent crates that want to serialize some parts of cranelift
