@@ -60,6 +60,7 @@ use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{Instance, TrapReason, VMGcRef};
 #[cfg(feature = "threads")]
 use core::time::Duration;
+use wasmtime_environ::Unsigned;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -662,6 +663,7 @@ fn trap(_instance: &mut Instance, code: u32) -> Result<(), TrapReason> {
     ))
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn f64_to_i64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
@@ -670,9 +672,10 @@ fn f64_to_i64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
     if val <= -9223372036854777856.0 || val >= 9223372036854775808.0 {
         return Err(TrapReason::Wasm(Trap::IntegerOverflow));
     }
-    Ok(val as i64 as u64)
+    Ok((val as i64).unsigned())
 }
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn f64_to_u64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
@@ -684,6 +687,7 @@ fn f64_to_u64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
     Ok(val as u64)
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn f64_to_i32(_instance: &mut Instance, val: f64) -> Result<u32, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
@@ -692,9 +696,10 @@ fn f64_to_i32(_instance: &mut Instance, val: f64) -> Result<u32, TrapReason> {
     if val <= -2147483649.0 || val >= 2147483648.0 {
         return Err(TrapReason::Wasm(Trap::IntegerOverflow));
     }
-    Ok(val as i32 as u32)
+    Ok((val as i32).unsigned())
 }
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn f64_to_u32(_instance: &mut Instance, val: f64) -> Result<u32, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
