@@ -1,7 +1,7 @@
 /// Helper trait used to add `signed()` methods to primitive unsigned integer
 /// types.
 ///
-/// The purpose of this trait is to signal the intent that the sign bit of na
+/// The purpose of this trait is to signal the intent that the sign bit of an
 /// unsigned integer is intended to be discarded and the value is instead
 /// understood to be a "bag of bits" where the conversion to a signed number
 /// is intended to be lossless bit-wise. This can be used for example when
