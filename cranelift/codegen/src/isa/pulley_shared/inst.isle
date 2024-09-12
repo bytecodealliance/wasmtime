@@ -1,5 +1,7 @@
 ;;;; Instruction definition ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(type OperandSize extern (enum Size32 Size64))
+
 ;; Note: in the instructions below, we order destination registers first and
 ;; then source registers afterwards.
 (type MInst
@@ -19,6 +21,9 @@
 
     ;; Raise a trap.
     (Trap (code TrapCode))
+
+    ;; Trap if `src1 cond src2`.
+    (TrapIf (cond IntCC) (size OperandSize) (src1 XReg) (src2 XReg) (code TrapCode))
 
     ;; Nothing.
     (Nop)

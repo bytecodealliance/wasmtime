@@ -204,15 +204,35 @@ where
 
     fn gen_add_imm(
         _call_conv: isa::CallConv,
-        _into_reg: Writable<Reg>,
-        _from_reg: Reg,
-        _imm: u32,
+        into_reg: Writable<Reg>,
+        from_reg: Reg,
+        imm: u32,
     ) -> SmallInstVec<Self::I> {
-        todo!()
+        let dst = into_reg.try_into().unwrap();
+        let imm = imm as i32;
+        smallvec![
+            Inst::Xconst32 { dst, imm }.into(),
+            Inst::Xadd32 {
+                dst,
+                src1: from_reg.try_into().unwrap(),
+                src2: dst.to_reg(),
+            }
+            .into()
+        ]
     }
 
-    fn gen_stack_lower_bound_trap(_limit_reg: Reg) -> SmallInstVec<Self::I> {
-        todo!()
+    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
+        smallvec![Inst::TrapIf {
+            cond: ir::condcodes::IntCC::UnsignedLessThan,
+            size: match P::pointer_width() {
+                super::PointerWidth::PointerWidth32 => OperandSize::Size32,
+                super::PointerWidth::PointerWidth64 => OperandSize::Size64,
+            },
+            src1: limit_reg.try_into().unwrap(),
+            src2: pulley_interpreter::regs::XReg::sp.into(),
+            code: ir::TrapCode::StackOverflow,
+        }
+        .into()]
     }
 
     fn gen_get_stack_addr(mem: StackAMode, dst: Writable<Reg>) -> Self::I {
