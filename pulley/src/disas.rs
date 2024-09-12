@@ -19,6 +19,8 @@ pub struct Disassembler<'a> {
     disas: String,
     start: usize,
     temp: String,
+    offsets: bool,
+    hexdump: bool,
 }
 
 impl<'a> Disassembler<'a> {
@@ -38,7 +40,25 @@ impl<'a> Disassembler<'a> {
             disas: String::new(),
             start: 0,
             temp: String::new(),
+            offsets: true,
+            hexdump: true,
         }
+    }
+
+    /// Whether to prefix each instruction's disassembly with its offset.
+    ///
+    /// True by default.
+    pub fn offsets(&mut self, offsets: bool) -> &mut Self {
+        self.offsets = offsets;
+        self
+    }
+
+    /// Whether to include a hexdump of the bytecode in the disassembly.
+    ///
+    /// True by default.
+    pub fn hexdump(&mut self, hexdump: bool) -> &mut Self {
+        self.hexdump = hexdump;
+        self
     }
 
     /// Get the disassembly thus far.
@@ -176,18 +196,21 @@ macro_rules! impl_disas {
             }
 
             fn after_visit(&mut self) {
-                let size = self.bytecode.position() - self.start;
-
-                write!(&mut self.disas, "{:8x}: ", self.start).unwrap();
-                let mut need_space = false;
-                for byte in &self.raw_bytecode[self.start..][..size] {
-                    write!(&mut self.disas, "{}{byte:02x}", if need_space { " " } else { "" }).unwrap();
-                    need_space = true;
+                if self.offsets {
+                    write!(&mut self.disas, "{:8x}: ", self.start).unwrap();
                 }
-                for _ in 0..11_usize.saturating_sub(size) {
-                    write!(&mut self.disas, "   ").unwrap();
+                if self.hexdump {
+                    let size = self.bytecode.position() - self.start;
+                    let mut need_space = false;
+                    for byte in &self.raw_bytecode[self.start..][..size] {
+                        let space = if need_space { " " } else { "" };
+                        write!(&mut self.disas, "{}{byte:02x}", space).unwrap();
+                        need_space = true;
+                    }
+                    for _ in 0..11_usize.saturating_sub(size) {
+                        write!(&mut self.disas, "   ").unwrap();
+                    }
                 }
-
                 self.disas.push_str(&self.temp);
                 self.temp.clear();
 
