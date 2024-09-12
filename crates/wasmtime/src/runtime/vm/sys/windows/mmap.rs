@@ -164,7 +164,7 @@ impl Mmap {
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.memory.as_ptr().len()
+        unsafe { (*self.memory.as_ptr()).len() }
     }
 
     pub unsafe fn make_executable(
