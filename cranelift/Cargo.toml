@@ -54,3 +54,4 @@ default = ["disas", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log",
 disas = ["capstone"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
 all-arch = ["cranelift-codegen/all-arch"]
+all-native-arch = ["cranelift-codegen/all-native-arch"]

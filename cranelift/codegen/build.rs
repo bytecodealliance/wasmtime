@@ -31,6 +31,7 @@ fn main() {
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
 
     let all_arch = env::var("CARGO_FEATURE_ALL_ARCH").is_ok();
+    let all_native_arch = env::var("CARGO_FEATURE_ALL_NATIVE_ARCH").is_ok();
 
     let mut isas = meta::isa::Isa::all()
         .iter()
@@ -47,7 +48,7 @@ fn main() {
         .collect::<Vec<_>>();
 
     // Don't require host isa if under 'all-arch' feature.
-    let host_isa = env::var("CARGO_FEATURE_HOST_ARCH").is_ok() && !all_arch;
+    let host_isa = env::var("CARGO_FEATURE_HOST_ARCH").is_ok() && !all_native_arch;
 
     if isas.is_empty() || host_isa {
         // Try to match native target.
