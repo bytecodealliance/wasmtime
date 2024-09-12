@@ -666,7 +666,7 @@ fn f64_to_i64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
     }
-    let val = val.trunc();
+    let val = relocs::truncf64(val);
     if val <= -9223372036854777856.0 || val >= 9223372036854775808.0 {
         return Err(TrapReason::Wasm(Trap::IntegerOverflow));
     }
@@ -677,7 +677,7 @@ fn f64_to_u64(_instance: &mut Instance, val: f64) -> Result<u64, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
     }
-    let val = val.trunc();
+    let val = relocs::truncf64(val);
     if val <= -1.0 || val >= 18446744073709551616.0 {
         return Err(TrapReason::Wasm(Trap::IntegerOverflow));
     }
@@ -688,7 +688,7 @@ fn f64_to_i32(_instance: &mut Instance, val: f64) -> Result<u32, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
     }
-    let val = val.trunc();
+    let val = relocs::truncf64(val);
     if val <= -2147483649.0 || val >= 2147483648.0 {
         return Err(TrapReason::Wasm(Trap::IntegerOverflow));
     }
@@ -699,7 +699,7 @@ fn f64_to_u32(_instance: &mut Instance, val: f64) -> Result<u32, TrapReason> {
     if val.is_nan() {
         return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
     }
-    let val = val.trunc();
+    let val = relocs::truncf64(val);
     if val <= -1.0 || val >= 4294967296.0 {
         return Err(TrapReason::Wasm(Trap::IntegerOverflow));
     }
