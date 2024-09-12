@@ -298,7 +298,7 @@ where
             ShutdownType::Send => std::net::Shutdown::Write,
             ShutdownType::Both => std::net::Shutdown::Both,
         };
-        Ok(socket.shutdown(how)?)
+        socket.shutdown(how)
     }
 
     fn drop(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), anyhow::Error> {

@@ -29,6 +29,19 @@ impl Pollable {
     }
 }
 
+impl InputStream {
+    pub fn blocking_read_to_end(&self) -> Result<Vec<u8>, crate::wasi::io::error::Error> {
+        let mut data = vec![];
+        loop {
+            match self.blocking_read(1024 * 1024) {
+                Ok(chunk) => data.extend(chunk),
+                Err(StreamError::Closed) => return Ok(data),
+                Err(StreamError::LastOperationFailed(e)) => return Err(e),
+            }
+        }
+    }
+}
+
 impl OutputStream {
     pub fn blocking_write_util(&self, mut bytes: &[u8]) -> Result<(), StreamError> {
         let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
