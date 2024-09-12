@@ -13,7 +13,7 @@ block0(v0: i32):
 ;   ret
 ;
 ; Disassembled:
-;        0: 20 00 00                        load32_u x0, x0
+;        0: 26 00 00                        load32_u x0, x0
 ;        3: 00                              ret
 
 function %load_i64(i32) -> i64 {
@@ -28,7 +28,7 @@ block0(v0: i32):
 ;   ret
 ;
 ; Disassembled:
-;        0: 22 00 00                        load64 x0, x0
+;        0: 28 00 00                        load64 x0, x0
 ;        3: 00                              ret
 
 function %load_i32_with_offset(i32) -> i32 {
@@ -43,7 +43,7 @@ block0(v0: i32):
 ;   ret
 ;
 ; Disassembled:
-;        0: 23 00 00 04                     load32_u_offset8 x0, x0, 4
+;        0: 29 00 00 04                     load32_u_offset8 x0, x0, 4
 ;        4: 00                              ret
 
 function %load_i64_with_offset(i32) -> i64 {
@@ -58,6 +58,6 @@ block0(v0: i32):
 ;   ret
 ;
 ; Disassembled:
-;        0: 25 00 00 08                     load64_offset8 x0, x0, 8
+;        0: 2b 00 00 08                     load64_offset8 x0, x0, 8
 ;        4: 00                              ret
 
