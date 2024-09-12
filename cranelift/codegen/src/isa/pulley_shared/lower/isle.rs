@@ -9,7 +9,7 @@ use inst::InstAndKind;
 use crate::ir::{condcodes::*, immediates::*, types::*, *};
 use crate::isa::pulley_shared::{
     abi::*,
-    inst::{FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg},
+    inst::{FReg, OperandSize, VReg, WritableFReg, WritableVReg, WritableXReg, XReg},
     *,
 };
 use crate::machinst::{

@@ -10,7 +10,7 @@ macro_rules! newtype_of_reg {
     (
         $newtype_reg:ident,
         $newtype_writable_reg:ident,
-        |$check_reg:ident| $check:expr
+        $class:expr
     ) => {
         /// A newtype wrapper around `Reg`.
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -38,9 +38,9 @@ macro_rules! newtype_of_reg {
         impl $newtype_reg {
             /// Create this newtype from the given register, or return `None` if the register
             /// is not a valid instance of this newtype.
-            pub fn new($check_reg: Reg) -> Option<Self> {
-                if $check {
-                    Some(Self($check_reg))
+            pub fn new(reg: Reg) -> Option<Self> {
+                if reg.class() == $class {
+                    Some(Self(reg))
                 } else {
                     None
                 }
@@ -78,6 +78,11 @@ macro_rules! newtype_of_reg {
         /// Writable Reg.
         pub type $newtype_writable_reg = Writable<$newtype_reg>;
 
+        impl From<pulley_interpreter::regs::$newtype_reg> for $newtype_reg {
+            fn from(r: pulley_interpreter::regs::$newtype_reg) -> Self {
+                Self::new(regalloc2::PReg::new(usize::from(r as u8), $class).into()).unwrap()
+            }
+        }
         impl From<$newtype_reg> for pulley_interpreter::regs::$newtype_reg {
             fn from(r: $newtype_reg) -> Self {
                 Self::new(r.to_real_reg().unwrap().hw_enc()).unwrap()
@@ -113,9 +118,9 @@ macro_rules! newtype_of_reg {
 }
 
 // Newtypes for registers classes.
-newtype_of_reg!(XReg, WritableXReg, |reg| reg.class() == RegClass::Int);
-newtype_of_reg!(FReg, WritableFReg, |reg| reg.class() == RegClass::Float);
-newtype_of_reg!(VReg, WritableVReg, |reg| reg.class() == RegClass::Vector);
+newtype_of_reg!(XReg, WritableXReg, RegClass::Int);
+newtype_of_reg!(FReg, WritableFReg, RegClass::Float);
+newtype_of_reg!(VReg, WritableVReg, RegClass::Vector);
 
 pub use super::super::lower::isle::generated_code::ExtKind;
 
@@ -189,4 +194,13 @@ impl From<StackAMode> for Amode {
     fn from(amode: StackAMode) -> Self {
         Amode::Stack { amode }
     }
+}
+
+/// The size of an operand or operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OperandSize {
+    /// 32 bits.
+    Size32,
+    /// 64 bits.
+    Size64,
 }
