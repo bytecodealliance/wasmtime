@@ -265,6 +265,7 @@ mod list;
 mod map;
 mod primary;
 mod set;
+mod signed;
 mod sparse;
 mod unsigned;
 
@@ -275,6 +276,7 @@ pub use self::list::{EntityList, ListPool};
 pub use self::map::SecondaryMap;
 pub use self::primary::PrimaryMap;
 pub use self::set::EntitySet;
+pub use self::signed::Signed;
 pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
 pub use self::unsigned::Unsigned;
 
