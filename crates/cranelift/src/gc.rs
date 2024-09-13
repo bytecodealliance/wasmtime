@@ -8,7 +8,7 @@
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{WasmHeapType, WasmRefType, WasmResult, WasmValType};
+use cranelift_wasm::{WasmHeapType, WasmRefType, WasmResult};
 
 #[cfg(feature = "gc")]
 mod enabled;
@@ -78,28 +78,6 @@ pub fn gc_ref_table_fill_builtin(
 ) -> WasmResult<ir::FuncRef> {
     debug_assert!(ty.is_vmgcref_type());
     imp::gc_ref_table_fill_builtin(ty, func_env, func)
-}
-
-/// Get the index and signature of the built-in function for doing `global.get`
-/// on a GC reference global.
-pub fn gc_ref_global_get_builtin(
-    ty: WasmValType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    imp::gc_ref_global_get_builtin(ty, func_env, func)
-}
-
-/// Get the index and signature of the built-in function for doing `global.set`
-/// on a GC reference global.
-pub fn gc_ref_global_set_builtin(
-    ty: WasmValType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    imp::gc_ref_global_set_builtin(ty, func_env, func)
 }
 
 /// A trait for different collectors to emit any GC barriers they might require.

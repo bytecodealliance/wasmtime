@@ -2,9 +2,7 @@ use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir::{self, condcodes::IntCC, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{
-    TargetEnvironment, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
-};
+use cranelift_wasm::{TargetEnvironment, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult};
 use wasmtime_environ::{PtrSize, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK};
 
 /// Get the default GC compiler.
@@ -60,24 +58,6 @@ pub fn gc_ref_table_fill_builtin(
 ) -> WasmResult<ir::FuncRef> {
     debug_assert!(ty.is_vmgcref_type());
     Ok(func_env.builtin_functions.table_fill_gc_ref(func))
-}
-
-pub fn gc_ref_global_get_builtin(
-    ty: WasmValType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    Ok(func_env.builtin_functions.gc_ref_global_get(func))
-}
-
-pub fn gc_ref_global_set_builtin(
-    ty: WasmValType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    Ok(func_env.builtin_functions.gc_ref_global_set(func))
 }
 
 impl FuncEnvironment<'_> {

@@ -437,43 +437,6 @@ unsafe fn gc(instance: &mut Instance, gc_ref: u32) -> Result<u32> {
     }
 }
 
-/// Perform a Wasm `global.get` for GC reference globals.
-#[cfg(feature = "gc")]
-unsafe fn gc_ref_global_get(instance: &mut Instance, index: u32) -> Result<u32> {
-    use core::num::NonZeroUsize;
-
-    let index = wasmtime_environ::GlobalIndex::from_u32(index);
-    let global = instance.defined_or_imported_global_ptr(index);
-    let gc_store = (*instance.store()).gc_store();
-
-    if gc_store
-        .gc_heap
-        .need_gc_before_entering_wasm(NonZeroUsize::new(1).unwrap())
-    {
-        (*instance.store()).gc(None)?;
-    }
-
-    match (*global).as_gc_ref() {
-        None => Ok(0),
-        Some(gc_ref) => {
-            let gc_ref = gc_store.clone_gc_ref(gc_ref);
-            let ret = gc_ref.as_raw_u32();
-            gc_store.expose_gc_ref_to_wasm(gc_ref);
-            Ok(ret)
-        }
-    }
-}
-
-/// Perform a Wasm `global.set` for GC reference globals.
-#[cfg(feature = "gc")]
-unsafe fn gc_ref_global_set(instance: &mut Instance, index: u32, gc_ref: u32) {
-    let index = wasmtime_environ::GlobalIndex::from_u32(index);
-    let global = instance.defined_or_imported_global_ptr(index);
-    let gc_ref = VMGcRef::from_raw_u32(gc_ref);
-    let gc_store = (*instance.store()).gc_store();
-    (*global).write_gc_ref(gc_store, gc_ref.as_ref());
-}
-
 // Implementation of `memory.atomic.notify` for locally defined memories.
 #[cfg(feature = "threads")]
 fn memory_atomic_notify(

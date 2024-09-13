@@ -1912,21 +1912,25 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             ty.is_vmgcref_type(),
             "We only use GlobalVariable::Custom for VMGcRef types"
         );
+        let cranelift_wasm::WasmValType::Ref(ty) = ty else {
+            unreachable!()
+        };
 
-        // TODO: use `GcCompiler::translate_read_gc_reference` for GC-reference
-        // globals instead of a libcall.
-        let libcall = gc::gc_ref_global_get_builtin(ty, self, &mut builder.func)?;
+        let (gv, offset) = self.get_global_location(builder.func, index);
+        let gv = builder.ins().global_value(self.pointer_type(), gv);
+        let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-
-        let global_index_arg = builder.ins().iconst(I32, index.as_u32() as i64);
-        let call_inst = builder.ins().call(libcall, &[vmctx, global_index_arg]);
-
-        let val = builder.func.dfg.first_result(call_inst);
-        if ty.is_vmgcref_type_and_not_i31() {
-            builder.declare_value_needs_stack_map(val);
+        if let WasmHeapType::I31 = ty.heap_type {
+            gc::unbarriered_load_gc_ref(self, builder, ty.heap_type, src, ir::MemFlags::trusted())
+        } else {
+            gc::gc_compiler(self).translate_read_gc_reference(
+                self,
+                builder,
+                ty,
+                src,
+                ir::MemFlags::trusted(),
+            )
         }
-        Ok(val)
     }
 
     fn translate_custom_global_set(
@@ -1940,19 +1944,33 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             ty.is_vmgcref_type(),
             "We only use GlobalVariable::Custom for VMGcRef types"
         );
+        let cranelift_wasm::WasmValType::Ref(ty) = ty else {
+            unreachable!()
+        };
 
-        // TODO: use `GcCompiler::translate_write_gc_reference` for GC-reference
-        // globals instead of a libcall.
-        let libcall = gc::gc_ref_global_set_builtin(ty, self, &mut builder.func)?;
+        let (gv, offset) = self.get_global_location(builder.func, index);
+        let gv = builder.ins().global_value(self.pointer_type(), gv);
+        let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-
-        let global_index_arg = builder.ins().iconst(I32, index.as_u32() as i64);
-        builder
-            .ins()
-            .call(libcall, &[vmctx, global_index_arg, value]);
-
-        Ok(())
+        if let WasmHeapType::I31 = ty.heap_type {
+            gc::unbarriered_store_gc_ref(
+                self,
+                builder,
+                ty.heap_type,
+                src,
+                value,
+                ir::MemFlags::trusted(),
+            )
+        } else {
+            gc::gc_compiler(self).translate_write_gc_reference(
+                self,
+                builder,
+                ty,
+                src,
+                value,
+                ir::MemFlags::trusted(),
+            )
+        }
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
