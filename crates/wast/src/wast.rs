@@ -388,6 +388,8 @@ where
             || (expected.contains("uninitialized element 2") && actual.contains("uninitialized element"))
             // function references call_ref
             || (expected.contains("null function") && (actual.contains("uninitialized element") || actual.contains("null reference")))
+            // GC tests say "null $kind reference" but we just say "null reference".
+            || (expected.contains("null") && expected.contains("reference") && actual.contains("null reference"))
         {
             return Ok(());
         }

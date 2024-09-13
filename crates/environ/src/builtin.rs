@@ -79,6 +79,17 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             gc(vmctx: vmctx, root: reference) -> reference;
 
+            // Allocate a new, uninitialized GC object and return a reference to
+            // it.
+            #[cfg(feature = "gc")]
+            gc_alloc_raw(
+                vmctx: vmctx,
+                kind: i32,
+                module_interned_type_index: i32,
+                size: i32,
+                align: i32
+            ) -> reference;
+
             // Returns an index for Wasm's `table.grow` instruction for GC references.
             #[cfg(feature = "gc")]
             table_grow_gc_ref(vmctx: vmctx, table: i32, delta: i64, init: reference) -> pointer;

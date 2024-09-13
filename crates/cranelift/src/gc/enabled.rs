@@ -1,10 +1,18 @@
 use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
-use cranelift_codegen::ir::{self, condcodes::IntCC, InstBuilder};
+use cranelift_codegen::{
+    cursor::FuncCursor,
+    ir::{self, condcodes::IntCC, InstBuilder},
+};
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{TargetEnvironment, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult};
+use cranelift_wasm::{
+    ModuleInternedTypeIndex, StructFieldsVec, TargetEnvironment, TypeIndex, WasmCompositeType,
+    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
+};
+use smallvec::SmallVec;
 use wasmtime_environ::{
-    drc::DrcTypeLayouts, GcTypeLayouts, PtrSize, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    drc::DrcTypeLayouts, GcStructLayout, GcTypeLayouts, PtrSize, VMGcKind, I31_DISCRIMINANT,
+    NON_NULL_NON_I31_MASK,
 };
 
 /// Get the default GC compiler.
@@ -56,7 +64,309 @@ pub fn gc_ref_table_fill_builtin(
     Ok(func_env.builtin_functions.table_fill_gc_ref(func))
 }
 
+pub fn translate_struct_new(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    fields: &[ir::Value],
+) -> WasmResult<ir::Value> {
+    gc_compiler(func_env).alloc_struct(func_env, builder, struct_type_index, &fields)
+}
+
+fn default_value(
+    cursor: &mut FuncCursor,
+    func_env: &FuncEnvironment<'_>,
+    ty: &WasmStorageType,
+) -> ir::Value {
+    match ty {
+        WasmStorageType::I8 | WasmStorageType::I16 => cursor.ins().iconst(ir::types::I32, 0),
+        WasmStorageType::Val(v) => match v {
+            WasmValType::I32 => cursor.ins().iconst(ir::types::I32, 0),
+            WasmValType::I64 => cursor.ins().iconst(ir::types::I64, 0),
+            WasmValType::F32 => cursor.ins().f32const(0.0),
+            WasmValType::F64 => cursor.ins().f64const(0.0),
+            WasmValType::V128 => cursor.ins().iconst(ir::types::I128, 0),
+            WasmValType::Ref(r) => {
+                assert!(r.nullable);
+                let (ty, needs_stack_map) = func_env.reference_type(r.heap_type);
+
+                // NB: The collector doesn't need to know about null references.
+                let _ = needs_stack_map;
+
+                cursor.ins().iconst(ty, 0)
+            }
+        },
+    }
+}
+
+pub fn translate_struct_new_default(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+) -> WasmResult<ir::Value> {
+    let interned_ty = func_env.module.types[struct_type_index];
+    let struct_ty = match &func_env.types[interned_ty].composite_type {
+        WasmCompositeType::Struct(s) => s,
+        _ => unreachable!(),
+    };
+    let fields = struct_ty
+        .fields
+        .iter()
+        .map(|f| default_value(&mut builder.cursor(), func_env, &f.element_type))
+        .collect::<StructFieldsVec>();
+    gc_compiler(func_env).alloc_struct(func_env, builder, struct_type_index, &fields)
+}
+
+pub fn translate_struct_get(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    // TODO: If we know we have a `(ref $my_struct)` here, instead of maybe a
+    // `(ref null $my_struct)`, we could omit the `trapz`. But plumbing that
+    // type info from `wasmparser` and through to here is a bit funky.
+    builder.ins().trapz(struct_ref, ir::TrapCode::NullReference);
+
+    let field_index = usize::try_from(field_index).unwrap();
+    let interned_type_index = func_env.module.types[struct_type_index];
+
+    let struct_layout = func_env.struct_layout(interned_type_index);
+    let field_offset = struct_layout.fields[field_index];
+
+    let field_ty = match &func_env.types[interned_type_index].composite_type {
+        WasmCompositeType::Struct(s) => &s.fields[field_index],
+        _ => unreachable!(),
+    };
+
+    let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
+
+    // TODO: We should claim we are accessing the whole object here so that
+    // repeated accesses to different fields can have their bounds checks
+    // deduped by GVN. This is a bit tricky to do right now because the last
+    // parameter of `prepare_gc_ref_access` is the size of the access, and is
+    // relative to `gc_ref[offset]`, rather than the size of the object itself,
+    // and relative to `gc_ref[0]`.
+    let field_addr = func_env.prepare_gc_ref_access(builder, struct_ref, field_offset, field_size);
+
+    let field_val = match field_ty.element_type {
+        WasmStorageType::Val(v) => match v {
+            WasmValType::I32 => {
+                builder
+                    .ins()
+                    .load(ir::types::I32, ir::MemFlags::trusted(), field_addr, 0)
+            }
+            WasmValType::I64 => {
+                builder
+                    .ins()
+                    .load(ir::types::I64, ir::MemFlags::trusted(), field_addr, 0)
+            }
+            WasmValType::F32 => {
+                builder
+                    .ins()
+                    .load(ir::types::F32, ir::MemFlags::trusted(), field_addr, 0)
+            }
+            WasmValType::F64 => {
+                builder
+                    .ins()
+                    .load(ir::types::F64, ir::MemFlags::trusted(), field_addr, 0)
+            }
+            WasmValType::V128 => {
+                builder
+                    .ins()
+                    .load(ir::types::I128, ir::MemFlags::trusted(), field_addr, 0)
+            }
+            WasmValType::Ref(r) => match r.heap_type.top() {
+                WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)
+                    .translate_read_gc_reference(
+                        func_env,
+                        builder,
+                        r,
+                        field_addr,
+                        ir::MemFlags::trusted(),
+                    )?,
+                WasmHeapTopType::Func => {
+                    unimplemented!("funcrefs inside the GC heap")
+                }
+            },
+        },
+        WasmStorageType::I8 | WasmStorageType::I16 => {
+            unreachable!()
+        }
+    };
+
+    Ok(field_val)
+}
+
+enum Extension {
+    Sign,
+    Zero,
+}
+
+fn translate_struct_get_and_extend(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+    extension: Extension,
+) -> WasmResult<ir::Value> {
+    // TODO: See comment in `translate_struct_get` about the `trapz`.
+    builder.ins().trapz(struct_ref, ir::TrapCode::NullReference);
+
+    let field_index = usize::try_from(field_index).unwrap();
+    let interned_type_index = func_env.module.types[struct_type_index];
+
+    let struct_layout = func_env.struct_layout(interned_type_index);
+    let field_offset = struct_layout.fields[field_index];
+
+    let field_ty = match &func_env.types[interned_type_index].composite_type {
+        WasmCompositeType::Struct(s) => &s.fields[field_index],
+        _ => unreachable!(),
+    };
+
+    let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
+
+    // TODO: See comment in `translate_struct_get` about the `prepare_gc_ref_access`.
+    let field_addr = func_env.prepare_gc_ref_access(builder, struct_ref, field_offset, field_size);
+
+    let field_val = match field_ty.element_type {
+        WasmStorageType::I8 => {
+            builder
+                .ins()
+                .load(ir::types::I8, ir::MemFlags::trusted(), field_addr, 0)
+        }
+        WasmStorageType::I16 => {
+            builder
+                .ins()
+                .load(ir::types::I16, ir::MemFlags::trusted(), field_addr, 0)
+        }
+        WasmStorageType::Val(_) => unreachable!(),
+    };
+
+    let extended = match extension {
+        Extension::Sign => builder.ins().sextend(ir::types::I32, field_val),
+        Extension::Zero => builder.ins().uextend(ir::types::I32, field_val),
+    };
+
+    Ok(extended)
+}
+
+pub fn translate_struct_get_s(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    translate_struct_get_and_extend(
+        func_env,
+        builder,
+        struct_type_index,
+        field_index,
+        struct_ref,
+        Extension::Sign,
+    )
+}
+
+pub fn translate_struct_get_u(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    translate_struct_get_and_extend(
+        func_env,
+        builder,
+        struct_type_index,
+        field_index,
+        struct_ref,
+        Extension::Zero,
+    )
+}
+
+pub fn translate_struct_set(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+    new_val: ir::Value,
+) -> WasmResult<()> {
+    // TODO: See comment in `translate_struct_get` about the `trapz`.
+    builder.ins().trapz(struct_ref, ir::TrapCode::NullReference);
+
+    let field_index = usize::try_from(field_index).unwrap();
+    let interned_type_index = func_env.module.types[struct_type_index];
+
+    let struct_layout = func_env.struct_layout(interned_type_index);
+    let field_offset = struct_layout.fields[field_index];
+
+    let field_ty = match &func_env.types[interned_type_index].composite_type {
+        WasmCompositeType::Struct(s) => &s.fields[field_index],
+        _ => unreachable!(),
+    };
+
+    let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
+
+    // TODO: See comment in `translate_struct_get` about the `prepare_gc_ref_access`.
+    let field_addr = func_env.prepare_gc_ref_access(builder, struct_ref, field_offset, field_size);
+
+    match &field_ty.element_type {
+        WasmStorageType::I8 => {
+            builder
+                .ins()
+                .istore8(ir::MemFlags::trusted(), new_val, field_addr, 0);
+        }
+        WasmStorageType::I16 => {
+            builder
+                .ins()
+                .istore16(ir::MemFlags::trusted(), new_val, field_addr, 0);
+        }
+        WasmStorageType::Val(WasmValType::Ref(r)) if r.heap_type.top() == WasmHeapTopType::Func => {
+            unimplemented!("funcrefs inside the GC heap")
+        }
+        WasmStorageType::Val(WasmValType::Ref(r)) => {
+            gc_compiler(func_env).translate_write_gc_reference(
+                func_env,
+                builder,
+                *r,
+                field_addr,
+                new_val,
+                ir::MemFlags::trusted(),
+            )?;
+        }
+        WasmStorageType::Val(_) => {
+            assert_eq!(builder.func.dfg.value_type(new_val).bytes(), field_size);
+            builder
+                .ins()
+                .store(ir::MemFlags::trusted(), new_val, field_addr, 0);
+        }
+    }
+
+    Ok(())
+}
+
 impl FuncEnvironment<'_> {
+    /// Get the `GcStructLayout` for the struct type at the given `type_index`.
+    fn struct_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcStructLayout {
+        // Lazily compute and cache the struct layout. Note that we can't use
+        // the entry API because of borrowck shenanigans.
+        if !self.ty_to_struct_layout.contains_key(&type_index) {
+            let ty = &self.types[type_index];
+            let WasmCompositeType::Struct(s) = &ty.composite_type else {
+                panic!("{type_index:?} is not a struct type: {ty:?}")
+            };
+            let s = s.clone();
+            let layout = gc_compiler(self).layouts().struct_layout(&s);
+            self.ty_to_struct_layout.insert(type_index, layout);
+        }
+
+        self.ty_to_struct_layout.get(&type_index).unwrap()
+    }
+
     /// Get the GC heap's base pointer and bound.
     fn get_gc_heap_base_bound(&mut self, builder: &mut FunctionBuilder) -> (ir::Value, ir::Value) {
         let ptr_ty = self.pointer_type();
@@ -79,6 +389,15 @@ impl FuncEnvironment<'_> {
 
     /// Get the raw pointer of `gc_ref[offset]` bounds checked for an access of
     /// `size` bytes.
+    ///
+    /// The given `gc_ref` must be a non-null, non-i31 GC reference.
+    ///
+    /// Returns the raw pointer to `gc_ref[offset]` -- not a raw pointer to the
+    /// GC object itself (unless `offset == 0`). This raw pointer may be used to
+    /// read or write up to `size` bytes. Do NOT attempt accesses larger than
+    /// `size` bytes; that may lead to unchecked out-of-bounds accesses.
+    ///
+    /// This method is collector-agnostic.
     fn prepare_gc_ref_access(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -132,8 +451,8 @@ impl FuncEnvironment<'_> {
     /// Takes advantage of static information based on `ty` as to whether the GC
     /// reference is nullable or can ever be an `i31`.
     ///
-    /// Returns an `ir::Value` that will be non-zero if the GC reference is null
-    /// or is an `i31ref`.
+    /// Returns an `ir::Value` that is an `i32` will be non-zero if the GC
+    /// reference is null or is an `i31ref`; otherwise, it will be zero.
     ///
     /// This method is collector-agnostic.
     fn gc_ref_is_null_or_i31(
@@ -144,9 +463,33 @@ impl FuncEnvironment<'_> {
     ) -> ir::Value {
         assert!(ty.is_vmgcref_type_and_not_i31());
 
-        let might_be_i31 = match ty.heap_type.top() {
-            WasmHeapTopType::Any => true,
-            WasmHeapTopType::Extern | WasmHeapTopType::Func => false,
+        let might_be_i31 = match ty.heap_type {
+            // If we are definitely dealing with an i31, we shouldn't be
+            // emitting dynamic checks for it, and the caller shouldn't call
+            // this function. Should have been caught by the assertion at the
+            // start of the function.
+            WasmHeapType::I31 => unreachable!(),
+
+            // Could potentially be an i31.
+            WasmHeapType::Any | WasmHeapType::Eq => true,
+
+            // If it is definitely a struct, array, or uninhabited type, then it
+            // is definitely not an i31.
+            WasmHeapType::Array
+            | WasmHeapType::ConcreteArray(_)
+            | WasmHeapType::Struct
+            | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::None => false,
+
+            // Wrong type hierarchy: cannot be an i31.
+            WasmHeapType::Extern | WasmHeapType::NoExtern => false,
+
+            // Wrong type hierarchy, and also funcrefs are not GC-managed
+            // types. Should have been caught by the assertion at the start of
+            // the function.
+            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
+                unreachable!()
+            }
         };
 
         match (ty.nullable, might_be_i31) {
@@ -272,11 +615,206 @@ impl DrcCompiler {
         );
         (activations_table, next, end)
     }
+
+    /// Write to an uninitialized GC reference field, initializing it.
+    ///
+    /// ```text
+    /// *dst = new_val
+    /// ```
+    ///
+    /// Doesn't need to do a full write barrier: we don't have an old reference
+    /// that is being overwritten and needs its refcount decremented, just a new
+    /// reference whose count should be incremented.
+    fn translate_init_gc_reference(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        ty: WasmRefType,
+        dst: ir::Value,
+        new_val: ir::Value,
+        flags: ir::MemFlags,
+    ) -> WasmResult<()> {
+        let (ref_ty, needs_stack_map) = func_env.reference_type(ty.heap_type);
+        debug_assert!(needs_stack_map);
+
+        // Special case for references to uninhabited bottom types: see
+        // `translate_write_gc_reference` for details.
+        if let WasmHeapType::None = ty.heap_type {
+            if ty.nullable {
+                let null = builder.ins().iconst(ref_ty, 0);
+                builder.ins().store(flags, null, dst, 0);
+            } else {
+                let zero = builder.ins().iconst(ir::types::I32, 0);
+                builder
+                    .ins()
+                    .trapz(zero, ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+            }
+            return Ok(());
+        };
+
+        // Special case for `i31ref`s: no need for any barriers.
+        if let WasmHeapType::I31 = ty.heap_type {
+            return unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags);
+        }
+
+        // Our initialization barrier for GC references being copied out of the
+        // stack and initializing a table/global/struct field/etc... is roughly
+        // equivalent to the following pseudo-CLIF:
+        //
+        // ```
+        // current_block:
+        //     ...
+        //     let new_val_is_null_or_i31 = ...
+        //     brif new_val_is_null_or_i31, continue_block, inc_ref_block
+        //
+        // inc_ref_block:
+        //     let ref_count = load new_val.ref_count
+        //     let new_ref_count = iadd_imm ref_count, 1
+        //     store new_val.ref_count, new_ref_count
+        //     jump check_old_val_block
+        //
+        // continue_block:
+        //     store dst, new_val
+        //     ...
+        // ```
+        //
+        // This write barrier is responsible for ensuring that the new value's
+        // ref count is incremented now that the table/global/struct/etc... is
+        // holding onto it.
+
+        let current_block = builder.current_block().unwrap();
+        let inc_ref_block = builder.create_block();
+        let continue_block = builder.create_block();
+
+        builder.ensure_inserted_block();
+        builder.insert_block_after(inc_ref_block, current_block);
+        builder.insert_block_after(continue_block, inc_ref_block);
+
+        // Current block: check whether the new value is non-null and
+        // non-i31. If so, branch to the `inc_ref_block`.
+        let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
+        builder.ins().brif(
+            new_val_is_null_or_i31,
+            continue_block,
+            &[],
+            inc_ref_block,
+            &[],
+        );
+
+        // Block to increment the ref count of the new value when it is non-null
+        // and non-i31.
+        builder.switch_to_block(inc_ref_block);
+        builder.seal_block(inc_ref_block);
+        self.mutate_ref_count(func_env, builder, new_val, 1);
+        builder.ins().jump(continue_block, &[]);
+
+        // Join point after we're done with the GC barrier: do the actual store
+        // to initialize the field.
+        builder.switch_to_block(continue_block);
+        builder.seal_block(continue_block);
+        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
+
+        Ok(())
+    }
 }
 
 impl GcCompiler for DrcCompiler {
     fn layouts(&self) -> &dyn GcTypeLayouts {
         &self.layouts
+    }
+
+    fn alloc_struct(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        struct_type_index: TypeIndex,
+        field_vals: &[ir::Value],
+    ) -> WasmResult<ir::Value> {
+        // First, call the `gc_alloc_raw` builtin libcall to allocate the
+        // struct.
+
+        let gc_alloc_raw_builtin = func_env.builtin_functions.gc_alloc_raw(builder.func);
+        let vmctx = func_env.vmctx_val(&mut builder.cursor());
+        let kind = builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(VMGcKind::StructRef.as_u32()));
+
+        let interned_type_index = func_env.module.types[struct_type_index];
+        let interned_type_index_val = builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(interned_type_index.as_u32()));
+
+        let struct_layout = func_env.struct_layout(interned_type_index);
+        let struct_size = struct_layout.size;
+        let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().copied().collect();
+        assert_eq!(field_vals.len(), field_offsets.len());
+
+        let size = builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(struct_layout.size));
+        let align = builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(struct_layout.align));
+
+        let call_inst = builder.ins().call(
+            gc_alloc_raw_builtin,
+            &[vmctx, kind, interned_type_index_val, size, align],
+        );
+        let struct_ref = builder.inst_results(call_inst)[0];
+
+        let struct_ty = match &func_env.types[interned_type_index].composite_type {
+            WasmCompositeType::Struct(s) => s,
+            _ => unreachable!(),
+        };
+        let field_types: SmallVec<[_; 8]> = struct_ty.fields.iter().cloned().collect();
+        assert_eq!(field_vals.len(), field_types.len());
+
+        // Second, initialize each of the newly-allocated struct's fields.
+
+        for ((ty, val), offset) in field_types.into_iter().zip(field_vals).zip(field_offsets) {
+            let size_of_access =
+                wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
+            assert!(offset + size_of_access <= struct_size);
+
+            let field_addr =
+                func_env.prepare_gc_ref_access(builder, struct_ref, offset, size_of_access);
+
+            match &ty.element_type {
+                WasmStorageType::Val(WasmValType::Ref(r))
+                    if r.heap_type.top() == WasmHeapTopType::Func =>
+                {
+                    unimplemented!("funcrefs inside the GC heap")
+                }
+                WasmStorageType::Val(WasmValType::Ref(r)) => {
+                    self.translate_init_gc_reference(
+                        func_env,
+                        builder,
+                        *r,
+                        field_addr,
+                        *val,
+                        ir::MemFlags::trusted(),
+                    )?;
+                }
+                WasmStorageType::I8 => {
+                    builder
+                        .ins()
+                        .istore8(ir::MemFlags::trusted(), *val, field_addr, 0);
+                }
+                WasmStorageType::I16 => {
+                    builder
+                        .ins()
+                        .istore16(ir::MemFlags::trusted(), *val, field_addr, 0);
+                }
+                WasmStorageType::Val(_) => {
+                    assert_eq!(builder.func.dfg.value_type(*val).bytes(), size_of_access);
+                    builder
+                        .ins()
+                        .store(ir::MemFlags::trusted(), *val, field_addr, 0);
+                }
+            }
+        }
+
+        Ok(struct_ref)
     }
 
     fn translate_read_gc_reference(

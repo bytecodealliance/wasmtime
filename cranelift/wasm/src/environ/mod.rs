@@ -4,5 +4,5 @@
 mod spec;
 
 pub use crate::environ::spec::{
-    FuncEnvironment, GlobalVariable, ModuleEnvironment, TargetEnvironment,
+    FuncEnvironment, GlobalVariable, ModuleEnvironment, StructFieldsVec, TargetEnvironment,
 };

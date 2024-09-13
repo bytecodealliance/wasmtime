@@ -22,6 +22,14 @@ pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
             ty: AbstractHeapType::Func,
             shared: false,
         }) => Val::FuncRef(None),
+        RefNull(HeapType::Abstract {
+            ty: AbstractHeapType::Any,
+            shared: false,
+        }) => Val::AnyRef(None),
+        RefNull(HeapType::Abstract {
+            shared: false,
+            ty: AbstractHeapType::None,
+        }) => Val::AnyRef(None),
         RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x)?)),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
@@ -105,11 +113,19 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
             }
         }
 
+        (Val::AnyRef(Some(_)), WastRetCore::RefAny) => Ok(()),
         (Val::AnyRef(Some(x)), WastRetCore::RefI31) => {
             if x.is_i31(store)? {
                 Ok(())
             } else {
                 bail!("expected a `(ref i31)`, found {x:?}");
+            }
+        }
+        (Val::AnyRef(Some(x)), WastRetCore::RefStruct) => {
+            if x.is_struct(store)? {
+                Ok(())
+            } else {
+                bail!("expected a struct reference, found {x:?}")
             }
         }
 
