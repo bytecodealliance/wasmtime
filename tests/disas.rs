@@ -315,7 +315,7 @@ fn assert_output(
             }
         }
         CompileOutput::Elf(bytes) => match isa.to_capstone() {
-            Ok(disas) => disas_elf(&mut actual, &bytes, |bytes, addr| {
+            Ok(disas) => disas_insts(&mut actual, &bytes, |bytes, addr| {
                 Ok(disas
                     .disasm_all(bytes, addr)?
                     .into_iter()
@@ -333,7 +333,7 @@ fn assert_output(
                             })
                             .unwrap_or(false);
 
-                        let is_ret = detail
+                        let is_return = detail
                             .map(|d| {
                                 d.groups()
                                     .iter()
@@ -342,7 +342,7 @@ fn assert_output(
                             })
                             .unwrap_or(false);
 
-                        let inst_str = match (inst.mnemonic(), inst.op_str()) {
+                        let disassembly = match (inst.mnemonic(), inst.op_str()) {
                             (Some(i), Some(o)) => {
                                 if o.is_empty() {
                                     format!("{i}")
@@ -354,7 +354,13 @@ fn assert_output(
                             _ => unreachable!(),
                         };
 
-                        (inst.address(), is_jump, is_ret, inst_str)
+                        let address = inst.address();
+                        DisasInst {
+                            address,
+                            is_jump,
+                            is_return,
+                            disassembly,
+                        }
                     })
                     .collect::<Vec<_>>())
             })?,
@@ -363,7 +369,7 @@ fn assert_output(
                     isa.triple().architecture,
                     target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64
                 ));
-                disas_elf(&mut actual, &bytes, |bytes, _addr| {
+                disas_insts(&mut actual, &bytes, |bytes, _addr| {
                     let mut result = vec![];
 
                     let mut disas = pulley_interpreter::disas::Disassembler::new(bytes);
@@ -387,17 +393,23 @@ fn assert_output(
                             }
 
                             Ok(()) => {
-                                let inst = disas
+                                let disassembly = disas
                                     .disas()
                                     .lines()
                                     .map(|l| l.trim().to_string())
                                     .filter(|l| !l.is_empty())
                                     .next_back()
                                     .unwrap();
-                                let addr = u64::try_from(addr).unwrap();
-                                let is_jump = inst.contains("jump") || inst.contains("br_if");
-                                let is_ret = inst == "ret";
-                                result.push((addr, is_jump, is_ret, inst));
+                                let address = u64::try_from(addr).unwrap();
+                                let is_jump =
+                                    disassembly.contains("jump") || disassembly.contains("br_if");
+                                let is_return = disassembly == "ret";
+                                result.push(DisasInst {
+                                    address,
+                                    is_jump,
+                                    is_return,
+                                    disassembly,
+                                });
                             }
                         }
                     }
@@ -411,24 +423,20 @@ fn assert_output(
     assert_or_bless_output(path, wat, actual)
 }
 
-fn disas_elf<I>(
+struct DisasInst {
+    address: u64,
+    is_jump: bool,
+    is_return: bool,
+    disassembly: String,
+}
+
+fn disas_insts<I>(
     result: &mut String,
     elf: &[u8],
     disas: impl Fn(&[u8], u64) -> Result<I>,
 ) -> Result<()>
 where
-    I: IntoIterator<
-        Item = (
-            // Address
-            u64,
-            // is jump?
-            bool,
-            // is return?
-            bool,
-            // disasembly
-            String,
-        ),
-    >,
+    I: IntoIterator<Item = DisasInst>,
 {
     use object::{Endianness, Object, ObjectSection, ObjectSymbol};
 
@@ -462,21 +470,27 @@ where
         let mut prev_jump = false;
         let mut write_offsets = false;
 
-        for (addr, is_jump, is_ret, inst) in disas(bytes, sym.address())?.into_iter() {
+        for DisasInst {
+            address,
+            is_jump,
+            is_return,
+            disassembly: disas,
+        } in disas(bytes, sym.address())?.into_iter()
+        {
             if write_offsets || (prev_jump && !is_jump) {
-                write!(result, "{addr:>4x}: ")?;
+                write!(result, "{address:>4x}: ")?;
             } else {
                 write!(result, "      ")?;
             }
 
-            writeln!(result, "{inst}")?;
+            writeln!(result, "{disas}")?;
 
             prev_jump = is_jump;
 
             // Flip write_offsets to true once we've seen a `ret`, as
             // instructions that follow the return are often related to trap
             // tables.
-            write_offsets |= is_ret;
+            write_offsets |= is_return;
         }
     }
     Ok(())
