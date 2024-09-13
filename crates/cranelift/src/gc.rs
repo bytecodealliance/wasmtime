@@ -26,39 +26,6 @@ pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
     imp::gc_compiler(func_env)
 }
 
-/// Load a `*mut VMGcRef` into a virtual register, without any GC barriers.
-///
-/// The resulting value is an instance of the function environment's type for
-/// GC-managed references, aka `i32`. Note that a `VMGcRef` is always 4-bytes
-/// large, even when targeting 64-bit architectures.
-pub fn unbarriered_load_gc_ref(
-    func_env: &FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    ty: WasmHeapType,
-    src: ir::Value,
-    flags: ir::MemFlags,
-) -> WasmResult<ir::Value> {
-    imp::unbarriered_load_gc_ref(func_env, builder, ty, src, flags)
-}
-
-/// Store `*dst = gc_ref`, without any GC barriers.
-///
-/// `dst` is a `*mut VMGcRef`.
-///
-/// `gc_ref` is an instance of the function environment's type for GC-managed
-/// references, aka `i32`. Note that a `VMGcRef` is always 4-bytes large, even
-/// when targeting 64-bit architectures.
-pub fn unbarriered_store_gc_ref(
-    func_env: &FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    ty: WasmHeapType,
-    dst: ir::Value,
-    gc_ref: ir::Value,
-    flags: ir::MemFlags,
-) -> WasmResult<()> {
-    imp::unbarriered_store_gc_ref(func_env, builder, ty, dst, gc_ref, flags)
-}
-
 /// Get the index and signature of the built-in function for doing `table.grow`
 /// on GC reference tables.
 pub fn gc_ref_table_grow_builtin(

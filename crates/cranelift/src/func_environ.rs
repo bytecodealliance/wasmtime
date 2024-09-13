@@ -1716,13 +1716,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
-            // `i31ref`s never need barriers, and therefore don't need to go
-            // through the GC compiler.
-            WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
-                let (src, flags) = table_data.prepare_table_addr(self, builder, index);
-                gc::unbarriered_load_gc_ref(self, builder, WasmHeapType::I31, src, flags)
-            }
-
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => {
                 let (src, flags) = table_data.prepare_table_addr(self, builder, index);
@@ -1762,13 +1755,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
-            // `i31ref`s never need GC barriers, and therefore don't need to go
-            // through the GC compiler.
-            WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
-                let (addr, flags) = table_data.prepare_table_addr(self, builder, index);
-                gc::unbarriered_store_gc_ref(self, builder, WasmHeapType::I31, addr, value, flags)
-            }
-
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => {
                 let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
@@ -1920,17 +1906,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let gv = builder.ins().global_value(self.pointer_type(), gv);
         let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-        if let WasmHeapType::I31 = ty.heap_type {
-            gc::unbarriered_load_gc_ref(self, builder, ty.heap_type, src, ir::MemFlags::trusted())
-        } else {
-            gc::gc_compiler(self).translate_read_gc_reference(
-                self,
-                builder,
-                ty,
-                src,
-                ir::MemFlags::trusted(),
-            )
-        }
+        gc::gc_compiler(self).translate_read_gc_reference(
+            self,
+            builder,
+            ty,
+            src,
+            ir::MemFlags::trusted(),
+        )
     }
 
     fn translate_custom_global_set(
@@ -1952,25 +1934,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let gv = builder.ins().global_value(self.pointer_type(), gv);
         let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-        if let WasmHeapType::I31 = ty.heap_type {
-            gc::unbarriered_store_gc_ref(
-                self,
-                builder,
-                ty.heap_type,
-                src,
-                value,
-                ir::MemFlags::trusted(),
-            )
-        } else {
-            gc::gc_compiler(self).translate_write_gc_reference(
-                self,
-                builder,
-                ty,
-                src,
-                value,
-                ir::MemFlags::trusted(),
-            )
-        }
+        gc::gc_compiler(self).translate_write_gc_reference(
+            self,
+            builder,
+            ty,
+            src,
+            value,
+            ir::MemFlags::trusted(),
+        )
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
