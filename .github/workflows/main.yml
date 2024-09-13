@@ -419,6 +419,52 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Checks for no_std support, ensure that crates can build on a no_std target
+  no_std_checks:
+    needs: determine
+    name: no_std checks
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_VERSION: 2.12.2
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    - run: rustup target add x86_64-unknown-none
+    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
+    - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
+    - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # Check that Clippy lints are passing.
+  clippy:
+    needs: determine
+    name: Clippy
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_VERSION: 2.12.2
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    - run: rustup component add clippy
+    - run: cargo clippy --workspace --all-targets
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Similar to `micro_checks` but where we need to install some more state
   # (e.g. Android NDK) and we haven't factored support for those things out into
   # a parallel jobs yet.
@@ -433,13 +479,6 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-
-    # Checks for no_std support, ensure that crates can build on a no_std
-    # target
-    - run: rustup target add x86_64-unknown-none
-    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
-    - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
-    - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
 
     # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
     # for specifically panic=abort there.
@@ -461,10 +500,6 @@ jobs:
     # TODO: We aren't building with default features since the `ittapi` crate fails to compile on freebsd.
     - run: rustup target add x86_64-unknown-freebsd
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
-
-    # Run clippy configuration
-    - run: rustup component add clippy
-    - run: cargo clippy --workspace --all-targets
 
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
