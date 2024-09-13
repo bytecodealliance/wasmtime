@@ -60,28 +60,6 @@ pub fn gc_ref_table_fill_builtin(
     ))
 }
 
-pub fn gc_ref_global_get_builtin(
-    ty: WasmValType,
-    _func_env: &mut FuncEnvironment<'_>,
-    _func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    Err(wasm_unsupported!(
-        "support for `{ty}` disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
-}
-
-pub fn gc_ref_global_set_builtin(
-    ty: WasmValType,
-    _func_env: &mut FuncEnvironment<'_>,
-    _func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    Err(wasm_unsupported!(
-        "support for `{ty}` disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
-}
-
 struct DisabledGcCompiler;
 
 impl GcCompiler for DisabledGcCompiler {
