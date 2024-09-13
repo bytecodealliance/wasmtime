@@ -79,16 +79,6 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             gc(vmctx: vmctx, root: reference) -> reference;
 
-            // Implementation of Wasm's `global.get` instruction for globals
-            // containing GC references.
-            #[cfg(feature = "gc")]
-            gc_ref_global_get(vmctx: vmctx, global: i32) -> reference;
-
-            // Implementation of Wasm's `global.set` instruction for globals
-            // containing GC references.
-            #[cfg(feature = "gc")]
-            gc_ref_global_set(vmctx: vmctx, global: i32, val: reference);
-
             // Returns an index for Wasm's `table.grow` instruction for GC references.
             #[cfg(feature = "gc")]
             table_grow_gc_ref(vmctx: vmctx, table: i32, delta: i64, init: reference) -> pointer;
