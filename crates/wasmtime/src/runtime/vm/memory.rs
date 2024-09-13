@@ -49,9 +49,7 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
     }
 }
 
-/// A linear memory's backing storage.
-///
-/// This does not a full Wasm linear memory, as it may
+/// A linear memory and its backing storage.
 pub trait RuntimeLinearMemory: Send + Sync {
     /// Returns the log2 of this memory's page size, in bytes.
     fn page_size_log2(&self) -> u8;
