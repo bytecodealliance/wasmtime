@@ -22,7 +22,8 @@ pub const I31_DISCRIMINANT: u64 = 1;
 /// with a single bitwise-and operation.
 pub const NON_NULL_NON_I31_MASK: u64 = !I31_DISCRIMINANT;
 
-/// TODO FITZGEN
+/// A trait for getting the layout of a Wasm GC struct or array inside a
+/// particular collector.
 pub trait GcTypeLayouts {
     /// Get this collector's layout for the given array type.
     fn array_layout(&self, ty: &WasmArrayType) -> GcArrayLayout;
