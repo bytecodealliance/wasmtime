@@ -33,6 +33,7 @@ impl MemoryStyle {
             // page size, but unfortunately that is a little hard to plumb
             // through here.
             memory.page_size_log2 >= Memory::DEFAULT_PAGE_SIZE_LOG2
+            && tunables.signals_based_traps
             && match memory.maximum_byte_size() {
                 Ok(mut maximum) => {
                     if tunables.static_memory_bound_is_maximum {

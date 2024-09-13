@@ -142,6 +142,15 @@ pub struct FuncEnvironment<'module_environment> {
 
     #[cfg(feature = "wmemcheck")]
     wmemcheck: bool,
+
+    /// A `GlobalValue` in CLIF which represents the stack limit.
+    ///
+    /// Typically this resides in the `stack_limit` value of `ir::Function` but
+    /// that requires signal handlers on the host and when that's disabled this
+    /// is here with an explicit check instead. Note that the explicit check is
+    /// always present even if this is a "leaf" function, as we have to call
+    /// into the host to trap when signal handlers are disabled.
+    pub(crate) stack_limit_at_function_entry: Option<ir::GlobalValue>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -186,6 +195,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             wmemcheck,
             #[cfg(feature = "wmemcheck")]
             translation,
+
+            stack_limit_at_function_entry: None,
         }
     }
 
@@ -852,13 +863,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> ir::Value {
         let pointer_type = self.pointer_type();
         self.ensure_table_exists(builder.func, table_index);
-        let table_data = self.tables[table_index].as_ref().unwrap();
+        let table_data = self.tables[table_index].clone().unwrap();
 
         // To support lazy initialization of table
         // contents, we check for a null entry here, and
         // if null, we take a slow-path that invokes a
         // libcall.
-        let (table_entry_addr, flags) = table_data.prepare_table_addr(&*self.isa, builder, index);
+        let (table_entry_addr, flags) = table_data.prepare_table_addr(self, builder, index);
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
 
         if !lazy_init {
@@ -1014,6 +1025,99 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pointee_mt
         });
         (pointee, mt)
+    }
+
+    /// Helper to emit a conditional trap based on `trap_cond`.
+    ///
+    /// This should only be used if `self.signals_based_traps()` is false,
+    /// otherwise native CLIF instructions should be used instead.
+    pub fn conditionally_trap(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        trap_cond: ir::Value,
+        trap: ir::TrapCode,
+    ) {
+        assert!(!self.signals_based_traps());
+
+        let trap_block = builder.create_block();
+        builder.set_cold_block(trap_block);
+        let continuation_block = builder.create_block();
+
+        builder
+            .ins()
+            .brif(trap_cond, trap_block, &[], continuation_block, &[]);
+
+        builder.seal_block(trap_block);
+        builder.seal_block(continuation_block);
+
+        builder.switch_to_block(trap_block);
+        self.trap(builder, trap);
+        builder.switch_to_block(continuation_block);
+    }
+
+    /// Helper used when `!self.signals_based_traps()` is enabled to test
+    /// whether the divisor is zero.
+    fn guard_zero_divisor(&mut self, builder: &mut FunctionBuilder, rhs: ir::Value) {
+        if self.signals_based_traps() {
+            return;
+        }
+        self.trapz(builder, rhs, ir::TrapCode::IntegerDivisionByZero);
+    }
+
+    /// Helper used when `!self.signals_based_traps()` is enabled to test
+    /// whether a signed division operation will raise a trap.
+    fn guard_signed_divide(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) {
+        if self.signals_based_traps() {
+            return;
+        }
+        self.trapz(builder, rhs, ir::TrapCode::IntegerDivisionByZero);
+
+        let ty = builder.func.dfg.value_type(rhs);
+        let minus_one = builder.ins().iconst(ty, -1);
+        let rhs_is_minus_one = builder.ins().icmp(IntCC::Equal, rhs, minus_one);
+        let int_min = builder.ins().iconst(
+            ty,
+            match ty {
+                I32 => i64::from(i32::MIN),
+                I64 => i64::MIN,
+                _ => unreachable!(),
+            },
+        );
+        let lhs_is_int_min = builder.ins().icmp(IntCC::Equal, lhs, int_min);
+        let is_integer_overflow = builder.ins().band(rhs_is_minus_one, lhs_is_int_min);
+        self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::IntegerOverflow);
+    }
+
+    /// Helper used when `!self.signals_based_traps()` is enabled to perform
+    /// trapping float-to-int conversions.
+    fn fcvt_to_int(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        ty: ir::Type,
+        val: ir::Value,
+        i32: fn(&mut Self, &mut Function) -> ir::FuncRef,
+        i64: fn(&mut Self, &mut Function) -> ir::FuncRef,
+    ) -> ir::Value {
+        assert!(!self.signals_based_traps());
+        let val_ty = builder.func.dfg.value_type(val);
+        let val = if val_ty == F64 {
+            val
+        } else {
+            builder.ins().fpromote(F64, val)
+        };
+        let libcall = match ty {
+            I32 => i32(self, &mut builder.func),
+            I64 => i64(self, &mut builder.func),
+            _ => unreachable!(),
+        };
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let call = builder.ins().call(libcall, &[vmctx, val]);
+        *builder.func.dfg.inst_results(call).first().unwrap()
     }
 }
 
@@ -1247,15 +1351,20 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 // null pointer, then this was a call to null. Otherwise if it
                 // succeeds then we know it won't match, so trap anyway.
                 if table.table.ref_type.nullable {
-                    let mem_flags = ir::MemFlags::trusted().with_readonly();
-                    self.builder.ins().load(
-                        sig_id_type,
-                        mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull)),
-                        funcref_ptr,
-                        i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
-                    );
+                    if self.env.signals_based_traps() {
+                        let mem_flags = ir::MemFlags::trusted().with_readonly();
+                        self.builder.ins().load(
+                            sig_id_type,
+                            mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull)),
+                            funcref_ptr,
+                            i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
+                        );
+                    } else {
+                        self.env
+                            .trapz(self.builder, funcref_ptr, ir::TrapCode::IndirectCallToNull);
+                    }
                 }
-                self.builder.ins().trap(ir::TrapCode::BadSignature);
+                self.env.trap(self.builder, ir::TrapCode::BadSignature);
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
@@ -1263,7 +1372,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // trap with that.
             WasmHeapType::NoFunc => {
                 assert!(table.table.ref_type.nullable);
-                self.builder.ins().trap(ir::TrapCode::IndirectCallToNull);
+                self.env
+                    .trap(self.builder, ir::TrapCode::IndirectCallToNull);
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
@@ -1311,10 +1421,16 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         //
         // Note that the callee may be null in which case this load may
         // trap. If so use the `IndirectCallToNull` trap code.
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let mut mem_flags = ir::MemFlags::trusted().with_readonly();
+        if self.env.signals_based_traps() {
+            mem_flags = mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull));
+        } else {
+            self.env
+                .trapz(self.builder, funcref_ptr, ir::TrapCode::IndirectCallToNull);
+        }
         let callee_sig_id = self.builder.ins().load(
             sig_id_type,
-            mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull)),
+            mem_flags,
             funcref_ptr,
             i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
         );
@@ -1324,7 +1440,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .builder
             .ins()
             .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
-        self.builder.ins().trapz(cmp, ir::TrapCode::BadSignature);
+        self.env
+            .trapz(self.builder, cmp, ir::TrapCode::BadSignature);
         CheckIndirectCallTypeSignature::Runtime
     }
 
@@ -1377,9 +1494,17 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // will handle the case where this is either already known to be
         // non-null or may trap.
         let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let mut callee_flags = mem_flags;
+        if self.env.signals_based_traps() {
+            callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
+        } else {
+            if let Some(trap) = callee_load_trap_code {
+                self.env.trapz(self.builder, callee, trap);
+            }
+        }
         let func_addr = self.builder.ins().load(
             pointer_type,
-            mem_flags.with_trap_code(callee_load_trap_code),
+            callee_flags,
             callee,
             i32::from(self.env.offsets.ptr.vm_func_ref_wasm_call()),
         );
@@ -1588,19 +1713,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let plan = &self.module.table_plans[table_index];
         let table = plan.table;
         self.ensure_table_exists(builder.func, table_index);
-        let table_data = self.tables[table_index].as_ref().unwrap();
+        let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // `i31ref`s never need barriers, and therefore don't need to go
             // through the GC compiler.
             WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
-                let (src, flags) = table_data.prepare_table_addr(&*self.isa, builder, index);
+                let (src, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::unbarriered_load_gc_ref(self, builder, WasmHeapType::I31, src, flags)
             }
 
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => {
-                let (src, flags) = table_data.prepare_table_addr(&*self.isa, builder, index);
+                let (src, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self).translate_read_gc_reference(
                     self,
                     builder,
@@ -1634,19 +1759,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let plan = &self.module.table_plans[table_index];
         let table = plan.table;
         self.ensure_table_exists(builder.func, table_index);
-        let table_data = self.tables[table_index].as_ref().unwrap();
+        let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // `i31ref`s never need GC barriers, and therefore don't need to go
             // through the GC compiler.
             WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
-                let (addr, flags) = table_data.prepare_table_addr(&*self.isa, builder, index);
+                let (addr, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::unbarriered_store_gc_ref(self, builder, WasmHeapType::I31, addr, value, flags)
             }
 
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => {
-                let (dst, flags) = table_data.prepare_table_addr(&*self.isa, builder, index);
+                let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self).translate_write_gc_reference(
                     self,
                     builder,
@@ -1662,7 +1787,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 match plan.style {
                     TableStyle::CallerChecksSignature { lazy_init } => {
                         let (elem_addr, flags) =
-                            table_data.prepare_table_addr(&*self.isa, builder, index);
+                            table_data.prepare_table_addr(self, builder, index);
                         // Set the "initialized bit". See doc-comment on
                         // `FUNCREF_INIT_BIT` in
                         // crates/environ/src/ref_bits.rs for details.
@@ -1725,20 +1850,20 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_i31_get_s(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         i31ref: ir::Value,
     ) -> WasmResult<ir::Value> {
-        pos.ins().trapz(i31ref, ir::TrapCode::NullI31Ref);
-        Ok(pos.ins().sshr_imm(i31ref, 1))
+        self.trapz(builder, i31ref, ir::TrapCode::NullI31Ref);
+        Ok(builder.ins().sshr_imm(i31ref, 1))
     }
 
     fn translate_i31_get_u(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         i31ref: ir::Value,
     ) -> WasmResult<ir::Value> {
-        pos.ins().trapz(i31ref, ir::TrapCode::NullI31Ref);
-        Ok(pos.ins().ushr_imm(i31ref, 1))
+        self.trapz(builder, i31ref, ir::TrapCode::NullI31Ref);
+        Ok(builder.ins().ushr_imm(i31ref, 1))
     }
 
     fn translate_ref_null(
@@ -2631,6 +2756,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         builder: &mut FunctionBuilder,
         _state: &FuncTranslationState,
     ) -> WasmResult<()> {
+        // If an explicit stack limit is requested, emit one here at the start
+        // of the function.
+        if let Some(gv) = self.stack_limit_at_function_entry {
+            let limit = builder.ins().global_value(self.pointer_type(), gv);
+            let sp = builder.ins().get_stack_pointer(self.pointer_type());
+            let overflow = builder.ins().icmp(IntCC::UnsignedLessThan, sp, limit);
+            self.conditionally_trap(builder, overflow, ir::TrapCode::StackOverflow);
+        }
+
         // If the `vmruntime_limits_ptr` variable will get used then we initialize
         // it here.
         if self.tunables.consume_fuel || self.tunables.epoch_interruption {
@@ -2776,6 +2910,160 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let update_mem_size = self.builtin_functions.update_mem_size(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             builder.ins().call(update_mem_size, &[vmctx, num_pages]);
+        }
+    }
+
+    fn isa(&self) -> &dyn TargetIsa {
+        &*self.isa
+    }
+
+    fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
+        match (
+            self.signals_based_traps(),
+            crate::clif_trap_to_env_trap(trap),
+        ) {
+            // If libcall traps are disabled or there's no wasmtime-defined trap
+            // code for this, then emit a native trap instruction.
+            (true, _) | (_, None) => {
+                builder.ins().trap(trap);
+            }
+            // ... otherwise with libcall traps explicitly enabled and a
+            // wasmtime-based trap code invoke the libcall to raise a trap and
+            // pass in our trap code. Leave a debug `unreachable` in place
+            // afterwards as a defense-in-depth measure.
+            (false, Some(trap)) => {
+                let libcall = self.builtin_functions.trap(&mut builder.func);
+                let vmctx = self.vmctx_val(&mut builder.cursor());
+                let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
+                builder.ins().call(libcall, &[vmctx, trap_code]);
+                builder
+                    .ins()
+                    .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+            }
+        }
+    }
+
+    fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
+        if self.signals_based_traps() {
+            builder.ins().trapz(value, trap);
+        } else {
+            let ty = builder.func.dfg.value_type(value);
+            let zero = builder.ins().iconst(ty, 0);
+            let cmp = builder.ins().icmp(IntCC::Equal, value, zero);
+            self.conditionally_trap(builder, cmp, trap);
+        }
+    }
+
+    fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
+        if self.signals_based_traps() {
+            builder.ins().trapnz(value, trap);
+        } else {
+            let ty = builder.func.dfg.value_type(value);
+            let zero = builder.ins().iconst(ty, 0);
+            let cmp = builder.ins().icmp(IntCC::NotEqual, value, zero);
+            self.conditionally_trap(builder, cmp, trap);
+        }
+    }
+
+    fn uadd_overflow_trap(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+        trap: ir::TrapCode,
+    ) -> ir::Value {
+        if self.signals_based_traps() {
+            builder.ins().uadd_overflow_trap(lhs, rhs, trap)
+        } else {
+            let (ret, overflow) = builder.ins().uadd_overflow(lhs, rhs);
+            self.conditionally_trap(builder, overflow, trap);
+            ret
+        }
+    }
+
+    fn signals_based_traps(&self) -> bool {
+        self.tunables.signals_based_traps
+    }
+
+    fn translate_sdiv(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        self.guard_signed_divide(builder, lhs, rhs);
+        builder.ins().sdiv(lhs, rhs)
+    }
+
+    fn translate_udiv(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        self.guard_zero_divisor(builder, rhs);
+        builder.ins().udiv(lhs, rhs)
+    }
+
+    fn translate_srem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        self.guard_zero_divisor(builder, rhs);
+        builder.ins().srem(lhs, rhs)
+    }
+
+    fn translate_urem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        lhs: ir::Value,
+        rhs: ir::Value,
+    ) -> ir::Value {
+        self.guard_zero_divisor(builder, rhs);
+        builder.ins().urem(lhs, rhs)
+    }
+
+    fn translate_fcvt_to_sint(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        ty: ir::Type,
+        val: ir::Value,
+    ) -> ir::Value {
+        // NB: for now avoid translating this entire instruction to CLIF and
+        // just do it in a libcall.
+        if self.signals_based_traps() {
+            builder.ins().fcvt_to_sint(ty, val)
+        } else {
+            self.fcvt_to_int(
+                builder,
+                ty,
+                val,
+                |me, func| me.builtin_functions.f64_to_i32(func),
+                |me, func| me.builtin_functions.f64_to_i64(func),
+            )
+        }
+    }
+
+    fn translate_fcvt_to_uint(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        ty: ir::Type,
+        val: ir::Value,
+    ) -> ir::Value {
+        // NB: for now avoid translating this entire instruction to CLIF and
+        // just do it in a libcall.
+        if self.signals_based_traps() {
+            builder.ins().fcvt_to_uint(ty, val)
+        } else {
+            self.fcvt_to_int(
+                builder,
+                ty,
+                val,
+                |me, func| me.builtin_functions.f64_to_u32(func),
+                |me, func| me.builtin_functions.f64_to_u64(func),
+            )
         }
     }
 }

@@ -127,6 +127,10 @@ macro_rules! declare_function_sig {
                 WasmValType::I32
             }
 
+            fn u8(&self) -> WasmValType {
+                WasmValType::I32
+            }
+
             fn f32(&self) -> WasmValType {
                 WasmValType::F32
             }

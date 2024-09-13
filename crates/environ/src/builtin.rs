@@ -96,6 +96,19 @@ macro_rules! foreach_builtin_function {
             // Returns an index for Wasm's `table.fill` instruction for GC references.
             #[cfg(feature = "gc")]
             table_fill_gc_ref(vmctx: vmctx, table: i32, dst: i64, val: reference, len: i64);
+
+            // Raises an unconditional trap.
+            trap(vmctx: vmctx, code: u8);
+
+            // Implementation of `i{32,64}.trunc_f{32,64}_{u,s}` when host trap
+            // handlers are disabled. These will raise a trap if necessary. Note
+            // that f32 inputs are always converted to f64 as the argument. Also
+            // note that the signed-ness of the result is not reflected in the
+            // type here.
+            f64_to_i64(vmctx: vmctx, float: f64) -> i64;
+            f64_to_u64(vmctx: vmctx, float: f64) -> i64;
+            f64_to_i32(vmctx: vmctx, float: f64) -> i32;
+            f64_to_u32(vmctx: vmctx, float: f64) -> i32;
         }
     };
 }

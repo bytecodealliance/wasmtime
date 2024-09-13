@@ -15,7 +15,9 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{CompiledCode, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{DefinedFuncIndex, FuncTranslator, WasmFuncType, WasmValType};
+use cranelift_wasm::{
+    DefinedFuncIndex, FuncEnvironment as _, FuncTranslator, WasmFuncType, WasmValType,
+};
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
 use std::any::Any;
@@ -206,7 +208,11 @@ impl wasmtime_environ::Compiler for Compiler {
             global_type: isa.pointer_type(),
             flags: MemFlags::trusted(),
         });
-        context.func.stack_limit = Some(stack_limit);
+        if func_env.signals_based_traps() {
+            context.func.stack_limit = Some(stack_limit);
+        } else {
+            func_env.stack_limit_at_function_entry = Some(stack_limit);
+        }
         let FunctionBodyData { validator, body } = input;
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
