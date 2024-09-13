@@ -4,7 +4,7 @@ use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{wasm_unsupported, WasmHeapType, WasmRefType, WasmResult, WasmValType};
+use cranelift_wasm::{wasm_unsupported, WasmHeapType, WasmRefType, WasmResult};
 
 /// Get the default GC compiler.
 pub fn gc_compiler(_: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
