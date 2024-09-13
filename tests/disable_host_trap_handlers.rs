@@ -11,6 +11,7 @@ use anyhow::Result;
 use wasmtime::{Config, Engine, Instance, Module, Store, Trap};
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn no_host_trap_handlers() -> Result<()> {
     let mut config = Config::new();
     config.signals_based_traps(false);
