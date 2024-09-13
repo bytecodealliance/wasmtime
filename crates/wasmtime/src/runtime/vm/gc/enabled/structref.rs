@@ -3,11 +3,10 @@ use crate::{
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
     store::AutoAssertNoGc,
-    vm::GcStructLayout,
     AnyRef, ExternRef, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
 };
 use core::fmt;
-use wasmtime_environ::VMGcKind;
+use wasmtime_environ::{GcStructLayout, VMGcKind};
 
 /// A `VMGcRef` that we know points to a `struct`.
 ///

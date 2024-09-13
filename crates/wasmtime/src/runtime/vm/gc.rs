@@ -22,7 +22,7 @@ use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
-use wasmtime_environ::{StackMap, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcArrayLayout, GcStructLayout, StackMap, VMGcKind, VMSharedTypeIndex};
 
 /// Used by the runtime to lookup information about a module given a
 /// program counter value.

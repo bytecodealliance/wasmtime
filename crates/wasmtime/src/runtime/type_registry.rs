@@ -5,7 +5,7 @@
 
 use crate::prelude::*;
 use crate::sync::RwLock;
-use crate::vm::{GcLayout, GcRuntime};
+use crate::vm::GcRuntime;
 use crate::Engine;
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
@@ -22,7 +22,7 @@ use core::{
 };
 use hashbrown::HashSet;
 use wasmtime_environ::{
-    iter_entity_range, packed_option::PackedOption, EngineOrModuleTypeIndex,
+    iter_entity_range, packed_option::PackedOption, EngineOrModuleTypeIndex, GcLayout,
     ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, SecondaryMap, TypeTrace, VMSharedTypeIndex,
     WasmRecGroup, WasmSubType,
 };
@@ -749,10 +749,10 @@ impl TypeRegistryInner {
         let gc_layout = match &ty.composite_type {
             wasmtime_environ::WasmCompositeType::Func(_) => None,
             wasmtime_environ::WasmCompositeType::Array(a) => {
-                Some(gc_runtime.array_layout(a).into())
+                Some(gc_runtime.layouts().array_layout(a).into())
             }
             wasmtime_environ::WasmCompositeType::Struct(s) => {
-                Some(gc_runtime.struct_layout(s).into())
+                Some(gc_runtime.layouts().struct_layout(s).into())
             }
         };
 

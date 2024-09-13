@@ -17,7 +17,7 @@ use crate::runtime::vm::GcRuntime;
 
 /// Get the default GC runtime.
 pub fn default_gc_runtime() -> impl GcRuntime {
-    DrcCollector
+    DrcCollector::default()
 }
 
 /// The default GC heap capacity: 512KiB.
