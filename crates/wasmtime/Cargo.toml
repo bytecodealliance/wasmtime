@@ -30,6 +30,7 @@ wasmtime-component-util = { workspace = true, optional = true }
 wasmtime-slab = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
+pulley-interpreter = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
@@ -134,10 +135,17 @@ default = [
 # precompiled WebAssembly modules.
 cranelift = ["dep:wasmtime-cranelift", "std"]
 
-# Enables support for winch, the WebAssembly baseline compiler. The Winch compiler
+# Enables support for Winch, the WebAssembly baseline compiler. The Winch compiler
 # strategy in `Config` will be available. It is currently in active development
 # and shouldn't be used in production applications.
 winch = ["dep:wasmtime-winch", "std"]
+
+# Enables support for Pulley, the WebAssembly interpreter. When paired with the
+# `cranelift` feature, the compiler backends for the `pulley32` and `pulley64`
+# targets will be available. When paired with the `runtime` feature, the Pulley
+# interpreter will be built into the runtime and you can interpret WebAssembly
+# modules that have been compiled to Pulley bytecode.
+pulley = ["dep:pulley-interpreter", "wasmtime-cranelift?/pulley"]
 
 # Enables support for incremental compilation cache to be enabled in `Config`.
 incremental-cache = ["wasmtime-cranelift?/incremental-cache", "std"]
@@ -175,7 +183,7 @@ pooling-allocator = ["runtime", "std"]
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
-all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch"]
+all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch", "pulley"]
 
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal
@@ -221,7 +229,8 @@ runtime = [
   "dep:windows-sys",
   "dep:psm",
   "dep:rustix",
-  "rustix/mm"
+  "rustix/mm",
+  "pulley-interpreter?/interp",
 ]
 
 # Enable support for garbage collection-related things.
