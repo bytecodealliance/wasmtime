@@ -370,6 +370,10 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(ir::types::F64)
     }
 
+    fn u8(&self) -> AbiParam {
+        AbiParam::new(ir::types::I8)
+    }
+
     fn signature(&self, builtin: BuiltinFunctionIndex) -> Signature {
         let mut _cur = 0;
         macro_rules! iter {

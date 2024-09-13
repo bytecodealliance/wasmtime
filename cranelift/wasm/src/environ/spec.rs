@@ -695,9 +695,9 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Accesses the ISA that is being compiled for.
     fn isa(&self) -> &dyn TargetIsa;
 
-    /// Embedder-defined hook for indicating whether virtual memory should not
-    /// be used which forces more explicit bounds checks for example.
-    fn can_use_virtual_memory_traps(&self) -> bool {
+    /// Embedder-defined hook for indicating whether signals can be used to
+    /// indicate traps.
+    fn signals_based_traps(&self) -> bool {
         true
     }
 

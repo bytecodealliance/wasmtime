@@ -64,7 +64,7 @@ where
 
     let host_page_size_log2 = env.target_config().page_size_align_log2;
     let can_use_virtual_memory =
-        heap.page_size_log2 >= host_page_size_log2 && env.can_use_virtual_memory_traps();
+        heap.page_size_log2 >= host_page_size_log2 && env.signals_based_traps();
 
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
@@ -576,6 +576,9 @@ fn explicit_check_oob_condition_and_compute_addr<FE: FuncEnvironment + ?Sized>(
     let mut addr = compute_addr(&mut builder.cursor(), heap, addr_ty, index, offset, pcc);
 
     if spectre_mitigations_enabled {
+        // These mitigations rely on trapping when loading from NULL so
+        // signals-based traps must be allowed for this to be generated.
+        assert!(env.signals_based_traps());
         let null = builder.ins().iconst(addr_ty, 0);
         addr = builder
             .ins()

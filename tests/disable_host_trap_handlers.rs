@@ -1,10 +1,19 @@
+//! A standalone test to assert that Wasmtime can operate in "no signal handlers
+//! mode"
+//!
+//! This is a test for `Config::signals_based_traps(false)` which resides in its
+//! own binary to assert properties about signal handlers that Wasmtime uses.
+//! Due to the global nature of signals no other tests can be in this binary.
+//! This will ensure that various trapping scenarios all work and additionally
+//! signal handlers are not registered.
+
 use anyhow::Result;
 use wasmtime::{Config, Engine, Instance, Module, Store, Trap};
 
 #[test]
 fn no_host_trap_handlers() -> Result<()> {
     let mut config = Config::new();
-    config.host_trap_handlers(false);
+    config.signals_based_traps(false);
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -71,5 +80,12 @@ fn assert_host_signal_handlers_are_unset() {
             libc::SIG_DFL,
             "fault handler was installed when it shouldn't have been"
         );
+    }
+    #[cfg(windows)]
+    {
+        // Note that this can't be checked on Windows because vectored exception
+        // handlers work a bit differently and aren't as "global" as a signal
+        // handler. For now rely on the check above on unix to also guarantee
+        // that on Windows we don't register any vectored exception handlers.
     }
 }

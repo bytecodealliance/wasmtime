@@ -105,7 +105,7 @@ macro_rules! foreach_builtin_component_function {
             resource_enter_call(vmctx: vmctx);
             resource_exit_call(vmctx: vmctx);
 
-            trap(vmctx: vmctx, code: u32);
+            trap(vmctx: vmctx, code: u8);
         }
     };
 }

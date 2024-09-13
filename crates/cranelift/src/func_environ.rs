@@ -148,8 +148,8 @@ pub struct FuncEnvironment<'module_environment> {
     /// Typically this resides in the `stack_limit` value of `ir::Function` but
     /// that requires signal handlers on the host and when that's disabled this
     /// is here with an explicit check instead. Note that the explicit check is
-    /// always present even if this is a leaf function, as that's what host trap
-    /// handlers enable.
+    /// always present even if this is a "leaf" function, as we have to call
+    /// into the host to trap when signal handlers are disabled.
     pub(crate) stack_limit_at_function_entry: Option<ir::GlobalValue>,
 }
 
@@ -1027,13 +1027,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         (pointee, mt)
     }
 
-    pub fn use_libcall_traps(&self) -> bool {
-        !self.tunables.host_trap_handlers
-    }
-
     /// Helper to emit a conditional trap based on `trap_cond`.
     ///
-    /// This should only be used if `self.use_libcall_traps()` is true,
+    /// This should only be used if `self.signals_based_traps()` is false,
     /// otherwise native CLIF instructions should be used instead.
     pub fn conditionally_trap(
         &mut self,
@@ -1041,7 +1037,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         trap_cond: ir::Value,
         trap: ir::TrapCode,
     ) {
-        assert!(self.use_libcall_traps());
+        assert!(!self.signals_based_traps());
 
         let trap_block = builder.create_block();
         builder.set_cold_block(trap_block);
@@ -1059,24 +1055,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.switch_to_block(continuation_block);
     }
 
-    /// Helper used when `self.use_libcall_traps()` is enabled to test whether
-    /// the divisor is zero.
+    /// Helper used when `!self.signals_based_traps()` is enabled to test
+    /// whether the divisor is zero.
     fn guard_zero_divisor(&mut self, builder: &mut FunctionBuilder, rhs: ir::Value) {
-        if !self.use_libcall_traps() {
+        if self.signals_based_traps() {
             return;
         }
         self.trapz(builder, rhs, ir::TrapCode::IntegerDivisionByZero);
     }
 
-    /// Helper used when `self.use_libcall_traps()` is enabled to test whether a
-    /// signed division operation will raise a trap.
+    /// Helper used when `!self.signals_based_traps()` is enabled to test
+    /// whether a signed division operation will raise a trap.
     fn guard_signed_divide(
         &mut self,
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
         rhs: ir::Value,
     ) {
-        if !self.use_libcall_traps() {
+        if self.signals_based_traps() {
             return;
         }
         self.trapz(builder, rhs, ir::TrapCode::IntegerDivisionByZero);
@@ -1097,7 +1093,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::IntegerOverflow);
     }
 
-    /// Helper used when `self.use_libcall_traps()` is enabled to perform
+    /// Helper used when `!self.signals_based_traps()` is enabled to perform
     /// trapping float-to-int conversions.
     fn fcvt_to_int(
         &mut self,
@@ -1107,6 +1103,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         i32: fn(&mut Self, &mut Function) -> ir::FuncRef,
         i64: fn(&mut Self, &mut Function) -> ir::FuncRef,
     ) -> ir::Value {
+        assert!(!self.signals_based_traps());
         let val_ty = builder.func.dfg.value_type(val);
         let val = if val_ty == F64 {
             val
@@ -1354,10 +1351,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 // null pointer, then this was a call to null. Otherwise if it
                 // succeeds then we know it won't match, so trap anyway.
                 if table.table.ref_type.nullable {
-                    if self.env.use_libcall_traps() {
-                        self.env
-                            .trapz(self.builder, funcref_ptr, ir::TrapCode::IndirectCallToNull);
-                    } else {
+                    if self.env.signals_based_traps() {
                         let mem_flags = ir::MemFlags::trusted().with_readonly();
                         self.builder.ins().load(
                             sig_id_type,
@@ -1365,6 +1359,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                             funcref_ptr,
                             i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
                         );
+                    } else {
+                        self.env
+                            .trapz(self.builder, funcref_ptr, ir::TrapCode::IndirectCallToNull);
                     }
                 }
                 self.env.trap(self.builder, ir::TrapCode::BadSignature);
@@ -1425,11 +1422,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // Note that the callee may be null in which case this load may
         // trap. If so use the `IndirectCallToNull` trap code.
         let mut mem_flags = ir::MemFlags::trusted().with_readonly();
-        if self.env.use_libcall_traps() {
+        if self.env.signals_based_traps() {
+            mem_flags = mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull));
+        } else {
             self.env
                 .trapz(self.builder, funcref_ptr, ir::TrapCode::IndirectCallToNull);
-        } else {
-            mem_flags = mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull));
         }
         let callee_sig_id = self.builder.ins().load(
             sig_id_type,
@@ -1498,12 +1495,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // non-null or may trap.
         let mem_flags = ir::MemFlags::trusted().with_readonly();
         let mut callee_flags = mem_flags;
-        if self.env.use_libcall_traps() {
+        if self.env.signals_based_traps() {
+            callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
+        } else {
             if let Some(trap) = callee_load_trap_code {
                 self.env.trapz(self.builder, callee, trap);
             }
-        } else {
-            callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
         }
         let func_addr = self.builder.ins().load(
             pointer_type,
@@ -2921,20 +2918,23 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
-        match (self.use_libcall_traps(), crate::clif_trap_to_env_trap(trap)) {
+        match (
+            self.signals_based_traps(),
+            crate::clif_trap_to_env_trap(trap),
+        ) {
             // If libcall traps are disabled or there's no wasmtime-defined trap
             // code for this, then emit a native trap instruction.
-            (false, _) | (_, None) => {
+            (true, _) | (_, None) => {
                 builder.ins().trap(trap);
             }
             // ... otherwise with libcall traps explicitly enabled and a
             // wasmtime-based trap code invoke the libcall to raise a trap and
             // pass in our trap code. Leave a debug `unreachable` in place
             // afterwards as a defense-in-depth measure.
-            (true, Some(trap)) => {
+            (false, Some(trap)) => {
                 let libcall = self.builtin_functions.trap(&mut builder.func);
                 let vmctx = self.vmctx_val(&mut builder.cursor());
-                let trap_code = builder.ins().iconst(I32, i64::from(trap as u8));
+                let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
                 builder.ins().call(libcall, &[vmctx, trap_code]);
                 builder
                     .ins()
@@ -2944,24 +2944,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
-        if self.use_libcall_traps() {
+        if self.signals_based_traps() {
+            builder.ins().trapz(value, trap);
+        } else {
             let ty = builder.func.dfg.value_type(value);
             let zero = builder.ins().iconst(ty, 0);
             let cmp = builder.ins().icmp(IntCC::Equal, value, zero);
             self.conditionally_trap(builder, cmp, trap);
-        } else {
-            builder.ins().trapz(value, trap);
         }
     }
 
     fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
-        if self.use_libcall_traps() {
+        if self.signals_based_traps() {
+            builder.ins().trapnz(value, trap);
+        } else {
             let ty = builder.func.dfg.value_type(value);
             let zero = builder.ins().iconst(ty, 0);
             let cmp = builder.ins().icmp(IntCC::NotEqual, value, zero);
             self.conditionally_trap(builder, cmp, trap);
-        } else {
-            builder.ins().trapnz(value, trap);
         }
     }
 
@@ -2972,17 +2972,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         rhs: ir::Value,
         trap: ir::TrapCode,
     ) -> ir::Value {
-        if self.use_libcall_traps() {
+        if self.signals_based_traps() {
+            builder.ins().uadd_overflow_trap(lhs, rhs, trap)
+        } else {
             let (ret, overflow) = builder.ins().uadd_overflow(lhs, rhs);
             self.conditionally_trap(builder, overflow, trap);
             ret
-        } else {
-            builder.ins().uadd_overflow_trap(lhs, rhs, trap)
         }
     }
 
-    fn can_use_virtual_memory_traps(&self) -> bool {
-        !self.use_libcall_traps()
+    fn signals_based_traps(&self) -> bool {
+        self.tunables.signals_based_traps
     }
 
     fn translate_sdiv(
@@ -3033,7 +3033,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> ir::Value {
         // NB: for now avoid translating this entire instruction to CLIF and
         // just do it in a libcall.
-        if self.use_libcall_traps() {
+        if self.signals_based_traps() {
+            builder.ins().fcvt_to_sint(ty, val)
+        } else {
             self.fcvt_to_int(
                 builder,
                 ty,
@@ -3041,8 +3043,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 |me, func| me.builtin_functions.f64_to_i32(func),
                 |me, func| me.builtin_functions.f64_to_i64(func),
             )
-        } else {
-            builder.ins().fcvt_to_sint(ty, val)
         }
     }
 
@@ -3054,7 +3054,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> ir::Value {
         // NB: for now avoid translating this entire instruction to CLIF and
         // just do it in a libcall.
-        if self.use_libcall_traps() {
+        if self.signals_based_traps() {
+            builder.ins().fcvt_to_uint(ty, val)
+        } else {
             self.fcvt_to_int(
                 builder,
                 ty,
@@ -3062,8 +3064,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 |me, func| me.builtin_functions.f64_to_u32(func),
                 |me, func| me.builtin_functions.f64_to_u64(func),
             )
-        } else {
-            builder.ins().fcvt_to_uint(ty, val)
         }
     }
 }

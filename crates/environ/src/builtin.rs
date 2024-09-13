@@ -98,7 +98,7 @@ macro_rules! foreach_builtin_function {
             table_fill_gc_ref(vmctx: vmctx, table: i32, dst: i64, val: reference, len: i64);
 
             // Raises an unconditional trap.
-            trap(vmctx: vmctx, code: i32);
+            trap(vmctx: vmctx, code: u8);
 
             // Implementation of `i{32,64}.trunc_f{32,64}_{u,s}` when host trap
             // handlers are disabled. These will raise a trap if necessary. Note

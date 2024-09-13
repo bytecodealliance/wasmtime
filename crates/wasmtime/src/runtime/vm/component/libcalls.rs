@@ -27,6 +27,7 @@ macro_rules! signature {
     (@ty ptr_u8) => (*mut u8);
     (@ty ptr_u16) => (*mut u16);
     (@ty ptr_size) => (*mut usize);
+    (@ty u8) => (u8);
     (@ty u32) => (u32);
     (@ty u64) => (u64);
     (@ty vmctx) => (*mut VMComponentContext);
@@ -570,6 +571,6 @@ unsafe fn resource_exit_call(vmctx: *mut VMComponentContext) -> Result<()> {
     ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_exit_call())
 }
 
-unsafe fn trap(_vmctx: *mut VMComponentContext, code: u32) -> Result<()> {
-    Err(wasmtime_environ::Trap::from_u8(code.try_into().unwrap()).unwrap()).err2anyhow()
+unsafe fn trap(_vmctx: *mut VMComponentContext, code: u8) -> Result<()> {
+    Err(wasmtime_environ::Trap::from_u8(code).unwrap()).err2anyhow()
 }

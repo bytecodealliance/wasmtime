@@ -63,9 +63,9 @@ pub struct Tunables {
     /// Whether or not Wasm functions target the winch abi.
     pub winch_callable: bool,
 
-    /// Whether or not the host will be using trap handlers such as signal
-    /// handlers.
-    pub host_trap_handlers: bool,
+    /// Whether or not the host will be using native signals (e.g. SIGILL,
+    /// SIGSEGV, etc) to implement traps.
+    pub signals_based_traps: bool,
 }
 
 impl Tunables {
@@ -117,7 +117,7 @@ impl Tunables {
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
             winch_callable: false,
-            host_trap_handlers: true,
+            signals_based_traps: true,
         }
     }
 

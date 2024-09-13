@@ -92,7 +92,7 @@ impl Engine {
         let (tunables, features) = config.validate()?;
 
         #[cfg(feature = "runtime")]
-        if tunables.host_trap_handlers {
+        if tunables.signals_based_traps {
             // Ensure that crate::runtime::vm's signal handlers are
             // configured. This is the per-program initialization required for
             // handling traps, such as configuring signals, vectored exception

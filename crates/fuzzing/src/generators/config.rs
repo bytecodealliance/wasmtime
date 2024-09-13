@@ -181,7 +181,7 @@ impl Config {
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
             .generate_address_map(self.wasmtime.generate_address_map)
-            .host_trap_handlers(self.wasmtime.host_trap_handlers);
+            .signals_based_traps(self.wasmtime.signals_based_traps);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -428,9 +428,9 @@ pub struct WasmtimeConfig {
     /// it's cooperatively time-sliced.
     pub async_config: AsyncConfig,
 
-    /// Whether or not host trap handlers are enabled for this configuration,
+    /// Whether or not host signal handlers are enabled for this configuration,
     /// aka whether signal handlers are supported.
-    host_trap_handlers: bool,
+    signals_based_traps: bool,
 }
 
 impl WasmtimeConfig {
@@ -478,7 +478,7 @@ impl WasmtimeConfig {
             config.reference_types_enabled = false;
 
             // Winch requires host trap handlers to be enabled at this time.
-            self.host_trap_handlers = true;
+            self.signals_based_traps = true;
         }
 
         // If using the pooling allocator, constrain the memory and module configurations
@@ -542,9 +542,20 @@ impl WasmtimeConfig {
             pooling.total_tables = config.max_tables as u32;
         }
 
-        // TODO: should fix this
-        if !self.host_trap_handlers {
+        if !self.signals_based_traps {
+            // At this time shared memories require a "static" memory
+            // configuration but when signals-based traps are disabled all
+            // memories are forced to the "dynamic" configuration. This is
+            // fixable with some more work on the bounds-checks side of things
+            // to do a full bounds check even on static memories, but that's
+            // left for a future PR.
             config.threads_enabled = false;
+
+            // Spectre-based heap mitigations require signal handlers so this
+            // must always be disabled if signals-based traps are disabled.
+            if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
+                cfg.cranelift_enable_heap_access_spectre_mitigations = None;
+            }
         }
         Ok(())
     }

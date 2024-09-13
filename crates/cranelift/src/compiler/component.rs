@@ -263,7 +263,7 @@ impl<'a> TrampolineCompiler<'a> {
     }
 
     fn translate_always_trap(&mut self) {
-        if self.tunables.host_trap_handlers {
+        if self.tunables.signals_based_traps {
             self.builder
                 .ins()
                 .trap(ir::TrapCode::User(ALWAYS_TRAP_CODE));
@@ -277,12 +277,14 @@ impl<'a> TrampolineCompiler<'a> {
         let host_fn = self.load_libcall(vmctx, offset);
 
         let code = self.builder.ins().iconst(
-            ir::types::I32,
+            ir::types::I8,
             i64::from(wasmtime_environ::Trap::AlwaysTrapAdapter as u8),
         );
         self.builder
             .ins()
             .call_indirect(host_sig, host_fn, &[vmctx, code]);
+        // debug trap in case execution actually falls through, but this
+        // shouldn't ever get hit at runtime.
         self.builder
             .ins()
             .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
@@ -936,6 +938,7 @@ mod host {
         (@ty $ptr:ident ptr_u8) => ($ptr);
         (@ty $ptr:ident ptr_u16) => ($ptr);
         (@ty $ptr:ident ptr_size) => ($ptr);
+        (@ty $ptr:ident u8) => (ir::types::I8);
         (@ty $ptr:ident u32) => (ir::types::I32);
         (@ty $ptr:ident u64) => (ir::types::I64);
         (@ty $ptr:ident vmctx) => ($ptr);
