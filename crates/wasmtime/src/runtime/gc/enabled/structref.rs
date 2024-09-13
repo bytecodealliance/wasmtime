@@ -2,7 +2,7 @@
 
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
-use crate::vm::{GcLayout, GcStructLayout, VMGcHeader, VMStructRef};
+use crate::vm::{VMGcHeader, VMStructRef};
 use crate::{
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
@@ -11,7 +11,7 @@ use crate::{
 };
 use crate::{AnyRef, FieldType};
 use core::mem::{self, MaybeUninit};
-use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// An allocator for a particular Wasm GC struct type.
 ///

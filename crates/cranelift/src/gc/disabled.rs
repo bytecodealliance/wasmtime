@@ -5,6 +5,7 @@ use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{wasm_unsupported, WasmHeapType, WasmRefType, WasmResult};
+use wasmtime_environ::GcTypeLayouts;
 
 /// Get the default GC compiler.
 pub fn gc_compiler(_: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
@@ -63,6 +64,13 @@ pub fn gc_ref_table_fill_builtin(
 struct DisabledGcCompiler;
 
 impl GcCompiler for DisabledGcCompiler {
+    fn layouts(&self) -> &dyn GcTypeLayouts {
+        panic!(
+            "support for GC types disabled at compile time because the `gc` cargo \
+             feature was not enabled"
+        )
+    }
+
     fn translate_read_gc_reference(
         &mut self,
         _func_env: &mut FuncEnvironment<'_>,

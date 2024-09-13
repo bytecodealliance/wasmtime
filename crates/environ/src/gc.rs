@@ -9,12 +9,137 @@
 //! on our various `gc` cargo features is the actual garbage collection
 //! functions and their associated impact on binary size anyways.
 
+#[cfg(feature = "gc")]
+pub mod drc;
+
+use crate::prelude::*;
+use wasmtime_types::{WasmArrayType, WasmStructType};
+
 /// Discriminant to check whether GC reference is an `i31ref` or not.
 pub const I31_DISCRIMINANT: u64 = 1;
 
 /// A mask that can be used to check for non-null and non-i31ref GC references
 /// with a single bitwise-and operation.
 pub const NON_NULL_NON_I31_MASK: u64 = !I31_DISCRIMINANT;
+
+/// TODO FITZGEN
+pub trait GcTypeLayouts {
+    /// Get this collector's layout for the given array type.
+    fn array_layout(&self, ty: &WasmArrayType) -> GcArrayLayout;
+
+    /// Get this collector's layout for the given struct type.
+    fn struct_layout(&self, ty: &WasmStructType) -> GcStructLayout;
+}
+
+/// The layout of a GC-managed object.
+#[derive(Clone, Debug)]
+pub enum GcLayout {
+    /// The layout of a GC-managed array object.
+    Array(GcArrayLayout),
+
+    /// The layout of a GC-managed struct object.
+    Struct(GcStructLayout),
+}
+
+impl From<GcArrayLayout> for GcLayout {
+    fn from(layout: GcArrayLayout) -> Self {
+        Self::Array(layout)
+    }
+}
+
+impl From<GcStructLayout> for GcLayout {
+    fn from(layout: GcStructLayout) -> Self {
+        Self::Struct(layout)
+    }
+}
+
+impl GcLayout {
+    /// Get the underlying `GcStructLayout`, or panic.
+    #[track_caller]
+    pub fn unwrap_struct(&self) -> &GcStructLayout {
+        match self {
+            Self::Struct(s) => s,
+            _ => panic!("GcLayout::unwrap_struct on non-struct GC layout"),
+        }
+    }
+
+    /// Get the underlying `GcArrayLayout`, or panic.
+    #[track_caller]
+    pub fn unwrap_array(&self) -> &GcArrayLayout {
+        match self {
+            Self::Array(a) => a,
+            _ => panic!("GcLayout::unwrap_array on non-array GC layout"),
+        }
+    }
+}
+
+/// The layout of a GC-managed array.
+///
+/// This layout is only valid for use with the GC runtime that created it. It is
+/// not valid to use one GC runtime's layout with another GC runtime, doing so
+/// is memory safe but will lead to general incorrectness like panics and wrong
+/// results.
+///
+/// All offsets are from the start of the object; that is, the size of the GC
+/// header (for example) is included in the offset.
+///
+/// All arrays are composed of the generic `VMGcHeader`, followed by
+/// collector-specific fields, followed by the contiguous array elements
+/// themselves. The array elements must be aligned to the element type's natural
+/// alignment.
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // Not used yet, but added for completeness.
+pub struct GcArrayLayout {
+    /// The size of this array object, ignoring its elements.
+    pub size: u32,
+
+    /// The alignment of this array.
+    pub align: u32,
+
+    /// The offset of the array's length.
+    pub length_field_offset: u32,
+
+    /// The offset from where this array's contiguous elements begin.
+    pub elems_offset: u32,
+
+    /// The size and natural alignment of each element in this array.
+    pub elem_size: u32,
+}
+
+impl GcArrayLayout {
+    /// Get the total size of this array for a given length of elements.
+    pub fn size_for_len(&self, len: u32) -> u32 {
+        self.size + len * self.elem_size
+    }
+
+    /// Get the offset of the `i`th element in an array with this layout.
+    #[inline]
+    pub fn elem_offset(&self, i: u32, elem_size: u32) -> u32 {
+        self.elems_offset + i * elem_size
+    }
+}
+
+/// The layout for a GC-managed struct type.
+///
+/// This layout is only valid for use with the GC runtime that created it. It is
+/// not valid to use one GC runtime's layout with another GC runtime, doing so
+/// is memory safe but will lead to general incorrectness like panics and wrong
+/// results.
+///
+/// All offsets are from the start of the object; that is, the size of the GC
+/// header (for example) is included in the offset.
+#[derive(Clone, Debug)]
+pub struct GcStructLayout {
+    /// The size of this struct.
+    pub size: u32,
+
+    /// The alignment of this struct.
+    pub align: u32,
+
+    /// The fields of this struct. The `i`th entry is the `i`th struct field's
+    /// offset in the struct.
+    pub fields: Vec<u32>,
+}
 
 /// The kind of an object in a GC heap.
 ///

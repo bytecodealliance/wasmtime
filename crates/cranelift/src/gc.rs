@@ -19,6 +19,7 @@ use enabled as imp;
 mod disabled;
 #[cfg(not(feature = "gc"))]
 use disabled as imp;
+use wasmtime_environ::GcTypeLayouts;
 
 /// Get the GC compiler configured for the given function environment.
 pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
@@ -82,6 +83,10 @@ pub fn gc_ref_table_fill_builtin(
 
 /// A trait for different collectors to emit any GC barriers they might require.
 pub trait GcCompiler {
+    /// Get the GC type layouts for this GC compiler.
+    #[allow(dead_code)] // Used in future PRs.
+    fn layouts(&self) -> &dyn GcTypeLayouts;
+
     /// Emit a read barrier for when we are cloning a GC reference onto the Wasm
     /// stack.
     ///

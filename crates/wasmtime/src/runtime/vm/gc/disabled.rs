@@ -6,8 +6,10 @@
 #![allow(missing_docs)]
 
 use crate::prelude::*;
-use crate::runtime::vm::{GcArrayLayout, GcHeap, GcRuntime, GcStructLayout};
-use wasmtime_environ::{WasmArrayType, WasmStructType};
+use crate::runtime::vm::{GcHeap, GcRuntime};
+use wasmtime_environ::{
+    GcArrayLayout, GcStructLayout, GcTypeLayouts, WasmArrayType, WasmStructType,
+};
 
 pub fn default_gc_runtime() -> impl GcRuntime {
     DisabledCollector
@@ -20,11 +22,7 @@ unsafe impl GcRuntime for DisabledCollector {
         unreachable!()
     }
 
-    fn array_layout(&self, _ty: &WasmArrayType) -> GcArrayLayout {
-        unreachable!()
-    }
-
-    fn struct_layout(&self, _ty: &WasmStructType) -> GcStructLayout {
+    fn layouts(&self) -> &dyn GcTypeLayouts {
         unreachable!()
     }
 }

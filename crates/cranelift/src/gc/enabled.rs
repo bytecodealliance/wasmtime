@@ -3,11 +3,13 @@ use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir::{self, condcodes::IntCC, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{TargetEnvironment, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult};
-use wasmtime_environ::{PtrSize, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK};
+use wasmtime_environ::{
+    drc::DrcTypeLayouts, GcTypeLayouts, PtrSize, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+};
 
 /// Get the default GC compiler.
 pub fn gc_compiler(_func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
-    Box::new(DrcCompiler)
+    Box::new(DrcCompiler::default())
 }
 
 pub fn unbarriered_load_gc_ref(
@@ -184,7 +186,10 @@ impl FuncEnvironment<'_> {
     }
 }
 
-struct DrcCompiler;
+#[derive(Default)]
+struct DrcCompiler {
+    layouts: DrcTypeLayouts,
+}
 
 impl DrcCompiler {
     /// Generate code to load the given GC reference's ref count.
@@ -276,6 +281,10 @@ impl DrcCompiler {
 }
 
 impl GcCompiler for DrcCompiler {
+    fn layouts(&self) -> &dyn GcTypeLayouts {
+        &self.layouts
+    }
+
     fn translate_read_gc_reference(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,
