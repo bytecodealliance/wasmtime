@@ -1150,6 +1150,8 @@ jobs:
       - cargo_vet
       - doc
       - micro_checks
+      - no_std_checks
+      - clippy
       - monolith_checks
       - checks_winarm64
       - bench
