@@ -338,7 +338,6 @@ jobs:
   # here isn't to run tests, mostly just serve as a double-check that Rust code
   # compiles and is likely to work everywhere else.
   micro_checks:
-    needs: determine
     name: Check ${{matrix.name}}
     strategy:
       fail-fast: true
@@ -421,7 +420,6 @@ jobs:
 
   # Checks for no_std support, ensure that crates can build on a no_std target
   no_std_checks:
-    needs: determine
     name: no_std checks
     runs-on: ubuntu-latest
     env:
@@ -445,7 +443,6 @@ jobs:
 
   # Check that Clippy lints are passing.
   clippy:
-    needs: determine
     name: Clippy
     runs-on: ubuntu-latest
     env:
@@ -469,7 +466,6 @@ jobs:
   # (e.g. Android NDK) and we haven't factored support for those things out into
   # a parallel jobs yet.
   monolith_checks:
-    needs: determine
     name: Monolith Checks
     runs-on: ubuntu-latest
     env:
