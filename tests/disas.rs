@@ -464,7 +464,7 @@ where
 
         for (addr, is_jump, is_ret, inst) in disas(bytes, sym.address())?.into_iter() {
             if write_offsets || (prev_jump && !is_jump) {
-                write!(result, "{:>4x}: ", addr)?;
+                write!(result, "{addr:>4x}: ")?;
             } else {
                 write!(result, "      ")?;
             }
