@@ -99,6 +99,21 @@
             (dst_lo WritableGpr)
             (dst_hi WritableGpr))
 
+       ;; Same as `Mul`, but for the BMI2 `mulx` instruction. This is different
+       ;; where the two `dst_*` registers can be arbitrary registers and it
+       ;; is always unsigned multiplication. Note that this instruction does
+       ;; not modify or read flags.
+       ;;
+       ;; Note that `dst_hi` here is always a valid register but `dst_lo`
+       ;; is allowed to be `invalid_reg` to indicate that only the high
+       ;; bits are desired. If `dst_lo` is invalid then the instruction itself
+       ;; will only define `dst_hi`.
+       (MulX (size OperandSize)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst_lo WritableGpr)
+             (dst_hi WritableGpr))
+
        ;; Same as `Mul` but the 16-bit multiplication result is stored in `AX`.
        (Mul8 (signed bool)
              (src1 Gpr)
@@ -2635,6 +2650,26 @@
             (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.Mul size signed src1 src2 dst_lo dst_hi))))
         (value_gprs dst_lo dst_hi)))
+
+;; Special case the `mulx` pattern with the BMI2 instruction set.
+(rule 1 (x64_mul (ty_32_or_64 ty) $false src1 src2)
+  (if-let $true (use_bmi2))
+  (let ((dst_lo WritableGpr (temp_writable_gpr))
+        (dst_hi WritableGpr (temp_writable_gpr))
+        (size OperandSize (raw_operand_size_of_type ty))
+        (_ Unit (emit (MInst.MulX size src1 src2 dst_lo dst_hi))))
+    (value_gprs dst_lo dst_hi)))
+
+(decl x64_mulx_hi (Type Gpr GprMem) Gpr)
+(rule (x64_mulx_hi (ty_32_or_64 ty) src1 src2)
+  (let ((dst WritableGpr (temp_writable_gpr))
+        (size OperandSize (raw_operand_size_of_type ty))
+        (_ Unit (emit (MInst.MulX size src1 src2 (writable_invalid_gpr) dst))))
+    dst))
+
+;; Get the invalid register as writable
+(decl writable_invalid_gpr () WritableGpr)
+(extern constructor writable_invalid_gpr writable_invalid_gpr)
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
 ;; on `signed`) for 8-bit operands.

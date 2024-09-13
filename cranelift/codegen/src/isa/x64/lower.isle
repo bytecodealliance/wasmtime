@@ -4354,6 +4354,14 @@
 (rule 1 (lower (umulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
         (value_regs_get_gpr (x64_mul ty $false a b) 1))
 
+;; The BMI2 instruction set introduced `mulx` which defines two registers but
+;; if the two registers are the same then it only defines the upper bits. This
+;; helps slightly reduce register pressure by ensuring only one register here is
+;; clobbered.
+(rule 2 (lower (umulhi a @ (value_type (ty_32_or_64 ty)) b))
+        (if-let $true (use_bmi2))
+        (x64_mulx_hi ty a b))
+
 ;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (smulhi a @ (value_type $I8) b))

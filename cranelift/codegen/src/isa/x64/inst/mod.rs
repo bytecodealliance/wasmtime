@@ -179,6 +179,8 @@ impl Inst {
             | Inst::GprToXmmVex { op, .. }
             | Inst::CvtIntToFloatVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
+
+            Inst::MulX { .. } => smallvec![InstructionSet::BMI2],
         }
     }
 }
@@ -820,6 +822,26 @@ impl PrettyPrint for Inst {
                 } else {
                     format!("mul{suffix}")
                 });
+                format!("{op} {src1}, {src2}, {dst_lo}, {dst_hi}")
+            }
+
+            Inst::MulX {
+                size,
+                src1,
+                src2,
+                dst_lo,
+                dst_hi,
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes());
+                let dst_hi = pretty_print_reg(dst_hi.to_reg().to_reg(), size.to_bytes());
+                let dst_lo = if dst_lo.to_reg().is_invalid_sentinel() {
+                    dst_hi.clone()
+                } else {
+                    pretty_print_reg(dst_lo.to_reg().to_reg(), size.to_bytes())
+                };
+                let src2 = src2.pretty_print(size.to_bytes());
+                let suffix = suffix_bwlq(*size);
+                let op = ljustify(format!("mulx{suffix}"));
                 format!("{op} {src1}, {src2}, {dst_lo}, {dst_hi}")
             }
 
@@ -1968,6 +1990,20 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::IMulImm { src1, dst, .. } => {
             collector.reg_def(dst);
             src1.get_operands(collector);
+        }
+        Inst::MulX {
+            src1,
+            src2,
+            dst_lo,
+            dst_hi,
+            ..
+        } => {
+            if !dst_lo.to_reg().is_invalid_sentinel() {
+                collector.reg_def(dst_lo);
+            }
+            collector.reg_def(dst_hi);
+            collector.reg_fixed_use(src1, regs::rdx());
+            src2.get_operands(collector);
         }
         Inst::SignExtendData { size, src, dst } => {
             match size {
