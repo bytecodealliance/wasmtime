@@ -990,6 +990,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         let mask = -1i128 as u128;
         self.emit_u128_le_const(mask ^ (0xff << (hole_idx * 8)))
     }
+
+    fn writable_invalid_gpr(&mut self) -> WritableGpr {
+        let reg = Gpr::new(self.invalid_reg()).unwrap();
+        WritableGpr::from_reg(reg)
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
