@@ -4,6 +4,7 @@ use crate::decode::*;
 use crate::imms::*;
 use crate::regs::*;
 use crate::ExtendedOpcode;
+use crate::Opcode;
 use alloc::string::ToString;
 use alloc::{vec, vec::Vec};
 use core::fmt;
@@ -12,6 +13,8 @@ use core::ops::ControlFlow;
 use core::ops::{Index, IndexMut};
 use core::ptr::{self, NonNull};
 use sptr::Strict;
+
+mod interp_loop;
 
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 
@@ -121,27 +124,11 @@ impl Vm {
     }
 
     unsafe fn run(&mut self, pc: NonNull<u8>) -> Result<(), NonNull<u8>> {
-        let mut visitor = InterpreterVisitor {
-            state: &mut self.state,
-            pc: UnsafeBytecodeStream::new(pc),
-        };
-
-        loop {
-            let cf = self.decoder.decode_one(&mut visitor).unwrap();
-
-            // Really wish we had `feature(explicit_tail_calls)`...
-            match cf {
-                ControlFlow::Continue(()) => continue,
-
-                // Out-of-line slow paths marked `cold` and `inline(never)` to
-                // improve codegen.
-                ControlFlow::Break(Done::Trap) => {
-                    let pc = visitor.pc.as_ptr();
-                    return self.trap(pc);
-                }
-                ControlFlow::Break(Done::ReturnToHost) => return self.return_to_host(),
-                ControlFlow::Break(Done::HostCall) => return self.host_call(),
-            }
+        let mut bytecode = UnsafeBytecodeStream::new(pc);
+        match interp_loop::interpreter_loop(self, &mut bytecode) {
+            Done::ReturnToHost => self.return_to_host(),
+            Done::Trap => self.trap(pc),
+            Done::HostCall => self.host_call(),
         }
     }
 

@@ -260,7 +260,8 @@ impl BytecodeStream for UnsafeBytecodeStream {
 
 /// Anything that can be decoded from a bytecode stream, e.g. opcodes,
 /// immediates, registers, etc...
-trait Decode: Sized {
+pub trait Decode: Sized {
+    /// Decode this type from the given bytecode stream.
     fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
     where
         T: BytecodeStream;
@@ -374,6 +375,32 @@ impl Decode for PcRelOffset {
         T: BytecodeStream,
     {
         i32::decode(bytecode).map(|x| Self::from(x))
+    }
+}
+
+impl Decode for Opcode {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        let byte = u8::decode(bytecode)?;
+        match Opcode::new(byte) {
+            Some(v) => Ok(v),
+            None => Err(bytecode.invalid_opcode(byte)),
+        }
+    }
+}
+
+impl Decode for ExtendedOpcode {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        let word = u16::decode(bytecode)?;
+        match ExtendedOpcode::new(word) {
+            Some(v) => Ok(v),
+            None => Err(bytecode.invalid_extended_opcode(word)),
+        }
     }
 }
 
@@ -655,3 +682,53 @@ macro_rules! define_extended_decoder {
     };
 }
 for_each_extended_op!(define_extended_decoder);
+
+/// Unwrap a `Result<T, Uninhabited>`.
+/// Always succeeds, since `Uninhabited` is uninhabited.
+pub fn unwrap_uninhabited<T>(res: Result<T, Uninhabited>) -> T {
+    match res {
+        Ok(ok) => ok,
+
+        // Nightly rust warns that this pattern is unreachable, but stable rust
+        // doesn't.
+        #[allow(unreachable_patterns)]
+        Err(err) => match err {},
+    }
+}
+
+/// Functions for decoding the operands of an instruction, assuming the opcode
+/// has already been decoded.
+pub mod operands {
+    use super::*;
+
+    macro_rules! define_operands_decoder {
+        (
+            $(
+                $( #[$attr:meta] )*
+                    $snake_name:ident = $name:ident $( {
+                    $(
+                        $( #[$field_attr:meta] )*
+                        $field:ident : $field_ty:ty
+                    ),*
+                } )? ;
+            )*
+        ) => {
+            $(
+                #[allow(unused_variables)]
+                #[allow(missing_docs)]
+                pub fn $snake_name<T: BytecodeStream>(pc: &mut T) -> Result<($($($field_ty,)*)?), T::Error> {
+                    Ok((($($((<$field_ty>::decode(pc))?,)*)?)))
+                }
+            )*
+        };
+    }
+
+    for_each_op!(define_operands_decoder);
+
+    #[allow(missing_docs)]
+    pub fn extended<T: BytecodeStream>(pc: &mut T) -> Result<(ExtendedOpcode,), T::Error> {
+        Ok((ExtendedOpcode::decode(pc)?,))
+    }
+
+    for_each_extended_op!(define_operands_decoder);
+}

@@ -176,6 +176,9 @@ unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
 unused-macro-rules = 'warn'
 
+# Don't warn about unknown cfg condition in `#[cfg(pulley_tail_calls)]`
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(pulley_tail_calls)'] }
+
 [workspace.lints.clippy]
 # The default set of lints in Clippy is viewed as "too noisy" right now so
 # they're all turned off by default. Selective lints are then enabled below as

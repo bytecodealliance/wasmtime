@@ -497,6 +497,13 @@ jobs:
     - run: rustup target add x86_64-unknown-freebsd
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
 
+    # Check that `pulley-interpreter` compiles with tail calls enabled.  Don't
+    # actually run the tests with tail calls enabled, because ther are not yet
+    # implemented in rustc and cause an ICE.
+    - run: cargo check -p pulley-interpreter
+      env:
+        RUSTFLAGS: "--cfg pulley_tail_calls"
+
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
     - name: Re-vendor WIT
