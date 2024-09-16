@@ -943,7 +943,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
             CallConv::Probestack => todo!("probestack?"),
-            CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
+            CallConv::AppleAarch64 => unreachable!(),
         };
         // Sort registers for deterministic code output. We can do an unstable sort because the
         // registers will be unique (there are no dups).
@@ -1138,7 +1138,7 @@ fn get_intreg_for_retval(
             is_last.then(|| regs::rax())
         }
         CallConv::Probestack => todo!(),
-        CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 => unreachable!(),
     }
 }
 
@@ -1166,7 +1166,7 @@ fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize, is_last: bool)
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
         CallConv::Probestack => todo!(),
-        CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 => unreachable!(),
     }
 }
 

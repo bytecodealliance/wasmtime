@@ -39,7 +39,7 @@ block0(v0: i64x2):
 ;   verllg %v24, %v4, 0x20
 ;   br %r14
 
-function %bitcast_i64x2_i32x4(i64x2) -> i32x4 wasmtime_system_v {
+function %bitcast_i64x2_i32x4(i64x2) -> i32x4 tail {
 block0(v0: i64x2):
   v1 = bitcast.i32x4 big v0
   return v1
@@ -59,7 +59,7 @@ block0(v0: i64x2):
 ;   verllg %v24, %v4, 0x20
 ;   br %r14
 
-function %bitcast_i64x2_i32x4(i64x2) -> i32x4 wasmtime_system_v {
+function %bitcast_i64x2_i32x4(i64x2) -> i32x4 tail {
 block0(v0: i64x2):
   v1 = bitcast.i32x4 little v0
   return v1
@@ -101,7 +101,7 @@ block0(v0: i64x2):
 ; block0: ; offset 0x0
 ;   br %r14
 
-function %bitcast_i64x2_f64x2(i64x2) -> f64x2 wasmtime_system_v {
+function %bitcast_i64x2_f64x2(i64x2) -> f64x2 tail {
 block0(v0: i64x2):
   v1 = bitcast.f64x2 big v0
   return v1

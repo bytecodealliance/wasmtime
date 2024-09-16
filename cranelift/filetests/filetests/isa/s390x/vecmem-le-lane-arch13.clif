@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x arch13
 
-function %uload8x8_big(i64) -> i16x8 wasmtime_system_v {
+function %uload8x8_big(i64) -> i16x8 tail {
 block0(v0: i64):
   v1 = uload8x8 big v0
   return v1
@@ -21,7 +21,7 @@ block0(v0: i64):
 ;   vuplhb %v24, %v2
 ;   br %r14
 
-function %uload16x4_big(i64) -> i32x4 wasmtime_system_v {
+function %uload16x4_big(i64) -> i32x4 tail {
 block0(v0: i64):
   v1 = uload16x4 big v0
   return v1
@@ -43,7 +43,7 @@ block0(v0: i64):
 ;   vuplhh %v24, %v4
 ;   br %r14
 
-function %uload32x2_big(i64) -> i64x2 wasmtime_system_v {
+function %uload32x2_big(i64) -> i64x2 tail {
 block0(v0: i64):
   v1 = uload32x2 big v0
   return v1
@@ -63,7 +63,7 @@ block0(v0: i64):
 ;   vuplhf %v24, %v4
 ;   br %r14
 
-function %sload8x8_big(i64) -> i16x8 wasmtime_system_v {
+function %sload8x8_big(i64) -> i16x8 tail {
 block0(v0: i64):
   v1 = sload8x8 big v0
   return v1
@@ -83,7 +83,7 @@ block0(v0: i64):
 ;   vuphb %v24, %v2
 ;   br %r14
 
-function %sload16x4_big(i64) -> i32x4 wasmtime_system_v {
+function %sload16x4_big(i64) -> i32x4 tail {
 block0(v0: i64):
   v1 = sload16x4 big v0
   return v1
@@ -105,7 +105,7 @@ block0(v0: i64):
 ;   vuphh %v24, %v4
 ;   br %r14
 
-function %sload32x2_big(i64) -> i64x2 wasmtime_system_v {
+function %sload32x2_big(i64) -> i64x2 tail {
 block0(v0: i64):
   v1 = sload32x2 big v0
   return v1
@@ -125,7 +125,7 @@ block0(v0: i64):
 ;   vuphf %v24, %v4
 ;   br %r14
 
-function %load_i8x16_big(i64) -> i8x16 wasmtime_system_v {
+function %load_i8x16_big(i64) -> i8x16 tail {
 block0(v0: i64):
   v1 = load.i8x16 big v0
   return v1
@@ -142,7 +142,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r6)
 
-function %load_i16x8_big(i64) -> i16x8 wasmtime_system_v {
+function %load_i16x8_big(i64) -> i16x8 tail {
 block0(v0: i64):
   v1 = load.i16x8 big v0
   return v1
@@ -160,7 +160,7 @@ block0(v0: i64):
 ;   lr %r0, %r7
 ;   br %r14
 
-function %load_i32x4_big(i64) -> i32x4 wasmtime_system_v {
+function %load_i32x4_big(i64) -> i32x4 tail {
 block0(v0: i64):
   v1 = load.i32x4 big v0
   return v1
@@ -178,7 +178,7 @@ block0(v0: i64):
 ;   ldr %f0, %f7
 ;   br %r14
 
-function %load_i64x2_big(i64) -> i64x2 wasmtime_system_v {
+function %load_i64x2_big(i64) -> i64x2 tail {
 block0(v0: i64):
   v1 = load.i64x2 big v0
   return v1
@@ -196,7 +196,7 @@ block0(v0: i64):
 ;   ler %f0, %f7
 ;   br %r14
 
-function %load_f32x4_big(i64) -> f32x4 wasmtime_system_v {
+function %load_f32x4_big(i64) -> f32x4 tail {
 block0(v0: i64):
   v1 = load.f32x4 big v0
   return v1
@@ -214,7 +214,7 @@ block0(v0: i64):
 ;   ldr %f0, %f7
 ;   br %r14
 
-function %load_f64x2_big(i64) -> f64x2 wasmtime_system_v {
+function %load_f64x2_big(i64) -> f64x2 tail {
 block0(v0: i64):
   v1 = load.f64x2 big v0
   return v1
@@ -232,7 +232,7 @@ block0(v0: i64):
 ;   ler %f0, %f7
 ;   br %r14
 
-function %store_i8x16_big(i8x16, i64) wasmtime_system_v {
+function %store_i8x16_big(i8x16, i64) tail {
 block0(v0: i8x16, v1: i64):
   store.i8x16 big v0, v1
   return
@@ -249,7 +249,7 @@ block0(v0: i8x16, v1: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r14)
 
-function %store_i16x8_big(i16x8, i64) wasmtime_system_v {
+function %store_i16x8_big(i16x8, i64) tail {
 block0(v0: i16x8, v1: i64):
   store.i16x8 big v0, v1
   return
@@ -267,7 +267,7 @@ block0(v0: i16x8, v1: i64):
 ;   lr %r0, %r15
 ;   br %r14
 
-function %store_i32x4_big(i32x4, i64) wasmtime_system_v {
+function %store_i32x4_big(i32x4, i64) tail {
 block0(v0: i32x4, v1: i64):
   store.i32x4 big v0, v1
   return
@@ -285,7 +285,7 @@ block0(v0: i32x4, v1: i64):
 ;   ldr %f0, %f15
 ;   br %r14
 
-function %store_i64x2_big(i64x2, i64) wasmtime_system_v {
+function %store_i64x2_big(i64x2, i64) tail {
 block0(v0: i64x2, v1: i64):
   store.i64x2 big v0, v1
   return
@@ -303,7 +303,7 @@ block0(v0: i64x2, v1: i64):
 ;   ler %f0, %f15
 ;   br %r14
 
-function %store_f32x4_big(f32x4, i64) wasmtime_system_v {
+function %store_f32x4_big(f32x4, i64) tail {
 block0(v0: f32x4, v1: i64):
   store.f32x4 big v0, v1
   return
@@ -321,7 +321,7 @@ block0(v0: f32x4, v1: i64):
 ;   ldr %f0, %f15
 ;   br %r14
 
-function %store_f64x2_big(f64x2, i64) wasmtime_system_v {
+function %store_f64x2_big(f64x2, i64) tail {
 block0(v0: f64x2, v1: i64):
   store.f64x2 big v0, v1
   return
@@ -339,7 +339,7 @@ block0(v0: f64x2, v1: i64):
 ;   ler %f0, %f15
 ;   br %r14
 
-function %uload8x8_little(i64) -> i16x8 wasmtime_system_v {
+function %uload8x8_little(i64) -> i16x8 tail {
 block0(v0: i64):
   v1 = uload8x8 little v0
   return v1
@@ -359,7 +359,7 @@ block0(v0: i64):
 ;   vuplhb %v24, %v2
 ;   br %r14
 
-function %uload16x4_little(i64) -> i32x4 wasmtime_system_v {
+function %uload16x4_little(i64) -> i32x4 tail {
 block0(v0: i64):
   v1 = uload16x4 little v0
   return v1
@@ -379,7 +379,7 @@ block0(v0: i64):
 ;   vuplhh %v24, %v2
 ;   br %r14
 
-function %uload32x2_little(i64) -> i64x2 wasmtime_system_v {
+function %uload32x2_little(i64) -> i64x2 tail {
 block0(v0: i64):
   v1 = uload32x2 little v0
   return v1
@@ -399,7 +399,7 @@ block0(v0: i64):
 ;   vuplhf %v24, %v2
 ;   br %r14
 
-function %sload8x8_little(i64) -> i16x8 wasmtime_system_v {
+function %sload8x8_little(i64) -> i16x8 tail {
 block0(v0: i64):
   v1 = sload8x8 little v0
   return v1
@@ -419,7 +419,7 @@ block0(v0: i64):
 ;   vuphb %v24, %v2
 ;   br %r14
 
-function %sload16x4_little(i64) -> i32x4 wasmtime_system_v {
+function %sload16x4_little(i64) -> i32x4 tail {
 block0(v0: i64):
   v1 = sload16x4 little v0
   return v1
@@ -439,7 +439,7 @@ block0(v0: i64):
 ;   vuphh %v24, %v2
 ;   br %r14
 
-function %sload32x2_little(i64) -> i64x2 wasmtime_system_v {
+function %sload32x2_little(i64) -> i64x2 tail {
 block0(v0: i64):
   v1 = sload32x2 little v0
   return v1
@@ -459,7 +459,7 @@ block0(v0: i64):
 ;   vuphf %v24, %v2
 ;   br %r14
 
-function %load_i8x16_little(i64) -> i8x16 wasmtime_system_v {
+function %load_i8x16_little(i64) -> i8x16 tail {
 block0(v0: i64):
   v1 = load.i8x16 little v0
   return v1
@@ -476,7 +476,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r6)
 
-function %load_i16x8_little(i64) -> i16x8 wasmtime_system_v {
+function %load_i16x8_little(i64) -> i16x8 tail {
 block0(v0: i64):
   v1 = load.i16x8 little v0
   return v1
@@ -493,7 +493,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r6)
 
-function %load_i32x4_little(i64) -> i32x4 wasmtime_system_v {
+function %load_i32x4_little(i64) -> i32x4 tail {
 block0(v0: i64):
   v1 = load.i32x4 little v0
   return v1
@@ -510,7 +510,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r6)
 
-function %load_i64x2_little(i64) -> i64x2 wasmtime_system_v {
+function %load_i64x2_little(i64) -> i64x2 tail {
 block0(v0: i64):
   v1 = load.i64x2 little v0
   return v1
@@ -527,7 +527,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r6)
 
-function %load_f32x4_little(i64) -> f32x4 wasmtime_system_v {
+function %load_f32x4_little(i64) -> f32x4 tail {
 block0(v0: i64):
   v1 = load.f32x4 little v0
   return v1
@@ -544,7 +544,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r6)
 
-function %load_f64x2_little(i64) -> f64x2 wasmtime_system_v {
+function %load_f64x2_little(i64) -> f64x2 tail {
 block0(v0: i64):
   v1 = load.f64x2 little v0
   return v1
@@ -561,7 +561,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r6)
 
-function %store_i8x16_little(i8x16, i64) wasmtime_system_v {
+function %store_i8x16_little(i8x16, i64) tail {
 block0(v0: i8x16, v1: i64):
   store.i8x16 little v0, v1
   return
@@ -578,7 +578,7 @@ block0(v0: i8x16, v1: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r14)
 
-function %store_i16x8_little(i16x8, i64) wasmtime_system_v {
+function %store_i16x8_little(i16x8, i64) tail {
 block0(v0: i16x8, v1: i64):
   store.i16x8 little v0, v1
   return
@@ -595,7 +595,7 @@ block0(v0: i16x8, v1: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r14)
 
-function %store_i32x4_little(i32x4, i64) wasmtime_system_v {
+function %store_i32x4_little(i32x4, i64) tail {
 block0(v0: i32x4, v1: i64):
   store.i32x4 little v0, v1
   return
@@ -612,7 +612,7 @@ block0(v0: i32x4, v1: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r14)
 
-function %store_i64x2_little(i64x2, i64) wasmtime_system_v {
+function %store_i64x2_little(i64x2, i64) tail {
 block0(v0: i64x2, v1: i64):
   store.i64x2 little v0, v1
   return
@@ -629,7 +629,7 @@ block0(v0: i64x2, v1: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r14)
 
-function %store_f32x4_little(f32x4, i64) wasmtime_system_v {
+function %store_f32x4_little(f32x4, i64) tail {
 block0(v0: f32x4, v1: i64):
   store.f32x4 little v0, v1
   return
@@ -646,7 +646,7 @@ block0(v0: f32x4, v1: i64):
 ;   lpdr %f0, %f0
 ;   lh %r0, 0x7fe(%r14)
 
-function %store_f64x2_little(f64x2, i64) wasmtime_system_v {
+function %store_f64x2_little(f64x2, i64) tail {
 block0(v0: f64x2, v1: i64):
   store.f64x2 little v0, v1
   return
