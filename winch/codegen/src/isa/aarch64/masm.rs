@@ -12,7 +12,7 @@ use crate::{
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
-    isa::aarch64::inst::VectorSize,
+    isa::aarch64::inst::{Cond, VectorSize},
     settings, Final, MachBufferFinalized, MachLabel,
 };
 use regalloc2::RegClass;
@@ -238,8 +238,9 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, _dst: WritableReg, _src: Reg, _cc: IntCmpKind, _size: OperandSize) {
-        todo!()
+    fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, size: OperandSize) {
+        self.asm.jmp_if_resolved(Cond::from(cc).invert(), 12);
+        self.asm.mov_rr(src, dst, size)
     }
 
     fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
@@ -262,13 +263,14 @@ impl Masm for MacroAssembler {
 
     fn checked_uadd(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: RegImm,
-        _size: OperandSize,
-        _trap: TrapCode,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: RegImm,
+        size: OperandSize,
+        trap: TrapCode,
     ) {
-        todo!()
+        self.add(dst, lhs, rhs, size);
+        self.asm.trapif(Cond::Vs, trap);
     }
 
     fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
@@ -632,7 +634,7 @@ impl Masm for MacroAssembler {
     }
 
     fn unreachable(&mut self) {
-        self.asm.udf(TrapCode::UnreachableCodeReached);
+        self.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {

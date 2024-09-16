@@ -642,6 +642,15 @@ impl Assembler {
         });
     }
 
+    /// A conditional branch with resolved destination.
+    pub fn jmp_if_resolved(&mut self, kind: Cond, taken: i32) {
+        self.emit(Inst::CondBr {
+            taken: BranchTarget::ResolvedOffset(taken),
+            not_taken: BranchTarget::ResolvedOffset(4),
+            kind: CondBrKind::Cond(kind),
+        });
+    }
+
     /// Emits a jump table sequence.
     pub fn jmp_table(
         &mut self,
