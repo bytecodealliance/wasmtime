@@ -372,7 +372,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         &self,
         mut request: InstanceAllocationRequest,
     ) -> Result<InstanceHandle> {
-        let module = request.runtime_info.module();
+        let module = request.runtime_info.env_module();
 
         #[cfg(debug_assertions)]
         InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
@@ -438,7 +438,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         request: &mut InstanceAllocationRequest,
         memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) -> Result<()> {
-        let module = request.runtime_info.module();
+        let module = request.runtime_info.env_module();
 
         #[cfg(debug_assertions)]
         InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
@@ -490,7 +490,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         request: &mut InstanceAllocationRequest,
         tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<()> {
-        let module = request.runtime_info.module();
+        let module = request.runtime_info.env_module();
 
         #[cfg(debug_assertions)]
         InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
@@ -636,7 +636,7 @@ fn get_memory_init_start(
     let mut context = ConstEvalContext::new(instance, module);
     let mut const_evaluator = ConstExprEvaluator::default();
     unsafe { const_evaluator.eval(&mut context, &init.offset) }.map(|v| {
-        match instance.module().memory_plans[init.memory_index]
+        match instance.env_module().memory_plans[init.memory_index]
             .memory
             .idx_type
         {
@@ -706,7 +706,10 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
             let val = unsafe { self.const_evaluator.eval(&mut context, expr) }
                 .expect("const expression should be valid");
             Some(
-                match self.instance.module().memory_plans[memory].memory.idx_type {
+                match self.instance.env_module().memory_plans[memory]
+                    .memory
+                    .idx_type
+                {
                     wasmtime_environ::IndexType::I32 => val.get_u32().into(),
                     wasmtime_environ::IndexType::I64 => val.get_u64(),
                 },

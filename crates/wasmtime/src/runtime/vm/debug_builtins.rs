@@ -11,7 +11,7 @@ static mut VMCTX_AND_MEMORY: (*mut VMContext, usize) = (std::ptr::null_mut(), 0)
 pub unsafe extern "C" fn resolve_vmctx_memory(ptr: usize) -> *const u8 {
     Instance::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
         assert!(
-            VMCTX_AND_MEMORY.1 < handle.module().memory_plans.len(),
+            VMCTX_AND_MEMORY.1 < handle.env_module().memory_plans.len(),
             "memory index for debugger is out of bounds"
         );
         let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
@@ -29,7 +29,7 @@ pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
     );
     Instance::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
         assert!(
-            VMCTX_AND_MEMORY.1 < handle.module().memory_plans.len(),
+            VMCTX_AND_MEMORY.1 < handle.env_module().memory_plans.len(),
             "memory index for debugger is out of bounds"
         );
         let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);

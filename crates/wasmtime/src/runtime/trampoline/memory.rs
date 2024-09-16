@@ -204,7 +204,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         #[cfg(debug_assertions)]
         {
-            let module = request.runtime_info.module();
+            let module = request.runtime_info.env_module();
             let offsets = request.runtime_info.offsets();
             self.validate_module_impl(module, offsets)
                 .expect("should have already validated the module before allocating memory");

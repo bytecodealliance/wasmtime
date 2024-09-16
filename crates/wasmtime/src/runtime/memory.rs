@@ -1013,7 +1013,7 @@ impl SharedMemory {
     ) -> Self {
         #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
         crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
-            let memory_index = handle.module().memory_index(wasmtime_export.index);
+            let memory_index = handle.env_module().memory_index(wasmtime_export.index);
             let page_size = handle.memory_page_size(memory_index);
             debug_assert!(page_size.is_power_of_two());
             let page_size_log2 = u8::try_from(page_size.ilog2()).unwrap();
