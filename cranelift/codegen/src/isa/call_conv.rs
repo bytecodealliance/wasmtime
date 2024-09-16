@@ -28,16 +28,11 @@ pub enum CallConv {
     AppleAarch64,
     /// Specialized convention for the probestack function.
     Probestack,
-    /// Wasmtime equivalent of SystemV, not ABI-stable.
-    ///
-    /// FIXME: remove this when Wasmtime uses the "tail" calling convention for
-    /// all wasm functions.
-    WasmtimeSystemV,
     /// The winch calling convention, not ABI-stable.
     ///
-    /// The main difference to WasmtimeSystemV is that the winch calling
-    /// convention defines no callee-save registers, and restricts the number
-    /// of return registers to one integer, and one floating point.
+    /// The main difference to SystemV is that the winch calling convention
+    /// defines no callee-save registers, and restricts the number of return
+    /// registers to one integer, and one floating point.
     Winch,
 }
 
@@ -74,22 +69,6 @@ impl CallConv {
             _ => false,
         }
     }
-
-    /// Is the calling convention extending the Windows Fastcall ABI?
-    pub fn extends_windows_fastcall(self) -> bool {
-        match self {
-            Self::WindowsFastcall => true,
-            _ => false,
-        }
-    }
-
-    /// Is the calling convention extending the Apple aarch64 ABI?
-    pub fn extends_apple_aarch64(self) -> bool {
-        match self {
-            Self::AppleAarch64 => true,
-            _ => false,
-        }
-    }
 }
 
 impl fmt::Display for CallConv {
@@ -102,7 +81,6 @@ impl fmt::Display for CallConv {
             Self::WindowsFastcall => "windows_fastcall",
             Self::AppleAarch64 => "apple_aarch64",
             Self::Probestack => "probestack",
-            Self::WasmtimeSystemV => "wasmtime_system_v",
             Self::Winch => "winch",
         })
     }
@@ -119,7 +97,6 @@ impl str::FromStr for CallConv {
             "windows_fastcall" => Ok(Self::WindowsFastcall),
             "apple_aarch64" => Ok(Self::AppleAarch64),
             "probestack" => Ok(Self::Probestack),
-            "wasmtime_system_v" => Ok(Self::WasmtimeSystemV),
             "winch" => Ok(Self::Winch),
             _ => Err(()),
         }

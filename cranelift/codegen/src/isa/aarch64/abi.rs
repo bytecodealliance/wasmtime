@@ -109,7 +109,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
-        let is_apple_cc = call_conv.extends_apple_aarch64();
+        let is_apple_cc = call_conv == isa::CallConv::AppleAarch64;
         let is_winch_return = call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets;
 
         // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
@@ -594,7 +594,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     });
                 }
 
-                if flags.unwind_info() && call_conv.extends_apple_aarch64() {
+                if flags.unwind_info() && call_conv == isa::CallConv::AppleAarch64 {
                     // The macOS unwinder seems to require this.
                     insts.push(Inst::Unwind {
                         inst: UnwindInst::Aarch64SetPointerAuth {

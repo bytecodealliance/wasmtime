@@ -1060,7 +1060,6 @@ impl IsleContext<'_, '_, MInst, S390xBackend> {
 #[inline]
 fn lane_order_for_call_conv(call_conv: CallConv) -> LaneOrder {
     match call_conv {
-        CallConv::WasmtimeSystemV => LaneOrder::LittleEndian,
         CallConv::Tail => LaneOrder::LittleEndian,
         _ => LaneOrder::BigEndian,
     }

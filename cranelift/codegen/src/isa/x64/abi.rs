@@ -101,7 +101,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
-        let is_fastcall = call_conv.extends_windows_fastcall();
+        let is_fastcall = call_conv == CallConv::WindowsFastcall;
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
@@ -199,7 +199,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 && args_or_rets == ArgsOrRets::Args
                 && is_fastcall
             {
-                let pointer = match get_intreg_for_arg(&call_conv, next_gpr, next_param_idx) {
+                let pointer = match get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
                     Some(reg) => {
                         next_gpr += 1;
                         ABIArgSlot::Reg {
@@ -238,8 +238,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             {
                 let mut slots = ABIArgSlotVec::new();
                 match (
-                    get_intreg_for_arg(&CallConv::SystemV, next_gpr, next_param_idx),
-                    get_intreg_for_arg(&CallConv::SystemV, next_gpr + 1, next_param_idx + 1),
+                    get_intreg_for_arg(CallConv::SystemV, next_gpr, next_param_idx),
+                    get_intreg_for_arg(CallConv::SystemV, next_gpr + 1, next_param_idx + 1),
                 ) {
                     (Some(reg1), Some(reg2)) => {
                         slots.push(ABIArgSlot::Reg {
@@ -292,19 +292,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 let intreg = *rc == RegClass::Int;
                 let nextreg = if intreg {
                     match args_or_rets {
-                        ArgsOrRets::Args => {
-                            get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
-                        }
+                        ArgsOrRets::Args => get_intreg_for_arg(call_conv, next_gpr, next_param_idx),
                         ArgsOrRets::Rets => {
-                            get_intreg_for_retval(&call_conv, flags, next_gpr, last_slot)
+                            get_intreg_for_retval(call_conv, flags, next_gpr, last_slot)
                         }
                     }
                 } else {
                     match args_or_rets {
                         ArgsOrRets::Args => {
-                            get_fltreg_for_arg(&call_conv, next_vreg, next_param_idx)
+                            get_fltreg_for_arg(call_conv, next_vreg, next_param_idx)
                         }
-                        ArgsOrRets::Rets => get_fltreg_for_retval(&call_conv, next_vreg, last_slot),
+                        ArgsOrRets::Rets => get_fltreg_for_retval(call_conv, next_vreg, last_slot),
                     }
                 };
                 next_param_idx += 1;
@@ -366,7 +364,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if let Some(reg) = get_intreg_for_arg(&call_conv, next_gpr, next_param_idx) {
+            if let Some(reg) = get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
                 args.push_non_formal(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
                     types::I64,
@@ -582,12 +580,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_return(
-        call_conv: isa::CallConv,
+        call_conv: CallConv,
         _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         // Emit return instruction.
-        let stack_bytes_to_pop = if call_conv == isa::CallConv::Tail {
+        let stack_bytes_to_pop = if call_conv == CallConv::Tail {
             frame_layout.tail_args_size
         } else {
             0
@@ -836,9 +834,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         mut alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
-        let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
-        let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
-        let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
+        let arg0 = get_intreg_for_arg(call_conv, 0, 0).unwrap();
+        let arg1 = get_intreg_for_arg(call_conv, 1, 1).unwrap();
+        let arg2 = get_intreg_for_arg(call_conv, 2, 2).unwrap();
         let temp = alloc_tmp(Self::word_type());
         let temp2 = alloc_tmp(Self::word_type());
         insts.push(Inst::imm(OperandSize::Size64, size as u64, temp));
@@ -902,8 +900,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         match call_conv_of_callee {
-            isa::CallConv::Winch => ALL_CLOBBERS,
-            _ if call_conv_of_callee.extends_windows_fastcall() => WINDOWS_CLOBBERS,
+            CallConv::Winch => ALL_CLOBBERS,
+            CallConv::WindowsFastcall => WINDOWS_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }
     }
@@ -943,7 +941,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
             CallConv::Probestack => todo!("probestack?"),
-            CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
+            CallConv::AppleAarch64 => unreachable!(),
         };
         // Sort registers for deterministic code output. We can do an unstable sort because the
         // registers will be unique (there are no dups).
@@ -1055,8 +1053,8 @@ impl From<StackAMode> for SyntheticAmode {
     }
 }
 
-fn get_intreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
-    let is_fastcall = call_conv.extends_windows_fastcall();
+fn get_intreg_for_arg(call_conv: CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
+    let is_fastcall = call_conv == CallConv::WindowsFastcall;
 
     // Fastcall counts by absolute argument number; SysV counts by argument of
     // this (integer) class.
@@ -1076,8 +1074,8 @@ fn get_intreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
     }
 }
 
-fn get_fltreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
-    let is_fastcall = call_conv.extends_windows_fastcall();
+fn get_fltreg_for_arg(call_conv: CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
+    let is_fastcall = call_conv == CallConv::WindowsFastcall;
 
     // Fastcall counts by absolute argument number; SysV counts by argument of
     // this (floating-point) class.
@@ -1100,7 +1098,7 @@ fn get_fltreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
 }
 
 fn get_intreg_for_retval(
-    call_conv: &CallConv,
+    call_conv: CallConv,
     flags: &settings::Flags,
     intreg_idx: usize,
     is_last: bool,
@@ -1138,11 +1136,11 @@ fn get_intreg_for_retval(
             is_last.then(|| regs::rax())
         }
         CallConv::Probestack => todo!(),
-        CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 => unreachable!(),
     }
 }
 
-fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize, is_last: bool) -> Option<Reg> {
+fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match fltreg_idx {
             0 => Some(regs::xmm0()),
@@ -1166,7 +1164,7 @@ fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize, is_last: bool)
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
         CallConv::Probestack => todo!(),
-        CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 => unreachable!(),
     }
 }
 

@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x
 
-function %snarrow_i64x2_i32x4(i64x2, i64x2) -> i32x4 wasmtime_system_v {
+function %snarrow_i64x2_i32x4(i64x2, i64x2) -> i32x4 tail {
 block0(v0: i64x2, v1: i64x2):
   v2 = snarrow.i64x2 v0, v1
   return v2
@@ -17,7 +17,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   vpksg %v24, %v25, %v24
 ;   br %r14
 
-function %snarrow_i32x4_i16x8(i32x4, i32x4) -> i16x8 wasmtime_system_v {
+function %snarrow_i32x4_i16x8(i32x4, i32x4) -> i16x8 tail {
 block0(v0: i32x4, v1: i32x4):
   v2 = snarrow.i32x4 v0, v1
   return v2
@@ -33,7 +33,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   vpksf %v24, %v25, %v24
 ;   br %r14
 
-function %snarrow_i16x8_i8x16(i16x8, i16x8) -> i8x16 wasmtime_system_v {
+function %snarrow_i16x8_i8x16(i16x8, i16x8) -> i8x16 tail {
 block0(v0: i16x8, v1: i16x8):
   v2 = snarrow.i16x8 v0, v1
   return v2
@@ -49,7 +49,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   vpksh %v24, %v25, %v24
 ;   br %r14
 
-function %unarrow_i64x2_i32x4(i64x2, i64x2) -> i32x4 wasmtime_system_v {
+function %unarrow_i64x2_i32x4(i64x2, i64x2) -> i32x4 tail {
 block0(v0: i64x2, v1: i64x2):
   v2 = unarrow.i64x2 v0, v1
   return v2
@@ -71,7 +71,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   vpklsg %v24, %v7, %v5
 ;   br %r14
 
-function %unarrow_i32x4_i16x8(i32x4, i32x4) -> i16x8 wasmtime_system_v {
+function %unarrow_i32x4_i16x8(i32x4, i32x4) -> i16x8 tail {
 block0(v0: i32x4, v1: i32x4):
   v2 = unarrow.i32x4 v0, v1
   return v2
@@ -93,7 +93,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   vpklsf %v24, %v7, %v5
 ;   br %r14
 
-function %unarrow_i16x8_i8x16(i16x8, i16x8) -> i8x16 wasmtime_system_v {
+function %unarrow_i16x8_i8x16(i16x8, i16x8) -> i8x16 tail {
 block0(v0: i16x8, v1: i16x8):
   v2 = unarrow.i16x8 v0, v1
   return v2
@@ -115,7 +115,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   vpklsh %v24, %v7, %v5
 ;   br %r14
 
-function %uunarrow_i64x2_i32x4(i64x2, i64x2) -> i32x4 wasmtime_system_v {
+function %uunarrow_i64x2_i32x4(i64x2, i64x2) -> i32x4 tail {
 block0(v0: i64x2, v1: i64x2):
   v2 = uunarrow.i64x2 v0, v1
   return v2
@@ -131,7 +131,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   vpklsg %v24, %v25, %v24
 ;   br %r14
 
-function %uunarrow_i32x4_i16x8(i32x4, i32x4) -> i16x8 wasmtime_system_v {
+function %uunarrow_i32x4_i16x8(i32x4, i32x4) -> i16x8 tail {
 block0(v0: i32x4, v1: i32x4):
   v2 = uunarrow.i32x4 v0, v1
   return v2
@@ -147,7 +147,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   vpklsf %v24, %v25, %v24
 ;   br %r14
 
-function %uunarrow_i16x8_i8x16(i16x8, i16x8) -> i8x16 wasmtime_system_v {
+function %uunarrow_i16x8_i8x16(i16x8, i16x8) -> i8x16 tail {
 block0(v0: i16x8, v1: i16x8):
   v2 = uunarrow.i16x8 v0, v1
   return v2
@@ -163,7 +163,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   vpklsh %v24, %v25, %v24
 ;   br %r14
 
-function %swiden_low_i32x4_i64x2(i32x4) -> i64x2 wasmtime_system_v {
+function %swiden_low_i32x4_i64x2(i32x4) -> i64x2 tail {
 block0(v0: i32x4):
   v1 = swiden_low.i32x4 v0
   return v1
@@ -179,7 +179,7 @@ block0(v0: i32x4):
 ;   vuplf %v24, %v24
 ;   br %r14
 
-function %swiden_low_i16x8_i32x4(i16x8) -> i32x4 wasmtime_system_v {
+function %swiden_low_i16x8_i32x4(i16x8) -> i32x4 tail {
 block0(v0: i16x8):
   v1 = swiden_low.i16x8 v0
   return v1
@@ -195,7 +195,7 @@ block0(v0: i16x8):
 ;   vuplhw %v24, %v24
 ;   br %r14
 
-function %swiden_low_i8x16_i16x8(i8x16) -> i16x8 wasmtime_system_v {
+function %swiden_low_i8x16_i16x8(i8x16) -> i16x8 tail {
 block0(v0: i8x16):
   v1 = swiden_low.i8x16 v0
   return v1
@@ -211,7 +211,7 @@ block0(v0: i8x16):
 ;   vuplb %v24, %v24
 ;   br %r14
 
-function %swiden_high_i32x4_i64x2(i32x4) -> i64x2 wasmtime_system_v {
+function %swiden_high_i32x4_i64x2(i32x4) -> i64x2 tail {
 block0(v0: i32x4):
   v1 = swiden_high.i32x4 v0
   return v1
@@ -227,7 +227,7 @@ block0(v0: i32x4):
 ;   vuphf %v24, %v24
 ;   br %r14
 
-function %swiden_high_i16x8_i32x4(i16x8) -> i32x4 wasmtime_system_v {
+function %swiden_high_i16x8_i32x4(i16x8) -> i32x4 tail {
 block0(v0: i16x8):
   v1 = swiden_high.i16x8 v0
   return v1
@@ -243,7 +243,7 @@ block0(v0: i16x8):
 ;   vuphh %v24, %v24
 ;   br %r14
 
-function %swiden_high_i8x16_i16x8(i8x16) -> i16x8 wasmtime_system_v {
+function %swiden_high_i8x16_i16x8(i8x16) -> i16x8 tail {
 block0(v0: i8x16):
   v1 = swiden_high.i8x16 v0
   return v1
@@ -259,7 +259,7 @@ block0(v0: i8x16):
 ;   vuphb %v24, %v24
 ;   br %r14
 
-function %uwiden_low_i32x4_i64x2(i32x4) -> i64x2 wasmtime_system_v {
+function %uwiden_low_i32x4_i64x2(i32x4) -> i64x2 tail {
 block0(v0: i32x4):
   v1 = uwiden_low.i32x4 v0
   return v1
@@ -275,7 +275,7 @@ block0(v0: i32x4):
 ;   vupllf %v24, %v24
 ;   br %r14
 
-function %uwiden_low_i16x8_i32x4(i16x8) -> i32x4 wasmtime_system_v {
+function %uwiden_low_i16x8_i32x4(i16x8) -> i32x4 tail {
 block0(v0: i16x8):
   v1 = uwiden_low.i16x8 v0
   return v1
@@ -291,7 +291,7 @@ block0(v0: i16x8):
 ;   vupllh %v24, %v24
 ;   br %r14
 
-function %uwiden_low_i8x16_i16x8(i8x16) -> i16x8 wasmtime_system_v {
+function %uwiden_low_i8x16_i16x8(i8x16) -> i16x8 tail {
 block0(v0: i8x16):
   v1 = uwiden_low.i8x16 v0
   return v1
@@ -307,7 +307,7 @@ block0(v0: i8x16):
 ;   vupllb %v24, %v24
 ;   br %r14
 
-function %uwiden_high_i32x4_i64x2(i32x4) -> i64x2 wasmtime_system_v {
+function %uwiden_high_i32x4_i64x2(i32x4) -> i64x2 tail {
 block0(v0: i32x4):
   v1 = uwiden_high.i32x4 v0
   return v1
@@ -323,7 +323,7 @@ block0(v0: i32x4):
 ;   vuplhf %v24, %v24
 ;   br %r14
 
-function %uwiden_high_i16x8_i32x4(i16x8) -> i32x4 wasmtime_system_v {
+function %uwiden_high_i16x8_i32x4(i16x8) -> i32x4 tail {
 block0(v0: i16x8):
   v1 = uwiden_high.i16x8 v0
   return v1
@@ -339,7 +339,7 @@ block0(v0: i16x8):
 ;   vuplhh %v24, %v24
 ;   br %r14
 
-function %uwiden_high_i8x16_i16x8(i8x16) -> i16x8 wasmtime_system_v {
+function %uwiden_high_i8x16_i16x8(i8x16) -> i16x8 tail {
 block0(v0: i8x16):
   v1 = uwiden_high.i8x16 v0
   return v1

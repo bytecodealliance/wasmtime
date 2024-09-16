@@ -177,7 +177,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                args.push(arg);
+                args.push_non_formal(arg);
             } else {
                 let arg = ABIArg::stack(
                     next_stack as i64,
@@ -185,7 +185,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                args.push(arg);
+                args.push_non_formal(arg);
                 next_stack += 8;
             }
             Some(args.args().len() - 1)
