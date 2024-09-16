@@ -12,34 +12,28 @@ pub fn gc_compiler(_func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
     Box::new(DrcCompiler::default())
 }
 
-pub fn unbarriered_load_gc_ref(
-    func_env: &FuncEnvironment<'_>,
+fn unbarriered_load_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
     ptr_to_gc_ref: ir::Value,
     flags: ir::MemFlags,
 ) -> WasmResult<ir::Value> {
-    debug_assert!({
-        let (_, needs_stack_map) = func_env.reference_type(ty);
-        needs_stack_map
-    });
+    debug_assert!(ty.is_vmgcref_type());
     let gc_ref = builder.ins().load(ir::types::I32, flags, ptr_to_gc_ref, 0);
-    builder.declare_value_needs_stack_map(gc_ref);
+    if ty != WasmHeapType::I31 {
+        builder.declare_value_needs_stack_map(gc_ref);
+    }
     Ok(gc_ref)
 }
 
-pub fn unbarriered_store_gc_ref(
-    func_env: &FuncEnvironment<'_>,
+fn unbarriered_store_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
     dst: ir::Value,
     gc_ref: ir::Value,
     flags: ir::MemFlags,
 ) -> WasmResult<()> {
-    debug_assert!({
-        let (_, needs_stack_map) = func_env.reference_type(ty);
-        needs_stack_map
-    });
+    debug_assert!(ty.is_vmgcref_type());
     builder.ins().store(flags, gc_ref, dst, 0);
     Ok(())
 }
@@ -293,7 +287,7 @@ impl GcCompiler for DrcCompiler {
         src: ir::Value,
         flags: ir::MemFlags,
     ) -> WasmResult<ir::Value> {
-        assert!(ty.is_vmgcref_type_and_not_i31());
+        assert!(ty.is_vmgcref_type());
 
         let (reference_type, needs_stack_map) = func_env.reference_type(ty.heap_type);
         debug_assert!(needs_stack_map);
@@ -314,6 +308,11 @@ impl GcCompiler for DrcCompiler {
             }
             return Ok(null);
         };
+
+        // Special case for `i31` references: they don't need barriers.
+        if let WasmHeapType::I31 = ty.heap_type {
+            return unbarriered_load_gc_ref(builder, ty.heap_type, src, flags);
+        }
 
         // Our read barrier for GC references is roughly equivalent to the
         // following pseudo-CLIF:
@@ -368,7 +367,7 @@ impl GcCompiler for DrcCompiler {
         builder.insert_block_after(continue_block, gc_block);
 
         // Load the GC reference and check for null/i31.
-        let gc_ref = unbarriered_load_gc_ref(func_env, builder, ty.heap_type, src, flags)?;
+        let gc_ref = unbarriered_load_gc_ref(builder, ty.heap_type, src, flags)?;
         let gc_ref_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, gc_ref);
         builder.ins().brif(
             gc_ref_is_null_or_i31,
@@ -436,7 +435,7 @@ impl GcCompiler for DrcCompiler {
         new_val: ir::Value,
         flags: ir::MemFlags,
     ) -> WasmResult<()> {
-        assert!(ty.is_vmgcref_type_and_not_i31());
+        assert!(ty.is_vmgcref_type());
 
         let (ref_ty, needs_stack_map) = func_env.reference_type(ty.heap_type);
         debug_assert!(needs_stack_map);
@@ -459,6 +458,11 @@ impl GcCompiler for DrcCompiler {
             }
             return Ok(());
         };
+
+        // Special case for `i31` references: they don't need barriers.
+        if let WasmHeapType::I31 = ty.heap_type {
+            return unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags);
+        }
 
         // Our write barrier for GC references being copied out of the stack and
         // written into a table/global/etc... is roughly equivalent to the
@@ -542,7 +546,7 @@ impl GcCompiler for DrcCompiler {
 
         // Load the old value and then check whether the new value is non-null
         // and non-i31.
-        let old_val = unbarriered_load_gc_ref(func_env, builder, ty.heap_type, dst, flags)?;
+        let old_val = unbarriered_load_gc_ref(builder, ty.heap_type, dst, flags)?;
         let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
         builder.ins().brif(
             new_val_is_null_or_i31,
@@ -564,7 +568,7 @@ impl GcCompiler for DrcCompiler {
         // decremented.
         builder.switch_to_block(check_old_val_block);
         builder.seal_block(check_old_val_block);
-        unbarriered_store_gc_ref(func_env, builder, ty.heap_type, dst, new_val, flags)?;
+        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
         let old_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, old_val);
         builder.ins().brif(
             old_val_is_null_or_i31,

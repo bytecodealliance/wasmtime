@@ -12,33 +12,6 @@ pub fn gc_compiler(_: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
     Box::new(DisabledGcCompiler)
 }
 
-pub fn unbarriered_load_gc_ref(
-    _func_env: &FuncEnvironment<'_>,
-    _builder: &mut FunctionBuilder,
-    ty: WasmHeapType,
-    _ptr_to_gc_ref: ir::Value,
-    _flags: ir::MemFlags,
-) -> WasmResult<ir::Value> {
-    Err(wasm_unsupported!(
-        "support for `{ty}` references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
-}
-
-pub fn unbarriered_store_gc_ref(
-    _func_env: &FuncEnvironment<'_>,
-    _builder: &mut FunctionBuilder<'_>,
-    ty: WasmHeapType,
-    _dst: ir::Value,
-    _gc_ref: ir::Value,
-    _flags: ir::MemFlags,
-) -> WasmResult<()> {
-    Err(wasm_unsupported!(
-        "support for `{ty}` references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
-}
-
 pub fn gc_ref_table_grow_builtin(
     ty: WasmHeapType,
     _func_env: &mut FuncEnvironment<'_>,
