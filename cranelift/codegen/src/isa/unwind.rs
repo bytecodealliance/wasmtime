@@ -11,6 +11,9 @@ pub mod systemv;
 #[cfg(feature = "unwind")]
 pub mod winx64;
 
+#[cfg(feature = "unwind")]
+pub mod winarm64;
+
 /// CFA-based unwind information used on SystemV.
 pub type CfaUnwindInfo = systemv::UnwindInfo;
 
@@ -39,6 +42,9 @@ pub enum UnwindInfo {
     /// System V ABI unwind information.
     #[cfg(feature = "unwind")]
     SystemV(CfaUnwindInfo),
+    /// Windows Arm64 ABI unwind information.
+    #[cfg(feature = "unwind")]
+    WindowsArm64(winarm64::UnwindInfo),
 }
 
 /// Unwind pseudoinstruction used in VCode backends: represents that
@@ -196,4 +202,40 @@ pub enum UnwindInst {
         /// Whether return addresses (hold in LR) contain a pointer-authentication code.
         return_addresses: bool,
     },
+}
+
+struct Writer<'a> {
+    buf: &'a mut [u8],
+    offset: usize,
+}
+
+impl<'a> Writer<'a> {
+    pub fn new(buf: &'a mut [u8]) -> Self {
+        Self { buf, offset: 0 }
+    }
+
+    fn write_u8(&mut self, v: u8) {
+        self.buf[self.offset] = v;
+        self.offset += 1;
+    }
+
+    fn write_u16_le(&mut self, v: u16) {
+        self.buf[self.offset..(self.offset + 2)].copy_from_slice(&v.to_le_bytes());
+        self.offset += 2;
+    }
+
+    fn write_u16_be(&mut self, v: u16) {
+        self.buf[self.offset..(self.offset + 2)].copy_from_slice(&v.to_be_bytes());
+        self.offset += 2;
+    }
+
+    fn write_u32_le(&mut self, v: u32) {
+        self.buf[self.offset..(self.offset + 4)].copy_from_slice(&v.to_le_bytes());
+        self.offset += 4;
+    }
+
+    fn write_u32_be(&mut self, v: u32) {
+        self.buf[self.offset..(self.offset + 4)].copy_from_slice(&v.to_be_bytes());
+        self.offset += 4;
+    }
 }
