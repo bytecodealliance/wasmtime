@@ -133,7 +133,7 @@ where
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                args.push(arg);
+                args.push_non_formal(arg);
             } else {
                 let arg = ABIArg::stack(
                     next_stack as i64,
@@ -141,7 +141,7 @@ where
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                args.push(arg);
+                args.push_non_formal(arg);
                 next_stack += 8;
             }
             Some(args.args().len() - 1)
