@@ -153,9 +153,9 @@ impl Default for InstanceLimits {
             total_component_instances: 1000,
             component_instance_size: 1 << 20, // 1 MiB
             total_core_instances: 1000,
-            max_core_instances_per_component: 20,
-            max_memories_per_component: 20,
-            max_tables_per_component: 20,
+            max_core_instances_per_component: u32::MAX,
+            max_memories_per_component: u32::MAX,
+            max_tables_per_component: u32::MAX,
             total_memories: 1000,
             total_tables: 1000,
             #[cfg(feature = "async")]

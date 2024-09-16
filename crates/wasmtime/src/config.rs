@@ -2704,7 +2704,7 @@ impl PoolingAllocationConfig {
     }
 
     /// The maximum number of core instances a single component may contain
-    /// (default is `20`).
+    /// (default is unlimited).
     ///
     /// This method (along with
     /// [`PoolingAllocationConfig::max_memories_per_component`],
@@ -2720,7 +2720,7 @@ impl PoolingAllocationConfig {
     }
 
     /// The maximum number of Wasm linear memories that a single component may
-    /// transitively contain (default is `20`).
+    /// transitively contain (default is unlimited).
     ///
     /// This method (along with
     /// [`PoolingAllocationConfig::max_core_instances_per_component`],
@@ -2736,7 +2736,7 @@ impl PoolingAllocationConfig {
     }
 
     /// The maximum number of tables that a single component may transitively
-    /// contain (default is `20`).
+    /// contain (default is unlimited).
     ///
     /// This method (along with
     /// [`PoolingAllocationConfig::max_core_instances_per_component`],
