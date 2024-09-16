@@ -70,6 +70,11 @@ Unreleased.
 
 ### Fixed
 
+* Use `tracing::Instrument` in generated bindings when tracing and async are
+  enabled, ensuring that spans aren't present in traces from unrelated async
+  tasks.
+  [#9217](https://github.com/bytecodealliance/wasmtime/pull/9217)
+
 * Completed support for the `CallHook` API when using the component model.
   [#9196](https://github.com/bytecodealliance/wasmtime/pull/9196)
 

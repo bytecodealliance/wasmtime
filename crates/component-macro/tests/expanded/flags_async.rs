@@ -342,77 +342,91 @@ pub mod foo {
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag1,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::roundtrip_flag1(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::roundtrip_flag1(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "roundtrip-flag2",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag2,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::roundtrip_flag2(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::roundtrip_flag2(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "roundtrip-flag4",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag4,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::roundtrip_flag4(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::roundtrip_flag4(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "roundtrip-flag8",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag8,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::roundtrip_flag8(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::roundtrip_flag8(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "roundtrip-flag16",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag16,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::roundtrip_flag16(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::roundtrip_flag16(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "roundtrip-flag32",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag32,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::roundtrip_flag32(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::roundtrip_flag32(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 inst.func_wrap_async(
                     "roundtrip-flag64",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag64,)|
-                    wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::roundtrip_flag64(host, arg0).await;
-                        Ok((r,))
-                    }),
+                    {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::roundtrip_flag64(host, arg0).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 Ok(())
             }

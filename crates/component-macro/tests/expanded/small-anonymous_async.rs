@@ -266,11 +266,13 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/anon")?;
                 inst.func_wrap_async(
                     "option-test",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::option_test(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::option_test(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 Ok(())
             }
