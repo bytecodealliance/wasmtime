@@ -632,7 +632,7 @@ impl Masm for MacroAssembler {
     }
 
     fn unreachable(&mut self) {
-        todo!()
+        self.asm.udf(TrapCode::UnreachableCodeReached);
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
@@ -647,16 +647,16 @@ impl Masm for MacroAssembler {
         self.asm.jmp_table(rest, default, index, tmp1, tmp);
     }
 
-    fn trap(&mut self, _code: TrapCode) {
-        todo!()
+    fn trap(&mut self, code: TrapCode) {
+        self.asm.udf(code);
     }
 
     fn trapz(&mut self, _src: Reg, _code: TrapCode) {
         todo!()
     }
 
-    fn trapif(&mut self, _cc: IntCmpKind, _code: TrapCode) {
-        todo!()
+    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) {
+        self.asm.trapif(cc.into(), code);
     }
 
     fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {
