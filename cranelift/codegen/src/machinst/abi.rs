@@ -205,10 +205,6 @@ pub enum ABIArg {
     /// area; on the callee side, we compute a pointer to this stack area and
     /// provide that as the argument's value.
     StructArg {
-        /// Register or stack slot holding a pointer to the buffer as passed
-        /// by the caller to the callee.  If None, the ABI defines the buffer
-        /// to reside at a well-known location (i.e. at `offset` below).
-        pointer: Option<ABIArgSlot>,
         /// Offset of this arg relative to base of stack args.
         offset: i64,
         /// Size of this arg on the stack.
@@ -1483,20 +1479,13 @@ impl<M: ABIMachineSpec> Callee<M> {
                     copy_arg_slot_to_reg(&slot, &into_reg);
                 }
             }
-            &ABIArg::StructArg {
-                pointer, offset, ..
-            } => {
+            &ABIArg::StructArg { offset, .. } => {
                 let into_reg = into_regs.only_reg().unwrap();
-                if let Some(slot) = pointer {
-                    // Buffer address is passed in a register or stack slot.
-                    copy_arg_slot_to_reg(&slot, &into_reg);
-                } else {
-                    // Buffer address is implicitly defined by the ABI.
-                    insts.push(M::gen_get_stack_addr(
-                        StackAMode::IncomingArg(offset, sigs[self.sig].sized_stack_arg_space),
-                        into_reg,
-                    ));
-                }
+                // Buffer address is implicitly defined by the ABI.
+                insts.push(M::gen_get_stack_addr(
+                    StackAMode::IncomingArg(offset, sigs[self.sig].sized_stack_arg_space),
+                    into_reg,
+                ));
             }
             &ABIArg::ImplicitPtrArg { pointer, ty, .. } => {
                 let into_reg = into_regs.only_reg().unwrap();
@@ -2199,8 +2188,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                     }
                 }
             }
-            ABIArg::StructArg { pointer, .. } => {
-                assert!(pointer.is_none()); // Only supported via ISLE.
+            ABIArg::StructArg { .. } => {
+                // Only supported via ISLE.
             }
             ABIArg::ImplicitPtrArg {
                 offset,

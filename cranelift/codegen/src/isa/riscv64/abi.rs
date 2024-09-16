@@ -113,17 +113,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_stack: u32 = 0;
 
         for param in params {
-            if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
-                let offset = next_stack;
-                assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                next_stack += size;
-                args.push(ABIArg::StructArg {
-                    pointer: None,
-                    offset: offset as i64,
-                    size: size as u64,
-                    purpose: param.purpose,
-                });
-                continue;
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!(
+                    "StructArgument parameters are not supported on riscv64. \
+                    Use regular pointer arguments instead."
+                );
             }
 
             // Find regclass(es) of the register(s) used to store a value of this type.

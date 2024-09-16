@@ -1030,11 +1030,6 @@
 (decl abi_arg_only_slot (ABIArgSlot) ABIArg)
 (extern extractor abi_arg_only_slot abi_arg_only_slot)
 
-;; Extractor to detect the special case where a struct argument
-;; is explicitly passed by reference using a hidden pointer.
-(decl abi_arg_struct_pointer (ABIArgSlot i64 u64) ABIArg)
-(extern extractor abi_arg_struct_pointer abi_arg_struct_pointer)
-
 ;; Extractor to detect the special case where a non-struct argument
 ;; is implicitly passed by reference using a hidden pointer.
 (decl abi_arg_implicit_pointer (ABIArgSlot i64 Type) ABIArg)

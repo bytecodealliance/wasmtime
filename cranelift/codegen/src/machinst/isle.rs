@@ -491,24 +491,6 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
-        fn abi_arg_struct_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, u64)> {
-            match arg {
-                &ABIArg::StructArg {
-                    pointer,
-                    offset,
-                    size,
-                    ..
-                } => {
-                    if let Some(pointer) = pointer {
-                        Some((pointer, offset, size))
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            }
-        }
-
         fn abi_arg_implicit_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, Type)> {
             match arg {
                 &ABIArg::ImplicitPtrArg {
