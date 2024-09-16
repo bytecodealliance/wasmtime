@@ -572,7 +572,7 @@ impl<T> Store<T> {
             let shim = ModuleRuntimeInfo::bare(module);
             let allocator = OnDemandInstanceAllocator::default();
             allocator
-                .validate_module(shim.module(), shim.offsets())
+                .validate_module(shim.env_module(), shim.offsets())
                 .unwrap();
             let mut instance = unsafe {
                 allocator

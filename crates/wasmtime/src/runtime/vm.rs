@@ -217,7 +217,7 @@ impl ModuleRuntimeInfo {
     }
 
     /// The underlying Module.
-    pub(crate) fn module(&self) -> &Arc<wasmtime_environ::Module> {
+    pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
         match self {
             ModuleRuntimeInfo::Module(m) => m.env_module(),
             ModuleRuntimeInfo::Bare(b) => &b.module,
