@@ -455,6 +455,8 @@ impl WasmtimeConfig {
             // allocator.
             self.memory_config = other.memory_config.clone();
         }
+
+        self.make_internally_consistent();
     }
 
     /// Updates `config` to be compatible with `self` and the other way around
@@ -557,7 +559,28 @@ impl WasmtimeConfig {
                 cfg.cranelift_enable_heap_access_spectre_mitigations = None;
             }
         }
+
+        self.make_internally_consistent();
+
         Ok(())
+    }
+
+    /// Helper method to handle some dependencies between various configuration
+    /// options. This is intended to be called whenever a `Config` is created or
+    /// modified to ensure that the final result is an instantiable `Config`.
+    ///
+    /// Note that in general this probably shouldn't exist and anything here can
+    /// be considered a "TODO" to go implement more stuff in Wasmtime to accept
+    /// these sorts of configurations. For now though it's intended to reflect
+    /// the current state of the engine's development.
+    fn make_internally_consistent(&mut self) {
+        if !self.signals_based_traps {
+            // Spectre-based heap mitigations require signal handlers so this
+            // must always be disabled if signals-based traps are disabled.
+            if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
+                cfg.cranelift_enable_heap_access_spectre_mitigations = None;
+            }
+        }
     }
 }
 
