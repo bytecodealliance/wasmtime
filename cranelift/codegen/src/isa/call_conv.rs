@@ -69,22 +69,6 @@ impl CallConv {
             _ => false,
         }
     }
-
-    /// Is the calling convention extending the Windows Fastcall ABI?
-    pub fn extends_windows_fastcall(self) -> bool {
-        match self {
-            Self::WindowsFastcall => true,
-            _ => false,
-        }
-    }
-
-    /// Is the calling convention extending the Apple aarch64 ABI?
-    pub fn extends_apple_aarch64(self) -> bool {
-        match self {
-            Self::AppleAarch64 => true,
-            _ => false,
-        }
-    }
 }
 
 impl fmt::Display for CallConv {

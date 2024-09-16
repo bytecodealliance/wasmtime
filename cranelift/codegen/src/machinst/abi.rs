@@ -1125,7 +1125,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                 || call_conv == isa::CallConv::Tail
                 || call_conv == isa::CallConv::Fast
                 || call_conv == isa::CallConv::Cold
-                || call_conv.extends_windows_fastcall()
+                || call_conv == isa::CallConv::WindowsFastcall
                 || call_conv == isa::CallConv::AppleAarch64
                 || call_conv == isa::CallConv::Winch,
             "Unsupported calling convention: {call_conv:?}"
