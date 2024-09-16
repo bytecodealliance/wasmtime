@@ -161,31 +161,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
             let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
 
-            if matches!(
-                param.purpose,
-                ir::ArgumentPurpose::StructArgument(_) | ir::ArgumentPurpose::StructReturn
-            ) {
+            if let ir::ArgumentPurpose::StructReturn = param.purpose {
                 assert!(
                     call_conv != isa::CallConv::Tail,
-                    "support for {:?} parameters is not implemented for the `tail` calling \
-                    convention yet",
-                    param.purpose,
+                    "support for StructReturn parameters is not implemented for the `tail` \
+                    calling convention yet",
                 );
             }
 
-            if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
-                assert_eq!(args_or_rets, ArgsOrRets::Args);
-                let offset = next_stack as i64;
-                let size = size;
-                assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                next_stack += size;
-                args.push(ABIArg::StructArg {
-                    pointer: None,
-                    offset,
-                    size: size as u64,
-                    purpose: param.purpose,
-                });
-                continue;
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!(
+                    "StructArgument parameters are not supported on arm64. \
+                    Use regular pointer arguments instead."
+                );
             }
 
             if let ir::ArgumentPurpose::StructReturn = param.purpose {

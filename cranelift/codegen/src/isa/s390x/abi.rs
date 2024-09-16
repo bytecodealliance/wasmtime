@@ -322,6 +322,13 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
 
         for mut param in params.into_iter().copied() {
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!(
+                    "StructArgument parameters are not supported on s390x. \
+                    Use regular pointer arguments instead."
+                );
+            }
+
             let intreg = in_int_reg(param.value_type);
             let fltreg = in_flt_reg(param.value_type);
             let vecreg = in_vec_reg(param.value_type);
@@ -393,22 +400,14 @@ impl ABIMachineSpec for S390xMachineDeps {
                 }
             };
 
-            if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
-                assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                args.push(ABIArg::StructArg {
-                    pointer: Some(slot),
-                    offset: 0,
-                    size: size as u64,
-                    purpose: param.purpose,
-                });
-            } else if let Some(ty) = implicit_ref {
+            if let Some(ty) = implicit_ref {
                 assert!(
                     (ty_bits(ty) / 8) % 8 == 0,
                     "implicit argument size is not properly aligned"
                 );
                 args.push(ABIArg::ImplicitPtrArg {
                     pointer: slot,
-                    offset: 0,
+                    offset: 0, // Will be filled in later
                     ty,
                     purpose: param.purpose,
                 });
@@ -447,13 +446,10 @@ impl ABIMachineSpec for S390xMachineDeps {
         };
 
         // After all arguments are in their well-defined location,
-        // allocate buffers for all StructArg or ImplicitPtrArg arguments.
+        // allocate buffers for all ImplicitPtrArg arguments.
         for arg in args.args_mut() {
             match arg {
-                ABIArg::StructArg { offset, size, .. } => {
-                    *offset = next_stack as i64;
-                    next_stack += *size as u32;
-                }
+                ABIArg::StructArg { .. } => unreachable!(),
                 ABIArg::ImplicitPtrArg { offset, ty, .. } => {
                     *offset = next_stack as i64;
                     next_stack += (ty_bits(*ty) / 8) as u32;
@@ -484,9 +480,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                             }
                         }
                     }
-                    ABIArg::StructArg { offset, .. } => {
-                        *offset -= next_stack as i64;
-                    }
+                    ABIArg::StructArg { .. } => unreachable!(),
                     ABIArg::ImplicitPtrArg { offset, .. } => {
                         *offset -= next_stack as i64;
                     }
