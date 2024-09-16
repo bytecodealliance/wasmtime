@@ -580,12 +580,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_return(
-        call_conv: isa::CallConv,
+        call_conv: CallConv,
         _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         // Emit return instruction.
-        let stack_bytes_to_pop = if call_conv == isa::CallConv::Tail {
+        let stack_bytes_to_pop = if call_conv == CallConv::Tail {
             frame_layout.tail_args_size
         } else {
             0
@@ -900,8 +900,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         match call_conv_of_callee {
-            isa::CallConv::Winch => ALL_CLOBBERS,
-            isa::CallConv::WindowsFastcall => WINDOWS_CLOBBERS,
+            CallConv::Winch => ALL_CLOBBERS,
+            CallConv::WindowsFastcall => WINDOWS_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }
     }
