@@ -1045,7 +1045,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -1080,7 +1080,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -1109,8 +1109,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_result(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }

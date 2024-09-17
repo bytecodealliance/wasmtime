@@ -868,8 +868,8 @@ pub mod foo {
                                     tracing::Level::TRACE, a = tracing::field::debug(& arg0), b
                                     = tracing::field::debug(& arg1), c = tracing::field::debug(&
                                     arg2), d = tracing::field::debug(& arg3), e =
-                                    tracing::field::debug(& arg4), f = tracing::field::debug(&
-                                    arg5), "call"
+                                    tracing::field::debug(& arg4), f =
+                                    tracing::field::debug("..."), "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::result_arg(
@@ -906,8 +906,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::result_result(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
