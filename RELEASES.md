@@ -74,6 +74,7 @@ Unreleased.
   enabled, ensuring that spans aren't present in traces from unrelated async
   tasks.
   [#9217](https://github.com/bytecodealliance/wasmtime/pull/9217)
+  [#9263](https://github.com/bytecodealliance/wasmtime/pull/9263)
 
 * Completed support for the `CallHook` API when using the component model.
   [#9196](https://github.com/bytecodealliance/wasmtime/pull/9196)
