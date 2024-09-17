@@ -13,6 +13,7 @@
 pub mod drc;
 
 use crate::prelude::*;
+use core::alloc::Layout;
 use wasmtime_types::{WasmArrayType, WasmStructType};
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
@@ -118,6 +119,15 @@ impl GcArrayLayout {
     pub fn elem_offset(&self, i: u32, elem_size: u32) -> u32 {
         self.elems_offset + i * elem_size
     }
+
+    /// Get a `core::alloc::Layout` for an array of this type with the given
+    /// length.
+    pub fn layout(&self, len: u32) -> Layout {
+        let size = self.size_for_len(len);
+        let size = usize::try_from(size).unwrap();
+        let align = usize::try_from(self.align).unwrap();
+        Layout::from_size_align(size, align).unwrap()
+    }
 }
 
 /// The layout for a GC-managed struct type.
@@ -140,6 +150,15 @@ pub struct GcStructLayout {
     /// The fields of this struct. The `i`th entry is the `i`th struct field's
     /// offset in the struct.
     pub fields: Vec<u32>,
+}
+
+impl GcStructLayout {
+    /// Get a `core::alloc::Layout` for a struct of this type.
+    pub fn layout(&self) -> Layout {
+        let size = usize::try_from(self.size).unwrap();
+        let align = usize::try_from(self.align).unwrap();
+        Layout::from_size_align(size, align).unwrap()
+    }
 }
 
 /// The kind of an object in a GC heap.
