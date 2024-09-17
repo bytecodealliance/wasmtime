@@ -29,6 +29,12 @@ Unreleased.
 
 ### Changed
 
+* The host bindgen macro now accepts a new `verbose_tracing` option, which will
+  trace the value of `list` arguments. The new behavior of the `tracing` option
+  is that it does not print `list` values without `verbose_tracing` also being
+  present.
+  [#9262](https://github.com/bytecodealliance/wasmtime/pull/9262)
+
 * Wasmtime's support for WASI is now listed with the 0.2.1 version instead of
   0.2.0. This is expected to not cause fallout or breakage, but please open an
   issue if you see any problems.
