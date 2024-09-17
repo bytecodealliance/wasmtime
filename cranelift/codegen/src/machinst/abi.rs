@@ -343,6 +343,11 @@ pub trait ABIMachineSpec {
     /// The ISA flags type.
     type F: IsaFlags;
 
+    /// This is the limit for the size of argument and return-value areas on the
+    /// stack. We place a reasonable limit here to avoid integer overflow issues
+    /// with 32-bit arithmetic.
+    const STACK_ARG_RET_SIZE_LIMIT: u32;
+
     /// Returns the number of bits in a word, that is 32/64 for 32/64-bit architecture.
     fn word_bits() -> u32;
 
@@ -863,6 +868,11 @@ impl SigSet {
         )?;
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
 
+        // To avoid overflow issues, limit the return size to something reasonable.
+        if sized_stack_ret_space > M::STACK_ARG_RET_SIZE_LIMIT {
+            return Err(CodegenError::ImplLimitExceeded);
+        }
+
         let need_stack_return_area = sized_stack_ret_space > 0;
         if need_stack_return_area {
             assert!(!sig.uses_special_param(ir::ArgumentPurpose::StructReturn));
@@ -877,6 +887,11 @@ impl SigSet {
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
         let args_end = u32::try_from(self.abi_args.len()).unwrap();
+
+        // To avoid overflow issues, limit the arg size to something reasonable.
+        if sized_stack_arg_space > M::STACK_ARG_RET_SIZE_LIMIT {
+            return Err(CodegenError::ImplLimitExceeded);
+        }
 
         trace!(
             "ABISig: sig {:?} => args end = {} rets end = {}

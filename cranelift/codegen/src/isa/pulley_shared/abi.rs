@@ -5,7 +5,7 @@ use crate::{
     ir::{self, types::*, MemFlags, Signature},
     isa::{self, unwind::UnwindInst},
     machinst::*,
-    settings, CodegenError, CodegenResult,
+    settings, CodegenResult,
 };
 use alloc::{boxed::Box, vec::Vec};
 use core::marker::PhantomData;
@@ -18,11 +18,6 @@ pub(crate) type PulleyCallee<P> = Callee<PulleyMachineDeps<P>>;
 
 /// Support for the Pulley ABI from the caller side (at a callsite).
 pub(crate) type PulleyABICallSite<P> = CallSite<PulleyMachineDeps<P>>;
-
-/// This is the limit for the size of argument and return-value areas on the
-/// stack. We place a reasonable limit here to avoid integer overflow issues
-/// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 /// Pulley-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
@@ -39,6 +34,11 @@ where
 {
     type I = InstAndKind<P>;
     type F = PulleyFlags;
+
+    /// This is the limit for the size of argument and return-value areas on the
+    /// stack. We place a reasonable limit here to avoid integer overflow issues
+    /// with 32-bit arithmetic: for now, 128 MB.
+    const STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
     fn word_bits() -> u32 {
         P::pointer_width().bits().into()
@@ -150,12 +150,6 @@ where
         };
 
         next_stack = align_to(next_stack, Self::stack_align(call_conv));
-
-        // To avoid overflow issues, limit the arg/return size to something
-        // reasonable -- here, 128 MB.
-        if next_stack > STACK_ARG_RET_SIZE_LIMIT {
-            return Err(CodegenError::ImplLimitExceeded);
-        }
 
         Ok((next_stack, pos))
     }
