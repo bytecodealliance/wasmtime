@@ -527,7 +527,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -556,7 +556,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -585,7 +585,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -614,7 +614,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -643,7 +643,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -672,7 +672,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -701,7 +701,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -730,7 +730,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -759,7 +759,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -788,7 +788,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -817,8 +817,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_u8_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -840,8 +840,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_u16_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -863,8 +863,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_u32_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -886,8 +886,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_u64_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -909,8 +909,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_s8_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -932,8 +932,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_s16_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -955,8 +955,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_s32_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -978,8 +978,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_s64_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1001,8 +1001,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_float32_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1024,8 +1024,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::list_float64_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1047,14 +1047,14 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::tuple_list(host, arg0).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1082,7 +1082,7 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, a = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, a = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
@@ -1111,8 +1111,8 @@ pub mod foo {
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::string_list_ret(host).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1140,14 +1140,14 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::tuple_string_list(host, arg0).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1175,14 +1175,14 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::string_list(host, arg0).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1204,14 +1204,14 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::record_list(host, arg0).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1233,14 +1233,14 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::record_list_reverse(host, arg0).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1262,14 +1262,14 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, x = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::variant_list(host, arg0).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
@@ -1291,14 +1291,14 @@ pub mod foo {
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(
-                                    tracing::Level::TRACE, a = tracing::field::debug(& arg0),
+                                    tracing::Level::TRACE, a = tracing::field::debug("..."),
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
                                 let r = Host::load_store_everything(host, arg0).await;
                                 tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
+                                    tracing::Level::TRACE, result =
+                                    tracing::field::debug("..."), "return"
                                 );
                                 Ok((r,))
                             }
