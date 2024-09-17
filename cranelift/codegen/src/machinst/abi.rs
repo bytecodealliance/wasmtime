@@ -830,12 +830,21 @@ impl SigSet {
         sig: &ir::Signature,
         flags: &settings::Flags,
     ) -> CodegenResult<SigData> {
-        use std::borrow::Cow;
-
-        let returns = if let Some(sret) = missing_struct_return(sig) {
-            Cow::from_iter(std::iter::once(&sret).chain(&sig.returns).copied())
+        // Keep in sync with ensure_struct_return_ptr_is_returned
+        if sig.uses_special_return(ArgumentPurpose::StructReturn) {
+            panic!("Explicit StructReturn return value not allowed: {sig:?}")
+        }
+        let tmp;
+        let returns = if let Some(struct_ret_index) =
+            sig.special_param_index(ArgumentPurpose::StructReturn)
+        {
+            if !sig.returns.is_empty() {
+                panic!("No return values are allowed when using StructReturn: {sig:?}");
+            }
+            tmp = [sig.params[struct_ret_index]];
+            &tmp
         } else {
-            Cow::from(sig.returns.as_slice())
+            sig.returns.as_slice()
         };
 
         // Compute args and retvals from signature. Handle retvals first,
@@ -855,6 +864,10 @@ impl SigSet {
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
 
         let need_stack_return_area = sized_stack_ret_space > 0;
+        if need_stack_return_area {
+            assert!(!sig.uses_special_param(ir::ArgumentPurpose::StructReturn));
+        }
+
         let (sized_stack_arg_space, stack_ret_arg) = M::compute_arg_locs(
             sig.call_conv,
             flags,
@@ -1328,21 +1341,23 @@ fn generate_gv<M: ABIMachineSpec>(
     }
 }
 
-/// If the signature needs to be legalized, then return the struct-return
-/// parameter that should be prepended to its returns. Otherwise, return `None`.
-fn missing_struct_return(sig: &ir::Signature) -> Option<ir::AbiParam> {
-    let struct_ret_index = sig.special_param_index(ArgumentPurpose::StructReturn)?;
-    if !sig.uses_special_return(ArgumentPurpose::StructReturn) {
-        return Some(sig.params[struct_ret_index]);
-    }
-
-    None
+/// Returns true if the signature needs to be legalized.
+fn missing_struct_return(sig: &ir::Signature) -> bool {
+    sig.uses_special_param(ArgumentPurpose::StructReturn)
+        && !sig.uses_special_return(ArgumentPurpose::StructReturn)
 }
 
 fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
+    // Keep in sync with Callee::new
     let mut sig = sig.clone();
-    if let Some(sret) = missing_struct_return(&sig) {
-        sig.returns.insert(0, sret);
+    if sig.uses_special_return(ArgumentPurpose::StructReturn) {
+        panic!("Explicit StructReturn return value not allowed: {sig:?}")
+    }
+    if let Some(struct_ret_index) = sig.special_param_index(ArgumentPurpose::StructReturn) {
+        if !sig.returns.is_empty() {
+            panic!("No return values are allowed when using StructReturn: {sig:?}");
+        }
+        sig.returns.insert(0, sig.params[struct_ret_index]);
     }
     sig
 }
@@ -1354,7 +1369,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// Access the (possibly legalized) signature.
     pub fn signature(&self) -> &ir::Signature {
         debug_assert!(
-            missing_struct_return(&self.ir_sig).is_none(),
+            !missing_struct_return(&self.ir_sig),
             "`Callee::ir_sig` is always legalized"
         );
         &self.ir_sig
