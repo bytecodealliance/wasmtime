@@ -5,6 +5,7 @@ use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, SendSyncPtr, VMArrayRef, VMExternRef, VMGcHeader,
     VMGcRef, VMStructRef,
 };
+use core::alloc::Layout;
 use core::marker;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
@@ -208,6 +209,37 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
 
     ////////////////////////////////////////////////////////////////////////////
     // Struct and Array methods
+
+    /// Allocate a raw, uninitialized GC-managed object with the given header
+    /// and layout.
+    ///
+    /// The object's fields and elements are left uninitialized. It is the
+    /// caller's responsibility to initialize them before exposing the struct to
+    /// Wasm or triggering a GC.
+    ///
+    /// The header's described type and layout must match *for this
+    /// collector*. That is, if this collector adds an extra header word to all
+    /// objects, the given layout must already include space for that header
+    /// word. Therefore, this method is effectively only usable with layouts
+    /// derived from a `Gc{Struct,Array}Layout` returned by this collector.
+    ///
+    /// Failure to uphold any of the above is memory safe, but may result in
+    /// general failures such as panics or incorrect results.
+    ///
+    /// Return values:
+    ///
+    /// * `Ok(Some(_))`: The allocation was successful.
+    ///
+    /// * `Ok(None)`: There is currently no available space for this
+    ///   allocation. The caller should call `self.gc()`, run the GC to
+    ///   completion so the collector can reclaim space, and then try allocating
+    ///   again.
+    ///
+    /// * `Err(_)`: The collector cannot satisfy this allocation request, and
+    ///   would not be able to even after the caller were to trigger a
+    ///   collection. This could be because, for example, the requested
+    ///   alignment is larger than this collector's implementation limit.
+    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>>;
 
     /// Allocate a GC-managed struct of the given type and layout.
     ///

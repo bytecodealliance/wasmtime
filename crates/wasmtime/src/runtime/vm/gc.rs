@@ -20,6 +20,7 @@ pub use i31::*;
 
 use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
+use core::alloc::Layout;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, StackMap, VMGcKind, VMSharedTypeIndex};
@@ -271,11 +272,17 @@ unsafe impl GcHeap for DisabledGcHeap {
     fn alloc_externref(&mut self, _host_data: ExternRefHostDataId) -> Result<Option<VMExternRef>> {
         bail!(
             "GC support disabled either in the `Config` or at compile time \
-                 because the `gc` cargo feature was not enabled"
+             because the `gc` cargo feature was not enabled"
         )
     }
     fn externref_host_data(&self, _externref: &VMExternRef) -> ExternRefHostDataId {
         unreachable!()
+    }
+    fn alloc_raw(&mut self, _header: VMGcHeader, _layout: Layout) -> Result<Option<VMGcRef>> {
+        bail!(
+            "GC support disabled either in the `Config` or at compile time \
+             because the `gc` cargo feature was not enabled"
+        )
     }
     fn alloc_uninit_struct(
         &mut self,
@@ -284,7 +291,7 @@ unsafe impl GcHeap for DisabledGcHeap {
     ) -> Result<Option<VMStructRef>> {
         bail!(
             "GC support disabled either in the `Config` or at compile time \
-                 because the `gc` cargo feature was not enabled"
+             because the `gc` cargo feature was not enabled"
         )
     }
     fn dealloc_uninit_struct(&mut self, _structref: VMStructRef) {
@@ -301,7 +308,7 @@ unsafe impl GcHeap for DisabledGcHeap {
     ) -> Result<Option<VMArrayRef>> {
         bail!(
             "GC support disabled either in the `Config` or at compile time \
-                 because the `gc` cargo feature was not enabled"
+             because the `gc` cargo feature was not enabled"
         )
     }
     fn dealloc_uninit_array(&mut self, _structref: VMArrayRef) {

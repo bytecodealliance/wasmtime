@@ -124,29 +124,6 @@ impl DrcHeap {
         unsafe { core::slice::from_raw_parts_mut(ptr, len) }
     }
 
-    /// Allocate a blank GC object.
-    ///
-    /// The given layout must include the `VMDrcHeader`.
-    ///
-    /// The resulting GC reference has its header initialized, but everything
-    /// else uninitialized.
-    fn alloc(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
-        let gc_ref = match self.free_list.alloc(layout)? {
-            None => return Ok(None),
-            Some(index) => VMGcRef::from_heap_index(index).unwrap(),
-        };
-
-        debug_assert_eq!(header.reserved_u26(), 0);
-        header.set_reserved_u26(u32::try_from(layout.size()).unwrap());
-
-        *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
-            header,
-            ref_count: UnsafeCell::new(1),
-        };
-        log::trace!("increment {gc_ref:#p} ref count -> 1");
-        Ok(Some(gc_ref))
-    }
-
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
         let size = self.index(drc_ref).object_size();
@@ -583,10 +560,11 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     fn alloc_externref(&mut self, host_data: ExternRefHostDataId) -> Result<Option<VMExternRef>> {
-        let gc_ref = match self.alloc(VMGcHeader::externref(), Layout::new::<VMDrcExternRef>())? {
-            None => return Ok(None),
-            Some(gc_ref) => gc_ref,
-        };
+        let gc_ref =
+            match self.alloc_raw(VMGcHeader::externref(), Layout::new::<VMDrcExternRef>())? {
+                None => return Ok(None),
+                Some(gc_ref) => gc_ref,
+            };
         self.index_mut::<VMDrcExternRef>(gc_ref.as_typed_unchecked())
             .host_data = host_data;
         Ok(Some(gc_ref.into_externref_unchecked()))
@@ -597,19 +575,31 @@ unsafe impl GcHeap for DrcHeap {
         self.index(typed_ref).host_data
     }
 
+    fn alloc_raw(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
+        let gc_ref = match self.free_list.alloc(layout)? {
+            None => return Ok(None),
+            Some(index) => VMGcRef::from_heap_index(index).unwrap(),
+        };
+
+        debug_assert_eq!(header.reserved_u26(), 0);
+        header.set_reserved_u26(u32::try_from(layout.size()).unwrap());
+
+        *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
+            header,
+            ref_count: UnsafeCell::new(1),
+        };
+        log::trace!("increment {gc_ref:#p} ref count -> 1");
+        Ok(Some(gc_ref))
+    }
+
     fn alloc_uninit_struct(
         &mut self,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
     ) -> Result<Option<VMStructRef>> {
-        let layout = Layout::from_size_align(
-            usize::try_from(layout.size).unwrap(),
-            usize::try_from(layout.align).unwrap(),
-        )
-        .unwrap();
-        let gc_ref = match self.alloc(
+        let gc_ref = match self.alloc_raw(
             VMGcHeader::from_kind_and_index(VMGcKind::StructRef, ty),
-            layout,
+            layout.layout(),
         )? {
             None => return Ok(None),
             Some(gc_ref) => gc_ref,
@@ -638,12 +628,9 @@ unsafe impl GcHeap for DrcHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Option<VMArrayRef>> {
-        let size = usize::try_from(layout.size_for_len(length)).unwrap();
-        let align = usize::try_from(layout.align).unwrap();
-        let layout = Layout::from_size_align(size, align).unwrap();
-        let gc_ref = match self.alloc(
+        let gc_ref = match self.alloc_raw(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
-            layout,
+            layout.layout(length),
         )? {
             None => return Ok(None),
             Some(gc_ref) => gc_ref,
