@@ -814,11 +814,7 @@ impl SigSet {
 
     /// Get the already-interned ABI signature id for the given `ir::SigRef`.
     pub fn abi_sig_for_sig_ref(&self, sig_ref: ir::SigRef) -> Sig {
-        self.ir_sig_ref_to_abi_sig
-            .get(sig_ref)
-            // Should have a secondary map entry...
-            .expect("must call `make_abi_sig_from_ir_sig_ref` before `get_abi_sig_for_sig_ref`")
-            // ...and that entry should be initialized.
+        self.ir_sig_ref_to_abi_sig[sig_ref]
             .expect("must call `make_abi_sig_from_ir_sig_ref` before `get_abi_sig_for_sig_ref`")
     }
 
