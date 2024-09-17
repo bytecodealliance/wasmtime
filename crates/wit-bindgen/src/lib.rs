@@ -3022,26 +3022,10 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .iter()
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
-            TypeDefKind::Future(ty) => {
-                if let Some(ty) = ty {
-                    if type_contains_lists(*ty, resolve) {
-                        return true;
-                    }
-                }
-                false
-            }
+            TypeDefKind::Future(ty) => option_type_contains_lists(*ty, resolve),
             TypeDefKind::Stream(Stream { element, end }) => {
-                if let Some(element) = element {
-                    if type_contains_lists(*element, resolve) {
-                        return true;
-                    }
-                }
-                if let Some(end) = end {
-                    if type_contains_lists(*end, resolve) {
-                        return true;
-                    }
-                }
-                false
+                option_type_contains_lists(*element, resolve)
+                    || option_type_contains_lists(*end, resolve)
             }
             TypeDefKind::List(_) => true,
         },
