@@ -236,15 +236,15 @@ block0(v0: i8):
 ; block0:
 ;   mv a5,a1
 ;   li a1,42
+;   sw a1,0(a0)
+;   sw a1,8(a0)
+;   sw a1,16(a0)
+;   sw a1,24(a0)
+;   sw a1,32(a0)
+;   sw a1,40(a0)
 ;   mv a2,a5
-;   sw a1,0(a2)
-;   sw a1,8(a2)
-;   sw a1,16(a2)
-;   sw a1,24(a2)
-;   sw a1,32(a2)
-;   sw a1,40(a2)
-;   slli a4,a0,56; srai a4,a4,56
-;   sd a0,48(a2)
+;   slli a4,a2,56; srai a4,a4,56
+;   sd a2,48(a0)
 ;   mv a0,a1
 ;   ret
 ;
@@ -252,16 +252,16 @@ block0(v0: i8):
 ; block0: ; offset 0x0
 ;   mv a5, a1
 ;   addi a1, zero, 0x2a
+;   sw a1, 0(a0)
+;   sw a1, 8(a0)
+;   sw a1, 0x10(a0)
+;   sw a1, 0x18(a0)
+;   sw a1, 0x20(a0)
+;   sw a1, 0x28(a0)
 ;   mv a2, a5
-;   sw a1, 0(a2)
-;   sw a1, 8(a2)
-;   sw a1, 0x10(a2)
-;   sw a1, 0x18(a2)
-;   sw a1, 0x20(a2)
-;   sw a1, 0x28(a2)
-;   slli a4, a0, 0x38
+;   slli a4, a2, 0x38
 ;   srai a4, a4, 0x38
-;   sd a0, 0x30(a2)
+;   sd a2, 0x30(a0)
 ;   mv a0, a1
 ;   ret
 

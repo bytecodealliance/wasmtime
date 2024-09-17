@@ -145,26 +145,26 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   fsd fs0,112(sp)
 ;   fsd fs2,104(sp)
 ; block0:
-;   mv s2,a4
-;   sb a0,0(slot)
-;   mv s1,a0
-;   sh a1,8(slot)
-;   mv s9,a1
-;   sw a2,16(slot)
-;   mv s4,a2
+;   mv s2,a0
+;   sb a1,0(slot)
+;   mv s1,a1
+;   sh a2,8(slot)
+;   mv s9,a2
+;   sw a3,16(slot)
+;   mv s4,a3
 ;   fsw fa0,20(slot)
 ;   fmv.d fs2,fa0
-;   sd a3,24(slot)
-;   mv s3,a3
+;   sd a4,24(slot)
+;   mv s3,a4
 ;   fsd fa1,32(slot)
 ;   fmv.d fs0,fa1
 ;   call userextname0
 ;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})], sp_to_sized_stack_slots: None }
-;   mv a2,s4
-;   mv a4,s2
-;   sw a2,0(a4)
-;   mv a3,s3
-;   sd a3,8(a4)
+;   mv a0,s2
+;   mv a3,s4
+;   sw a3,0(a0)
+;   mv a4,s3
+;   sd a4,8(a0)
 ;   mv a0,s1
 ;   mv a1,s9
 ;   fmv.d fa0,fs2
@@ -197,26 +197,26 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   fsd fs0, 0x70(sp)
 ;   fsd fs2, 0x68(sp)
 ; block1: ; offset 0x30
-;   mv s2, a4
-;   sb a0, 0(sp)
-;   mv s1, a0
-;   sh a1, 8(sp)
-;   mv s9, a1
-;   sw a2, 0x10(sp)
-;   mv s4, a2
+;   mv s2, a0
+;   sb a1, 0(sp)
+;   mv s1, a1
+;   sh a2, 8(sp)
+;   mv s9, a2
+;   sw a3, 0x10(sp)
+;   mv s4, a3
 ;   fsw fa0, 0x14(sp)
 ;   fmv.d fs2, fa0
-;   sd a3, 0x18(sp)
-;   mv s3, a3
+;   sd a4, 0x18(sp)
+;   mv s3, a4
 ;   fsd fa1, 0x20(sp)
 ;   fmv.d fs0, fa1
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
 ;   jalr ra
-;   mv a2, s4
-;   mv a4, s2
-;   sw a2, 0(a4)
-;   mv a3, s3
-;   sd a3, 8(a4)
+;   mv a0, s2
+;   mv a3, s4
+;   sw a3, 0(a0)
+;   mv a4, s3
+;   sd a4, 8(a0)
 ;   mv a0, s1
 ;   mv a1, s9
 ;   fmv.d fa0, fs2

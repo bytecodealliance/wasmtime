@@ -351,7 +351,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if call_conv == isa::CallConv::Tail {
+            if call_conv != isa::CallConv::Tail && call_conv != isa::CallConv::Winch {
+                args.push_non_formal(ABIArg::reg(
+                    xreg(8).to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
+            } else if call_conv == isa::CallConv::Tail {
                 args.push_non_formal(ABIArg::reg(
                     xreg_preg(0).into(),
                     I64,

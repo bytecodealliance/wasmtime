@@ -50,20 +50,20 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   vmv.s.x v12,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmv.s.x v12,a2 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmv1r.v v14,v12
-;   vslide1up.vx v14,v12,a0 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v14,0(a2) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vslide1up.vx v14,v12,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v14,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0x57, 0xe6, 0x05, 0x42
+;   .byte 0x57, 0x66, 0x06, 0x42
 ;   .byte 0x57, 0x37, 0xc0, 0x9e
-;   .byte 0x57, 0x67, 0xc5, 0x3a
+;   .byte 0x57, 0xe7, 0xc5, 0x3a
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x07, 0x06, 0x02
+;   .byte 0x27, 0x07, 0x05, 0x02
 ;   ret
 
 function %bitcast_vec_to_i64(i32x2) -> i64 {
@@ -110,16 +110,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   vmv.s.x v11,a0 #avl=1, #vtype=(e64, m1, ta, ma)
-;   vse8.v v11,0(a1) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vmv.s.x v11,a1 #avl=1, #vtype=(e64, m1, ta, ma)
+;   vse8.v v11,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0xf0, 0x80, 0xcd
-;   .byte 0xd7, 0x65, 0x05, 0x42
+;   .byte 0xd7, 0xe5, 0x05, 0x42
 ;   .byte 0x57, 0x70, 0x04, 0xcc
-;   .byte 0xa7, 0x85, 0x05, 0x02
+;   .byte 0xa7, 0x05, 0x05, 0x02
 ;   ret
 
 function %bitcast_vec_to_f64(i32x2) -> f64 {

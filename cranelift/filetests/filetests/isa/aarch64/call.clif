@@ -182,7 +182,7 @@ block0(v0: i8):
 ; VCode:
 ; block0:
 ;   movz w7, #42
-;   strb w0, [x1]
+;   strb w0, [x8]
 ;   mov x0, x7
 ;   mov x1, x7
 ;   mov x2, x7
@@ -195,7 +195,7 @@ block0(v0: i8):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w7, #0x2a
-;   sturb w0, [x1]
+;   sturb w0, [x8]
 ;   mov x0, x7
 ;   mov x1, x7
 ;   mov x2, x7

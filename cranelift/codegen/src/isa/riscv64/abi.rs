@@ -111,6 +111,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Stack space.
         let mut next_stack: u32 = 0;
 
+        // In the SystemV ABI, the return area pointer is the first argument,
+        // so we need to leave room for it if required.
+        if add_ret_area_ptr && call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+            next_x_reg += 1;
+        }
+
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
                 panic!(
@@ -163,7 +169,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
         let pos: Option<usize> = if add_ret_area_ptr {
             assert!(ArgsOrRets::Args == args_or_rets);
-            if next_x_reg <= x_end {
+            if call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+                // In the SystemV ABI, the return area pointer is the first argument.
+                let arg = ABIArg::reg(
+                    x_reg(x_start).to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                );
+                args.push_non_formal(arg);
+            } else if next_x_reg <= x_end {
                 let arg = ABIArg::reg(
                     x_reg(next_x_reg).to_real_reg().unwrap(),
                     I64,

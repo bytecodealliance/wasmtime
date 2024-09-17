@@ -20,7 +20,7 @@ block0(v0: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   movq    %rdi, %r10
+;   movq    %rsi, %r10
 ;   addq    %r10, $48, %r10
 ;   cmpq    %rsp, %r10
 ;   jnbe #trap=stk_ovf
@@ -30,8 +30,8 @@ block0(v0: i64):
 ;   lea     rsp(16 + virtual offset), %rdx
 ;   lea     rsp(32 + virtual offset), %r8
 ;   lea     rsp(40 + virtual offset), %r9
-;   movq    %r8, 0(%rsi)
-;   movq    %r9, 8(%rsi)
+;   movq    %r8, 0(%rdi)
+;   movq    %r9, 8(%rdi)
 ;   addq    %rsp, $48, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -41,7 +41,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   movq %rdi, %r10
+;   movq %rsi, %r10
 ;   addq $0x30, %r10
 ;   cmpq %rsp, %r10
 ;   ja 0x3b
@@ -51,8 +51,8 @@ block0(v0: i64):
 ;   leaq 0x10(%rsp), %rdx
 ;   leaq 0x20(%rsp), %r8
 ;   leaq 0x28(%rsp), %r9
-;   movq %r8, (%rsi)
-;   movq %r9, 8(%rsi)
+;   movq %r8, (%rdi)
+;   movq %r9, 8(%rdi)
 ;   addq $0x30, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

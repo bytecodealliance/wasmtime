@@ -117,6 +117,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             next_stack = 32;
         }
 
+        // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first argument,
+        // so we need to leave room for it if required.
+        if add_ret_area_ptr && call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+            next_gpr += 1;
+        }
+
         // If any param uses extension, the winch calling convention will not pack its results
         // on the stack and will instead align them to 8-byte boundaries the same way that all the
         // other calling conventions do. This isn't consistent with Winch itself, but is fine as
@@ -363,7 +369,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if let Some(reg) = get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
+            if call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+                // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
+                // argument.
+                args.push_non_formal(ABIArg::reg(
+                    get_intreg_for_arg(call_conv, 0, 0)
+                        .unwrap()
+                        .to_real_reg()
+                        .unwrap(),
+                    types::I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
+            } else if let Some(reg) = get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
                 args.push_non_formal(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
                     types::I64,
