@@ -2782,6 +2782,10 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         if self.gen.opts.tracing {
+            if is_async {
+                self.src.push_str("use tracing::Instrument;\n");
+            }
+
             let ns = match ns {
                 Some(key) => resolve.name_world_key(key),
                 None => "default".to_string(),
@@ -2794,10 +2798,17 @@ impl<'a> InterfaceGenerator<'a> {
                        module = \"{ns}\",
                        function = \"{}\",
                    );
-                   let _enter = span.enter();
                ",
                 func.name,
             ));
+
+            if !is_async {
+                self.src.push_str(
+                    "
+                   let _enter = span.enter();
+                   ",
+                );
+            }
         }
 
         self.src.push_str("let callee = unsafe {\n");
@@ -2832,11 +2843,22 @@ impl<'a> InterfaceGenerator<'a> {
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}, ", i);
         }
-        uwriteln!(self.src, ")){await_}?;");
 
+        let instrument = if is_async && self.gen.opts.tracing {
+            ".instrument(span.clone())"
+        } else {
+            ""
+        };
+        uwriteln!(self.src, ")){instrument}{await_}?;");
+
+        let instrument = if is_async && self.gen.opts.tracing {
+            ".instrument(span)"
+        } else {
+            ""
+        };
         uwriteln!(
             self.src,
-            "callee.post_return{async__}(store.as_context_mut()){await_}?;"
+            "callee.post_return{async__}(store.as_context_mut()){instrument}{await_}?;"
         );
 
         self.src.push_str("Ok(");
