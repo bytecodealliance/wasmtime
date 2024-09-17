@@ -122,7 +122,7 @@ impl ResourceLimiter for StoreLimits {
         desired: usize,
         _maximum: Option<usize>,
     ) -> Result<bool> {
-        let delta = (desired - current) * std::mem::size_of::<usize>();
+        let delta = (desired - current).saturating_mul(std::mem::size_of::<usize>());
         Ok(self.alloc(delta))
     }
 }
