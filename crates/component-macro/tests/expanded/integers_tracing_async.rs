@@ -1033,11 +1033,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a1",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (u8,),
@@ -1046,8 +1046,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a2<S: wasmtime::AsContextMut>(
@@ -1058,11 +1062,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a2",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (i8,),
@@ -1071,8 +1075,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a3<S: wasmtime::AsContextMut>(
@@ -1083,11 +1091,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a3",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (u16,),
@@ -1096,8 +1104,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a4<S: wasmtime::AsContextMut>(
@@ -1108,11 +1120,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a4",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (i16,),
@@ -1121,8 +1133,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a5<S: wasmtime::AsContextMut>(
@@ -1133,11 +1149,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a5",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (u32,),
@@ -1146,8 +1162,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a6<S: wasmtime::AsContextMut>(
@@ -1158,11 +1178,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a6",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (i32,),
@@ -1171,8 +1191,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a7<S: wasmtime::AsContextMut>(
@@ -1183,11 +1207,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a7",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (u64,),
@@ -1196,8 +1220,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a8<S: wasmtime::AsContextMut>(
@@ -1208,11 +1236,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a8",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (i64,),
@@ -1221,8 +1249,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_a9<S: wasmtime::AsContextMut>(
@@ -1240,11 +1272,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "a9",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (u8, i8, u16, i16, u32, i32, u64, i64),
@@ -1256,8 +1288,12 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7),
                             )
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_r1<S: wasmtime::AsContextMut>(
@@ -1267,11 +1303,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r1",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1280,8 +1316,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_r2<S: wasmtime::AsContextMut>(
@@ -1291,11 +1331,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r2",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1304,8 +1344,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_r3<S: wasmtime::AsContextMut>(
@@ -1315,11 +1359,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r3",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1328,8 +1372,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_r4<S: wasmtime::AsContextMut>(
@@ -1339,11 +1387,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r4",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1352,8 +1400,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_r5<S: wasmtime::AsContextMut>(
@@ -1363,11 +1415,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r5",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1376,8 +1428,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_r6<S: wasmtime::AsContextMut>(
@@ -1387,11 +1443,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r6",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1400,8 +1456,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_r7<S: wasmtime::AsContextMut>(
@@ -1411,11 +1471,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r7",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1424,8 +1484,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_r8<S: wasmtime::AsContextMut>(
@@ -1435,11 +1499,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "r8",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1448,8 +1512,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_pair_ret<S: wasmtime::AsContextMut>(
@@ -1459,11 +1527,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/integers", function = "pair-ret",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1472,8 +1540,12 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(ret0)
                     }
                 }

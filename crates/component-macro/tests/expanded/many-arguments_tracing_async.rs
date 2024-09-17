@@ -725,11 +725,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/manyarg", function = "many-args",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
@@ -775,8 +775,12 @@ pub mod exports {
                                     arg15,
                                 ),
                             )
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_big_argument<S: wasmtime::AsContextMut>(
@@ -787,11 +791,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/manyarg", function = "big-argument",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&BigStruct,),
@@ -800,8 +804,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                 }

@@ -218,16 +218,19 @@ const _: () = {
         where
             <S as wasmtime::AsContext>::Data: Send,
         {
+            use tracing::Instrument;
             let span = tracing::span!(
                 tracing::Level::TRACE, "wit-bindgen export", module = "default", function
                 = "f",
             );
-            let _enter = span.enter();
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
             };
-            let (ret0,) = callee.call_async(store.as_context_mut(), ()).await?;
-            callee.post_return_async(store.as_context_mut()).await?;
+            let (ret0,) = callee
+                .call_async(store.as_context_mut(), ())
+                .instrument(span.clone())
+                .await?;
+            callee.post_return_async(store.as_context_mut()).instrument(span).await?;
             Ok(ret0)
         }
     }

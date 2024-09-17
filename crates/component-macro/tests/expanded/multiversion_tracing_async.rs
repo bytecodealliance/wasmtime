@@ -443,19 +443,25 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "my:dep/a@0.1.0", function = "x",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
                             >::new_unchecked(self.x)
                         };
-                        let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        let () = callee
+                            .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
+                            .await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                 }
@@ -551,19 +557,25 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "my:dep/a@0.2.0", function = "x",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
                             >::new_unchecked(self.x)
                         };
-                        let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        let () = callee
+                            .call_async(store.as_context_mut(), ())
+                            .instrument(span.clone())
+                            .await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                 }

@@ -406,19 +406,22 @@ const _: () = {
         where
             <S as wasmtime::AsContext>::Data: Send,
         {
+            use tracing::Instrument;
             let span = tracing::span!(
                 tracing::Level::TRACE, "wit-bindgen export", module = "default", function
                 = "some-world-func2",
             );
-            let _enter = span.enter();
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<
                     (),
                     (wasmtime::component::Resource<WorldResource>,),
                 >::new_unchecked(self.some_world_func2)
             };
-            let (ret0,) = callee.call_async(store.as_context_mut(), ()).await?;
-            callee.post_return_async(store.as_context_mut()).await?;
+            let (ret0,) = callee
+                .call_async(store.as_context_mut(), ())
+                .instrument(span.clone())
+                .await?;
+            callee.post_return_async(store.as_context_mut()).instrument(span).await?;
             Ok(ret0)
         }
         pub fn foo_foo_uses_resource_transitively(
@@ -1743,11 +1746,11 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
+                        use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/uses-resource-transitively", function = "handle",
                         );
-                        let _enter = span.enter();
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (wasmtime::component::Resource<Foo>,),
@@ -1756,8 +1759,12 @@ pub mod exports {
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
+                            .instrument(span.clone())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
+                        callee
+                            .post_return_async(store.as_context_mut())
+                            .instrument(span)
+                            .await?;
                         Ok(())
                     }
                 }

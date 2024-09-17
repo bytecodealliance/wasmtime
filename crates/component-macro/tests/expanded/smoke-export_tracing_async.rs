@@ -260,16 +260,19 @@ pub mod exports {
             where
                 <S as wasmtime::AsContext>::Data: Send,
             {
+                use tracing::Instrument;
                 let span = tracing::span!(
                     tracing::Level::TRACE, "wit-bindgen export", module = "the-name",
                     function = "y",
                 );
-                let _enter = span.enter();
                 let callee = unsafe {
                     wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
                 };
-                let () = callee.call_async(store.as_context_mut(), ()).await?;
-                callee.post_return_async(store.as_context_mut()).await?;
+                let () = callee
+                    .call_async(store.as_context_mut(), ())
+                    .instrument(span.clone())
+                    .await?;
+                callee.post_return_async(store.as_context_mut()).instrument(span).await?;
                 Ok(())
             }
         }
