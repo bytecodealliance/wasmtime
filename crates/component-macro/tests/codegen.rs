@@ -16,6 +16,7 @@ macro_rules! gentest {
                 wasmtime::component::bindgen!({
                     path: $path,
                     tracing: true,
+                    verbose_tracing: true,
                     ownership: Borrowing {
                         duplicate_if_necessary: true
                     }

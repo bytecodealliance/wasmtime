@@ -110,6 +110,7 @@ impl Parse for Config {
                         inline = Some(s.value());
                     }
                     Opt::Tracing(val) => opts.tracing = val,
+                    Opt::VerboseTracing(val) => opts.verbose_tracing = val,
                     Opt::Async(val, span) => {
                         if async_configured {
                             return Err(Error::new(span, "cannot specify second async config"));
@@ -232,6 +233,7 @@ mod kw {
     syn::custom_keyword!(inline);
     syn::custom_keyword!(path);
     syn::custom_keyword!(tracing);
+    syn::custom_keyword!(verbose_tracing);
     syn::custom_keyword!(trappable_error_type);
     syn::custom_keyword!(world);
     syn::custom_keyword!(ownership);
@@ -254,6 +256,7 @@ enum Opt {
     Path(syn::LitStr),
     Inline(syn::LitStr),
     Tracing(bool),
+    VerboseTracing(bool),
     Async(AsyncConfig, Span),
     TrappableErrorType(Vec<TrappableError>),
     Ownership(Ownership),
@@ -288,6 +291,10 @@ impl Parse for Opt {
             input.parse::<kw::tracing>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::Tracing(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::verbose_tracing) {
+            input.parse::<kw::verbose_tracing>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::VerboseTracing(input.parse::<syn::LitBool>()?.value))
         } else if l.peek(Token![async]) {
             let span = input.parse::<Token![async]>()?.span;
             input.parse::<Token![:]>()?;
