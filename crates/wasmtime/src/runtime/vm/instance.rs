@@ -259,8 +259,16 @@ impl Instance {
             .cast()
     }
 
-    pub(crate) fn env_module(&self) -> &Arc<Module> {
+    pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
         self.runtime_info.env_module()
+    }
+
+    #[allow(dead_code)] // TODO: used in forthcoming patches
+    pub(crate) fn runtime_module(&self) -> Option<&crate::Module> {
+        match &self.runtime_info {
+            ModuleRuntimeInfo::Module(m) => Some(m),
+            ModuleRuntimeInfo::Bare(_) => None,
+        }
     }
 
     /// Translate a module-level interned type index into an engine-level
