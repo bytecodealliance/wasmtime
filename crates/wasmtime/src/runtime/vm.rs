@@ -4,6 +4,7 @@
 #![warn(clippy::cast_sign_loss)]
 
 use crate::prelude::*;
+use crate::store::StoreOpaque;
 use alloc::sync::Arc;
 use core::fmt;
 use core::mem;
@@ -93,6 +94,12 @@ pub use crate::runtime::vm::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImag
 /// be respected by embedders (e.g. the `wasmtime::Store` structure). The theory
 /// is that `wasmtime::Store` handles all this correctly.
 pub unsafe trait VMStore {
+    /// Get a shared borrow of this store's `StoreOpaque`.
+    fn store_opaque(&self) -> &StoreOpaque;
+
+    /// Get an exclusive borrow of this store's `StoreOpaque`.
+    fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
+
     /// Returns the raw pointer in memory where this store's shared
     /// `VMRuntimeLimits` structure is located.
     ///

@@ -2424,6 +2424,14 @@ impl AsyncCx {
 }
 
 unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
+    fn store_opaque(&self) -> &StoreOpaque {
+        &self.inner
+    }
+
+    fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
+        &mut self.inner
+    }
+
     fn vmruntime_limits(&self) -> *mut VMRuntimeLimits {
         <StoreOpaque>::vmruntime_limits(self)
     }
