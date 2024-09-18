@@ -1728,7 +1728,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => {
                 let (src, flags) = table_data.prepare_table_addr(self, builder, index);
-                gc::gc_compiler(self).translate_read_gc_reference(
+                gc::gc_compiler(self)?.translate_read_gc_reference(
                     self,
                     builder,
                     table.ref_type,
@@ -1767,7 +1767,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => {
                 let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
-                gc::gc_compiler(self).translate_write_gc_reference(
+                gc::gc_compiler(self)?.translate_write_gc_reference(
                     self,
                     builder,
                     table.ref_type,
@@ -1994,7 +1994,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let gv = builder.ins().global_value(self.pointer_type(), gv);
         let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-        gc::gc_compiler(self).translate_read_gc_reference(
+        gc::gc_compiler(self)?.translate_read_gc_reference(
             self,
             builder,
             ty,
@@ -2022,7 +2022,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let gv = builder.ins().global_value(self.pointer_type(), gv);
         let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-        gc::gc_compiler(self).translate_write_gc_reference(
+        gc::gc_compiler(self)?.translate_write_gc_reference(
             self,
             builder,
             ty,
