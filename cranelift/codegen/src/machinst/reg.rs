@@ -82,7 +82,9 @@ impl Reg {
 
 impl std::fmt::Debug for Reg {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(rreg) = self.to_real_reg() {
+        if self.0 == VReg::invalid() {
+            write!(f, "<invalid>")
+        } else if let Some(rreg) = self.to_real_reg() {
             let preg: PReg = rreg.into();
             write!(f, "{preg}")
         } else if let Some(vreg) = self.to_virtual_reg() {
