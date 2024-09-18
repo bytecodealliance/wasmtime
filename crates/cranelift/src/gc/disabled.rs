@@ -12,15 +12,19 @@ pub fn gc_compiler(_: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
     Box::new(DisabledGcCompiler)
 }
 
+fn disabled<T>() -> WasmResult<T> {
+    Err(wasm_unsupported!(
+        "support for Wasm GC disabled at compile time because the `gc` cargo \
+         feature was not enabled"
+    ))
+}
+
 pub fn gc_ref_table_grow_builtin(
     ty: WasmHeapType,
     _func_env: &mut FuncEnvironment<'_>,
     _func: &mut ir::Function,
 ) -> WasmResult<ir::FuncRef> {
-    Err(wasm_unsupported!(
-        "support for `{ty}` references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 pub fn gc_ref_table_fill_builtin(
@@ -28,10 +32,7 @@ pub fn gc_ref_table_fill_builtin(
     _func_env: &mut FuncEnvironment<'_>,
     _func: &mut ir::Function,
 ) -> WasmResult<ir::FuncRef> {
-    Err(wasm_unsupported!(
-        "support for `{ty}` references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 pub fn translate_struct_new(
@@ -40,10 +41,7 @@ pub fn translate_struct_new(
     _struct_type_index: TypeIndex,
     _fields: &[ir::Value],
 ) -> WasmResult<ir::Value> {
-    Err(wasm_unsupported!(
-        "support for GC references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 pub fn translate_struct_new_default(
@@ -51,10 +49,7 @@ pub fn translate_struct_new_default(
     _builder: &mut FunctionBuilder<'_>,
     _struct_type_index: TypeIndex,
 ) -> WasmResult<ir::Value> {
-    Err(wasm_unsupported!(
-        "support for GC references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 pub fn translate_struct_get(
@@ -64,10 +59,7 @@ pub fn translate_struct_get(
     _field_index: u32,
     _struct_ref: ir::Value,
 ) -> WasmResult<ir::Value> {
-    Err(wasm_unsupported!(
-        "support for GC references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 pub fn translate_struct_get_s(
@@ -77,10 +69,7 @@ pub fn translate_struct_get_s(
     _field_index: u32,
     _struct_ref: ir::Value,
 ) -> WasmResult<ir::Value> {
-    Err(wasm_unsupported!(
-        "support for GC references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 pub fn translate_struct_get_u(
@@ -90,10 +79,7 @@ pub fn translate_struct_get_u(
     _field_index: u32,
     _struct_ref: ir::Value,
 ) -> WasmResult<ir::Value> {
-    Err(wasm_unsupported!(
-        "support for GC references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 pub fn translate_struct_set(
@@ -104,10 +90,7 @@ pub fn translate_struct_set(
     _struct_ref: ir::Value,
     _new_val: ir::Value,
 ) -> WasmResult<()> {
-    Err(wasm_unsupported!(
-        "support for GC references disabled at compile time because the `gc` cargo \
-         feature was not enabled"
-    ))
+    disabled()
 }
 
 struct DisabledGcCompiler;
@@ -127,38 +110,29 @@ impl GcCompiler for DisabledGcCompiler {
         _struct_type_index: TypeIndex,
         _fields: &[ir::Value],
     ) -> WasmResult<ir::Value> {
-        Err(wasm_unsupported!(
-            "support for GC types disabled at compile time because the `gc` cargo \
-             feature was not enabled"
-        ))
+        disabled()
     }
 
     fn translate_read_gc_reference(
         &mut self,
         _func_env: &mut FuncEnvironment<'_>,
         _builder: &mut FunctionBuilder,
-        ty: WasmRefType,
+        _ty: WasmRefType,
         _src: ir::Value,
         _flags: ir::MemFlags,
     ) -> WasmResult<ir::Value> {
-        Err(wasm_unsupported!(
-            "support for `{ty}` disabled at compile time because the `gc` cargo \
-             feature was not enabled"
-        ))
+        disabled()
     }
 
     fn translate_write_gc_reference(
         &mut self,
         _func_env: &mut FuncEnvironment<'_>,
         _builder: &mut FunctionBuilder,
-        ty: WasmRefType,
+        _ty: WasmRefType,
         _dst: ir::Value,
         _new_val: ir::Value,
         _flags: ir::MemFlags,
     ) -> WasmResult<()> {
-        Err(wasm_unsupported!(
-            "support for `{ty}` disabled at compile time because the `gc` cargo \
-             feature was not enabled"
-        ))
+        disabled()
     }
 }
