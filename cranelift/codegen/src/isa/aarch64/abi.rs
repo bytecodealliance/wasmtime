@@ -11,7 +11,7 @@ use crate::isa::unwind::UnwindInst;
 use crate::isa::winch;
 use crate::machinst::*;
 use crate::settings;
-use crate::{CodegenError, CodegenResult};
+use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
@@ -26,11 +26,6 @@ pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
 
 /// Support for the AArch64 ABI from the caller side (at a callsite).
 pub(crate) type AArch64CallSite = CallSite<AArch64MachineDeps>;
-
-/// This is the limit for the size of argument and return-value areas on the
-/// stack. We place a reasonable limit here to avoid integer overflow issues
-/// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
@@ -91,6 +86,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
     type I = Inst;
 
     type F = aarch64_settings::Flags;
+
+    /// This is the limit for the size of argument and return-value areas on the
+    /// stack. We place a reasonable limit here to avoid integer overflow issues
+    /// with 32-bit arithmetic: for now, 128 MB.
+    const STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
     fn word_bits() -> u32 {
         64
@@ -351,7 +351,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if call_conv == isa::CallConv::Tail {
+            if call_conv != isa::CallConv::Tail && call_conv != isa::CallConv::Winch {
+                args.push_non_formal(ABIArg::reg(
+                    xreg(8).to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
+            } else if call_conv == isa::CallConv::Tail {
                 args.push_non_formal(ABIArg::reg(
                     xreg_preg(0).into(),
                     I64,
@@ -386,12 +393,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         next_stack = align_to(next_stack, 16);
-
-        // To avoid overflow issues, limit the arg/return size to something
-        // reasonable -- here, 128 MB.
-        if next_stack > STACK_ARG_RET_SIZE_LIMIT {
-            return Err(CodegenError::ImplLimitExceeded);
-        }
 
         Ok((next_stack, extra_arg))
     }

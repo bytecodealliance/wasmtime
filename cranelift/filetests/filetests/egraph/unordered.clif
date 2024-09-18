@@ -4,7 +4,7 @@ target x86_64
 
 ; https://github.com/bytecodealliance/wasmtime/issues/6126
 ;
-; In this example, iconst defines v2, and later an identical iconst defines v1. 
+; In this example, iconst defines v2, and later an identical iconst defines v1.
 ; In between, v2 is used in an iadd instruction that's added to the GVN map.
 ; Finally, v1 is used in another iadd which should unify with the first one.
 function %unordered(i32) -> i32, i32 {

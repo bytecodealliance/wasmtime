@@ -143,7 +143,7 @@ use crate::isa::s390x::{inst::*, settings as s390x_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;
-use crate::{CodegenError, CodegenResult};
+use crate::CodegenResult;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
@@ -249,11 +249,6 @@ fn get_vecreg_for_ret(idx: usize) -> Option<Reg> {
     }
 }
 
-/// This is the limit for the size of argument and return-value areas on the
-/// stack. We place a reasonable limit here to avoid integer overflow issues
-/// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
-
 /// The size of the register save area
 pub static REG_SAVE_AREA_SIZE: u32 = 160;
 
@@ -278,6 +273,11 @@ impl ABIMachineSpec for S390xMachineDeps {
     type I = Inst;
 
     type F = s390x_settings::Flags;
+
+    /// This is the limit for the size of argument and return-value areas on the
+    /// stack. We place a reasonable limit here to avoid integer overflow issues
+    /// with 32-bit arithmetic: for now, 128 MB.
+    const STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
     fn word_bits() -> u32 {
         64
@@ -456,12 +456,6 @@ impl ABIMachineSpec for S390xMachineDeps {
                 }
                 _ => {}
             }
-        }
-
-        // To avoid overflow issues, limit the arg/return size to something
-        // reasonable -- here, 128 MB.
-        if next_stack > STACK_ARG_RET_SIZE_LIMIT {
-            return Err(CodegenError::ImplLimitExceeded);
         }
 
         // With the tail-call convention, arguments are passed in the *callee*'s

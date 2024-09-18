@@ -8,18 +8,13 @@ use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings
 use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
-use crate::{CodegenError, CodegenResult};
+use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::sync::OnceLock;
-
-/// This is the limit for the size of argument and return-value areas on the
-/// stack. We place a reasonable limit here to avoid integer overflow issues
-/// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
@@ -84,6 +79,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     type F = x64_settings::Flags;
 
+    /// This is the limit for the size of argument and return-value areas on the
+    /// stack. We place a reasonable limit here to avoid integer overflow issues
+    /// with 32-bit arithmetic: for now, 128 MB.
+    const STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
+
     fn word_bits() -> u32 {
         64
     }
@@ -115,6 +115,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // (See:
             // https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-160)
             next_stack = 32;
+        }
+
+        // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first argument,
+        // so we need to leave room for it if required.
+        if add_ret_area_ptr && call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+            next_gpr += 1;
+            next_param_idx += 1;
         }
 
         // If any param uses extension, the winch calling convention will not pack its results
@@ -363,7 +370,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if let Some(reg) = get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
+            if call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+                // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
+                // argument.
+                args.push_non_formal(ABIArg::reg(
+                    get_intreg_for_arg(call_conv, 0, 0)
+                        .unwrap()
+                        .to_real_reg()
+                        .unwrap(),
+                    types::I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
+            } else if let Some(reg) = get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
                 args.push_non_formal(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
                     types::I64,
@@ -391,11 +410,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         next_stack = align_to(next_stack, 16);
-
-        // To avoid overflow issues, limit the arg/return size to something reasonable.
-        if next_stack > STACK_ARG_RET_SIZE_LIMIT {
-            return Err(CodegenError::ImplLimitExceeded);
-        }
 
         Ok((next_stack, extra_arg))
     }

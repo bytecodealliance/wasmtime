@@ -21,9 +21,25 @@ const VALUE_REGS_PARTS: usize = 2;
 /// values (`Reg::invalid()`) to avoid the need to carry a separate length. This
 /// allows the struct to be `Copy` (no heap or drop overhead) and be only 16 or
 /// 8 bytes, which is important for compiler performance.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ValueRegs<R: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel> {
     parts: [R; VALUE_REGS_PARTS],
+}
+
+impl<R: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel> Debug for ValueRegs<R> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut f = f.debug_tuple("ValueRegs");
+        let mut last_valid = true;
+        for part in self.parts {
+            if part.is_invalid_sentinel() {
+                last_valid = false;
+            } else {
+                debug_assert!(last_valid);
+                f.field(&part);
+            }
+        }
+        f.finish()
+    }
 }
 
 /// A type with an "invalid" sentinel value.

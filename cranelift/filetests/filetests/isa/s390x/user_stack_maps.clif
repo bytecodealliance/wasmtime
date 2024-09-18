@@ -95,7 +95,7 @@ block0:
 ;   lmg %r6, %r15, 0xe0(%r15)
 ;   br %r14
 
-function %different_types(i8, i16, i32, i64, f32, f64) -> i8, i16, i32, i64, f32, f64 {
+function %different_types(i8, i16, i32, i64, f32, f64) -> i8, i16, i32, i64, f32, f64 fast {
     ss0 = explicit_slot 1
     ss1 = explicit_slot 2, align = 2
     ss2 = explicit_slot 8, align = 4

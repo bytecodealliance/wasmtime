@@ -11,17 +11,17 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lb a4,0(a0)
+;   lb a4,0(a1)
 ;   vmv.v.x v12,a4 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v12,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lb a4, 0(a0) ; trap: heap_oob
+;   lb a4, 0(a1) ; trap: heap_oob
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   .byte 0x57, 0x46, 0x07, 0x5e
-;   .byte 0x27, 0x86, 0x05, 0x02
+;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ret
 
 function %load_splat_i16x8(i64) -> i16x8 {
@@ -33,18 +33,18 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lh a4,0(a0)
+;   lh a4,0(a1)
 ;   vmv.v.x v12,a4 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v12,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lh a4, 0(a0) ; trap: heap_oob
+;   lh a4, 0(a1) ; trap: heap_oob
 ;   .byte 0x57, 0x70, 0x84, 0xcc
 ;   .byte 0x57, 0x46, 0x07, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x86, 0x05, 0x02
+;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ret
 
 function %load_splat_i32x4(i64) -> i32x4 {
@@ -56,18 +56,18 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lw a4,0(a0)
+;   lw a4,0(a1)
 ;   vmv.v.x v12,a4 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v12,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lw a4, 0(a0) ; trap: heap_oob
+;   lw a4, 0(a1) ; trap: heap_oob
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x46, 0x07, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x86, 0x05, 0x02
+;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ret
 
 function %load_splat_i64x2(i64) -> i64x2 {
@@ -79,18 +79,18 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   ld a4,0(a0)
+;   ld a4,0(a1)
 ;   vmv.v.x v12,a4 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v12,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld a4, 0(a0) ; trap: heap_oob
+;   ld a4, 0(a1) ; trap: heap_oob
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x46, 0x07, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x86, 0x05, 0x02
+;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ret
 
 function %load_splat_f32x4(i64) -> f32x4 {
@@ -102,18 +102,18 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   flw fa4,0(a0)
+;   flw fa4,0(a1)
 ;   vfmv.v.f v12,fa4 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v12,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flw fa4, 0(a0) ; trap: heap_oob
+;   flw fa4, 0(a1) ; trap: heap_oob
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x56, 0x07, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x86, 0x05, 0x02
+;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ret
 
 function %load_splat_f64x2(i64) -> f64x2 {
@@ -125,17 +125,17 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   fld fa4,0(a0)
+;   fld fa4,0(a1)
 ;   vfmv.v.f v12,fa4 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v12,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fld fa4, 0(a0) ; trap: heap_oob
+;   fld fa4, 0(a1) ; trap: heap_oob
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x56, 0x07, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x86, 0x05, 0x02
+;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ret
 
