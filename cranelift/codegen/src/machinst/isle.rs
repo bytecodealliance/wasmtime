@@ -753,7 +753,7 @@ pub fn shuffle_imm_as_le_lane_idx(size: u8, bytes: &[u8]) -> Option<u8> {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! isle_prelude_caller_methods {
-    ($abispec:ty, $abicaller:ty) => {
+    ($abicaller:ty) => {
         fn gen_call(
             &mut self,
             sig_ref: SigRef,

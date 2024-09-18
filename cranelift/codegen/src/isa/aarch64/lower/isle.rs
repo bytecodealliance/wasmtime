@@ -73,10 +73,7 @@ pub struct ExtendedValue {
 
 impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(
-        crate::isa::aarch64::abi::AArch64MachineDeps,
-        AArch64CallSite
-    );
+    isle_prelude_caller_methods!(AArch64CallSite);
 
     fn gen_return_call(
         &mut self,

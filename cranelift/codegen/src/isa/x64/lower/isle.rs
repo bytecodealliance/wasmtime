@@ -72,7 +72,7 @@ pub(crate) fn lower_branch(
 
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(X64ABIMachineSpec, X64CallSite);
+    isle_prelude_caller_methods!(X64CallSite);
 
     fn gen_return_call_indirect(
         &mut self,

@@ -49,7 +49,7 @@ where
     P: PulleyTargetKind,
 {
     crate::isle_lower_prelude_methods!(InstAndKind<P>);
-    crate::isle_prelude_caller_methods!(PulleyMachineDeps<P>, PulleyABICallSite<P>);
+    crate::isle_prelude_caller_methods!(PulleyABICallSite<P>);
 
     fn gen_return_call(
         &mut self,

@@ -60,7 +60,7 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
 
 impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICallSite);
+    isle_prelude_caller_methods!(Riscv64ABICallSite);
 
     fn gen_return_call(
         &mut self,
