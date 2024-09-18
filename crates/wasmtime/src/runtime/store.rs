@@ -2431,10 +2431,6 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         &mut self.inner
     }
 
-    fn maybe_gc_store(&mut self) -> Option<&mut GcStore> {
-        self.gc_store.as_mut()
-    }
-
     fn memory_growing(
         &mut self,
         current: usize,

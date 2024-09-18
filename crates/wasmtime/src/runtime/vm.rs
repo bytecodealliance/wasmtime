@@ -102,15 +102,6 @@ pub unsafe trait VMStore {
     /// Get an exclusive borrow of this store's `StoreOpaque`.
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
 
-    /// Get this store's GC heap.
-    fn unwrap_gc_store_mut(&mut self) -> &mut GcStore {
-        self.maybe_gc_store()
-            .expect("attempt to access the GC store before it has been allocated")
-    }
-
-    /// Get this store's GC heap, if it has been allocated.
-    fn maybe_gc_store(&mut self) -> Option<&mut GcStore>;
-
     /// Callback invoked to allow the store's resource limiter to reject a
     /// memory grow operation.
     fn memory_growing(

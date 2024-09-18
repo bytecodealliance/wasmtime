@@ -474,7 +474,7 @@ impl Instance {
             *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store()) = store;
             *self.runtime_limits() = (*store).vmruntime_limits();
             *self.epoch_ptr() = (*store).engine().epoch_counter();
-            self.set_gc_heap((*store).maybe_gc_store());
+            self.set_gc_heap((*store).gc_store_mut().ok());
         } else {
             assert_eq!(
                 mem::size_of::<*mut dyn VMStore>(),
