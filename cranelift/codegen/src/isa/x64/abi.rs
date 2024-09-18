@@ -121,6 +121,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // so we need to leave room for it if required.
         if add_ret_area_ptr && call_conv != CallConv::Tail && call_conv != CallConv::Winch {
             next_gpr += 1;
+            next_param_idx += 1;
         }
 
         // If any param uses extension, the winch calling convention will not pack its results
