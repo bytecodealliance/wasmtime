@@ -246,7 +246,7 @@ impl VMGcKind {
         (self.as_u32() & other.as_u32()) == other.as_u32()
     }
 
-    /// TODO FITZGEN
+    /// Get this `VMGcKind` as a raw `u32`.
     #[inline]
     pub fn as_u32(self) -> u32 {
         self as u32
