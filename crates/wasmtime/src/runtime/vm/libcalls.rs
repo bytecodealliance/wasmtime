@@ -262,7 +262,12 @@ unsafe fn table_fill_func_ref(
     match table.element_type() {
         TableElementType::Func => {
             let val = val.cast::<VMFuncRef>();
-            table.fill((*instance.store()).unwrap_gc_store_mut(), dst, val.into(), len)
+            table.fill(
+                (*instance.store()).unwrap_gc_store_mut(),
+                dst,
+                val.into(),
+                len,
+            )
         }
         TableElementType::GcRef => unreachable!(),
     }
@@ -404,7 +409,9 @@ unsafe fn table_get_lazy_init_func_ref(
 unsafe fn drop_gc_ref(instance: &mut Instance, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
-    (*instance.store()).unwrap_gc_store_mut().drop_gc_ref(gc_ref);
+    (*instance.store())
+        .unwrap_gc_store_mut()
+        .drop_gc_ref(gc_ref);
 }
 
 /// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
@@ -431,7 +438,9 @@ unsafe fn gc(instance: &mut Instance, gc_ref: u32) -> Result<u32> {
         None => Ok(0),
         Some(r) => {
             let raw = r.as_raw_u32();
-            (*instance.store()).unwrap_gc_store_mut().expose_gc_ref_to_wasm(r);
+            (*instance.store())
+                .unwrap_gc_store_mut()
+                .expose_gc_ref_to_wasm(r);
             Ok(raw)
         }
     }
@@ -471,7 +480,10 @@ unsafe fn gc_alloc_raw(
     let align = usize::try_from(align).unwrap();
     let layout = Layout::from_size_align(size, align).unwrap();
 
-    let gc_ref = match (*instance.store()).unwrap_gc_store_mut().alloc_raw(header, layout)? {
+    let gc_ref = match (*instance.store())
+        .unwrap_gc_store_mut()
+        .alloc_raw(header, layout)?
+    {
         Some(r) => r,
         None => {
             // If the allocation failed, do a GC to hopefully clean up space.
