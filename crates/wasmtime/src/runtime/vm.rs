@@ -92,7 +92,7 @@ pub use crate::runtime::vm::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImag
 /// lifetime of this store or the Send/Sync-ness of this store. All of that must
 /// be respected by embedders (e.g. the `wasmtime::Store` structure). The theory
 /// is that `wasmtime::Store` handles all this correctly.
-pub unsafe trait Store {
+pub unsafe trait VMStore {
     /// Returns the raw pointer in memory where this store's shared
     /// `VMRuntimeLimits` structure is located.
     ///

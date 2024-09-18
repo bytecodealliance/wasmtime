@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::runtime::vm::memory::{validate_atomic_addr, MmapMemory};
 use crate::runtime::vm::threads::parking_spot::{ParkingSpot, Waiter};
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
-use crate::runtime::vm::{Memory, RuntimeLinearMemory, Store, WaitResult};
+use crate::runtime::vm::{Memory, RuntimeLinearMemory, VMStore, WaitResult};
 use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -79,7 +79,7 @@ impl SharedMemory {
     pub fn grow(
         &self,
         delta_pages: u64,
-        store: Option<&mut dyn Store>,
+        store: Option<&mut dyn VMStore>,
     ) -> Result<Option<(usize, usize)>, Error> {
         let mut memory = self.0.memory.write().unwrap();
         let result = memory.grow(delta_pages, store)?;
@@ -204,7 +204,7 @@ impl RuntimeLinearMemory for SharedMemory {
     fn grow(
         &mut self,
         delta_pages: u64,
-        store: Option<&mut dyn Store>,
+        store: Option<&mut dyn VMStore>,
     ) -> Result<Option<(usize, usize)>, Error> {
         SharedMemory::grow(self, delta_pages, store)
     }

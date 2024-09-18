@@ -593,8 +593,8 @@ impl<T> Store<T> {
             // throughout Wasmtime.
             unsafe {
                 let traitobj = mem::transmute::<
-                    *mut (dyn crate::runtime::vm::Store + '_),
-                    *mut (dyn crate::runtime::vm::Store + 'static),
+                    *mut (dyn crate::runtime::vm::VMStore + '_),
+                    *mut (dyn crate::runtime::vm::VMStore + 'static),
                 >(&mut *inner);
                 instance.set_store(traitobj);
             }
@@ -1883,7 +1883,7 @@ impl StoreOpaque {
         self.default_caller.vmctx()
     }
 
-    pub fn traitobj(&self) -> *mut dyn crate::runtime::vm::Store {
+    pub fn traitobj(&self) -> *mut dyn crate::runtime::vm::VMStore {
         self.default_caller.store()
     }
 
@@ -2423,7 +2423,7 @@ impl AsyncCx {
     }
 }
 
-unsafe impl<T> crate::runtime::vm::Store for StoreInner<T> {
+unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     fn vmruntime_limits(&self) -> *mut VMRuntimeLimits {
         <StoreOpaque>::vmruntime_limits(self)
     }
