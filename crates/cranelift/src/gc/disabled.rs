@@ -20,7 +20,7 @@ fn disabled<T>() -> WasmResult<T> {
 }
 
 pub fn gc_ref_table_grow_builtin(
-    ty: WasmHeapType,
+    _ty: WasmHeapType,
     _func_env: &mut FuncEnvironment<'_>,
     _func: &mut ir::Function,
 ) -> WasmResult<ir::FuncRef> {
@@ -28,7 +28,7 @@ pub fn gc_ref_table_grow_builtin(
 }
 
 pub fn gc_ref_table_fill_builtin(
-    ty: WasmHeapType,
+    _ty: WasmHeapType,
     _func_env: &mut FuncEnvironment<'_>,
     _func: &mut ir::Function,
 ) -> WasmResult<ir::FuncRef> {
