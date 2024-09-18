@@ -2734,8 +2734,8 @@ impl Drop for StoreOpaque {
 }
 
 impl crate::runtime::vm::ModuleInfoLookup for ModuleRegistry {
-    fn lookup(&self, pc: usize) -> Option<&dyn crate::runtime::vm::ModuleInfo> {
-        self.lookup_module_info(pc)
+    fn lookup(&self, pc: usize) -> Option<&Module> {
+        self.lookup_module_by_pc(pc)
     }
 }
 
