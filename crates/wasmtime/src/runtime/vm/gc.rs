@@ -29,7 +29,7 @@ use wasmtime_environ::{GcArrayLayout, GcStructLayout, StackMap, VMGcKind, VMShar
 /// program counter value.
 pub trait ModuleInfoLookup {
     /// Lookup the module information from a program counter value.
-    fn lookup(&self, pc: usize) -> Option<&Module>;
+    fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module>;
 }
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.

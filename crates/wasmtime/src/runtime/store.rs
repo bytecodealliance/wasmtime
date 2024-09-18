@@ -1704,7 +1704,7 @@ impl StoreOpaque {
 
             let module_info = self
                 .modules()
-                .lookup(pc)
+                .lookup_module_by_pc(pc)
                 .expect("should have module info for Wasm frame");
 
             let stack_map = match module_info.lookup_stack_map(pc) {
@@ -2734,7 +2734,7 @@ impl Drop for StoreOpaque {
 }
 
 impl crate::runtime::vm::ModuleInfoLookup for ModuleRegistry {
-    fn lookup(&self, pc: usize) -> Option<&Module> {
+    fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module> {
         self.lookup_module_by_pc(pc)
     }
 }
