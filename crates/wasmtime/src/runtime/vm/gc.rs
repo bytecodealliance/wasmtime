@@ -18,19 +18,12 @@ pub use gc_runtime::*;
 pub use host_data::*;
 pub use i31::*;
 
+use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
-use crate::{prelude::*, Module};
 use core::alloc::Layout;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, StackMap, VMGcKind, VMSharedTypeIndex};
-
-/// Used by the runtime to lookup information about a module given a
-/// program counter value.
-pub trait ModuleInfoLookup {
-    /// Lookup the module information from a program counter value.
-    fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module>;
-}
+use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
 ///
