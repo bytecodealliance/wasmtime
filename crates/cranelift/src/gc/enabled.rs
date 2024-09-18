@@ -16,8 +16,8 @@ use wasmtime_environ::{
 };
 
 /// Get the default GC compiler.
-pub fn gc_compiler(_func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
-    Box::new(DrcCompiler::default())
+pub fn gc_compiler(_func_env: &FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
+    Ok(Box::new(DrcCompiler::default()))
 }
 
 fn unbarriered_load_gc_ref(
@@ -70,7 +70,7 @@ pub fn translate_struct_new(
     struct_type_index: TypeIndex,
     fields: &[ir::Value],
 ) -> WasmResult<ir::Value> {
-    gc_compiler(func_env).alloc_struct(func_env, builder, struct_type_index, &fields)
+    gc_compiler(func_env)?.alloc_struct(func_env, builder, struct_type_index, &fields)
 }
 
 fn default_value(
@@ -114,7 +114,7 @@ pub fn translate_struct_new_default(
         .iter()
         .map(|f| default_value(&mut builder.cursor(), func_env, &f.element_type))
         .collect::<StructFieldsVec>();
-    gc_compiler(func_env).alloc_struct(func_env, builder, struct_type_index, &fields)
+    gc_compiler(func_env)?.alloc_struct(func_env, builder, struct_type_index, &fields)
 }
 
 pub fn translate_struct_get(
@@ -178,7 +178,7 @@ pub fn translate_struct_get(
                     .load(ir::types::I128, ir::MemFlags::trusted(), field_addr, 0)
             }
             WasmValType::Ref(r) => match r.heap_type.top() {
-                WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)
+                WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)?
                     .translate_read_gc_reference(
                         func_env,
                         builder,
@@ -329,7 +329,7 @@ pub fn translate_struct_set(
             unimplemented!("funcrefs inside the GC heap")
         }
         WasmStorageType::Val(WasmValType::Ref(r)) => {
-            gc_compiler(func_env).translate_write_gc_reference(
+            gc_compiler(func_env)?.translate_write_gc_reference(
                 func_env,
                 builder,
                 *r,
@@ -360,7 +360,7 @@ impl FuncEnvironment<'_> {
                 panic!("{type_index:?} is not a struct type: {ty:?}")
             };
             let s = s.clone();
-            let layout = gc_compiler(self).layouts().struct_layout(&s);
+            let layout = gc_compiler(self).unwrap().layouts().struct_layout(&s);
             self.ty_to_struct_layout.insert(type_index, layout);
         }
 

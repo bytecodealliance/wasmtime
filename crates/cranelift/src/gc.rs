@@ -22,9 +22,7 @@ use disabled as imp;
 use wasmtime_environ::GcTypeLayouts;
 
 /// Get the GC compiler configured for the given function environment.
-pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
-    imp::gc_compiler(func_env)
-}
+pub use imp::gc_compiler;
 
 /// Get the index and signature of the built-in function for doing `table.grow`
 /// on GC reference tables.
