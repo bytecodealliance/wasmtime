@@ -8,6 +8,8 @@ use crate::store::StoreOpaque;
 use alloc::sync::Arc;
 use core::fmt;
 use core::mem;
+use core::ops::Deref;
+use core::ops::DerefMut;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use wasmtime_environ::{
@@ -175,6 +177,20 @@ pub unsafe trait VMStore {
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut component::CallContexts;
+}
+
+impl Deref for dyn VMStore {
+    type Target = StoreOpaque;
+
+    fn deref(&self) -> &Self::Target {
+        self.store_opaque()
+    }
+}
+
+impl DerefMut for dyn VMStore {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.store_opaque_mut()
+    }
 }
 
 /// Functionality required by this crate for a particular module. This
