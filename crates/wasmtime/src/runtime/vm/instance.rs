@@ -473,7 +473,7 @@ impl Instance {
         if let Some(store) = store {
             *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store()) = store;
             *self.runtime_limits() = (*store).vmruntime_limits();
-            *self.epoch_ptr() = (*store).epoch_ptr();
+            *self.epoch_ptr() = (*store).engine().epoch_counter();
             self.set_gc_heap((*store).maybe_gc_store());
         } else {
             assert_eq!(

@@ -102,7 +102,6 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr;
-use core::sync::atomic::AtomicU64;
 use core::task::{Context, Poll};
 
 mod context;
@@ -2430,10 +2429,6 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
 
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
         &mut self.inner
-    }
-
-    fn epoch_ptr(&self) -> *const AtomicU64 {
-        self.engine.epoch_counter() as *const _
     }
 
     fn maybe_gc_store(&mut self) -> Option<&mut GcStore> {

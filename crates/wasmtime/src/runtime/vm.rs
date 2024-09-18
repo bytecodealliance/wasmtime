@@ -11,7 +11,7 @@ use core::mem;
 use core::ops::Deref;
 use core::ops::DerefMut;
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleInternedTypeIndex, VMOffsets,
     VMSharedTypeIndex,
@@ -101,11 +101,6 @@ pub unsafe trait VMStore {
 
     /// Get an exclusive borrow of this store's `StoreOpaque`.
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
-
-    /// Returns a pointer to the global epoch counter.
-    ///
-    /// Used to configure the `VMContext` on initialization.
-    fn epoch_ptr(&self) -> *const AtomicU64;
 
     /// Get this store's GC heap.
     fn gc_store(&mut self) -> &mut GcStore {
