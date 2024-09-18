@@ -74,7 +74,7 @@
 mod bounds_checks;
 
 use super::{hash_map, HashMap};
-use crate::environ::{FuncEnvironment, GlobalVariable};
+use crate::environ::{FuncEnvironment, GlobalVariable, StructFieldsVec};
 use crate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
@@ -2501,6 +2501,82 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(val);
         }
 
+        Operator::StructNew { struct_type_index } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let arity = environ.struct_fields_len(struct_type_index)?;
+            let fields: StructFieldsVec = state.peekn(arity).iter().copied().collect();
+            state.popn(arity);
+            let struct_ref = environ.translate_struct_new(builder, struct_type_index, fields)?;
+            state.push1(struct_ref);
+        }
+
+        Operator::StructNewDefault { struct_type_index } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = environ.translate_struct_new_default(builder, struct_type_index)?;
+            state.push1(struct_ref);
+        }
+
+        Operator::StructSet {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let val = state.pop1();
+            let struct_ref = state.pop1();
+            environ.translate_struct_set(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+                val,
+            )?;
+        }
+
+        Operator::StructGetS {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = state.pop1();
+            let val = environ.translate_struct_get_s(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+            )?;
+            state.push1(val);
+        }
+
+        Operator::StructGetU {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = state.pop1();
+            let val = environ.translate_struct_get_u(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+            )?;
+            state.push1(val);
+        }
+
+        Operator::StructGet {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = state.pop1();
+            let val = environ.translate_struct_get(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+            )?;
+            state.push1(val);
+        }
+
         Operator::TryTable { .. } | Operator::ThrowRef => {
             return Err(wasm_unsupported!(
                 "exception operators are not yet implemented"
@@ -2529,13 +2605,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::ArrayFill { .. }
         | Operator::ArrayCopy { .. }
         | Operator::ArrayInitData { .. }
-        | Operator::ArrayInitElem { .. }
-        | Operator::StructNew { .. }
-        | Operator::StructNewDefault { .. }
-        | Operator::StructGetS { .. }
-        | Operator::StructGetU { .. }
-        | Operator::StructSet { .. }
-        | Operator::StructGet { .. } => {
+        | Operator::ArrayInitElem { .. } => {
             return Err(wasm_unsupported!("GC operators are not yet implemented"));
         }
 

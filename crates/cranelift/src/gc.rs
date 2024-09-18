@@ -8,7 +8,7 @@
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{WasmHeapType, WasmRefType, WasmResult};
+use cranelift_wasm::{TypeIndex, WasmHeapType, WasmRefType, WasmResult};
 
 #[cfg(feature = "gc")]
 mod enabled;
@@ -48,11 +48,113 @@ pub fn gc_ref_table_fill_builtin(
     imp::gc_ref_table_fill_builtin(ty, func_env, func)
 }
 
+/// Translate a `struct.new` instruction.
+pub fn translate_struct_new(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    fields: &[ir::Value],
+) -> WasmResult<ir::Value> {
+    imp::translate_struct_new(func_env, builder, struct_type_index, fields)
+}
+
+/// Translate a `struct.new_default` instruction.
+pub fn translate_struct_new_default(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+) -> WasmResult<ir::Value> {
+    imp::translate_struct_new_default(func_env, builder, struct_type_index)
+}
+
+/// Translate a `struct.get` instruction.
+pub fn translate_struct_get(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    imp::translate_struct_get(
+        func_env,
+        builder,
+        struct_type_index,
+        field_index,
+        struct_ref,
+    )
+}
+
+/// Translate a `struct.get_s` instruction.
+pub fn translate_struct_get_s(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    imp::translate_struct_get_s(
+        func_env,
+        builder,
+        struct_type_index,
+        field_index,
+        struct_ref,
+    )
+}
+
+/// Translate a `struct.get_u` instruction.
+pub fn translate_struct_get_u(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    imp::translate_struct_get_u(
+        func_env,
+        builder,
+        struct_type_index,
+        field_index,
+        struct_ref,
+    )
+}
+
+/// Translate a `struct.set` instruction.
+pub fn translate_struct_set(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_type_index: TypeIndex,
+    field_index: u32,
+    struct_ref: ir::Value,
+    new_val: ir::Value,
+) -> WasmResult<()> {
+    imp::translate_struct_set(
+        func_env,
+        builder,
+        struct_type_index,
+        field_index,
+        struct_ref,
+        new_val,
+    )
+}
+
 /// A trait for different collectors to emit any GC barriers they might require.
 pub trait GcCompiler {
     /// Get the GC type layouts for this GC compiler.
-    #[allow(dead_code)] // Used in future PRs.
+    #[cfg_attr(not(feature = "gc"), allow(dead_code))]
     fn layouts(&self) -> &dyn GcTypeLayouts;
+
+    /// Emit code to allocate a new struct.
+    ///
+    /// The struct should be of the given type and its fields initialized to the
+    /// given values.
+    #[cfg_attr(not(feature = "gc"), allow(dead_code))]
+    fn alloc_struct(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        struct_type_index: TypeIndex,
+        fields: &[ir::Value],
+    ) -> WasmResult<ir::Value>;
 
     /// Emit a read barrier for when we are cloning a GC reference onto the Wasm
     /// stack.

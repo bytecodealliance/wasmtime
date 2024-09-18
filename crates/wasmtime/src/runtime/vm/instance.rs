@@ -263,7 +263,6 @@ impl Instance {
         self.runtime_info.env_module()
     }
 
-    #[allow(dead_code)] // TODO: used in forthcoming patches
     pub(crate) fn runtime_module(&self) -> Option<&crate::Module> {
         match &self.runtime_info {
             ModuleRuntimeInfo::Module(m) => Some(m),

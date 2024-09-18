@@ -437,6 +437,58 @@ unsafe fn gc(instance: &mut Instance, gc_ref: u32) -> Result<u32> {
     }
 }
 
+/// Allocate a raw, unininitialized GC object for Wasm code.
+///
+/// The Wasm code is responsible for initializing the object.
+#[cfg(feature = "gc")]
+unsafe fn gc_alloc_raw(
+    instance: &mut Instance,
+    kind: u32,
+    module_interned_type_index: u32,
+    size: u32,
+    align: u32,
+) -> Result<u32> {
+    use crate::{vm::VMGcHeader, GcHeapOutOfMemory};
+    use core::alloc::Layout;
+    use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
+
+    debug_assert_eq!(VMGcKind::UNUSED_MASK & kind, 0);
+    let kind = VMGcKind::from_high_bits_of_u32(kind);
+
+    let module = instance
+        .runtime_module()
+        .expect("should never allocate GC types defined in a dummy module");
+
+    let module_interned_type_index = ModuleInternedTypeIndex::from_u32(module_interned_type_index);
+    let shared_type_index = module
+        .signatures()
+        .shared_type(module_interned_type_index)
+        .expect("should have engine type index for module type index");
+
+    let header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
+
+    let size = usize::try_from(size).unwrap();
+    let align = usize::try_from(align).unwrap();
+    let layout = Layout::from_size_align(size, align).unwrap();
+
+    let gc_ref = match (*instance.store()).gc_store().alloc_raw(header, layout)? {
+        Some(r) => r,
+        None => {
+            // If the allocation failed, do a GC to hopefully clean up space.
+            (*instance.store()).gc(None)?;
+
+            // And then try again.
+            (*instance.store())
+                .gc_store()
+                .alloc_raw(header, layout)?
+                .ok_or_else(|| GcHeapOutOfMemory::new(()))
+                .err2anyhow()?
+        }
+    };
+
+    Ok(gc_ref.as_raw_u32())
+}
+
 // Implementation of `memory.atomic.notify` for locally defined memories.
 #[cfg(feature = "threads")]
 fn memory_atomic_notify(

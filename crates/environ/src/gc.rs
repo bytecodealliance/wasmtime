@@ -14,7 +14,7 @@ pub mod drc;
 
 use crate::prelude::*;
 use core::alloc::Layout;
-use wasmtime_types::{WasmArrayType, WasmStructType};
+use wasmtime_types::{WasmArrayType, WasmStorageType, WasmStructType, WasmValType};
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
 pub const I31_DISCRIMINANT: u64 = 1;
@@ -22,6 +22,20 @@ pub const I31_DISCRIMINANT: u64 = 1;
 /// A mask that can be used to check for non-null and non-i31ref GC references
 /// with a single bitwise-and operation.
 pub const NON_NULL_NON_I31_MASK: u64 = !I31_DISCRIMINANT;
+
+/// Get the byte size of the given Wasm type when it is stored inside the GC
+/// heap.
+pub fn byte_size_of_wasm_ty_in_gc_heap(ty: &WasmStorageType) -> u32 {
+    match ty {
+        WasmStorageType::I8 => 1,
+        WasmStorageType::I16 => 2,
+        WasmStorageType::Val(ty) => match ty {
+            WasmValType::I32 | WasmValType::F32 | WasmValType::Ref(_) => 4,
+            WasmValType::I64 | WasmValType::F64 => 8,
+            WasmValType::V128 => 16,
+        },
+    }
+}
 
 /// A trait for getting the layout of a Wasm GC struct or array inside a
 /// particular collector.
@@ -141,14 +155,14 @@ impl GcArrayLayout {
 /// header (for example) is included in the offset.
 #[derive(Clone, Debug)]
 pub struct GcStructLayout {
-    /// The size of this struct.
+    /// The size (in bytes) of this struct.
     pub size: u32,
 
-    /// The alignment of this struct.
+    /// The alignment (in bytes) of this struct.
     pub align: u32,
 
     /// The fields of this struct. The `i`th entry is the `i`th struct field's
-    /// offset in the struct.
+    /// offset (in bytes) in the struct.
     pub fields: Vec<u32>,
 }
 
@@ -213,13 +227,13 @@ impl VMGcKind {
     pub fn from_high_bits_of_u32(val: u32) -> VMGcKind {
         let masked = val & Self::MASK;
         match masked {
-            x if x == Self::ExternRef as u32 => Self::ExternRef,
-            x if x == Self::ExternOfAnyRef as u32 => Self::ExternOfAnyRef,
-            x if x == Self::AnyRef as u32 => Self::AnyRef,
-            x if x == Self::AnyOfExternRef as u32 => Self::AnyOfExternRef,
-            x if x == Self::EqRef as u32 => Self::EqRef,
-            x if x == Self::ArrayRef as u32 => Self::ArrayRef,
-            x if x == Self::StructRef as u32 => Self::StructRef,
+            x if x == Self::ExternRef.as_u32() => Self::ExternRef,
+            x if x == Self::ExternOfAnyRef.as_u32() => Self::ExternOfAnyRef,
+            x if x == Self::AnyRef.as_u32() => Self::AnyRef,
+            x if x == Self::AnyOfExternRef.as_u32() => Self::AnyOfExternRef,
+            x if x == Self::EqRef.as_u32() => Self::EqRef,
+            x if x == Self::ArrayRef.as_u32() => Self::ArrayRef,
+            x if x == Self::StructRef.as_u32() => Self::StructRef,
             _ => panic!("invalid `VMGcKind`: {masked:#032b}"),
         }
     }
@@ -227,8 +241,15 @@ impl VMGcKind {
     /// Does this kind match the other kind?
     ///
     /// That is, is this kind a subtype of the other kind?
+    #[inline]
     pub fn matches(self, other: Self) -> bool {
-        (self as u32) & (other as u32) == (other as u32)
+        (self.as_u32() & other.as_u32()) == other.as_u32()
+    }
+
+    /// Get this `VMGcKind` as a raw `u32`.
+    #[inline]
+    pub fn as_u32(self) -> u32 {
+        self as u32
     }
 }
 

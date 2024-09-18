@@ -1,7 +1,6 @@
 //! Layout of Wasm GC objects in the deferred reference-counting collector.
 
 use super::*;
-use wasmtime_types::{WasmStorageType, WasmValType};
 
 /// The size of the `VMDrcHeader` header for GC objects.
 pub const HEADER_SIZE: u32 = 16;
@@ -31,18 +30,6 @@ fn field(size: &mut u32, align: &mut u32, bytes: u32) -> u32 {
     offset
 }
 
-fn size_of_wasm_ty(ty: &WasmStorageType) -> u32 {
-    match ty {
-        WasmStorageType::I8 => 1,
-        WasmStorageType::I16 => 2,
-        WasmStorageType::Val(ty) => match ty {
-            WasmValType::I32 | WasmValType::F32 | WasmValType::Ref(_) => 4,
-            WasmValType::I64 | WasmValType::F64 => 8,
-            WasmValType::V128 => 16,
-        },
-    }
-}
-
 /// The layout of Wasm GC objects in the deferred reference-counting collector.
 #[derive(Default)]
 pub struct DrcTypeLayouts;
@@ -55,7 +42,7 @@ impl GcTypeLayouts for DrcTypeLayouts {
         let length_field_offset = field(&mut size, &mut align, 4);
         debug_assert_eq!(length_field_offset, ARRAY_LENGTH_OFFSET);
 
-        let elem_size = size_of_wasm_ty(&ty.0.element_type);
+        let elem_size = byte_size_of_wasm_ty_in_gc_heap(&ty.0.element_type);
         let elems_offset = align_up(&mut size, &mut align, elem_size);
 
         GcArrayLayout {
@@ -82,7 +69,7 @@ impl GcTypeLayouts for DrcTypeLayouts {
             .fields
             .iter()
             .map(|f| {
-                let field_size = size_of_wasm_ty(&f.element_type);
+                let field_size = byte_size_of_wasm_ty_in_gc_heap(&f.element_type);
                 field(&mut size, &mut align, field_size)
             })
             .collect();

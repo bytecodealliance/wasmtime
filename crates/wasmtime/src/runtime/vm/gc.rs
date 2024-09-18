@@ -180,6 +180,11 @@ impl GcStore {
         self.host_data_table.get_mut(host_data_id)
     }
 
+    /// Allocate a raw object with the given header and layout.
+    pub fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
+        self.gc_heap.alloc_raw(header, layout)
+    }
+
     /// Allocate an uninitialized struct with the given type index and layout.
     ///
     /// This does NOT check that the index is currently allocated in the types
