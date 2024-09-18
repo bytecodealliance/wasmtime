@@ -247,7 +247,11 @@ impl AnyRef {
     /// [`ValRaw`]: crate::ValRaw
     pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        let gc_ref = self.inner.try_clone_gc_ref(&mut store)?;
+        self._to_raw(&mut store)
+    }
+
+    pub(crate) unsafe fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+        let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = gc_ref.as_raw_u32();
         store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
         Ok(raw)
