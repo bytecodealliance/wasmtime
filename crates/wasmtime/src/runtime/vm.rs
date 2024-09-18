@@ -102,13 +102,6 @@ pub unsafe trait VMStore {
     /// Get an exclusive borrow of this store's `StoreOpaque`.
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
 
-    /// Returns the raw pointer in memory where this store's shared
-    /// `VMRuntimeLimits` structure is located.
-    ///
-    /// Used to configure `VMContext` initialization and store the right pointer
-    /// in the `VMContext`.
-    fn vmruntime_limits(&self) -> *mut VMRuntimeLimits;
-
     /// Returns a pointer to the global epoch counter.
     ///
     /// Used to configure the `VMContext` on initialization.

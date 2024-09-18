@@ -2432,10 +2432,6 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         &mut self.inner
     }
 
-    fn vmruntime_limits(&self) -> *mut VMRuntimeLimits {
-        <StoreOpaque>::vmruntime_limits(self)
-    }
-
     fn epoch_ptr(&self) -> *const AtomicU64 {
         self.engine.epoch_counter() as *const _
     }
