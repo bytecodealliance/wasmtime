@@ -5,7 +5,7 @@ use crate::runtime::vm::instance::{Instance, InstanceHandle};
 use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
-use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, Store, VMFuncRef, VMGcRef};
+use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMFuncRef, VMGcRef, VMStore};
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
@@ -79,7 +79,7 @@ pub struct InstanceAllocationRequest<'a> {
 /// InstanceAllocationRequest, rather than on a &mut InstanceAllocationRequest
 /// itself, because several use-sites require a split mut borrow on the
 /// InstanceAllocationRequest.
-pub struct StorePtr(Option<*mut dyn Store>);
+pub struct StorePtr(Option<*mut dyn VMStore>);
 
 impl StorePtr {
     /// A pointer to no Store.
@@ -88,19 +88,19 @@ impl StorePtr {
     }
 
     /// A pointer to a Store.
-    pub fn new(ptr: *mut dyn Store) -> Self {
+    pub fn new(ptr: *mut dyn VMStore) -> Self {
         Self(Some(ptr))
     }
 
     /// The raw contents of this struct
-    pub fn as_raw(&self) -> Option<*mut dyn Store> {
+    pub fn as_raw(&self) -> Option<*mut dyn VMStore> {
         self.0
     }
 
     /// Use the StorePtr as a mut ref to the Store.
     ///
     /// Safety: must not be used outside the original lifetime of the borrow.
-    pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn Store> {
+    pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn VMStore> {
         match self.0 {
             Some(ptr) => Some(&mut *ptr),
             None => None,
@@ -575,7 +575,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 match module.table_plans[idx].table.ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
-                        let gc_store = unsafe { (*instance.store()).gc_store() };
+                        let gc_store = unsafe { (*instance.store()).unwrap_gc_store_mut() };
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items).err2anyhow()?;
@@ -583,7 +583,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
 
                     WasmHeapTopType::Any => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
-                        let gc_store = unsafe { (*instance.store()).gc_store() };
+                        let gc_store = unsafe { (*instance.store()).unwrap_gc_store_mut() };
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items).err2anyhow()?;

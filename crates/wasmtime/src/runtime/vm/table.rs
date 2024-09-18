@@ -6,7 +6,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
-use crate::runtime::vm::{GcStore, SendSyncPtr, Store, VMGcRef};
+use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VMStore};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::slice;
@@ -268,7 +268,7 @@ fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(plan: &TablePlan, store: &mut dyn Store) -> Result<Self> {
+    pub fn new_dynamic(plan: &TablePlan, store: &mut dyn VMStore) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
         match wasm_to_table_type(plan.table.ref_type) {
             TableElementType::Func => {
@@ -290,7 +290,7 @@ impl Table {
     pub unsafe fn new_static(
         plan: &TablePlan,
         data: SendSyncPtr<[u8]>,
-        store: &mut dyn Store,
+        store: &mut dyn VMStore,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
         let size = minimum;
@@ -348,7 +348,7 @@ impl Table {
     // Calls the `store`'s limiter to optionally prevent the table from being created.
     //
     // Returns the minimum and maximum size of the table if the table can be created.
-    fn limit_new(plan: &TablePlan, store: &mut dyn Store) -> Result<(usize, Option<usize>)> {
+    fn limit_new(plan: &TablePlan, store: &mut dyn VMStore) -> Result<(usize, Option<usize>)> {
         // No matter how the table limits are specified
         // The table size is limited by the host's pointer size
         let absolute_max = usize::MAX;
@@ -551,7 +551,7 @@ impl Table {
         &mut self,
         delta: u64,
         init_value: TableElement,
-        store: &mut dyn Store,
+        store: &mut dyn VMStore,
     ) -> Result<Option<usize>, Error> {
         let old_size = self.size();
 
@@ -618,9 +618,8 @@ impl Table {
             }
         }
 
-        // casting to u64 is ok to unwrap
         self.fill(
-            store.gc_store(),
+            store.store_opaque_mut().unwrap_gc_store_mut(),
             u64::try_from(old_size).unwrap(),
             init_value,
             u64::try_from(delta).unwrap(),

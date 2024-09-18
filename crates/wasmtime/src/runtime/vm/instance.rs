@@ -14,7 +14,7 @@ use crate::runtime::vm::vmcontext::{
 };
 use crate::runtime::vm::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, GcStore, Imports, ModuleRuntimeInfo,
-    SendSyncPtr, Store, VMFunctionBody, VMGcRef, WasmFault,
+    SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, WasmFault,
 };
 use alloc::sync::Arc;
 use core::alloc::Layout;
@@ -461,22 +461,23 @@ impl Instance {
     /// functions are shared amongst threads and don't all share the same
     /// store).
     #[inline]
-    pub fn store(&self) -> *mut dyn Store {
-        let ptr =
-            unsafe { *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets().ptr.vmctx_store()) };
+    pub fn store(&self) -> *mut dyn VMStore {
+        let ptr = unsafe {
+            *self.vmctx_plus_offset::<*mut dyn VMStore>(self.offsets().ptr.vmctx_store())
+        };
         debug_assert!(!ptr.is_null());
         ptr
     }
 
-    pub(crate) unsafe fn set_store(&mut self, store: Option<*mut dyn Store>) {
+    pub(crate) unsafe fn set_store(&mut self, store: Option<*mut dyn VMStore>) {
         if let Some(store) = store {
             *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store()) = store;
             *self.runtime_limits() = (*store).vmruntime_limits();
-            *self.epoch_ptr() = (*store).epoch_ptr();
-            self.set_gc_heap((*store).maybe_gc_store());
+            *self.epoch_ptr() = (*store).engine().epoch_counter();
+            self.set_gc_heap((*store).gc_store_mut().ok());
         } else {
             assert_eq!(
-                mem::size_of::<*mut dyn Store>(),
+                mem::size_of::<*mut dyn VMStore>(),
                 mem::size_of::<[*mut (); 2]>()
             );
             *self.vmctx_plus_offset_mut::<[*mut (); 2]>(self.offsets().ptr.vmctx_store()) =
@@ -1102,7 +1103,7 @@ impl Instance {
 
         if elt_ty == TableElementType::Func {
             for i in range {
-                let gc_store = unsafe { (*self.store()).gc_store() };
+                let gc_store = unsafe { (*self.store()).unwrap_gc_store_mut() };
                 let value = match self.tables[idx].1.get(gc_store, i) {
                     Some(value) => value,
                     None => {
@@ -1480,7 +1481,7 @@ impl InstanceHandle {
 
     /// Returns the `Store` pointer that was stored on creation
     #[inline]
-    pub fn store(&self) -> *mut dyn Store {
+    pub fn store(&self) -> *mut dyn VMStore {
         self.instance().store()
     }
 
@@ -1488,7 +1489,7 @@ impl InstanceHandle {
     ///
     /// This is provided for the original `Store` itself to configure the first
     /// self-pointer after the original `Box` has been initialized.
-    pub unsafe fn set_store(&mut self, store: *mut dyn Store) {
+    pub unsafe fn set_store(&mut self, store: *mut dyn VMStore) {
         self.instance_mut().set_store(Some(store));
     }
 
