@@ -28,7 +28,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
 
     fn global_get(&mut self, index: GlobalIndex) -> Result<ValRaw> {
         unsafe {
-            let gc_store = (*self.instance.store()).gc_store();
+            let gc_store = (*self.instance.store()).unwrap_gc_store_mut();
             let global = self
                 .instance
                 .defined_or_imported_global_ptr(index)

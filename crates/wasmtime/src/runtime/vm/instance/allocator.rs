@@ -575,7 +575,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 match module.table_plans[idx].table.ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
-                        let gc_store = unsafe { (*instance.store()).gc_store() };
+                        let gc_store = unsafe { (*instance.store()).unwrap_gc_store_mut() };
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items).err2anyhow()?;
@@ -583,7 +583,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
 
                     WasmHeapTopType::Any => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
-                        let gc_store = unsafe { (*instance.store()).gc_store() };
+                        let gc_store = unsafe { (*instance.store()).unwrap_gc_store_mut() };
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items).err2anyhow()?;

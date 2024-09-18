@@ -620,7 +620,7 @@ impl Table {
 
         // casting to u64 is ok to unwrap
         self.fill(
-            store.gc_store(),
+            store.unwrap_gc_store_mut(),
             u64::try_from(old_size).unwrap(),
             init_value,
             u64::try_from(delta).unwrap(),

@@ -103,7 +103,7 @@ pub unsafe trait VMStore {
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
 
     /// Get this store's GC heap.
-    fn gc_store(&mut self) -> &mut GcStore {
+    fn unwrap_gc_store_mut(&mut self) -> &mut GcStore {
         self.maybe_gc_store()
             .expect("attempt to access the GC store before it has been allocated")
     }
