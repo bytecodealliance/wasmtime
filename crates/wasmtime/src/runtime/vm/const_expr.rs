@@ -30,14 +30,14 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
         Self { instance, module }
     }
 
-    fn global_get(&mut self, index: GlobalIndex) -> Result<ValRaw> {
+    fn global_get(&mut self, store: &mut AutoAssertNoGc<'_>, index: GlobalIndex) -> Result<ValRaw> {
         unsafe {
             let global = self
                 .instance
                 .defined_or_imported_global_ptr(index)
                 .as_ref()
                 .unwrap();
-            let mut gc_store = (*self.instance.store()).unwrap_gc_store_mut();
+            let mut gc_store = store.unwrap_gc_store_mut();
             Ok(global.to_val_raw(&mut gc_store, self.module.globals[index].wasm_ty))
         }
     }
@@ -67,6 +67,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
     #[cfg(feature = "gc")]
     unsafe fn struct_new(
         &mut self,
+        store: &mut AutoAssertNoGc<'_>,
         struct_type_index: ModuleInternedTypeIndex,
         fields: &[ValRaw],
     ) -> Result<ValRaw> {
@@ -78,8 +79,6 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
             .signatures()
             .shared_type(struct_type_index)
             .expect("should have an engine type for module type");
-
-        let store = unsafe { (*self.instance.store()).store_opaque_mut() };
 
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
         let fields = fields
@@ -93,27 +92,17 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
             .collect::<Vec<_>>();
 
         let allocator = StructRefPre::_new(store, struct_ty);
-        let mut store = crate::OpaqueRootScope::new(store);
-
-        // TODO: if this fails with `GcHeapOutOfMemory<()>`, then we should do a
-        // GC and try to allocate again, hoping that the GC freed up
-        // space. However, we would need to choose between sync and async GC,
-        // and we can't use `AsyncCx::block_on` here to fake it because we
-        // aren't guaranteed to be running on a fiber yet, so we would be forced
-        // to create sync and async versions of every function up to at least
-        // `ConstExprEvaluator::eval`.
-        //
-        // In the meantime, just give up early without trying a GC if allocation
-        // fails.
-        let struct_ref = StructRef::_new(&mut store, &allocator, &fields)?;
-
-        let mut store = AutoAssertNoGc::new(&mut store);
-        let raw = struct_ref.to_anyref()._to_raw(&mut store)?;
+        let struct_ref = StructRef::_new(store, &allocator, &fields)?;
+        let raw = struct_ref.to_anyref()._to_raw(store)?;
         Ok(ValRaw::anyref(raw))
     }
 
     #[cfg(feature = "gc")]
-    fn struct_new_default(&mut self, struct_type_index: ModuleInternedTypeIndex) -> Result<ValRaw> {
+    fn struct_new_default(
+        &mut self,
+        store: &mut AutoAssertNoGc<'_>,
+        struct_type_index: ModuleInternedTypeIndex,
+    ) -> Result<ValRaw> {
         let module = self
             .instance
             .runtime_module()
@@ -158,7 +147,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
             })
             .collect::<SmallVec<[_; 8]>>();
 
-        unsafe { self.struct_new(struct_type_index, &fields) }
+        unsafe { self.struct_new(store, struct_type_index, &fields) }
     }
 }
 
@@ -179,6 +168,21 @@ impl ConstExprEvaluator {
     ) -> Result<ValRaw> {
         self.stack.clear();
 
+        let mut store = (*context.instance.store()).store_opaque_mut();
+
+        // Ensure that we don't permanently root any GC references we allocate
+        // during const evaluation, keeping them alive for the duration of the
+        // store's lifetime.
+        #[cfg(feature = "gc")]
+        let mut store = crate::OpaqueRootScope::new(&mut store);
+
+        // We cannot allow GC during const evaluation because the stack of
+        // `ValRaw`s are not rooted. If we had a GC reference on our stack, and
+        // then performed a collection, that on-stack reference's object could
+        // be reclaimed or relocated by the collector, and then when we use the
+        // reference again we would basically get a use-after-free bug.
+        let mut store = AutoAssertNoGc::new(&mut store);
+
         for op in expr.ops() {
             match op {
                 ConstOp::I32Const(i) => self.stack.push(ValRaw::i32(*i)),
@@ -186,7 +190,7 @@ impl ConstExprEvaluator {
                 ConstOp::F32Const(f) => self.stack.push(ValRaw::f32(*f)),
                 ConstOp::F64Const(f) => self.stack.push(ValRaw::f64(*f)),
                 ConstOp::V128Const(v) => self.stack.push(ValRaw::v128(*v)),
-                ConstOp::GlobalGet(g) => self.stack.push(context.global_get(*g)?),
+                ConstOp::GlobalGet(g) => self.stack.push(context.global_get(&mut store, *g)?),
                 ConstOp::RefNull => self.stack.push(ValRaw::null()),
                 ConstOp::RefFunc(f) => self.stack.push(context.ref_func(*f)?),
                 ConstOp::RefI31 => {
@@ -247,7 +251,11 @@ impl ConstExprEvaluator {
                     }
 
                     let start = self.stack.len() - len;
-                    let s = context.struct_new(interned_type_index, &self.stack[start..])?;
+                    let s = context.struct_new(
+                        &mut store,
+                        interned_type_index,
+                        &self.stack[start..],
+                    )?;
                     self.stack.truncate(start);
                     self.stack.push(s);
                 }
@@ -256,7 +264,7 @@ impl ConstExprEvaluator {
                 ConstOp::StructNewDefault { struct_type_index } => {
                     let interned_type_index = context.module.types[*struct_type_index];
                     self.stack
-                        .push(context.struct_new_default(interned_type_index)?);
+                        .push(context.struct_new_default(&mut store, interned_type_index)?);
                 }
             }
         }
