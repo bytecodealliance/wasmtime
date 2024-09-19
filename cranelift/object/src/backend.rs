@@ -331,16 +331,15 @@ impl Module for ObjectModule {
         ctrl_plane: &mut ControlPlane,
     ) -> ModuleResult<()> {
         info!("defining function {}: {}", func_id, ctx.func.display());
-        let mut code: Vec<u8> = Vec::new();
 
-        let res = ctx.compile_and_emit(self.isa(), &mut code, ctrl_plane)?;
+        let res = ctx.compile(self.isa(), ctrl_plane)?;
         let alignment = res.buffer.alignment as u64;
 
         self.define_function_bytes(
             func_id,
             &ctx.func,
             alignment,
-            &code,
+            ctx.compiled_code().unwrap().code_buffer(),
             ctx.compiled_code().unwrap().buffer.relocs(),
         )
     }

@@ -595,14 +595,14 @@ mod incremental_cache {
         context: &'a mut Context,
         isa: &dyn TargetIsa,
         cache_ctx: Option<&mut IncrementalCacheContext>,
-    ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
+    ) -> Result<CompiledCode, CompileError> {
         let cache_ctx = match cache_ctx {
             Some(ctx) => ctx,
             None => return compile_uncached(context, isa),
         };
 
         let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
-        let (compiled_code, from_cache) = context
+        let (_compiled_code, from_cache) = context
             .compile_with_cache(isa, &mut cache_store, &mut Default::default())
             .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
 
@@ -612,7 +612,7 @@ mod incremental_cache {
             cache_ctx.num_cached += 1;
         }
 
-        Ok((compiled_code, compiled_code.code_buffer().to_vec()))
+        Ok(context.take_compiled_code().unwrap())
     }
 }
 
@@ -624,19 +624,18 @@ fn compile_maybe_cached<'a>(
     context: &'a mut Context,
     isa: &dyn TargetIsa,
     _cache_ctx: Option<&mut IncrementalCacheContext>,
-) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
+) -> Result<CompiledCode, CompileError> {
     compile_uncached(context, isa)
 }
 
 fn compile_uncached<'a>(
     context: &'a mut Context,
     isa: &dyn TargetIsa,
-) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
-    let mut code_buf = Vec::new();
-    let compiled_code = context
-        .compile_and_emit(isa, &mut code_buf, &mut Default::default())
+) -> Result<CompiledCode, CompileError> {
+    context
+        .compile(isa, &mut Default::default())
         .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
-    Ok((compiled_code, code_buf))
+    Ok(context.take_compiled_code().unwrap())
 }
 
 impl Compiler {
@@ -814,9 +813,8 @@ impl FunctionCompiler<'_> {
     ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
-        let (_, _code_buf) =
+        let mut compiled_code =
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
-        let mut compiled_code = context.take_compiled_code().unwrap();
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
