@@ -43,6 +43,11 @@ impl ExternRef {
         None
     }
 
+    pub unsafe fn _from_raw(_store: &mut AutoAssertNoGc<'_>, raw: u32) -> Option<Rooted<Self>> {
+        assert_eq!(raw, 0);
+        None
+    }
+
     pub unsafe fn to_raw(&self, _store: impl AsContextMut) -> Result<u32> {
         match *self {}
     }

@@ -2,7 +2,7 @@
 
 use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
 use crate::store::AutoAssertNoGc;
-use crate::{prelude::*, OpaqueRootScope, StructRef, StructRefPre, StructType, Val};
+use crate::{prelude::*, StructRef, StructRefPre, StructType, Val};
 use smallvec::SmallVec;
 use wasmtime_environ::{
     ConstExpr, ConstOp, FuncIndex, GlobalIndex, Module, ModuleInternedTypeIndex, WasmCompositeType,
@@ -48,6 +48,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
         ))
     }
 
+    #[cfg(feature = "gc")]
     fn struct_fields_len(&self, struct_type_index: ModuleInternedTypeIndex) -> usize {
         let module = self
             .instance
@@ -63,6 +64,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
     }
 
     /// Safety: field values must be of the correct types.
+    #[cfg(feature = "gc")]
     unsafe fn struct_new(
         &mut self,
         struct_type_index: ModuleInternedTypeIndex,
@@ -91,7 +93,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
             .collect::<Vec<_>>();
 
         let allocator = StructRefPre::_new(store, struct_ty);
-        let mut store = OpaqueRootScope::new(store);
+        let mut store = crate::OpaqueRootScope::new(store);
 
         // TODO: if this fails with `GcHeapOutOfMemory<()>`, then we should do a
         // GC and try to allocate again, hoping that the GC freed up
@@ -110,6 +112,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
         Ok(ValRaw::anyref(raw))
     }
 
+    #[cfg(feature = "gc")]
     fn struct_new_default(&mut self, struct_type_index: ModuleInternedTypeIndex) -> Result<ValRaw> {
         let module = self
             .instance
@@ -222,6 +225,16 @@ impl ConstExprEvaluator {
                     let a = self.pop()?.get_i64();
                     self.stack.push(ValRaw::i64(a.wrapping_mul(b)));
                 }
+
+                #[cfg(not(feature = "gc"))]
+                ConstOp::StructNew { .. } | ConstOp::StructNewDefault { .. } => {
+                    bail!(
+                        "const expr evaluation error: struct operations are not \
+                         supported without the `gc` feature"
+                    )
+                }
+
+                #[cfg(feature = "gc")]
                 ConstOp::StructNew { struct_type_index } => {
                     let interned_type_index = context.module.types[*struct_type_index];
                     let len = context.struct_fields_len(interned_type_index);
@@ -238,6 +251,8 @@ impl ConstExprEvaluator {
                     self.stack.truncate(start);
                     self.stack.push(s);
                 }
+
+                #[cfg(feature = "gc")]
                 ConstOp::StructNewDefault { struct_type_index } => {
                     let interned_type_index = context.module.types[*struct_type_index];
                     self.stack
