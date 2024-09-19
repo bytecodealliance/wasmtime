@@ -138,10 +138,11 @@ impl TargetIsa for AArch64Backend {
                     )?,
                 ))
             }
-            UnwindInfoKind::Windows => {
-                // TODO: support Windows unwind info on AArch64
-                None
-            }
+            UnwindInfoKind::Windows => Some(UnwindInfo::WindowsArm64(
+                crate::isa::unwind::winarm64::create_unwind_info_from_insts(
+                    &result.buffer.unwind_info[..],
+                )?,
+            )),
             _ => None,
         })
     }
