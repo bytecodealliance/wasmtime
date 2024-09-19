@@ -1,26 +1,22 @@
 test compile precise-output
 target x86_64
 
-function %f0(i64 vmctx) -> i64, i64, i64, i64 {
+function %f0(i64 vmctx) -> i64, i64 {
   gv0 = vmctx
   stack_limit = gv0
-  ss0 = explicit_slot 8, align=16
-  ss1 = explicit_slot 8, align=16
-  ss2 = explicit_slot 4
-  ss3 = explicit_slot 4
+  ss0 = explicit_slot 8
+  ss1 = explicit_slot 32, align=16
 
 block0(v0: i64):
   v1 = stack_addr.i64 ss0
   v2 = stack_addr.i64 ss1
-  v3 = stack_addr.i64 ss2
-  v4 = stack_addr.i64 ss3
-  return v1, v2, v3, v4
+  return v1, v2
 }
 
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   movq    %rsi, %r10
+;   movq    %rdi, %r10
 ;   addq    %r10, $48, %r10
 ;   cmpq    %rsp, %r10
 ;   jnbe #trap=stk_ovf
@@ -28,10 +24,6 @@ block0(v0: i64):
 ; block0:
 ;   lea     rsp(0 + virtual offset), %rax
 ;   lea     rsp(16 + virtual offset), %rdx
-;   lea     rsp(24 + virtual offset), %r8
-;   lea     rsp(32 + virtual offset), %r9
-;   movq    %r8, 0(%rdi)
-;   movq    %r9, 8(%rdi)
 ;   addq    %rsp, $48, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -41,21 +33,16 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   movq %rsi, %r10
+;   movq %rdi, %r10
 ;   addq $0x30, %r10
 ;   cmpq %rsp, %r10
-;   ja 0x3b
+;   ja 0x2a
 ;   subq $0x30, %rsp
 ; block1: ; offset 0x18
 ;   leaq (%rsp), %rax
 ;   leaq 0x10(%rsp), %rdx
-;   leaq 0x18(%rsp), %r8
-;   leaq 0x20(%rsp), %r9
-;   movq %r8, (%rdi)
-;   movq %r9, 8(%rdi)
 ;   addq $0x30, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 ;   ud2 ; trap: stk_ovf
-
