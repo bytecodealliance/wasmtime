@@ -112,6 +112,7 @@ mod with_key_and_resources {
 
 mod trappable_errors_with_versioned_and_unversioned_packages {
     wasmtime::component::bindgen!({
+        world: "foo:foo/nope",
         inline: "
             package foo:foo@0.1.0;
 
@@ -694,6 +695,22 @@ mod trappable_error_type_and_versions {
             trappable_error_type: {
                 "my:inline/i@1.0.0/e" => super::MyError,
             },
+        });
+    }
+}
+
+mod paths {
+    mod multiple_paths {
+        wasmtime::component::bindgen!({
+            world: "test:paths/test",
+            inline: r#"
+            package test:paths;
+            world test {
+                import paths:path1/test;
+                export paths:path2/test;
+            }
+            "#,
+            path: ["tests/codegen/path1", "tests/codegen/path2"],
         });
     }
 }
