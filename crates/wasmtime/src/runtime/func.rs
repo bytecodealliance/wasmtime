@@ -1450,7 +1450,7 @@ impl Func {
     /// | `(ref <func type index>)`                 | `Func`                                |
     /// | `nullfuncref` aka `(ref null nofunc)`     | `Option<NoFunc>`                      |
     /// | `(ref nofunc)`                            | `NoFunc`                              |
-    /// | `v128`                                    | `V128` on `x86-64` and `aarch64` only |
+    /// | `v128`                                    | `V128`                                |
     ///
     /// (Note that this mapping is the same as that of [`Func::wrap`], and that
     /// anywhere a `Rooted<T>` appears, a `ManuallyRooted<T>` may also appear).
