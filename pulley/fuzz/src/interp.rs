@@ -32,7 +32,7 @@ pub fn interp(ops: Vec<Op>) {
         match vm.call(NonNull::from(&encoded[0]), args, rets.into_iter().copied()) {
             Ok(rets) => assert_eq!(rets.count(), 0),
             Err(pc) => {
-                let pc = pc as usize;
+                let pc = pc.as_ptr() as usize;
 
                 let start = &encoded[0] as *const u8 as usize;
                 let end = encoded.last().unwrap() as *const u8 as usize;
