@@ -95,6 +95,20 @@ pub struct AnyRef {
     pub(super) inner: GcRootIndex,
 }
 
+impl From<Rooted<EqRef>> for Rooted<AnyRef> {
+    #[inline]
+    fn from(e: Rooted<EqRef>) -> Self {
+        e.to_anyref()
+    }
+}
+
+impl From<ManuallyRooted<EqRef>> for ManuallyRooted<AnyRef> {
+    #[inline]
+    fn from(e: ManuallyRooted<EqRef>) -> Self {
+        e.to_anyref()
+    }
+}
+
 impl From<Rooted<StructRef>> for Rooted<AnyRef> {
     #[inline]
     fn from(s: Rooted<StructRef>) -> Self {

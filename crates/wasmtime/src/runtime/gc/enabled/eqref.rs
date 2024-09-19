@@ -92,6 +92,34 @@ pub struct EqRef {
     pub(super) inner: GcRootIndex,
 }
 
+impl From<Rooted<StructRef>> for Rooted<EqRef> {
+    #[inline]
+    fn from(s: Rooted<StructRef>) -> Self {
+        s.to_eqref()
+    }
+}
+
+impl From<ManuallyRooted<StructRef>> for ManuallyRooted<EqRef> {
+    #[inline]
+    fn from(s: ManuallyRooted<StructRef>) -> Self {
+        s.to_eqref()
+    }
+}
+
+impl From<Rooted<ArrayRef>> for Rooted<EqRef> {
+    #[inline]
+    fn from(s: Rooted<ArrayRef>) -> Self {
+        s.to_eqref()
+    }
+}
+
+impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<EqRef> {
+    #[inline]
+    fn from(s: ManuallyRooted<ArrayRef>) -> Self {
+        s.to_eqref()
+    }
+}
+
 unsafe impl GcRefImpl for EqRef {
     #[allow(private_interfaces)]
     fn transmute_ref(index: &GcRootIndex) -> &Self {

@@ -1,78 +1,50 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    ArrayRef, AsContext, AsContextMut, EqRef, GcRefImpl, HeapType, ManuallyRooted, Result, Rooted,
+    ArrayRef, AsContext, AsContextMut, GcRefImpl, HeapType, ManuallyRooted, Result, Rooted,
     StructRef, I31,
 };
 
-/// Support for `anyref` disabled at compile time because the `gc` cargo feature
+/// Support for `eqref` disabled at compile time because the `gc` cargo feature
 /// was not enabled.
-pub enum AnyRef {}
+pub enum EqRef {}
 
-impl From<Rooted<EqRef>> for Rooted<AnyRef> {
-    #[inline]
-    fn from(s: Rooted<EqRef>) -> Self {
-        match s.inner {}
-    }
-}
-
-impl From<ManuallyRooted<EqRef>> for ManuallyRooted<AnyRef> {
-    #[inline]
-    fn from(s: ManuallyRooted<EqRef>) -> Self {
-        match s.inner {}
-    }
-}
-
-impl From<Rooted<StructRef>> for Rooted<AnyRef> {
+impl From<Rooted<StructRef>> for Rooted<EqRef> {
     #[inline]
     fn from(s: Rooted<StructRef>) -> Self {
         match s.inner {}
     }
 }
 
-impl From<ManuallyRooted<StructRef>> for ManuallyRooted<AnyRef> {
+impl From<ManuallyRooted<StructRef>> for ManuallyRooted<EqRef> {
     #[inline]
     fn from(s: ManuallyRooted<StructRef>) -> Self {
         match s.inner {}
     }
 }
 
-impl From<Rooted<ArrayRef>> for Rooted<AnyRef> {
+impl From<Rooted<ArrayRef>> for Rooted<EqRef> {
     #[inline]
     fn from(s: Rooted<ArrayRef>) -> Self {
         match s.inner {}
     }
 }
 
-impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<AnyRef> {
+impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<EqRef> {
     #[inline]
     fn from(s: ManuallyRooted<ArrayRef>) -> Self {
         match s.inner {}
     }
 }
 
-impl GcRefImpl for AnyRef {}
+impl GcRefImpl for EqRef {}
 
-impl AnyRef {
+impl EqRef {
     pub(crate) fn from_cloned_gc_ref(
         _store: &mut AutoAssertNoGc<'_>,
         _gc_ref: VMGcRef,
     ) -> Rooted<Self> {
         unreachable!()
-    }
-
-    pub unsafe fn from_raw(_store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
-        assert_eq!(raw, 0);
-        None
-    }
-
-    pub unsafe fn _from_raw(_store: &mut AutoAssertNoGc<'_>, raw: u32) -> Option<Rooted<Self>> {
-        assert_eq!(raw, 0);
-        None
-    }
-
-    pub unsafe fn to_raw(&self, _store: impl AsContextMut) -> Result<u32> {
-        match *self {}
     }
 
     pub fn ty(&self, _store: impl AsContext) -> Result<HeapType> {
@@ -84,22 +56,6 @@ impl AnyRef {
     }
 
     pub fn matches_ty(&self, _store: impl AsContext, _ty: &HeapType) -> Result<bool> {
-        match *self {}
-    }
-
-    pub fn is_eqref(&self, _store: impl AsContext) -> Result<bool> {
-        match *self {}
-    }
-
-    pub(crate) fn _is_eqref(&self, _store: &StoreOpaque) -> Result<bool> {
-        match *self {}
-    }
-
-    pub fn as_eqref(&self, _store: impl AsContext) -> Result<Option<EqRef>> {
-        match *self {}
-    }
-
-    pub fn unwrap_eqref(&self, _store: impl AsContext) -> Result<EqRef> {
         match *self {}
     }
 
