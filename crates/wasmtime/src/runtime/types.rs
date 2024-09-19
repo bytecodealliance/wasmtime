@@ -139,6 +139,9 @@ impl ValType {
     /// The `anyref` type, aka `(ref null any)`.
     pub const ANYREF: Self = ValType::Ref(RefType::ANYREF);
 
+    /// The `eqref` type, aka `(ref null eq)`.
+    pub const EQREF: Self = ValType::Ref(RefType::EQREF);
+
     /// The `i31ref` type, aka `(ref null i31)`.
     pub const I31REF: Self = ValType::Ref(RefType::I31REF);
 
@@ -415,6 +418,12 @@ impl RefType {
     pub const ANYREF: Self = RefType {
         is_nullable: true,
         heap_type: HeapType::Any,
+    };
+
+    /// The `eqref` type, aka `(ref null eq)`.
+    pub const EQREF: Self = RefType {
+        is_nullable: true,
+        heap_type: HeapType::Eq,
     };
 
     /// The `i31ref` type, aka `(ref null i31)`.
