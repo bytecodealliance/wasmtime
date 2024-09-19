@@ -75,62 +75,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(AArch64CallSite);
 
-    fn gen_return_call(
-        &mut self,
-        callee_sig: SigRef,
-        callee: ExternalName,
-        distance: RelocDistance,
-        args: ValueSlice,
-    ) -> InstOutput {
-        let caller_conv = isa::CallConv::Tail;
-        debug_assert_eq!(
-            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            caller_conv,
-            "Can only do `return_call`s from within a `tail` calling convention function"
-        );
-
-        let call_site = AArch64CallSite::from_func(
-            self.lower_ctx.sigs(),
-            callee_sig,
-            &callee,
-            IsTailCall::Yes,
-            distance,
-            caller_conv,
-            self.backend.flags().clone(),
-        );
-        call_site.emit_return_call(self.lower_ctx, args, &self.backend.isa_flags);
-
-        InstOutput::new()
-    }
-
-    fn gen_return_call_indirect(
-        &mut self,
-        callee_sig: SigRef,
-        callee: Value,
-        args: ValueSlice,
-    ) -> InstOutput {
-        let caller_conv = isa::CallConv::Tail;
-        debug_assert_eq!(
-            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            caller_conv,
-            "Can only do `return_call`s from within a `tail` calling convention function"
-        );
-
-        let callee = self.put_in_reg(callee);
-
-        let call_site = AArch64CallSite::from_ptr(
-            self.lower_ctx.sigs(),
-            callee_sig,
-            callee,
-            IsTailCall::Yes,
-            caller_conv,
-            self.backend.flags().clone(),
-        );
-        call_site.emit_return_call(self.lower_ctx, args, &self.backend.isa_flags);
-
-        InstOutput::new()
-    }
-
     fn sign_return_address_disabled(&mut self) -> Option<()> {
         if self.backend.isa_flags.sign_return_address() {
             None

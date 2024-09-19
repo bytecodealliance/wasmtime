@@ -5,7 +5,7 @@ use crate::ir::types::*;
 
 use crate::isa;
 
-use crate::isa::riscv64::inst::*;
+use crate::isa::riscv64::{inst::*, Riscv64Backend};
 use crate::isa::CallConv;
 use crate::machinst::*;
 
@@ -727,7 +727,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 }
 
 impl Riscv64ABICallSite {
-    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+    pub fn emit_return_call(
+        mut self,
+        ctx: &mut Lower<Inst>,
+        args: isle::ValueSlice,
+        _backend: &Riscv64Backend,
+    ) {
         let new_stack_arg_size =
             u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
 

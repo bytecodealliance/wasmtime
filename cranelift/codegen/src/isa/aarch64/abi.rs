@@ -6,7 +6,7 @@ use crate::ir::types::*;
 use crate::ir::MemFlags;
 use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
-use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
+use crate::isa::aarch64::{inst::*, settings as aarch64_settings, AArch64Backend};
 use crate::isa::unwind::UnwindInst;
 use crate::isa::winch;
 use crate::machinst::*;
@@ -1249,7 +1249,7 @@ impl AArch64CallSite {
         mut self,
         ctx: &mut Lower<Inst>,
         args: isle::ValueSlice,
-        isa_flags: &aarch64_settings::Flags,
+        backend: &AArch64Backend,
     ) {
         let new_stack_arg_size =
             u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
@@ -1263,7 +1263,7 @@ impl AArch64CallSite {
 
         let dest = self.dest().clone();
         let uses = self.take_uses();
-        let key = select_api_key(isa_flags, isa::CallConv::Tail, true);
+        let key = select_api_key(&backend.isa_flags, isa::CallConv::Tail, true);
 
         match dest {
             CallDest::ExtName(callee, RelocDistance::Near) => {
