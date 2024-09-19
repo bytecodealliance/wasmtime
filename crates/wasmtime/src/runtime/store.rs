@@ -1686,9 +1686,8 @@ impl StoreOpaque {
 
     #[cfg(feature = "gc")]
     fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::runtime::vm::SendSyncPtr;
         use core::ptr::NonNull;
-
-        use crate::runtime::vm::{ModuleInfoLookup, SendSyncPtr};
 
         log::trace!("Begin trace GC roots :: Wasm stack");
 
@@ -1704,7 +1703,7 @@ impl StoreOpaque {
 
             let module_info = self
                 .modules()
-                .lookup(pc)
+                .lookup_module_by_pc(pc)
                 .expect("should have module info for Wasm frame");
 
             let stack_map = match module_info.lookup_stack_map(pc) {
@@ -2730,12 +2729,6 @@ impl Drop for StoreOpaque {
             ManuallyDrop::drop(&mut self.store_data);
             ManuallyDrop::drop(&mut self.rooted_host_funcs);
         }
-    }
-}
-
-impl crate::runtime::vm::ModuleInfoLookup for ModuleRegistry {
-    fn lookup(&self, pc: usize) -> Option<&dyn crate::runtime::vm::ModuleInfo> {
-        self.lookup_module_info(pc)
     }
 }
 
