@@ -19,22 +19,6 @@ pub fn gc_compiler(_: &FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
     disabled()
 }
 
-pub fn gc_ref_table_grow_builtin(
-    _ty: WasmHeapType,
-    _func_env: &mut FuncEnvironment<'_>,
-    _func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    disabled()
-}
-
-pub fn gc_ref_table_fill_builtin(
-    _ty: WasmHeapType,
-    _func_env: &mut FuncEnvironment<'_>,
-    _func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    disabled()
-}
-
 pub fn translate_struct_new(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder<'_>,
@@ -89,6 +73,83 @@ pub fn translate_struct_set(
     _field_index: u32,
     _struct_ref: ir::Value,
     _new_val: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}
+
+pub fn translate_array_new(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _elem: ir::Value,
+    _len: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_new_default(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _len: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_new_fixed(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _elems: &[ir::Value],
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_len(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_get(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _array: ir::Value,
+    _index: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_get_s(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _array: ir::Value,
+    _index: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_get_u(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _array: ir::Value,
+    _index: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_set(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _array: ir::Value,
+    _index: ir::Value,
+    _value: ir::Value,
 ) -> WasmResult<()> {
     disabled()
 }

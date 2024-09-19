@@ -469,6 +469,19 @@ impl Instance {
         ptr
     }
 
+    /// Serves a similar purpose as `OpaqueRootScope`, but for situations where
+    /// you need to enter a GC scope (which would normally require mutably
+    /// borrowing the instance's underlying store) but also access to `Instance`
+    /// methods that will internally mutably borrow that store as well.
+    pub(crate) fn with_gc_lifo_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let scope = unsafe { (*self.store()).gc_roots().enter_lifo_scope() };
+        let result = f(self);
+        unsafe {
+            (*self.store()).exit_gc_lifo_scope(scope);
+        }
+        result
+    }
+
     pub(crate) unsafe fn set_store(&mut self, store: Option<*mut dyn VMStore>) {
         if let Some(store) = store {
             *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store()) = store;
@@ -804,6 +817,41 @@ impl Instance {
         }
     }
 
+    /// Get the passive elements segment at the given index.
+    ///
+    /// Returns an empty segment if the index is out of bounds or if the segment
+    /// has been dropped.
+    ///
+    /// The `storage` parameter should always be `None`; it is a bit of a hack
+    /// to work around lifetime issues.
+    pub(crate) fn passive_element_segment<'a>(
+        &self,
+        storage: &'a mut Option<(Arc<wasmtime_environ::Module>, TableSegmentElements)>,
+        elem_index: ElemIndex,
+    ) -> &'a TableSegmentElements {
+        debug_assert!(storage.is_none());
+        *storage = Some((
+            // TODO: this `clone()` shouldn't be necessary but is used for now to
+            // inform `rustc` that the lifetime of the elements here are
+            // disconnected from the lifetime of `self`.
+            self.env_module().clone(),
+            // NB: fall back to an expressions-based list of elements which
+            // doesn't have static type information (as opposed to
+            // `TableSegmentElements::Functions`) since we don't know what type
+            // is needed in the caller's context. Let the type be inferred by
+            // how they use the segment.
+            TableSegmentElements::Expressions(Box::new([])),
+        ));
+        let (module, empty) = storage.as_ref().unwrap();
+
+        match module.passive_elements_map.get(&elem_index) {
+            Some(index) if !self.dropped_elements.contains(elem_index) => {
+                &module.passive_elements[*index]
+            }
+            _ => empty,
+        }
+    }
+
     /// The `table.init` operation: initializes a portion of a table with a
     /// passive element.
     ///
@@ -819,23 +867,8 @@ impl Instance {
         src: u64,
         len: u64,
     ) -> Result<(), Trap> {
-        // TODO: this `clone()` shouldn't be necessary but is used for now to
-        // inform `rustc` that the lifetime of the elements here are
-        // disconnected from the lifetime of `self`.
-        let module = self.env_module().clone();
-
-        // NB: fall back to an expressions-based list of elements which doesn't
-        // have static type information (as opposed to `Functions`) since we
-        // don't know just yet what type the table has. The type will be be
-        // inferred in the next step within `table_init_segment`.
-        let empty = TableSegmentElements::Expressions(Box::new([]));
-
-        let elements = match module.passive_elements_map.get(&elem_index) {
-            Some(index) if !self.dropped_elements.contains(elem_index) => {
-                &module.passive_elements[*index]
-            }
-            _ => &empty,
-        };
+        let mut storage = None;
+        let elements = self.passive_element_segment(&mut storage, elem_index);
         let mut const_evaluator = ConstExprEvaluator::default();
         self.table_init_segment(&mut const_evaluator, table_index, elements, dst, src, len)
     }
@@ -1008,6 +1041,22 @@ impl Instance {
         Ok(())
     }
 
+    /// Get the internal storage range of a particular Wasm data segment.
+    pub(crate) fn wasm_data_range(&self, index: DataIndex) -> Range<u32> {
+        match self.env_module().passive_data_map.get(&index) {
+            Some(range) if !self.dropped_data.contains(index) => range.clone(),
+            _ => 0..0,
+        }
+    }
+
+    /// Given an internal storage range of a Wasm data segment (or subset of a
+    /// Wasm data segment), get the data's raw bytes.
+    pub(crate) fn wasm_data(&self, range: Range<u32>) -> &[u8] {
+        let start = usize::try_from(range.start).unwrap();
+        let end = usize::try_from(range.end).unwrap();
+        &self.runtime_info.wasm_data()[start..end]
+    }
+
     /// Performs the `memory.init` operation.
     ///
     /// # Errors
@@ -1023,15 +1072,8 @@ impl Instance {
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        let range = match self.env_module().passive_data_map.get(&data_index).cloned() {
-            Some(range) if !self.dropped_data.contains(data_index) => range,
-            _ => 0..0,
-        };
+        let range = self.wasm_data_range(data_index);
         self.memory_init_segment(memory_index, range, dst, src, len)
-    }
-
-    pub(crate) fn wasm_data(&self, range: Range<u32>) -> &[u8] {
-        &self.runtime_info.wasm_data()[range.start as usize..range.end as usize]
     }
 
     pub(crate) fn memory_init_segment(

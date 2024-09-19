@@ -114,6 +114,13 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
         }
 
         (Val::AnyRef(Some(_)), WastRetCore::RefAny) => Ok(()),
+        (Val::AnyRef(Some(x)), WastRetCore::RefEq) => {
+            if x.is_eqref(store)? {
+                Ok(())
+            } else {
+                bail!("expected an eqref, found {x:?}");
+            }
+        }
         (Val::AnyRef(Some(x)), WastRetCore::RefI31) => {
             if x.is_i31(store)? {
                 Ok(())
@@ -126,6 +133,13 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
                 Ok(())
             } else {
                 bail!("expected a struct reference, found {x:?}")
+            }
+        }
+        (Val::AnyRef(Some(x)), WastRetCore::RefArray) => {
+            if x.is_array(store)? {
+                Ok(())
+            } else {
+                bail!("expected a array reference, found {x:?}")
             }
         }
 

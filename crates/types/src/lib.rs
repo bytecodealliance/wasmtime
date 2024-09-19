@@ -699,7 +699,7 @@ impl WasmFuncType {
 }
 
 /// Represents storage types introduced in the GC spec for array and struct fields.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum WasmStorageType {
     /// The storage type is i8.
     I8,
@@ -1490,8 +1490,22 @@ pub enum ConstOp {
     I64Add,
     I64Sub,
     I64Mul,
-    StructNew { struct_type_index: TypeIndex },
-    StructNewDefault { struct_type_index: TypeIndex },
+    StructNew {
+        struct_type_index: TypeIndex,
+    },
+    StructNewDefault {
+        struct_type_index: TypeIndex,
+    },
+    ArrayNew {
+        array_type_index: TypeIndex,
+    },
+    ArrayNewDefault {
+        array_type_index: TypeIndex,
+    },
+    ArrayNewFixed {
+        array_type_index: TypeIndex,
+        array_size: u32,
+    },
 }
 
 impl ConstOp {
@@ -1519,6 +1533,19 @@ impl ConstOp {
             },
             O::StructNewDefault { struct_type_index } => Self::StructNewDefault {
                 struct_type_index: TypeIndex::from_u32(struct_type_index),
+            },
+            O::ArrayNew { array_type_index } => Self::ArrayNew {
+                array_type_index: TypeIndex::from_u32(array_type_index),
+            },
+            O::ArrayNewDefault { array_type_index } => Self::ArrayNewDefault {
+                array_type_index: TypeIndex::from_u32(array_type_index),
+            },
+            O::ArrayNewFixed {
+                array_type_index,
+                array_size,
+            } => Self::ArrayNewFixed {
+                array_type_index: TypeIndex::from_u32(array_type_index),
+                array_size,
             },
             op => {
                 return Err(wasm_unsupported!(

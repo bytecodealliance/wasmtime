@@ -14,7 +14,9 @@ pub mod drc;
 
 use crate::prelude::*;
 use core::alloc::Layout;
-use wasmtime_types::{WasmArrayType, WasmStorageType, WasmStructType, WasmValType};
+use wasmtime_types::{
+    WasmArrayType, WasmCompositeType, WasmStorageType, WasmStructType, WasmValType,
+};
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
 pub const I31_DISCRIMINANT: u64 = 1;
@@ -40,6 +42,24 @@ pub fn byte_size_of_wasm_ty_in_gc_heap(ty: &WasmStorageType) -> u32 {
 /// A trait for getting the layout of a Wasm GC struct or array inside a
 /// particular collector.
 pub trait GcTypeLayouts {
+    /// The offset of an array's length field.
+    ///
+    /// This must be the same for all arrays in the heap, regardless of their
+    /// element type.
+    fn array_length_field_offset(&self) -> u32;
+
+    /// Get this collector's layout for the given composite type.
+    ///
+    /// Returns `None` if the type is a function type, as functions are not
+    /// managed by the GC.
+    fn gc_layout(&self, ty: &WasmCompositeType) -> Option<GcLayout> {
+        match ty {
+            WasmCompositeType::Array(ty) => Some(self.array_layout(ty).into()),
+            WasmCompositeType::Struct(ty) => Some(self.struct_layout(ty).into()),
+            WasmCompositeType::Func(_) => None,
+        }
+    }
+
     /// Get this collector's layout for the given array type.
     fn array_layout(&self, ty: &WasmArrayType) -> GcArrayLayout;
 
@@ -106,17 +126,13 @@ impl GcLayout {
 #[derive(Clone, Debug)]
 #[allow(dead_code)] // Not used yet, but added for completeness.
 pub struct GcArrayLayout {
-    /// The size of this array object, ignoring its elements.
-    pub size: u32,
+    /// The size of this array object, without any elements.
+    ///
+    /// The array's elements, if any, must begin at exactly this offset.
+    pub base_size: u32,
 
     /// The alignment of this array.
     pub align: u32,
-
-    /// The offset of the array's length.
-    pub length_field_offset: u32,
-
-    /// The offset from where this array's contiguous elements begin.
-    pub elems_offset: u32,
 
     /// The size and natural alignment of each element in this array.
     pub elem_size: u32,
@@ -124,14 +140,15 @@ pub struct GcArrayLayout {
 
 impl GcArrayLayout {
     /// Get the total size of this array for a given length of elements.
+    #[inline]
     pub fn size_for_len(&self, len: u32) -> u32 {
-        self.size + len * self.elem_size
+        self.elem_offset(len)
     }
 
     /// Get the offset of the `i`th element in an array with this layout.
     #[inline]
-    pub fn elem_offset(&self, i: u32, elem_size: u32) -> u32 {
-        self.elems_offset + i * elem_size
+    pub fn elem_offset(&self, i: u32) -> u32 {
+        self.base_size + i * self.elem_size
     }
 
     /// Get a `core::alloc::Layout` for an array of this type with the given
@@ -222,8 +239,15 @@ impl VMGcKind {
     /// get the bits that `VMGcKind` doesn't use.
     pub const UNUSED_MASK: u32 = !Self::MASK;
 
+    /// Does the given value fit in the unused bits of a `VMGcKind`?
+    #[inline]
+    pub fn value_fits_in_unused_bits(value: u32) -> bool {
+        (value & Self::UNUSED_MASK) == value
+    }
+
     /// Convert the given value into a `VMGcKind` by masking off the unused
     /// bottom bits.
+    #[inline]
     pub fn from_high_bits_of_u32(val: u32) -> VMGcKind {
         let masked = val & Self::MASK;
         match masked {

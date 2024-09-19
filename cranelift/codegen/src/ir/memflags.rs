@@ -362,7 +362,7 @@ impl MemFlags {
             0b1010 => Some(TrapCode::Interrupt),
             0b1011 => Some(TrapCode::NullReference),
             0b1100 => Some(TrapCode::ArrayOutOfBounds),
-            // 0b1101 => {} not allocated
+            0b1101 => Some(TrapCode::AllocationTooLarge),
             // 0b1110 => {} not allocated
             0b1111 => None,
             _ => unreachable!(),
@@ -391,6 +391,7 @@ impl MemFlags {
             Some(TrapCode::Interrupt) => 0b1010,
             Some(TrapCode::NullReference) => 0b1011,
             Some(TrapCode::ArrayOutOfBounds) => 0b1100,
+            Some(TrapCode::AllocationTooLarge) => 0b1101,
             None => 0b1111,
 
             Some(TrapCode::User(_)) => panic!("cannot set user trap code in mem flags"),

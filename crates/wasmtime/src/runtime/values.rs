@@ -109,6 +109,27 @@ impl Val {
         Val::AnyRef(None)
     }
 
+    /// Returns the default value for the given type, if any exists.
+    ///
+    /// Returns `None` if there is no default value for the given type (for
+    /// example, non-nullable reference types do not have a default value).
+    pub fn default_for_ty(ty: &ValType) -> Option<Val> {
+        match ty {
+            ValType::I32 => Some(Val::I32(0)),
+            ValType::I64 => Some(Val::I64(0)),
+            ValType::F32 => Some(Val::F32(0)),
+            ValType::F64 => Some(Val::F64(0)),
+            ValType::V128 => Some(Val::V128(V128::from(0))),
+            ValType::Ref(ref_ty) => {
+                if ref_ty.is_nullable() {
+                    Some(Val::null_ref(ref_ty.heap_type()))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Returns the corresponding [`ValType`] for this `Val`.
     ///
     /// # Errors

@@ -94,6 +94,7 @@ use itertools::Itertools;
 use smallvec::SmallVec;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
+use wasmtime_types::{DataIndex, ElemIndex};
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
 /// `state.reachable = false` and return.
@@ -2583,6 +2584,147 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             ));
         }
 
+        Operator::ArrayNew { array_type_index } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let (elem, len) = state.pop2();
+            let array_ref = environ.translate_array_new(builder, array_type_index, elem, len)?;
+            state.push1(array_ref);
+        }
+        Operator::ArrayNewDefault { array_type_index } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let len = state.pop1();
+            let array_ref = environ.translate_array_new_default(builder, array_type_index, len)?;
+            state.push1(array_ref);
+        }
+        Operator::ArrayNewFixed {
+            array_type_index,
+            array_size,
+        } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let array_size = usize::try_from(*array_size).unwrap();
+            let elems = state.peekn(array_size);
+            let array_ref = environ.translate_array_new_fixed(builder, array_type_index, elems)?;
+            state.popn(array_size);
+            state.push1(array_ref);
+        }
+        Operator::ArrayNewData {
+            array_type_index,
+            array_data_index,
+        } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let array_data_index = DataIndex::from_u32(*array_data_index);
+            let (data_offset, len) = state.pop2();
+            let array_ref = environ.translate_array_new_data(
+                builder,
+                array_type_index,
+                array_data_index,
+                data_offset,
+                len,
+            )?;
+            state.push1(array_ref);
+        }
+        Operator::ArrayNewElem {
+            array_type_index,
+            array_elem_index,
+        } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let array_elem_index = ElemIndex::from_u32(*array_elem_index);
+            let (elem_offset, len) = state.pop2();
+            let array_ref = environ.translate_array_new_elem(
+                builder,
+                array_type_index,
+                array_elem_index,
+                elem_offset,
+                len,
+            )?;
+            state.push1(array_ref);
+        }
+        Operator::ArrayCopy {
+            array_type_index_dst,
+            array_type_index_src,
+        } => {
+            let array_type_index_dst = TypeIndex::from_u32(*array_type_index_dst);
+            let array_type_index_src = TypeIndex::from_u32(*array_type_index_src);
+            let (dst_array, dst_index, src_array, src_index, len) = state.pop5();
+            environ.translate_array_copy(
+                builder,
+                array_type_index_dst,
+                dst_array,
+                dst_index,
+                array_type_index_src,
+                src_array,
+                src_index,
+                len,
+            )?;
+        }
+        Operator::ArrayFill { array_type_index } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let (array, index, val, len) = state.pop4();
+            environ.translate_array_fill(builder, array_type_index, array, index, val, len)?;
+        }
+        Operator::ArrayInitData {
+            array_type_index,
+            array_data_index,
+        } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let array_data_index = DataIndex::from_u32(*array_data_index);
+            let (array, dst_index, src_index, len) = state.pop4();
+            environ.translate_array_init_data(
+                builder,
+                array_type_index,
+                array,
+                dst_index,
+                array_data_index,
+                src_index,
+                len,
+            )?;
+        }
+        Operator::ArrayInitElem {
+            array_type_index,
+            array_elem_index,
+        } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let array_elem_index = ElemIndex::from_u32(*array_elem_index);
+            let (array, dst_index, src_index, len) = state.pop4();
+            environ.translate_array_init_elem(
+                builder,
+                array_type_index,
+                array,
+                dst_index,
+                array_elem_index,
+                src_index,
+                len,
+            )?;
+        }
+        Operator::ArrayLen => {
+            let array = state.pop1();
+            let len = environ.translate_array_len(builder, array)?;
+            state.push1(len);
+        }
+        Operator::ArrayGet { array_type_index } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let (array, index) = state.pop2();
+            let elem = environ.translate_array_get(builder, array_type_index, array, index)?;
+            state.push1(elem);
+        }
+        Operator::ArrayGetS { array_type_index } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let (array, index) = state.pop2();
+            let elem = environ.translate_array_get_s(builder, array_type_index, array, index)?;
+            state.push1(elem);
+        }
+        Operator::ArrayGetU { array_type_index } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let (array, index) = state.pop2();
+            let elem = environ.translate_array_get_u(builder, array_type_index, array, index)?;
+            state.push1(elem);
+        }
+        Operator::ArraySet { array_type_index } => {
+            let array_type_index = TypeIndex::from_u32(*array_type_index);
+            let (array, index, elem) = state.pop3();
+            environ.translate_array_set(builder, array_type_index, array, index, elem)?;
+        }
+
         Operator::RefEq
         | Operator::RefTestNonNull { .. }
         | Operator::RefTestNullable { .. }
@@ -2591,21 +2733,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::BrOnCast { .. }
         | Operator::BrOnCastFail { .. }
         | Operator::AnyConvertExtern
-        | Operator::ExternConvertAny
-        | Operator::ArrayNew { .. }
-        | Operator::ArrayNewDefault { .. }
-        | Operator::ArrayNewFixed { .. }
-        | Operator::ArrayNewData { .. }
-        | Operator::ArrayNewElem { .. }
-        | Operator::ArrayGet { .. }
-        | Operator::ArrayGetU { .. }
-        | Operator::ArrayGetS { .. }
-        | Operator::ArraySet { .. }
-        | Operator::ArrayLen { .. }
-        | Operator::ArrayFill { .. }
-        | Operator::ArrayCopy { .. }
-        | Operator::ArrayInitData { .. }
-        | Operator::ArrayInitElem { .. } => {
+        | Operator::ExternConvertAny => {
             return Err(wasm_unsupported!("GC operators are not yet implemented"));
         }
 

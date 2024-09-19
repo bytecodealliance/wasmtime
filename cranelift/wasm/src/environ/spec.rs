@@ -575,6 +575,143 @@ pub trait FuncEnvironment: TargetEnvironment {
         struct_ref: ir::Value,
     ) -> WasmResult<ir::Value>;
 
+    /// Translate an `array.new` instruction.
+    fn translate_array_new(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        elem: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.new_default` instruction.
+    fn translate_array_new_default(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.new_fixed` instruction.
+    fn translate_array_new_fixed(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        elems: &[ir::Value],
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.new_data` instruction.
+    fn translate_array_new_data(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        data_index: DataIndex,
+        data_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.new_elem` instruction.
+    fn translate_array_new_elem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        elem_index: ElemIndex,
+        elem_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.copy` instruction.
+    fn translate_array_copy(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        dst_array_type_index: TypeIndex,
+        dst_array: ir::Value,
+        dst_index: ir::Value,
+        src_array_type_index: TypeIndex,
+        src_array: ir::Value,
+        src_index: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate an `array.fill` instruction.
+    fn translate_array_fill(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+        value: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate an `array.init_data` instruction.
+    fn translate_array_init_data(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        dst_index: ir::Value,
+        data_index: DataIndex,
+        data_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate an `array.init_elem` instruction.
+    fn translate_array_init_elem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        dst_index: ir::Value,
+        elem_index: ElemIndex,
+        elem_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate an `array.len` instruction.
+    fn translate_array_len(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.get` instruction.
+    fn translate_array_get(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.get_s` instruction.
+    fn translate_array_get_s(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.get_u` instruction.
+    fn translate_array_get_u(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `array.set` instruction.
+    fn translate_array_set(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+        value: ir::Value,
+    ) -> WasmResult<()>;
+
     /// Emit code at the beginning of every wasm loop.
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at

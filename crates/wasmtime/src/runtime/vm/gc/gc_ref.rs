@@ -16,11 +16,11 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 ///
 /// ```ignore
 /// struct VMGcHeader {
-///     // Highest 2 bits.
+///     // Highest 6 bits.
 ///     kind: VMGcKind,
 ///
-///     // 30 bits available for the `GcRuntime` to make use of however it sees fit.
-///     reserved: u30,
+///     // 26 bits available for the `GcRuntime` to make use of however it sees fit.
+///     reserved: u26,
 ///
 ///     // The `VMSharedTypeIndex` for this GC object, if it isn't an
 ///     // `externref` (or an `externref` re-wrapped as an `anyref`). `None` is
@@ -85,9 +85,8 @@ impl VMGcHeader {
     ///
     /// Panics if the given `value` has any of the upper 6 bits set.
     pub fn set_reserved_u26(&mut self, value: u32) {
-        assert_eq!(
-            value & VMGcKind::MASK,
-            0,
+        assert!(
+            VMGcKind::value_fits_in_unused_bits(value),
             "VMGcHeader::set_reserved_u26 with value using more than 26 bits"
         );
         self.0 |= u64::from(value) << 32;
