@@ -111,11 +111,18 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Stack space.
         let mut next_stack: u32 = 0;
 
-        // In the SystemV ABI, the return area pointer is the first argument,
-        // so we need to leave room for it if required.
-        if add_ret_area_ptr && call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+        let ret_area_ptr = if add_ret_area_ptr {
+            assert!(ArgsOrRets::Args == args_or_rets);
             next_x_reg += 1;
-        }
+            Some(ABIArg::reg(
+                x_reg(x_start).to_real_reg().unwrap(),
+                I64,
+                ir::ArgumentExtension::None,
+                ir::ArgumentPurpose::Normal,
+            ))
+        } else {
+            None
+        };
 
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
@@ -167,35 +174,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 purpose: param.purpose,
             });
         }
-        let pos: Option<usize> = if add_ret_area_ptr {
-            assert!(ArgsOrRets::Args == args_or_rets);
-            if call_conv != CallConv::Tail && call_conv != CallConv::Winch {
-                // In the SystemV ABI, the return area pointer is the first argument.
-                let arg = ABIArg::reg(
-                    x_reg(x_start).to_real_reg().unwrap(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                );
-                args.push_non_formal(arg);
-            } else if next_x_reg <= x_end {
-                let arg = ABIArg::reg(
-                    x_reg(next_x_reg).to_real_reg().unwrap(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                );
-                args.push_non_formal(arg);
-            } else {
-                let arg = ABIArg::stack(
-                    next_stack as i64,
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                );
-                args.push_non_formal(arg);
-                next_stack += 8;
-            }
+        let pos = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
         } else {
             None

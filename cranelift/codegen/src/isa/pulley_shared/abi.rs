@@ -70,6 +70,19 @@ where
         let mut next_v_reg = 0;
         let mut next_stack: u32 = 0;
 
+        let ret_area_ptr = if add_ret_area_ptr {
+            assert!(ArgsOrRets::Args == args_or_rets);
+            next_x_reg += 1;
+            Some(ABIArg::reg(
+                x_reg(0).to_real_reg().unwrap(),
+                I64,
+                ir::ArgumentExtension::None,
+                ir::ArgumentPurpose::Normal,
+            ))
+        } else {
+            None
+        };
+
         for param in params {
             // Find the regclass(es) of the register(s) used to store a value of
             // this type.
@@ -125,26 +138,8 @@ where
             });
         }
 
-        let pos = if add_ret_area_ptr {
-            assert!(ArgsOrRets::Args == args_or_rets);
-            if next_x_reg <= x_end {
-                let arg = ABIArg::reg(
-                    x_reg(next_x_reg).to_real_reg().unwrap(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                );
-                args.push_non_formal(arg);
-            } else {
-                let arg = ABIArg::stack(
-                    next_stack as i64,
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                );
-                args.push_non_formal(arg);
-                next_stack += 8;
-            }
+        let pos = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
         } else {
             None

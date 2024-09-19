@@ -315,11 +315,21 @@ impl ABIMachineSpec for S390xMachineDeps {
             next_stack = REG_SAVE_AREA_SIZE;
         }
 
-        // In the SystemV ABI, the return area pointer is the first argument,
-        // so we need to leave room for it if required.
-        if add_ret_area_ptr {
+        let ret_area_ptr = if add_ret_area_ptr {
+            debug_assert!(args_or_rets == ArgsOrRets::Args);
             next_gpr += 1;
-        }
+            Some(ABIArg::reg(
+                get_intreg_for_arg(call_conv, 0)
+                    .unwrap()
+                    .to_real_reg()
+                    .unwrap(),
+                types::I64,
+                ir::ArgumentExtension::None,
+                ir::ArgumentPurpose::Normal,
+            ))
+        } else {
+            None
+        };
 
         for mut param in params.into_iter().copied() {
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
@@ -421,25 +431,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         next_stack = align_to(next_stack, 8);
 
-        let extra_arg = if add_ret_area_ptr {
-            debug_assert!(args_or_rets == ArgsOrRets::Args);
-            // The return pointer is passed as first argument.
-            if let Some(reg) = get_intreg_for_arg(call_conv, 0) {
-                args.push(ABIArg::reg(
-                    reg.to_real_reg().unwrap(),
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-            } else {
-                args.push(ABIArg::stack(
-                    next_stack as i64,
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-                next_stack += 8;
-            }
+        let extra_arg = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
         } else {
             None

@@ -13,16 +13,16 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     x28, sp
-;;       mov     x9, x0
+;;       mov     x9, x1
 ;;       sub     sp, sp, #0x28
 ;;       mov     x28, sp
-;;       stur    x0, [x28, #0x20]
-;;       stur    x1, [x28, #0x18]
-;;       stur    w2, [x28, #0x14]
-;;       stur    w3, [x28, #0x10]
+;;       stur    x1, [x28, #0x20]
+;;       stur    x2, [x28, #0x18]
+;;       stur    w3, [x28, #0x14]
+;;       stur    w4, [x28, #0x10]
 ;;       stur    s0, [x28, #0xc]
 ;;       stur    s1, [x28, #8]
-;;       stur    x4, [x28]
+;;       stur    x0, [x28]
 ;;       ldur    s0, [x28, #8]
 ;;       ldur    w16, [x28, #0x14]
 ;;       sub     sp, sp, #4

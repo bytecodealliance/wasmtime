@@ -151,6 +151,33 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let max_per_class_reg_vals = 8; // x0-x7 and v0-v7
         let mut remaining_reg_vals = 16;
 
+        let ret_area_ptr = if add_ret_area_ptr {
+            debug_assert!(args_or_rets == ArgsOrRets::Args);
+            if call_conv != isa::CallConv::Winch {
+                // In the AAPCS64 calling convention the return area pointer is
+                // stored in x8.
+                Some(ABIArg::reg(
+                    xreg(8).to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ))
+            } else {
+                // Use x0 for the return area pointer in the Winch calling convention
+                // to simplify the ABI handling code in Winch by avoiding an AArch64
+                // special case to assign it to x8.
+                next_xreg += 1;
+                Some(ABIArg::reg(
+                    xreg(0).to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ))
+            }
+        } else {
+            None
+        };
+
         for (i, param) in params.into_iter().enumerate() {
             if is_apple_cc && param.value_type == types::F128 && !flags.enable_llvm_abi_extensions()
             {
@@ -349,40 +376,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
             next_stack += size;
         }
 
-        let extra_arg = if add_ret_area_ptr {
-            debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if call_conv != isa::CallConv::Tail && call_conv != isa::CallConv::Winch {
-                args.push_non_formal(ABIArg::reg(
-                    xreg(8).to_real_reg().unwrap(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-            } else if call_conv == isa::CallConv::Tail {
-                args.push_non_formal(ABIArg::reg(
-                    xreg_preg(0).into(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-            } else {
-                if next_xreg < max_per_class_reg_vals && remaining_reg_vals > 0 {
-                    args.push_non_formal(ABIArg::reg(
-                        xreg(next_xreg).to_real_reg().unwrap(),
-                        I64,
-                        ir::ArgumentExtension::None,
-                        ir::ArgumentPurpose::Normal,
-                    ));
-                } else {
-                    args.push_non_formal(ABIArg::stack(
-                        next_stack as i64,
-                        I64,
-                        ir::ArgumentExtension::None,
-                        ir::ArgumentPurpose::Normal,
-                    ));
-                    next_stack += 8;
-                }
-            }
+        let extra_arg = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
         } else {
             None

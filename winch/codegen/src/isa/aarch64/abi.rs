@@ -239,12 +239,12 @@ mod tests {
         let params = sig.params;
         let results = sig.results;
 
-        match_reg_arg(params.get(0).unwrap(), I32, regs::xreg(0));
-        match_reg_arg(params.get(1).unwrap(), I64, regs::xreg(1));
-        match_reg_arg(params.get(2).unwrap(), I32, regs::xreg(2));
-        match_reg_arg(params.get(3).unwrap(), I64, regs::xreg(3));
-        match_reg_arg(params.get(4).unwrap(), I32, regs::xreg(4));
-        match_reg_arg(params.get(5).unwrap(), I32, regs::xreg(5));
+        match_reg_arg(params.get(0).unwrap(), I32, regs::xreg(1));
+        match_reg_arg(params.get(1).unwrap(), I64, regs::xreg(2));
+        match_reg_arg(params.get(2).unwrap(), I32, regs::xreg(3));
+        match_reg_arg(params.get(3).unwrap(), I64, regs::xreg(4));
+        match_reg_arg(params.get(4).unwrap(), I32, regs::xreg(5));
+        match_reg_arg(params.get(5).unwrap(), I32, regs::xreg(6));
 
         match_stack_arg(results.get(0).unwrap(), I32, 4);
         match_stack_arg(results.get(1).unwrap(), I32, 0);
@@ -263,10 +263,10 @@ mod tests {
         let results = sig.results;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));
-        match_reg_arg(params.get(1).unwrap(), I32, regs::xreg(0));
-        match_reg_arg(params.get(2).unwrap(), I64, regs::xreg(1));
+        match_reg_arg(params.get(1).unwrap(), I32, regs::xreg(1));
+        match_reg_arg(params.get(2).unwrap(), I64, regs::xreg(2));
         match_reg_arg(params.get(3).unwrap(), F64, regs::vreg(1));
-        match_reg_arg(params.get(4).unwrap(), I32, regs::xreg(2));
+        match_reg_arg(params.get(4).unwrap(), I32, regs::xreg(3));
 
         match_stack_arg(results.get(0).unwrap(), I32, 12);
         match_stack_arg(results.get(1).unwrap(), F32, 8);
@@ -275,6 +275,7 @@ mod tests {
         match_reg_arg(results.get(4).unwrap(), I64, regs::xreg(0));
     }
 
+    #[track_caller]
     fn match_reg_arg(abi_arg: &ABIOperand, expected_ty: WasmValType, expected_reg: Reg) {
         match abi_arg {
             &ABIOperand::Reg { reg, ty, .. } => {
@@ -285,6 +286,7 @@ mod tests {
         }
     }
 
+    #[track_caller]
     fn match_stack_arg(abi_arg: &ABIOperand, expected_ty: WasmValType, expected_offset: u32) {
         match abi_arg {
             &ABIOperand::Stack { offset, ty, .. } => {

@@ -118,12 +118,24 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             next_stack = 32;
         }
 
-        // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first argument,
-        // so we need to leave room for it if required.
-        if add_ret_area_ptr && call_conv != CallConv::Tail && call_conv != CallConv::Winch {
+        let ret_area_ptr = if add_ret_area_ptr {
+            debug_assert!(args_or_rets == ArgsOrRets::Args);
             next_gpr += 1;
             next_param_idx += 1;
-        }
+            // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
+            // argument. For the Tail and Winch ABIs we do the same for simplicity sake.
+            Some(ABIArg::reg(
+                get_intreg_for_arg(call_conv, 0, 0)
+                    .unwrap()
+                    .to_real_reg()
+                    .unwrap(),
+                types::I64,
+                ir::ArgumentExtension::None,
+                ir::ArgumentPurpose::Normal,
+            ))
+        } else {
+            None
+        };
 
         // If any param uses extension, the winch calling convention will not pack its results
         // on the stack and will instead align them to 8-byte boundaries the same way that all the
@@ -368,37 +380,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 }
             }
         }
-
-        let extra_arg = if add_ret_area_ptr {
-            debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if call_conv != CallConv::Tail && call_conv != CallConv::Winch {
-                // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
-                // argument.
-                args.push_non_formal(ABIArg::reg(
-                    get_intreg_for_arg(call_conv, 0, 0)
-                        .unwrap()
-                        .to_real_reg()
-                        .unwrap(),
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-            } else if let Some(reg) = get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
-                args.push_non_formal(ABIArg::reg(
-                    reg.to_real_reg().unwrap(),
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-            } else {
-                args.push_non_formal(ABIArg::stack(
-                    next_stack as i64,
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-                next_stack += 8;
-            }
+        let extra_arg_idx = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
         } else {
             None
@@ -412,7 +395,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         next_stack = align_to(next_stack, 16);
 
-        Ok((next_stack, extra_arg))
+        Ok((next_stack, extra_arg_idx))
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {

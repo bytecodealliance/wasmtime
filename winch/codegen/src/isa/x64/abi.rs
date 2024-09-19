@@ -314,14 +314,14 @@ mod tests {
         let params = sig.params;
         let results = sig.results;
 
-        match_reg_arg(params.get(0).unwrap(), I32, regs::rdi());
-        match_reg_arg(params.get(1).unwrap(), I64, regs::rsi());
-        match_reg_arg(params.get(2).unwrap(), I32, regs::rdx());
-        match_reg_arg(params.get(3).unwrap(), I64, regs::rcx());
-        match_reg_arg(params.get(4).unwrap(), I32, regs::r8());
-        match_reg_arg(params.get(5).unwrap(), I32, regs::r9());
-        match_stack_arg(params.get(6).unwrap(), I64, 0);
-        match_stack_arg(params.get(7).unwrap(), I32, 8);
+        match_reg_arg(params.get(0).unwrap(), I32, regs::rsi());
+        match_reg_arg(params.get(1).unwrap(), I64, regs::rdx());
+        match_reg_arg(params.get(2).unwrap(), I32, regs::rcx());
+        match_reg_arg(params.get(3).unwrap(), I64, regs::r8());
+        match_reg_arg(params.get(4).unwrap(), I32, regs::r9());
+        match_stack_arg(params.get(5).unwrap(), I32, 0);
+        match_stack_arg(params.get(6).unwrap(), I64, 8);
+        match_stack_arg(params.get(7).unwrap(), I32, 16);
 
         match_stack_arg(results.get(0).unwrap(), I32, 4);
         match_stack_arg(results.get(1).unwrap(), I32, 0);
@@ -454,13 +454,13 @@ mod tests {
         let params = sig.params;
         let results = sig.results;
 
-        match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
-        match_reg_arg(params.get(1).unwrap(), I32, regs::rdx());
-        match_reg_arg(params.get(2).unwrap(), I64, regs::r8());
-        match_reg_arg(params.get(3).unwrap(), F64, regs::xmm3());
+        match_reg_arg(params.get(0).unwrap(), F32, regs::xmm1());
+        match_reg_arg(params.get(1).unwrap(), I32, regs::r8());
+        match_reg_arg(params.get(2).unwrap(), I64, regs::r9());
         // Each argument stack slot is 8 bytes.
-        match_stack_arg(params.get(4).unwrap(), I32, 32);
-        match_stack_arg(params.get(5).unwrap(), F32, 40);
+        match_stack_arg(params.get(3).unwrap(), F64, 32);
+        match_stack_arg(params.get(4).unwrap(), I32, 40);
+        match_stack_arg(params.get(5).unwrap(), F32, 48);
 
         match_reg_arg(results.get(0).unwrap(), I32, regs::rax());
 
@@ -470,7 +470,7 @@ mod tests {
         match_stack_arg(results.get(4).unwrap(), I64, 12);
     }
 
-    #[cfg(test)]
+    #[track_caller]
     fn match_reg_arg(abi_arg: &ABIOperand, expected_ty: WasmValType, expected_reg: Reg) {
         match abi_arg {
             &ABIOperand::Reg { reg, ty, .. } => {
@@ -481,7 +481,7 @@ mod tests {
         }
     }
 
-    #[cfg(test)]
+    #[track_caller]
     fn match_stack_arg(abi_arg: &ABIOperand, expected_ty: WasmValType, expected_offset: u32) {
         match abi_arg {
             &ABIOperand::Stack { offset, ty, .. } => {
