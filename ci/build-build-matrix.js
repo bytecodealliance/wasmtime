@@ -64,6 +64,11 @@ const array = [
     "os": "ubuntu-latest",
     "target": "x86_64-unknown-linux-musl",
   },
+  {
+    "build": "aarch64-windows",
+    "os": "windows-latest",
+    "target": "aarch64-pc-windows-msvc",
+  },
 ];
 
 const builds = [];
