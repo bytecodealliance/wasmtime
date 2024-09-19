@@ -238,9 +238,8 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, size: OperandSize) {
-        self.asm.jmp_if_resolved(Cond::from(cc).invert(), 12);
-        self.asm.mov_rr(src, dst, size)
+    fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, _size: OperandSize) {
+        self.asm.csel(src, src, dst, Cond::from(cc));
     }
 
     fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {

@@ -642,15 +642,6 @@ impl Assembler {
         });
     }
 
-    /// A conditional branch with resolved destination.
-    pub fn jmp_if_resolved(&mut self, kind: Cond, taken: i32) {
-        self.emit(Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(taken),
-            not_taken: BranchTarget::ResolvedOffset(4),
-            kind: CondBrKind::Cond(kind),
-        });
-    }
-
     /// Emits a jump table sequence.
     pub fn jmp_table(
         &mut self,
@@ -680,6 +671,17 @@ impl Assembler {
     pub fn cset(&mut self, rd: WritableReg, cond: Cond) {
         self.emit(Inst::CSet {
             rd: rd.map(Into::into),
+            cond,
+        });
+    }
+
+    // If the condition is true, Conditional Select writes rm to rd. If the condition is false,
+    // it writes rn to rd
+    pub fn csel(&mut self, rm: Reg, rn: Reg, rd: WritableReg, cond: Cond) {
+        self.emit(Inst::CSel {
+            rd: rd.map(Into::into),
+            rm: rm.into(),
+            rn: rn.into(),
             cond,
         });
     }
