@@ -1152,42 +1152,59 @@ impl<M: ABIMachineSpec> Callee<M> {
         );
 
         // Compute sized stackslot locations and total stackslot size.
-        let mut sized_stack_offset: u32 = 0;
+        let mut end_offset: u32 = 0;
         let mut sized_stackslots = PrimaryMap::new();
+
         for (stackslot, data) in f.sized_stack_slots.iter() {
-            let off = sized_stack_offset;
-            sized_stack_offset = sized_stack_offset
-                .checked_add(data.size)
-                .ok_or(CodegenError::ImplLimitExceeded)?;
-            // Always at least machine-word-align slots, but also
+            // We start our computation possibly unaligned where the previous
+            // stackslot left off.
+            let unaligned_start_offset = end_offset;
+
+            // The start of the stackslot must be aligned.
+            //
+            // We always at least machine-word-align slots, but also
             // satisfy the user's requested alignment.
             debug_assert!(data.align_shift < 32);
             let align = std::cmp::max(M::word_bytes(), 1u32 << data.align_shift);
             let mask = align - 1;
-            sized_stack_offset = checked_round_up(sized_stack_offset, mask)
+            let start_offset = checked_round_up(unaligned_start_offset, mask)
                 .ok_or(CodegenError::ImplLimitExceeded)?;
+
+            // The end offset is the the start offset increased by the size
+            end_offset = start_offset
+                .checked_add(data.size)
+                .ok_or(CodegenError::ImplLimitExceeded)?;
+
             debug_assert_eq!(stackslot.as_u32() as usize, sized_stackslots.len());
-            sized_stackslots.push(off);
+            sized_stackslots.push(start_offset);
         }
 
         // Compute dynamic stackslot locations and total stackslot size.
         let mut dynamic_stackslots = PrimaryMap::new();
-        let mut dynamic_stack_offset: u32 = sized_stack_offset;
         for (stackslot, data) in f.dynamic_stack_slots.iter() {
             debug_assert_eq!(stackslot.as_u32() as usize, dynamic_stackslots.len());
-            let off = dynamic_stack_offset;
+
+            // This computation is similar to the stackslots above
+            let unaligned_start_offset = end_offset;
+
+            let mask = M::word_bytes() - 1;
+            let start_offset = checked_round_up(unaligned_start_offset, mask)
+                .ok_or(CodegenError::ImplLimitExceeded)?;
+
             let ty = f.get_concrete_dynamic_ty(data.dyn_ty).ok_or_else(|| {
                 CodegenError::Unsupported(format!("invalid dynamic vector type: {}", data.dyn_ty))
             })?;
-            dynamic_stack_offset = dynamic_stack_offset
+
+            end_offset = start_offset
                 .checked_add(isa.dynamic_vector_bytes(ty))
                 .ok_or(CodegenError::ImplLimitExceeded)?;
-            let mask = M::word_bytes() - 1;
-            dynamic_stack_offset = checked_round_up(dynamic_stack_offset, mask)
-                .ok_or(CodegenError::ImplLimitExceeded)?;
-            dynamic_stackslots.push(off);
+
+            dynamic_stackslots.push(start_offset);
         }
-        let stackslots_size = dynamic_stack_offset;
+
+        // The size of the stackslots needs to be word aligned
+        let stackslots_size = checked_round_up(end_offset, M::word_bytes() - 1)
+            .ok_or(CodegenError::ImplLimitExceeded)?;
 
         let mut dynamic_type_sizes = HashMap::with_capacity(f.dfg.dynamic_types.len());
         for (dyn_ty, _data) in f.dfg.dynamic_types.iter() {
