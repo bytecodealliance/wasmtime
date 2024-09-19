@@ -68,7 +68,8 @@ case $build in
     fi
     ;;
 
-  x86_64-mingw*)
+  # Skip the MSI for non-x86_64 builds of Windows
+  x86_64-mingw* | *-windows*)
     cp target/$target/release/wasmtime.exe tmp/$bin_pkgname/wasmtime$min.exe
     fmt=zip
     ;;
