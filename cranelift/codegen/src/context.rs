@@ -109,21 +109,7 @@ impl Context {
     }
 
     /// Compile the function, and emit machine code into a `Vec<u8>`.
-    ///
-    /// Run the function through all the passes necessary to generate
-    /// code for the target ISA represented by `isa`, as well as the
-    /// final step of emitting machine code into a `Vec<u8>`. The
-    /// machine code is not relocated. Instead, any relocations can be
-    /// obtained from `compiled_code()`.
-    ///
-    /// Performs any optimizations that are enabled, unless
-    /// `optimize()` was already invoked.
-    ///
-    /// This function calls `compile`, taking care to resize `mem` as
-    /// needed.
-    ///
-    /// Returns information about the function's code and read-only
-    /// data.
+    #[deprecated = "use Context::compile"]
     pub fn compile_and_emit(
         &mut self,
         isa: &dyn TargetIsa,
@@ -198,13 +184,18 @@ impl Context {
         Ok(())
     }
 
-    /// Compile the function.
+    /// Compile the function,
     ///
-    /// Run the function through all the passes necessary to generate code for the target ISA
-    /// represented by `isa`. This does not include the final step of emitting machine code into a
-    /// code sink.
+    /// Run the function through all the passes necessary to generate
+    /// code for the target ISA represented by `isa`. The generated
+    /// machine code is not relocated. Instead, any relocations can be
+    /// obtained from `compiled_code.buffer.relocs()`.
     ///
-    /// Returns information about the function's code and read-only data.
+    /// Performs any optimizations that are enabled, unless
+    /// `optimize()` was already invoked.
+    ///
+    /// Returns the generated machine code as well as information about
+    /// the function's code and read-only data.
     pub fn compile(
         &mut self,
         isa: &dyn TargetIsa,
