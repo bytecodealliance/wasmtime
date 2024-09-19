@@ -4,6 +4,7 @@ use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::winch;
+use crate::isa::x64::X64Backend;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
 use crate::machinst::abi::*;
 use crate::machinst::*;
@@ -980,7 +981,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 }
 
 impl X64CallSite {
-    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+    pub fn emit_return_call(
+        mut self,
+        ctx: &mut Lower<Inst>,
+        args: isle::ValueSlice,
+        _backend: &X64Backend,
+    ) {
         let new_stack_arg_size =
             u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
 
