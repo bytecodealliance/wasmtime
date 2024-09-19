@@ -269,7 +269,7 @@ impl Masm for MacroAssembler {
         trap: TrapCode,
     ) {
         self.add(dst, lhs, rhs, size);
-        self.asm.trapif(Cond::Vs, trap);
+        self.asm.trapif(Cond::Hs, trap);
     }
 
     fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
