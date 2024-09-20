@@ -86,14 +86,14 @@ impl Mmap {
             // WRITECOPY part is needed for possibly resolving relocations,
             // but otherwise writes don't happen.
             let mapping = CreateFileMappingW(
-                file.as_raw_handle() as isize,
+                file.as_raw_handle(),
                 ptr::null_mut(),
                 PAGE_EXECUTE_WRITECOPY,
                 0,
                 0,
                 ptr::null(),
             );
-            if mapping == 0 {
+            if mapping == INVALID_HANDLE_VALUE {
                 return Err(io::Error::last_os_error().into_anyhow())
                     .context("failed to create file mapping");
             }
