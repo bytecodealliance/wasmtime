@@ -316,7 +316,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
 
         let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert!(args_or_rets == ArgsOrRets::Args);
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_gpr += 1;
             Some(ABIArg::reg(
                 get_intreg_for_arg(call_conv, 0)

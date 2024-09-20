@@ -71,10 +71,10 @@ where
         let mut next_stack: u32 = 0;
 
         let ret_area_ptr = if add_ret_area_ptr {
-            assert!(ArgsOrRets::Args == args_or_rets);
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_x_reg += 1;
             Some(ABIArg::reg(
-                x_reg(0).to_real_reg().unwrap(),
+                x_reg(next_x_reg - 1).to_real_reg().unwrap(),
                 I64,
                 ir::ArgumentExtension::None,
                 ir::ArgumentPurpose::Normal,

@@ -152,7 +152,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut remaining_reg_vals = 16;
 
         let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert!(args_or_rets == ArgsOrRets::Args);
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             if call_conv != isa::CallConv::Winch {
                 // In the AAPCS64 calling convention the return area pointer is
                 // stored in x8.

@@ -119,7 +119,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         let ret_area_ptr = if add_ret_area_ptr {
-            debug_assert!(args_or_rets == ArgsOrRets::Args);
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_gpr += 1;
             next_param_idx += 1;
             // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
