@@ -895,11 +895,23 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.21.0 -> 0.22.0"
 
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.22.0 -> 0.24.1"
+notes = "Lots of internal code refactorings and code movement. Nothing out of place however."
+
 [[audits.adler]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "1.0.2"
 notes = "This is a small crate which forbids unsafe code and is a straightforward implementation of the adler hashing algorithm."
+
+[[audits.adler2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "2.0.0"
+notes = "Fork of the original `adler` crate, zero unsfae code, works in `no_std`, does what it says on th tin."
 
 [[audits.ahash]]
 who = "Chris Fallin <chris@cfallin.org>"
@@ -1617,6 +1629,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.28.0 -> 0.29.0"
 
+[[audits.gimli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.29.0 -> 0.31.0"
+notes = "Various updates here and there, nothing too major, what you'd expect from a DWARF parsing crate."
+
 [[audits.glob]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1910,6 +1928,12 @@ criteria = "safe-to-deploy"
 delta = "0.2.151 -> 0.2.153"
 notes = "More bindings for more platforms. I have not verified that everything is exactly as-is on the platform as specified but nothing major is otherwise introduced as part of this bump."
 
+[[audits.libc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.153 -> 0.2.158"
+notes = "More platforms, more definitions, more headers, it's still just `libc`"
+
 [[audits.libfuzzer-sys]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-run"
@@ -1963,6 +1987,12 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.3.3"
 notes = "I am the author of this crate."
+
+[[audits.log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.20 -> 0.4.22"
+notes = "Mostly updates around the key-value implementation of this crate, but nothing out of place."
 
 [[audits.mach2]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -2050,6 +2080,12 @@ This looks to be a minor update to the crate to remove some `unsafe` code,
 update Rust stylistic conventions, and perhaps some clippy lints. No major
 changes.
 """
+
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.7.1 -> 0.8.0"
+notes = "Minor updates, using new Rust features like `const`, no major changes."
 
 [[audits.mio]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2604,6 +2640,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.1.17 -> 0.2.6"
 notes = "Minor updates around using some utilities from the standard library, nothing major."
+
+[[audits.terminal_size]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.6 -> 0.3.0"
+notes = "Minor updates here, nothing major."
 
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -3577,13 +3619,13 @@ end = "2024-07-15"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2023-03-16"
-end = "2024-07-14"
+end = "2025-09-20"
 
 [[trusted.anstyle]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2022-05-18"
-end = "2024-07-14"
+end = "2025-09-20"
 
 [[trusted.anstyle-parse]]
 criteria = "safe-to-deploy"
@@ -3601,7 +3643,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2023-03-08"
-end = "2024-07-14"
+end = "2025-09-20"
 
 [[trusted.anyhow]]
 criteria = "safe-to-deploy"
@@ -3620,6 +3662,12 @@ criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2023-06-29"
 end = "2024-07-14"
+
+[[trusted.backtrace]]
+criteria = "safe-to-deploy"
+user-id = 539 # Josh Stone (cuviper)
+start = "2024-03-21"
+end = "2025-09-20"
 
 [[trusted.bstr]]
 criteria = "safe-to-deploy"
@@ -3685,25 +3733,25 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2021-12-08"
-end = "2024-07-06"
+end = "2025-09-20"
 
 [[trusted.clap_builder]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2023-03-28"
-end = "2024-07-14"
+end = "2025-09-20"
 
 [[trusted.clap_derive]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2021-12-08"
-end = "2024-07-06"
+end = "2025-09-20"
 
 [[trusted.clap_lex]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2022-04-15"
-end = "2024-07-06"
+end = "2025-09-20"
 
 [[trusted.cpp_demangle]]
 criteria = "safe-to-deploy"
@@ -3722,6 +3770,18 @@ criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-05-19"
 end = "2025-02-23"
+
+[[trusted.env_filter]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2024-01-19"
+end = "2025-09-20"
+
+[[trusted.env_logger]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2022-11-24"
+end = "2025-09-20"
 
 [[trusted.equivalent]]
 criteria = "safe-to-deploy"
@@ -3794,6 +3854,12 @@ criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2022-01-22"
 end = "2024-07-14"
+
+[[trusted.is_terminal_polyfill]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2024-05-02"
+end = "2025-09-20"
 
 [[trusted.itoa]]
 criteria = "safe-to-deploy"
@@ -4075,55 +4141,61 @@ end = "2025-08-07"
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-11-15"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.windows-targets]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2022-09-09"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.windows_aarch64_gnullvm]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2022-09-01"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.windows_aarch64_msvc]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-11-05"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.windows_i686_gnu]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-10-28"
-end = "2024-06-17"
+end = "2025-09-20"
+
+[[trusted.windows_i686_gnullvm]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2024-04-02"
+end = "2025-09-20"
 
 [[trusted.windows_i686_msvc]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-10-27"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.windows_x86_64_gnu]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-10-28"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.windows_x86_64_gnullvm]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2022-09-01"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.windows_x86_64_msvc]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-10-27"
-end = "2024-06-17"
+end = "2025-09-20"
 
 [[trusted.winnow]]
 criteria = "safe-to-deploy"
