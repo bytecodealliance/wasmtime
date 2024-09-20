@@ -275,7 +275,8 @@ impl Masm for MacroAssembler {
     }
 
     fn zero(&mut self, reg: Reg) {
-        self.asm.xor_rr(reg, reg, OperandSize::S32);
+        self.asm
+            .xor_rr(reg, reg, OperandSize::from_bytes(<Self::ABI>::word_bytes()));
     }
 
     fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
