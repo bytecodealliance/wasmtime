@@ -40,20 +40,20 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    8(%rdi), %r11
+;;       movq    8(%rsi), %r11
 ;;       movq    (%r11), %r11
 ;;       addq    $0x58, %r11
 ;;       cmpq    %rsp, %r11
 ;;       ja      0x106
-;;   1b: movq    %rdi, %r14
+;;   1b: movq    %rsi, %r14
 ;;       subq    $0x40, %rsp
-;;       movq    %rdi, 0x38(%rsp)
-;;       movq    %rsi, 0x30(%rsp)
+;;       movq    %rsi, 0x38(%rsp)
+;;       movq    %rdx, 0x30(%rsp)
 ;;       movsd   %xmm0, 0x28(%rsp)
 ;;       movsd   %xmm1, 0x20(%rsp)
 ;;       movsd   %xmm2, 0x18(%rsp)
 ;;       movsd   %xmm3, 0x10(%rsp)
-;;       movq    %rdx, 8(%rsp)
+;;       movq    %rdi, 8(%rsp)
 ;;       movl    $0, %eax
 ;;       movsd   0x28(%rsp), %xmm15
 ;;       subq    $8, %rsp

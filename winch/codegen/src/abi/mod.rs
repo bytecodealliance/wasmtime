@@ -488,35 +488,36 @@ impl ABIParams {
         }
 
         let register_capacity = params.len().min(6);
-        let (mut operands, mut regs, mut stack_bytes): (
-            SmallVec<[ABIOperand; 6]>,
-            HashSet<Reg>,
-            u32,
-        ) = params.iter().fold(
-            (
-                SmallVec::new(),
-                HashSet::with_capacity(register_capacity),
-                initial_bytes,
-            ),
-            |(mut operands, mut regs, stack_bytes), arg| {
-                let (operand, bytes) = map(arg, stack_bytes);
-                if operand.is_reg() {
-                    regs.insert(operand.unwrap_reg());
-                }
-                operands.push(operand);
-                (operands, regs, bytes)
-            },
-        );
+        let mut operands = SmallVec::new();
+        let mut regs = HashSet::with_capacity(register_capacity);
+        let mut stack_bytes = initial_bytes;
 
         let ptr_type = ptr_type_from_ptr_size(<A as ABI>::word_bytes());
-        // Handle stack results by specifying an extra, implicit last argument.
-        if needs_stack_results {
+        // Handle stack results by specifying an extra, implicit first argument.
+        let stack_results = if needs_stack_results {
             let (operand, bytes) = map(&ptr_type, stack_bytes);
+            if operand.is_reg() {
+                regs.insert(operand.unwrap_reg());
+            }
+            stack_bytes = bytes;
+            Some(operand)
+        } else {
+            None
+        };
+
+        for arg in params.iter() {
+            let (operand, bytes) = map(arg, stack_bytes);
             if operand.is_reg() {
                 regs.insert(operand.unwrap_reg());
             }
             operands.push(operand);
             stack_bytes = bytes;
+        }
+
+        if let Some(operand) = stack_results {
+            // But still push the operand for stack results last as that is what
+            // the rest of the code expects.
+            operands.push(operand);
         }
 
         Self {
