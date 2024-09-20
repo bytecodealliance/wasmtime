@@ -595,9 +595,23 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.anstream]]
+version = "0.6.15"
+when = "2024-07-25"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.anstyle]]
 version = "1.0.1"
 when = "2023-06-20"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.anstyle]]
+version = "1.0.8"
+when = "2024-07-25"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -619,6 +633,13 @@ user-name = "Ed Page"
 [[publisher.anstyle-wincon]]
 version = "1.0.1"
 when = "2023-04-24"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.anstyle-wincon]]
+version = "3.0.4"
+when = "2024-07-25"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -650,6 +671,13 @@ when = "2024-06-12"
 user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
+
+[[publisher.backtrace]]
+version = "0.3.74"
+when = "2024-09-08"
+user-id = 539
+user-login = "cuviper"
+user-name = "Josh Stone"
 
 [[publisher.bstr]]
 version = "1.6.0"
@@ -728,9 +756,23 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.clap]]
+version = "4.5.17"
+when = "2024-09-04"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.clap_builder]]
 version = "4.3.12"
 when = "2023-07-14"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.clap_builder]]
+version = "4.5.17"
+when = "2024-09-04"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -742,9 +784,23 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.clap_derive]]
+version = "4.5.13"
+when = "2024-07-31"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.clap_lex]]
 version = "0.5.0"
 when = "2023-05-19"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.clap_lex]]
+version = "0.7.2"
+when = "2024-07-25"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -986,6 +1042,27 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.env_filter]]
+version = "0.1.2"
+when = "2024-07-25"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.env_logger]]
+version = "0.10.0"
+when = "2022-11-24"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.env_logger]]
+version = "0.11.5"
+when = "2024-07-25"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.equivalent]]
 version = "1.0.1"
 when = "2023-07-10"
@@ -1076,6 +1153,13 @@ when = "2023-12-28"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
+
+[[publisher.is_terminal_polyfill]]
+version = "1.70.1"
+when = "2024-07-25"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
 
 [[publisher.itoa]]
 version = "1.0.1"
@@ -1967,6 +2051,13 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
+[[publisher.windows-sys]]
+version = "0.59.0"
+when = "2024-07-30"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
 [[publisher.windows-targets]]
 version = "0.48.5"
 when = "2023-08-18"
@@ -1977,6 +2068,13 @@ user-name = "Kenny Kerr"
 [[publisher.windows-targets]]
 version = "0.52.0"
 when = "2023-11-15"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
+[[publisher.windows-targets]]
+version = "0.52.6"
+when = "2024-07-03"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -1995,6 +2093,13 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
+[[publisher.windows_aarch64_gnullvm]]
+version = "0.52.6"
+when = "2024-07-03"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
 [[publisher.windows_aarch64_msvc]]
 version = "0.48.5"
 when = "2023-08-18"
@@ -2005,6 +2110,13 @@ user-name = "Kenny Kerr"
 [[publisher.windows_aarch64_msvc]]
 version = "0.52.0"
 when = "2023-11-15"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
+[[publisher.windows_aarch64_msvc]]
+version = "0.52.6"
+when = "2024-07-03"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -2023,6 +2135,20 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
+[[publisher.windows_i686_gnu]]
+version = "0.52.6"
+when = "2024-07-03"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
+[[publisher.windows_i686_gnullvm]]
+version = "0.52.6"
+when = "2024-07-03"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
 [[publisher.windows_i686_msvc]]
 version = "0.48.5"
 when = "2023-08-18"
@@ -2033,6 +2159,13 @@ user-name = "Kenny Kerr"
 [[publisher.windows_i686_msvc]]
 version = "0.52.0"
 when = "2023-11-15"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
+[[publisher.windows_i686_msvc]]
+version = "0.52.6"
+when = "2024-07-03"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -2051,6 +2184,13 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
+[[publisher.windows_x86_64_gnu]]
+version = "0.52.6"
+when = "2024-07-03"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
 [[publisher.windows_x86_64_gnullvm]]
 version = "0.48.5"
 when = "2023-08-18"
@@ -2065,6 +2205,13 @@ user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
+[[publisher.windows_x86_64_gnullvm]]
+version = "0.52.6"
+when = "2024-07-03"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
 [[publisher.windows_x86_64_msvc]]
 version = "0.48.5"
 when = "2023-08-18"
@@ -2075,6 +2222,13 @@ user-name = "Kenny Kerr"
 [[publisher.windows_x86_64_msvc]]
 version = "0.52.0"
 when = "2023-11-15"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
+[[publisher.windows_x86_64_msvc]]
+version = "0.52.6"
+when = "2024-07-03"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -2716,6 +2870,20 @@ criteria = "safe-to-deploy"
 version = "0.4.17"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.log]]
+who = "Jan-Erik Rediger <jrediger@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.17 -> 0.4.18"
+notes = "One dependency removed, others updated (which we don't rely on), some APIs (which we don't use) changed."
+aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.log]]
+who = "Kagami Sascha Rosylight <krosylight@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.18 -> 0.4.20"
+notes = "Only cfg attribute and internal macro changes and module refactorings"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.mach2]]
 who = "Gabriele Svelto <gsvelto@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -2848,6 +3016,12 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Kershaw Chang <kershaw@mozilla.com>"
 criteria = "safe-to-deploy"
 delta = "0.5.5 -> 0.5.7"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.strsim]]
+who = "Ben Dean-Kawamura <bdk@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.0 -> 0.11.1"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.subtle]]
