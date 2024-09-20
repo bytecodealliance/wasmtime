@@ -21,7 +21,7 @@ pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()>
         ptr.cast(),
         len,
         ProtFlags::empty(),
-        MapFlags::PRIVATE | MapFlags::FIXED,
+        MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
     )?;
     assert_eq!(ptr, ret.cast());
     Ok(())
@@ -56,7 +56,7 @@ pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
                     addr as _,
                     len,
                     ProtFlags::READ | ProtFlags::WRITE,
-                    MapFlags::PRIVATE | MapFlags::FIXED,
+                    MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
                 )?;
             }
         }
@@ -176,7 +176,7 @@ impl MemoryImageSource {
             base.cast(),
             len,
             ProtFlags::READ | ProtFlags::WRITE,
-            MapFlags::PRIVATE | MapFlags::FIXED,
+            MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
         )?;
         assert_eq!(base, ptr.cast());
         Ok(())

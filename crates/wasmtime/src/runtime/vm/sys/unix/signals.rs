@@ -279,7 +279,7 @@ pub fn abort_stack_overflow() -> ! {
                                            // help much anyway
 unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
     cfg_if::cfg_if! {
-        if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "x86_64"))] {
+        if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
@@ -347,8 +347,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 pc: cx.sc_rip as usize,
                 fp: cx.sc_rbp as usize,
             }
-        }
-        else {
+        } else {
             compile_error!("unsupported platform");
             panic!();
         }
