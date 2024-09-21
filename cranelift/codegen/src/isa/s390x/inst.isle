@@ -1020,7 +1020,6 @@
       (tls_offset WritableReg)
       (got Reg)
       (got_offset Reg)
-      (link WritableReg)
       (symbol BoxSymbolReloc))
 ))
 

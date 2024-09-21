@@ -923,7 +923,6 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             tls_offset,
             got,
             got_offset,
-            link,
             ..
         } => {
             collector.reg_fixed_use(got, gpr(12));
@@ -931,7 +930,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_fixed_def(tls_offset, gpr(2));
 
             let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            clobbers.add(gpr_preg(14));
             clobbers.remove(gpr_preg(2));
             collector.reg_clobbers(clobbers);
         }
@@ -3164,19 +3163,14 @@ impl Inst {
                 };
                 format!("return_call_ind {rn}{callee_pop_size}")
             }
-            &Inst::ElfTlsGetOffset {
-                ref symbol,
-                ref link,
-                ..
-            } => {
-                let link = link.to_reg();
+            &Inst::ElfTlsGetOffset { ref symbol, .. } => {
                 let dest = match &**symbol {
                     SymbolReloc::TlsGd { name } => {
                         format!("tls_gdcall:{}", name.display(None))
                     }
                     _ => unreachable!(),
                 };
-                format!("brasl {}, {}", show_reg(link), dest)
+                format!("brasl {}, {}", show_reg(gpr(14)), dest)
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
