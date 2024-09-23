@@ -171,8 +171,7 @@ impl Parse for Config {
         let (resolve, pkgs, files) = parse_source(&paths, &inline, &features)
             .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
 
-        let world = 
-            select_world(&resolve, &pkgs, world.as_deref())
+        let world = select_world(&resolve, &pkgs, world.as_deref())
             .map_err(|e| Error::new(call_site, format!("{e:?}")))?;
         Ok(Config {
             opts,
@@ -195,7 +194,11 @@ fn parse_source(
     let mut pkgs = Vec::new();
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
-    let parse = |resolve: &mut Resolve, files: &mut Vec<PathBuf>, pkgs: &mut Vec<PackageId>, paths: &[String]| -> anyhow::Result<_> {
+    let parse = |resolve: &mut Resolve,
+                 files: &mut Vec<PathBuf>,
+                 pkgs: &mut Vec<PackageId>,
+                 paths: &[String]|
+     -> anyhow::Result<_> {
         for path in paths {
             let p = root.join(path);
             // Try to normalize the path to make the error message more understandable when
@@ -315,7 +318,7 @@ impl Parse for Opt {
             input.parse::<Token![:]>()?;
 
             let mut paths: Vec<syn::LitStr> = vec![];
-            
+
             let l = input.lookahead1();
             if l.peek(syn::LitStr) {
                 paths.push(input.parse()?);
