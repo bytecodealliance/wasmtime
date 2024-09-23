@@ -65,13 +65,8 @@
 ;; @0053                               v26 = iconst.i64 8
 ;; @0053                               v27 = uadd_overflow_trap v25, v26, user65535  ; v26 = 8
 ;; @0053                               v28 = icmp ult v27, v22
-;; @0053                               brif v28, block7, block6
-;;
-;;                                 block6 cold:
-;; @0053                               trap user65535
-;;
-;;                                 block7:
-;; @0053                               v29 = iadd.i64 v21, v25
+;; @0053                               trapz v28, user65535
+;; @0053                               v29 = iadd v21, v25
 ;; @0053                               v30 = load.i64 notrap aligned v29
 ;;                                     v58 = iconst.i64 1
 ;; @0053                               v31 = iadd v30, v58  ; v58 = 1
@@ -85,14 +80,9 @@
 ;; @0053                               v38 = iconst.i64 8
 ;; @0053                               v39 = uadd_overflow_trap v37, v38, user65535  ; v38 = 8
 ;; @0053                               v40 = icmp ult v39, v34
-;; @0053                               brif v40, block9, block8
-;;
-;;                                 block8 cold:
-;; @0053                               trap user65535
-;;
-;;                                 block9:
-;; @0053                               v41 = iadd.i64 v33, v37
-;; @0053                               store.i64 notrap aligned v31, v41
+;; @0053                               trapz v40, user65535
+;; @0053                               v41 = iadd v33, v37
+;; @0053                               store notrap aligned v31, v41
 ;;                                     v60 = stack_addr.i64 ss0
 ;;                                     v47 = load.i32 notrap v60
 ;; @0053                               store notrap aligned v47, v17
@@ -166,13 +156,8 @@
 ;; @005a                               v26 = iconst.i64 8
 ;; @005a                               v27 = uadd_overflow_trap v25, v26, user65535  ; v26 = 8
 ;; @005a                               v28 = icmp ult v27, v22
-;; @005a                               brif v28, block7, block6
-;;
-;;                                 block6 cold:
-;; @005a                               trap user65535
-;;
-;;                                 block7:
-;; @005a                               v29 = iadd.i64 v21, v25
+;; @005a                               trapz v28, user65535
+;; @005a                               v29 = iadd v21, v25
 ;; @005a                               v30 = load.i64 notrap aligned v29
 ;;                                     v58 = iconst.i64 1
 ;; @005a                               v31 = iadd v30, v58  ; v58 = 1
@@ -186,14 +171,9 @@
 ;; @005a                               v38 = iconst.i64 8
 ;; @005a                               v39 = uadd_overflow_trap v37, v38, user65535  ; v38 = 8
 ;; @005a                               v40 = icmp ult v39, v34
-;; @005a                               brif v40, block9, block8
-;;
-;;                                 block8 cold:
-;; @005a                               trap user65535
-;;
-;;                                 block9:
-;; @005a                               v41 = iadd.i64 v33, v37
-;; @005a                               store.i64 notrap aligned v31, v41
+;; @005a                               trapz v40, user65535
+;; @005a                               v41 = iadd v33, v37
+;; @005a                               store notrap aligned v31, v41
 ;;                                     v60 = stack_addr.i64 ss0
 ;;                                     v47 = load.i32 notrap v60
 ;; @005a                               store notrap aligned v47, v17

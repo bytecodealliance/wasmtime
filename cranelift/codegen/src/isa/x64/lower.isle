@@ -1860,6 +1860,15 @@
 (rule (lower (trap code))
       (side_effect (x64_ud2 code)))
 
+;;;; Rules for `trapz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (trapz val code))
+      (side_effect (trap_if_val (ZeroCond.Zero) val code)))
+
+;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trapnz val code))
+      (side_effect (trap_if_val (ZeroCond.NonZero) val code)))
+
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_64 ty) (uadd_overflow_trap a b tc)))

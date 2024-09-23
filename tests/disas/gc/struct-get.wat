@@ -31,12 +31,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0033                               brif v2, block3, block2
-;;
-;;                                 block2 cold:
-;; @0033                               trap null_reference
-;;
-;;                                 block3:
+;; @0033                               trapz v2, null_reference
 ;; @0033                               v7 = uextend.i64 v2
 ;; @0033                               v8 = iconst.i64 16
 ;; @0033                               v9 = uadd_overflow_trap v7, v8, user65535  ; v8 = 16
@@ -44,12 +39,7 @@
 ;; @0033                               v11 = uadd_overflow_trap v9, v10, user65535  ; v10 = 4
 ;; @0033                               v6 = load.i64 notrap aligned readonly v0+48
 ;; @0033                               v12 = icmp ult v11, v6
-;; @0033                               brif v12, block5, block4
-;;
-;;                                 block4 cold:
-;; @0033                               trap user65535
-;;
-;;                                 block5:
+;; @0033                               trapz v12, user65535
 ;; @0033                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @0033                               v13 = iadd v5, v9
 ;; @0033                               v14 = load.f32 notrap aligned v13
@@ -67,12 +57,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @003c                               brif v2, block3, block2
-;;
-;;                                 block2 cold:
-;; @003c                               trap null_reference
-;;
-;;                                 block3:
+;; @003c                               trapz v2, null_reference
 ;; @003c                               v7 = uextend.i64 v2
 ;; @003c                               v8 = iconst.i64 20
 ;; @003c                               v9 = uadd_overflow_trap v7, v8, user65535  ; v8 = 20
@@ -80,12 +65,7 @@
 ;; @003c                               v11 = uadd_overflow_trap v9, v10, user65535  ; v10 = 1
 ;; @003c                               v6 = load.i64 notrap aligned readonly v0+48
 ;; @003c                               v12 = icmp ult v11, v6
-;; @003c                               brif v12, block5, block4
-;;
-;;                                 block4 cold:
-;; @003c                               trap user65535
-;;
-;;                                 block5:
+;; @003c                               trapz v12, user65535
 ;; @003c                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @003c                               v13 = iadd v5, v9
 ;; @003c                               v14 = load.i8 notrap aligned v13
@@ -104,12 +84,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0045                               brif v2, block3, block2
-;;
-;;                                 block2 cold:
-;; @0045                               trap null_reference
-;;
-;;                                 block3:
+;; @0045                               trapz v2, null_reference
 ;; @0045                               v7 = uextend.i64 v2
 ;; @0045                               v8 = iconst.i64 20
 ;; @0045                               v9 = uadd_overflow_trap v7, v8, user65535  ; v8 = 20
@@ -117,12 +92,7 @@
 ;; @0045                               v11 = uadd_overflow_trap v9, v10, user65535  ; v10 = 1
 ;; @0045                               v6 = load.i64 notrap aligned readonly v0+48
 ;; @0045                               v12 = icmp ult v11, v6
-;; @0045                               brif v12, block5, block4
-;;
-;;                                 block4 cold:
-;; @0045                               trap user65535
-;;
-;;                                 block5:
+;; @0045                               trapz v12, user65535
 ;; @0045                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @0045                               v13 = iadd v5, v9
 ;; @0045                               v14 = load.i8 notrap aligned v13
@@ -144,12 +114,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @004e                               brif v2, block7, block6
-;;
-;;                                 block6 cold:
-;; @004e                               trap null_reference
-;;
-;;                                 block7:
+;; @004e                               trapz v2, null_reference
 ;; @004e                               v7 = uextend.i64 v2
 ;; @004e                               v8 = iconst.i64 24
 ;; @004e                               v9 = uadd_overflow_trap v7, v8, user65535  ; v8 = 24
@@ -157,12 +122,7 @@
 ;; @004e                               v11 = uadd_overflow_trap v9, v10, user65535  ; v10 = 4
 ;; @004e                               v6 = load.i64 notrap aligned readonly v0+48
 ;; @004e                               v12 = icmp ult v11, v6
-;; @004e                               brif v12, block9, block8
-;;
-;;                                 block8 cold:
-;; @004e                               trap user65535
-;;
-;;                                 block9:
+;; @004e                               trapz v12, user65535
 ;; @004e                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @004e                               v13 = iadd v5, v9
 ;; @004e                               v14 = load.i32 notrap aligned v13
@@ -187,35 +147,24 @@
 ;; @004e                               v28 = uadd_overflow_trap v26, v27, user65535  ; v27 = 8
 ;; @004e                               v30 = uadd_overflow_trap v28, v27, user65535  ; v27 = 8
 ;; @004e                               v31 = icmp ult v30, v6
-;; @004e                               brif v31, block11, block10
-;;
-;;                                 block10 cold:
-;; @004e                               trap user65535
-;;
-;;                                 block11:
+;; @004e                               trapz v31, user65535
 ;; @004e                               v32 = iadd.i64 v5, v28
 ;; @004e                               v33 = load.i64 notrap aligned v32
 ;;                                     v51 = load.i32 notrap v54
 ;; @004e                               v38 = uextend.i64 v51
-;;                                     v64 = iconst.i64 8
-;; @004e                               v40 = uadd_overflow_trap v38, v64, user65535  ; v64 = 8
-;; @004e                               v42 = uadd_overflow_trap v40, v64, user65535  ; v64 = 8
+;; @004e                               v40 = uadd_overflow_trap v38, v27, user65535  ; v27 = 8
+;; @004e                               v42 = uadd_overflow_trap v40, v27, user65535  ; v27 = 8
 ;; @004e                               v43 = icmp ult v42, v6
-;; @004e                               brif v43, block13, block12
-;;
-;;                                 block12 cold:
-;; @004e                               trap user65535
-;;
-;;                                 block13:
+;; @004e                               trapz v43, user65535
 ;;                                     v58 = iconst.i64 1
-;; @004e                               v34 = iadd.i64 v33, v58  ; v58 = 1
+;; @004e                               v34 = iadd v33, v58  ; v58 = 1
 ;; @004e                               v44 = iadd.i64 v5, v40
 ;; @004e                               store notrap aligned v34, v44
 ;;                                     v50 = load.i32 notrap v54
 ;; @004e                               store notrap aligned v50, v20
-;;                                     v65 = iconst.i64 4
-;;                                     v66 = iadd.i64 v20, v65  ; v65 = 4
-;; @004e                               store notrap aligned v66, v19
+;;                                     v64 = iconst.i64 4
+;;                                     v65 = iadd.i64 v20, v64  ; v64 = 4
+;; @004e                               store notrap aligned v65, v19
 ;; @004e                               jump block5
 ;;
 ;;                                 block3 cold:

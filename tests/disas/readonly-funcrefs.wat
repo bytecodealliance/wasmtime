@@ -67,12 +67,7 @@
 ;; @0031                               v19 = load.i64 notrap aligned readonly v0+80
 ;; @0031                               v20 = load.i32 notrap aligned readonly v19
 ;; @0031                               v22 = icmp eq v21, v20
-;; @0031                               brif v22, block5, block4
-;;
-;;                                 block4 cold:
-;; @0031                               trap bad_sig
-;;
-;;                                 block5:
+;; @0031                               trapz v22, bad_sig
 ;; @0031                               v23 = load.i64 notrap aligned readonly v13+8
 ;; @0031                               v24 = load.i64 notrap aligned readonly v13+24
 ;; @0031                               call_indirect sig0, v23(v24, v0)

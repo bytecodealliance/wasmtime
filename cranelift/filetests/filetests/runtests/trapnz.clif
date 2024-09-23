@@ -1,0 +1,23 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target x86_64
+target aarch64
+target riscv64
+target s390x
+
+function %trapnz(i64) -> i64 {
+block0(v0: i64):
+  trapnz v0, user0
+  return v0
+}
+
+; run: %trapnz(0) == 0
+
+function %trapnz_i128(i128) -> i128 {
+block0(v0: i128):
+  trapnz v0, user0
+  return v0
+}
+
+; run: %trapnz_i128(0) == 0

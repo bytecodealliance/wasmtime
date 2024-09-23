@@ -32,13 +32,12 @@
 ;;       llgfr   %r3, %r6
 ;;       aghi    %r4, -0x1001
 ;;       clgr    %r3, %r4
-;;       jgh     0x5a
+;;       jgh     0x40
 ;;       ag      %r3, 0x60(%r2)
 ;;       lghi    %r6, 0x1000
 ;;       stc     %r5, 0(%r6, %r3)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
-;;       .byte   0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
 ;;       lg      %r1, 8(%r2)
@@ -54,10 +53,9 @@
 ;;       llgfr   %r3, %r6
 ;;       aghi    %r4, -0x1001
 ;;       clgr    %r3, %r4
-;;       jgh     0xb8
+;;       jgh     0x9c
 ;;       ag      %r3, 0x60(%r2)
 ;;       lghi    %r6, 0x1000
 ;;       llc     %r2, 0(%r6, %r3)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
-;;       .byte   0x00, 0x00

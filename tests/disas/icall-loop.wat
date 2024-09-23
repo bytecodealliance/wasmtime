@@ -63,12 +63,7 @@
 ;;                                 block5(v14: i64):
 ;; @002b                               v22 = load.i32 icall_null aligned readonly v14+16
 ;; @002b                               v23 = icmp eq v22, v21
-;; @002b                               brif v23, block7, block6
-;;
-;;                                 block6 cold:
-;; @002b                               trap bad_sig
-;;
-;;                                 block7:
+;; @002b                               trapz v23, bad_sig
 ;; @002b                               v24 = load.i64 notrap aligned readonly v14+8
 ;; @002b                               v25 = load.i64 notrap aligned readonly v14+24
 ;; @002b                               v26 = call_indirect sig0, v24(v25, v0)
@@ -113,12 +108,7 @@
 ;;                                 block5(v13: i64):
 ;; @0038                               v21 = load.i32 icall_null aligned readonly v13+16
 ;; @0038                               v22 = icmp eq v21, v20
-;; @0038                               brif v22, block7, block6
-;;
-;;                                 block6 cold:
-;; @0038                               trap bad_sig
-;;
-;;                                 block7:
+;; @0038                               trapz v22, bad_sig
 ;; @0038                               v23 = load.i64 notrap aligned readonly v13+8
 ;; @0038                               v24 = load.i64 notrap aligned readonly v13+24
 ;; @0038                               v25 = call_indirect sig0, v23(v24, v0)
