@@ -27,6 +27,9 @@ pub enum TrapCode {
     /// A `table_addr` instruction detected an out-of-bounds error.
     TableOutOfBounds,
 
+    /// An array access attempted to index beyond its array's bounds.
+    ArrayOutOfBounds,
+
     /// Indirect call to a null table entry.
     IndirectCallToNull,
 
@@ -92,6 +95,7 @@ impl Display for TrapCode {
             Interrupt => "interrupt",
             User(x) => return write!(f, "user{x}"),
             NullReference => "null_reference",
+            ArrayOutOfBounds => "array_oob",
         };
         f.write_str(identifier)
     }
@@ -115,6 +119,7 @@ impl FromStr for TrapCode {
             "unreachable" => Ok(UnreachableCodeReached),
             "interrupt" => Ok(Interrupt),
             "null_reference" => Ok(NullReference),
+            "array_oob" => Ok(ArrayOutOfBounds),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }
