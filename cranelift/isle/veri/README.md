@@ -1,6 +1,6 @@
 # Crocus: An SMT-based ISLE verification tool
 
-This directory contains Crocus, a tool for verifying instruction lowering and transformation rules written in ISLE. Crocus uses an underlying SMT solver to model ISLE rules in as logical bitvectors; searching over all possible inputs to find potential soundness counterexamples.
+This directory contains Crocus, a tool for verifying instruction lowering and transformation rules written in ISLE. Crocus uses an underlying SMT solver to model values in ISLE rules in as logical bitvectors, searching over all possible inputs to find potential soundness counterexamples. The motivation and context project are described in detail in our ASPLOS 2024 paper: [Lightweight, Modular Verification for WebAssembly-to-Native Instruction Selection](https://dl.acm.org/doi/10.1145/3617232.3624862). 
 
 Currently[^1], Crocus requires every ISLE term uses within a rule to have a user-provided specification, or `spec`, that provides the logical preconditions and effects of the term (`require` and `provide` blocks).
 The syntax for these specs is embedded as an optional extension to ISLE itself: specs are written in the ISLE source files. 
@@ -42,7 +42,7 @@ We also require that the relevant (outermost) CLIF term on the left hand side ha
 We can then invoke the rule with the following, using `-t` or `--term` to specify the relevant CLIF instruction and `--names` to specify the name of the rule:
 
 ```
-cargo run -- --aarch64 -t band --names band_fits_in_64
+cargo run --  --codegen ../../../codegen --aarch64 -t band --names band_fits_in_64
 ```
 
 With the expected output:
@@ -278,10 +278,10 @@ RUST_LOG=DEBUG cargo test test_named_band_fits_in_64 -- --nocapture
 To see the x86-64 CVE repro, run:
 
 ```bash
-RUST_LOG=debug cargo run -- --noprelude -t amode_add -i examples/x86/amode_add_uextend_shl.isle
+RUST_LOG=debug cargo run -- --codegen ../../../codegen --noprelude -t amode_add -i examples/x86/amode_add_uextend_shl.isle
 ```
 
 To see the x86-64 CVE variant with a 32-bit address, run:
 ```bash
-RUST_LOG=debug cargo run -- --noprelude -t amode_add -i examples/x86/amode_add_shl.isle
+RUST_LOG=debug cargo run --  --codegen ../../../codegen --noprelude -t amode_add -i examples/x86/amode_add_shl.isle
 ```

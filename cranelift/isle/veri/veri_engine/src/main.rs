@@ -10,6 +10,10 @@ use veri_engine_lib::Config;
 #[derive(Parser)]
 #[clap(about, version, author)]
 struct Args {
+    /// Path to codegen crate directory.
+    #[clap(long, required = true)]
+    codegen: std::path::PathBuf,
+
     /// Sets the input file
     #[clap(short, long)]
     input: Option<String>,
@@ -53,11 +57,10 @@ impl Args {
         }
         generate_isle(gen_dir.as_path()).expect("Can't generate ISLE");
 
-        let codegen_crate_dir = cur_dir.join("../../../codegen");
-        let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
+        let inst_specs_isle = self.codegen.join("src").join("inst_specs.isle");
 
         // Lookup ISLE compilations.
-        let compilations = get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
+        let compilations = get_isle_compilations(&self.codegen, gen_dir.as_path());
 
         let name = match (self.aarch64, self.x64) {
             (true, false) => "aarch64",
