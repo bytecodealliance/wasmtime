@@ -676,9 +676,9 @@ impl CommonOptions {
             // If `-Wasync-stack-size` isn't passed then automatically adjust it
             // to the wasm stack size provided here too. That prevents the need
             // to pass both when one can generally be inferred from the other.
+            #[cfg(feature = "async")]
             if self.wasm.async_stack_size.is_none() {
                 const DEFAULT_HOST_STACK: usize = 512 << 10;
-                #[cfg(feature = "async")]
                 config.async_stack_size(max + DEFAULT_HOST_STACK);
             }
         }
