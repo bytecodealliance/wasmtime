@@ -1,7 +1,6 @@
 use crate::solver::SolverCtx;
 use easy_smt::SExpr;
 
-
 // Future work: possibly move these into the annotation language or an SMTLIB prelude
 // Adapted from https://stackoverflow.com/questions/23856596/how-to-count-leading-zeros-in-a-32-bit-unsigned-integer
 
