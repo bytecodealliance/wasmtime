@@ -437,12 +437,25 @@ gc = ["wasmtime-cli-flags/gc"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
-serve = ["wasi-http", "component-model", "dep:http-body-util", "dep:http"]
+serve = [
+  "wasi-http",
+  "component-model",
+  "dep:http-body-util",
+  "dep:http",
+  "wasmtime-cli-flags/async",
+]
 explore = ["dep:wasmtime-explorer", "dep:tempfile"]
 wast = ["dep:wasmtime-wast"]
 config = ["cache"]
 compile = ["cranelift"]
-run = ["dep:wasmtime-wasi", "wasmtime/runtime", "dep:listenfd", "dep:wasi-common", "dep:tokio"]
+run = [
+  "dep:wasmtime-wasi",
+  "wasmtime/runtime",
+  "dep:listenfd",
+  "dep:wasi-common",
+  "dep:tokio",
+  "wasmtime-cli-flags/async",
+]
 
 [[test]]
 name = "host_segfault"

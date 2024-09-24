@@ -202,6 +202,12 @@ wasmtime_option_group! {
         /// Maximum stack size, in bytes, that wasm is allowed to consume before a
         /// stack overflow is reported.
         pub max_wasm_stack: Option<usize>,
+        /// Stack size, in bytes, that will be allocated for async stacks.
+        ///
+        /// Note that this must be larger than `max-wasm-stack` and the
+        /// difference between the two is how much stack the host has to execute
+        /// on.
+        pub async_stack_size: Option<usize>,
         /// Allow unknown exports when running commands.
         pub unknown_exports_allow: Option<bool>,
         /// Allow the main module to import unknown functions, using an
@@ -658,8 +664,23 @@ impl CommonOptions {
             anyhow::bail!("memory protection keys require the pooling allocator");
         }
 
+        match_feature! {
+            ["async" : self.wasm.async_stack_size]
+            size => config.async_stack_size(size),
+            _ => err,
+        }
+
         if let Some(max) = self.wasm.max_wasm_stack {
             config.max_wasm_stack(max);
+
+            // If `-Wasync-stack-size` isn't passed then automatically adjust it
+            // to the wasm stack size provided here too. That prevents the need
+            // to pass both when one can generally be inferred from the other.
+            if self.wasm.async_stack_size.is_none() {
+                const DEFAULT_HOST_STACK: usize = 512 << 10;
+                #[cfg(feature = "async")]
+                config.async_stack_size(max + DEFAULT_HOST_STACK);
+            }
         }
 
         if let Some(enable) = self.wasm.relaxed_simd_deterministic {

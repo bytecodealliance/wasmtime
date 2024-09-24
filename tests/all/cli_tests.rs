@@ -1098,6 +1098,21 @@ fn mpk_without_pooling() -> Result<()> {
     Ok(())
 }
 
+// Very basic use case: compile binary wasm file and run specific function with arguments.
+#[test]
+fn increase_stack_size() -> Result<()> {
+    run_wasmtime(&[
+        "run",
+        "--invoke",
+        "simple",
+        &format!("-Wmax-wasm-stack={}", 5 << 20),
+        "-Ccache=n",
+        "tests/all/cli_tests/simple.wat",
+        "4",
+    ])?;
+    Ok(())
+}
+
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
     use anyhow::{bail, Context, Result};
