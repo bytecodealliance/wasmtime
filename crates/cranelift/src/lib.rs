@@ -248,6 +248,7 @@ fn clif_trap_to_env_trap(trap: ir::TrapCode) -> Option<Trap> {
         ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
         ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
         ir::TrapCode::NullReference => Trap::NullReference,
+        ir::TrapCode::ArrayOutOfBounds => Trap::ArrayOutOfBounds,
 
         // These do not get converted to wasmtime traps, since they
         // shouldn't ever be hit in theory. Instead of catching and handling

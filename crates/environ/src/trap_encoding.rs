@@ -74,6 +74,9 @@ pub enum Trap {
     /// Call to a null reference.
     NullReference,
 
+    /// Attempt to access beyond the bounds of an array.
+    ArrayOutOfBounds,
+
     /// When the `component-model` feature is enabled this trap represents a
     /// scenario where one component tried to call another component but it
     /// would have violated the reentrance rules of the component model,
@@ -111,6 +114,7 @@ impl Trap {
             OutOfFuel
             AtomicWaitNonSharedMemory
             NullReference
+            ArrayOutOfBounds
             CannotEnterComponent
         }
 
@@ -138,6 +142,7 @@ impl fmt::Display for Trap {
             OutOfFuel => "all fuel consumed by WebAssembly",
             AtomicWaitNonSharedMemory => "atomic wait on non-shared memory",
             NullReference => "null reference",
+            ArrayOutOfBounds => "out of bounds array access",
             CannotEnterComponent => "cannot enter component instance",
         };
         write!(f, "wasm trap: {desc}")
