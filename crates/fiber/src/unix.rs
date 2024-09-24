@@ -46,7 +46,7 @@ pub struct FiberStack {
 
 enum FiberStackStorage {
     Mmap(#[allow(dead_code)] MmapFiberStack),
-    Unmanaged,
+    Unmanaged(usize),
     Custom(#[allow(dead_code)] Box<dyn RuntimeFiberStack>),
 }
 
@@ -70,21 +70,21 @@ impl FiberStack {
         })
     }
 
-    pub unsafe fn from_raw_parts(base: *mut u8, len: usize) -> io::Result<Self> {
+    pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> io::Result<Self> {
         // See comments in `mod asan` below for why asan has a different stack
         // allocation strategy.
         if cfg!(asan) {
             return Self::from_custom(asan::new_fiber_stack(len)?);
         }
         Ok(FiberStack {
-            base,
+            base: base.add(guard_size),
             len,
-            storage: FiberStackStorage::Unmanaged,
+            storage: FiberStackStorage::Unmanaged(guard_size),
         })
     }
 
     pub fn is_from_raw_parts(&self) -> bool {
-        matches!(self.storage, FiberStackStorage::Unmanaged)
+        matches!(self.storage, FiberStackStorage::Unmanaged(_))
     }
 
     pub fn from_custom(custom: Box<dyn RuntimeFiberStack>) -> io::Result<Self> {
@@ -114,6 +114,17 @@ impl FiberStack {
     pub fn range(&self) -> Option<Range<usize>> {
         let base = self.base as usize;
         Some(base..base + self.len)
+    }
+
+    pub fn guard_range(&self) -> Option<Range<*mut u8>> {
+        match &self.storage {
+            FiberStackStorage::Unmanaged(guard_size) => unsafe {
+                let start = self.base.sub(*guard_size);
+                Some(start..self.base)
+            },
+            FiberStackStorage::Mmap(mmap) => Some(mmap.mapping_base..self.base),
+            FiberStackStorage::Custom(custom) => Some(custom.guard_range()),
+        }
     }
 }
 

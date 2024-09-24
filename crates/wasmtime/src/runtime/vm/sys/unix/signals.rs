@@ -180,7 +180,16 @@ unsafe extern "C" fn trap_handler(
         // exception was handled by a custom exception handler, so we
         // keep executing.
         let jmp_buf = match test {
-            TrapTest::NotWasm => return false,
+            TrapTest::NotWasm => {
+                if let Some(faulting_addr) = faulting_addr {
+                    let start = info.async_guard_range.start;
+                    let end = info.async_guard_range.end;
+                    if start as usize <= faulting_addr && faulting_addr < end as usize {
+                        abort_stack_overflow();
+                    }
+                }
+                return false;
+            }
             TrapTest::HandledByEmbedder => return true,
             TrapTest::Trap { jmp_buf } => jmp_buf,
         };
@@ -227,6 +236,15 @@ unsafe extern "C" fn trap_handler(
         return;
     }
 
+    delegate_signal_to_previous_handler(previous, signum, siginfo, context)
+}
+
+pub unsafe fn delegate_signal_to_previous_handler(
+    previous: *const libc::sigaction,
+    signum: libc::c_int,
+    siginfo: *mut libc::siginfo_t,
+    context: *mut libc::c_void,
+) {
     // This signal is not for any compiled wasm code we expect, so we
     // need to forward the signal to the next handler. If there is no
     // next handler (SIG_IGN or SIG_DFL), then it's time to crash. To do
@@ -245,6 +263,14 @@ unsafe extern "C" fn trap_handler(
         libc::sigaction(signum, &previous as *const _, ptr::null_mut());
     } else {
         mem::transmute::<usize, extern "C" fn(libc::c_int)>(previous.sa_sigaction)(signum)
+    }
+}
+
+pub fn abort_stack_overflow() -> ! {
+    unsafe {
+        let msg = "execution on async fiber has overflowed its stack";
+        libc::write(libc::STDERR_FILENO, msg.as_ptr().cast(), msg.len());
+        libc::abort();
     }
 }
 

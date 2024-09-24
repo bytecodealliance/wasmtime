@@ -47,7 +47,8 @@ use mach2::port::*;
 use mach2::thread_act::*;
 use mach2::thread_status::*;
 use mach2::traps::*;
-use std::mem;
+use std::io;
+use std::mem::{self, MaybeUninit};
 use std::ptr::addr_of_mut;
 use std::thread;
 use wasmtime_environ::Trap;
@@ -60,6 +61,8 @@ static mut CHILD_OF_FORKED_PROCESS: bool = false;
 pub struct TrapHandler {
     thread: Option<thread::JoinHandle<()>>,
 }
+
+static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
 impl TrapHandler {
     pub unsafe fn new() -> TrapHandler {
@@ -86,6 +89,21 @@ impl TrapHandler {
         // we're not very interested in so it's detached here.
         let thread = thread::spawn(|| handler_thread());
 
+        // Setup a SIGBUS handler which is used for printing that the stack was
+        // overflowed when a host overflows its fiber stack.
+        unsafe {
+            let mut handler: libc::sigaction = mem::zeroed();
+            handler.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK;
+            handler.sa_sigaction = sigbus_handler as usize;
+            libc::sigemptyset(&mut handler.sa_mask);
+            if libc::sigaction(libc::SIGBUS, &handler, PREV_SIGBUS.as_mut_ptr()) != 0 {
+                panic!(
+                    "unable to install signal handler: {}",
+                    io::Error::last_os_error(),
+                );
+            }
+        }
+
         TrapHandler {
             thread: Some(thread),
         }
@@ -100,6 +118,35 @@ impl Drop for TrapHandler {
             self.thread.take().unwrap().join().unwrap();
         }
     }
+}
+
+unsafe extern "C" fn sigbus_handler(
+    signum: libc::c_int,
+    siginfo: *mut libc::siginfo_t,
+    context: *mut libc::c_void,
+) {
+    // If this is a faulting address within the async guard range listed within
+    // our tls storage then print a helpful message about it and abort.
+    // Otherwise forward to the previous SIGBUS handler, if any.
+    tls::with(|info| {
+        let info = match info {
+            Some(info) => info,
+            None => return,
+        };
+        let faulting_addr = (*siginfo).si_addr() as usize;
+        let start = info.async_guard_range.start;
+        let end = info.async_guard_range.end;
+        if start as usize <= faulting_addr && faulting_addr < end as usize {
+            super::signals::abort_stack_overflow();
+        }
+    });
+
+    super::signals::delegate_signal_to_previous_handler(
+        PREV_SIGBUS.as_ptr(),
+        signum,
+        siginfo,
+        context,
+    )
 }
 
 // Note that this is copied from Gecko at

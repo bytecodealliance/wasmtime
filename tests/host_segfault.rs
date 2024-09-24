@@ -95,6 +95,23 @@ fn main() {
         return;
     }
 
+    // Disable core dumps on Unix to avoid spamming the system core dump utility
+    // and having this test take longer.
+    #[cfg(unix)]
+    unsafe {
+        let zero = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        let rc = libc::setrlimit(libc::RLIMIT_CORE, &zero);
+        assert_eq!(
+            rc,
+            0,
+            "failed to disable core dumps: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+
     let tests: &[(&str, fn(), bool)] = &[
         ("normal segfault", || segfault(), false),
         (
@@ -263,12 +280,16 @@ fn is_segfault(status: &ExitStatus) -> bool {
 fn is_stack_overflow(status: &ExitStatus, stderr: &str) -> bool {
     use std::os::unix::prelude::*;
 
-    // The main thread might overflow or it might be from a fiber stack (SIGSEGV/SIGBUS)
+    // The exit status should always be SIGABRT, not SIGSEGV. Something, be it
+    // the standard library or Wasmtime, should catch the original SIGSEGV or
+    // SIGBUS and abort instead.
+    match status.signal() {
+        Some(libc::SIGABRT) => {}
+        _ => return false,
+    }
+
+    // A helpful message should additionally be printed at all times.
     stderr.contains("has overflowed its stack")
-        || match status.signal() {
-            Some(libc::SIGSEGV) | Some(libc::SIGBUS) => true,
-            _ => false,
-        }
 }
 
 #[cfg(windows)]

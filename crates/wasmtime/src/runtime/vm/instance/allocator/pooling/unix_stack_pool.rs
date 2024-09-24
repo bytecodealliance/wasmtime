@@ -105,13 +105,16 @@ impl StackPool {
             let bottom_of_stack = self
                 .mapping
                 .as_ptr()
-                .add((index * self.stack_size) + self.page_size)
+                .add(index * self.stack_size)
                 .cast_mut();
 
             commit_pages(bottom_of_stack, size_without_guard)?;
 
-            let stack =
-                wasmtime_fiber::FiberStack::from_raw_parts(bottom_of_stack, size_without_guard)?;
+            let stack = wasmtime_fiber::FiberStack::from_raw_parts(
+                bottom_of_stack,
+                self.page_size,
+                size_without_guard,
+            )?;
             Ok(stack)
         }
     }

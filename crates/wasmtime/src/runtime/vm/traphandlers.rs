@@ -17,6 +17,7 @@ use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
 use crate::sync::RwLock;
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
+use core::ops::Range;
 use core::ptr;
 
 pub use self::backtrace::Backtrace;
@@ -246,6 +247,7 @@ pub unsafe fn catch_traps<F>(
     signal_handler: Option<*const SignalHandler<'static>>,
     capture_backtrace: bool,
     capture_coredump: bool,
+    async_guard_range: Range<*mut u8>,
     caller: *mut VMContext,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
@@ -254,15 +256,21 @@ where
 {
     let limits = Instance::from_vmctx(caller, |i| i.runtime_limits());
 
-    let result = CallThreadState::new(signal_handler, capture_backtrace, capture_coredump, *limits)
-        .with(|cx| {
-            traphandlers::wasmtime_setjmp(
-                cx.jmp_buf.as_ptr(),
-                call_closure::<F>,
-                &mut closure as *mut F as *mut u8,
-                caller,
-            )
-        });
+    let result = CallThreadState::new(
+        signal_handler,
+        capture_backtrace,
+        capture_coredump,
+        *limits,
+        async_guard_range,
+    )
+    .with(|cx| {
+        traphandlers::wasmtime_setjmp(
+            cx.jmp_buf.as_ptr(),
+            call_closure::<F>,
+            &mut closure as *mut F as *mut u8,
+            caller,
+        )
+    });
 
     return match result {
         Ok(x) => Ok(x),
@@ -302,6 +310,7 @@ mod call_thread_state {
         pub(crate) limits: *const VMRuntimeLimits,
 
         pub(super) prev: Cell<tls::Ptr>,
+        pub(crate) async_guard_range: Range<*mut u8>,
 
         // The values of `VMRuntimeLimits::last_wasm_{exit_{pc,fp},entry_sp}`
         // for the *previous* `CallThreadState` for this same store/limits. Our
@@ -333,6 +342,7 @@ mod call_thread_state {
             capture_backtrace: bool,
             capture_coredump: bool,
             limits: *const VMRuntimeLimits,
+            async_guard_range: Range<*mut u8>,
         ) -> CallThreadState {
             let _ = capture_coredump;
 
@@ -344,6 +354,7 @@ mod call_thread_state {
                 #[cfg(feature = "coredump")]
                 capture_coredump,
                 limits,
+                async_guard_range,
                 prev: Cell::new(ptr::null()),
                 old_last_wasm_exit_fp: Cell::new(unsafe { *(*limits).last_wasm_exit_fp.get() }),
                 old_last_wasm_exit_pc: Cell::new(unsafe { *(*limits).last_wasm_exit_pc.get() }),
