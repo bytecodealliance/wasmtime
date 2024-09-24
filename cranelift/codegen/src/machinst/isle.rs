@@ -491,24 +491,6 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
-        fn abi_arg_struct_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, u64)> {
-            match arg {
-                &ABIArg::StructArg {
-                    pointer,
-                    offset,
-                    size,
-                    ..
-                } => {
-                    if let Some(pointer) = pointer {
-                        Some((pointer, offset, size))
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            }
-        }
-
         fn abi_arg_implicit_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, Type)> {
             match arg {
                 &ABIArg::ImplicitPtrArg {
@@ -724,6 +706,10 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.add_range_fact(reg, bits, min, max);
             reg
         }
+
+        fn value_is_unused(&mut self, val: Value) -> bool {
+            self.lower_ctx.value_is_unused(val)
+        }
     };
 }
 
@@ -767,7 +753,7 @@ pub fn shuffle_imm_as_le_lane_idx(size: u8, bytes: &[u8]) -> Option<u8> {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! isle_prelude_caller_methods {
-    ($abispec:ty, $abicaller:ty) => {
+    ($abicaller:ty) => {
         fn gen_call(
             &mut self,
             sig_ref: SigRef,
@@ -821,6 +807,62 @@ macro_rules! isle_prelude_caller_methods {
             );
 
             crate::machinst::isle::gen_call_common(&mut self.lower_ctx, num_rets, caller, args)
+        }
+
+        fn gen_return_call(
+            &mut self,
+            callee_sig: SigRef,
+            callee: ExternalName,
+            distance: RelocDistance,
+            args: ValueSlice,
+        ) -> InstOutput {
+            let caller_conv = isa::CallConv::Tail;
+            debug_assert_eq!(
+                self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+                caller_conv,
+                "Can only do `return_call`s from within a `tail` calling convention function"
+            );
+
+            let call_site = <$abicaller>::from_func(
+                self.lower_ctx.sigs(),
+                callee_sig,
+                &callee,
+                IsTailCall::Yes,
+                distance,
+                caller_conv,
+                self.backend.flags().clone(),
+            );
+            call_site.emit_return_call(self.lower_ctx, args, self.backend);
+
+            InstOutput::new()
+        }
+
+        fn gen_return_call_indirect(
+            &mut self,
+            callee_sig: SigRef,
+            callee: Value,
+            args: ValueSlice,
+        ) -> InstOutput {
+            let caller_conv = isa::CallConv::Tail;
+            debug_assert_eq!(
+                self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+                caller_conv,
+                "Can only do `return_call`s from within a `tail` calling convention function"
+            );
+
+            let callee = self.put_in_reg(callee);
+
+            let call_site = <$abicaller>::from_ptr(
+                self.lower_ctx.sigs(),
+                callee_sig,
+                callee,
+                IsTailCall::Yes,
+                caller_conv,
+                self.backend.flags().clone(),
+            );
+            call_site.emit_return_call(self.lower_ctx, args, self.backend);
+
+            InstOutput::new()
         }
     };
 }

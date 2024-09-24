@@ -480,6 +480,20 @@
       (dst_lo XReg (madd x_lo y_lo (zero_reg))))
     (value_regs dst_lo dst_hi)))
 
+;; Special case 128-bit multiplication where the operands are extended since
+;; that maps directly to the `mulhu` and `mulh` instructions.
+(rule 6 (lower (has_type $I128 (imul (uextend x) (uextend y))))
+  (let ((x XReg (zext x))
+        (y XReg (zext y)))
+    (value_regs (rv_mul x y) (rv_mulhu x y))))
+
+(rule 6 (lower (has_type $I128 (imul (sextend x) (sextend y))))
+  (let ((x XReg (sext x))
+        (y XReg (sext y)))
+    (value_regs (rv_mul x y) (rv_mulh x y))))
+
+;; Vector multiplication
+
 (rule 3 (lower (has_type (ty_supported_vec ty) (imul x y)))
   (rv_vmul_vv x y (unmasked) ty))
 
@@ -1931,6 +1945,18 @@
       (t2 XReg y))
     (value_regs t1 t2)))
 
+;; Special-case the lowering of an `isplit` of a 128-bit multiply where the
+;; lower bits of the result are discarded and the operands are sign or zero
+;; extended. This maps directly to `umulh` and `smulh`.
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (uextend x) (uextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (output_pair (invalid_reg) (rv_mulhu (zext x) (zext y))))
+
+(rule 1 (lower i @ (isplit (has_type $I128 (imul (sextend x) (sextend y)))))
+  (if-let (first_result lo) i)
+  (if-let $true (value_is_unused lo))
+  (output_pair (invalid_reg) (rv_mulh (sext x) (sext y))))
 
 ;;;;;  Rules for `smax`;;;;;;;;;
 
@@ -2023,6 +2049,32 @@
 (rule
   (lower (trap code))
   (udf code))
+
+;;;;;  Rules for `trapz`;;;;;;;;;
+(rule
+  (lower (trapz value @ (value_type (fits_in_64 _)) code))
+  (gen_trapz value code))
+
+(rule 1
+  (lower (trapz value @ (value_type $I128) code))
+    (gen_trapif_val_i128 (ZeroCond.Zero) value code))
+
+; fold icmp + trapz
+(rule 2 (lower (trapz (icmp cc x @ (value_type (fits_in_64 _)) y) code))
+  (gen_trapif (intcc_complement cc) x y code))
+
+;;;;;  Rules for `trapnz`;;;;;;;;;
+(rule
+  (lower (trapnz value @ (value_type (fits_in_64 _)) code))
+    (gen_trapnz value code))
+
+(rule 1
+  (lower (trapnz value @ (value_type $I128) code))
+    (gen_trapif_val_i128 (ZeroCond.NonZero) value code))
+
+; fold icmp + trapnz
+(rule 2 (lower (trapnz (icmp cc x @ (value_type (fits_in_64 _)) y) code))
+  (gen_trapif cc x y code))
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))

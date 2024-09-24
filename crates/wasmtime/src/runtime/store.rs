@@ -102,7 +102,6 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr;
-use core::sync::atomic::AtomicU64;
 use core::task::{Context, Poll};
 
 mod context;
@@ -572,7 +571,7 @@ impl<T> Store<T> {
             let shim = ModuleRuntimeInfo::bare(module);
             let allocator = OnDemandInstanceAllocator::default();
             allocator
-                .validate_module(shim.module(), shim.offsets())
+                .validate_module(shim.env_module(), shim.offsets())
                 .unwrap();
             let mut instance = unsafe {
                 allocator
@@ -593,8 +592,8 @@ impl<T> Store<T> {
             // throughout Wasmtime.
             unsafe {
                 let traitobj = mem::transmute::<
-                    *mut (dyn crate::runtime::vm::Store + '_),
-                    *mut (dyn crate::runtime::vm::Store + 'static),
+                    *mut (dyn crate::runtime::vm::VMStore + '_),
+                    *mut (dyn crate::runtime::vm::VMStore + 'static),
                 >(&mut *inner);
                 instance.set_store(traitobj);
             }
@@ -1687,9 +1686,8 @@ impl StoreOpaque {
 
     #[cfg(feature = "gc")]
     fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::runtime::vm::SendSyncPtr;
         use core::ptr::NonNull;
-
-        use crate::runtime::vm::{ModuleInfoLookup, SendSyncPtr};
 
         log::trace!("Begin trace GC roots :: Wasm stack");
 
@@ -1705,7 +1703,7 @@ impl StoreOpaque {
 
             let module_info = self
                 .modules()
-                .lookup(pc)
+                .lookup_module_by_pc(pc)
                 .expect("should have module info for Wasm frame");
 
             let stack_map = match module_info.lookup_stack_map(pc) {
@@ -1883,7 +1881,7 @@ impl StoreOpaque {
         self.default_caller.vmctx()
     }
 
-    pub fn traitobj(&self) -> *mut dyn crate::runtime::vm::Store {
+    pub fn traitobj(&self) -> *mut dyn crate::runtime::vm::VMStore {
         self.default_caller.store()
     }
 
@@ -2423,17 +2421,13 @@ impl AsyncCx {
     }
 }
 
-unsafe impl<T> crate::runtime::vm::Store for StoreInner<T> {
-    fn vmruntime_limits(&self) -> *mut VMRuntimeLimits {
-        <StoreOpaque>::vmruntime_limits(self)
+unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
+    fn store_opaque(&self) -> &StoreOpaque {
+        &self.inner
     }
 
-    fn epoch_ptr(&self) -> *const AtomicU64 {
-        self.engine.epoch_counter() as *const _
-    }
-
-    fn maybe_gc_store(&mut self) -> Option<&mut GcStore> {
-        self.gc_store.as_mut()
+    fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
+        &mut self.inner
     }
 
     fn memory_growing(
@@ -2479,9 +2473,9 @@ unsafe impl<T> crate::runtime::vm::Store for StoreInner<T> {
 
     fn table_growing(
         &mut self,
-        current: u32,
-        desired: u32,
-        maximum: Option<u32>,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
     ) -> Result<bool, anyhow::Error> {
         // Need to borrow async_cx before the mut borrow of the limiter.
         // self.async_cx() panicks when used with a non-async store, so
@@ -2735,12 +2729,6 @@ impl Drop for StoreOpaque {
             ManuallyDrop::drop(&mut self.store_data);
             ManuallyDrop::drop(&mut self.rooted_host_funcs);
         }
-    }
-}
-
-impl crate::runtime::vm::ModuleInfoLookup for ModuleRegistry {
-    fn lookup(&self, pc: usize) -> Option<&dyn crate::runtime::vm::ModuleInfo> {
-        self.lookup_module_info(pc)
     }
 }
 

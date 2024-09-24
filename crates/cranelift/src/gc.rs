@@ -8,7 +8,8 @@
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{WasmHeapType, WasmRefType, WasmResult, WasmValType};
+use cranelift_wasm::{TypeIndex, WasmRefType, WasmResult};
+use wasmtime_environ::GcTypeLayouts;
 
 #[cfg(feature = "gc")]
 mod enabled;
@@ -20,90 +21,29 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 use disabled as imp;
 
-/// Get the GC compiler configured for the given function environment.
-pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> Box<dyn GcCompiler> {
-    imp::gc_compiler(func_env)
-}
-
-/// Load a `*mut VMGcRef` into a virtual register, without any GC barriers.
-///
-/// The resulting value is an instance of the function environment's type for
-/// GC-managed references, aka `i32`. Note that a `VMGcRef` is always 4-bytes
-/// large, even when targeting 64-bit architectures.
-pub fn unbarriered_load_gc_ref(
-    func_env: &FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    ty: WasmHeapType,
-    src: ir::Value,
-    flags: ir::MemFlags,
-) -> WasmResult<ir::Value> {
-    imp::unbarriered_load_gc_ref(func_env, builder, ty, src, flags)
-}
-
-/// Store `*dst = gc_ref`, without any GC barriers.
-///
-/// `dst` is a `*mut VMGcRef`.
-///
-/// `gc_ref` is an instance of the function environment's type for GC-managed
-/// references, aka `i32`. Note that a `VMGcRef` is always 4-bytes large, even
-/// when targeting 64-bit architectures.
-pub fn unbarriered_store_gc_ref(
-    func_env: &FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    ty: WasmHeapType,
-    dst: ir::Value,
-    gc_ref: ir::Value,
-    flags: ir::MemFlags,
-) -> WasmResult<()> {
-    imp::unbarriered_store_gc_ref(func_env, builder, ty, dst, gc_ref, flags)
-}
-
-/// Get the index and signature of the built-in function for doing `table.grow`
-/// on GC reference tables.
-pub fn gc_ref_table_grow_builtin(
-    ty: WasmHeapType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    imp::gc_ref_table_grow_builtin(ty, func_env, func)
-}
-
-/// Get the index and signature of the built-in function for doing `table.fill`
-/// on GC reference tables.
-pub fn gc_ref_table_fill_builtin(
-    ty: WasmHeapType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    imp::gc_ref_table_fill_builtin(ty, func_env, func)
-}
-
-/// Get the index and signature of the built-in function for doing `global.get`
-/// on a GC reference global.
-pub fn gc_ref_global_get_builtin(
-    ty: WasmValType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    imp::gc_ref_global_get_builtin(ty, func_env, func)
-}
-
-/// Get the index and signature of the built-in function for doing `global.set`
-/// on a GC reference global.
-pub fn gc_ref_global_set_builtin(
-    ty: WasmValType,
-    func_env: &mut FuncEnvironment<'_>,
-    func: &mut ir::Function,
-) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_vmgcref_type());
-    imp::gc_ref_global_set_builtin(ty, func_env, func)
-}
+// Re-export the GC compilation interface from the implementation that we chose
+// based on the compile-time features enabled.
+pub use imp::*;
 
 /// A trait for different collectors to emit any GC barriers they might require.
 pub trait GcCompiler {
+    /// Get the GC type layouts for this GC compiler.
+    #[cfg_attr(not(feature = "gc"), allow(dead_code))]
+    fn layouts(&self) -> &dyn GcTypeLayouts;
+
+    /// Emit code to allocate a new struct.
+    ///
+    /// The struct should be of the given type and its fields initialized to the
+    /// given values.
+    #[cfg_attr(not(feature = "gc"), allow(dead_code))]
+    fn alloc_struct(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        struct_type_index: TypeIndex,
+        fields: &[ir::Value],
+    ) -> WasmResult<ir::Value>;
+
     /// Emit a read barrier for when we are cloning a GC reference onto the Wasm
     /// stack.
     ///

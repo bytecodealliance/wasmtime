@@ -1,98 +1,111 @@
 test interpret
 
-function %isubborrow_i8_v(i8, i8, i8) -> i8 {
+function %ssub_overflow_bin_i8(i8, i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v3
+    v3, v4 = ssub_overflow_bin v0, v1, v2
+    return v3, v4
 }
-; run: %isubborrow_i8_v(0, 1, 1) == -2
-; run: %isubborrow_i8_v(0, 1, 0) == -1
-; run: %isubborrow_i8_v(100, 20, 1) == 79
-; run: %isubborrow_i8_v(100, 20, 0) == 80
-; run: %isubborrow_i8_v(127, 127, 1) == -1
-; run: %isubborrow_i8_v(127, 127, 0) == 0
+; run: %ssub_overflow_bin_i8(0, 1, 1) == [-2, 0]
+; run: %ssub_overflow_bin_i8(0, 1, 10) == [-2, 0]
+; run: %ssub_overflow_bin_i8(0, 1, 0) == [-1, 0]
+; run: %ssub_overflow_bin_i8(100, 20, 1) == [79, 0]
+; run: %ssub_overflow_bin_i8(100, 20, 0) == [80, 0]
+; run: %ssub_overflow_bin_i8(127, 127, 1) == [-1, 0]
+; run: %ssub_overflow_bin_i8(127, 127, 0) == [0, 0]
+; run: %ssub_overflow_bin_i8(-120, 8, 0) == [-128, 0]
+; run: %ssub_overflow_bin_i8(-120, 8, 1) == [127, 1]
+; run: %ssub_overflow_bin_i8(-120, 8, 10) == [127, 1]
 
-function %isubborrow_i8_c(i8, i8, i8) -> i8 {
+function %ssub_overflow_bin_i16(i16, i16, i8) -> i16, i8 {
+block0(v0: i16, v1: i16, v2: i8):
+    v3, v4 = ssub_overflow_bin v0, v1, v2
+    return v3, v4
+}
+; run: %ssub_overflow_bin_i16(0, 1, 1) == [-2, 0]
+; run: %ssub_overflow_bin_i16(0, 1, 10) == [-2, 0]
+; run: %ssub_overflow_bin_i16(0, 1, 0) == [-1, 0]
+; run: %ssub_overflow_bin_i16(100, 20, 1) == [79, 0]
+; run: %ssub_overflow_bin_i16(100, 20, 0) == [80, 0]
+; run: %ssub_overflow_bin_i16(-32000, 768, 1) == [32767, 1]
+; run: %ssub_overflow_bin_i16(-32000, 768, 0) == [-32768, 0]
+
+function %ssub_overflow_bin_i32(i32, i32, i8) -> i32, i8 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3, v4 = ssub_overflow_bin v0, v1, v2
+    return v3, v4
+}
+; run: %ssub_overflow_bin_i32(0, 1, 1) == [-2, 0]
+; run: %ssub_overflow_bin_i32(0, 1, 10) == [-2, 0]
+; run: %ssub_overflow_bin_i32(0, 1, 0) == [-1, 0]
+; run: %ssub_overflow_bin_i32(100, 20, 1) == [79, 0]
+; run: %ssub_overflow_bin_i32(100, 20, 0) == [80, 0]
+; run: %ssub_overflow_bin_i32(-2147483640, 8, 1) == [2147483647, 1]
+; run: %ssub_overflow_bin_i32(-2147483640, 8, 0) == [-2147483648, 0]
+
+function %ssub_overflow_bin_i64(i64, i64, i8) -> i64, i8 {
+block0(v0: i64, v1: i64, v2: i8):
+    v3, v4 = ssub_overflow_bin v0, v1, v2
+    return v3, v4
+}
+; run: %ssub_overflow_bin_i64(0, 1, 1) == [-2, 0]
+; run: %ssub_overflow_bin_i64(0, 1, 10) == [-2, 0]
+; run: %ssub_overflow_bin_i64(0, 1, 0) == [-1, 0]
+; run: %ssub_overflow_bin_i64(100, 20, 1) == [79, 0]
+; run: %ssub_overflow_bin_i64(100, 20, 0) == [80, 0]
+; run: %ssub_overflow_bin_i64(-9223372036854775800, 8, 1) == [9223372036854775807, 1]
+; run: %ssub_overflow_bin_i64(-9223372036854775800, 8, 0) == [-9223372036854775808, 0]
+
+function %usub_overflow_bin_i8(i8, i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v4
+    v3, v4 = usub_overflow_bin v0, v1, v2
+    return v3, v4
 }
-; run: %isubborrow_i8_c(0, 1, 1) == 1
-; run: %isubborrow_i8_c(0, 1, 0) == 1
-; run: %isubborrow_i8_c(100, 20, 1) == 0
-; run: %isubborrow_i8_c(100, 20, 0) == 0
-; run: %isubborrow_i8_c(127, 127, 1) == 0
-; run: %isubborrow_i8_c(127, 127, 0) == 0
+; run: %usub_overflow_bin_i8(0, 1, 1) == [-2, 1]
+; run: %usub_overflow_bin_i8(0, 1, 10) == [-2, 1]
+; run: %usub_overflow_bin_i8(0, 1, 0) == [-1, 1]
+; run: %usub_overflow_bin_i8(100, 20, 1) == [79, 0]
+; run: %usub_overflow_bin_i8(100, 20, 0) == [80, 0]
+; run: %usub_overflow_bin_i8(127, 127, 1) == [-1, 1]
+; run: %usub_overflow_bin_i8(127, 127, 0) == [0, 0]
+; run: %usub_overflow_bin_i8(-120, 8, 0) == [-128, 0]
+; run: %usub_overflow_bin_i8(-120, 8, 1) == [127, 0]
+; run: %usub_overflow_bin_i8(-120, 8, 10) == [127, 0]
 
-function %isubborrow_i16_v(i16, i16, i8) -> i16 {
+function %usub_overflow_bin_i16(i16, i16, i8) -> i16, i8 {
 block0(v0: i16, v1: i16, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v3
+    v3, v4 = usub_overflow_bin v0, v1, v2
+    return v3, v4
 }
-; run: %isubborrow_i16_v(0, 1, 1) == -2
-; run: %isubborrow_i16_v(0, 1, 0) == -1
-; run: %isubborrow_i16_v(100, 20, 1) == 79
-; run: %isubborrow_i16_v(100, 20, 0) == 80
-; run: %isubborrow_i16_v(-32000, 768, 1) == 32767
-; run: %isubborrow_i16_v(-32000, 768, 0) == -32768
+; run: %usub_overflow_bin_i16(0, 1, 1) == [-2, 1]
+; run: %usub_overflow_bin_i16(0, 1, 10) == [-2, 1]
+; run: %usub_overflow_bin_i16(0, 1, 0) == [-1, 1]
+; run: %usub_overflow_bin_i16(100, 20, 1) == [79, 0]
+; run: %usub_overflow_bin_i16(100, 20, 0) == [80, 0]
+; run: %usub_overflow_bin_i16(-32000, 768, 1) == [32767, 0]
+; run: %usub_overflow_bin_i16(-32000, 768, 0) == [-32768, 0]
 
-function %isubborrow_i16_c(i16, i16, i8) -> i8 {
-block0(v0: i16, v1: i16, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v4
-}
-; run: %isubborrow_i16_c(0, 1, 1) == 1
-; run: %isubborrow_i16_c(0, 1, 0) == 1
-; run: %isubborrow_i16_c(100, 20, 1) == 0
-; run: %isubborrow_i16_c(100, 20, 0) == 0
-; run: %isubborrow_i16_c(-32000, 768, 1) == 1
-; run: %isubborrow_i16_c(-32000, 768, 0) == 1
-
-function %isubborrow_i32_v(i32, i32, i8) -> i32 {
+function %usub_overflow_bin_i32(i32, i32, i8) -> i32, i8 {
 block0(v0: i32, v1: i32, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v3
+    v3, v4 = usub_overflow_bin v0, v1, v2
+    return v3, v4
 }
-; run: %isubborrow_i32_v(0, 1, 1) == -2
-; run: %isubborrow_i32_v(0, 1, 0) == -1
-; run: %isubborrow_i32_v(100, 20, 1) == 79
-; run: %isubborrow_i32_v(100, 20, 0) == 80
-; run: %isubborrow_i32_v(-2147483640, 8, 1) == 2147483647
-; run: %isubborrow_i32_v(-2147483640, 8, 0) == -2147483648
+; run: %usub_overflow_bin_i32(0, 1, 1) == [-2, 1]
+; run: %usub_overflow_bin_i32(0, 1, 10) == [-2, 1]
+; run: %usub_overflow_bin_i32(0, 1, 0) == [-1, 1]
+; run: %usub_overflow_bin_i32(100, 20, 1) == [79, 0]
+; run: %usub_overflow_bin_i32(100, 20, 0) == [80, 0]
+; run: %usub_overflow_bin_i32(-2147483640, 8, 1) == [2147483647, 0]
+; run: %usub_overflow_bin_i32(-2147483640, 8, 0) == [-2147483648, 0]
 
-function %isubborrow_i32_c(i32, i32, i8) -> i8 {
-block0(v0: i32, v1: i32, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v4
-}
-; run: %isubborrow_i32_c(0, 1, 1) == 1
-; run: %isubborrow_i32_c(0, 1, 0) == 1
-; run: %isubborrow_i32_c(100, 20, 1) == 0
-; run: %isubborrow_i32_c(100, 20, 0) == 0
-; run: %isubborrow_i32_c(-2147483640, 8, 1) == 1
-; run: %isubborrow_i32_c(-2147483640, 8, 0) == 1
-
-
-function %isubborrow_i64_v(i64, i64, i8) -> i64 {
+function %usub_overflow_bin_i64(i64, i64, i8) -> i64, i8 {
 block0(v0: i64, v1: i64, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v3
+    v3, v4 = usub_overflow_bin v0, v1, v2
+    return v3, v4
 }
-; run: %isubborrow_i64_v(0, 1, 1) == -2
-; run: %isubborrow_i64_v(0, 1, 0) == -1
-; run: %isubborrow_i64_v(100, 20, 1) == 79
-; run: %isubborrow_i64_v(100, 20, 0) == 80
-; run: %isubborrow_i64_v(-9223372036854775800, 8, 1) == 9223372036854775807
-; run: %isubborrow_i64_v(-9223372036854775800, 8, 0) == -9223372036854775808
-
-function %isubborrow_i64_c(i64, i64, i8) -> i8 {
-block0(v0: i64, v1: i64, v2: i8):
-    v3, v4 = isub_borrow v0, v1, v2
-    return v4
-}
-; run: %isubborrow_i64_c(0, 1, 1) == 1
-; run: %isubborrow_i64_c(0, 1, 0) == 1
-; run: %isubborrow_i64_c(100, 20, 1) == 0
-; run: %isubborrow_i64_c(100, 20, 0) == 0
-; run: %isubborrow_i64_c(-9223372036854775800, 8, 1) == 1
-; run: %isubborrow_i64_c(-9223372036854775800, 8, 0) == 1
+; run: %usub_overflow_bin_i64(0, 1, 1) == [-2, 1]
+; run: %usub_overflow_bin_i64(0, 1, 10) == [-2, 1]
+; run: %usub_overflow_bin_i64(0, 1, 0) == [-1, 1]
+; run: %usub_overflow_bin_i64(100, 20, 1) == [79, 0]
+; run: %usub_overflow_bin_i64(100, 20, 0) == [80, 0]
+; run: %usub_overflow_bin_i64(-9223372036854775800, 8, 1) == [9223372036854775807, 0]
+; run: %usub_overflow_bin_i64(-9223372036854775800, 8, 0) == [-9223372036854775808, 0]

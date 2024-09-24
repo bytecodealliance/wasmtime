@@ -139,6 +139,53 @@ fn pulley_emit<P>(
             enc::trap(sink);
         }
 
+        Inst::TrapIf {
+            cond,
+            size,
+            src1,
+            src2,
+            code,
+        } => {
+            let label = sink.defer_trap(*code);
+
+            let cur_off = sink.cur_offset();
+            sink.use_label_at_offset(cur_off, label, LabelUse::Jump(3));
+
+            use ir::condcodes::IntCC::*;
+            use OperandSize::*;
+            match (cond, size) {
+                (Equal, Size32) => enc::br_if_xeq32(sink, src1, src2, 0),
+                (Equal, Size64) => enc::br_if_xeq64(sink, src1, src2, 0),
+
+                (NotEqual, Size32) => enc::br_if_xneq32(sink, src1, src2, 0),
+                (NotEqual, Size64) => enc::br_if_xneq64(sink, src1, src2, 0),
+
+                (SignedLessThan, Size32) => enc::br_if_xslt32(sink, src1, src2, 0),
+                (SignedLessThan, Size64) => enc::br_if_xslt64(sink, src1, src2, 0),
+
+                (SignedLessThanOrEqual, Size32) => enc::br_if_xslteq32(sink, src1, src2, 0),
+                (SignedLessThanOrEqual, Size64) => enc::br_if_xslteq64(sink, src1, src2, 0),
+
+                (UnsignedLessThan, Size32) => enc::br_if_xult32(sink, src1, src2, 0),
+                (UnsignedLessThan, Size64) => enc::br_if_xult64(sink, src1, src2, 0),
+
+                (UnsignedLessThanOrEqual, Size32) => enc::br_if_xulteq32(sink, src1, src2, 0),
+                (UnsignedLessThanOrEqual, Size64) => enc::br_if_xulteq64(sink, src1, src2, 0),
+
+                (SignedGreaterThan, Size32) => enc::br_if_xslt32(sink, src2, src1, 0),
+                (SignedGreaterThan, Size64) => enc::br_if_xslt64(sink, src2, src1, 0),
+
+                (SignedGreaterThanOrEqual, Size32) => enc::br_if_xslteq32(sink, src2, src1, 0),
+                (SignedGreaterThanOrEqual, Size64) => enc::br_if_xslteq64(sink, src2, src1, 0),
+
+                (UnsignedGreaterThan, Size32) => enc::br_if_xult32(sink, src2, src1, 0),
+                (UnsignedGreaterThan, Size64) => enc::br_if_xult64(sink, src2, src1, 0),
+
+                (UnsignedGreaterThanOrEqual, Size32) => enc::br_if_xulteq32(sink, src2, src1, 0),
+                (UnsignedGreaterThanOrEqual, Size64) => enc::br_if_xulteq64(sink, src2, src1, 0),
+            }
+        }
+
         Inst::Nop => todo!(),
 
         Inst::GetSp { dst } => enc::get_sp(sink, dst),

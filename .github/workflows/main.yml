@@ -338,7 +338,6 @@ jobs:
   # here isn't to run tests, mostly just serve as a double-check that Rust code
   # compiles and is likely to work everywhere else.
   micro_checks:
-    needs: determine
     name: Check ${{matrix.name}}
     strategy:
       fail-fast: true
@@ -419,12 +418,9 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
-  # Similar to `micro_checks` but where we need to install some more state
-  # (e.g. Android NDK) and we haven't factored support for those things out into
-  # a parallel jobs yet.
-  monolith_checks:
-    needs: determine
-    name: Monolith Checks
+  # Checks for no_std support, ensure that crates can build on a no_std target
+  no_std_checks:
+    name: no_std checks
     runs-on: ubuntu-latest
     env:
       CARGO_NDK_VERSION: 2.12.2
@@ -434,12 +430,51 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
 
-    # Checks for no_std support, ensure that crates can build on a no_std
-    # target
     - run: rustup target add x86_64-unknown-none
     - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
     - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
     - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # Check that Clippy lints are passing.
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_VERSION: 2.12.2
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    - run: rustup component add clippy
+    - run: cargo clippy --workspace --all-targets
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # Similar to `micro_checks` but where we need to install some more state
+  # (e.g. Android NDK) and we haven't factored support for those things out into
+  # a parallel jobs yet.
+  monolith_checks:
+    name: Monolith Checks
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_VERSION: 2.12.2
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
 
     # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
     # for specifically panic=abort there.
@@ -461,10 +496,6 @@ jobs:
     # TODO: We aren't building with default features since the `ittapi` crate fails to compile on freebsd.
     - run: rustup target add x86_64-unknown-freebsd
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
-
-    # Run clippy configuration
-    - run: rustup component add clippy
-    - run: cargo clippy --workspace --all-targets
 
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
@@ -685,6 +716,11 @@ jobs:
         else
           echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (\`cargo run --example mpk-available\`)."
         fi
+
+    # Install VTune, see `cli_tests::profile_with_vtune`.
+    - name: Install VTune
+      if: matrix.filter == 'linux-x64' && contains(matrix.bucket, 'wasmtime-cli')
+      uses: abrown/install-vtune-action@v1
 
     # Build and test all features
     - run: ./ci/run-tests.sh --locked ${{ matrix.bucket }}
@@ -1110,6 +1146,8 @@ jobs:
       - cargo_vet
       - doc
       - micro_checks
+      - no_std_checks
+      - clippy
       - monolith_checks
       - checks_winarm64
       - bench

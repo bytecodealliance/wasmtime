@@ -2,8 +2,8 @@ use crate::type_registry::RegisteredType;
 use crate::{linker::DefinitionType, Engine, FuncType};
 use crate::{prelude::*, ArrayType, StructType};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex, WasmHeapType,
-    WasmRefType, WasmSubType, WasmValType,
+    EntityType, Global, IndexType, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex,
+    WasmHeapType, WasmRefType, WasmSubType, WasmValType,
 };
 
 pub struct MatchCx<'a> {
@@ -151,17 +151,18 @@ fn global_ty(expected: &Global, actual: &Global) -> Result<()> {
     Ok(())
 }
 
-fn table_ty(expected: &Table, actual: &Table, actual_runtime_size: Option<u32>) -> Result<()> {
+fn table_ty(expected: &Table, actual: &Table, actual_runtime_size: Option<u64>) -> Result<()> {
     equal_ty(
-        WasmValType::Ref(expected.wasm_ty),
-        WasmValType::Ref(actual.wasm_ty),
+        WasmValType::Ref(expected.ref_type),
+        WasmValType::Ref(actual.ref_type),
         "table",
     )?;
+    match_index(expected.idx_type, actual.idx_type, "table")?;
     match_limits(
-        expected.minimum.into(),
-        expected.maximum.map(|i| i.into()),
-        actual_runtime_size.unwrap_or(actual.minimum).into(),
-        actual.maximum.map(|i| i.into()),
+        expected.limits.min,
+        expected.limits.max,
+        actual_runtime_size.unwrap_or(actual.limits.min),
+        actual.limits.max,
         "table",
     )?;
     Ok(())
@@ -175,18 +176,12 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
         "shared",
         "non-shared",
     )?;
-    match_bool(
-        expected.memory64,
-        actual.memory64,
-        "memory",
-        "64-bit",
-        "32-bit",
-    )?;
+    match_index(expected.idx_type, actual.idx_type, "memory")?;
     match_limits(
-        expected.minimum,
-        expected.maximum,
-        actual_runtime_size.unwrap_or(actual.minimum),
-        actual.maximum,
+        expected.limits.min,
+        expected.limits.max,
+        actual_runtime_size.unwrap_or(actual.limits.min),
+        actual.limits.max,
         "memory",
     )?;
     if expected.page_size_log2 != actual.page_size_log2 {
@@ -340,6 +335,28 @@ fn match_bool(
     }
     let expected = if expected { if_true } else { if_false };
     let actual = if actual { if_true } else { if_false };
+    bail!(
+        "{desc} types incompatible: expected {expected} {desc}, \
+         found {actual} {desc}",
+    )
+}
+
+fn match_index(expected: IndexType, actual: IndexType, desc: &str) -> Result<()> {
+    if expected == actual {
+        return Ok(());
+    }
+    const S64: &str = "64-bit";
+    const S32: &str = "32-bit";
+    let expected = if matches!(expected, IndexType::I64) {
+        S64
+    } else {
+        S32
+    };
+    let actual = if matches!(actual, IndexType::I64) {
+        S64
+    } else {
+        S32
+    };
     bail!(
         "{desc} types incompatible: expected {expected} {desc}, \
          found {actual} {desc}",

@@ -10,15 +10,15 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a0 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v11,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v11,a1 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xd7, 0x45, 0x05, 0x5e
-;   .byte 0xa7, 0x85, 0x05, 0x02
+;   .byte 0xd7, 0xc5, 0x05, 0x5e
+;   .byte 0xa7, 0x05, 0x05, 0x02
 ;   ret
 
 function %splat_i16x8(i16) -> i16x8 {
@@ -29,16 +29,16 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a0 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v11,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v11,a1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0xd7, 0x45, 0x05, 0x5e
+;   .byte 0xd7, 0xc5, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x85, 0x05, 0x02
+;   .byte 0xa7, 0x05, 0x05, 0x02
 ;   ret
 
 function %splat_i32x4(i32) -> i32x4 {
@@ -49,16 +49,16 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a0 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v11,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v11,a1 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0xd7, 0x45, 0x05, 0x5e
+;   .byte 0xd7, 0xc5, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x85, 0x05, 0x02
+;   .byte 0xa7, 0x05, 0x05, 0x02
 ;   ret
 
 function %splat_i64x2(i64) -> i64x2 {
@@ -69,16 +69,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a0 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v11,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v11,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0xd7, 0x45, 0x05, 0x5e
+;   .byte 0xd7, 0xc5, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x85, 0x05, 0x02
+;   .byte 0xa7, 0x05, 0x05, 0x02
 ;   ret
 
 function %splat_const_i8x16() -> i8x16 {

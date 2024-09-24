@@ -39,7 +39,9 @@ mod state;
 mod table;
 mod translation_utils;
 
-pub use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, TargetEnvironment};
+pub use crate::environ::{
+    FuncEnvironment, GlobalVariable, ModuleEnvironment, StructFieldsVec, TargetEnvironment,
+};
 pub use crate::func_translator::FuncTranslator;
 pub use crate::heap::{Heap, HeapData, HeapStyle};
 pub use crate::module_translator::translate_module;

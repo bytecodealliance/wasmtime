@@ -116,8 +116,13 @@ impl ResourceLimiter for StoreLimits {
         Ok(self.alloc(desired - current))
     }
 
-    fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> Result<bool> {
-        let delta = (desired - current) as usize * std::mem::size_of::<usize>();
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool> {
+        let delta = (desired - current).saturating_mul(std::mem::size_of::<usize>());
         Ok(self.alloc(delta))
     }
 }
@@ -484,7 +489,13 @@ impl<T, U> DiffEqResult<T, U> {
             // of the two instances, so `None` is returned and nothing else is
             // compared.
             (Err(lhs), Err(rhs)) => {
-                let err = rhs.downcast::<Trap>().expect("not a trap");
+                let err = match rhs.downcast::<Trap>() {
+                    Ok(trap) => trap,
+                    Err(err) => {
+                        log::debug!("rhs failed: {err:?}");
+                        return DiffEqResult::Failed;
+                    }
+                };
                 let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
 
                 if poisoned {
@@ -494,8 +505,8 @@ impl<T, U> DiffEqResult<T, U> {
                 DiffEqResult::Failed
             }
             // A real bug is found if only one side fails.
-            (Ok(_), Err(_)) => panic!("only the `rhs` failed for this input"),
-            (Err(_), Ok(_)) => panic!("only the `lhs` failed for this input"),
+            (Ok(_), Err(err)) => panic!("only the `rhs` failed for this input: {err:?}"),
+            (Err(err), Ok(_)) => panic!("only the `lhs` failed for this input: {err:?}"),
         }
     }
 }

@@ -983,7 +983,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   vpkh %v24, %v7, %v19
 ;   br %r14
 
-function %iadd_pairwise_i32x4_le(i32x4, i32x4) -> i32x4 wasmtime_system_v {
+function %iadd_pairwise_i32x4_le(i32x4, i32x4) -> i32x4 tail {
 block0(v0: i32x4, v1: i32x4):
   v2 = iadd_pairwise.i32x4 v0, v1
   return v2
@@ -1009,7 +1009,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   vpkg %v24, %v19, %v7
 ;   br %r14
 
-function %iadd_pairwise_i16x8_le(i16x8, i16x8) -> i16x8 wasmtime_system_v {
+function %iadd_pairwise_i16x8_le(i16x8, i16x8) -> i16x8 tail {
 block0(v0: i16x8, v1: i16x8):
   v2 = iadd_pairwise.i16x8 v0, v1
   return v2
@@ -1035,7 +1035,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   vpkf %v24, %v19, %v7
 ;   br %r14
 
-function %iadd_pairwise_i8x16_le(i8x16, i8x16) -> i8x16 wasmtime_system_v {
+function %iadd_pairwise_i8x16_le(i8x16, i8x16) -> i8x16 tail {
 block0(v0: i8x16, v1: i8x16):
   v2 = iadd_pairwise.i8x16 v0, v1
   return v2

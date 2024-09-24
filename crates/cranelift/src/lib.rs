@@ -228,31 +228,34 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
     let &MachTrap { offset, code } = trap;
     Some(TrapInformation {
         code_offset: offset,
-        trap_code: match code {
-            ir::TrapCode::StackOverflow => Trap::StackOverflow,
-            ir::TrapCode::HeapOutOfBounds => Trap::MemoryOutOfBounds,
-            ir::TrapCode::HeapMisaligned => Trap::HeapMisaligned,
-            ir::TrapCode::TableOutOfBounds => Trap::TableOutOfBounds,
-            ir::TrapCode::IndirectCallToNull => Trap::IndirectCallToNull,
-            ir::TrapCode::BadSignature => Trap::BadSignature,
-            ir::TrapCode::IntegerOverflow => Trap::IntegerOverflow,
-            ir::TrapCode::IntegerDivisionByZero => Trap::IntegerDivisionByZero,
-            ir::TrapCode::BadConversionToInteger => Trap::BadConversionToInteger,
-            ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
-            ir::TrapCode::Interrupt => Trap::Interrupt,
-            ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
-            ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
-            ir::TrapCode::NullReference => Trap::NullReference,
-            ir::TrapCode::NullI31Ref => Trap::NullI31Ref,
+        trap_code: clif_trap_to_env_trap(code)?,
+    })
+}
 
-            // These do not get converted to wasmtime traps, since they
-            // shouldn't ever be hit in theory. Instead of catching and handling
-            // these, we let the signal crash the process.
-            ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE) => return None,
+fn clif_trap_to_env_trap(trap: ir::TrapCode) -> Option<Trap> {
+    Some(match trap {
+        ir::TrapCode::StackOverflow => Trap::StackOverflow,
+        ir::TrapCode::HeapOutOfBounds => Trap::MemoryOutOfBounds,
+        ir::TrapCode::HeapMisaligned => Trap::HeapMisaligned,
+        ir::TrapCode::TableOutOfBounds => Trap::TableOutOfBounds,
+        ir::TrapCode::IndirectCallToNull => Trap::IndirectCallToNull,
+        ir::TrapCode::BadSignature => Trap::BadSignature,
+        ir::TrapCode::IntegerOverflow => Trap::IntegerOverflow,
+        ir::TrapCode::IntegerDivisionByZero => Trap::IntegerDivisionByZero,
+        ir::TrapCode::BadConversionToInteger => Trap::BadConversionToInteger,
+        ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
+        ir::TrapCode::Interrupt => Trap::Interrupt,
+        ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
+        ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
+        ir::TrapCode::NullReference => Trap::NullReference,
 
-            // these should never be emitted by wasmtime-cranelift
-            ir::TrapCode::User(_) => unreachable!(),
-        },
+        // These do not get converted to wasmtime traps, since they
+        // shouldn't ever be hit in theory. Instead of catching and handling
+        // these, we let the signal crash the process.
+        ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE) => return None,
+
+        // these should never be emitted by wasmtime-cranelift
+        ir::TrapCode::User(_) => unreachable!(),
     })
 }
 
@@ -360,6 +363,14 @@ impl BuiltinFunctionSignatures {
 
     fn i64(&self) -> AbiParam {
         AbiParam::new(ir::types::I64)
+    }
+
+    fn f64(&self) -> AbiParam {
+        AbiParam::new(ir::types::F64)
+    }
+
+    fn u8(&self) -> AbiParam {
+        AbiParam::new(ir::types::I8)
     }
 
     fn signature(&self, builtin: BuiltinFunctionIndex) -> Signature {

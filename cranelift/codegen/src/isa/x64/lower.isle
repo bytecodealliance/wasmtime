@@ -1003,20 +1003,28 @@
 
 ;; 8-bit base case, needs a special instruction encoding and additionally
 ;; move sinkable loads to the right.
-(rule -7 (lower (has_type $I8 (imul x y))) (x64_mul8 $false x y))
-(rule -6 (lower (has_type $I8 (imul (sinkable_load x) y))) (x64_mul8 $false y x))
+(rule -8 (lower (has_type $I8 (imul x y))) (x64_mul8 $false x y))
+(rule -7 (lower (has_type $I8 (imul (sinkable_load x) y))) (x64_mul8 $false y x))
 
 ;; 16-to-64-bit base cases, same as above by moving sinkable loads to the right.
-(rule -5 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x y)))
+(rule -6 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x y)))
          (x64_imul ty x y))
-(rule -4 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (sinkable_load x) y)))
+(rule -5 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (sinkable_load x) y)))
          (x64_imul ty y x))
 
 ;; lift out constants to use 3-operand form
-(rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (i32_from_iconst y))))
+(rule -4 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (i32_from_iconst y))))
          (x64_imul_imm ty x y))
-(rule -2 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (i32_from_iconst x) y)))
+(rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (i32_from_iconst x) y)))
          (x64_imul_imm ty y x))
+
+;; Special case widening multiplication from 8-to-16-bits with a single
+;; instruction since the 8-bit-multiply places both the high and low halves in
+;; the same register
+(rule -2 (lower (has_type $I16 (imul (sextend x) (sextend y))))
+  (x64_mul8 $true x y))
+(rule -2 (lower (has_type $I16 (imul (uextend x) (uextend y))))
+  (x64_mul8 $false x y))
 
 ;; `i128`.
 
@@ -1853,6 +1861,15 @@
 
 (rule (lower (trap code))
       (side_effect (x64_ud2 code)))
+
+;;;; Rules for `trapz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (trapz val code))
+      (side_effect (trap_if_val (ZeroCond.Zero) val code)))
+
+;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trapnz val code))
+      (side_effect (trap_if_val (ZeroCond.NonZero) val code)))
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4347,6 +4364,14 @@
 
 (rule 1 (lower (umulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
         (value_regs_get_gpr (x64_mul ty $false a b) 1))
+
+;; The BMI2 instruction set introduced `mulx` which defines two registers but
+;; if the two registers are the same then it only defines the upper bits. This
+;; helps slightly reduce register pressure by ensuring only one register here is
+;; clobbered.
+(rule 2 (lower (umulhi a @ (value_type (ty_32_or_64 ty)) b))
+        (if-let $true (use_bmi2))
+        (x64_mulx_hi ty a b))
 
 ;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

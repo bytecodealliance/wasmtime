@@ -6,6 +6,18 @@ inputs:
     description: 'Default toolchan to install'
     required: false
     default: 'default'
+  msrv_range:
+    description: 'Versions later-than-latest-Rust the MSRV supports'
+    required: false
+    # Note that this is currently set to 3 as the MSRV is 1.78 and current
+    # stable is 1.81. Currently MSRV cannot be updated as it would break the
+    # build on OSS-Fuzz which hasn't updated its Rust compiler in quite some time.
+    #
+    # Updating OSS-Fuzz is being done in
+    # https://github.com/google/oss-fuzz/pull/12365 but it's taking some time,
+    # so for now this'll get bumped instead of MSRV while we wait for the update
+    # to happen.
+    default: '3'
 
 runs:
   using: composite
@@ -17,13 +29,14 @@ runs:
         # Determine MSRV as N in `1.N.0` by looking at the `rust-version`
         # located in the root `Cargo.toml`.
         msrv=$(grep 'rust-version.*1' Cargo.toml | sed 's/.*\.\([0-9]*\)\..*/\1/')
+        range=${{ inputs.msrv_range }}
 
         if [ "${{ inputs.toolchain }}" = "default" ]; then
-          echo "version=1.$((msrv+2)).0" >> "$GITHUB_OUTPUT"
+          echo "version=1.$((msrv+range)).0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
           echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-pinned-nightly" ]; then
-          echo "version=nightly-2024-09-03" >> "$GITHUB_OUTPUT"
+          echo "version=nightly-2024-09-05" >> "$GITHUB_OUTPUT"
         else
           echo "version=${{ inputs.toolchain }}" >> "$GITHUB_OUTPUT"
         fi

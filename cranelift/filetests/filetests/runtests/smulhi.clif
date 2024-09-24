@@ -2,6 +2,8 @@ test interpret
 test run
 target aarch64
 target s390x
+target x86_64
+target x86_64 has_bmi2
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 target riscv64

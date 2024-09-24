@@ -29,12 +29,11 @@
 ;;       stg     %r1, 0(%r15)
 ;;       lg      %r7, 0x68(%r2)
 ;;       clgr    %r4, %r7
-;;       jghe    0x4a
+;;       jghe    0x34
 ;;       lg      %r3, 0x60(%r2)
 ;;       stc     %r5, 0(%r4, %r3)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
-;;       .byte   0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
 ;;       lg      %r1, 8(%r2)
@@ -47,9 +46,8 @@
 ;;       stg     %r1, 0(%r15)
 ;;       lg      %r7, 0x68(%r2)
 ;;       clgr    %r4, %r7
-;;       jghe    0x98
+;;       jghe    0x80
 ;;       lg      %r3, 0x60(%r2)
 ;;       llc     %r2, 0(%r4, %r3)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
-;;       .byte   0x00, 0x00

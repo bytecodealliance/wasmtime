@@ -74,7 +74,7 @@
 mod bounds_checks;
 
 use super::{hash_map, HashMap};
-use crate::environ::{FuncEnvironment, GlobalVariable};
+use crate::environ::{FuncEnvironment, GlobalVariable, StructFieldsVec};
 use crate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
@@ -245,7 +245,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // We do nothing
         }
         Operator::Unreachable => {
-            builder.ins().trap(ir::TrapCode::UnreachableCodeReached);
+            environ.trap(builder, ir::TrapCode::UnreachableCodeReached);
             state.reachable = false;
         }
         /***************************** Control flow blocks **********************************
@@ -1016,19 +1016,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I64TruncF64S | Operator::I64TruncF32S => {
             let val = state.pop1();
-            state.push1(builder.ins().fcvt_to_sint(I64, val));
+            state.push1(environ.translate_fcvt_to_sint(builder, I64, val));
         }
         Operator::I32TruncF64S | Operator::I32TruncF32S => {
             let val = state.pop1();
-            state.push1(builder.ins().fcvt_to_sint(I32, val));
+            state.push1(environ.translate_fcvt_to_sint(builder, I32, val));
         }
         Operator::I64TruncF64U | Operator::I64TruncF32U => {
             let val = state.pop1();
-            state.push1(builder.ins().fcvt_to_uint(I64, val));
+            state.push1(environ.translate_fcvt_to_uint(builder, I64, val));
         }
         Operator::I32TruncF64U | Operator::I32TruncF32U => {
             let val = state.pop1();
-            state.push1(builder.ins().fcvt_to_uint(I32, val));
+            state.push1(environ.translate_fcvt_to_uint(builder, I32, val));
         }
         Operator::I64TruncSatF64S | Operator::I64TruncSatF32S => {
             let val = state.pop1();
@@ -1155,19 +1155,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I32DivS | Operator::I64DivS => {
             let (arg1, arg2) = state.pop2();
-            state.push1(builder.ins().sdiv(arg1, arg2));
+            state.push1(environ.translate_sdiv(builder, arg1, arg2));
         }
         Operator::I32DivU | Operator::I64DivU => {
             let (arg1, arg2) = state.pop2();
-            state.push1(builder.ins().udiv(arg1, arg2));
+            state.push1(environ.translate_udiv(builder, arg1, arg2));
         }
         Operator::I32RemS | Operator::I64RemS => {
             let (arg1, arg2) = state.pop2();
-            state.push1(builder.ins().srem(arg1, arg2));
+            state.push1(environ.translate_srem(builder, arg1, arg2));
         }
         Operator::I32RemU | Operator::I64RemU => {
             let (arg1, arg2) = state.pop2();
-            state.push1(builder.ins().urem(arg1, arg2));
+            state.push1(environ.translate_urem(builder, arg1, arg2));
         }
         Operator::F32Min | Operator::F64Min => {
             let (arg1, arg2) = state.pop2();
@@ -1255,9 +1255,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             } else {
                 let index_type = environ.heaps()[heap].index_type;
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
-                builder
-                    .ins()
-                    .uadd_overflow_trap(addr, offset, ir::TrapCode::HeapOutOfBounds)
+                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HeapOutOfBounds)
             };
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
@@ -1281,9 +1279,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             } else {
                 let index_type = environ.heaps()[heap].index_type;
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
-                builder
-                    .ins()
-                    .uadd_overflow_trap(addr, offset, ir::TrapCode::HeapOutOfBounds)
+                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HeapOutOfBounds)
             };
             let res = environ.translate_atomic_notify(
                 builder.cursor(),
@@ -2485,7 +2481,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefAsNonNull => {
             let r = state.pop1();
             let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
-            builder.ins().trapnz(is_null, ir::TrapCode::NullReference);
+            environ.trapnz(builder, is_null, ir::TrapCode::NullReference);
             state.push1(r);
         }
 
@@ -2496,12 +2492,88 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I31GetS => {
             let i31ref = state.pop1();
-            let val = environ.translate_i31_get_s(builder.cursor(), i31ref)?;
+            let val = environ.translate_i31_get_s(builder, i31ref)?;
             state.push1(val);
         }
         Operator::I31GetU => {
             let i31ref = state.pop1();
-            let val = environ.translate_i31_get_u(builder.cursor(), i31ref)?;
+            let val = environ.translate_i31_get_u(builder, i31ref)?;
+            state.push1(val);
+        }
+
+        Operator::StructNew { struct_type_index } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let arity = environ.struct_fields_len(struct_type_index)?;
+            let fields: StructFieldsVec = state.peekn(arity).iter().copied().collect();
+            state.popn(arity);
+            let struct_ref = environ.translate_struct_new(builder, struct_type_index, fields)?;
+            state.push1(struct_ref);
+        }
+
+        Operator::StructNewDefault { struct_type_index } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = environ.translate_struct_new_default(builder, struct_type_index)?;
+            state.push1(struct_ref);
+        }
+
+        Operator::StructSet {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let val = state.pop1();
+            let struct_ref = state.pop1();
+            environ.translate_struct_set(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+                val,
+            )?;
+        }
+
+        Operator::StructGetS {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = state.pop1();
+            let val = environ.translate_struct_get_s(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+            )?;
+            state.push1(val);
+        }
+
+        Operator::StructGetU {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = state.pop1();
+            let val = environ.translate_struct_get_u(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+            )?;
+            state.push1(val);
+        }
+
+        Operator::StructGet {
+            struct_type_index,
+            field_index,
+        } => {
+            let struct_type_index = TypeIndex::from_u32(*struct_type_index);
+            let struct_ref = state.pop1();
+            let val = environ.translate_struct_get(
+                builder,
+                struct_type_index,
+                *field_index,
+                struct_ref,
+            )?;
             state.push1(val);
         }
 
@@ -2533,13 +2605,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::ArrayFill { .. }
         | Operator::ArrayCopy { .. }
         | Operator::ArrayInitData { .. }
-        | Operator::ArrayInitElem { .. }
-        | Operator::StructNew { .. }
-        | Operator::StructNewDefault { .. }
-        | Operator::StructGetS { .. }
-        | Operator::StructGetU { .. }
-        | Operator::StructSet { .. }
-        | Operator::StructGet { .. } => {
+        | Operator::ArrayInitElem { .. } => {
             return Err(wasm_unsupported!("GC operators are not yet implemented"));
         }
 
@@ -2863,9 +2929,7 @@ where
         Err(_) => {
             let offset = builder.ins().iconst(heap.index_type, memarg.offset as i64);
             let adjusted_index =
-                builder
-                    .ins()
-                    .uadd_overflow_trap(index, offset, ir::TrapCode::HeapOutOfBounds);
+                environ.uadd_overflow_trap(builder, index, offset, ir::TrapCode::HeapOutOfBounds);
             bounds_checks::bounds_check_and_compute_addr(
                 builder,
                 environ,
@@ -2902,11 +2966,12 @@ where
     Ok(Reachability::Reachable((flags, index, addr)))
 }
 
-fn align_atomic_addr(
+fn align_atomic_addr<FE: FuncEnvironment + ?Sized>(
     memarg: &MemArg,
     loaded_bytes: u8,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
+    environ: &mut FE,
 ) {
     // Atomic addresses must all be aligned correctly, and for now we check
     // alignment before we check out-of-bounds-ness. The order of this check may
@@ -2933,7 +2998,7 @@ fn align_atomic_addr(
             .ins()
             .band_imm(effective_addr, i64::from(loaded_bytes - 1));
         let f = builder.ins().icmp_imm(IntCC::NotEqual, misalignment, 0);
-        builder.ins().trapnz(f, ir::TrapCode::HeapMisaligned);
+        environ.trapnz(builder, f, ir::TrapCode::HeapMisaligned);
     }
 }
 
@@ -2947,7 +3012,7 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
-    align_atomic_addr(memarg, loaded_bytes, builder, state);
+    align_atomic_addr(memarg, loaded_bytes, builder, state, environ);
     prepare_addr(memarg, loaded_bytes, builder, state, environ)
 }
 

@@ -13,7 +13,7 @@ block0:
 ;   ret
 ;
 ; Disassembled:
-;        0: 0f 00 ff 00                     xconst16 x0, 255
+;        0: 15 00 ff 00                     xconst16 x0, 255
 ;        4: 00                              ret
 
 function %i16() -> i16 {
@@ -28,7 +28,7 @@ block0:
 ;   ret
 ;
 ; Disassembled:
-;        0: 10 00 ff ff 00 00               xconst32 x0, 65535
+;        0: 16 00 ff ff 00 00               xconst32 x0, 65535
 ;        6: 00                              ret
 
 function %i32() -> i32 {
@@ -43,7 +43,7 @@ block0:
 ;   ret
 ;
 ; Disassembled:
-;        0: 10 00 ff ff ff ff               xconst32 x0, -1
+;        0: 16 00 ff ff ff ff               xconst32 x0, -1
 ;        6: 00                              ret
 
 function %i64() -> i64 {
@@ -58,6 +58,6 @@ block0:
 ;   ret
 ;
 ; Disassembled:
-;        0: 11 00 ff ff ff ff ff ff ff ff   xconst64 x0, -1
+;        0: 17 00 ff ff ff ff ff ff ff ff   xconst64 x0, -1
 ;        a: 00                              ret
 

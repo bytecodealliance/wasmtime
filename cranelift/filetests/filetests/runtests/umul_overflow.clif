@@ -1,6 +1,7 @@
 test interpret
 test run
 target x86_64
+target x86_64 has_bmi2
 target aarch64
 
 function %umulof_i64(i64, i64) -> i64, i8 {

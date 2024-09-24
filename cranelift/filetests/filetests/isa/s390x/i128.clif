@@ -1,0 +1,154 @@
+test compile precise-output
+set opt_level=speed
+target s390x
+
+function %mul_uextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   lgr %r5, %r2
+;   mlgr %r2, %r4
+;   vlvgp %v7, %r2, %r3
+;   lgr %r2, %r5
+;   vst %v7, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgr %r5, %r2
+;   mlgr %r2, %r4
+;   vlvgp %v7, %r2, %r3
+;   lgr %r2, %r5
+;   vst %v7, 0(%r2)
+;   br %r14
+
+function %mul_sextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   lgr %r5, %r2
+;   mgrk %r2, %r3, %r4
+;   vlvgp %v7, %r2, %r3
+;   lgr %r2, %r5
+;   vst %v7, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgr %r5, %r2
+;   mgrk %r2, %r3, %r4
+;   vlvgp %v7, %r2, %r3
+;   lgr %r2, %r5
+;   vst %v7, 0(%r2)
+;   br %r14
+
+function %smul_high_i64_pattern(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    v5 = sshr_imm v4, 64
+    v6 = ireduce.i64 v5
+    return v6
+}
+
+; VCode:
+; block0:
+;   mgrk %r2, %r2, %r3
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mgrk %r2, %r2, %r3
+;   br %r14
+
+function %smul_high_i64_isplit(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    v5, v6 = isplit v4
+    return v6
+}
+
+; VCode:
+; block0:
+;   mgrk %r2, %r2, %r3
+;   vlvgp %v16, %r2, %r3
+;   vlgvg %r2, %v16, 0
+;   vlgvg %r5, %v16, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mgrk %r2, %r2, %r3
+;   vlvgp %v16, %r2, %r3
+;   vlgvg %r2, %v16, 0
+;   vlgvg %r5, %v16, 1
+;   br %r14
+
+function %umul_high_i64_pattern(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    v5 = ushr_imm v4, 64
+    v6 = ireduce.i64 v5
+    return v6
+}
+
+; VCode:
+; block0:
+;   lgr %r4, %r3
+;   lgr %r3, %r2
+;   mlgr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgr %r4, %r3
+;   lgr %r3, %r2
+;   mlgr %r2, %r4
+;   br %r14
+
+function %umul_high_i64_isplit(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    v5, v6 = isplit v4
+    return v6
+}
+
+; VCode:
+; block0:
+;   lgr %r4, %r3
+;   lgr %r3, %r2
+;   mlgr %r2, %r4
+;   vlvgp %v16, %r2, %r3
+;   vlgvg %r2, %v16, 0
+;   vlgvg %r5, %v16, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgr %r4, %r3
+;   lgr %r3, %r2
+;   mlgr %r2, %r4
+;   vlvgp %v16, %r2, %r3
+;   vlgvg %r2, %v16, 0
+;   vlgvg %r5, %v16, 1
+;   br %r14
+

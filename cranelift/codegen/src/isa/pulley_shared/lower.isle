@@ -59,6 +59,60 @@
 (rule (lower (trap code))
       (side_effect (pulley_trap code)))
 
+;;;; Rules for `trapz` and `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trapz a @ (value_type (fits_in_64 ty)) code))
+      (let ((zero Reg (pulley_xconst8 0)))
+        (side_effect (pulley_trap_if (IntCC.Equal)
+                                     (ty_to_operand_size ty)
+                                     a
+                                     zero
+                                     code))))
+
+(rule (lower (trapnz a @ (value_type (fits_in_64 ty)) code))
+      (let ((zero Reg (pulley_xconst8 0)))
+        (side_effect (pulley_trap_if (IntCC.NotEqual)
+                                     (ty_to_operand_size ty)
+                                     a
+                                     zero
+                                     code))))
+
+;; Fold `(trap[n]z (icmp ...))` together.
+
+(rule 1 (lower (trapz (icmp cc a b @ (value_type (fits_in_64 ty))) code))
+      (side_effect (pulley_trap_if (intcc_complement cc)
+                                   (ty_to_operand_size ty)
+                                   a
+                                   b
+                                   code)))
+
+(rule 1 (lower (trapnz (icmp cc a b @ (value_type (fits_in_64 ty))) code))
+      (side_effect (pulley_trap_if cc
+                                   (ty_to_operand_size ty)
+                                   a
+                                   b
+                                   code)))
+
+;; Fold `(trap[n]z (iconst ...))` together.
+
+(rule 2 (lower (trapz (iconst (u64_from_imm64 (u64_nonzero _))) code))
+      (output_none))
+
+(rule 2 (lower (trapnz (iconst (u64_from_imm64 0)) code))
+      (output_none))
+
+;; TODO: These rules are disabled because they insert a block terminator into
+;; the middle of the current block, which leads to regalloc errors. We should
+;; ideally be able to lower conditional traps that will always trap into
+;; unconditional traps though. This isn't very high priority though because
+;; traps, pretty much by definition, are not hot paths.
+;;
+;; (rule 3 (lower (trapnz (iconst (u64_from_imm64 (u64_nonzero _))) code))
+;;       (side_effect (pulley_trap code)))
+;;
+;; (rule 3 (lower (trapz (iconst (u64_from_imm64 0)) code))
+;;       (side_effect (pulley_trap code)))
+
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_stack_pointer))

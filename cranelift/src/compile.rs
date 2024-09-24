@@ -98,11 +98,10 @@ fn handle_module(
     for (func, _) in test_file.functions {
         let mut context = Context::new();
         context.func = func;
-        let mut mem = vec![];
 
         // Compile and encode the result to machine code.
         let compiled_code = context
-            .compile_and_emit(isa, &mut mem, &mut Default::default())
+            .compile(isa, &mut Default::default())
             .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
         let code_info = compiled_code.code_info();
 
@@ -129,7 +128,7 @@ fn handle_module(
             print_all(
                 isa,
                 &context.func,
-                &mem,
+                context.compiled_code().unwrap().code_buffer(),
                 code_info.total_size,
                 options.print,
                 result.buffer.relocs(),

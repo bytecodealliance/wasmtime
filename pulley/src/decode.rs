@@ -1,5 +1,7 @@
 //! Decoding support for pulley bytecode.
 
+use core::ptr::NonNull;
+
 use alloc::vec::Vec;
 use cranelift_bitset::scalar::ScalarBitSetStorage;
 use cranelift_bitset::ScalarBitSet;
@@ -147,13 +149,13 @@ impl<'a> SafeBytecodeStream<'a> {
 
 impl BytecodeStream for SafeBytecodeStream<'_> {
     fn read<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {
-        let bytes = *self
+        let (bytes, rest) = self
             .bytecode
-            .first_chunk::<N>()
+            .split_first_chunk()
             .ok_or_else(|| self.unexpected_eof())?;
-        self.bytecode = &self.bytecode[N..];
+        self.bytecode = rest;
         self.position += N;
-        Ok(bytes)
+        Ok(*bytes)
     }
 
     type Error = DecodingError;
@@ -194,7 +196,7 @@ pub enum Uninhabited {}
 ///
 /// This is a wrapper over a raw pointer to bytecode somewhere in memory.
 #[derive(Clone, Copy, Debug)]
-pub struct UnsafeBytecodeStream(*mut u8);
+pub struct UnsafeBytecodeStream(NonNull<u8>);
 
 impl UnsafeBytecodeStream {
     /// Construct a new `UnsafeBytecodeStream` pointing at the given PC.
@@ -208,8 +210,7 @@ impl UnsafeBytecodeStream {
     /// new PC, this stream must not be used to read just after the
     /// unconditional jump instruction because there is no guarantee that that
     /// memory is part of the bytecode stream or not.
-    pub unsafe fn new(pc: *mut u8) -> Self {
-        assert!(!pc.is_null());
+    pub unsafe fn new(pc: NonNull<u8>) -> Self {
         UnsafeBytecodeStream(pc)
     }
 
@@ -222,20 +223,19 @@ impl UnsafeBytecodeStream {
     /// that the address at `self._as_ptr() + offset` contains valid Pulley
     /// bytecode.
     pub unsafe fn offset(&self, offset: isize) -> Self {
-        UnsafeBytecodeStream(self.0.offset(offset))
+        UnsafeBytecodeStream(NonNull::new_unchecked(self.0.as_ptr().offset(offset)))
     }
 
     /// Get this stream's underlying raw pointer.
-    pub fn as_ptr(&self) -> *mut u8 {
+    pub fn as_ptr(&self) -> NonNull<u8> {
         self.0
     }
 }
 
 impl BytecodeStream for UnsafeBytecodeStream {
     fn read<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {
-        debug_assert!(!self.0.is_null());
-        let bytes = unsafe { self.0.cast::<[u8; N]>().read() };
-        self.0 = unsafe { self.0.add(N) };
+        let bytes = unsafe { self.0.cast::<[u8; N]>().as_ptr().read() };
+        self.0 = unsafe { NonNull::new_unchecked(self.0.as_ptr().add(N)) };
         Ok(bytes)
     }
 

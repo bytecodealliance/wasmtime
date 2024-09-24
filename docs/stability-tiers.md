@@ -71,7 +71,6 @@ For explanations of what each tier means see below.
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
-| Compiler Backend     | Winch on x86\_64           | Consenus on moving to Tier 1 |
 | WebAssembly Proposal | [`memory64`]               | Unstable wasm proposal      |
 | WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
 
@@ -92,7 +91,8 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-linux-android`           | CI testing, full-time maintainer |
 | Target               | `x86_64-linux-android`            | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
-| Compiler Backend     | Winch on aarch64                  | finished implementation     |
+| Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
+| Compiler Backend     | Winch on aarch64                  | Complete implementation     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |

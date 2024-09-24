@@ -682,6 +682,42 @@ pub(crate) fn emit(
             emit_simm(sink, imm_size, *src2 as u32);
         }
 
+        Inst::MulX {
+            size,
+            src1,
+            src2,
+            dst_lo,
+            dst_hi,
+        } => {
+            let src1 = src1.to_reg();
+            let dst_lo = dst_lo.to_reg().to_reg();
+            let dst_hi = dst_hi.to_reg().to_reg();
+            debug_assert_eq!(src1, regs::rdx());
+            let src2 = match src2.clone().to_reg_mem().clone() {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let dst_hi = dst_hi.to_real_reg().unwrap().hw_enc();
+            let dst_lo = if dst_lo.is_invalid_sentinel() {
+                dst_hi
+            } else {
+                dst_lo.to_real_reg().unwrap().hw_enc()
+            };
+
+            VexInstruction::new()
+                .prefix(LegacyPrefixes::_F2)
+                .map(OpcodeMap::_0F38)
+                .w(*size == OperandSize::Size64)
+                .opcode(0xf6)
+                .reg(dst_hi)
+                .vvvv(dst_lo)
+                .rm(src2)
+                .encode(sink);
+        }
+
         Inst::SignExtendData { size, src, dst } => {
             let src = src.to_reg();
             let dst = dst.to_reg().to_reg();

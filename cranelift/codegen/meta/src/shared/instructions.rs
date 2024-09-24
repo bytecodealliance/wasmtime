@@ -2008,18 +2008,12 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "iadd_cin",
+            "sadd_overflow_cin",
             r#"
-        Add integers with carry in.
+        Add signed integers with carry in and overflow out.
 
-        Same as `iadd` with an additional carry input. Computes:
-
-        ```text
-            a = x + y + c_{in} \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
+        Same as `sadd_overflow` with an additional carry input. The `c_in` type
+        is interpreted as 1 if it's nonzero or 0 if it's zero.
         "#,
             &formats.ternary,
         )
@@ -2028,24 +2022,20 @@ pub(crate) fn define(
             Operand::new("y", iB),
             Operand::new("c_in", i8).with_doc("Input carry flag"),
         ])
-        .operands_out(vec![Operand::new("a", iB)]),
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("c_out", i8).with_doc("Output carry flag"),
+        ]),
     );
 
     ig.push(
         Inst::new(
-            "iadd_carry",
+            "uadd_overflow_cin",
             r#"
-        Add integers with carry in and out.
+        Add unsigned integers with carry in and overflow out.
 
-        Same as `iadd` with an additional carry input and output.
-
-        ```text
-            a &= x + y + c_{in} \pmod 2^B \\
-            c_{out} &= x + y + c_{in} >= 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
+        Same as `uadd_overflow` with an additional carry input. The `c_in` type
+        is interpreted as 1 if it's nonzero or 0 if it's zero.
         "#,
             &formats.ternary,
         )
@@ -2207,18 +2197,13 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "isub_bin",
+            "ssub_overflow_bin",
             r#"
-        Subtract integers with borrow in.
+        Subtract signed integers with borrow in and overflow out.
 
-        Same as `isub` with an additional borrow flag input. Computes:
-
-        ```text
-            a = x - (y + b_{in}) \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
+        Same as `ssub_overflow` with an additional borrow input. The `b_in` type
+        is interpreted as 1 if it's nonzero or 0 if it's zero. The computation
+        performed here is `x - (y + (b_in != 0))`.
         "#,
             &formats.ternary,
         )
@@ -2227,24 +2212,21 @@ pub(crate) fn define(
             Operand::new("y", iB),
             Operand::new("b_in", i8).with_doc("Input borrow flag"),
         ])
-        .operands_out(vec![Operand::new("a", iB)]),
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("b_out", i8).with_doc("Output borrow flag"),
+        ]),
     );
 
     ig.push(
         Inst::new(
-            "isub_borrow",
+            "usub_overflow_bin",
             r#"
-        Subtract integers with borrow in and out.
+        Subtract unsigned integers with borrow in and overflow out.
 
-        Same as `isub` with an additional borrow flag input and output.
-
-        ```text
-            a &= x - (y + b_{in}) \pmod 2^B \\
-            b_{out} &= x < y + b_{in}
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
+        Same as `usub_overflow` with an additional borrow input. The `b_in` type
+        is interpreted as 1 if it's nonzero or 0 if it's zero. The computation
+        performed here is `x - (y + (b_in != 0))`.
         "#,
             &formats.ternary,
         )

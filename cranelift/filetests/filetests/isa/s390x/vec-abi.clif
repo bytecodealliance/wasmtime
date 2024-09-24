@@ -50,7 +50,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   br %r14
 
 function %caller_be_to_le(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 {
-    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v
+    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 tail
 
 block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16x8, v7: i8x16, v8: i64x2, v9: i32x4, v10: i16x8, v11: i8x16):
     v12 = call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11)
@@ -58,30 +58,31 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 }
 
 ; VCode:
-;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -288
-;   std %f8, 224(%r15)
-;   std %f9, 232(%r15)
-;   std %f10, 240(%r15)
-;   std %f11, 248(%r15)
-;   std %f12, 256(%r15)
-;   std %f13, 264(%r15)
-;   std %f14, 272(%r15)
-;   std %f15, 280(%r15)
+;   stmg %r6, %r15, 48(%r15)
+;   aghi %r15, -224
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
 ; block0:
-;   vl %v17, 448(%r15)
-;   vl %v19, 464(%r15)
-;   vl %v21, 480(%r15)
-;   vl %v23, 496(%r15)
+;   vl %v17, 384(%r15)
+;   vl %v19, 400(%r15)
+;   vl %v21, 416(%r15)
+;   vl %v23, 432(%r15)
+;   aghi %r15, -224
 ;   vpdi %v24, %v24, %v24, 4
 ;   vpdi %v0, %v25, %v25, 4
 ;   verllg %v25, %v0, 32
 ;   vpdi %v0, %v26, %v26, 4
-;   verllg %v1, %v0, 32
-;   verllf %v26, %v1, 16
-;   vpdi %v5, %v27, %v27, 4
-;   verllg %v7, %v5, 32
-;   verllf %v18, %v7, 16
+;   verllg %v2, %v0, 32
+;   verllf %v26, %v2, 16
+;   vpdi %v6, %v27, %v27, 4
+;   verllg %v16, %v6, 32
+;   verllf %v18, %v16, 16
 ;   verllh %v27, %v18, 8
 ;   vpdi %v28, %v28, %v28, 4
 ;   vpdi %v29, %v29, %v29, 4
@@ -89,65 +90,66 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vpdi %v30, %v30, %v30, 4
 ;   verllg %v30, %v30, 32
 ;   verllf %v30, %v30, 16
-;   vpdi %v1, %v31, %v31, 4
-;   verllg %v3, %v1, 32
-;   verllf %v5, %v3, 16
-;   verllh %v31, %v5, 8
-;   vpdi %v17, %v17, %v17, 4
-;   vst %v17, 160(%r15)
-;   vpdi %v20, %v19, %v19, 4
-;   verllg %v22, %v20, 32
-;   vst %v22, 176(%r15)
+;   vpdi %v2, %v31, %v31, 4
+;   verllg %v4, %v2, 32
+;   verllf %v6, %v4, 16
+;   verllh %v31, %v6, 8
+;   vpdi %v18, %v17, %v17, 4
+;   vst %v18, 160(%r15)
+;   vpdi %v22, %v19, %v19, 4
+;   verllg %v0, %v22, 32
+;   vst %v0, 176(%r15)
 ;   vpdi %v0, %v21, %v21, 4
 ;   verllg %v0, %v0, 32
 ;   verllf %v0, %v0, 16
 ;   vst %v0, 192(%r15)
-;   vpdi %v0, %v23, %v23, 4
-;   verllg %v2, %v0, 32
-;   verllf %v4, %v2, 16
-;   verllh %v6, %v4, 8
-;   vst %v6, 208(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
-;   vpdi %v21, %v24, %v24, 4
-;   verllg %v24, %v21, 32
-;   ld %f8, 224(%r15)
-;   ld %f9, 232(%r15)
-;   ld %f10, 240(%r15)
-;   ld %f11, 248(%r15)
-;   ld %f12, 256(%r15)
-;   ld %f13, 264(%r15)
-;   ld %f14, 272(%r15)
-;   ld %f15, 280(%r15)
-;   lmg %r14, %r15, 400(%r15)
+;   vpdi %v1, %v23, %v23, 4
+;   verllg %v3, %v1, 32
+;   verllf %v5, %v3, 16
+;   verllh %v7, %v5, 8
+;   vst %v7, 208(%r15)
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5 ; callee_pop_size 224
+;   vpdi %v22, %v24, %v24, 4
+;   verllg %v24, %v22, 32
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r6, %r15, 272(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r14, %r15, 0x70(%r15)
-;   aghi %r15, -0x120
-;   std %f8, 0xe0(%r15)
-;   std %f9, 0xe8(%r15)
-;   std %f10, 0xf0(%r15)
-;   std %f11, 0xf8(%r15)
-;   std %f12, 0x100(%r15)
-;   std %f13, 0x108(%r15)
-;   std %f14, 0x110(%r15)
-;   std %f15, 0x118(%r15)
+;   stmg %r6, %r15, 0x30(%r15)
+;   aghi %r15, -0xe0
+;   std %f8, 0xa0(%r15)
+;   std %f9, 0xa8(%r15)
+;   std %f10, 0xb0(%r15)
+;   std %f11, 0xb8(%r15)
+;   std %f12, 0xc0(%r15)
+;   std %f13, 0xc8(%r15)
+;   std %f14, 0xd0(%r15)
+;   std %f15, 0xd8(%r15)
 ; block1: ; offset 0x2a
-;   vl %v17, 0x1c0(%r15)
-;   vl %v19, 0x1d0(%r15)
-;   vl %v21, 0x1e0(%r15)
-;   vl %v23, 0x1f0(%r15)
+;   vl %v17, 0x180(%r15)
+;   vl %v19, 0x190(%r15)
+;   vl %v21, 0x1a0(%r15)
+;   vl %v23, 0x1b0(%r15)
+;   aghi %r15, -0xe0
 ;   vpdi %v24, %v24, %v24, 4
 ;   vpdi %v0, %v25, %v25, 4
 ;   verllg %v25, %v0, 0x20
 ;   vpdi %v0, %v26, %v26, 4
-;   verllg %v1, %v0, 0x20
-;   verllf %v26, %v1, 0x10
-;   vpdi %v5, %v27, %v27, 4
-;   verllg %v7, %v5, 0x20
-;   verllf %v18, %v7, 0x10
+;   verllg %v2, %v0, 0x20
+;   verllf %v26, %v2, 0x10
+;   vpdi %v6, %v27, %v27, 4
+;   verllg %v16, %v6, 0x20
+;   verllf %v18, %v16, 0x10
 ;   verllh %v27, %v18, 8
 ;   vpdi %v28, %v28, %v28, 4
 ;   vpdi %v29, %v29, %v29, 4
@@ -155,45 +157,45 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vpdi %v30, %v30, %v30, 4
 ;   verllg %v30, %v30, 0x20
 ;   verllf %v30, %v30, 0x10
-;   vpdi %v1, %v31, %v31, 4
-;   verllg %v3, %v1, 0x20
-;   verllf %v5, %v3, 0x10
-;   verllh %v31, %v5, 8
-;   vpdi %v17, %v17, %v17, 4
-;   vst %v17, 0xa0(%r15)
-;   vpdi %v20, %v19, %v19, 4
-;   verllg %v22, %v20, 0x20
-;   vst %v22, 0xb0(%r15)
+;   vpdi %v2, %v31, %v31, 4
+;   verllg %v4, %v2, 0x20
+;   verllf %v6, %v4, 0x10
+;   verllh %v31, %v6, 8
+;   vpdi %v18, %v17, %v17, 4
+;   vst %v18, 0xa0(%r15)
+;   vpdi %v22, %v19, %v19, 4
+;   verllg %v0, %v22, 0x20
+;   vst %v0, 0xb0(%r15)
 ;   vpdi %v0, %v21, %v21, 4
 ;   verllg %v0, %v0, 0x20
 ;   verllf %v0, %v0, 0x10
 ;   vst %v0, 0xc0(%r15)
-;   vpdi %v0, %v23, %v23, 4
-;   verllg %v2, %v0, 0x20
-;   verllf %v4, %v2, 0x10
-;   verllh %v6, %v4, 8
-;   vst %v6, 0xd0(%r15)
-;   bras %r1, 0x11a
+;   vpdi %v1, %v23, %v23, 4
+;   verllg %v3, %v1, 0x20
+;   verllf %v5, %v3, 0x10
+;   verllh %v7, %v5, 8
+;   vst %v7, 0xd0(%r15)
+;   bras %r1, 0x11e
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
-;   basr %r14, %r4
-;   vpdi %v21, %v24, %v24, 4
-;   verllg %v24, %v21, 0x20
-;   ld %f8, 0xe0(%r15)
-;   ld %f9, 0xe8(%r15)
-;   ld %f10, 0xf0(%r15)
-;   ld %f11, 0xf8(%r15)
-;   ld %f12, 0x100(%r15)
-;   ld %f13, 0x108(%r15)
-;   ld %f14, 0x110(%r15)
-;   ld %f15, 0x118(%r15)
-;   lmg %r14, %r15, 0x190(%r15)
+;   lg %r5, 0(%r1)
+;   basr %r14, %r5
+;   vpdi %v22, %v24, %v24, 4
+;   verllg %v24, %v22, 0x20
+;   ld %f8, 0xa0(%r15)
+;   ld %f9, 0xa8(%r15)
+;   ld %f10, 0xb0(%r15)
+;   ld %f11, 0xb8(%r15)
+;   ld %f12, 0xc0(%r15)
+;   ld %f13, 0xc8(%r15)
+;   ld %f14, 0xd0(%r15)
+;   ld %f15, 0xd8(%r15)
+;   lmg %r6, %r15, 0x110(%r15)
 ;   br %r14
 
-function %caller_le_to_be(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v {
+function %caller_le_to_be(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 tail {
     fn0 = %callee_be(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4
 
 block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16x8, v7: i8x16, v8: i64x2, v9: i32x4, v10: i16x8, v11: i8x16):
@@ -202,7 +204,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 }
 
 ; VCode:
-;   stmg %r14, %r15, 112(%r15)
+;   stmg %r14, %r15, 336(%r15)
 ;   aghi %r15, -288
 ;   std %f8, 224(%r15)
 ;   std %f9, 232(%r15)
@@ -251,8 +253,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   verllf %v4, %v2, 16
 ;   verllh %v6, %v4, 8
 ;   vst %v6, 208(%r15)
-;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r6, 0(%r1)
+;   basr %r14, %r6
 ;   vpdi %v21, %v24, %v24, 4
 ;   verllg %v24, %v21, 32
 ;   ld %f8, 224(%r15)
@@ -263,12 +265,13 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   ld %f13, 264(%r15)
 ;   ld %f14, 272(%r15)
 ;   ld %f15, 280(%r15)
-;   lmg %r14, %r15, 400(%r15)
+;   aghi %r15, 512
+;   lmg %r14, %r14, 112(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r14, %r15, 0x70(%r15)
+;   stmg %r14, %r15, 0x150(%r15)
 ;   aghi %r15, -0x120
 ;   std %f8, 0xe0(%r15)
 ;   std %f9, 0xe8(%r15)
@@ -322,8 +325,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   lg %r6, 0(%r1)
+;   basr %r14, %r6
 ;   vpdi %v21, %v24, %v24, 4
 ;   verllg %v24, %v21, 0x20
 ;   ld %f8, 0xe0(%r15)
@@ -334,11 +337,12 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   ld %f13, 0x108(%r15)
 ;   ld %f14, 0x110(%r15)
 ;   ld %f15, 0x118(%r15)
-;   lmg %r14, %r15, 0x190(%r15)
+;   aghi %r15, 0x200
+;   lmg %r14, %r14, 0x70(%r15)
 ;   br %r14
 
-function %caller_le_to_le(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v {
-    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v
+function %caller_le_to_le(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 tail {
+    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16, i64x2, i32x4, i16x8, i8x16) -> i32x4 tail
 
 block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16x8, v7: i8x16, v8: i64x2, v9: i32x4, v10: i16x8, v11: i8x16):
     v12 = call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11)
@@ -346,42 +350,46 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 }
 
 ; VCode:
-;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -224
+;   stmg %r14, %r15, 336(%r15)
+;   aghi %r15, -160
 ; block0:
-;   vl %v17, 384(%r15)
-;   vl %v19, 400(%r15)
-;   vl %v21, 416(%r15)
-;   vl %v23, 432(%r15)
+;   vl %v17, 320(%r15)
+;   vl %v19, 336(%r15)
+;   vl %v21, 352(%r15)
+;   vl %v23, 368(%r15)
+;   aghi %r15, -224
 ;   vst %v17, 160(%r15)
 ;   vst %v19, 176(%r15)
 ;   vst %v21, 192(%r15)
 ;   vst %v23, 208(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
-;   lmg %r14, %r15, 336(%r15)
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r7, 0(%r1)
+;   basr %r14, %r7 ; callee_pop_size 224
+;   aghi %r15, 384
+;   lmg %r14, %r14, 112(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r14, %r15, 0x70(%r15)
-;   aghi %r15, -0xe0
+;   stmg %r14, %r15, 0x150(%r15)
+;   aghi %r15, -0xa0
 ; block1: ; offset 0xa
-;   vl %v17, 0x180(%r15)
-;   vl %v19, 0x190(%r15)
-;   vl %v21, 0x1a0(%r15)
-;   vl %v23, 0x1b0(%r15)
+;   vl %v17, 0x140(%r15)
+;   vl %v19, 0x150(%r15)
+;   vl %v21, 0x160(%r15)
+;   vl %v23, 0x170(%r15)
+;   aghi %r15, -0xe0
 ;   vst %v17, 0xa0(%r15)
 ;   vst %v19, 0xb0(%r15)
 ;   vst %v21, 0xc0(%r15)
 ;   vst %v23, 0xd0(%r15)
-;   bras %r1, 0x46
+;   bras %r1, 0x4a
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
-;   basr %r14, %r4
-;   lmg %r14, %r15, 0x150(%r15)
+;   lg %r7, 0(%r1)
+;   basr %r14, %r7
+;   aghi %r15, 0x180
+;   lmg %r14, %r14, 0x70(%r15)
 ;   br %r14
 

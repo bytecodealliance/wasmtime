@@ -147,14 +147,14 @@ number, others don't care.
 - i64
 - i128
 
-Of these types, i32 and i64 are the most heavily-tested because of their use by 
-Wasmtime. There are no known bugs in i8, i16, and i128, but their use may not 
-be supported by all instructions in all backends (that is, they may cause 
+Of these types, i32 and i64 are the most heavily-tested because of their use by
+Wasmtime. There are no known bugs in i8, i16, and i128, but their use may not
+be supported by all instructions in all backends (that is, they may cause
 the compiler to crash during code generation with an error that an instruction
-is unsupported). 
+is unsupported).
 
-The function `valid_for_target` within the [fuzzgen function generator][fungen] 
-contains information about which instructions support which types. 
+The function `valid_for_target` within the [fuzzgen function generator][fungen]
+contains information about which instructions support which types.
 
 [fungen]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/fuzzgen/src/function_generator.rs
 
@@ -352,9 +352,7 @@ param        : type [paramext] [paramspecial]
 paramext     : "uext" | "sext"
 paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "stack_limit"
 callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
-             | "wasmtime_system_v" | "wasmtime_fastcall"
-             | "apple_aarch64" | "wasmtime_apple_aarch64"
-             | "probestack"
+             | "apple_aarch64" | "probestack" | "winch"
 ```
 
 A function's calling convention determines exactly how arguments and return

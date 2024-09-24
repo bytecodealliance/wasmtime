@@ -293,19 +293,19 @@ impl<'a> UnwindInfoBuilder<'a> {
             // actually assembled byte-wise here. Instead that's deferred to
             // happen later during `write_windows_unwind_info` which will apply
             // a further offset to `unwind_address`.
+            //
+            // FIXME: in theory we could "intern" the `unwind_info` value
+            // here within the `.xdata` section. Most of our unwind
+            // information for functions is probably pretty similar in which
+            // case the `.xdata` could be quite small and `.pdata` could
+            // have multiple functions point to the same unwinding
+            // information.
             UnwindInfo::WindowsX64(info) => {
                 let unwind_size = info.emit_size();
                 let mut unwind_info = vec![0; unwind_size];
                 info.emit(&mut unwind_info);
 
                 // `.xdata` entries are always 4-byte aligned
-                //
-                // FIXME: in theory we could "intern" the `unwind_info` value
-                // here within the `.xdata` section. Most of our unwind
-                // information for functions is probably pretty similar in which
-                // case the `.xdata` could be quite small and `.pdata` could
-                // have multiple functions point to the same unwinding
-                // information.
                 while self.windows_xdata.len() % 4 != 0 {
                     self.windows_xdata.push(0x00);
                 }
@@ -316,6 +316,58 @@ impl<'a> UnwindInfoBuilder<'a> {
                 self.windows_pdata.push(RUNTIME_FUNCTION {
                     begin: u32::try_from(function_offset).unwrap(),
                     end: u32::try_from(function_offset + function_len).unwrap(),
+                    unwind_address: u32::try_from(unwind_address).unwrap(),
+                });
+            }
+
+            // See https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling
+            UnwindInfo::WindowsArm64(info) => {
+                let code_words = info.code_words();
+                let mut unwind_codes = vec![0; (code_words * 4) as usize];
+                info.emit(&mut unwind_codes);
+
+                // `.xdata` entries are always 4-byte aligned
+                while self.windows_xdata.len() % 4 != 0 {
+                    self.windows_xdata.push(0x00);
+                }
+
+                // First word:
+                // 0-17:    Function Length
+                // 18-19:   Version (must be 0)
+                // 20:      X bit (is exception data present?)
+                // 21:      E bit (has single packed epilogue?)
+                // 22-26:   Epilogue count
+                // 27-31:   Code words count
+                let requires_extended_counts = code_words > (1 << 5);
+                let encoded_function_len = function_len / 4;
+                assert!(encoded_function_len < (1 << 18), "function too large");
+                let mut word1 = encoded_function_len as u32;
+                if !requires_extended_counts {
+                    word1 |= (code_words as u32) << 27;
+                }
+                let unwind_address = self.windows_xdata.len();
+                self.windows_xdata.extend_from_slice(&word1.to_le_bytes());
+
+                if requires_extended_counts {
+                    // Extended counts word:
+                    // 0-15:    Epilogue count
+                    // 16-23:   Code words count
+                    let extended_counts_word = (code_words as u32) << 16;
+                    self.windows_xdata
+                        .extend_from_slice(&extended_counts_word.to_le_bytes());
+                }
+
+                // Skip epilogue information: Per comment on [`UnwindInst`], we
+                // do not emit information about epilogues.
+
+                // Emit the unwind codes.
+                self.windows_xdata.extend_from_slice(&unwind_codes);
+
+                // Record a `RUNTIME_FUNCTION` which this will point to.
+                // NOTE: `end` is not used, so leave it as 0.
+                self.windows_pdata.push(RUNTIME_FUNCTION {
+                    begin: u32::try_from(function_offset).unwrap(),
+                    end: 0,
                     unwind_address: u32::try_from(unwind_address).unwrap(),
                 });
             }
@@ -385,11 +437,6 @@ impl<'a> UnwindInfoBuilder<'a> {
         pdata_id: SectionId,
         text_section_size: u64,
     ) {
-        // Currently the binary format supported here only supports
-        // little-endian for x86_64, or at least that's all where it's tested.
-        // This may need updates for other platforms.
-        assert_eq!(obj.architecture(), Architecture::X86_64);
-
         // Append the `.xdata` section, or the actual unwinding information
         // codes and such which were built as we found unwind information for
         // functions.
@@ -409,14 +456,35 @@ impl<'a> UnwindInfoBuilder<'a> {
         // `xdata` section follows the `.text` section so the
         // `text_section_size` is added in to calculate the final
         // `.text`-section-relative address of the unwind information.
-        let mut pdata = Vec::with_capacity(self.windows_pdata.len() * 3 * 4);
-        for info in self.windows_pdata.iter() {
-            pdata.extend_from_slice(&info.begin.to_le_bytes());
-            pdata.extend_from_slice(&info.end.to_le_bytes());
-            let address = text_section_size + u64::from(info.unwind_address);
-            let address = u32::try_from(address).unwrap();
-            pdata.extend_from_slice(&address.to_le_bytes());
-        }
+        let xdata_rva = |address| {
+            let address = u64::from(address);
+            let address = address + text_section_size;
+            u32::try_from(address).unwrap()
+        };
+        let pdata = match obj.architecture() {
+            Architecture::X86_64 => {
+                let mut pdata = Vec::with_capacity(self.windows_pdata.len() * 3 * 4);
+                for info in self.windows_pdata.iter() {
+                    pdata.extend_from_slice(&info.begin.to_le_bytes());
+                    pdata.extend_from_slice(&info.end.to_le_bytes());
+                    pdata.extend_from_slice(&xdata_rva(info.unwind_address).to_le_bytes());
+                }
+                pdata
+            }
+
+            Architecture::Aarch64 => {
+                // Windows Arm64 .pdata also supports packed unwind data, but
+                // we're not currently using that.
+                let mut pdata = Vec::with_capacity(self.windows_pdata.len() * 2 * 4);
+                for info in self.windows_pdata.iter() {
+                    pdata.extend_from_slice(&info.begin.to_le_bytes());
+                    pdata.extend_from_slice(&xdata_rva(info.unwind_address).to_le_bytes());
+                }
+                pdata
+            }
+
+            _ => unimplemented!("unsupported architecture for windows unwind info"),
+        };
         obj.append_section_data(pdata_id, &pdata, 4);
     }
 

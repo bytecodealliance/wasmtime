@@ -370,7 +370,7 @@ impl Metadata<'_> {
             table_lazy_init,
             relaxed_simd_deterministic,
             winch_callable,
-
+            signals_based_traps,
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
 
@@ -435,6 +435,11 @@ impl Metadata<'_> {
             winch_callable,
             other.winch_callable,
             "Winch calling convention",
+        )?;
+        Self::check_bool(
+            signals_based_traps,
+            other.signals_based_traps,
+            "Signals-based traps",
         )?;
 
         Ok(())

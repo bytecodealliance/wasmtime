@@ -1,5 +1,11 @@
 ;;;; Instruction definition ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(type OperandSize extern (enum Size32 Size64))
+
+(decl ty_to_operand_size (Type) OperandSize)
+(rule (ty_to_operand_size $I32) (OperandSize.Size32))
+(rule (ty_to_operand_size $I64) (OperandSize.Size64))
+
 ;; Note: in the instructions below, we order destination registers first and
 ;; then source registers afterwards.
 (type MInst
@@ -19,6 +25,9 @@
 
     ;; Raise a trap.
     (Trap (code TrapCode))
+
+    ;; Trap if `src1 cond src2`.
+    (TrapIf (cond IntCC) (size OperandSize) (src1 XReg) (src2 XReg) (code TrapCode))
 
     ;; Nothing.
     (Nop)
@@ -353,6 +362,10 @@
 (decl pulley_trap (TrapCode) SideEffectNoResult)
 (rule (pulley_trap code)
       (SideEffectNoResult.Inst (MInst.Trap code)))
+
+(decl pulley_trap_if (IntCC OperandSize XReg XReg TrapCode) SideEffectNoResult)
+(rule (pulley_trap_if cond size src1 src2 code)
+      (SideEffectNoResult.Inst (MInst.TrapIf cond size src1 src2 code)))
 
 (decl pulley_get_sp () XReg)
 (rule (pulley_get_sp)

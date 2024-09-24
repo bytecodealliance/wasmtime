@@ -99,6 +99,21 @@
             (dst_lo WritableGpr)
             (dst_hi WritableGpr))
 
+       ;; Same as `Mul`, but for the BMI2 `mulx` instruction. This is different
+       ;; where the two `dst_*` registers can be arbitrary registers and it
+       ;; is always unsigned multiplication. Note that this instruction does
+       ;; not modify or read flags.
+       ;;
+       ;; Note that `dst_hi` here is always a valid register but `dst_lo`
+       ;; is allowed to be `invalid_reg` to indicate that only the high
+       ;; bits are desired. If `dst_lo` is invalid then the instruction itself
+       ;; will only define `dst_hi`.
+       (MulX (size OperandSize)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst_lo WritableGpr)
+             (dst_hi WritableGpr))
+
        ;; Same as `Mul` but the 16-bit multiplication result is stored in `AX`.
        (Mul8 (signed bool)
              (src1 Gpr)
@@ -2744,6 +2759,26 @@
             (_ Unit (emit (MInst.Mul size signed src1 src2 dst_lo dst_hi))))
         (value_gprs dst_lo dst_hi)))
 
+;; Special case the `mulx` pattern with the BMI2 instruction set.
+(rule 1 (x64_mul (ty_32_or_64 ty) $false src1 src2)
+  (if-let $true (use_bmi2))
+  (let ((dst_lo WritableGpr (temp_writable_gpr))
+        (dst_hi WritableGpr (temp_writable_gpr))
+        (size OperandSize (raw_operand_size_of_type ty))
+        (_ Unit (emit (MInst.MulX size src1 src2 dst_lo dst_hi))))
+    (value_gprs dst_lo dst_hi)))
+
+(decl x64_mulx_hi (Type Gpr GprMem) Gpr)
+(rule (x64_mulx_hi (ty_32_or_64 ty) src1 src2)
+  (let ((dst WritableGpr (temp_writable_gpr))
+        (size OperandSize (raw_operand_size_of_type ty))
+        (_ Unit (emit (MInst.MulX size src1 src2 (writable_invalid_gpr) dst))))
+    dst))
+
+;; Get the invalid register as writable
+(decl writable_invalid_gpr () WritableGpr)
+(extern constructor writable_invalid_gpr writable_invalid_gpr)
+
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
 ;; on `signed`) for 8-bit operands.
 (decl x64_mul8 (bool Gpr GprMem) Gpr)
@@ -4856,6 +4891,30 @@
       (with_flags_side_effect producer (trap_if_and cc1 cc2 tc)))
 (rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
+
+;; Trap if zero/not zero
+(type ZeroCond
+      (enum
+       Zero
+       NonZero))
+
+(decl zero_cond_to_cc (ZeroCond) CC)
+(rule (zero_cond_to_cc (ZeroCond.Zero)) (CC.Z))
+(rule (zero_cond_to_cc (ZeroCond.NonZero)) (CC.NZ))
+
+(decl trap_if_val (ZeroCond Value TrapCode) SideEffectNoResult)
+(rule (trap_if_val zero_cond a @ (value_type (fits_in_64 ty)) tc)
+  (let ((size OperandSize (raw_operand_size_of_type ty))
+        (a Gpr (put_in_reg a))
+        (producer ProducesFlags (x64_test size a a)))
+        (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
+
+(rule 1 (trap_if_val zero_cond a @ (value_type $I128) tc)
+  (let ((a_lo Gpr (value_regs_get_gpr a 0))
+        (a_hi Gpr (value_regs_get_gpr a 1))
+        (a_or Gpr (x64_or $I64 a_hi a_lo))
+        (producer ProducesFlags (x64_test (OperandSize.Size64) a_or a_or)))
+        (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
 
 ;; Helper for creating `movddup` instructions
 (decl x64_movddup (XmmMem) Xmm)

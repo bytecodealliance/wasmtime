@@ -57,7 +57,7 @@ wasmtime_table_type(const wasmtime_context_t *store,
  */
 WASM_API_EXTERN bool wasmtime_table_get(wasmtime_context_t *store,
                                         const wasmtime_table_t *table,
-                                        uint32_t index, wasmtime_val_t *val);
+                                        uint64_t index, wasmtime_val_t *val);
 
 /**
  * \brief Sets a value in a table.
@@ -74,12 +74,12 @@ WASM_API_EXTERN bool wasmtime_table_get(wasmtime_context_t *store,
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_table_set(wasmtime_context_t *store, const wasmtime_table_t *table,
-                   uint32_t index, const wasmtime_val_t *value);
+                   uint64_t index, const wasmtime_val_t *value);
 
 /**
  * \brief Returns the size, in elements, of the specified table
  */
-WASM_API_EXTERN uint32_t wasmtime_table_size(const wasmtime_context_t *store,
+WASM_API_EXTERN uint64_t wasmtime_table_size(const wasmtime_context_t *store,
                                              const wasmtime_table_t *table);
 
 /**
@@ -101,8 +101,8 @@ WASM_API_EXTERN uint32_t wasmtime_table_size(const wasmtime_context_t *store,
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_table_grow(wasmtime_context_t *store, const wasmtime_table_t *table,
-                    uint32_t delta, const wasmtime_val_t *init,
-                    uint32_t *prev_size);
+                    uint64_t delta, const wasmtime_val_t *init,
+                    uint64_t *prev_size);
 
 #ifdef __cplusplus
 } // extern "C"

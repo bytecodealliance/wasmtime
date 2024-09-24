@@ -180,7 +180,8 @@ impl Config {
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map);
+            .generate_address_map(self.wasmtime.generate_address_map)
+            .signals_based_traps(self.wasmtime.signals_based_traps);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -361,20 +362,6 @@ impl Config {
         unsafe { Ok(Module::deserialize_file(engine, &file).unwrap()) }
     }
 
-    /// Winch doesn't support the same set of wasm proposal as Cranelift at
-    /// this time, so if winch is selected be sure to disable wasm proposals
-    /// in `Config` to ensure that Winch can compile the module that
-    /// wasm-smith generates.
-    pub fn disable_unimplemented_winch_proposals(&mut self) {
-        self.module_config.config.simd_enabled = false;
-        self.module_config.config.relaxed_simd_enabled = false;
-        self.module_config.config.gc_enabled = false;
-        self.module_config.config.threads_enabled = false;
-        self.module_config.config.tail_call_enabled = false;
-        self.module_config.config.exceptions_enabled = false;
-        self.module_config.config.reference_types_enabled = false;
-    }
-
     /// Updates this configuration to forcibly enable async support. Only useful
     /// in fuzzers which do async calls.
     pub fn enable_async(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
@@ -400,76 +387,9 @@ impl<'a> Arbitrary<'a> for Config {
             module_config: u.arbitrary()?,
         };
 
-        if let CompilerStrategy::Winch = config.wasmtime.compiler_strategy {
-            config.disable_unimplemented_winch_proposals();
-        }
-
-        // Wasm-smith implements the most up-to-date version of memory64 where
-        // it supports 64-bit tables as well, but Wasmtime doesn't support that
-        // yet, so disable the memory64 proposal in fuzzing for now.
-        config.module_config.config.memory64_enabled = false;
-
-        // If using the pooling allocator, constrain the memory and module configurations
-        // to the module limits.
-        if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {
-            // Forcibly don't use the `CustomUnaligned` memory configuration
-            // with the pooling allocator active.
-            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
-                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
-            }
-
-            let cfg = &mut config.module_config.config;
-            // If the pooling allocator is used, do not allow shared memory to
-            // be created. FIXME: see
-            // https://github.com/bytecodealliance/wasmtime/issues/4244.
-            cfg.threads_enabled = false;
-
-            // Ensure the pooling allocator can support the maximal size of
-            // memory, picking the smaller of the two to win.
-            let min_bytes = cfg
-                .max_memory32_bytes
-                // memory64_bytes is a u128, but since we are taking the min
-                // we can truncate it down to a u64.
-                .min(cfg.max_memory64_bytes.try_into().unwrap_or(u64::MAX));
-            let mut min = min_bytes.min(pooling.max_memory_size as u64);
-            if let MemoryConfig::Normal(cfg) = &config.wasmtime.memory_config {
-                min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
-            }
-            pooling.max_memory_size = min as usize;
-            cfg.max_memory32_bytes = min;
-            cfg.max_memory64_bytes = min as u128;
-
-            // If traps are disallowed then memories must have at least one page
-            // of memory so if we still are only allowing 0 pages of memory then
-            // increase that to one here.
-            if cfg.disallow_traps {
-                if pooling.max_memory_size < (1 << 16) {
-                    pooling.max_memory_size = 1 << 16;
-                    cfg.max_memory32_bytes = 1 << 16;
-                    cfg.max_memory64_bytes = 1 << 16;
-                    if let MemoryConfig::Normal(cfg) = &mut config.wasmtime.memory_config {
-                        match &mut cfg.static_memory_maximum_size {
-                            Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
-                            size @ None => *size = Some(pooling.max_memory_size as u64),
-                        }
-                    }
-                }
-                // .. additionally update tables
-                if pooling.table_elements == 0 {
-                    pooling.table_elements = 1;
-                }
-            }
-
-            // Don't allow too many linear memories per instance since massive
-            // virtual mappings can fail to get allocated.
-            cfg.min_memories = cfg.min_memories.min(10);
-            cfg.max_memories = cfg.max_memories.min(10);
-
-            // Force this pooling allocator to always be able to accommodate the
-            // module that may be generated.
-            pooling.total_memories = cfg.max_memories as u32;
-            pooling.total_tables = cfg.max_tables as u32;
-        }
+        config
+            .wasmtime
+            .update_module_config(&mut config.module_config.config, u)?;
 
         Ok(config)
     }
@@ -507,6 +427,10 @@ pub struct WasmtimeConfig {
     /// Configuration for whether wasm is invoked in an async fashion and how
     /// it's cooperatively time-sliced.
     pub async_config: AsyncConfig,
+
+    /// Whether or not host signal handlers are enabled for this configuration,
+    /// aka whether signal handlers are supported.
+    signals_based_traps: bool,
 }
 
 impl WasmtimeConfig {
@@ -530,6 +454,132 @@ impl WasmtimeConfig {
             // Also use the same memory configuration when using the pooling
             // allocator.
             self.memory_config = other.memory_config.clone();
+        }
+
+        self.make_internally_consistent();
+    }
+
+    /// Updates `config` to be compatible with `self` and the other way around
+    /// too.
+    pub fn update_module_config(
+        &mut self,
+        config: &mut wasm_smith::Config,
+        u: &mut Unstructured<'_>,
+    ) -> arbitrary::Result<()> {
+        // Winch doesn't support the same set of wasm proposal as Cranelift at
+        // this time, so if winch is selected be sure to disable wasm proposals
+        // in `Config` to ensure that Winch can compile the module that
+        // wasm-smith generates.
+        if let CompilerStrategy::Winch = self.compiler_strategy {
+            config.simd_enabled = false;
+            config.relaxed_simd_enabled = false;
+            config.gc_enabled = false;
+            config.threads_enabled = false;
+            config.tail_call_enabled = false;
+            config.exceptions_enabled = false;
+            config.reference_types_enabled = false;
+
+            // Winch requires host trap handlers to be enabled at this time.
+            self.signals_based_traps = true;
+        }
+
+        // If using the pooling allocator, constrain the memory and module configurations
+        // to the module limits.
+        if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.strategy {
+            // Forcibly don't use the `CustomUnaligned` memory configuration
+            // with the pooling allocator active.
+            if let MemoryConfig::CustomUnaligned = self.memory_config {
+                self.memory_config = MemoryConfig::Normal(u.arbitrary()?);
+            }
+
+            // If the pooling allocator is used, do not allow shared memory to
+            // be created. FIXME: see
+            // https://github.com/bytecodealliance/wasmtime/issues/4244.
+            config.threads_enabled = false;
+
+            // Ensure the pooling allocator can support the maximal size of
+            // memory, picking the smaller of the two to win.
+            let min_bytes = config
+                .max_memory32_bytes
+                // memory64_bytes is a u128, but since we are taking the min
+                // we can truncate it down to a u64.
+                .min(config.max_memory64_bytes.try_into().unwrap_or(u64::MAX));
+            let mut min = min_bytes.min(pooling.max_memory_size as u64);
+            if let MemoryConfig::Normal(cfg) = &self.memory_config {
+                min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
+            }
+            pooling.max_memory_size = min as usize;
+            config.max_memory32_bytes = min;
+            config.max_memory64_bytes = min as u128;
+
+            // If traps are disallowed then memories must have at least one page
+            // of memory so if we still are only allowing 0 pages of memory then
+            // increase that to one here.
+            if config.disallow_traps {
+                if pooling.max_memory_size < (1 << 16) {
+                    pooling.max_memory_size = 1 << 16;
+                    config.max_memory32_bytes = 1 << 16;
+                    config.max_memory64_bytes = 1 << 16;
+                    if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
+                        match &mut cfg.static_memory_maximum_size {
+                            Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                            size @ None => *size = Some(pooling.max_memory_size as u64),
+                        }
+                    }
+                }
+                // .. additionally update tables
+                if pooling.table_elements == 0 {
+                    pooling.table_elements = 1;
+                }
+            }
+
+            // Don't allow too many linear memories per instance since massive
+            // virtual mappings can fail to get allocated.
+            config.min_memories = config.min_memories.min(10);
+            config.max_memories = config.max_memories.min(10);
+
+            // Force this pooling allocator to always be able to accommodate the
+            // module that may be generated.
+            pooling.total_memories = config.max_memories as u32;
+            pooling.total_tables = config.max_tables as u32;
+        }
+
+        if !self.signals_based_traps {
+            // At this time shared memories require a "static" memory
+            // configuration but when signals-based traps are disabled all
+            // memories are forced to the "dynamic" configuration. This is
+            // fixable with some more work on the bounds-checks side of things
+            // to do a full bounds check even on static memories, but that's
+            // left for a future PR.
+            config.threads_enabled = false;
+
+            // Spectre-based heap mitigations require signal handlers so this
+            // must always be disabled if signals-based traps are disabled.
+            if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
+                cfg.cranelift_enable_heap_access_spectre_mitigations = None;
+            }
+        }
+
+        self.make_internally_consistent();
+
+        Ok(())
+    }
+
+    /// Helper method to handle some dependencies between various configuration
+    /// options. This is intended to be called whenever a `Config` is created or
+    /// modified to ensure that the final result is an instantiable `Config`.
+    ///
+    /// Note that in general this probably shouldn't exist and anything here can
+    /// be considered a "TODO" to go implement more stuff in Wasmtime to accept
+    /// these sorts of configurations. For now though it's intended to reflect
+    /// the current state of the engine's development.
+    fn make_internally_consistent(&mut self) {
+        if !self.signals_based_traps {
+            // Spectre-based heap mitigations require signal handlers so this
+            // must always be disabled if signals-based traps are disabled.
+            if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
+                cfg.cranelift_enable_heap_access_spectre_mitigations = None;
+            }
         }
     }
 }

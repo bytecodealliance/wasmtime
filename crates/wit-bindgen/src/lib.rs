@@ -125,6 +125,10 @@ pub struct Opts {
     /// Whether or not to emit `tracing` macro calls on function entry/exit.
     pub tracing: bool,
 
+    /// Whether or not `tracing` macro calls should included argument and
+    /// return values which contain dynamically-sized `list` values.
+    pub verbose_tracing: bool,
+
     /// Whether or not to use async rust functions and traits.
     pub async_: AsyncConfig,
 
@@ -2534,16 +2538,13 @@ impl<'a> InterfaceGenerator<'a> {
             self.src.push_str(", ");
         }
         self.src.push_str(") |");
-        if self.gen.opts.async_.is_import_async(&func.name) {
-            uwriteln!(
-                self.src,
-                " {wt}::component::__internal::Box::new(async move {{ "
-            );
-        } else {
-            self.src.push_str(" { \n");
-        }
+        self.src.push_str(" {\n");
 
         if self.gen.opts.tracing {
+            if self.gen.opts.async_.is_import_async(&func.name) {
+                self.src.push_str("use tracing::Instrument;\n");
+            }
+
             uwrite!(
                 self.src,
                 "
@@ -2553,7 +2554,6 @@ impl<'a> InterfaceGenerator<'a> {
                        module = \"{}\",
                        function = \"{}\",
                    );
-                   let _enter = span.enter();
                ",
                 match owner {
                     TypeOwner::Interface(id) => self.resolve.interfaces[id]
@@ -2565,13 +2565,30 @@ impl<'a> InterfaceGenerator<'a> {
                 },
                 func.name,
             );
+        }
+
+        if self.gen.opts.async_.is_import_async(&func.name) {
+            uwriteln!(
+                self.src,
+                " {wt}::component::__internal::Box::new(async move {{ "
+            );
+        } else {
+            // Only directly enter the span if the function is sync. Otherwise
+            // we use tracing::Instrument to ensure that the span is not entered
+            // across an await point.
+            if self.gen.opts.tracing {
+                self.push_str("let _enter = span.enter();\n");
+            }
+        }
+
+        if self.gen.opts.tracing {
             let mut event_fields = func
                 .params
                 .iter()
                 .enumerate()
-                .map(|(i, (name, _ty))| {
+                .map(|(i, (name, ty))| {
                     let name = to_rust_ident(&name);
-                    format!("{name} = tracing::field::debug(&arg{i})")
+                    formatting_for_arg(&name, i, *ty, &self.gen.opts, &self.resolve)
                 })
                 .collect::<Vec<String>>();
             event_fields.push(format!("\"call\""));
@@ -2616,7 +2633,8 @@ impl<'a> InterfaceGenerator<'a> {
         if self.gen.opts.tracing {
             uwrite!(
                 self.src,
-                "tracing::event!(tracing::Level::TRACE, result = tracing::field::debug(&r), \"return\");"
+                "tracing::event!(tracing::Level::TRACE, {}, \"return\");",
+                formatting_for_results(&func.results, &self.gen.opts, &self.resolve)
             );
         }
 
@@ -2653,10 +2671,15 @@ impl<'a> InterfaceGenerator<'a> {
 
         if self.gen.opts.async_.is_import_async(&func.name) {
             // Need to close Box::new and async block
-            self.src.push_str("})");
-        } else {
-            self.src.push_str("}");
+
+            if self.gen.opts.tracing {
+                self.src.push_str("}.instrument(span))\n");
+            } else {
+                self.src.push_str("})\n");
+            }
         }
+
+        self.src.push_str("}\n");
     }
 
     fn generate_function_trait_sig(&mut self, func: &Function) {
@@ -2764,6 +2787,10 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         if self.gen.opts.tracing {
+            if is_async {
+                self.src.push_str("use tracing::Instrument;\n");
+            }
+
             let ns = match ns {
                 Some(key) => resolve.name_world_key(key),
                 None => "default".to_string(),
@@ -2776,10 +2803,17 @@ impl<'a> InterfaceGenerator<'a> {
                        module = \"{ns}\",
                        function = \"{}\",
                    );
-                   let _enter = span.enter();
                ",
                 func.name,
             ));
+
+            if !is_async {
+                self.src.push_str(
+                    "
+                   let _enter = span.enter();
+                   ",
+                );
+            }
         }
 
         self.src.push_str("let callee = unsafe {\n");
@@ -2814,11 +2848,22 @@ impl<'a> InterfaceGenerator<'a> {
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}, ", i);
         }
-        uwriteln!(self.src, ")){await_}?;");
 
+        let instrument = if is_async && self.gen.opts.tracing {
+            ".instrument(span.clone())"
+        } else {
+            ""
+        };
+        uwriteln!(self.src, ")){instrument}{await_}?;");
+
+        let instrument = if is_async && self.gen.opts.tracing {
+            ".instrument(span)"
+        } else {
+            ""
+        };
         uwriteln!(
             self.src,
-            "callee.post_return{async__}(store.as_context_mut()){await_}?;"
+            "callee.post_return{async__}(store.as_context_mut()){instrument}{await_}?;"
         );
 
         self.src.push_str("Ok(");
@@ -2912,6 +2957,89 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
 
     fn wasmtime_path(&self) -> String {
         self.gen.wasmtime_path()
+    }
+}
+
+/// Produce a string for tracing a function argument.
+fn formatting_for_arg(
+    name: &str,
+    index: usize,
+    ty: Type,
+    opts: &Opts,
+    resolve: &Resolve,
+) -> String {
+    if !opts.verbose_tracing && type_contains_lists(ty, resolve) {
+        return format!("{name} = tracing::field::debug(\"...\")");
+    }
+
+    // Normal tracing.
+    format!("{name} = tracing::field::debug(&arg{index})")
+}
+
+/// Produce a string for tracing function results.
+fn formatting_for_results(results: &Results, opts: &Opts, resolve: &Resolve) -> String {
+    let contains_lists = match results {
+        Results::Anon(ty) => type_contains_lists(*ty, resolve),
+        Results::Named(params) => params
+            .iter()
+            .any(|(_, ty)| type_contains_lists(*ty, resolve)),
+    };
+
+    if !opts.verbose_tracing && contains_lists {
+        return format!("result = tracing::field::debug(\"...\")");
+    }
+
+    // Normal tracing.
+    format!("result = tracing::field::debug(&r)")
+}
+
+/// Test whether the given type contains lists.
+///
+/// Here, a `string` is not considered a list.
+fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
+    match ty {
+        Type::Id(id) => match &resolve.types[id].kind {
+            TypeDefKind::Resource
+            | TypeDefKind::Unknown
+            | TypeDefKind::Flags(_)
+            | TypeDefKind::Handle(_)
+            | TypeDefKind::Enum(_) => false,
+            TypeDefKind::Option(ty) => type_contains_lists(*ty, resolve),
+            TypeDefKind::Result(Result_ { ok, err }) => {
+                option_type_contains_lists(*ok, resolve)
+                    || option_type_contains_lists(*err, resolve)
+            }
+            TypeDefKind::Record(record) => record
+                .fields
+                .iter()
+                .any(|field| type_contains_lists(field.ty, resolve)),
+            TypeDefKind::Tuple(tuple) => tuple
+                .types
+                .iter()
+                .any(|ty| type_contains_lists(*ty, resolve)),
+            TypeDefKind::Variant(variant) => variant
+                .cases
+                .iter()
+                .any(|case| option_type_contains_lists(case.ty, resolve)),
+            TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
+            TypeDefKind::Future(ty) => option_type_contains_lists(*ty, resolve),
+            TypeDefKind::Stream(Stream { element, end }) => {
+                option_type_contains_lists(*element, resolve)
+                    || option_type_contains_lists(*end, resolve)
+            }
+            TypeDefKind::List(_) => true,
+        },
+
+        // Technically strings are lists too, but we ignore that here because
+        // they're usually short.
+        _ => false,
+    }
+}
+
+fn option_type_contains_lists(ty: Option<Type>, resolve: &Resolve) -> bool {
+    match ty {
+        Some(ty) => type_contains_lists(ty, resolve),
+        None => false,
     }
 }
 

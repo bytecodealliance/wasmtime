@@ -274,9 +274,12 @@ impl CompiledModule {
                 .meta
                 .dwarf
                 .binary_search_by_key(&(id as u8), |(id, _)| *id)
-                .map(|i| {
+                .ok()
+                .and_then(|i| {
                     let (_, range) = &self.meta.dwarf[i];
-                    &self.code_memory().dwarf()[range.start as usize..range.end as usize]
+                    let start = range.start.try_into().ok()?;
+                    let end = range.end.try_into().ok()?;
+                    self.code_memory().dwarf().get(start..end)
                 })
                 .unwrap_or(&[]);
             Ok(EndianSlice::new(data, gimli::LittleEndian))

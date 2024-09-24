@@ -7,7 +7,7 @@ use crate::runtime::vm::mmap::Mmap;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{
     round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MemoryImage,
-    MemoryImageSlot, SendSyncPtr, SharedMemory, Store, WaitResult,
+    MemoryImageSlot, SendSyncPtr, SharedMemory, VMStore, WaitResult,
 };
 use alloc::sync::Arc;
 use core::ops::Range;
@@ -49,9 +49,7 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
     }
 }
 
-/// A linear memory's backing storage.
-///
-/// This does not a full Wasm linear memory, as it may
+/// A linear memory and its backing storage.
 pub trait RuntimeLinearMemory: Send + Sync {
     /// Returns the log2 of this memory's page size, in bytes.
     fn page_size_log2(&self) -> u8;
@@ -82,7 +80,7 @@ pub trait RuntimeLinearMemory: Send + Sync {
     fn grow(
         &mut self,
         delta_pages: u64,
-        mut store: Option<&mut dyn Store>,
+        mut store: Option<&mut dyn VMStore>,
     ) -> Result<Option<(usize, usize)>, Error> {
         let old_byte_size = self.byte_size();
 
@@ -541,7 +539,7 @@ impl Memory {
     pub fn new_dynamic(
         plan: &MemoryPlan,
         creator: &dyn RuntimeMemoryCreator,
-        store: &mut dyn Store,
+        store: &mut dyn VMStore,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
@@ -561,7 +559,7 @@ impl Memory {
         base_capacity: usize,
         memory_image: MemoryImageSlot,
         memory_and_guard_size: usize,
-        store: &mut dyn Store,
+        store: &mut dyn VMStore,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
         let pooled_memory = StaticMemory::new(
@@ -592,7 +590,7 @@ impl Memory {
     /// size) of the memory, all in bytes.
     pub(crate) fn limit_new(
         plan: &MemoryPlan,
-        store: Option<&mut dyn Store>,
+        store: Option<&mut dyn VMStore>,
     ) -> Result<(usize, Option<usize>)> {
         let page_size = usize::try_from(plan.memory.page_size()).unwrap();
 
@@ -653,7 +651,7 @@ impl Memory {
                 if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
                     bail!(
                         "memory minimum size of {} pages exceeds memory limits",
-                        plan.memory.minimum
+                        plan.memory.limits.min
                     );
                 }
             }
@@ -664,7 +662,7 @@ impl Memory {
         let minimum = minimum.ok_or_else(|| {
             format_err!(
                 "memory minimum size of {} pages exceeds memory limits",
-                plan.memory.minimum
+                plan.memory.limits.min
             )
         })?;
 
@@ -708,7 +706,7 @@ impl Memory {
     pub unsafe fn grow(
         &mut self,
         delta_pages: u64,
-        store: Option<&mut dyn Store>,
+        store: Option<&mut dyn VMStore>,
     ) -> Result<Option<usize>, Error> {
         self.0
             .grow(delta_pages, store)
@@ -811,5 +809,6 @@ pub fn validate_atomic_addr(
         return Err(Trap::MemoryOutOfBounds);
     }
 
-    Ok(def.base.wrapping_add(addr as usize))
+    let addr = usize::try_from(addr).unwrap();
+    Ok(def.base.wrapping_add(addr))
 }

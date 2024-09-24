@@ -88,7 +88,7 @@ pub(crate) enum LookupError {
 /// convention and the rest, if any, via a return pointer.
 #[derive(Copy, Clone, Debug)]
 pub enum CallingConvention {
-    /// See [cranelift_codegen::isa::CallConv::WasmtimeSystemV]
+    /// See [cranelift_codegen::isa::CallConv::SystemV]
     SystemV,
     /// See [cranelift_codegen::isa::CallConv::WindowsFastcall]
     WindowsFastcall,
@@ -101,7 +101,7 @@ pub enum CallingConvention {
 }
 
 impl CallingConvention {
-    /// Returns true if the current calling convention is `WasmtimeFastcall`.
+    /// Returns true if the current calling convention is `WindowsFastcall`.
     fn is_fastcall(&self) -> bool {
         match &self {
             CallingConvention::WindowsFastcall => true,
@@ -109,7 +109,7 @@ impl CallingConvention {
         }
     }
 
-    /// Returns true if the current calling convention is `WasmtimeSystemV`.
+    /// Returns true if the current calling convention is `SystemV`.
     fn is_systemv(&self) -> bool {
         match &self {
             CallingConvention::SystemV => true,
@@ -117,7 +117,7 @@ impl CallingConvention {
         }
     }
 
-    /// Returns true if the current calling convention is `WasmtimeAppleAarch64`.
+    /// Returns true if the current calling convention is `AppleAarch64`.
     fn is_apple_aarch64(&self) -> bool {
         match &self {
             CallingConvention::AppleAarch64 => true,

@@ -63,7 +63,8 @@ where
     let pcc = env.proof_carrying_code();
 
     let host_page_size_log2 = env.target_config().page_size_align_log2;
-    let can_use_virtual_memory = heap.page_size_log2 >= host_page_size_log2;
+    let can_use_virtual_memory =
+        heap.page_size_log2 >= host_page_size_log2 && env.signals_based_traps();
 
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
@@ -154,9 +155,9 @@ where
                 Some(0),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
-                &mut builder.cursor(),
+                env,
+                builder,
                 heap,
-                env.pointer_type(),
                 index,
                 offset,
                 access_size,
@@ -204,9 +205,9 @@ where
                 Some(0),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
-                &mut builder.cursor(),
+                env,
+                builder,
                 heap,
-                env.pointer_type(),
                 index,
                 offset,
                 access_size,
@@ -248,9 +249,9 @@ where
                 Some(adjustment),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
-                &mut builder.cursor(),
+                env,
+                builder,
                 heap,
-                env.pointer_type(),
                 index,
                 offset,
                 access_size,
@@ -275,7 +276,8 @@ where
                 builder.func.dfg.facts[access_size_val] =
                     Some(Fact::constant(pointer_bit_width, offset_and_size));
             }
-            let adjusted_index = builder.ins().uadd_overflow_trap(
+            let adjusted_index = env.uadd_overflow_trap(
+                builder,
                 index,
                 access_size_val,
                 ir::TrapCode::HeapOutOfBounds,
@@ -297,9 +299,9 @@ where
                 Some(0),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
-                &mut builder.cursor(),
+                env,
+                builder,
                 heap,
-                env.pointer_type(),
                 index,
                 offset,
                 access_size,
@@ -323,7 +325,7 @@ where
                 "static memories require the ability to use virtual memory"
             );
             env.before_unconditionally_trapping_memory_access(builder)?;
-            builder.ins().trap(ir::TrapCode::HeapOutOfBounds);
+            env.trap(builder, ir::TrapCode::HeapOutOfBounds);
             Unreachable
         }
 
@@ -423,9 +425,9 @@ where
                 Some(0),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
-                &mut builder.cursor(),
+                env,
+                builder,
                 heap,
-                env.pointer_type(),
                 index,
                 offset,
                 access_size,
@@ -550,10 +552,10 @@ impl AddrPcc {
 ///
 /// This function deduplicates explicit bounds checks and Spectre mitigations
 /// that inherently also implement bounds checking.
-fn explicit_check_oob_condition_and_compute_addr(
-    pos: &mut FuncCursor,
+fn explicit_check_oob_condition_and_compute_addr<FE: FuncEnvironment + ?Sized>(
+    env: &mut FE,
+    builder: &mut FunctionBuilder,
     heap: &HeapData,
-    addr_ty: ir::Type,
     index: ir::Value,
     offset: u32,
     access_size: u8,
@@ -567,22 +569,27 @@ fn explicit_check_oob_condition_and_compute_addr(
     oob_condition: ir::Value,
 ) -> ir::Value {
     if !spectre_mitigations_enabled {
-        pos.ins()
-            .trapnz(oob_condition, ir::TrapCode::HeapOutOfBounds);
+        env.trapnz(builder, oob_condition, ir::TrapCode::HeapOutOfBounds);
     }
+    let addr_ty = env.pointer_type();
 
-    let mut addr = compute_addr(pos, heap, addr_ty, index, offset, pcc);
+    let mut addr = compute_addr(&mut builder.cursor(), heap, addr_ty, index, offset, pcc);
 
     if spectre_mitigations_enabled {
-        let null = pos.ins().iconst(addr_ty, 0);
-        addr = pos.ins().select_spectre_guard(oob_condition, null, addr);
+        // These mitigations rely on trapping when loading from NULL so
+        // signals-based traps must be allowed for this to be generated.
+        assert!(env.signals_based_traps());
+        let null = builder.ins().iconst(addr_ty, 0);
+        addr = builder
+            .ins()
+            .select_spectre_guard(oob_condition, null, addr);
 
         match pcc {
             None => {}
             Some(AddrPcc::Static32(ty, size)) => {
-                pos.func.dfg.facts[null] =
+                builder.func.dfg.facts[null] =
                     Some(Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), 0));
-                pos.func.dfg.facts[addr] = Some(Fact::Mem {
+                builder.func.dfg.facts[addr] = Some(Fact::Mem {
                     ty,
                     min_offset: 0,
                     max_offset: size.checked_sub(u64::from(access_size)).unwrap(),
@@ -590,9 +597,9 @@ fn explicit_check_oob_condition_and_compute_addr(
                 });
             }
             Some(AddrPcc::Dynamic(ty, gv)) => {
-                pos.func.dfg.facts[null] =
+                builder.func.dfg.facts[null] =
                     Some(Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), 0));
-                pos.func.dfg.facts[addr] = Some(Fact::DynamicMem {
+                builder.func.dfg.facts[addr] = Some(Fact::DynamicMem {
                     ty,
                     min: Expr::constant(0),
                     max: Expr::offset(

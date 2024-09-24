@@ -1,5 +1,7 @@
+use crate::FuncEnvironment;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, condcodes::IntCC, immediates::Imm64, InstBuilder};
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_frontend::FunctionBuilder;
 
 /// Size of a WebAssembly table, in elements.
@@ -8,7 +10,7 @@ pub enum TableSize {
     /// Non-resizable table.
     Static {
         /// Non-resizable tables have a constant size known at compile time.
-        bound: u32,
+        bound: u64,
     },
     /// Resizable table.
     Dynamic {
@@ -20,10 +22,21 @@ pub enum TableSize {
 
 impl TableSize {
     /// Get a CLIF value representing the current bounds of this table.
-    pub fn bound(&self, mut pos: FuncCursor, index_ty: ir::Type) -> ir::Value {
+    pub fn bound(&self, isa: &dyn TargetIsa, mut pos: FuncCursor, index_ty: ir::Type) -> ir::Value {
         match *self {
-            TableSize::Static { bound } => pos.ins().iconst(index_ty, Imm64::new(i64::from(bound))),
-            TableSize::Dynamic { bound_gv } => pos.ins().global_value(index_ty, bound_gv),
+            // Instead of `i64::try_from(bound)`, here we just want to direcly interpret `bound` as an i64.
+            TableSize::Static { bound } => pos.ins().iconst(index_ty, Imm64::new(bound as i64)),
+            TableSize::Dynamic { bound_gv } => {
+                let ty = pos.func.global_values[bound_gv].global_type(isa);
+                let gv = pos.ins().global_value(ty, bound_gv);
+                if index_ty == ty {
+                    gv
+                } else if index_ty.bytes() < ty.bytes() {
+                    pos.ins().ireduce(index_ty, gv)
+                } else {
+                    pos.ins().uextend(index_ty, gv)
+                }
+            }
         }
     }
 }
@@ -46,23 +59,23 @@ impl TableData {
     /// given index within this table.
     pub fn prepare_table_addr(
         &self,
+        env: &mut dyn FuncEnvironment,
         pos: &mut FunctionBuilder,
         mut index: ir::Value,
-        addr_ty: ir::Type,
-        enable_table_access_spectre_mitigation: bool,
     ) -> (ir::Value, ir::MemFlags) {
         let index_ty = pos.func.dfg.value_type(index);
+        let addr_ty = env.pointer_type();
 
         // Start with the bounds check. Trap if `index + 1 > bound`.
-        let bound = self.bound.bound(pos.cursor(), index_ty);
+        let bound = self.bound.bound(env.isa(), pos.cursor(), index_ty);
 
         // `index > bound - 1` is the same as `index >= bound`.
         let oob = pos
             .ins()
             .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
 
-        if !enable_table_access_spectre_mitigation {
-            pos.ins().trapnz(oob, ir::TrapCode::TableOutOfBounds);
+        if !env.isa().flags().enable_table_access_spectre_mitigation() {
+            env.trapnz(pos, oob, ir::TrapCode::TableOutOfBounds);
         }
 
         // Convert `index` to `addr_ty`.
@@ -88,7 +101,7 @@ impl TableData {
         let base_flags = ir::MemFlags::new()
             .with_aligned()
             .with_alias_region(Some(ir::AliasRegion::Table));
-        if enable_table_access_spectre_mitigation {
+        if env.isa().flags().enable_table_access_spectre_mitigation() {
             // Short-circuit the computed table element address to a null pointer
             // when out-of-bounds. The consumer of this address will trap when
             // trying to access it.

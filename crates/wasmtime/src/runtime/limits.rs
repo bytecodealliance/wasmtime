@@ -103,7 +103,12 @@ pub trait ResourceLimiter {
     ///
     /// See the details on the return values for `memory_growing` for what the
     /// return value of this function indicates.
-    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> Result<bool>;
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool>;
 
     /// Notifies the resource limiter that growing a linear memory, permitted by
     /// the `table_growing` method, has failed.
@@ -185,9 +190,9 @@ pub trait ResourceLimiterAsync {
     /// Asynchronous version of [`ResourceLimiter::table_growing`]
     async fn table_growing(
         &mut self,
-        current: u32,
-        desired: u32,
-        maximum: Option<u32>,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
     ) -> Result<bool>;
 
     /// Identical to [`ResourceLimiter::table_grow_failed`]
@@ -244,7 +249,7 @@ impl StoreLimitsBuilder {
     /// they're all allowed to reach up to the `limit` specified.
     ///
     /// By default, table elements will not be limited.
-    pub fn table_elements(mut self, limit: u32) -> Self {
+    pub fn table_elements(mut self, limit: usize) -> Self {
         self.0.table_elements = Some(limit);
         self
     }
@@ -310,7 +315,7 @@ impl StoreLimitsBuilder {
 #[derive(Clone, Debug)]
 pub struct StoreLimits {
     memory_size: Option<usize>,
-    table_elements: Option<u32>,
+    table_elements: Option<usize>,
     instances: usize,
     tables: usize,
     memories: usize,
@@ -360,7 +365,12 @@ impl ResourceLimiter for StoreLimits {
         }
     }
 
-    fn table_growing(&mut self, _current: u32, desired: u32, maximum: Option<u32>) -> Result<bool> {
+    fn table_growing(
+        &mut self,
+        _current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool> {
         let allow = match self.table_elements {
             Some(limit) if desired > limit => false,
             _ => match maximum {

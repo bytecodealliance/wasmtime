@@ -88,8 +88,11 @@ impl Engine {
     /// to `true`, but explicitly disable these two compiler settings
     /// will cause errors.
     pub fn new(config: &Config) -> Result<Engine> {
+        let config = config.clone();
+        let (tunables, features) = config.validate()?;
+
         #[cfg(feature = "runtime")]
-        {
+        if tunables.signals_based_traps {
             // Ensure that crate::runtime::vm's signal handlers are
             // configured. This is the per-program initialization required for
             // handling traps, such as configuring signals, vectored exception
@@ -98,9 +101,6 @@ impl Engine {
             #[cfg(feature = "debug-builtins")]
             crate::runtime::vm::debug_builtins::ensure_exported();
         }
-
-        let config = config.clone();
-        let (tunables, features) = config.validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let (config, compiler) = config.build_compiler(&tunables, features)?;

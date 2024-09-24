@@ -8,8 +8,8 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{
-    SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMWasmCallFunction, ValRaw,
+    SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
+    VMOpaqueContext, VMStore, VMWasmCallFunction, ValRaw,
 };
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
@@ -23,6 +23,8 @@ use sptr::Strict;
 use wasmtime_environ::component::*;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
+#[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
+                                           // 32-bit platforms
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod libcalls;
@@ -187,7 +189,7 @@ impl ComponentInstance {
         offsets: VMComponentOffsets<HostPtr>,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<dyn Any + Send + Sync>,
-        store: *mut dyn Store,
+        store: *mut dyn VMStore,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
@@ -251,9 +253,9 @@ impl ComponentInstance {
     }
 
     /// Returns the store that this component was created with.
-    pub fn store(&self) -> *mut dyn Store {
+    pub fn store(&self) -> *mut dyn VMStore {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets.store());
+            let ret = *self.vmctx_plus_offset::<*mut dyn VMStore>(self.offsets.store());
             assert!(!ret.is_null());
             ret
         }
@@ -433,7 +435,7 @@ impl ComponentInstance {
         }
     }
 
-    unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
+    unsafe fn initialize_vmctx(&mut self, store: *mut dyn VMStore) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
         *self.vmctx_plus_offset_mut(self.offsets.libcalls()) = &libcalls::VMComponentLibcalls::INIT;
         *self.vmctx_plus_offset_mut(self.offsets.store()) = store;
@@ -656,7 +658,7 @@ impl OwnedComponentInstance {
     pub fn new(
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<dyn Any + Send + Sync>,
-        store: *mut dyn Store,
+        store: *mut dyn VMStore,
     ) -> OwnedComponentInstance {
         let component = runtime_info.component();
         let offsets = VMComponentOffsets::new(HostPtr, component);

@@ -252,6 +252,13 @@ pub(crate) fn check(
             dst_hi,
             ref src2,
             ..
+        }
+        | Inst::MulX {
+            size,
+            dst_lo,
+            dst_hi,
+            ref src2,
+            ..
         } => {
             match <&RegMem>::from(src2) {
                 RegMem::Mem { ref addr } => {

@@ -4,7 +4,7 @@
     (export "x" (func $f)))
   "component export `x` is a reexport of an imported function which is not implemented")
 
-(assert_invalid
+(assert_unlinkable
   (component
     (import "host-return-two" (instance))
   )

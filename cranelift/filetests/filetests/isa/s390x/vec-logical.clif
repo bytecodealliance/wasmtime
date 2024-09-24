@@ -1130,7 +1130,7 @@ block0(v0: i8x16):
 ;   lgdr %r2, %f4
 ;   br %r14
 
-function %vhigh_bits_le(i64x2) -> i64 wasmtime_system_v {
+function %vhigh_bits_le(i64x2) -> i64 tail {
 block0(v0: i64x2):
   v1 = vhigh_bits.i64 v0
   return v1
@@ -1159,7 +1159,7 @@ block0(v0: i64x2):
 ;   lgdr %r2, %f4
 ;   br %r14
 
-function %vhigh_bits_le(i32x4) -> i64 wasmtime_system_v {
+function %vhigh_bits_le(i32x4) -> i64 tail {
 block0(v0: i32x4):
   v1 = vhigh_bits.i64 v0
   return v1
@@ -1189,7 +1189,7 @@ block0(v0: i32x4):
 ;   lgdr %r2, %f4
 ;   br %r14
 
-function %vhigh_bits_le(i16x8) -> i64 wasmtime_system_v {
+function %vhigh_bits_le(i16x8) -> i64 tail {
 block0(v0: i16x8):
   v1 = vhigh_bits.i64 v0
   return v1
@@ -1217,7 +1217,7 @@ block0(v0: i16x8):
 ;   lgdr %r2, %f4
 ;   br %r14
 
-function %vhigh_bits_le(i8x16) -> i64 wasmtime_system_v {
+function %vhigh_bits_le(i8x16) -> i64 tail {
 block0(v0: i8x16):
   v1 = vhigh_bits.i64 v0
   return v1

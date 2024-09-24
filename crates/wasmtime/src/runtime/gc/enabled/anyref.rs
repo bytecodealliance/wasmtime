@@ -4,8 +4,8 @@ use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    ArrayRef, ArrayType, AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted,
-    RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, I31,
+    ArrayRef, ArrayType, AsContext, AsContextMut, EqRef, GcRefImpl, GcRootIndex, HeapType,
+    ManuallyRooted, RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, I31,
 };
 use core::mem;
 use core::mem::MaybeUninit;
@@ -93,6 +93,20 @@ use wasmtime_environ::VMGcKind;
 #[repr(transparent)]
 pub struct AnyRef {
     pub(super) inner: GcRootIndex,
+}
+
+impl From<Rooted<EqRef>> for Rooted<AnyRef> {
+    #[inline]
+    fn from(e: Rooted<EqRef>) -> Self {
+        e.to_anyref()
+    }
+}
+
+impl From<ManuallyRooted<EqRef>> for ManuallyRooted<AnyRef> {
+    #[inline]
+    fn from(e: ManuallyRooted<EqRef>) -> Self {
+        e.to_anyref()
+    }
 }
 
 impl From<Rooted<StructRef>> for Rooted<AnyRef> {
@@ -247,7 +261,11 @@ impl AnyRef {
     /// [`ValRaw`]: crate::ValRaw
     pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        let gc_ref = self.inner.try_clone_gc_ref(&mut store)?;
+        self._to_raw(&mut store)
+    }
+
+    pub(crate) unsafe fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+        let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = gc_ref.as_raw_u32();
         store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
         Ok(raw)
@@ -320,6 +338,71 @@ impl AnyRef {
             let actual_ty = self._ty(store)?;
             bail!("type mismatch: expected `(ref {ty})`, found `(ref {actual_ty})`")
         }
+    }
+
+    /// Is this `anyref` an `eqref`?
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn is_eqref(&self, store: impl AsContext) -> Result<bool> {
+        self._is_eqref(store.as_context().0)
+    }
+
+    pub(crate) fn _is_eqref(&self, store: &StoreOpaque) -> Result<bool> {
+        assert!(self.comes_from_same_store(store));
+        let gc_ref = self.inner.try_gc_ref(store)?;
+        Ok(gc_ref.is_i31() || store.gc_store()?.kind(gc_ref).matches(VMGcKind::EqRef))
+    }
+
+    /// Downcast this `anyref` to an `eqref`.
+    ///
+    /// If this `anyref` is an `eqref`, then `Some(_)` is returned.
+    ///
+    /// If this `anyref` is not an `eqref`, then `None` is returned.
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn as_eqref(&self, store: impl AsContext) -> Result<Option<Rooted<EqRef>>> {
+        self._as_eqref(store.as_context().0)
+    }
+
+    pub(crate) fn _as_eqref(&self, store: &StoreOpaque) -> Result<Option<Rooted<EqRef>>> {
+        if self._is_eqref(store)? {
+            Ok(Some(Rooted::from_gc_root_index(self.inner)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Downcast this `anyref` to an `eqref`, panicking if this `anyref` is not
+    /// an `eqref`.
+    ///
+    /// # Errors
+    ///
+    /// Return an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store, or if
+    /// this `anyref` is not an `eqref`.
+    pub fn unwrap_eqref(&self, store: impl AsContext) -> Result<Rooted<EqRef>> {
+        self._unwrap_eqref(store.as_context().0)
+    }
+
+    pub(crate) fn _unwrap_eqref(&self, store: &StoreOpaque) -> Result<Rooted<EqRef>> {
+        Ok(self
+            ._as_eqref(store)?
+            .expect("AnyRef::unwrap_eqref on non-eqref"))
     }
 
     /// Is this `anyref` an `i31`?

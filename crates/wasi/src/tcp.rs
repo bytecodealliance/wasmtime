@@ -3,10 +3,10 @@ use crate::host::network;
 use crate::network::SocketAddressFamily;
 use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
 use crate::{
-    HostInputStream, HostOutputStream, InputStream, OutputStream, SocketResult, StreamError,
-    Subscribe,
+    HostInputStream, HostOutputStream, InputStream, OutputStream, SocketError, SocketResult,
+    StreamError, Subscribe,
 };
-use anyhow::{Error, Result};
+use anyhow::Result;
 use cap_net_ext::AddressFamily;
 use futures::Future;
 use io_lifetimes::views::SocketlikeView;
@@ -15,10 +15,11 @@ use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
 use std::mem;
-use std::net::SocketAddr;
+use std::net::{Shutdown, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
+use tokio::sync::Mutex;
 
 /// Value taken from rust std library.
 const DEFAULT_BACKLOG: u32 = 128;
@@ -54,7 +55,13 @@ enum TcpState {
     ConnectReady(io::Result<tokio::net::TcpStream>),
 
     /// An outgoing connection has been established.
-    Connected(Arc<tokio::net::TcpStream>),
+    Connected {
+        stream: Arc<tokio::net::TcpStream>,
+
+        // WASI is single threaded, so in practice these Mutexes should never be contended:
+        reader: Arc<Mutex<TcpReader>>,
+        writer: Arc<Mutex<TcpWriter>>,
+    },
 
     Closed,
 }
@@ -72,7 +79,7 @@ impl std::fmt::Debug for TcpState {
                 .finish(),
             Self::Connecting(_) => f.debug_tuple("Connecting").finish(),
             Self::ConnectReady(_) => f.debug_tuple("ConnectReady").finish(),
-            Self::Connected(_) => f.debug_tuple("Connected").finish(),
+            Self::Connected { .. } => f.debug_tuple("Connected").finish(),
             Self::Closed => write!(f, "Closed"),
         }
     }
@@ -145,7 +152,9 @@ impl TcpSocket {
             TcpState::Default(socket) | TcpState::Bound(socket) => {
                 Ok(socket.as_socketlike_view::<std::net::TcpStream>())
             }
-            TcpState::Connected(stream) => Ok(stream.as_socketlike_view::<std::net::TcpStream>()),
+            TcpState::Connected { stream, .. } => {
+                Ok(stream.as_socketlike_view::<std::net::TcpStream>())
+            }
             TcpState::Listening { listener, .. } => {
                 Ok(listener.as_socketlike_view::<std::net::TcpStream>())
             }
@@ -277,9 +286,15 @@ impl TcpSocket {
         match result {
             Ok(stream) => {
                 let stream = Arc::new(stream);
-                self.tcp_state = TcpState::Connected(stream.clone());
-                let input: InputStream = Box::new(TcpReadStream::new(stream.clone()));
-                let output: OutputStream = Box::new(TcpWriteStream::new(stream));
+                let reader = Arc::new(Mutex::new(TcpReader::new(stream.clone())));
+                let writer = Arc::new(Mutex::new(TcpWriter::new(stream.clone())));
+                self.tcp_state = TcpState::Connected {
+                    stream,
+                    reader: reader.clone(),
+                    writer: writer.clone(),
+                };
+                let input: InputStream = Box::new(TcpReadStream(reader));
+                let output: OutputStream = Box::new(TcpWriteStream(writer));
                 Ok((input, output))
             }
             Err(err) => {
@@ -427,9 +442,19 @@ impl TcpSocket {
 
         let client = Arc::new(client);
 
-        let input: InputStream = Box::new(TcpReadStream::new(client.clone()));
-        let output: OutputStream = Box::new(TcpWriteStream::new(client.clone()));
-        let tcp_socket = TcpSocket::from_state(TcpState::Connected(client), self.family)?;
+        let reader = Arc::new(Mutex::new(TcpReader::new(client.clone())));
+        let writer = Arc::new(Mutex::new(TcpWriter::new(client.clone())));
+
+        let input: InputStream = Box::new(TcpReadStream(reader.clone()));
+        let output: OutputStream = Box::new(TcpWriteStream(writer.clone()));
+        let tcp_socket = TcpSocket::from_state(
+            TcpState::Connected {
+                stream: client,
+                reader,
+                writer,
+            },
+            self.family,
+        )?;
 
         Ok((tcp_socket, input, output))
     }
@@ -446,7 +471,7 @@ impl TcpSocket {
 
     pub fn remote_address(&self) -> SocketResult<SocketAddr> {
         let view = match self.tcp_state {
-            TcpState::Connected(..) => self.as_std_view()?,
+            TcpState::Connected { .. } => self.as_std_view()?,
             TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
             }
@@ -613,20 +638,19 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn shutdown(&self, how: std::net::Shutdown) -> io::Result<()> {
-        let stream = match &self.tcp_state {
-            TcpState::Connected(stream) => stream,
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotConnected,
-                    "socket not connected",
-                ))
-            }
+    pub fn shutdown(&self, how: Shutdown) -> SocketResult<()> {
+        let TcpState::Connected { reader, writer, .. } = &self.tcp_state else {
+            return Err(ErrorCode::InvalidState.into());
         };
 
-        stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(how)?;
+        if let Shutdown::Both | Shutdown::Read = how {
+            try_lock_for_socket(reader)?.shutdown();
+        }
+
+        if let Shutdown::Both | Shutdown::Write = how {
+            try_lock_for_socket(writer)?.shutdown();
+        }
+
         Ok(())
     }
 }
@@ -641,7 +665,7 @@ impl Subscribe for TcpSocket {
             | TcpState::ListenStarted(..)
             | TcpState::ConnectReady(..)
             | TcpState::Closed
-            | TcpState::Connected(..) => {
+            | TcpState::Connected { .. } => {
                 // No async operation in progress.
             }
             TcpState::Connecting(future) => {
@@ -664,22 +688,18 @@ impl Subscribe for TcpSocket {
     }
 }
 
-struct TcpReadStream {
+struct TcpReader {
     stream: Arc<tokio::net::TcpStream>,
     closed: bool,
 }
 
-impl TcpReadStream {
+impl TcpReader {
     fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             closed: false,
         }
     }
-}
-
-#[async_trait::async_trait]
-impl HostInputStream for TcpReadStream {
     fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
         if self.closed {
             return Err(StreamError::Closed);
@@ -710,37 +730,57 @@ impl HostInputStream for TcpReadStream {
         buf.truncate(n);
         Ok(buf.freeze())
     }
+
+    fn shutdown(&mut self) {
+        native_shutdown(&self.stream, Shutdown::Read);
+        self.closed = true;
+    }
+
+    async fn ready(&mut self) {
+        if self.closed {
+            return;
+        }
+
+        self.stream.readable().await.unwrap();
+    }
+}
+
+struct TcpReadStream(Arc<Mutex<TcpReader>>);
+
+#[async_trait::async_trait]
+impl HostInputStream for TcpReadStream {
+    fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
+        try_lock_for_stream(&self.0)?.read(size)
+    }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for TcpReadStream {
     async fn ready(&mut self) {
-        if self.closed {
-            return;
-        }
-        self.stream.readable().await.unwrap();
+        self.0.lock().await.ready().await
     }
 }
 
 const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
-struct TcpWriteStream {
+struct TcpWriter {
     stream: Arc<tokio::net::TcpStream>,
-    last_write: LastWrite,
+    state: WriteState,
 }
 
-enum LastWrite {
-    Waiting(AbortOnDropJoinHandle<Result<()>>),
-    Error(Error),
-    Done,
+enum WriteState {
+    Ready,
+    Writing(AbortOnDropJoinHandle<io::Result<()>>),
+    Closing(AbortOnDropJoinHandle<io::Result<()>>),
     Closed,
+    Error(io::Error),
 }
 
-impl TcpWriteStream {
+impl TcpWriter {
     fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
-            last_write: LastWrite::Done,
+            state: WriteState::Ready,
         }
     }
 
@@ -761,10 +801,10 @@ impl TcpWriteStream {
     /// Write `bytes` in a background task, remembering the task handle for use in a future call to
     /// `write_ready`
     fn background_write(&mut self, mut bytes: bytes::Bytes) {
-        assert!(matches!(self.last_write, LastWrite::Done));
+        assert!(matches!(self.state, WriteState::Ready));
 
         let stream = self.stream.clone();
-        self.last_write = LastWrite::Waiting(crate::runtime::spawn(async move {
+        self.state = WriteState::Writing(crate::runtime::spawn(async move {
             // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
             // primitive try_write, which goes directly to attempt a write with mio. This has
             // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream
@@ -784,14 +824,12 @@ impl TcpWriteStream {
             Ok(())
         }));
     }
-}
 
-#[async_trait::async_trait]
-impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
-        match self.last_write {
-            LastWrite::Done => {}
-            LastWrite::Waiting(_) | LastWrite::Error(_) | LastWrite::Closed => {
+        match self.state {
+            WriteState::Ready => {}
+            WriteState::Closed => return Err(StreamError::Closed),
+            WriteState::Writing(_) | WriteState::Closing(_) | WriteState::Error(_) => {
                 return Err(StreamError::Trap(anyhow::anyhow!(
                     "unpermitted: must call check_write first"
                 )));
@@ -812,7 +850,7 @@ impl HostOutputStream for TcpWriteStream {
                 }
 
                 Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
-                    self.last_write = LastWrite::Closed;
+                    self.state = WriteState::Closed;
                     return Err(StreamError::Closed);
                 }
 
@@ -827,23 +865,30 @@ impl HostOutputStream for TcpWriteStream {
         // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
         // `write_ready` will join the background write task if it's active, so following `flush`
         // with `write_ready` will have the desired effect.
-        match self.last_write {
-            LastWrite::Done | LastWrite::Waiting(_) | LastWrite::Error(_) => Ok(()),
-            LastWrite::Closed => Err(StreamError::Closed),
+        match self.state {
+            WriteState::Ready
+            | WriteState::Writing(_)
+            | WriteState::Closing(_)
+            | WriteState::Error(_) => Ok(()),
+            WriteState::Closed => Err(StreamError::Closed),
         }
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        match mem::replace(&mut self.last_write, LastWrite::Closed) {
-            LastWrite::Waiting(task) => {
-                self.last_write = LastWrite::Waiting(task);
+        match mem::replace(&mut self.state, WriteState::Closed) {
+            WriteState::Writing(task) => {
+                self.state = WriteState::Writing(task);
                 return Ok(0);
             }
-            LastWrite::Done => {
-                self.last_write = LastWrite::Done;
+            WriteState::Closing(task) => {
+                self.state = WriteState::Closing(task);
+                return Ok(0);
             }
-            LastWrite::Closed => return Err(StreamError::Closed),
-            LastWrite::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
+            WriteState::Ready => {
+                self.state = WriteState::Ready;
+            }
+            WriteState::Closed => return Err(StreamError::Closed),
+            WriteState::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
         }
 
         let writable = self.stream.writable();
@@ -853,25 +898,103 @@ impl HostOutputStream for TcpWriteStream {
         }
         Ok(SOCKET_READY_SIZE)
     }
+
+    fn shutdown(&mut self) {
+        self.state = match mem::replace(&mut self.state, WriteState::Closed) {
+            // No write in progress, immediately shut down:
+            WriteState::Ready => {
+                native_shutdown(&self.stream, Shutdown::Write);
+                WriteState::Closed
+            }
+
+            // Schedule the shutdown after the current write has finished:
+            WriteState::Writing(write) => {
+                let stream = self.stream.clone();
+                WriteState::Closing(crate::runtime::spawn(async move {
+                    let result = write.await;
+                    native_shutdown(&stream, Shutdown::Write);
+                    result
+                }))
+            }
+
+            s => s,
+        };
+    }
+
     async fn cancel(&mut self) {
-        match mem::replace(&mut self.last_write, LastWrite::Closed) {
-            LastWrite::Waiting(task) => _ = task.abort_wait().await,
+        match mem::replace(&mut self.state, WriteState::Closed) {
+            WriteState::Writing(task) | WriteState::Closing(task) => _ = task.cancel().await,
             _ => {}
         }
+    }
+
+    async fn ready(&mut self) {
+        match &mut self.state {
+            WriteState::Writing(task) => {
+                self.state = match task.await {
+                    Ok(()) => WriteState::Ready,
+                    Err(e) => WriteState::Error(e),
+                }
+            }
+            WriteState::Closing(task) => {
+                self.state = match task.await {
+                    Ok(()) => WriteState::Closed,
+                    Err(e) => WriteState::Error(e),
+                }
+            }
+            _ => {}
+        }
+
+        if let WriteState::Ready = self.state {
+            self.stream.writable().await.unwrap();
+        }
+    }
+}
+
+struct TcpWriteStream(Arc<Mutex<TcpWriter>>);
+
+#[async_trait::async_trait]
+impl HostOutputStream for TcpWriteStream {
+    fn write(&mut self, bytes: bytes::Bytes) -> Result<(), StreamError> {
+        try_lock_for_stream(&self.0)?.write(bytes)
+    }
+
+    fn flush(&mut self) -> Result<(), StreamError> {
+        try_lock_for_stream(&self.0)?.flush()
+    }
+
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        try_lock_for_stream(&self.0)?.check_write()
+    }
+
+    async fn cancel(&mut self) {
+        self.0.lock().await.cancel().await
     }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for TcpWriteStream {
     async fn ready(&mut self) {
-        if let LastWrite::Waiting(task) = &mut self.last_write {
-            self.last_write = match task.await {
-                Ok(()) => LastWrite::Done,
-                Err(e) => LastWrite::Error(e),
-            };
-        }
-        if let LastWrite::Done = self.last_write {
-            self.stream.writable().await.unwrap();
-        }
+        self.0.lock().await.ready().await
     }
+}
+
+fn native_shutdown(stream: &tokio::net::TcpStream, how: Shutdown) {
+    _ = stream
+        .as_socketlike_view::<std::net::TcpStream>()
+        .shutdown(how);
+}
+
+fn try_lock_for_stream<T>(mutex: &Mutex<T>) -> Result<tokio::sync::MutexGuard<'_, T>, StreamError> {
+    mutex
+        .try_lock()
+        .map_err(|_| StreamError::trap("concurrent access to resource not supported"))
+}
+
+fn try_lock_for_socket<T>(mutex: &Mutex<T>) -> Result<tokio::sync::MutexGuard<'_, T>, SocketError> {
+    mutex.try_lock().map_err(|_| {
+        SocketError::trap(anyhow::anyhow!(
+            "concurrent access to resource not supported"
+        ))
+    })
 }

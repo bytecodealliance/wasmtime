@@ -29,6 +29,7 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 /// }
 /// ```
 #[repr(align(8))]
+#[derive(Debug, Clone, Copy)]
 pub struct VMGcHeader(u64);
 
 unsafe impl GcHeapObject for VMGcHeader {

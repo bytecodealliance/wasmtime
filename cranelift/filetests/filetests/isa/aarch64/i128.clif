@@ -1,0 +1,127 @@
+test compile precise-output
+set enable_llvm_abi_extensions=true
+set opt_level=speed
+target aarch64
+
+function %mul_uextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   madd x3, x0, x1, xzr
+;   umulh x1, x0, x1
+;   mov x0, x3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mul x3, x0, x1
+;   umulh x1, x0, x1
+;   mov x0, x3
+;   ret
+
+function %mul_sextend_i64(i64, i64) -> i128 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   madd x3, x0, x1, xzr
+;   smulh x1, x0, x1
+;   mov x0, x3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mul x3, x0, x1
+;   smulh x1, x0, x1
+;   mov x0, x3
+;   ret
+
+function %smul_high_i64_pattern(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    v5 = sshr_imm v4, 64
+    v6 = ireduce.i64 v5
+    return v6
+}
+
+; VCode:
+; block0:
+;   smulh x0, x0, x1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smulh x0, x0, x1
+;   ret
+
+function %smul_high_i64_isplit(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = imul v2, v3
+    v5, v6 = isplit v4
+    return v6
+}
+
+; VCode:
+; block0:
+;   smulh x0, x0, x1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smulh x0, x0, x1
+;   ret
+
+function %umul_high_i64_pattern(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    v5 = ushr_imm v4, 64
+    v6 = ireduce.i64 v5
+    return v6
+}
+
+; VCode:
+; block0:
+;   umulh x0, x0, x1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umulh x0, x0, x1
+;   ret
+
+function %umul_high_i64_isplit(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = imul v2, v3
+    v5, v6 = isplit v4
+    return v6
+}
+
+; VCode:
+; block0:
+;   umulh x0, x0, x1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umulh x0, x0, x1
+;   ret
+

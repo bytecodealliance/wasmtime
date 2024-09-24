@@ -228,11 +228,13 @@ pub mod a {
                 let mut inst = linker.instance("a:b/interface-with-live-type")?;
                 inst.func_wrap_async(
                     "f",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::f(host).await;
-                        Ok((r,))
-                    }),
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = Host::f(host).await;
+                            Ok((r,))
+                        })
+                    },
                 )?;
                 Ok(())
             }

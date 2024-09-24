@@ -14,6 +14,13 @@ macro_rules! genexpand {
             async: true,
             stringify: true,
         }))?;
+
+        process_expanded($path, "_tracing_async", wasmtime::component::bindgen!({
+            path: $path,
+            async: true,
+            tracing: true,
+            stringify: true,
+        }))?;
     };
 }
 

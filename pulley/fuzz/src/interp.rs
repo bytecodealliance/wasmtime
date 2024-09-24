@@ -32,7 +32,7 @@ pub fn interp(ops: Vec<Op>) {
         match vm.call(NonNull::from(&encoded[0]), args, rets.into_iter().copied()) {
             Ok(rets) => assert_eq!(rets.count(), 0),
             Err(pc) => {
-                let pc = pc as usize;
+                let pc = pc.as_ptr() as usize;
 
                 let start = &encoded[0] as *const u8 as usize;
                 let end = encoded.last().unwrap() as *const u8 as usize;
@@ -63,6 +63,12 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::BrIfXulteq32(_) => false,
         Op::BrIfXslt32(_) => false,
         Op::BrIfXslteq32(_) => false,
+        Op::BrIfXeq64(_) => false,
+        Op::BrIfXneq64(_) => false,
+        Op::BrIfXult64(_) => false,
+        Op::BrIfXulteq64(_) => false,
+        Op::BrIfXslt64(_) => false,
+        Op::BrIfXslteq64(_) => false,
         Op::Xmov(op::Xmov { dst, .. }) => !dst.is_special(),
         Op::Fmov(_) => true,
         Op::Vmov(_) => true,

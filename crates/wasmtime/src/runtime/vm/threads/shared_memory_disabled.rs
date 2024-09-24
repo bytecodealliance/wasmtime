@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use crate::prelude::*;
-use crate::runtime::vm::{RuntimeLinearMemory, Store, VMMemoryDefinition, WaitResult};
+use crate::runtime::vm::{RuntimeLinearMemory, VMMemoryDefinition, VMStore, WaitResult};
 use core::ops::Range;
 use core::time::Duration;
 use wasmtime_environ::{MemoryPlan, Trap};
@@ -33,7 +33,7 @@ impl SharedMemory {
     pub fn grow(
         &self,
         _delta_pages: u64,
-        _store: Option<&mut dyn Store>,
+        _store: Option<&mut dyn VMStore>,
     ) -> Result<Option<(usize, usize)>> {
         match *self {}
     }
@@ -77,7 +77,7 @@ impl RuntimeLinearMemory for SharedMemory {
     fn grow(
         &mut self,
         _delta_pages: u64,
-        _store: Option<&mut dyn Store>,
+        _store: Option<&mut dyn VMStore>,
     ) -> Result<Option<(usize, usize)>> {
         match *self {}
     }

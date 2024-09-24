@@ -51,13 +51,8 @@
 ;; @0056                               v20 = iconst.i64 8
 ;; @0056                               v21 = uadd_overflow_trap v19, v20, user65535  ; v20 = 8
 ;; @0056                               v22 = icmp ult v21, v16
-;; @0056                               brif v22, block9, block8
-;;
-;;                                 block8 cold:
-;; @0056                               trap user65535
-;;
-;;                                 block9:
-;; @0056                               v23 = iadd.i64 v15, v19
+;; @0056                               trapz v22, user65535
+;; @0056                               v23 = iadd v15, v19
 ;; @0056                               v24 = load.i64 notrap aligned v23
 ;;                                     v64 = iconst.i64 1
 ;; @0056                               v25 = iadd v24, v64  ; v64 = 1
@@ -69,14 +64,9 @@
 ;; @0056                               v32 = iconst.i64 8
 ;; @0056                               v33 = uadd_overflow_trap v31, v32, user65535  ; v32 = 8
 ;; @0056                               v34 = icmp ult v33, v28
-;; @0056                               brif v34, block11, block10
-;;
-;;                                 block10 cold:
-;; @0056                               trap user65535
-;;
-;;                                 block11:
-;; @0056                               v35 = iadd.i64 v27, v31
-;; @0056                               store.i64 notrap aligned v25, v35
+;; @0056                               trapz v34, user65535
+;; @0056                               v35 = iadd v27, v31
+;; @0056                               store notrap aligned v25, v35
 ;; @0056                               jump block3
 ;;
 ;;                                 block3:
@@ -94,13 +84,8 @@
 ;; @0056                               v43 = iconst.i64 8
 ;; @0056                               v44 = uadd_overflow_trap v42, v43, user65535  ; v43 = 8
 ;; @0056                               v45 = icmp ult v44, v39
-;; @0056                               brif v45, block13, block12
-;;
-;;                                 block12 cold:
-;; @0056                               trap user65535
-;;
-;;                                 block13:
-;; @0056                               v46 = iadd.i64 v38, v42
+;; @0056                               trapz v45, user65535
+;; @0056                               v46 = iadd v38, v42
 ;; @0056                               v47 = load.i64 notrap aligned v46
 ;;                                     v66 = iconst.i64 -1
 ;; @0056                               v48 = iadd v47, v66  ; v66 = -1
@@ -121,13 +106,8 @@
 ;; @0056                               v57 = iconst.i64 8
 ;; @0056                               v58 = uadd_overflow_trap v56, v57, user65535  ; v57 = 8
 ;; @0056                               v59 = icmp ult v58, v53
-;; @0056                               brif v59, block15, block14
-;;
-;;                                 block14 cold:
-;; @0056                               trap user65535
-;;
-;;                                 block15:
-;; @0056                               v60 = iadd.i64 v52, v56
+;; @0056                               trapz v59, user65535
+;; @0056                               v60 = iadd v52, v56
 ;; @0056                               store.i64 notrap aligned v48, v60
 ;; @0056                               jump block7
 ;;
@@ -172,13 +152,8 @@
 ;; @005f                               v20 = iconst.i64 8
 ;; @005f                               v21 = uadd_overflow_trap v19, v20, user65535  ; v20 = 8
 ;; @005f                               v22 = icmp ult v21, v16
-;; @005f                               brif v22, block9, block8
-;;
-;;                                 block8 cold:
-;; @005f                               trap user65535
-;;
-;;                                 block9:
-;; @005f                               v23 = iadd.i64 v15, v19
+;; @005f                               trapz v22, user65535
+;; @005f                               v23 = iadd v15, v19
 ;; @005f                               v24 = load.i64 notrap aligned v23
 ;;                                     v64 = iconst.i64 1
 ;; @005f                               v25 = iadd v24, v64  ; v64 = 1
@@ -190,14 +165,9 @@
 ;; @005f                               v32 = iconst.i64 8
 ;; @005f                               v33 = uadd_overflow_trap v31, v32, user65535  ; v32 = 8
 ;; @005f                               v34 = icmp ult v33, v28
-;; @005f                               brif v34, block11, block10
-;;
-;;                                 block10 cold:
-;; @005f                               trap user65535
-;;
-;;                                 block11:
-;; @005f                               v35 = iadd.i64 v27, v31
-;; @005f                               store.i64 notrap aligned v25, v35
+;; @005f                               trapz v34, user65535
+;; @005f                               v35 = iadd v27, v31
+;; @005f                               store notrap aligned v25, v35
 ;; @005f                               jump block3
 ;;
 ;;                                 block3:
@@ -215,13 +185,8 @@
 ;; @005f                               v43 = iconst.i64 8
 ;; @005f                               v44 = uadd_overflow_trap v42, v43, user65535  ; v43 = 8
 ;; @005f                               v45 = icmp ult v44, v39
-;; @005f                               brif v45, block13, block12
-;;
-;;                                 block12 cold:
-;; @005f                               trap user65535
-;;
-;;                                 block13:
-;; @005f                               v46 = iadd.i64 v38, v42
+;; @005f                               trapz v45, user65535
+;; @005f                               v46 = iadd v38, v42
 ;; @005f                               v47 = load.i64 notrap aligned v46
 ;;                                     v66 = iconst.i64 -1
 ;; @005f                               v48 = iadd v47, v66  ; v66 = -1
@@ -242,13 +207,8 @@
 ;; @005f                               v57 = iconst.i64 8
 ;; @005f                               v58 = uadd_overflow_trap v56, v57, user65535  ; v57 = 8
 ;; @005f                               v59 = icmp ult v58, v53
-;; @005f                               brif v59, block15, block14
-;;
-;;                                 block14 cold:
-;; @005f                               trap user65535
-;;
-;;                                 block15:
-;; @005f                               v60 = iadd.i64 v52, v56
+;; @005f                               trapz v59, user65535
+;; @005f                               v60 = iadd v52, v56
 ;; @005f                               store.i64 notrap aligned v48, v60
 ;; @005f                               jump block7
 ;;

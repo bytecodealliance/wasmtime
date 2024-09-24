@@ -72,10 +72,13 @@ impl MemoryImage {
         data: &[u8],
         mmap: Option<&MmapVec>,
     ) -> Result<Option<MemoryImage>> {
+        let assert_page_aligned = |val: usize| {
+            assert_eq!(val % (page_size as usize), 0);
+        };
         // Sanity-check that various parameters are page-aligned.
         let len = data.len();
         assert_eq!(offset % u64::from(page_size), 0);
-        assert_eq!((len as u32) % page_size, 0);
+        assert_page_aligned(len);
         let linear_memory_offset = match usize::try_from(offset) {
             Ok(offset) => offset,
             Err(_) => return Ok(None),
@@ -101,10 +104,10 @@ impl MemoryImage {
             let data_start = data.as_ptr() as usize;
             let data_end = data_start + data.len();
             assert!(start <= data_start && data_end <= end);
-            assert_eq!((start as u32) % page_size, 0);
-            assert_eq!((data_start as u32) % page_size, 0);
-            assert_eq!((data_end as u32) % page_size, 0);
-            assert_eq!((mmap.original_offset() as u32) % page_size, 0);
+            assert_page_aligned(start);
+            assert_page_aligned(data_start);
+            assert_page_aligned(data_end);
+            assert_page_aligned(mmap.original_offset());
 
             #[cfg(feature = "std")]
             if let Some(file) = mmap.original_file() {
@@ -167,7 +170,8 @@ impl ModuleMemoryImages {
             _ => return Ok(None),
         };
         let mut memories = PrimaryMap::with_capacity(map.len());
-        let page_size = crate::runtime::vm::host_page_size() as u32;
+        let page_size = crate::runtime::vm::host_page_size();
+        let page_size = u32::try_from(page_size).unwrap();
         for (memory_index, init) in map {
             // mmap-based-initialization only works for defined memories with a
             // known starting point of all zeros, so bail out if the mmeory is
@@ -752,7 +756,7 @@ mod test {
     use crate::runtime::vm::mmap::Mmap;
     use crate::runtime::vm::sys::vm::decommit_pages;
     use std::sync::Arc;
-    use wasmtime_environ::Memory;
+    use wasmtime_environ::{IndexType, Limits, Memory};
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
@@ -774,10 +778,9 @@ mod test {
         MemoryPlan {
             style,
             memory: Memory {
-                minimum: 0,
-                maximum: None,
+                idx_type: IndexType::I32,
+                limits: Limits { min: 0, max: None },
                 shared: false,
-                memory64: false,
                 page_size_log2: Memory::DEFAULT_PAGE_SIZE_LOG2,
             },
             pre_guard_size: 0,

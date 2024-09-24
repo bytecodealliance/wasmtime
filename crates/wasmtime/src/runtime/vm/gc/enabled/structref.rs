@@ -1,12 +1,12 @@
+use super::{truncate_i32_to_i16, truncate_i32_to_i8};
 use crate::{
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
     store::AutoAssertNoGc,
-    vm::GcStructLayout,
     AnyRef, ExternRef, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
 };
 use core::fmt;
-use wasmtime_environ::VMGcKind;
+use wasmtime_environ::{GcStructLayout, VMGcKind};
 
 /// A `VMGcRef` that we know points to a `struct`.
 ///
@@ -187,8 +187,8 @@ impl VMStructRef {
         let offset = layout.fields[field];
         let mut data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
         match val {
-            Val::I32(i) if ty.is_i8() => data.write_i8(offset, i as i8),
-            Val::I32(i) if ty.is_i16() => data.write_i16(offset, i as i16),
+            Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
+            Val::I32(i) if ty.is_i16() => data.write_i16(offset, truncate_i32_to_i16(i)),
             Val::I32(i) => data.write_i32(offset, i),
             Val::I64(i) => data.write_i64(offset, i),
             Val::F32(f) => data.write_u32(offset, f),
@@ -273,11 +273,11 @@ impl VMStructRef {
             Val::I32(i) if ty.is_i8() => store
                 .gc_store_mut()?
                 .gc_object_data(self.as_gc_ref())
-                .write_i8(offset, i as i8),
+                .write_i8(offset, truncate_i32_to_i8(i)),
             Val::I32(i) if ty.is_i16() => store
                 .gc_store_mut()?
                 .gc_object_data(self.as_gc_ref())
-                .write_i16(offset, i as i16),
+                .write_i16(offset, truncate_i32_to_i16(i)),
             Val::I32(i) => store
                 .gc_store_mut()?
                 .gc_object_data(self.as_gc_ref())

@@ -311,11 +311,13 @@ pub mod http_fetch {
         let mut inst = linker.instance("http-fetch")?;
         inst.func_wrap_async(
             "fetch-request",
-            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Request,)| wasmtime::component::__internal::Box::new(async move {
-                let host = &mut host_getter(caller.data_mut());
-                let r = Host::fetch_request(host, arg0).await;
-                Ok((r,))
-            }),
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Request,)| {
+                wasmtime::component::__internal::Box::new(async move {
+                    let host = &mut host_getter(caller.data_mut());
+                    let r = Host::fetch_request(host, arg0).await;
+                    Ok((r,))
+                })
+            },
         )?;
         Ok(())
     }

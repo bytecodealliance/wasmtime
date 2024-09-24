@@ -18,7 +18,7 @@
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movq    %r14, %r11
-;;       movl    0x60(%r11), %eax
+;;       movq    0x60(%r11), %rax
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq

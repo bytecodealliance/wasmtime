@@ -68,6 +68,17 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::Unwind { .. } | Inst::Trap { .. } | Inst::Nop => {}
 
+        Inst::TrapIf {
+            cond: _,
+            size: _,
+            src1,
+            src2,
+            code: _,
+        } => {
+            collector.reg_use(src1);
+            collector.reg_use(src2);
+        }
+
         Inst::GetSp { dst } => {
             collector.reg_def(dst);
         }
@@ -522,6 +533,18 @@ impl Inst {
             Inst::Unwind { inst } => format!("unwind {inst:?}"),
 
             Inst::Trap { code } => format!("trap // code = {code:?}"),
+
+            Inst::TrapIf {
+                cond,
+                size,
+                src1,
+                src2,
+                code,
+            } => {
+                let src1 = format_reg(**src1);
+                let src2 = format_reg(**src2);
+                format!("trap_if {cond}, {size:?}, {src1}, {src2} // code = {code:?}")
+            }
 
             Inst::Nop => format!("nop"),
 

@@ -187,11 +187,11 @@ impl Val {
                 let u32_count = cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap();
                 let ty = &cx.types[i];
                 let mut flags = Vec::new();
-                for i in 0..u32_count {
+                for i in 0..u32::try_from(u32_count).unwrap() {
                     push_flags(
                         ty,
                         &mut flags,
-                        (i as u32) * 32,
+                        i * 32,
                         u32::lift(cx, InterfaceType::U32, next(src))?,
                     );
                 }
@@ -480,8 +480,8 @@ impl Val {
                 let ty = &cx.types[ty];
                 let (ptr, len) = lower_list(cx, ty.element, values)?;
                 // FIXME: needs memory64 handling
-                *cx.get(offset + 0) = (ptr as i32).to_le_bytes();
-                *cx.get(offset + 4) = (len as i32).to_le_bytes();
+                *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
+                *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
                 Ok(())
             }
             (InterfaceType::List(_), _) => unexpected(ty, self),
@@ -947,7 +947,7 @@ fn get_enum_discriminant(ty: &TypeEnum, n: &str) -> Result<u32> {
     ty.names
         .get_index_of(n)
         .ok_or_else(|| anyhow::anyhow!("enum variant name `{n}` is not valid"))
-        .map(|i| i as u32)
+        .map(|i| i.try_into().unwrap())
 }
 
 fn get_variant_discriminant<'a>(
@@ -958,7 +958,7 @@ fn get_variant_discriminant<'a>(
         .cases
         .get_full(name)
         .ok_or_else(|| anyhow::anyhow!("unknown variant case: `{name}`"))?;
-    Ok((i as u32, ty))
+    Ok((i.try_into().unwrap(), ty))
 }
 
 fn next<'a>(src: &mut Iter<'a, ValRaw>) -> &'a ValRaw {

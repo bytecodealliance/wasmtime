@@ -1,3 +1,31 @@
+// Wasmtime's runtime has lots of fiddly bits where we're doing operations like
+// casting between wasm i32/i64 and host `usize` values. There's also in general
+// just lots of pieces of low-level manipulation of memory and internals of VM
+// runtime state. To help keep all the integer casts correct be a bit more
+// strict than the default settings to help weed out bugs ahead of time.
+//
+// This inevitably leads to wordier code than might otherwise be used because,
+// for example, `u64 as usize` is warned against and will be an error on CI.
+// This happens pretty frequently and needs to be replaced with `val.try_into()`
+// or `usize::try_from(val)` where the error is handled. In some cases the
+// correct thing to do is to `.unwrap()` the error to indicate a fatal mistake,
+// but in some cases the correct thing is to propagate the error.
+//
+// Some niche cases that explicitly want truncation are recommended to have a
+// function along the lines of
+//
+//     #[allow(clippy::cast_possible_truncation)]
+//     fn truncate_i32_to_i8(a: i32) -> i8 { a as i8 }
+//
+// as this explicitly indicates the intent of truncation is desired. Other
+// locations should use fallible conversions.
+//
+// If performance is absolutely critical then it's recommended to use `#[allow]`
+// with a comment indicating why performance is critical as well as a short
+// explanation of why truncation shouldn't be happening at runtime. This
+// situation should be pretty rare though.
+#![warn(clippy::cast_possible_truncation)]
+
 #[macro_use]
 pub(crate) mod func;
 

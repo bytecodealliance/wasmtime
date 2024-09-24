@@ -3502,6 +3502,35 @@
         (ConsumesFlags.ConsumesFlagsSideEffect
          (MInst.TrapIf (cond_br_cond cond) trap_code)))))
 
+;; Helpers for lowering `trapz` and `trapnz`.
+(type ZeroCond
+      (enum
+       Zero
+       NonZero))
+
+(decl zero_cond_to_cond_br (ZeroCond Reg) CondBrKind)
+(rule (zero_cond_to_cond_br (ZeroCond.Zero) reg)
+      (cond_br_zero reg))
+
+(rule (zero_cond_to_cond_br (ZeroCond.NonZero) reg)
+      (cond_br_not_zero reg))
+
+(decl trap_if_val (ZeroCond Value TrapCode) InstOutput)
+(rule (trap_if_val zero_cond val @ (value_type (fits_in_64 _)) trap_code)
+      (let ((reg Reg (put_in_reg_zext64 val)))
+      (side_effect
+       (SideEffectNoResult.Inst
+        (MInst.TrapIf (zero_cond_to_cond_br zero_cond reg) trap_code)))))
+
+(rule -1 (trap_if_val zero_cond val @ (value_type $I128) trap_code)
+  (let ((c ValueRegs (put_in_regs val))
+        (c_lo Reg (value_regs_get c 0))
+        (c_hi Reg (value_regs_get c 1))
+        (c_test Reg (orr $I64 c_lo c_hi)))
+      (side_effect 
+       (SideEffectNoResult.Inst
+        (MInst.TrapIf (zero_cond_to_cond_br zero_cond c_test) trap_code)))))
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Type of extension performed by an immediate helper

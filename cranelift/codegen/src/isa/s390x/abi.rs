@@ -143,7 +143,7 @@ use crate::isa::s390x::{inst::*, settings as s390x_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;
-use crate::{CodegenError, CodegenResult};
+use crate::CodegenResult;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
@@ -249,11 +249,6 @@ fn get_vecreg_for_ret(idx: usize) -> Option<Reg> {
     }
 }
 
-/// This is the limit for the size of argument and return-value areas on the
-/// stack. We place a reasonable limit here to avoid integer overflow issues
-/// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
-
 /// The size of the register save area
 pub static REG_SAVE_AREA_SIZE: u32 = 160;
 
@@ -278,6 +273,11 @@ impl ABIMachineSpec for S390xMachineDeps {
     type I = Inst;
 
     type F = s390x_settings::Flags;
+
+    /// This is the limit for the size of argument and return-value areas on the
+    /// stack. We place a reasonable limit here to avoid integer overflow issues
+    /// with 32-bit arithmetic: for now, 128 MB.
+    const STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
     fn word_bits() -> u32 {
         64
@@ -315,13 +315,30 @@ impl ABIMachineSpec for S390xMachineDeps {
             next_stack = REG_SAVE_AREA_SIZE;
         }
 
-        // In the SystemV ABI, the return area pointer is the first argument,
-        // so we need to leave room for it if required.
-        if add_ret_area_ptr {
+        let ret_area_ptr = if add_ret_area_ptr {
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_gpr += 1;
-        }
+            Some(ABIArg::reg(
+                get_intreg_for_arg(call_conv, 0)
+                    .unwrap()
+                    .to_real_reg()
+                    .unwrap(),
+                types::I64,
+                ir::ArgumentExtension::None,
+                ir::ArgumentPurpose::Normal,
+            ))
+        } else {
+            None
+        };
 
         for mut param in params.into_iter().copied() {
+            if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                panic!(
+                    "StructArgument parameters are not supported on s390x. \
+                    Use regular pointer arguments instead."
+                );
+            }
+
             let intreg = in_int_reg(param.value_type);
             let fltreg = in_flt_reg(param.value_type);
             let vecreg = in_vec_reg(param.value_type);
@@ -393,22 +410,14 @@ impl ABIMachineSpec for S390xMachineDeps {
                 }
             };
 
-            if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
-                assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                args.push(ABIArg::StructArg {
-                    pointer: Some(slot),
-                    offset: 0,
-                    size: size as u64,
-                    purpose: param.purpose,
-                });
-            } else if let Some(ty) = implicit_ref {
+            if let Some(ty) = implicit_ref {
                 assert!(
                     (ty_bits(ty) / 8) % 8 == 0,
                     "implicit argument size is not properly aligned"
                 );
                 args.push(ABIArg::ImplicitPtrArg {
                     pointer: slot,
-                    offset: 0,
+                    offset: 0, // Will be filled in later
                     ty,
                     purpose: param.purpose,
                 });
@@ -422,50 +431,24 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         next_stack = align_to(next_stack, 8);
 
-        let extra_arg = if add_ret_area_ptr {
-            debug_assert!(args_or_rets == ArgsOrRets::Args);
-            // The return pointer is passed as first argument.
-            if let Some(reg) = get_intreg_for_arg(call_conv, 0) {
-                args.push(ABIArg::reg(
-                    reg.to_real_reg().unwrap(),
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-            } else {
-                args.push(ABIArg::stack(
-                    next_stack as i64,
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
-                next_stack += 8;
-            }
+        let extra_arg = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
         } else {
             None
         };
 
         // After all arguments are in their well-defined location,
-        // allocate buffers for all StructArg or ImplicitPtrArg arguments.
+        // allocate buffers for all ImplicitPtrArg arguments.
         for arg in args.args_mut() {
             match arg {
-                ABIArg::StructArg { offset, size, .. } => {
-                    *offset = next_stack as i64;
-                    next_stack += *size as u32;
-                }
+                ABIArg::StructArg { .. } => unreachable!(),
                 ABIArg::ImplicitPtrArg { offset, ty, .. } => {
                     *offset = next_stack as i64;
                     next_stack += (ty_bits(*ty) / 8) as u32;
                 }
                 _ => {}
             }
-        }
-
-        // To avoid overflow issues, limit the arg/return size to something
-        // reasonable -- here, 128 MB.
-        if next_stack > STACK_ARG_RET_SIZE_LIMIT {
-            return Err(CodegenError::ImplLimitExceeded);
         }
 
         // With the tail-call convention, arguments are passed in the *callee*'s
@@ -484,9 +467,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                             }
                         }
                     }
-                    ABIArg::StructArg { offset, .. } => {
-                        *offset -= next_stack as i64;
-                    }
+                    ABIArg::StructArg { .. } => unreachable!(),
                     ABIArg::ImplicitPtrArg { offset, .. } => {
                         *offset -= next_stack as i64;
                     }

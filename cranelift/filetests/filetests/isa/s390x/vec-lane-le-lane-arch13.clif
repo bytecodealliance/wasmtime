@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x arch13
 
-function %insertlane_i64x2_mem_0(i64x2, i64) -> i64x2 wasmtime_system_v {
+function %insertlane_i64x2_mem_0(i64x2, i64) -> i64x2 tail {
 block0(v0: i64x2, v1: i64):
     v2 = load.i64 v1
     v3 = insertlane.i64x2 v0, v2, 0
@@ -18,7 +18,7 @@ block0(v0: i64x2, v1: i64):
 ;   vleg %v24, 0(%r2), 1 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i64x2_mem_1(i64x2, i64) -> i64x2 wasmtime_system_v {
+function %insertlane_i64x2_mem_1(i64x2, i64) -> i64x2 tail {
 block0(v0: i64x2, v1: i64):
     v2 = load.i64 v1
     v3 = insertlane.i64x2 v0, v2, 1
@@ -35,7 +35,7 @@ block0(v0: i64x2, v1: i64):
 ;   vleg %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i64x2_mem_little_0(i64x2, i64) -> i64x2 wasmtime_system_v {
+function %insertlane_i64x2_mem_little_0(i64x2, i64) -> i64x2 tail {
 block0(v0: i64x2, v1: i64):
     v2 = load.i64 little v1
     v3 = insertlane.i64x2 v0, v2, 0
@@ -54,7 +54,7 @@ block0(v0: i64x2, v1: i64):
 ;   lr %r0, %r2
 ;   br %r14
 
-function %insertlane_i64x2_mem_little_1(i64x2, i64) -> i64x2 wasmtime_system_v {
+function %insertlane_i64x2_mem_little_1(i64x2, i64) -> i64x2 tail {
 block0(v0: i64x2, v1: i64):
     v2 = load.i64 little v1
     v3 = insertlane.i64x2 v0, v2, 1
@@ -73,7 +73,7 @@ block0(v0: i64x2, v1: i64):
 ;   .byte 0x08, 0x02
 ;   br %r14
 
-function %insertlane_i32x4_mem_0(i32x4, i64) -> i32x4 wasmtime_system_v {
+function %insertlane_i32x4_mem_0(i32x4, i64) -> i32x4 tail {
 block0(v0: i32x4, v1: i64):
     v2 = load.i32 v1
     v3 = insertlane.i32x4 v0, v2, 0
@@ -90,7 +90,7 @@ block0(v0: i32x4, v1: i64):
 ;   vlef %v24, 0(%r2), 3 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 wasmtime_system_v {
+function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 tail {
 block0(v0: i32x4, v1: i64):
     v2 = load.i32 v1
     v3 = insertlane.i32x4 v0, v2, 3
@@ -107,7 +107,7 @@ block0(v0: i32x4, v1: i64):
 ;   vlef %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i32x4_mem_little_0(i32x4, i64) -> i32x4 wasmtime_system_v {
+function %insertlane_i32x4_mem_little_0(i32x4, i64) -> i32x4 tail {
 block0(v0: i32x4, v1: i64):
     v2 = load.i32 little v1
     v3 = insertlane.i32x4 v0, v2, 0
@@ -126,7 +126,7 @@ block0(v0: i32x4, v1: i64):
 ;   ler %f0, %f3
 ;   br %r14
 
-function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 wasmtime_system_v {
+function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 tail {
 block0(v0: i32x4, v1: i64):
     v2 = load.i32 little v1
     v3 = insertlane.i32x4 v0, v2, 3
@@ -145,7 +145,7 @@ block0(v0: i32x4, v1: i64):
 ;   .byte 0x08, 0x03
 ;   br %r14
 
-function %insertlane_i16x8_mem_0(i16x8, i64) -> i16x8 wasmtime_system_v {
+function %insertlane_i16x8_mem_0(i16x8, i64) -> i16x8 tail {
 block0(v0: i16x8, v1: i64):
     v2 = load.i16 v1
     v3 = insertlane.i16x8 v0, v2, 0
@@ -162,7 +162,7 @@ block0(v0: i16x8, v1: i64):
 ;   vleh %v24, 0(%r2), 7 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i16x8_mem_7(i16x8, i64) -> i16x8 wasmtime_system_v {
+function %insertlane_i16x8_mem_7(i16x8, i64) -> i16x8 tail {
 block0(v0: i16x8, v1: i64):
     v2 = load.i16 v1
     v3 = insertlane.i16x8 v0, v2, 7
@@ -179,7 +179,7 @@ block0(v0: i16x8, v1: i64):
 ;   vleh %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i16x8_mem_little_0(i16x8, i64) -> i16x8 wasmtime_system_v {
+function %insertlane_i16x8_mem_little_0(i16x8, i64) -> i16x8 tail {
 block0(v0: i16x8, v1: i64):
     v2 = load.i16 little v1
     v3 = insertlane.i16x8 v0, v2, 0
@@ -197,7 +197,7 @@ block0(v0: i16x8, v1: i64):
 ;   lpdr %f0, %f0
 ;   le %f0, 0x7fe(%r1)
 
-function %insertlane_i16x8_mem_little_7(i16x8, i64) -> i16x8 wasmtime_system_v {
+function %insertlane_i16x8_mem_little_7(i16x8, i64) -> i16x8 tail {
 block0(v0: i16x8, v1: i64):
     v2 = load.i16 little v1
     v3 = insertlane.i16x8 v0, v2, 7
@@ -216,7 +216,7 @@ block0(v0: i16x8, v1: i64):
 ;   .byte 0x08, 0x01
 ;   br %r14
 
-function %insertlane_i8x16_mem_0(i8x16, i64) -> i8x16 wasmtime_system_v {
+function %insertlane_i8x16_mem_0(i8x16, i64) -> i8x16 tail {
 block0(v0: i8x16, v1: i64):
     v2 = load.i8 v1
     v3 = insertlane.i8x16 v0, v2, 0
@@ -233,7 +233,7 @@ block0(v0: i8x16, v1: i64):
 ;   vleb %v24, 0(%r2), 0xf ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i8x16_mem_15(i8x16, i64) -> i8x16 wasmtime_system_v {
+function %insertlane_i8x16_mem_15(i8x16, i64) -> i8x16 tail {
 block0(v0: i8x16, v1: i64):
     v2 = load.i8 v1
     v3 = insertlane.i8x16 v0, v2, 15
@@ -250,7 +250,7 @@ block0(v0: i8x16, v1: i64):
 ;   vleb %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i8x16_mem_little_0(i8x16, i64) -> i8x16 wasmtime_system_v {
+function %insertlane_i8x16_mem_little_0(i8x16, i64) -> i8x16 tail {
 block0(v0: i8x16, v1: i64):
     v2 = load.i8 little v1
     v3 = insertlane.i8x16 v0, v2, 0
@@ -267,7 +267,7 @@ block0(v0: i8x16, v1: i64):
 ;   vleb %v24, 0(%r2), 0xf ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i8x16_mem_little_15(i8x16, i64) -> i8x16 wasmtime_system_v {
+function %insertlane_i8x16_mem_little_15(i8x16, i64) -> i8x16 tail {
 block0(v0: i8x16, v1: i64):
     v2 = load.i8 little v1
     v3 = insertlane.i8x16 v0, v2, 15
@@ -284,7 +284,7 @@ block0(v0: i8x16, v1: i64):
 ;   vleb %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_f64x2_mem_0(f64x2, i64) -> f64x2 wasmtime_system_v {
+function %insertlane_f64x2_mem_0(f64x2, i64) -> f64x2 tail {
 block0(v0: f64x2, v1: i64):
     v2 = load.f64 v1
     v3 = insertlane.f64x2 v0, v2, 0
@@ -301,7 +301,7 @@ block0(v0: f64x2, v1: i64):
 ;   vleg %v24, 0(%r2), 1 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_f64x2_mem_1(f64x2, i64) -> f64x2 wasmtime_system_v {
+function %insertlane_f64x2_mem_1(f64x2, i64) -> f64x2 tail {
 block0(v0: f64x2, v1: i64):
     v2 = load.f64 v1
     v3 = insertlane.f64x2 v0, v2, 1
@@ -318,7 +318,7 @@ block0(v0: f64x2, v1: i64):
 ;   vleg %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_f64x2_mem_little_0(f64x2, i64) -> f64x2 wasmtime_system_v {
+function %insertlane_f64x2_mem_little_0(f64x2, i64) -> f64x2 tail {
 block0(v0: f64x2, v1: i64):
     v2 = load.f64 little v1
     v3 = insertlane.f64x2 v0, v2, 0
@@ -337,7 +337,7 @@ block0(v0: f64x2, v1: i64):
 ;   lr %r0, %r2
 ;   br %r14
 
-function %insertlane_f64x2_mem_little_1(f64x2, i64) -> f64x2 wasmtime_system_v {
+function %insertlane_f64x2_mem_little_1(f64x2, i64) -> f64x2 tail {
 block0(v0: f64x2, v1: i64):
     v2 = load.f64 little v1
     v3 = insertlane.f64x2 v0, v2, 1
@@ -356,7 +356,7 @@ block0(v0: f64x2, v1: i64):
 ;   .byte 0x08, 0x02
 ;   br %r14
 
-function %insertlane_f32x4_mem_0(f32x4, i64) -> f32x4 wasmtime_system_v {
+function %insertlane_f32x4_mem_0(f32x4, i64) -> f32x4 tail {
 block0(v0: f32x4, v1: i64):
     v2 = load.f32 v1
     v3 = insertlane.f32x4 v0, v2, 0
@@ -373,7 +373,7 @@ block0(v0: f32x4, v1: i64):
 ;   vlef %v24, 0(%r2), 3 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 wasmtime_system_v {
+function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 tail {
 block0(v0: i32x4, v1: i64):
     v2 = load.i32 v1
     v3 = insertlane.i32x4 v0, v2, 3
@@ -390,7 +390,7 @@ block0(v0: i32x4, v1: i64):
 ;   vlef %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %insertlane_f32x4_mem_little_0(f32x4, i64) -> f32x4 wasmtime_system_v {
+function %insertlane_f32x4_mem_little_0(f32x4, i64) -> f32x4 tail {
 block0(v0: f32x4, v1: i64):
     v2 = load.f32 little v1
     v3 = insertlane.f32x4 v0, v2, 0
@@ -409,7 +409,7 @@ block0(v0: f32x4, v1: i64):
 ;   ler %f0, %f3
 ;   br %r14
 
-function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 wasmtime_system_v {
+function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 tail {
 block0(v0: i32x4, v1: i64):
     v2 = load.i32 little v1
     v3 = insertlane.i32x4 v0, v2, 3
@@ -428,7 +428,7 @@ block0(v0: i32x4, v1: i64):
 ;   .byte 0x08, 0x03
 ;   br %r14
 
-function %extractlane_i64x2_mem_0(i64x2, i64) wasmtime_system_v {
+function %extractlane_i64x2_mem_0(i64x2, i64) tail {
 block0(v0: i64x2, v1: i64):
     v2 = extractlane.i64x2 v0, 0
     store v2, v1
@@ -445,7 +445,7 @@ block0(v0: i64x2, v1: i64):
 ;   vsteg %v24, 0(%r2), 1 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i64x2_mem_1(i64x2, i64) wasmtime_system_v {
+function %extractlane_i64x2_mem_1(i64x2, i64) tail {
 block0(v0: i64x2, v1: i64):
     v2 = extractlane.i64x2 v0, 1
     store v2, v1
@@ -462,7 +462,7 @@ block0(v0: i64x2, v1: i64):
 ;   vsteg %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i64x2_mem_little_0(i64x2, i64) wasmtime_system_v {
+function %extractlane_i64x2_mem_little_0(i64x2, i64) tail {
 block0(v0: i64x2, v1: i64):
     v2 = extractlane.i64x2 v0, 0
     store little v2, v1
@@ -481,7 +481,7 @@ block0(v0: i64x2, v1: i64):
 ;   lr %r0, %r10
 ;   br %r14
 
-function %extractlane_i64x2_mem_little_1(i64x2, i64) wasmtime_system_v {
+function %extractlane_i64x2_mem_little_1(i64x2, i64) tail {
 block0(v0: i64x2, v1: i64):
     v2 = extractlane.i64x2 v0, 1
     store little v2, v1
@@ -500,7 +500,7 @@ block0(v0: i64x2, v1: i64):
 ;   .byte 0x08, 0x0a
 ;   br %r14
 
-function %extractlane_i32x4_mem_0(i32x4, i64) wasmtime_system_v {
+function %extractlane_i32x4_mem_0(i32x4, i64) tail {
 block0(v0: i32x4, v1: i64):
     v2 = extractlane.i32x4 v0, 0
     store v2, v1
@@ -517,7 +517,7 @@ block0(v0: i32x4, v1: i64):
 ;   vstef %v24, 0(%r2), 3 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i32x4_mem_3(i32x4, i64) wasmtime_system_v {
+function %extractlane_i32x4_mem_3(i32x4, i64) tail {
 block0(v0: i32x4, v1: i64):
     v2 = extractlane.i32x4 v0, 3
     store v2, v1
@@ -534,7 +534,7 @@ block0(v0: i32x4, v1: i64):
 ;   vstef %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i32x4_mem_little_0(i32x4, i64) wasmtime_system_v {
+function %extractlane_i32x4_mem_little_0(i32x4, i64) tail {
 block0(v0: i32x4, v1: i64):
     v2 = extractlane.i32x4 v0, 0
     store little v2, v1
@@ -553,7 +553,7 @@ block0(v0: i32x4, v1: i64):
 ;   ler %f0, %f11
 ;   br %r14
 
-function %extractlane_i32x4_mem_little_3(i32x4, i64) wasmtime_system_v {
+function %extractlane_i32x4_mem_little_3(i32x4, i64) tail {
 block0(v0: i32x4, v1: i64):
     v2 = extractlane.i32x4 v0, 3
     store little v2, v1
@@ -572,7 +572,7 @@ block0(v0: i32x4, v1: i64):
 ;   .byte 0x08, 0x0b
 ;   br %r14
 
-function %extractlane_i16x8_mem_0(i16x8, i64) wasmtime_system_v {
+function %extractlane_i16x8_mem_0(i16x8, i64) tail {
 block0(v0: i16x8, v1: i64):
     v2 = extractlane.i16x8 v0, 0
     store v2, v1
@@ -589,7 +589,7 @@ block0(v0: i16x8, v1: i64):
 ;   vsteh %v24, 0(%r2), 7 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i16x8_mem_7(i16x8, i64) wasmtime_system_v {
+function %extractlane_i16x8_mem_7(i16x8, i64) tail {
 block0(v0: i16x8, v1: i64):
     v2 = extractlane.i16x8 v0, 7
     store v2, v1
@@ -606,7 +606,7 @@ block0(v0: i16x8, v1: i64):
 ;   vsteh %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i16x8_mem_little_0(i16x8, i64) wasmtime_system_v {
+function %extractlane_i16x8_mem_little_0(i16x8, i64) tail {
 block0(v0: i16x8, v1: i64):
     v2 = extractlane.i16x8 v0, 0
     store little v2, v1
@@ -624,7 +624,7 @@ block0(v0: i16x8, v1: i64):
 ;   lpdr %f0, %f0
 ;   le %f0, 0x7fe(%r9)
 
-function %extractlane_i16x8_mem_little_7(i16x8, i64) wasmtime_system_v {
+function %extractlane_i16x8_mem_little_7(i16x8, i64) tail {
 block0(v0: i16x8, v1: i64):
     v2 = extractlane.i16x8 v0, 7
     store little v2, v1
@@ -643,7 +643,7 @@ block0(v0: i16x8, v1: i64):
 ;   .byte 0x08, 0x09
 ;   br %r14
 
-function %extractlane_i8x16_mem_0(i8x16, i64) wasmtime_system_v {
+function %extractlane_i8x16_mem_0(i8x16, i64) tail {
 block0(v0: i8x16, v1: i64):
     v2 = extractlane.i8x16 v0, 0
     store v2, v1
@@ -660,7 +660,7 @@ block0(v0: i8x16, v1: i64):
 ;   vsteb %v24, 0(%r2), 0xf ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i8x16_mem_15(i8x16, i64) wasmtime_system_v {
+function %extractlane_i8x16_mem_15(i8x16, i64) tail {
 block0(v0: i8x16, v1: i64):
     v2 = extractlane.i8x16 v0, 15
     store v2, v1
@@ -677,7 +677,7 @@ block0(v0: i8x16, v1: i64):
 ;   vsteb %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i8x16_mem_little_0(i8x16, i64) wasmtime_system_v {
+function %extractlane_i8x16_mem_little_0(i8x16, i64) tail {
 block0(v0: i8x16, v1: i64):
     v2 = extractlane.i8x16 v0, 0
     store little v2, v1
@@ -694,7 +694,7 @@ block0(v0: i8x16, v1: i64):
 ;   vsteb %v24, 0(%r2), 0xf ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_i8x16_mem_little_15(i8x16, i64) wasmtime_system_v {
+function %extractlane_i8x16_mem_little_15(i8x16, i64) tail {
 block0(v0: i8x16, v1: i64):
     v2 = extractlane.i8x16 v0, 15
     store little v2, v1
@@ -711,7 +711,7 @@ block0(v0: i8x16, v1: i64):
 ;   vsteb %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_f64x2_mem_0(f64x2, i64) wasmtime_system_v {
+function %extractlane_f64x2_mem_0(f64x2, i64) tail {
 block0(v0: f64x2, v1: i64):
     v2 = extractlane.f64x2 v0, 0
     store v2, v1
@@ -728,7 +728,7 @@ block0(v0: f64x2, v1: i64):
 ;   vsteg %v24, 0(%r2), 1 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_f64x2_mem_1(f64x2, i64) wasmtime_system_v {
+function %extractlane_f64x2_mem_1(f64x2, i64) tail {
 block0(v0: f64x2, v1: i64):
     v2 = extractlane.f64x2 v0, 1
     store v2, v1
@@ -745,7 +745,7 @@ block0(v0: f64x2, v1: i64):
 ;   vsteg %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_f64x2_mem_little_0(f64x2, i64) wasmtime_system_v {
+function %extractlane_f64x2_mem_little_0(f64x2, i64) tail {
 block0(v0: f64x2, v1: i64):
     v2 = extractlane.f64x2 v0, 0
     store little v2, v1
@@ -764,7 +764,7 @@ block0(v0: f64x2, v1: i64):
 ;   lr %r0, %r10
 ;   br %r14
 
-function %extractlane_f64x2_mem_little_1(f64x2, i64) wasmtime_system_v {
+function %extractlane_f64x2_mem_little_1(f64x2, i64) tail {
 block0(v0: f64x2, v1: i64):
     v2 = extractlane.f64x2 v0, 1
     store little v2, v1
@@ -783,7 +783,7 @@ block0(v0: f64x2, v1: i64):
 ;   .byte 0x08, 0x0a
 ;   br %r14
 
-function %extractlane_f32x4_mem_0(f32x4, i64) wasmtime_system_v {
+function %extractlane_f32x4_mem_0(f32x4, i64) tail {
 block0(v0: f32x4, v1: i64):
     v2 = extractlane.f32x4 v0, 0
     store v2, v1
@@ -800,7 +800,7 @@ block0(v0: f32x4, v1: i64):
 ;   vstef %v24, 0(%r2), 3 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_f32x4_mem_3(f32x4, i64) wasmtime_system_v {
+function %extractlane_f32x4_mem_3(f32x4, i64) tail {
 block0(v0: f32x4, v1: i64):
     v2 = extractlane.f32x4 v0, 3
     store v2, v1
@@ -817,7 +817,7 @@ block0(v0: f32x4, v1: i64):
 ;   vstef %v24, 0(%r2), 0 ; trap: heap_oob
 ;   br %r14
 
-function %extractlane_f32x4_mem_little_0(f32x4, i64) wasmtime_system_v {
+function %extractlane_f32x4_mem_little_0(f32x4, i64) tail {
 block0(v0: f32x4, v1: i64):
     v2 = extractlane.f32x4 v0, 0
     store little v2, v1
@@ -836,7 +836,7 @@ block0(v0: f32x4, v1: i64):
 ;   ler %f0, %f11
 ;   br %r14
 
-function %extractlane_f32x4_mem_little_3(f32x4, i64) wasmtime_system_v {
+function %extractlane_f32x4_mem_little_3(f32x4, i64) tail {
 block0(v0: f32x4, v1: i64):
     v2 = extractlane.f32x4 v0, 3
     store little v2, v1
@@ -855,7 +855,7 @@ block0(v0: f32x4, v1: i64):
 ;   .byte 0x08, 0x0b
 ;   br %r14
 
-function %splat_i64x2_mem(i64) -> i64x2 wasmtime_system_v {
+function %splat_i64x2_mem(i64) -> i64x2 tail {
 block0(v0: i64):
     v1 = load.i64 v0
     v2 = splat.i64x2 v1
@@ -872,7 +872,7 @@ block0(v0: i64):
 ;   vlrepg %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
-function %splat_i64x2_mem_little(i64) -> i64x2 wasmtime_system_v {
+function %splat_i64x2_mem_little(i64) -> i64x2 tail {
 block0(v0: i64):
     v1 = load.i64 little v0
     v2 = splat.i64x2 v1
@@ -891,7 +891,7 @@ block0(v0: i64):
 ;   ler %f0, %f5
 ;   br %r14
 
-function %splat_i32x4_mem(i64) -> i32x4 wasmtime_system_v {
+function %splat_i32x4_mem(i64) -> i32x4 tail {
 block0(v0: i64):
     v1 = load.i32 v0
     v2 = splat.i32x4 v1
@@ -908,7 +908,7 @@ block0(v0: i64):
 ;   vlrepf %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
-function %splat_i32x4_mem_little(i64) -> i32x4 wasmtime_system_v {
+function %splat_i32x4_mem_little(i64) -> i32x4 tail {
 block0(v0: i64):
     v1 = load.i32 little v0
     v2 = splat.i32x4 v1
@@ -927,7 +927,7 @@ block0(v0: i64):
 ;   ldr %f0, %f5
 ;   br %r14
 
-function %splat_i16x8_mem(i64) -> i16x8 wasmtime_system_v {
+function %splat_i16x8_mem(i64) -> i16x8 tail {
 block0(v0: i64):
     v1 = load.i16 v0
     v2 = splat.i16x8 v1
@@ -944,7 +944,7 @@ block0(v0: i64):
 ;   vlreph %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
-function %splat_i16x8_mem_little(i64) -> i16x8 wasmtime_system_v {
+function %splat_i16x8_mem_little(i64) -> i16x8 tail {
 block0(v0: i64):
     v1 = load.i16 little v0
     v2 = splat.i16x8 v1
@@ -963,7 +963,7 @@ block0(v0: i64):
 ;   lr %r0, %r5
 ;   br %r14
 
-function %splat_i8x16_mem(i64) -> i8x16 wasmtime_system_v {
+function %splat_i8x16_mem(i64) -> i8x16 tail {
 block0(v0: i64):
     v1 = load.i8 v0
     v2 = splat.i8x16 v1
@@ -980,7 +980,7 @@ block0(v0: i64):
 ;   vlrepb %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
-function %splat_i8x16_mem_little(i64) -> i8x16 wasmtime_system_v {
+function %splat_i8x16_mem_little(i64) -> i8x16 tail {
 block0(v0: i64):
     v1 = load.i8 little v0
     v2 = splat.i8x16 v1
@@ -997,7 +997,7 @@ block0(v0: i64):
 ;   vlrepb %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
-function %splat_f64x2_mem(i64) -> f64x2 wasmtime_system_v {
+function %splat_f64x2_mem(i64) -> f64x2 tail {
 block0(v0: i64):
     v1 = load.f64 v0
     v2 = splat.f64x2 v1
@@ -1014,7 +1014,7 @@ block0(v0: i64):
 ;   vlrepg %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
-function %splat_f64x2_mem_little(i64) -> f64x2 wasmtime_system_v {
+function %splat_f64x2_mem_little(i64) -> f64x2 tail {
 block0(v0: i64):
     v1 = load.f64 little v0
     v2 = splat.f64x2 v1
@@ -1033,7 +1033,7 @@ block0(v0: i64):
 ;   ler %f0, %f5
 ;   br %r14
 
-function %splat_f32x4_mem(i64) -> f32x4 wasmtime_system_v {
+function %splat_f32x4_mem(i64) -> f32x4 tail {
 block0(v0: i64):
     v1 = load.f32 v0
     v2 = splat.f32x4 v1
@@ -1050,7 +1050,7 @@ block0(v0: i64):
 ;   vlrepf %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
-function %splat_f32x4_mem_little(i64) -> f32x4 wasmtime_system_v {
+function %splat_f32x4_mem_little(i64) -> f32x4 tail {
 block0(v0: i64):
     v1 = load.f32 little v0
     v2 = splat.f32x4 v1
@@ -1069,7 +1069,7 @@ block0(v0: i64):
 ;   ldr %f0, %f5
 ;   br %r14
 
-function %scalar_to_vector_i64x2_mem(i64) -> i64x2 wasmtime_system_v {
+function %scalar_to_vector_i64x2_mem(i64) -> i64x2 tail {
 block0(v0: i64):
     v1 = load.i64 v0
     v2 = scalar_to_vector.i64x2 v1
@@ -1088,7 +1088,7 @@ block0(v0: i64):
 ;   vleg %v24, 0(%r2), 1 ; trap: heap_oob
 ;   br %r14
 
-function %scalar_to_vector_i64x2_mem_little(i64) -> i64x2 wasmtime_system_v {
+function %scalar_to_vector_i64x2_mem_little(i64) -> i64x2 tail {
 block0(v0: i64):
     v1 = load.i64 little v0
     v2 = scalar_to_vector.i64x2 v1
@@ -1109,7 +1109,7 @@ block0(v0: i64):
 ;   lr %r0, %r2
 ;   br %r14
 
-function %scalar_to_vector_i32x4_mem(i64) -> i32x4 wasmtime_system_v {
+function %scalar_to_vector_i32x4_mem(i64) -> i32x4 tail {
 block0(v0: i64):
     v1 = load.i32 v0
     v2 = scalar_to_vector.i32x4 v1
@@ -1128,7 +1128,7 @@ block0(v0: i64):
 ;   vlef %v24, 0(%r2), 3 ; trap: heap_oob
 ;   br %r14
 
-function %scalar_to_vector_i32x4_mem_little(i64) -> i32x4 wasmtime_system_v {
+function %scalar_to_vector_i32x4_mem_little(i64) -> i32x4 tail {
 block0(v0: i64):
     v1 = load.i32 little v0
     v2 = scalar_to_vector.i32x4 v1
@@ -1149,7 +1149,7 @@ block0(v0: i64):
 ;   ler %f0, %f3
 ;   br %r14
 
-function %scalar_to_vector_i16x8_mem(i64) -> i16x8 wasmtime_system_v {
+function %scalar_to_vector_i16x8_mem(i64) -> i16x8 tail {
 block0(v0: i64):
     v1 = load.i16 v0
     v2 = scalar_to_vector.i16x8 v1
@@ -1168,7 +1168,7 @@ block0(v0: i64):
 ;   vleh %v24, 0(%r2), 7 ; trap: heap_oob
 ;   br %r14
 
-function %scalar_to_vector_i16x8_mem_little(i64) -> i16x8 wasmtime_system_v {
+function %scalar_to_vector_i16x8_mem_little(i64) -> i16x8 tail {
 block0(v0: i64):
     v1 = load.i16 little v0
     v2 = scalar_to_vector.i16x8 v1
@@ -1188,7 +1188,7 @@ block0(v0: i64):
 ;   lpdr %f0, %f0
 ;   le %f0, 0x7fe(%r1)
 
-function %scalar_to_vector_i8x16_mem(i64) -> i8x16 wasmtime_system_v {
+function %scalar_to_vector_i8x16_mem(i64) -> i8x16 tail {
 block0(v0: i64):
     v1 = load.i8 v0
     v2 = scalar_to_vector.i8x16 v1
@@ -1207,7 +1207,7 @@ block0(v0: i64):
 ;   vleb %v24, 0(%r2), 0xf ; trap: heap_oob
 ;   br %r14
 
-function %scalar_to_vector_i8x16_mem_little(i64) -> i8x16 wasmtime_system_v {
+function %scalar_to_vector_i8x16_mem_little(i64) -> i8x16 tail {
 block0(v0: i64):
     v1 = load.i8 little v0
     v2 = scalar_to_vector.i8x16 v1
@@ -1226,7 +1226,7 @@ block0(v0: i64):
 ;   vleb %v24, 0(%r2), 0xf ; trap: heap_oob
 ;   br %r14
 
-function %scalar_to_vector_f64x2_mem(i64) -> f64x2 wasmtime_system_v {
+function %scalar_to_vector_f64x2_mem(i64) -> f64x2 tail {
 block0(v0: i64):
     v1 = load.f64 v0
     v2 = scalar_to_vector.f64x2 v1
@@ -1245,7 +1245,7 @@ block0(v0: i64):
 ;   vleg %v24, 0(%r2), 1 ; trap: heap_oob
 ;   br %r14
 
-function %scalar_to_vector_f64x2_mem_little(i64) -> f64x2 wasmtime_system_v {
+function %scalar_to_vector_f64x2_mem_little(i64) -> f64x2 tail {
 block0(v0: i64):
     v1 = load.f64 little v0
     v2 = scalar_to_vector.f64x2 v1
@@ -1266,7 +1266,7 @@ block0(v0: i64):
 ;   lr %r0, %r2
 ;   br %r14
 
-function %scalar_to_vector_f32x4_mem(i64) -> f32x4 wasmtime_system_v {
+function %scalar_to_vector_f32x4_mem(i64) -> f32x4 tail {
 block0(v0: i64):
     v1 = load.f32 v0
     v2 = scalar_to_vector.f32x4 v1
@@ -1285,7 +1285,7 @@ block0(v0: i64):
 ;   vlef %v24, 0(%r2), 3 ; trap: heap_oob
 ;   br %r14
 
-function %scalar_to_vector_f32x4_mem_little(i64) -> f32x4 wasmtime_system_v {
+function %scalar_to_vector_f32x4_mem_little(i64) -> f32x4 tail {
 block0(v0: i64):
     v1 = load.f32 little v0
     v2 = scalar_to_vector.f32x4 v1

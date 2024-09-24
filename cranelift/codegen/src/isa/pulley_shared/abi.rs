@@ -1,11 +1,12 @@
 //! Implementation of a standard Pulley ABI.
 
 use super::{inst::*, PulleyFlags, PulleyTargetKind};
+use crate::isa::pulley_shared::PulleyBackend;
 use crate::{
     ir::{self, types::*, MemFlags, Signature},
     isa::{self, unwind::UnwindInst},
     machinst::*,
-    settings, CodegenError, CodegenResult,
+    settings, CodegenResult,
 };
 use alloc::{boxed::Box, vec::Vec};
 use core::marker::PhantomData;
@@ -18,11 +19,6 @@ pub(crate) type PulleyCallee<P> = Callee<PulleyMachineDeps<P>>;
 
 /// Support for the Pulley ABI from the caller side (at a callsite).
 pub(crate) type PulleyABICallSite<P> = CallSite<PulleyMachineDeps<P>>;
-
-/// This is the limit for the size of argument and return-value areas on the
-/// stack. We place a reasonable limit here to avoid integer overflow issues
-/// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 /// Pulley-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
@@ -39,6 +35,11 @@ where
 {
     type I = InstAndKind<P>;
     type F = PulleyFlags;
+
+    /// This is the limit for the size of argument and return-value areas on the
+    /// stack. We place a reasonable limit here to avoid integer overflow issues
+    /// with 32-bit arithmetic: for now, 128 MB.
+    const STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
     fn word_bits() -> u32 {
         P::pointer_width().bits().into()
@@ -68,6 +69,19 @@ where
         let mut next_f_reg = 0;
         let mut next_v_reg = 0;
         let mut next_stack: u32 = 0;
+
+        let ret_area_ptr = if add_ret_area_ptr {
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
+            next_x_reg += 1;
+            Some(ABIArg::reg(
+                x_reg(next_x_reg - 1).to_real_reg().unwrap(),
+                I64,
+                ir::ArgumentExtension::None,
+                ir::ArgumentPurpose::Normal,
+            ))
+        } else {
+            None
+        };
 
         for param in params {
             // Find the regclass(es) of the register(s) used to store a value of
@@ -124,38 +138,14 @@ where
             });
         }
 
-        let pos = if add_ret_area_ptr {
-            assert!(ArgsOrRets::Args == args_or_rets);
-            if next_x_reg <= x_end {
-                let arg = ABIArg::reg(
-                    x_reg(next_x_reg).to_real_reg().unwrap(),
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                );
-                args.push(arg);
-            } else {
-                let arg = ABIArg::stack(
-                    next_stack as i64,
-                    I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                );
-                args.push(arg);
-                next_stack += 8;
-            }
+        let pos = if let Some(ret_area_ptr) = ret_area_ptr {
+            args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
         } else {
             None
         };
 
         next_stack = align_to(next_stack, Self::stack_align(call_conv));
-
-        // To avoid overflow issues, limit the arg/return size to something
-        // reasonable -- here, 128 MB.
-        if next_stack > STACK_ARG_RET_SIZE_LIMIT {
-            return Err(CodegenError::ImplLimitExceeded);
-        }
 
         Ok((next_stack, pos))
     }
@@ -204,15 +194,35 @@ where
 
     fn gen_add_imm(
         _call_conv: isa::CallConv,
-        _into_reg: Writable<Reg>,
-        _from_reg: Reg,
-        _imm: u32,
+        into_reg: Writable<Reg>,
+        from_reg: Reg,
+        imm: u32,
     ) -> SmallInstVec<Self::I> {
-        todo!()
+        let dst = into_reg.try_into().unwrap();
+        let imm = imm as i32;
+        smallvec![
+            Inst::Xconst32 { dst, imm }.into(),
+            Inst::Xadd32 {
+                dst,
+                src1: from_reg.try_into().unwrap(),
+                src2: dst.to_reg(),
+            }
+            .into()
+        ]
     }
 
-    fn gen_stack_lower_bound_trap(_limit_reg: Reg) -> SmallInstVec<Self::I> {
-        todo!()
+    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
+        smallvec![Inst::TrapIf {
+            cond: ir::condcodes::IntCC::UnsignedLessThan,
+            size: match P::pointer_width() {
+                super::PointerWidth::PointerWidth32 => OperandSize::Size32,
+                super::PointerWidth::PointerWidth64 => OperandSize::Size64,
+            },
+            src1: limit_reg.try_into().unwrap(),
+            src2: pulley_interpreter::regs::XReg::sp.into(),
+            code: ir::TrapCode::StackOverflow,
+        }
+        .into()]
     }
 
     fn gen_get_stack_addr(mem: StackAMode, dst: Writable<Reg>) -> Self::I {
@@ -643,7 +653,12 @@ impl<P> PulleyABICallSite<P>
 where
     P: PulleyTargetKind,
 {
-    pub fn emit_return_call(self, _ctx: &mut Lower<InstAndKind<P>>, _args: isle::ValueSlice) {
+    pub fn emit_return_call(
+        self,
+        _ctx: &mut Lower<InstAndKind<P>>,
+        _args: isle::ValueSlice,
+        _backend: &PulleyBackend<P>,
+    ) {
         todo!()
     }
 }

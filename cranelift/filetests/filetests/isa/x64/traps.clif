@@ -1,4 +1,5 @@
 test compile precise-output
+set enable_llvm_abi_extensions=true
 target x86_64
 
 function %trap() {
@@ -47,3 +48,118 @@ block0(v0: i64, v1: i64):
 ;   retq
 ;   ud2 ; trap: user0
 
+function %trapz(i64) {
+block0(v0: i64):
+  trapz v0, user0
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   testq   %rdi, %rdi
+;   jz #trap=user0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   testq %rdi, %rdi
+;   je 0x12
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user0
+
+function %trapz_i128(i128) {
+block0(v0: i128):
+  trapz v0, user0
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rsi, %rdi, %rsi
+;   testq   %rsi, %rsi
+;   jz #trap=user0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orq %rdi, %rsi
+;   testq %rsi, %rsi
+;   je 0x15
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user0
+
+function %trapnz(i64) {
+block0(v0: i64):
+  trapnz v0, user0
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   testq   %rdi, %rdi
+;   jnz #trap=user0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   testq %rdi, %rdi
+;   jne 0x12
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user0
+
+function %trapnz_i128(i128) {
+block0(v0: i128):
+  trapnz v0, user0
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rsi, %rdi, %rsi
+;   testq   %rsi, %rsi
+;   jnz #trap=user0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orq %rdi, %rsi
+;   testq %rsi, %rsi
+;   jne 0x15
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user0

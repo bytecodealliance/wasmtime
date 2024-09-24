@@ -182,7 +182,7 @@ block0(v0: i8):
 ; VCode:
 ; block0:
 ;   movz w7, #42
-;   strb w0, [x1]
+;   strb w0, [x8]
 ;   mov x0, x7
 ;   mov x1, x7
 ;   mov x2, x7
@@ -195,7 +195,7 @@ block0(v0: i8):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w7, #0x2a
-;   sturb w0, [x1]
+;   sturb w0, [x8]
 ;   mov x0, x7
 ;   mov x1, x7
 ;   mov x2, x7
@@ -825,20 +825,24 @@ block0(v0: i64):
 ;   ret
 
 function %f18(i64) -> i64 {
-    fn0 = %g(i64 sret) -> i64
+    fn0 = %g(i64 sret)
 
 block0(v0: i64):
-    v1 = call fn0(v0)
-    return v1
+    call fn0(v0)
+    return v0
 }
 
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
+;   str x24, [sp, #-16]!
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
-;   mov x8, x0
-;   blr x3
+;   mov x24, x0
+;   load_ext_name x2, TestCase(%g)+0
+;   mov x8, x24
+;   blr x2
+;   mov x0, x24
+;   ldr x24, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -846,13 +850,17 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block1: ; offset 0x8
-;   ldr x3, #0x10
-;   b #0x18
+;   str x24, [sp, #-0x10]!
+; block1: ; offset 0xc
+;   mov x24, x0
+;   ldr x2, #0x18
+;   b #0x20
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mov x8, x0
-;   blr x3
+;   mov x8, x24
+;   blr x2
+;   mov x0, x24
+;   ldr x24, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
