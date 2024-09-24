@@ -1851,7 +1851,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // TODO: If we knew we have a `(ref i31)` here, instead of maybe a `(ref
         // null i31)`, we could omit the `trapz`. But plumbing that type info
         // from `wasmparser` and through to here is a bit funky.
-        self.trapz(builder, i31ref, ir::TrapCode::NullI31Ref);
+        self.trapz(builder, i31ref, ir::TrapCode::NullReference);
         Ok(builder.ins().sshr_imm(i31ref, 1))
     }
 
@@ -1863,7 +1863,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // TODO: If we knew we have a `(ref i31)` here, instead of maybe a `(ref
         // null i31)`, we could omit the `trapz`. But plumbing that type info
         // from `wasmparser` and through to here is a bit funky.
-        self.trapz(builder, i31ref, ir::TrapCode::NullI31Ref);
+        self.trapz(builder, i31ref, ir::TrapCode::NullReference);
         Ok(builder.ins().ushr_imm(i31ref, 1))
     }
 
