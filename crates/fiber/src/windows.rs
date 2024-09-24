@@ -15,7 +15,11 @@ impl FiberStack {
         Ok(Self(size))
     }
 
-    pub unsafe fn from_raw_parts(_base: *mut u8, _len: usize) -> io::Result<Self> {
+    pub unsafe fn from_raw_parts(
+        _base: *mut u8,
+        _guard_size: usize,
+        _len: usize,
+    ) -> io::Result<Self> {
         Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
     }
 
@@ -32,6 +36,10 @@ impl FiberStack {
     }
 
     pub fn range(&self) -> Option<Range<usize>> {
+        None
+    }
+
+    pub fn guard_range(&self) -> Option<Range<*mut u8>> {
         None
     }
 }
