@@ -1,6 +1,8 @@
 use crate::solver::SolverCtx;
 use easy_smt::SExpr;
 
+// Future work: possibly move these into the annotation language or an SMTLIB prelude
+
 pub fn rev64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     // Generated code.
     let x1 = solver.declare(

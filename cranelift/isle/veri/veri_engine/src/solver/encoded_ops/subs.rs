@@ -1,6 +1,8 @@
 use crate::solver::SolverCtx;
 use easy_smt::SExpr;
 
+// Future work: likely remove this when we add rule-chaining
+
 // Build the results of a subtraction with flags. Put the 4 flags in the high bits.
 // Encoding adapted from SAIL ISLA: https://github.com/rems-project/isla
 //

@@ -1,6 +1,8 @@
 use crate::solver::SolverCtx;
 use easy_smt::SExpr;
 
+// Future work: possibly move these into the annotation language or an SMTLIB prelude
+
 // Encoding strategy borrowed from
 // https://github.com/fitzgen/synth-loop-free-prog/blob/6d04857693e4688eff4a36537840ba682353c2f3/src/component.rs#L219
 pub fn popcnt(s: &mut SolverCtx, ty: usize, x: SExpr, id: u32) -> SExpr {
