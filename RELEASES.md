@@ -1,3 +1,16 @@
+## 25.0.1
+
+Released 2024-09-24.
+
+### Added
+
+* The `wasmtime` CLI's `-Wmax-wasm-stack` option now automatically configures
+  the async stack size as well. A new `-Wasync-stack-size` option was
+  additionally added to configure it too.
+  [#9302](https://github.com/bytecodealliance/wasmtime/pull/9302)
+
+--------------------------------------------------------------------------------
+
 ## 25.0.0
 
 Released 2024-09-20.
