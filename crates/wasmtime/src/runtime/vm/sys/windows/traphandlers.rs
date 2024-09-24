@@ -96,6 +96,10 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             Some(info) => info,
             None => return ExceptionContinueSearch,
         };
+        // Suppress a warning about this field otherwise being unused on
+        // Windows. Right now it's mainly used on Unix.
+        let _ = info.async_guard_range;
+
         let context = &*(*exception_info).ContextRecord;
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
