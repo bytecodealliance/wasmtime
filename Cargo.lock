@@ -455,7 +455,7 @@ version = "4.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "501d359d5f3dcaf6ecdeee48833ae73ec6e42723a1e52419c79abf9507eec0a0"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.60",
@@ -1434,6 +1434,12 @@ dependencies = [
  "ahash",
  "serde",
 ]
+
+[[package]]
+name = "heck"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "heck"
@@ -2703,7 +2709,7 @@ version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e385be0d24f186b4ce2f9982191e7101bb737312ad61c1f2f984f34bcf85d59"
 dependencies = [
- "heck 0.4.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -2851,7 +2857,7 @@ name = "test-programs-artifacts"
 version = "0.0.0"
 dependencies = [
  "cargo_metadata",
- "heck",
+ "heck 0.5.0",
  "wasmtime",
  "wit-component",
 ]
@@ -3192,7 +3198,7 @@ dependencies = [
  "cranelift-codegen-meta",
  "cranelift-isle",
  "easy-smt",
- "env_logger",
+ "env_logger 0.11.5",
  "itertools 0.12.1",
  "log",
  "strum",
@@ -4083,7 +4089,7 @@ name = "wasmtime-wit-bindgen"
 version = "26.0.0"
 dependencies = [
  "anyhow",
- "heck",
+ "heck 0.5.0",
  "indexmap 2.2.6",
  "wit-parser",
 ]
@@ -4177,7 +4183,7 @@ name = "wiggle-generate"
 version = "26.0.0"
 dependencies = [
  "anyhow",
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "shellexpand",
@@ -4482,7 +4488,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc9cfd3f1b4e29e9a90fe04157764f24ae396cfb8530dae5753de140e73f9e56"
 dependencies = [
  "anyhow",
- "heck",
+ "heck 0.5.0",
  "wit-parser",
 ]
 
@@ -4502,7 +4508,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf075ae0c89dc391f7d710d70c69bfd018c029c74a54f7ddfd0266dccc8ff0c5"
 dependencies = [
  "anyhow",
- "heck",
+ "heck 0.5.0",
  "indexmap 2.2.6",
  "prettyplease",
  "syn 2.0.60",
