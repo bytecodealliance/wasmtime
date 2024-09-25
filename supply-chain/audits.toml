@@ -1329,6 +1329,12 @@ criteria = "safe-to-deploy"
 version = "0.7.1"
 notes = "This library has many uses of unsafe, but contains extensive fuzzing and miri testing."
 
+[[audits.console]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.15.0 -> 0.15.8"
+notes = "Lots of internal refactorings for new features and such, nothing major out of place."
+
 [[audits.constant_time_eq]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -1414,6 +1420,18 @@ was and all the updates here are related to odds-and-ends maintenance. In
 other words everything is as one would expect from a minor update for this
 crate.
 """
+
+[[audits.crossbeam-epoch]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.15 -> 0.9.18"
+notes = "Nontrivial update but mostly around dependencies and how `unsafe` code is managed. Everything looks the same shape as before."
+
+[[audits.crossbeam-utils]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.10 -> 0.8.11"
+notes = "No changes of substance, only minor updates around how `unsafe` code is managed but it's all trivially the same as before"
 
 [[audits.crypto-common]]
 who = "Benjamin Bouvier <public@benj.me>"
@@ -2694,6 +2712,18 @@ notes = "Minor updates here, nothing major."
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.2.11"
+
+[[audits.test-log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.2.11 -> 0.2.16"
+notes = "Crate implementation was moved to a `*-macros` crate, crate is very small as a result."
+
+[[audits.test-log-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.2.16"
+notes = "Simple procedural macro copied from its previous source."
 
 [[audits.thread_local]]
 who = "Pat Hickey <phickey@fastly.com>"
