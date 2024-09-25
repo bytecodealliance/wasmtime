@@ -533,7 +533,7 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
 
     for segment in module.table_initialization.segments.iter() {
         let table = unsafe { &*instance.get_table(segment.table_index) };
-        let mut context = ConstEvalContext::new(instance, module);
+        let mut context = ConstEvalContext::new(instance);
         let start = unsafe {
             const_evaluator
                 .eval(&mut context, &segment.offset)
@@ -564,7 +564,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
             TableInitialValue::Null { precomputed: _ } => {}
 
             TableInitialValue::Expr(expr) => {
-                let mut context = ConstEvalContext::new(instance, module);
+                let mut context = ConstEvalContext::new(instance);
                 let raw = unsafe {
                     const_evaluator
                         .eval(&mut context, expr)
@@ -607,7 +607,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
     for segment in module.table_initialization.segments.iter() {
-        let mut context = ConstEvalContext::new(instance, module);
+        let mut context = ConstEvalContext::new(instance);
         let start = unsafe {
             const_evaluator
                 .eval(&mut context, &segment.offset)
@@ -630,10 +630,9 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
 
 fn get_memory_init_start(
     init: &MemoryInitializer,
-    instance: &mut Instance,
-    module: &Module,
+    instance: &mut Instance
 ) -> Result<u64> {
-    let mut context = ConstEvalContext::new(instance, module);
+    let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
     unsafe { const_evaluator.eval(&mut context, &init.offset) }.map(|v| {
         match instance.env_module().memory_plans[init.memory_index]
@@ -648,12 +647,11 @@ fn get_memory_init_start(
 
 fn check_memory_init_bounds(
     instance: &mut Instance,
-    module: &Module,
     initializers: &[MemoryInitializer],
 ) -> Result<()> {
     for init in initializers {
         let memory = instance.get_memory(init.memory_index);
-        let start = get_memory_init_start(init, instance, module)?;
+        let start = get_memory_init_start(init, instance)?;
         let end = usize::try_from(start)
             .ok()
             .and_then(|start| start.checked_add(init.data.len()));
@@ -702,7 +700,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
             memory: wasmtime_environ::MemoryIndex,
             expr: &wasmtime_environ::ConstExpr,
         ) -> Option<u64> {
-            let mut context = ConstEvalContext::new(self.instance, self.module);
+            let mut context = ConstEvalContext::new(self.instance);
             let val = unsafe { self.const_evaluator.eval(&mut context, expr) }
                 .expect("const expression should be valid");
             Some(
@@ -767,7 +765,7 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
 
     match &module.memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
-            check_memory_init_bounds(instance, module, initializers)?;
+            check_memory_init_bounds(instance, initializers)?;
         }
         // Statically validated already to have everything in-bounds.
         MemoryInitialization::Static { .. } => {}

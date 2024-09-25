@@ -5,7 +5,7 @@ use crate::store::AutoAssertNoGc;
 use crate::{prelude::*, StructRef, StructRefPre, StructType, Val};
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    ConstExpr, ConstOp, FuncIndex, GlobalIndex, Module, ModuleInternedTypeIndex, WasmCompositeType,
+    ConstExpr, ConstOp, FuncIndex, GlobalIndex, ModuleInternedTypeIndex, WasmCompositeType,
     WasmSubType,
 };
 
@@ -19,15 +19,14 @@ pub struct ConstExprEvaluator {
 }
 
 /// The context within which a particular const expression is evaluated.
-pub struct ConstEvalContext<'a, 'b> {
-    instance: &'a mut Instance,
-    module: &'b Module,
+pub struct ConstEvalContext<'a> {
+    instance: &'a mut Instance
 }
 
-impl<'a, 'b> ConstEvalContext<'a, 'b> {
+impl<'a> ConstEvalContext<'a> {
     /// Create a new context.
-    pub fn new(instance: &'a mut Instance, module: &'b Module) -> Self {
-        Self { instance, module }
+    pub fn new(instance: &'a mut Instance) -> Self {
+        Self { instance }
     }
 
     fn global_get(&mut self, store: &mut AutoAssertNoGc<'_>, index: GlobalIndex) -> Result<ValRaw> {
@@ -38,7 +37,7 @@ impl<'a, 'b> ConstEvalContext<'a, 'b> {
                 .as_ref()
                 .unwrap();
             let mut gc_store = store.unwrap_gc_store_mut();
-            Ok(global.to_val_raw(&mut gc_store, self.module.globals[index].wasm_ty))
+            Ok(global.to_val_raw(&mut gc_store, self.instance.env_module().globals[index].wasm_ty))
         }
     }
 
@@ -163,7 +162,7 @@ impl ConstExprEvaluator {
     /// the correct type.
     pub unsafe fn eval(
         &mut self,
-        context: &mut ConstEvalContext<'_, '_>,
+        context: &mut ConstEvalContext<'_>,
         expr: &ConstExpr,
     ) -> Result<ValRaw> {
         self.stack.clear();
@@ -240,7 +239,7 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::StructNew { struct_type_index } => {
-                    let interned_type_index = context.module.types[*struct_type_index];
+                    let interned_type_index = context.instance.env_module().types[*struct_type_index];
                     let len = context.struct_fields_len(interned_type_index);
 
                     if self.stack.len() < len {
@@ -262,7 +261,7 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::StructNewDefault { struct_type_index } => {
-                    let interned_type_index = context.module.types[*struct_type_index];
+                    let interned_type_index = context.instance.env_module().types[*struct_type_index];
                     self.stack
                         .push(context.struct_new_default(&mut store, interned_type_index)?);
                 }
