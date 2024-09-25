@@ -218,12 +218,8 @@ version = "0.113.0"
 audited_as = "0.111.0"
 
 [[unpublished.pulley-interpreter]]
-version = "0.1.0"
-audited_as = "0.0.0"
-
-[[unpublished.pulley-interpreter]]
 version = "0.2.0"
-audited_as = "0.0.0"
+audited_as = "0.1.1"
 
 [[unpublished.wasi-common]]
 version = "24.0.0"
@@ -1279,6 +1275,12 @@ when = "2024-07-30"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
+
+[[publisher.pulley-interpreter]]
+version = "0.1.1"
+when = "2024-09-24"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.quote]]
 version = "1.0.36"

@@ -160,6 +160,14 @@ start = "2020-01-14"
 end = "2025-07-30"
 notes = "I am an author of this crate"
 
+[[wildcard-audits.pulley-interpreter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-09-20"
+end = "2025-09-25"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[wildcard-audits.regalloc2]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
