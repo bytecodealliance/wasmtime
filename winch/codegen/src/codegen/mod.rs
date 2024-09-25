@@ -547,7 +547,7 @@ where
     ///
     /// Winch follows almost the same principles as Cranelift when it comes to
     /// bounds checks, for a more detailed explanation refer to
-    /// [cranelift_wasm::code_translator::prepare_addr].
+    /// prepare_addr in wasmtime-cranelift.
     ///
     /// Winch implementation differs in that, it defaults to the general case
     /// for dynamic heaps rather than optimizing for doing the least amount of

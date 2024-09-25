@@ -3,11 +3,12 @@
 //! The `FuncTranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use crate::environ::{FuncEnvironment, GlobalVariable};
-use crate::{FuncIndex, GlobalIndex, Heap, MemoryIndex, TypeIndex, WasmResult};
-use crate::{HashMap, Occupied, Vacant};
+use crate::translate::environ::{FuncEnvironment, GlobalVariable};
+use crate::translate::Heap;
 use cranelift_codegen::ir::{self, Block, Inst, Value};
+use std::collections::hash_map::{Entry::Occupied, Entry::Vacant, HashMap};
 use std::vec::Vec;
+use wasmtime_environ::{FuncIndex, GlobalIndex, MemoryIndex, TypeIndex, WasmResult};
 
 /// Information about the presence of an associated `else` for an `if`, or the
 /// lack thereof.
@@ -240,7 +241,7 @@ pub struct FuncTranslationState {
     functions: HashMap<FuncIndex, (ir::FuncRef, usize)>,
 }
 
-// Public methods that are exposed to non-`cranelift_wasm` API consumers.
+// Public methods that are exposed to non- API consumers.
 impl FuncTranslationState {
     /// True if the current translation state expresses reachable code, false if it is unreachable.
     #[inline]

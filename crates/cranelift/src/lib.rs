@@ -11,11 +11,11 @@ use cranelift_codegen::{
     settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{FuncIndex, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmValType};
 
 use target_lexicon::Architecture;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, FlagValue, RelocationTarget, Trap, TrapInformation, Tunables,
+    BuiltinFunctionIndex, FlagValue, FuncIndex, RelocationTarget, Trap, TrapInformation, Tunables,
+    WasmFuncType, WasmHeapTopType, WasmHeapType, WasmValType,
 };
 
 pub use builder::builder;
@@ -31,6 +31,7 @@ mod compiler;
 mod debug;
 mod func_environ;
 mod gc;
+mod translate;
 
 /// User trap code for debug assertions we emit in our JIT code.
 const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;

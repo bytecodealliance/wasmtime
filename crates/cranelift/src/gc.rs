@@ -8,8 +8,7 @@
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{TypeIndex, WasmRefType, WasmResult};
-use wasmtime_environ::GcTypeLayouts;
+use wasmtime_environ::{GcTypeLayouts, TypeIndex, WasmRefType, WasmResult};
 
 #[cfg(feature = "gc")]
 mod enabled;
@@ -169,7 +168,7 @@ pub mod builtins {
                     #[cfg(not(feature = "gc"))]
                     let _ = (func, func_env);
                     #[cfg(not(feature = "gc"))]
-                    return Err(cranelift_wasm::wasm_unsupported!(
+                    return Err(wasmtime_environ::wasm_unsupported!(
                         "support for Wasm GC disabled at compile time because the `gc` cargo \
                          feature was not enabled"
                     ));

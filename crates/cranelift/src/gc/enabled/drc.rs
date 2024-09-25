@@ -1,19 +1,21 @@
 //! Compiler for the deferred reference-counting (DRC) collector and its
 //! barriers.
 
-use super::*;
-use crate::{
-    func_environ::FuncEnvironment,
-    gc::{ArrayInit, GcCompiler},
+use super::{
+    emit_array_fill_impl, uextend_i32_to_pointer_type, unbarriered_load_gc_ref,
+    unbarriered_store_gc_ref, BoundsCheck, Offset,
 };
-use cranelift_codegen::ir::{self, condcodes::IntCC, InstBuilder};
+use crate::gc::{gc_compiler, ArrayInit};
+use crate::translate::TargetEnvironment;
+use crate::{func_environ::FuncEnvironment, gc::GcCompiler};
+use cranelift_codegen::ir::condcodes::IntCC;
+use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{ModuleInternedTypeIndex, TargetEnvironment};
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    drc::DrcTypeLayouts, GcArrayLayout, GcTypeLayouts, PtrSize, TypeIndex, VMGcKind,
-    WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType,
-    WasmValType,
+    drc::DrcTypeLayouts, wasm_unsupported, GcArrayLayout, GcTypeLayouts, ModuleInternedTypeIndex,
+    PtrSize, TypeIndex, VMGcKind, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType,
+    WasmResult, WasmStorageType, WasmValType,
 };
 
 #[derive(Default)]

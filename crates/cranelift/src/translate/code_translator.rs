@@ -73,14 +73,11 @@
 
 mod bounds_checks;
 
-use super::{hash_map, HashMap};
-use crate::environ::{FuncEnvironment, GlobalVariable, StructFieldsVec};
-use crate::state::{ControlStackFrame, ElseData, FuncTranslationState};
-use crate::translation_utils::{
+use crate::translate::environ::{FuncEnvironment, GlobalVariable, StructFieldsVec};
+use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState};
+use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
 };
-use crate::wasm_unsupported;
-use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmResult};
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
@@ -92,9 +89,13 @@ use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
 use smallvec::SmallVec;
+use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
-use wasmtime_types::{DataIndex, ElemIndex};
+use wasmtime_environ::{
+    wasm_unsupported, DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex,
+    TypeIndex, WasmResult,
+};
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
 /// `state.reachable = false` and return.
@@ -173,7 +174,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::GlobalGet { global_index } => {
             let val = match state.get_global(builder.func, *global_index, environ)? {
-                GlobalVariable::Const(val) => val,
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();
@@ -188,7 +188,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::GlobalSet { global_index } => {
             match state.get_global(builder.func, *global_index, environ)? {
-                GlobalVariable::Const(_) => panic!("global #{} is a constant", *global_index),
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();

@@ -23,7 +23,7 @@
 //!   specifically the memory-access sequences. In practice, each such
 //!   sequence is likely to be a carefully-controlled sequence of IR
 //!   operations from, e.g., a sandboxing compiler (such as
-//!   `cranelift-wasm`) so adding annotations here to communicate
+//!   Wasmtime) so adding annotations here to communicate
 //!   intent (ranges, bounds-checks, and the like) is no problem.
 //!
 //! Facts are attached to SSA values in CLIF, and are maintained

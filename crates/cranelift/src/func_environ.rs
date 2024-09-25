@@ -1,3 +1,7 @@
+use crate::translate::{
+    FuncEnvironment as _, FuncTranslationState, GlobalVariable, Heap, HeapData, HeapStyle,
+    StructFieldsVec, TableData, TableSize, TargetEnvironment,
+};
 use crate::{gc, BuiltinFunctionSignatures};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
@@ -11,19 +15,15 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
-use cranelift_wasm::{
-    DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncEnvironment as _, FuncIndex,
-    FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle, IndexType,
-    Memory, MemoryIndex, StructFieldsVec, Table, TableData, TableIndex, TableSize,
-    TargetEnvironment, TypeIndex, WasmCompositeType, WasmFuncType, WasmHeapTopType, WasmHeapType,
-    WasmResult, WasmValType,
-};
 use smallvec::SmallVec;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypesBuilder,
-    PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets,
+    BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
+    IndexType, Memory, MemoryIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation,
+    ModuleTypesBuilder, PtrSize, Table, TableIndex, TableStyle, Tunables, TypeConvert, TypeIndex,
+    VMOffsets, WasmCompositeType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmResult,
+    WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -1644,7 +1644,9 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     }
 }
 
-impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
+impl<'module_environment> crate::translate::FuncEnvironment
+    for FuncEnvironment<'module_environment>
+{
     fn heaps(&self) -> &PrimaryMap<Heap, HeapData> {
         &self.heaps
     }
@@ -1973,7 +1975,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
-        data_index: cranelift_wasm::DataIndex,
+        data_index: DataIndex,
         data_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
@@ -1995,7 +1997,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
-        elem_index: cranelift_wasm::ElemIndex,
+        elem_index: ElemIndex,
         elem_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
@@ -2214,7 +2216,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_custom_global_get(
         &mut self,
         builder: &mut FunctionBuilder,
-        index: cranelift_wasm::GlobalIndex,
+        index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
         let ty = self.module.globals[index].wasm_ty;
         debug_assert!(
@@ -2241,7 +2243,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_custom_global_set(
         &mut self,
         builder: &mut FunctionBuilder,
-        index: cranelift_wasm::GlobalIndex,
+        index: GlobalIndex,
         value: ir::Value,
     ) -> WasmResult<()> {
         let ty = self.module.globals[index].wasm_ty;
@@ -2523,7 +2525,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // any other type of global at the same index would, getting or
             // setting them requires ref counting barriers. Therefore, we need
             // to use `GlobalVariable::Custom`, as that is the only kind of
-            // `GlobalVariable` for which `cranelift-wasm` supports custom
+            // `GlobalVariable` for which translation supports custom
             // access translation.
             return Ok(GlobalVariable::Custom);
         }

@@ -7,10 +7,6 @@ use cranelift_entity::entity_impl;
 ///
 /// While the order is stable, it is arbitrary.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(
-    feature = "enable-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
 pub struct Heap(u32);
 entity_impl!(Heap, "heap");
 
@@ -18,7 +14,7 @@ entity_impl!(Heap, "heap");
 ///
 /// Code compiled from WebAssembly runs in a sandbox where it can't access all
 /// process memory. Instead, it is given a small set of memory areas to work in,
-/// and all accesses are bounds checked. `cranelift-wasm` models this through
+/// and all accesses are bounds checked. Wasmtime models this through
 /// the concept of *heaps*.
 ///
 /// Heap addresses can be smaller than the native pointer size, for example
@@ -62,10 +58,6 @@ entity_impl!(Heap, "heap");
 /// when the heap is resized. The bound of a dynamic heap is stored in a global
 /// value.
 #[derive(Clone, PartialEq, Hash)]
-#[cfg_attr(
-    feature = "enable-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
 pub struct HeapData {
     /// The address of the start of the heap's storage.
     pub base: GlobalValue,
@@ -97,10 +89,6 @@ pub struct HeapData {
 
 /// Style of heap including style-specific information.
 #[derive(Clone, PartialEq, Hash)]
-#[cfg_attr(
-    feature = "enable-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
 pub enum HeapStyle {
     /// A dynamic heap can be relocated to a different base address when it is
     /// grown.
