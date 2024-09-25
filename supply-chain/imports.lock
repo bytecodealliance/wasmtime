@@ -815,6 +815,13 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.clap_complete]]
+version = "4.5.28"
+when = "2024-09-17"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.clap_derive]]
 version = "4.3.12"
 when = "2023-07-14"

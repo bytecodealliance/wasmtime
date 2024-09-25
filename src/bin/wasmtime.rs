@@ -4,10 +4,10 @@
 //! See `wasmtime --help` for usage.
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 /// Wasmtime WebAssembly Runtime
-#[derive(Parser, PartialEq)]
+#[derive(Parser)]
 #[command(
     name = "wasmtime",
     version = version(),
@@ -52,7 +52,7 @@ fn version() -> &'static str {
     option_env!("WASMTIME_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
 }
 
-#[derive(Parser, PartialEq)]
+#[derive(Parser)]
 enum Subcommand {
     /// Runs a WebAssembly module
     #[cfg(feature = "run")]
@@ -81,6 +81,10 @@ enum Subcommand {
     /// Runs a WebAssembly test script file
     #[cfg(feature = "wast")]
     Wast(wasmtime_cli::commands::WastCommand),
+
+    /// Generate shell completions for the `wasmtime` CLI
+    #[cfg(feature = "completion")]
+    Completion(CompletionCommand),
 }
 
 impl Wasmtime {
@@ -112,7 +116,39 @@ impl Wasmtime {
 
             #[cfg(feature = "wast")]
             Subcommand::Wast(c) => c.execute(),
+
+            #[cfg(feature = "completion")]
+            Subcommand::Completion(c) => c.execute(),
         }
+    }
+}
+
+/// Generate shell completion scripts for this CLI.
+///
+/// Shells have different paths for their completion scripts. Please refer to
+/// their documentation. For example, to generate completions for the fish
+/// shell, run the following command below:
+///
+///     wasmtime completion fish > ~/.config/fish/completions/wasmtime.fish
+///
+/// For a shell like zsh you can add this to your .zshrc or startup scripts:
+///
+///     eval "$(wasmtime completion zsh)"
+#[derive(Parser)]
+#[cfg(feature = "completion")]
+pub struct CompletionCommand {
+    /// The shell to generate completions for.
+    shell: clap_complete::Shell,
+}
+
+#[cfg(feature = "completion")]
+impl CompletionCommand {
+    pub fn execute(&self) -> Result<()> {
+        let mut cmd = Wasmtime::command();
+        let cli_name = cmd.get_name().to_owned();
+
+        clap_complete::generate(self.shell, &mut cmd, cli_name, &mut std::io::stdout());
+        Ok(())
     }
 }
 

@@ -3814,6 +3814,12 @@ user-id = 6743 # Ed Page (epage)
 start = "2023-03-28"
 end = "2025-09-20"
 
+[[trusted.clap_complete]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2021-12-31"
+end = "2025-09-25"
+
 [[trusted.clap_derive]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
