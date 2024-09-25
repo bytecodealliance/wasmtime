@@ -4,7 +4,7 @@
 //! See `wasmtime --help` for usage.
 
 use anyhow::Result;
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]
@@ -144,6 +144,8 @@ pub struct CompletionCommand {
 #[cfg(feature = "completion")]
 impl CompletionCommand {
     pub fn execute(&self) -> Result<()> {
+        use clap::CommandFactory;
+
         let mut cmd = Wasmtime::command();
         let cli_name = cmd.get_name().to_owned();
 
