@@ -218,12 +218,8 @@ version = "0.113.0"
 audited_as = "0.111.0"
 
 [[unpublished.pulley-interpreter]]
-version = "0.1.0"
-audited_as = "0.0.0"
-
-[[unpublished.pulley-interpreter]]
 version = "0.2.0"
-audited_as = "0.0.0"
+audited_as = "0.1.1"
 
 [[unpublished.wasi-common]]
 version = "24.0.0"
@@ -714,9 +710,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-fs-ext]]
+version = "3.2.0"
+when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-net-ext]]
 version = "3.0.0"
 when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-net-ext]]
+version = "3.2.0"
+when = "2024-07-08"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -728,9 +738,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-primitives]]
+version = "3.2.0"
+when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-rand]]
 version = "3.0.0"
 when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-rand]]
+version = "3.2.0"
+when = "2024-07-08"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -742,9 +766,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-std]]
+version = "3.2.0"
+when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-time-ext]]
 version = "3.0.0"
 when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-time-ext]]
+version = "3.2.0"
+when = "2024-07-08"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1196,6 +1234,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.linux-raw-sys]]
+version = "0.4.14"
+when = "2024-05-17"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.memchr]]
 version = "2.5.0"
 when = "2022-04-30"
@@ -1230,6 +1275,12 @@ when = "2024-07-30"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
+
+[[publisher.pulley-interpreter]]
+version = "0.1.1"
+when = "2024-09-24"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.quote]]
 version = "1.0.36"
@@ -1311,6 +1362,13 @@ user-name = "Dan Gohman"
 [[publisher.rustix]]
 version = "0.38.31"
 when = "2024-02-01"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.rustix]]
+version = "0.38.34"
+when = "2024-04-22"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
