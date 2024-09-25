@@ -310,6 +310,7 @@ mod call_thread_state {
         pub(crate) limits: *const VMRuntimeLimits,
 
         pub(super) prev: Cell<tls::Ptr>,
+        #[cfg_attr(any(windows, miri), allow(dead_code))]
         pub(crate) async_guard_range: Range<*mut u8>,
 
         // The values of `VMRuntimeLimits::last_wasm_{exit_{pc,fp},entry_sp}`
