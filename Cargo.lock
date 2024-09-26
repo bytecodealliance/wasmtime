@@ -450,6 +450,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.5.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b378c786d3bde9442d2c6dd7e6080b2a818db2b96e30d6e7f1b6d224eb617d3"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3547,6 +3556,7 @@ dependencies = [
  "capstone",
  "cfg-if",
  "clap",
+ "clap_complete",
  "component-macro-test",
  "component-test-util",
  "cranelift-codegen",
