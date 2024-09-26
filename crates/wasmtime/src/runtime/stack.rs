@@ -57,6 +57,8 @@ pub unsafe trait StackMemory: Send + Sync {
     fn top(&self) -> *mut u8;
     /// The range of where this stack resides in memory, excluding guard pages.
     fn range(&self) -> Range<usize>;
+    /// The range of memory where the guard region of this stack resides.
+    fn guard_range(&self) -> Range<*mut u8>;
 }
 
 pub(crate) struct FiberStackProxy(pub Box<dyn StackMemory>);
@@ -68,5 +70,9 @@ unsafe impl RuntimeFiberStack for FiberStackProxy {
 
     fn range(&self) -> Range<usize> {
         self.0.range()
+    }
+
+    fn guard_range(&self) -> Range<*mut u8> {
+        self.0.guard_range()
     }
 }

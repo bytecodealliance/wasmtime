@@ -389,6 +389,9 @@ unsafe impl StackMemory for CHostStackMemory {
         let base = unsafe { top.sub(len) as usize };
         base..base + len
     }
+    fn guard_range(&self) -> Range<*mut u8> {
+        std::ptr::null_mut()..std::ptr::null_mut()
+    }
 }
 
 pub type wasmtime_new_stack_memory_callback_t = extern "C" fn(

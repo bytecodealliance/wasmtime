@@ -31,6 +31,9 @@ unsafe impl StackMemory for CustomStack {
         let base = self.base.as_ptr() as usize;
         base..base + self.len
     }
+    fn guard_range(&self) -> Range<*mut u8> {
+        std::ptr::null_mut()..std::ptr::null_mut()
+    }
 }
 
 // A creator that allocates stacks on the heap instead of mmap'ing.

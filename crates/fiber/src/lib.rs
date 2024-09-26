@@ -33,10 +33,11 @@ impl FiberStack {
     }
 
     /// Creates a new fiber stack with the given pointer to the bottom of the
-    /// stack plus the byte length of the stack.
+    /// stack plus how large the guard size and stack size are.
     ///
-    /// The `bottom` pointer should be addressable for `len` bytes. The page
-    /// beneath `bottom` should be unmapped as a guard page.
+    /// The bytes from `bottom` to `bottom.add(guard_size)` should all be
+    /// guaranteed to be unmapped. The bytes from `bottom.add(guard_size)` to
+    /// `bottom.add(guard_size + len)` should be addressable.
     ///
     /// # Safety
     ///
@@ -44,8 +45,14 @@ impl FiberStack {
     ///
     /// The caller must properly allocate the stack space with a guard page and
     /// make the pages accessible for correct behavior.
-    pub unsafe fn from_raw_parts(bottom: *mut u8, len: usize) -> io::Result<Self> {
-        Ok(Self(imp::FiberStack::from_raw_parts(bottom, len)?))
+    pub unsafe fn from_raw_parts(
+        bottom: *mut u8,
+        guard_size: usize,
+        len: usize,
+    ) -> io::Result<Self> {
+        Ok(Self(imp::FiberStack::from_raw_parts(
+            bottom, guard_size, len,
+        )?))
     }
 
     /// Gets the top of the stack.
@@ -67,6 +74,11 @@ impl FiberStack {
     pub fn is_from_raw_parts(&self) -> bool {
         self.0.is_from_raw_parts()
     }
+
+    /// Returns the range of memory that the guard page(s) reside in.
+    pub fn guard_range(&self) -> Option<Range<*mut u8>> {
+        self.0.guard_range()
+    }
 }
 
 /// A creator of RuntimeFiberStacks.
@@ -85,6 +97,8 @@ pub unsafe trait RuntimeFiberStack: Send + Sync {
     fn top(&self) -> *mut u8;
     /// The valid range of the stack without guard pages.
     fn range(&self) -> Range<usize>;
+    /// The range of the guard page(s)
+    fn guard_range(&self) -> Range<*mut u8>;
 }
 
 pub struct Fiber<'a, Resume, Yield, Return> {
