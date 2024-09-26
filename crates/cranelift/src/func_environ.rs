@@ -2869,15 +2869,23 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
-    fn after_translate_function(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        state: &FuncTranslationState,
-    ) -> WasmResult<()> {
-        if self.tunables.consume_fuel && state.reachable() {
+    fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
+        // Ignore unused-argument warnings
+        let _ = retvals;
+
+        if self.tunables.consume_fuel {
             self.fuel_function_exit(builder);
         }
-        Ok(())
+
+        #[cfg(feature = "wmemcheck")]
+        if self.wmemcheck {
+            let func_name = self.current_func_name(builder);
+            if func_name == Some("malloc") {
+                self.hook_malloc_exit(builder, retvals);
+            } else if func_name == Some("free") {
+                self.hook_free_exit(builder);
+            }
+        }
     }
 
     fn relaxed_simd_deterministic(&self) -> bool {
@@ -2906,18 +2914,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn use_x86_pmaddubsw_for_dot(&self) -> bool {
         self.isa.has_x86_pmaddubsw_lowering()
-    }
-
-    #[cfg(feature = "wmemcheck")]
-    fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
-        if self.wmemcheck {
-            let func_name = self.current_func_name(builder);
-            if func_name == Some("malloc") {
-                self.hook_malloc_exit(builder, retvals);
-            } else if func_name == Some("free") {
-                self.hook_free_exit(builder);
-            }
-        }
     }
 
     #[cfg(feature = "wmemcheck")]

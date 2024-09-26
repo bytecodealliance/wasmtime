@@ -628,16 +628,6 @@ pub trait FuncEnvironment: TargetEnvironment {
         Ok(())
     }
 
-    /// Optional callback for the `FunctionEnvironment` performing this translation to perform work
-    /// after the function body is translated.
-    fn after_translate_function(
-        &mut self,
-        _builder: &mut FunctionBuilder,
-        _state: &FuncTranslationState,
-    ) -> WasmResult<()> {
-        Ok(())
-    }
-
     /// Whether or not to force relaxed simd instructions to have deterministic
     /// lowerings meaning they will produce the same results across all hosts,
     /// regardless of the cost to performance.
