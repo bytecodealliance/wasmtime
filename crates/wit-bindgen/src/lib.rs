@@ -2606,7 +2606,7 @@ impl<'a> InterfaceGenerator<'a> {
             FunctionKind::Freestanding => match owner {
                 TypeOwner::World(id) => format!(
                     "{}Imports",
-                    self.resolve.worlds[id].name.to_upper_camel_case()
+                    rust::to_rust_upper_camel_case(&self.resolve.worlds[id].name)
                 ),
                 _ => "Host".to_string(),
             },
