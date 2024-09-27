@@ -260,6 +260,9 @@ impl GcCompiler for DrcCompiler {
 
         // Second, initialize each of the newly-allocated struct's fields.
 
+        // Data inside GC objects is always little endian.
+        let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+
         for ((ty, val), offset) in field_types.into_iter().zip(field_vals).zip(field_offsets) {
             let size_of_access =
                 wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
@@ -276,29 +279,18 @@ impl GcCompiler for DrcCompiler {
                 }
                 WasmStorageType::Val(WasmValType::Ref(r)) => {
                     self.translate_init_gc_reference(
-                        func_env,
-                        builder,
-                        *r,
-                        field_addr,
-                        *val,
-                        ir::MemFlags::trusted(),
+                        func_env, builder, *r, field_addr, *val, flags,
                     )?;
                 }
                 WasmStorageType::I8 => {
-                    builder
-                        .ins()
-                        .istore8(ir::MemFlags::trusted(), *val, field_addr, 0);
+                    builder.ins().istore8(flags, *val, field_addr, 0);
                 }
                 WasmStorageType::I16 => {
-                    builder
-                        .ins()
-                        .istore16(ir::MemFlags::trusted(), *val, field_addr, 0);
+                    builder.ins().istore16(flags, *val, field_addr, 0);
                 }
                 WasmStorageType::Val(_) => {
                     assert_eq!(builder.func.dfg.value_type(*val).bytes(), size_of_access);
-                    builder
-                        .ins()
-                        .store(ir::MemFlags::trusted(), *val, field_addr, 0);
+                    builder.ins().store(flags, *val, field_addr, 0);
                 }
             }
         }
