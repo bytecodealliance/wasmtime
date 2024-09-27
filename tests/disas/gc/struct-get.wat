@@ -42,7 +42,7 @@
 ;; @0033                               trapz v12, user65535
 ;; @0033                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @0033                               v13 = iadd v5, v9
-;; @0033                               v14 = load.f32 notrap aligned v13
+;; @0033                               v14 = load.f32 notrap aligned little v13
 ;; @0037                               jump block1
 ;;
 ;;                                 block1:
@@ -68,7 +68,7 @@
 ;; @003c                               trapz v12, user65535
 ;; @003c                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @003c                               v13 = iadd v5, v9
-;; @003c                               v14 = load.i8 notrap aligned v13
+;; @003c                               v14 = load.i8 notrap aligned little v13
 ;; @0040                               jump block1
 ;;
 ;;                                 block1:
@@ -95,7 +95,7 @@
 ;; @0045                               trapz v12, user65535
 ;; @0045                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @0045                               v13 = iadd v5, v9
-;; @0045                               v14 = load.i8 notrap aligned v13
+;; @0045                               v14 = load.i8 notrap aligned little v13
 ;; @0049                               jump block1
 ;;
 ;;                                 block1:
@@ -125,7 +125,7 @@
 ;; @004e                               trapz v12, user65535
 ;; @004e                               v5 = load.i64 notrap aligned readonly v0+40
 ;; @004e                               v13 = iadd v5, v9
-;; @004e                               v14 = load.i32 notrap aligned v13
+;; @004e                               v14 = load.i32 notrap aligned little v13
 ;;                                     v54 = stack_addr.i64 ss0
 ;;                                     store notrap v14, v54
 ;; @004e                               v15 = iconst.i32 -2
