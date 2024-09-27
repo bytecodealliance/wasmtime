@@ -628,10 +628,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     Ok(())
 }
 
-fn get_memory_init_start(
-    init: &MemoryInitializer,
-    instance: &mut Instance
-) -> Result<u64> {
+fn get_memory_init_start(init: &MemoryInitializer, instance: &mut Instance) -> Result<u64> {
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
     unsafe { const_evaluator.eval(&mut context, &init.offset) }.map(|v| {

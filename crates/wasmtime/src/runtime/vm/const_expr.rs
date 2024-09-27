@@ -20,7 +20,7 @@ pub struct ConstExprEvaluator {
 
 /// The context within which a particular const expression is evaluated.
 pub struct ConstEvalContext<'a> {
-    instance: &'a mut Instance
+    instance: &'a mut Instance,
 }
 
 impl<'a> ConstEvalContext<'a> {
@@ -37,7 +37,10 @@ impl<'a> ConstEvalContext<'a> {
                 .as_ref()
                 .unwrap();
             let mut gc_store = store.unwrap_gc_store_mut();
-            Ok(global.to_val_raw(&mut gc_store, self.instance.env_module().globals[index].wasm_ty))
+            Ok(global.to_val_raw(
+                &mut gc_store,
+                self.instance.env_module().globals[index].wasm_ty,
+            ))
         }
     }
 
@@ -239,7 +242,8 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::StructNew { struct_type_index } => {
-                    let interned_type_index = context.instance.env_module().types[*struct_type_index];
+                    let interned_type_index =
+                        context.instance.env_module().types[*struct_type_index];
                     let len = context.struct_fields_len(interned_type_index);
 
                     if self.stack.len() < len {
@@ -261,7 +265,8 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::StructNewDefault { struct_type_index } => {
-                    let interned_type_index = context.instance.env_module().types[*struct_type_index];
+                    let interned_type_index =
+                        context.instance.env_module().types[*struct_type_index];
                     self.stack
                         .push(context.struct_new_default(&mut store, interned_type_index)?);
                 }
