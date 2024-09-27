@@ -25,10 +25,6 @@ fn unbarriered_load_gc_ref(
     flags: ir::MemFlags,
 ) -> WasmResult<ir::Value> {
     debug_assert!(ty.is_vmgcref_type());
-    assert!(
-        flags.explicit_endianness().is_none(),
-        "GC references are always native-endian"
-    );
     let gc_ref = builder.ins().load(ir::types::I32, flags, ptr_to_gc_ref, 0);
     if ty != WasmHeapType::I31 {
         builder.declare_value_needs_stack_map(gc_ref);
@@ -44,10 +40,6 @@ fn unbarriered_store_gc_ref(
     flags: ir::MemFlags,
 ) -> WasmResult<()> {
     debug_assert!(ty.is_vmgcref_type());
-    assert!(
-        flags.explicit_endianness().is_none(),
-        "GC references are always native-endian"
-    );
     builder.ins().store(flags, gc_ref, dst, 0);
     Ok(())
 }
@@ -156,42 +148,19 @@ pub fn translate_struct_get(
     // and relative to `gc_ref[0]`.
     let field_addr = func_env.prepare_gc_ref_access(builder, struct_ref, field_offset, field_size);
 
+    // Data inside GC objects is always little endian.
+    let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+
     let field_val = match field_ty.element_type {
         WasmStorageType::Val(v) => match v {
-            WasmValType::I32 => {
-                builder
-                    .ins()
-                    .load(ir::types::I32, ir::MemFlags::trusted(), field_addr, 0)
-            }
-            WasmValType::I64 => {
-                builder
-                    .ins()
-                    .load(ir::types::I64, ir::MemFlags::trusted(), field_addr, 0)
-            }
-            WasmValType::F32 => {
-                builder
-                    .ins()
-                    .load(ir::types::F32, ir::MemFlags::trusted(), field_addr, 0)
-            }
-            WasmValType::F64 => {
-                builder
-                    .ins()
-                    .load(ir::types::F64, ir::MemFlags::trusted(), field_addr, 0)
-            }
-            WasmValType::V128 => {
-                builder
-                    .ins()
-                    .load(ir::types::I128, ir::MemFlags::trusted(), field_addr, 0)
-            }
+            WasmValType::I32 => builder.ins().load(ir::types::I32, flags, field_addr, 0),
+            WasmValType::I64 => builder.ins().load(ir::types::I64, flags, field_addr, 0),
+            WasmValType::F32 => builder.ins().load(ir::types::F32, flags, field_addr, 0),
+            WasmValType::F64 => builder.ins().load(ir::types::F64, flags, field_addr, 0),
+            WasmValType::V128 => builder.ins().load(ir::types::I128, flags, field_addr, 0),
             WasmValType::Ref(r) => match r.heap_type.top() {
                 WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)?
-                    .translate_read_gc_reference(
-                        func_env,
-                        builder,
-                        r,
-                        field_addr,
-                        ir::MemFlags::trusted(),
-                    )?,
+                    .translate_read_gc_reference(func_env, builder, r, field_addr, flags)?,
                 WasmHeapTopType::Func => {
                     unimplemented!("funcrefs inside the GC heap")
                 }
@@ -237,17 +206,12 @@ fn translate_struct_get_and_extend(
     // TODO: See comment in `translate_struct_get` about the `prepare_gc_ref_access`.
     let field_addr = func_env.prepare_gc_ref_access(builder, struct_ref, field_offset, field_size);
 
+    // Data inside GC objects is always little endian.
+    let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+
     let field_val = match field_ty.element_type {
-        WasmStorageType::I8 => {
-            builder
-                .ins()
-                .load(ir::types::I8, ir::MemFlags::trusted(), field_addr, 0)
-        }
-        WasmStorageType::I16 => {
-            builder
-                .ins()
-                .load(ir::types::I16, ir::MemFlags::trusted(), field_addr, 0)
-        }
+        WasmStorageType::I8 => builder.ins().load(ir::types::I8, flags, field_addr, 0),
+        WasmStorageType::I16 => builder.ins().load(ir::types::I16, flags, field_addr, 0),
         WasmStorageType::Val(_) => unreachable!(),
     };
 
@@ -320,35 +284,26 @@ pub fn translate_struct_set(
     // TODO: See comment in `translate_struct_get` about the `prepare_gc_ref_access`.
     let field_addr = func_env.prepare_gc_ref_access(builder, struct_ref, field_offset, field_size);
 
+    // Data inside GC objects is always little endian.
+    let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+
     match &field_ty.element_type {
         WasmStorageType::I8 => {
-            builder
-                .ins()
-                .istore8(ir::MemFlags::trusted(), new_val, field_addr, 0);
+            builder.ins().istore8(flags, new_val, field_addr, 0);
         }
         WasmStorageType::I16 => {
-            builder
-                .ins()
-                .istore16(ir::MemFlags::trusted(), new_val, field_addr, 0);
+            builder.ins().istore16(flags, new_val, field_addr, 0);
         }
         WasmStorageType::Val(WasmValType::Ref(r)) if r.heap_type.top() == WasmHeapTopType::Func => {
             unimplemented!("funcrefs inside the GC heap")
         }
         WasmStorageType::Val(WasmValType::Ref(r)) => {
-            gc_compiler(func_env)?.translate_write_gc_reference(
-                func_env,
-                builder,
-                *r,
-                field_addr,
-                new_val,
-                ir::MemFlags::trusted(),
-            )?;
+            gc_compiler(func_env)?
+                .translate_write_gc_reference(func_env, builder, *r, field_addr, new_val, flags)?;
         }
         WasmStorageType::Val(_) => {
             assert_eq!(builder.func.dfg.value_type(new_val).bytes(), field_size);
-            builder
-                .ins()
-                .store(ir::MemFlags::trusted(), new_val, field_addr, 0);
+            builder.ins().store(flags, new_val, field_addr, 0);
         }
     }
 

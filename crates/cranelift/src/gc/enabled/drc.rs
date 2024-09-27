@@ -315,10 +315,6 @@ impl GcCompiler for DrcCompiler {
         flags: ir::MemFlags,
     ) -> WasmResult<ir::Value> {
         assert!(ty.is_vmgcref_type());
-        assert!(
-            flags.explicit_endianness().is_none(),
-            "GC references are always native-endian"
-        );
 
         let (reference_type, needs_stack_map) = func_env.reference_type(ty.heap_type);
         debug_assert!(needs_stack_map);
@@ -467,10 +463,6 @@ impl GcCompiler for DrcCompiler {
         flags: ir::MemFlags,
     ) -> WasmResult<()> {
         assert!(ty.is_vmgcref_type());
-        assert!(
-            flags.explicit_endianness().is_none(),
-            "GC references are always native-endian"
-        );
 
         let (ref_ty, needs_stack_map) = func_env.reference_type(ty.heap_type);
         debug_assert!(needs_stack_map);

@@ -6,21 +6,21 @@ use core::mem;
 /// A plain-old-data type that can be stored in a `ValType` or a `StorageType`.
 pub trait PodValType<const SIZE: usize>: Copy {
     /// Read an instance of `Self` from the given native-endian bytes.
-    fn read_ne(ne_bytes: &[u8; SIZE]) -> Self;
+    fn read_le(le_bytes: &[u8; SIZE]) -> Self;
 
     /// Write `self` into the given memory location, as native-endian bytes.
-    fn write_ne(&self, into: &mut [u8; SIZE]);
+    fn write_le(&self, into: &mut [u8; SIZE]);
 }
 
 macro_rules! impl_pod_val_type {
     ( $( $t:ty , )* ) => {
         $(
             impl PodValType<{mem::size_of::<$t>()}> for $t {
-                fn read_ne(ne_bytes: &[u8; mem::size_of::<$t>()]) -> Self {
-                    <$t>::from_ne_bytes(*ne_bytes)
+                fn read_le(le_bytes: &[u8; mem::size_of::<$t>()]) -> Self {
+                    <$t>::from_le_bytes(*le_bytes)
                 }
-                fn write_ne(&self, into: &mut [u8; mem::size_of::<$t>()]) {
-                    *into = self.to_ne_bytes();
+                fn write_le(&self, into: &mut [u8; mem::size_of::<$t>()]) {
+                    *into = self.to_le_bytes();
                 }
             }
         )*
@@ -39,11 +39,11 @@ impl_pod_val_type! {
 }
 
 impl PodValType<{ mem::size_of::<V128>() }> for V128 {
-    fn read_ne(ne_bytes: &[u8; mem::size_of::<V128>()]) -> Self {
-        u128::from_ne_bytes(*ne_bytes).into()
+    fn read_le(le_bytes: &[u8; mem::size_of::<V128>()]) -> Self {
+        u128::from_le_bytes(*le_bytes).into()
     }
-    fn write_ne(&self, into: &mut [u8; mem::size_of::<V128>()]) {
-        *into = self.as_u128().to_ne_bytes();
+    fn write_le(&self, into: &mut [u8; mem::size_of::<V128>()]) {
+        *into = self.as_u128().to_le_bytes();
     }
 }
 
@@ -112,7 +112,7 @@ impl<'a> VMGcObjectDataMut<'a> {
         let offset = usize::try_from(offset).unwrap();
         let end = offset.checked_add(N).unwrap();
         let bytes = self.data.get(offset..end).expect("out of bounds field");
-        T::read_ne(bytes.try_into().unwrap())
+        T::read_le(bytes.try_into().unwrap())
     }
 
     /// Read a POD field out of this object.
@@ -130,7 +130,7 @@ impl<'a> VMGcObjectDataMut<'a> {
         let offset = usize::try_from(offset).unwrap();
         let end = offset.checked_add(N).unwrap();
         let into = self.data.get_mut(offset..end).expect("out of bounds field");
-        val.write_ne(into.try_into().unwrap());
+        val.write_le(into.try_into().unwrap());
     }
 
     impl_pod_methods! {
