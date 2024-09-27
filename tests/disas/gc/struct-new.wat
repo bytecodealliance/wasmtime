@@ -39,7 +39,7 @@
 ;; @002a                               trapz v20, user65535
 ;; @002a                               v13 = load.i64 notrap aligned readonly v0+40
 ;; @002a                               v21 = iadd v13, v17
-;; @002a                               store notrap aligned v2, v21
+;; @002a                               store notrap aligned little v2, v21
 ;; @002a                               v26 = iconst.i64 20
 ;; @002a                               v27 = uadd_overflow_trap v15, v26, user65535  ; v26 = 20
 ;; @002a                               v28 = iconst.i64 1
@@ -47,7 +47,7 @@
 ;; @002a                               v30 = icmp ult v29, v14
 ;; @002a                               trapz v30, user65535
 ;; @002a                               v31 = iadd v13, v27
-;; @002a                               istore8 notrap aligned v3, v31
+;; @002a                               istore8 notrap aligned little v3, v31
 ;; @002a                               v36 = iconst.i64 24
 ;; @002a                               v37 = uadd_overflow_trap v15, v36, user65535  ; v36 = 24
 ;; @002a                               v39 = uadd_overflow_trap v37, v18, user65535  ; v18 = 4
@@ -83,7 +83,7 @@
 ;;                                 block3:
 ;;                                     v67 = load.i32 notrap v71
 ;; @002a                               v41 = iadd.i64 v13, v37
-;; @002a                               store notrap aligned v67, v41
+;; @002a                               store notrap aligned little v67, v41
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:
