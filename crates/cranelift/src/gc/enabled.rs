@@ -689,13 +689,7 @@ pub fn translate_array_get_s(
         .unwrap_array();
     let elem_ty = array_ty.0.element_type.clone();
 
-    read_field_at_addr(
-        func_env,
-        builder,
-        elem_ty,
-        elem_addr,
-        Some(Extension::Sign),
-    )
+    read_field_at_addr(func_env, builder, elem_ty, elem_addr, Some(Extension::Sign))
 }
 
 pub fn translate_array_get_u(
@@ -713,13 +707,7 @@ pub fn translate_array_get_u(
         .unwrap_array();
     let elem_ty = array_ty.0.element_type;
 
-    read_field_at_addr(
-        func_env,
-        builder,
-        elem_ty,
-        elem_addr,
-        Some(Extension::Zero),
-    )
+    read_field_at_addr(func_env, builder, elem_ty, elem_addr, Some(Extension::Zero))
 }
 
 pub fn translate_array_set(
