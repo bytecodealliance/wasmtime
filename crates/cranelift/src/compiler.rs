@@ -1,7 +1,7 @@
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::{FuncEnvironment as _, FuncTranslator};
-use crate::DEBUG_ASSERT_TRAP_CODE;
+use crate::TRAP_DEBUG_ASSERT;
 use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
 use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
 use anyhow::{Context as _, Result};
@@ -945,9 +945,7 @@ fn debug_assert_enough_capacity_for_length(
             capacity,
             ir::immediates::Imm64::new(length.try_into().unwrap()),
         );
-        builder
-            .ins()
-            .trapz(enough_capacity, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+        builder.ins().trapz(enough_capacity, TRAP_DEBUG_ASSERT);
     }
 }
 
@@ -969,10 +967,7 @@ fn debug_assert_vmctx_kind(
             magic,
             i64::from(expected_vmctx_magic),
         );
-        builder.ins().trapz(
-            is_expected_vmctx,
-            ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE),
-        );
+        builder.ins().trapz(is_expected_vmctx, TRAP_DEBUG_ASSERT);
     }
 }
 

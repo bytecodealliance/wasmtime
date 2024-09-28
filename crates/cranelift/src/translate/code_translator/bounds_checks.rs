@@ -280,7 +280,7 @@ where
                 builder,
                 index,
                 access_size_val,
-                ir::TrapCode::HeapOutOfBounds,
+                ir::TrapCode::HEAP_OUT_OF_BOUNDS,
             );
             if pcc {
                 builder.func.dfg.facts[adjusted_index] = Some(Fact::value_offset(
@@ -325,7 +325,7 @@ where
                 "static memories require the ability to use virtual memory"
             );
             env.before_unconditionally_trapping_memory_access(builder)?;
-            env.trap(builder, ir::TrapCode::HeapOutOfBounds);
+            env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
             Unreachable
         }
 
@@ -569,7 +569,7 @@ fn explicit_check_oob_condition_and_compute_addr<FE: FuncEnvironment + ?Sized>(
     oob_condition: ir::Value,
 ) -> ir::Value {
     if !spectre_mitigations_enabled {
-        env.trapnz(builder, oob_condition, ir::TrapCode::HeapOutOfBounds);
+        env.trapnz(builder, oob_condition, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
     }
     let addr_ty = env.pointer_type();
 

@@ -150,39 +150,39 @@ where
     let assign_or_trap = |value: ValueResult<DataValue>| match value {
         Ok(v) => Ok(assign(v)),
         Err(ValueError::IntegerDivisionByZero) => Ok(ControlFlow::Trap(CraneliftTrap::User(
-            TrapCode::IntegerDivisionByZero,
+            TrapCode::INTEGER_DIVISION_BY_ZERO,
         ))),
         Err(ValueError::IntegerOverflow) => Ok(ControlFlow::Trap(CraneliftTrap::User(
-            TrapCode::IntegerOverflow,
+            TrapCode::INTEGER_OVERFLOW,
         ))),
         Err(e) => Err(e),
     };
 
     let memerror_to_trap = |e: MemoryError| match e {
-        MemoryError::InvalidAddress(_) => TrapCode::HeapOutOfBounds,
-        MemoryError::InvalidAddressType(_) => TrapCode::HeapOutOfBounds,
-        MemoryError::InvalidOffset { .. } => TrapCode::HeapOutOfBounds,
-        MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,
-        MemoryError::OutOfBoundsStore { mem_flags, .. } => mem_flags
-            .trap_code()
-            .expect("store with notrap flag should not trap"),
-        MemoryError::OutOfBoundsLoad { mem_flags, .. } => mem_flags
-            .trap_code()
-            .expect("load with notrap flag should not trap"),
-        MemoryError::MisalignedLoad { .. } => TrapCode::HeapMisaligned,
-        MemoryError::MisalignedStore { .. } => TrapCode::HeapMisaligned,
+        MemoryError::InvalidAddress(_)
+        | MemoryError::InvalidAddressType(_)
+        | MemoryError::InvalidOffset { .. }
+        | MemoryError::InvalidEntry { .. } => CraneliftTrap::User(TrapCode::HEAP_OUT_OF_BOUNDS),
+        MemoryError::OutOfBoundsStore { mem_flags, .. }
+        | MemoryError::OutOfBoundsLoad { mem_flags, .. } => CraneliftTrap::User(
+            mem_flags
+                .trap_code()
+                .expect("op with notrap flag should not trap"),
+        ),
+        MemoryError::MisalignedLoad { .. } => CraneliftTrap::HeapMisaligned,
+        MemoryError::MisalignedStore { .. } => CraneliftTrap::HeapMisaligned,
     };
 
     // Assigns or traps depending on the value of the result
     let assign_or_memtrap = |res| match res {
         Ok(v) => assign(v),
-        Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
+        Err(e) => ControlFlow::Trap(memerror_to_trap(e)),
     };
 
     // Continues or traps depending on the value of the result
     let continue_or_memtrap = |res| match res {
         Ok(_) => ControlFlow::Continue,
-        Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
+        Err(e) => ControlFlow::Trap(memerror_to_trap(e)),
     };
 
     let calculate_addr =
@@ -275,9 +275,7 @@ where
             // guarantees that the user has ran that.
             let args_match = validate_signature_params(&signature.params[..], &args[..]);
             if !args_match {
-                return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                    TrapCode::BadSignature,
-                )));
+                return Ok(ControlFlow::Trap(CraneliftTrap::BadSignature));
             }
 
             Ok(match func_ref {
@@ -295,7 +293,7 @@ where
                     // We don't transfer control to a libcall, we just execute it and return the results
                     let res = libcall_handler(libcall, args);
                     let res = match res {
-                        Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
+                        Err(trap) => return Ok(ControlFlow::Trap(trap)),
                         Ok(rets) => rets,
                     };
 
@@ -303,7 +301,7 @@ where
                     if validate_signature_params(&signature.returns[..], &res[..]) {
                         ControlFlow::Assign(res)
                     } else {
-                        ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+                        ControlFlow::Trap(CraneliftTrap::BadSignature)
                     }
                 }
             })
@@ -1050,7 +1048,7 @@ where
             // NaN check
             if arg(0).is_nan()? {
                 return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                    TrapCode::BadConversionToInteger,
+                    TrapCode::BAD_CONVERSION_TO_INTEGER,
                 )));
             }
             let x = arg(0).into_float()? as i128;
@@ -1064,7 +1062,7 @@ where
             // bounds check
             if overflow {
                 return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                    TrapCode::IntegerOverflow,
+                    TrapCode::INTEGER_OVERFLOW,
                 )));
             }
             // perform the conversion.
@@ -1181,7 +1179,7 @@ where
                 .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
             let prev_val = match loaded {
                 Ok(v) => v,
-                Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
+                Err(e) => return Ok(ControlFlow::Trap(memerror_to_trap(e))),
             };
             let prev_val_to_assign = prev_val.clone();
             let replace = match op {
@@ -1208,7 +1206,7 @@ where
                 .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
             let loaded_val = match loaded {
                 Ok(v) => v,
-                Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
+                Err(e) => return Ok(ControlFlow::Trap(memerror_to_trap(e))),
             };
             let expected_val = arg(1);
             let val_to_assign = if loaded_val == expected_val {
@@ -1333,6 +1331,12 @@ pub enum ControlFlow<'a> {
 pub enum CraneliftTrap {
     #[error("user code: {0}")]
     User(TrapCode),
+    #[error("bad signature")]
+    BadSignature,
+    #[error("unreachable code has been reached")]
+    UnreachableCodeReached,
+    #[error("heap is misaligned")]
+    HeapMisaligned,
     #[error("user debug")]
     Debug,
 }

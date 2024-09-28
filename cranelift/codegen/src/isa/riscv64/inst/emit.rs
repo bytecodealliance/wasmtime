@@ -903,7 +903,7 @@ impl Inst {
                 rs,
             } => {
                 if alu_op.is_convert_to_int() {
-                    sink.add_trap(TrapCode::BadConversionToInteger);
+                    sink.add_trap(TrapCode::BAD_CONVERSION_TO_INTEGER);
                 }
                 sink.put4(encode_fp_rr(alu_op, width, frm, rd, rs));
             }

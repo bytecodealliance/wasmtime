@@ -567,7 +567,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             rn: stack_reg(),
             rm: limit_reg,
             cond: Cond::from_intcc(IntCC::UnsignedLessThanOrEqual),
-            trap_code: ir::TrapCode::StackOverflow,
+            trap_code: ir::TrapCode::STACK_OVERFLOW,
         });
         insts
     }

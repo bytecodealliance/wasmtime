@@ -2442,10 +2442,10 @@ mod test {
 
         buf.bind_label(label(0), ctrl_plane);
         buf.put1(1);
-        buf.add_trap(TrapCode::HeapOutOfBounds);
+        buf.add_trap(TrapCode::HEAP_OUT_OF_BOUNDS);
         buf.put1(2);
-        buf.add_trap(TrapCode::IntegerOverflow);
-        buf.add_trap(TrapCode::IntegerDivisionByZero);
+        buf.add_trap(TrapCode::INTEGER_OVERFLOW);
+        buf.add_trap(TrapCode::INTEGER_DIVISION_BY_ZERO);
         buf.add_call_site();
         buf.add_reloc(
             Reloc::Abs4,
@@ -2469,9 +2469,9 @@ mod test {
                 .map(|trap| (trap.offset, trap.code))
                 .collect::<Vec<_>>(),
             vec![
-                (1, TrapCode::HeapOutOfBounds),
-                (2, TrapCode::IntegerOverflow),
-                (2, TrapCode::IntegerDivisionByZero)
+                (1, TrapCode::HEAP_OUT_OF_BOUNDS),
+                (2, TrapCode::INTEGER_OVERFLOW),
+                (2, TrapCode::INTEGER_DIVISION_BY_ZERO)
             ]
         );
         assert_eq!(

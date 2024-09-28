@@ -24,23 +24,23 @@
 ;;                                     v39 = ishl v6, v38  ; v38 = 3
 ;;                                     v37 = iconst.i64 32
 ;; @0022                               v8 = ushr v39, v37  ; v37 = 32
-;; @0022                               trapnz v8, alloc_too_large
+;; @0022                               trapnz v8, user18
 ;; @0022                               v5 = iconst.i32 24
 ;;                                     v45 = iconst.i32 3
 ;;                                     v46 = ishl v3, v45  ; v45 = 3
-;; @0022                               v10 = uadd_overflow_trap v5, v46, alloc_too_large  ; v5 = 24
+;; @0022                               v10 = uadd_overflow_trap v5, v46, user18  ; v5 = 24
 ;; @0022                               v12 = iconst.i32 -1543503872
 ;; @0022                               v13 = iconst.i32 0
 ;;                                     v43 = iconst.i32 8
 ;; @0022                               v15 = call fn0(v0, v12, v13, v10, v43)  ; v12 = -1543503872, v13 = 0, v43 = 8
 ;; @0022                               v19 = uextend.i64 v15
 ;; @0022                               v20 = iconst.i64 16
-;; @0022                               v21 = uadd_overflow_trap v19, v20, user65535  ; v20 = 16
+;; @0022                               v21 = uadd_overflow_trap v19, v20, user1  ; v20 = 16
 ;; @0022                               v22 = uextend.i64 v10
-;; @0022                               v23 = uadd_overflow_trap v19, v22, user65535
+;; @0022                               v23 = uadd_overflow_trap v19, v22, user1
 ;; @0022                               v18 = load.i64 notrap aligned readonly v0+48
 ;; @0022                               v24 = icmp ule v23, v18
-;; @0022                               trapz v24, user65535
+;; @0022                               trapz v24, user1
 ;; @0022                               v17 = load.i64 notrap aligned readonly v0+40
 ;; @0022                               v25 = iadd v17, v21
 ;; @0022                               store notrap aligned v3, v25

@@ -245,7 +245,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // We do nothing
         }
         Operator::Unreachable => {
-            environ.trap(builder, ir::TrapCode::UnreachableCodeReached);
+            environ.trap(builder, crate::TRAP_UNREACHABLE);
             state.reachable = false;
         }
         /***************************** Control flow blocks **********************************
@@ -1255,7 +1255,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             } else {
                 let index_type = environ.heaps()[heap].index_type;
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
-                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HeapOutOfBounds)
+                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
             };
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
@@ -1279,7 +1279,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             } else {
                 let index_type = environ.heaps()[heap].index_type;
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
-                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HeapOutOfBounds)
+                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
             };
             let res = environ.translate_atomic_notify(
                 builder.cursor(),
@@ -2481,7 +2481,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefAsNonNull => {
             let r = state.pop1();
             let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
-            environ.trapnz(builder, is_null, ir::TrapCode::NullReference);
+            environ.trapnz(builder, is_null, crate::TRAP_NULL_REFERENCE);
             state.push1(r);
         }
 
@@ -3066,8 +3066,12 @@ where
         // optimizing this more.
         Err(_) => {
             let offset = builder.ins().iconst(heap.index_type, memarg.offset as i64);
-            let adjusted_index =
-                environ.uadd_overflow_trap(builder, index, offset, ir::TrapCode::HeapOutOfBounds);
+            let adjusted_index = environ.uadd_overflow_trap(
+                builder,
+                index,
+                offset,
+                ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+            );
             bounds_checks::bounds_check_and_compute_addr(
                 builder,
                 environ,
@@ -3136,7 +3140,7 @@ fn align_atomic_addr<FE: FuncEnvironment + ?Sized>(
             .ins()
             .band_imm(effective_addr, i64::from(loaded_bytes - 1));
         let f = builder.ins().icmp_imm(IntCC::NotEqual, misalignment, 0);
-        environ.trapnz(builder, f, ir::TrapCode::HeapMisaligned);
+        environ.trapnz(builder, f, crate::TRAP_HEAP_MISALIGNED);
     }
 }
 

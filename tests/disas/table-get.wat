@@ -38,7 +38,7 @@
 ;; @0053                               v10 = iadd v8, v9
 ;; @0053                               v11 = iconst.i64 0
 ;; @0053                               v12 = select_spectre_guard v6, v11, v10  ; v11 = 0
-;; @0053                               v13 = load.i32 table_oob aligned table v12
+;; @0053                               v13 = load.i32 user5 aligned table v12
 ;;                                     v54 = stack_addr.i64 ss0
 ;;                                     store notrap v13, v54
 ;;                                     v55 = stack_addr.i64 ss0
@@ -61,11 +61,11 @@
 ;;                                     v49 = load.i32 notrap v57
 ;; @0053                               v23 = uextend.i64 v49
 ;; @0053                               v24 = iconst.i64 8
-;; @0053                               v25 = uadd_overflow_trap v23, v24, user65535  ; v24 = 8
+;; @0053                               v25 = uadd_overflow_trap v23, v24, user1  ; v24 = 8
 ;; @0053                               v26 = iconst.i64 8
-;; @0053                               v27 = uadd_overflow_trap v25, v26, user65535  ; v26 = 8
+;; @0053                               v27 = uadd_overflow_trap v25, v26, user1  ; v26 = 8
 ;; @0053                               v28 = icmp ule v27, v22
-;; @0053                               trapz v28, user65535
+;; @0053                               trapz v28, user1
 ;; @0053                               v29 = iadd v21, v25
 ;; @0053                               v30 = load.i64 notrap aligned v29
 ;;                                     v58 = iconst.i64 1
@@ -76,11 +76,11 @@
 ;;                                     v48 = load.i32 notrap v59
 ;; @0053                               v35 = uextend.i64 v48
 ;; @0053                               v36 = iconst.i64 8
-;; @0053                               v37 = uadd_overflow_trap v35, v36, user65535  ; v36 = 8
+;; @0053                               v37 = uadd_overflow_trap v35, v36, user1  ; v36 = 8
 ;; @0053                               v38 = iconst.i64 8
-;; @0053                               v39 = uadd_overflow_trap v37, v38, user65535  ; v38 = 8
+;; @0053                               v39 = uadd_overflow_trap v37, v38, user1  ; v38 = 8
 ;; @0053                               v40 = icmp ule v39, v34
-;; @0053                               trapz v40, user65535
+;; @0053                               trapz v40, user1
 ;; @0053                               v41 = iadd v33, v37
 ;; @0053                               store notrap aligned v31, v41
 ;;                                     v60 = stack_addr.i64 ss0
@@ -129,7 +129,7 @@
 ;; @005a                               v10 = iadd v8, v9
 ;; @005a                               v11 = iconst.i64 0
 ;; @005a                               v12 = select_spectre_guard v6, v11, v10  ; v11 = 0
-;; @005a                               v13 = load.i32 table_oob aligned table v12
+;; @005a                               v13 = load.i32 user5 aligned table v12
 ;;                                     v54 = stack_addr.i64 ss0
 ;;                                     store notrap v13, v54
 ;;                                     v55 = stack_addr.i64 ss0
@@ -152,11 +152,11 @@
 ;;                                     v49 = load.i32 notrap v57
 ;; @005a                               v23 = uextend.i64 v49
 ;; @005a                               v24 = iconst.i64 8
-;; @005a                               v25 = uadd_overflow_trap v23, v24, user65535  ; v24 = 8
+;; @005a                               v25 = uadd_overflow_trap v23, v24, user1  ; v24 = 8
 ;; @005a                               v26 = iconst.i64 8
-;; @005a                               v27 = uadd_overflow_trap v25, v26, user65535  ; v26 = 8
+;; @005a                               v27 = uadd_overflow_trap v25, v26, user1  ; v26 = 8
 ;; @005a                               v28 = icmp ule v27, v22
-;; @005a                               trapz v28, user65535
+;; @005a                               trapz v28, user1
 ;; @005a                               v29 = iadd v21, v25
 ;; @005a                               v30 = load.i64 notrap aligned v29
 ;;                                     v58 = iconst.i64 1
@@ -167,11 +167,11 @@
 ;;                                     v48 = load.i32 notrap v59
 ;; @005a                               v35 = uextend.i64 v48
 ;; @005a                               v36 = iconst.i64 8
-;; @005a                               v37 = uadd_overflow_trap v35, v36, user65535  ; v36 = 8
+;; @005a                               v37 = uadd_overflow_trap v35, v36, user1  ; v36 = 8
 ;; @005a                               v38 = iconst.i64 8
-;; @005a                               v39 = uadd_overflow_trap v37, v38, user65535  ; v38 = 8
+;; @005a                               v39 = uadd_overflow_trap v37, v38, user1  ; v38 = 8
 ;; @005a                               v40 = icmp ule v39, v34
-;; @005a                               trapz v40, user65535
+;; @005a                               trapz v40, user1
 ;; @005a                               v41 = iadd v33, v37
 ;; @005a                               store notrap aligned v31, v41
 ;;                                     v60 = stack_addr.i64 ss0

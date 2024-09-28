@@ -7,12 +7,12 @@ use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
-use crate::step::{step, ControlFlow, StepError};
+use crate::step::{step, ControlFlow, CraneliftTrap, StepError};
 use crate::value::{DataValueExt, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type,
+    GlobalValueData, LibCall, MemFlags, StackSlot, Type,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -192,7 +192,7 @@ pub enum InterpreterError {
 }
 
 pub type LibCallValues = SmallVec<[DataValue; 1]>;
-pub type LibCallHandler = fn(LibCall, LibCallValues) -> Result<LibCallValues, TrapCode>;
+pub type LibCallHandler = fn(LibCall, LibCallValues) -> Result<LibCallValues, CraneliftTrap>;
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
@@ -215,7 +215,7 @@ impl Default for InterpreterState<'_> {
         };
         Self {
             functions: FunctionStore::default(),
-            libcall_handler: |_, _| Err(TrapCode::UnreachableCodeReached),
+            libcall_handler: |_, _| Err(CraneliftTrap::UnreachableCodeReached),
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),

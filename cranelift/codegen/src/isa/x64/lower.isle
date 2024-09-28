@@ -4240,7 +4240,7 @@
         (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
                   (put_in_gpr b)
                   (DivSignedness.Unsigned)
-                  (TrapCode.IntegerDivisionByZero)))
+                  (TrapCode.INTEGER_DIVISION_BY_ZERO)))
 
 ;; 16-to-64-bit division is all done with a similar instruction and the only
 ;; tricky requirement here is that when div traps are disallowed the divisor
@@ -4251,7 +4251,7 @@
                           (put_in_gpr b)
                           (raw_operand_size_of_type ty)
                           (DivSignedness.Unsigned)
-                          (TrapCode.IntegerDivisionByZero)))
+                          (TrapCode.INTEGER_DIVISION_BY_ZERO)))
 
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4259,7 +4259,7 @@
         (x64_div8 (x64_sign_extend_data a (OperandSize.Size8))
                   (nonzero_sdiv_divisor $I8 b)
                   (DivSignedness.Signed)
-                  (TrapCode.IntegerOverflow)))
+                  (TrapCode.INTEGER_OVERFLOW)))
 
 (rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
         (let (
@@ -4271,7 +4271,7 @@
                           (nonzero_sdiv_divisor ty b)
                           size
                           (DivSignedness.Signed)
-                          (TrapCode.IntegerOverflow))))
+                          (TrapCode.INTEGER_OVERFLOW))))
 
 ;; Checks to make sure that the input `Value` is a non-zero value for `sdiv`.
 ;;
@@ -4286,7 +4286,7 @@
           (val Reg val)
           (_ InstOutput (side_effect (with_flags_side_effect
             (x64_test (raw_operand_size_of_type ty) val val)
-            (trap_if (CC.Z) (TrapCode.IntegerDivisionByZero)))))
+            (trap_if (CC.Z) (TrapCode.INTEGER_DIVISION_BY_ZERO)))))
         )
         val))
 
@@ -4299,7 +4299,7 @@
             (result Gpr (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
                                   (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
                                   (DivSignedness.Unsigned)
-                                  (TrapCode.IntegerDivisionByZero)))
+                                  (TrapCode.INTEGER_DIVISION_BY_ZERO)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 
@@ -4309,7 +4309,7 @@
                            (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
                            (raw_operand_size_of_type ty)
                            (DivSignedness.Unsigned)
-                           (TrapCode.IntegerDivisionByZero)))
+                           (TrapCode.INTEGER_DIVISION_BY_ZERO)))
 
 ;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4322,7 +4322,7 @@
         (if-let n (safe_divisor_from_imm64 $I8 imm))
         (let (
             (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed) (TrapCode.IntegerDivisionByZero)))
+            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed) (TrapCode.INTEGER_DIVISION_BY_ZERO)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 
@@ -4338,7 +4338,7 @@
                              (imm ty n)
                              size
                              (DivSignedness.Signed)
-                             (TrapCode.IntegerDivisionByZero))))
+                             (TrapCode.INTEGER_DIVISION_BY_ZERO))))
 
 (rule 1 (lower (srem a @ (value_type $I8) b))
         (let (

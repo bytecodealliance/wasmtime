@@ -1900,7 +1900,7 @@ fn test_x64_emit() {
         Inst::div(
             OperandSize::Size32,
             DivSignedness::Signed,
-            TrapCode::IntegerDivisionByZero,
+            TrapCode::INTEGER_DIVISION_BY_ZERO,
             RegMem::reg(regs::rsi()),
             Gpr::unwrap_new(regs::rax()),
             Gpr::unwrap_new(regs::rdx()),
@@ -1914,7 +1914,7 @@ fn test_x64_emit() {
         Inst::div(
             OperandSize::Size64,
             DivSignedness::Signed,
-            TrapCode::IntegerDivisionByZero,
+            TrapCode::INTEGER_DIVISION_BY_ZERO,
             RegMem::reg(regs::r15()),
             Gpr::unwrap_new(regs::rax()),
             Gpr::unwrap_new(regs::rdx()),
@@ -1928,7 +1928,7 @@ fn test_x64_emit() {
         Inst::div(
             OperandSize::Size32,
             DivSignedness::Unsigned,
-            TrapCode::IntegerDivisionByZero,
+            TrapCode::INTEGER_DIVISION_BY_ZERO,
             RegMem::reg(regs::r14()),
             Gpr::unwrap_new(regs::rax()),
             Gpr::unwrap_new(regs::rdx()),
@@ -1942,7 +1942,7 @@ fn test_x64_emit() {
         Inst::div(
             OperandSize::Size64,
             DivSignedness::Unsigned,
-            TrapCode::IntegerDivisionByZero,
+            TrapCode::INTEGER_DIVISION_BY_ZERO,
             RegMem::reg(regs::rdi()),
             Gpr::unwrap_new(regs::rax()),
             Gpr::unwrap_new(regs::rdx()),
@@ -1955,7 +1955,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::div8(
             DivSignedness::Unsigned,
-            TrapCode::IntegerDivisionByZero,
+            TrapCode::INTEGER_DIVISION_BY_ZERO,
             RegMem::reg(regs::rax()),
             Gpr::unwrap_new(regs::rax()),
             WritableGpr::from_reg(Gpr::unwrap_new(regs::rax())),
@@ -1966,7 +1966,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::div8(
             DivSignedness::Unsigned,
-            TrapCode::IntegerDivisionByZero,
+            TrapCode::INTEGER_DIVISION_BY_ZERO,
             RegMem::reg(regs::rsi()),
             Gpr::unwrap_new(regs::rax()),
             WritableGpr::from_reg(Gpr::unwrap_new(regs::rax())),
@@ -5074,8 +5074,8 @@ fn test_x64_emit() {
 
     insns.push((Inst::Hlt, "CC", "hlt"));
 
-    let trap_code = TrapCode::UnreachableCodeReached;
-    insns.push((Inst::Ud2 { trap_code }, "0F0B", "ud2 unreachable"));
+    let trap_code = TrapCode::INTEGER_OVERFLOW;
+    insns.push((Inst::Ud2 { trap_code }, "0F0B", "ud2 int_ovf"));
 
     insns.push((
         Inst::ElfTlsGetAddr {

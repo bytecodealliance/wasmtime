@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::{compiler::Compiler, ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
+use crate::{compiler::Compiler, TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_DEBUG_ASSERT};
 use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
@@ -79,9 +79,7 @@ impl<'a> TrampolineCompiler<'a> {
                     // Transcoders can only actually be called by Wasm, so let's assert
                     // that here.
                     Abi::Array => {
-                        self.builder
-                            .ins()
-                            .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+                        self.builder.ins().trap(TRAP_DEBUG_ASSERT);
                     }
                 }
             }
@@ -263,9 +261,7 @@ impl<'a> TrampolineCompiler<'a> {
 
     fn translate_always_trap(&mut self) {
         if self.tunables.signals_based_traps {
-            self.builder
-                .ins()
-                .trap(ir::TrapCode::User(ALWAYS_TRAP_CODE));
+            self.builder.ins().trap(TRAP_ALWAYS);
             return;
         }
 
@@ -284,9 +280,7 @@ impl<'a> TrampolineCompiler<'a> {
             .call_indirect(host_sig, host_fn, &[vmctx, code]);
         // debug trap in case execution actually falls through, but this
         // shouldn't ever get hit at runtime.
-        self.builder
-            .ins()
-            .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+        self.builder.ins().trap(TRAP_DEBUG_ASSERT);
     }
 
     fn translate_resource_new(&mut self, resource: TypeResourceTableIndex) {
@@ -474,9 +468,7 @@ impl<'a> TrampolineCompiler<'a> {
                     .builder
                     .ins()
                     .band_imm(flags, i64::from(FLAG_MAY_ENTER));
-                self.builder
-                    .ins()
-                    .trapz(masked, ir::TrapCode::User(CANNOT_ENTER_CODE));
+                self.builder.ins().trapz(masked, TRAP_CANNOT_ENTER);
             }
         }
 
@@ -496,10 +488,7 @@ impl<'a> TrampolineCompiler<'a> {
                 i32::try_from(self.offsets.resource_destructor(index)).unwrap(),
             );
             if cfg!(debug_assertions) {
-                self.builder.ins().trapz(
-                    dtor_func_ref,
-                    ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
-                );
+                self.builder.ins().trapz(dtor_func_ref, TRAP_DEBUG_ASSERT);
             }
             let func_addr = self.builder.ins().load(
                 pointer_type,
@@ -554,9 +543,7 @@ impl<'a> TrampolineCompiler<'a> {
             // These trampolines can only actually be called by Wasm, so
             // let's assert that here.
             Abi::Array => {
-                self.builder
-                    .ins()
-                    .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+                self.builder.ins().trap(TRAP_DEBUG_ASSERT);
                 return;
             }
         }

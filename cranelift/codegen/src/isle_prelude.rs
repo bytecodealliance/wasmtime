@@ -648,15 +648,15 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn trap_code_division_by_zero(&mut self) -> TrapCode {
-            TrapCode::IntegerDivisionByZero
+            TrapCode::INTEGER_DIVISION_BY_ZERO
         }
 
         fn trap_code_integer_overflow(&mut self) -> TrapCode {
-            TrapCode::IntegerOverflow
+            TrapCode::INTEGER_OVERFLOW
         }
 
         fn trap_code_bad_conversion_to_integer(&mut self) -> TrapCode {
-            TrapCode::BadConversionToInteger
+            TrapCode::BAD_CONVERSION_TO_INTEGER
         }
 
         fn nonzero_u64_from_imm64(&mut self, val: Imm64) -> Option<u64> {

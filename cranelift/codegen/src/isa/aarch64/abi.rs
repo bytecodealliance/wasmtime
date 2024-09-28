@@ -475,7 +475,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             extendop: ExtendOp::UXTX,
         });
         insts.push(Inst::TrapIf {
-            trap_code: ir::TrapCode::StackOverflow,
+            trap_code: ir::TrapCode::STACK_OVERFLOW,
             // Here `Lo` == "less than" when interpreting the two
             // operands as unsigned integers.
             kind: CondBrKind::Cond(Cond::Lo),

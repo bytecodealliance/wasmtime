@@ -71,8 +71,8 @@ pub struct MemFlags {
     // * 3 - big endian flag
     // * 4 - checked flag
     // * 5/6 - alias region
-    // * 7/8/9/10 - trap code
-    // * 11/12/13/14/15 - unallocated
+    // * 7/8/9/10/11/12/13/14 - trap code
+    // * 15 - unallocated
     //
     // Current properties upheld are:
     //
@@ -108,13 +108,13 @@ const MASK_ALIAS_REGION: u16 = 0b11 << ALIAS_REGION_OFFSET;
 const ALIAS_REGION_OFFSET: u16 = 5;
 
 /// Trap code, if any, for this memory operation.
-const MASK_TRAP_CODE: u16 = 0b1111 << TRAP_CODE_OFFSET;
+const MASK_TRAP_CODE: u16 = 0b1111_1111 << TRAP_CODE_OFFSET;
 const TRAP_CODE_OFFSET: u16 = 7;
 
 impl MemFlags {
     /// Create a new empty set of flags.
     pub const fn new() -> Self {
-        Self { bits: 0 }
+        Self { bits: 0 }.with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
     }
 
     /// Create a set of flags representing an access from a "trusted" address, meaning it's
@@ -199,7 +199,6 @@ impl MemFlags {
             "checked" => self.with_checked(),
 
             other => match TrapCode::from_str(other) {
-                Ok(TrapCode::User(_)) => return Err("cannot set user trap code on mem flags"),
                 Ok(code) => self.with_trap_code(Some(code)),
                 Err(()) => return Ok(false),
             },
@@ -343,58 +342,19 @@ impl MemFlags {
     ///
     /// A `None` trap code indicates that this memory access does not trap.
     pub const fn trap_code(self) -> Option<TrapCode> {
-        // NB: keep this encoding in sync with `with_trap_code` below.
-        //
-        // Also note that the default, all zeros, is `HeapOutOfBounds`. It is
-        // intentionally not `None` so memory operations are all considered
-        // effect-ful by default.
-        match (self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET {
-            0b0000 => Some(TrapCode::HeapOutOfBounds),
-            0b0001 => Some(TrapCode::StackOverflow),
-            0b0010 => Some(TrapCode::HeapMisaligned),
-            0b0011 => Some(TrapCode::TableOutOfBounds),
-            0b0100 => Some(TrapCode::IndirectCallToNull),
-            0b0101 => Some(TrapCode::BadSignature),
-            0b0110 => Some(TrapCode::IntegerOverflow),
-            0b0111 => Some(TrapCode::IntegerDivisionByZero),
-            0b1000 => Some(TrapCode::BadConversionToInteger),
-            0b1001 => Some(TrapCode::UnreachableCodeReached),
-            0b1010 => Some(TrapCode::Interrupt),
-            0b1011 => Some(TrapCode::NullReference),
-            0b1100 => Some(TrapCode::ArrayOutOfBounds),
-            0b1101 => Some(TrapCode::AllocationTooLarge),
-            // 0b1110 => {} not allocated
-            0b1111 => None,
-            _ => unreachable!(),
-        }
+        TrapCode::from_raw(((self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET) as u8)
     }
 
     /// Configures these flags with the specified trap code `code`.
     ///
-    /// Note that `TrapCode::User(_)` cannot be set in `MemFlags`. A trap code
-    /// indicates that this memory operation cannot be optimized away and it
-    /// must "stay where it is" in the programs. Traps are considered side
-    /// effects, for example, and have meaning through the trap code that is
-    /// communicated and which instruction trapped.
+    /// A trap code indicates that this memory operation cannot be optimized
+    /// away and it must "stay where it is" in the programs. Traps are
+    /// considered side effects, for example, and have meaning through the trap
+    /// code that is communicated and which instruction trapped.
     pub const fn with_trap_code(mut self, code: Option<TrapCode>) -> Self {
         let bits = match code {
-            Some(TrapCode::HeapOutOfBounds) => 0b0000,
-            Some(TrapCode::StackOverflow) => 0b0001,
-            Some(TrapCode::HeapMisaligned) => 0b0010,
-            Some(TrapCode::TableOutOfBounds) => 0b0011,
-            Some(TrapCode::IndirectCallToNull) => 0b0100,
-            Some(TrapCode::BadSignature) => 0b0101,
-            Some(TrapCode::IntegerOverflow) => 0b0110,
-            Some(TrapCode::IntegerDivisionByZero) => 0b0111,
-            Some(TrapCode::BadConversionToInteger) => 0b1000,
-            Some(TrapCode::UnreachableCodeReached) => 0b1001,
-            Some(TrapCode::Interrupt) => 0b1010,
-            Some(TrapCode::NullReference) => 0b1011,
-            Some(TrapCode::ArrayOutOfBounds) => 0b1100,
-            Some(TrapCode::AllocationTooLarge) => 0b1101,
-            None => 0b1111,
-
-            Some(TrapCode::User(_)) => panic!("cannot set user trap code in mem flags"),
+            Some(code) => code.as_raw() as u16,
+            None => 0,
         };
         self.bits &= !MASK_TRAP_CODE;
         self.bits |= bits << TRAP_CODE_OFFSET;
@@ -408,7 +368,7 @@ impl fmt::Display for MemFlags {
             None => write!(f, " notrap")?,
             // This is the default trap code, so don't print anything extra
             // for this.
-            Some(TrapCode::HeapOutOfBounds) => {}
+            Some(TrapCode::HEAP_OUT_OF_BOUNDS) => {}
             Some(t) => write!(f, " {t}")?,
         }
         if self.aligned() {

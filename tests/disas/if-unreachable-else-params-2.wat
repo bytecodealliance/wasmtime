@@ -39,7 +39,7 @@
 ;; @005c                               jump block3
 ;;
 ;;                                 block4(v6: i32):
-;; @005d                               trap unreachable
+;; @005d                               trap user11
 ;;
 ;;                                 block3:
 ;; @005f                               jump block1(v5)  ; v5 = 0x1.0000000000000p0

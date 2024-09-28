@@ -85,7 +85,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0043                               trap unreachable
+;; @0043                               trap user11
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
@@ -98,7 +98,7 @@
 ;; @004c                               jump block2
 ;;
 ;;                                 block2:
-;; @004e                               trap unreachable
+;; @004e                               trap user11
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
@@ -115,7 +115,7 @@
 ;; @006a                               jump block9
 ;;
 ;;                                 block9:
-;; @0074                               trap unreachable
+;; @0074                               trap user11
 ;;
 ;;                                 block13:
 ;; @0087                               jump block7
@@ -130,7 +130,7 @@
 ;; @008b                               jump block3
 ;;
 ;;                                 block3:
-;; @008c                               trap unreachable
+;; @008c                               trap user11
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) tail {

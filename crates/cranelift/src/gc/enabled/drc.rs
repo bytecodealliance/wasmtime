@@ -7,7 +7,7 @@ use super::{
 };
 use crate::gc::{gc_compiler, ArrayInit};
 use crate::translate::TargetEnvironment;
-use crate::{func_environ::FuncEnvironment, gc::GcCompiler};
+use crate::{func_environ::FuncEnvironment, gc::GcCompiler, TRAP_DEBUG_ASSERT};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
@@ -187,9 +187,7 @@ impl DrcCompiler {
                 builder.ins().store(flags, null, dst, 0);
             } else {
                 let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder
-                    .ins()
-                    .trapz(zero, ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+                builder.ins().trapz(zero, TRAP_DEBUG_ASSERT);
             }
             return Ok(());
         };
@@ -297,7 +295,7 @@ fn emit_array_size(
     let high_bits = builder.ins().ushr_imm(elems_size_64, 32);
     builder
         .ins()
-        .trapnz(high_bits, ir::TrapCode::AllocationTooLarge);
+        .trapnz(high_bits, crate::TRAP_ALLOCATION_TOO_LARGE);
     let elems_size = builder.ins().ireduce(ir::types::I32, elems_size_64);
 
     // And if adding the base size and elements size overflows, then the
@@ -305,7 +303,7 @@ fn emit_array_size(
     let size =
         builder
             .ins()
-            .uadd_overflow_trap(base_size, elems_size, ir::TrapCode::AllocationTooLarge);
+            .uadd_overflow_trap(base_size, elems_size, crate::TRAP_ALLOCATION_TOO_LARGE);
 
     // NB: No need to check that the array's size can fit within the unused bits
     // of a `VMGcKind`, even though the DRC collector stores the object's size
@@ -533,9 +531,7 @@ impl GcCompiler for DrcCompiler {
                 // is a block terminator, and we still need to integrate with
                 // the rest of the surrounding code.
                 let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder
-                    .ins()
-                    .trapz(zero, ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+                builder.ins().trapz(zero, TRAP_DEBUG_ASSERT);
             }
             return Ok(null);
         };
@@ -683,9 +679,7 @@ impl GcCompiler for DrcCompiler {
                 // is a block terminator, and we still need to integrate with
                 // the rest of the surrounding code.
                 let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder
-                    .ins()
-                    .trapz(zero, ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+                builder.ins().trapz(zero, TRAP_DEBUG_ASSERT);
             }
             return Ok(());
         };

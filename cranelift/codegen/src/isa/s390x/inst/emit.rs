@@ -1689,7 +1689,7 @@ impl Inst {
                 debug_assert_eq!(rd2.to_reg(), ri);
 
                 let opcode = 0xb91d; // DSGFR
-                let trap_code = TrapCode::IntegerDivisionByZero;
+                let trap_code = TrapCode::INTEGER_DIVISION_BY_ZERO;
                 put_with_trap(sink, &enc_rre(opcode, rd1.to_reg(), rn), trap_code);
             }
             &Inst::SDivMod64 { rd, ri, rn } => {
@@ -1699,7 +1699,7 @@ impl Inst {
                 debug_assert_eq!(rd2.to_reg(), ri);
 
                 let opcode = 0xb90d; // DSGR
-                let trap_code = TrapCode::IntegerDivisionByZero;
+                let trap_code = TrapCode::INTEGER_DIVISION_BY_ZERO;
                 put_with_trap(sink, &enc_rre(opcode, rd1.to_reg(), rn), trap_code);
             }
             &Inst::UDivMod32 { rd, ri, rn } => {
@@ -1712,7 +1712,7 @@ impl Inst {
                 debug_assert_eq!(rd2.to_reg(), ri2);
 
                 let opcode = 0xb997; // DLR
-                let trap_code = TrapCode::IntegerDivisionByZero;
+                let trap_code = TrapCode::INTEGER_DIVISION_BY_ZERO;
                 put_with_trap(sink, &enc_rre(opcode, rd1.to_reg(), rn), trap_code);
             }
             &Inst::UDivMod64 { rd, ri, rn } => {
@@ -1725,7 +1725,7 @@ impl Inst {
                 debug_assert_eq!(rd2.to_reg(), ri2);
 
                 let opcode = 0xb987; // DLGR
-                let trap_code = TrapCode::IntegerDivisionByZero;
+                let trap_code = TrapCode::INTEGER_DIVISION_BY_ZERO;
                 put_with_trap(sink, &enc_rre(opcode, rd1.to_reg(), rn), trap_code);
             }
             &Inst::Flogr { rd, rn } => {

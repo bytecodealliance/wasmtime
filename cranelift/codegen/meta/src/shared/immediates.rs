@@ -187,11 +187,11 @@ impl Immediates {
 
             trapcode: {
                 let mut trapcode_values = HashMap::new();
-                trapcode_values.insert("stk_ovf", "StackOverflow");
-                trapcode_values.insert("heap_oob", "HeapOutOfBounds");
-                trapcode_values.insert("int_ovf", "IntegerOverflow");
-                trapcode_values.insert("int_divz", "IntegerDivisionByZero");
-                trapcode_values.insert("bad_toint", "BadConversionToInteger");
+                trapcode_values.insert("stk_ovf", "STACK_OVERFLOW");
+                trapcode_values.insert("heap_oob", "HEAP_OUT_OF_BOUNDS");
+                trapcode_values.insert("int_ovf", "INTEGER_OVERFLOW");
+                trapcode_values.insert("int_divz", "INTEGER_DIVISION_BY_ZERO");
+                trapcode_values.insert("bad_toint", "BAD_CONVERSION_TO_INTEGER");
                 new_enum(
                     "code",
                     "ir::TrapCode",

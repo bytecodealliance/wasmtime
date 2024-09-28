@@ -86,7 +86,7 @@
 ;; @0044                               v22 = iconst.i32 87
 ;; @0047                               v23 = bitcast.i8x16 little v15
 ;; @0047                               v24 = select.i8x16 v22, v8, v23  ; v22 = 87
-;; @0048                               trap unreachable
+;; @0048                               trap user11
 ;;
 ;;                                 block1(v2: i8x16, v3: i8x16, v4: i8x16):
 ;; @0055                               return v2, v3, v4
@@ -126,7 +126,7 @@
 ;; @006e                               v22 = iconst.i32 87
 ;; @0071                               v23 = bitcast.i8x16 little v15
 ;; @0071                               v24 = select.i8x16 v22, v8, v23  ; v22 = 87
-;; @0074                               trap unreachable
+;; @0074                               trap user11
 ;;
 ;;                                 block1(v2: i8x16, v3: i8x16, v4: i8x16):
 ;; @0081                               return v2, v3, v4
