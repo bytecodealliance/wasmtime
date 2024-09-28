@@ -19,6 +19,76 @@ at the root of the repository. You can find [more information about rustfmt
 online](https://github.com/rust-lang/rustfmt) too, such as how to configure
 your editor.
 
+### Compiler Warnings and Lints
+
+Wasmtime promotes all compiler warnings to errors in CI, meaning that the `main`
+branch will never have compiler warnings for the version of Rust that's being
+tested on CI. Compiler warnings change over time, however, so it's not always
+guaranteed that Wasmtime will build with zero warnings given an arbitrary
+version of Rust. If you encounter compiler warnings on your version of Rust
+please feel free to send a PR fixing them.
+
+During local development, however, compiler warnings are simply warnings and the
+build and tests can still succeed despite the presence of warnings. This can be
+useful because warnings are often quite prevalent in the middle of a
+refactoring, for example. By the time you make a PR, though, we'll require that
+all warnings are resolved or otherwise CI will fail and the PR cannot land.
+
+Compiler lints are controlled through the `[workspace.lints.rust]` table in the
+`Cargo.toml` at the root of the Wasmtime repository. A few allow-by-default
+lints are enabled such as `trivial_numeric_casts`, and you're welcome to enable
+more lints as applicable. Lints can additionally be enabled on a per-crate basis
+such as placing this in a `src/lib.rs` file:
+
+```rust
+#![warn(trivial_numeric_casts)]
+```
+
+Using `warn` here will allow local development to continue while still causing
+CI to promote this warning to an error.
+
+### Clippy
+
+All PRs are gated on `cargo clippy` passing for all workspace crates and
+targets. All clippy lints, however, are allow-by-default and thus disabled. The
+Wasmtime project selectively enables Clippy lints on an opt-in basis. Lints can
+be controlled for the entire workspace via `[workspace.lints.clippy]`:
+
+```toml
+[workspace.lints.clippy]
+# ...
+manual_strip = 'warn'
+```
+
+or on a per-crate or module basis by using attributes:
+
+```rust
+#![warn(clippy::manual_strip)]
+```
+
+In Wasmtime we've found that the default set of Clippy lints is too noisy to
+productively use other Clippy lints, hence the allow-by-default behavior.
+Despite this though there are numerous useful Clippy lints which are desired for
+all crates or in some cases for a single crate or module. Wasmtime encourages
+contributors to enable Clippy lints they find useful through workspace or
+per-crate configuration.
+
+Like compiler warnings in the above section all Clippy warnings are turned into
+errors in CI. This means that `cargo clippy` should always produce no warnings
+on Wasmtime's `main` branch if you're using the same compiler version that CI
+does (typically current stable Rust). This means, however, that if you enable a
+new Clippy lint for the workspace you'll be required to fix the lint for all
+crates in the workspace to land the PR in CI.
+
+Clippy can be run locally with:
+
+```shell
+$ cargo clippy --workspace --all-targets
+```
+
+Contributors are welcome to enable new lints and send PRs for this. Feel free to
+reach out if you're not sure about a lint as well.
+
 ### Minimum Supported `rustc` Version
 
 Wasmtime and Cranelift support the latest three stable releases of Rust. This
