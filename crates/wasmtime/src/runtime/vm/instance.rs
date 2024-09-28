@@ -874,7 +874,7 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                let mut context = ConstEvalContext::new(self, &module);
+                let mut context = ConstEvalContext::new(self);
                 match module.table_plans[table_index]
                     .table
                     .ref_type
@@ -1277,7 +1277,7 @@ impl Instance {
         module: &Module,
     ) {
         for (index, init) in module.global_initializers.iter() {
-            let mut context = ConstEvalContext::new(self, module);
+            let mut context = ConstEvalContext::new(self);
             let raw = const_evaluator
                 .eval(&mut context, init)
                 .expect("should be a valid const expr");
