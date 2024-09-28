@@ -8,11 +8,13 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 pub use disabled::*;
 
+mod func_ref;
 mod gc_ref;
 mod gc_runtime;
 mod host_data;
 mod i31;
 
+pub use func_ref::*;
 pub use gc_ref::*;
 pub use gc_runtime::*;
 pub use host_data::*;
@@ -42,16 +44,21 @@ pub struct GcStore {
 
     /// The `externref` host data table for this GC heap.
     pub host_data_table: ExternRefHostDataTable,
+
+    /// The function-references table for this GC heap.
+    pub func_ref_table: FuncRefTable,
 }
 
 impl GcStore {
     /// Create a new `GcStore`.
     pub fn new(allocation_index: GcHeapAllocationIndex, gc_heap: Box<dyn GcHeap>) -> Self {
         let host_data_table = ExternRefHostDataTable::default();
+        let func_ref_table = FuncRefTable::default();
         Self {
             allocation_index,
             gc_heap,
             host_data_table,
+            func_ref_table,
         }
     }
 
