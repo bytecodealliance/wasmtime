@@ -60,7 +60,7 @@ enum Extension {
 fn read_field_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
-    ty: &WasmStorageType,
+    ty: WasmStorageType,
     addr: ir::Value,
     extension: Option<Extension>,
 ) -> WasmResult<ir::Value> {
@@ -84,7 +84,7 @@ fn read_field_at_addr(
             WasmValType::V128 => builder.ins().load(ir::types::I128, flags, addr, 0),
             WasmValType::Ref(r) => match r.heap_type.top() {
                 WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)?
-                    .translate_read_gc_reference(func_env, builder, *r, addr, flags)?,
+                    .translate_read_gc_reference(func_env, builder, r, addr, flags)?,
                 WasmHeapTopType::Func => {
                     return Err(wasm_unsupported!(
                         "funcrefs inside the GC heap are not yet implemented"
@@ -229,7 +229,7 @@ pub fn translate_struct_get(
         BoundsCheck::Object(struct_size_val),
     );
 
-    read_field_at_addr(func_env, builder, &field_ty.element_type, field_addr, None)
+    read_field_at_addr(func_env, builder, field_ty.element_type, field_addr, None)
 }
 
 fn translate_struct_get_and_extend(
@@ -270,7 +270,7 @@ fn translate_struct_get_and_extend(
     read_field_at_addr(
         func_env,
         builder,
-        &field_ty.element_type,
+        field_ty.element_type,
         field_addr,
         Some(extension),
     )
@@ -669,9 +669,9 @@ pub fn translate_array_get(
     let array_ty = func_env.types[array_type_index]
         .composite_type
         .unwrap_array();
-    let elem_ty = array_ty.0.element_type.clone();
+    let elem_ty = array_ty.0.element_type;
 
-    read_field_at_addr(func_env, builder, &elem_ty, elem_addr, None)
+    read_field_at_addr(func_env, builder, elem_ty, elem_addr, None)
 }
 
 pub fn translate_array_get_s(
@@ -692,7 +692,7 @@ pub fn translate_array_get_s(
     read_field_at_addr(
         func_env,
         builder,
-        &elem_ty,
+        elem_ty,
         elem_addr,
         Some(Extension::Sign),
     )
@@ -711,12 +711,12 @@ pub fn translate_array_get_u(
     let array_ty = func_env.types[array_type_index]
         .composite_type
         .unwrap_array();
-    let elem_ty = array_ty.0.element_type.clone();
+    let elem_ty = array_ty.0.element_type;
 
     read_field_at_addr(
         func_env,
         builder,
-        &elem_ty,
+        elem_ty,
         elem_addr,
         Some(Extension::Zero),
     )
@@ -755,14 +755,18 @@ enum Offset {
 enum BoundsCheck {
     /// Check that this whole object is inside the GC heap:
     ///
-    ///     gc_ref + size <= gc_heap_bound
+    /// ```ignore
+    /// gc_ref + size <= gc_heap_bound
+    /// ```
     ///
     /// The object size must be an `i32` value.
     Object(ir::Value),
 
     /// Check that this one access in particular is inside the GC heap:
     ///
-    ///     gc_ref + offset + access_size <= gc_heap_bound
+    /// ```ignore
+    /// gc_ref + offset + access_size <= gc_heap_bound
+    /// ```
     ///
     /// Prefer `Bound::Object` over `Bound::Access` when possible, as that
     /// approach allows the mid-end to deduplicate bounds checks across multiple

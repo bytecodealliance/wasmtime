@@ -416,7 +416,7 @@ impl GcCompiler for DrcCompiler {
         let array_ty = func_env.types[interned_type_index]
             .composite_type
             .unwrap_array();
-        let elem_ty = array_ty.0.element_type.clone();
+        let elem_ty = array_ty.0.element_type;
 
         let pointer_type = func_env.pointer_type();
         let elem_size = builder.ins().iconst(pointer_type, i64::from(elem_size));

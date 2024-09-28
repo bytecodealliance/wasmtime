@@ -557,7 +557,7 @@ unsafe fn array_new_data(
             (*instance.store())
                 .unwrap_gc_store_mut()
                 .alloc_uninit_array(shared_ty, u32::try_from(byte_len).unwrap(), &array_layout)?
-                .ok_or_else(|| GcHeapOutOfMemory::new(()))?
+                .ok_or_else(|| GcHeapOutOfMemory::new(()).into_anyhow())?
         }
     };
 

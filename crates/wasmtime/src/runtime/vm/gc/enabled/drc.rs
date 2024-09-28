@@ -578,7 +578,7 @@ unsafe impl GcHeap for DrcHeap {
     fn alloc_raw(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
         let size = u32::try_from(layout.size()).unwrap();
         if !VMGcKind::value_fits_in_unused_bits(size) {
-            return Err(crate::Trap::AllocationTooLarge.into());
+            return Err(crate::Trap::AllocationTooLarge.into_anyhow());
         }
 
         let gc_ref = match self.free_list.alloc(layout)? {
