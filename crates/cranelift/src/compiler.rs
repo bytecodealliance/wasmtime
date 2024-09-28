@@ -200,9 +200,7 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.ptr.vmruntime_limits_stack_limit())
-                .unwrap()
-                .into(),
+            offset: i32::from(func_env.offsets.ptr.vmruntime_limits_stack_limit()).into(),
             global_type: isa.pointer_type(),
             flags: MemFlags::trusted(),
         });
@@ -341,7 +339,7 @@ impl wasmtime_environ::Compiler for Compiler {
             pointer_type,
             MemFlags::trusted(),
             caller_vmctx,
-            i32::try_from(ptr.vmcontext_runtime_limits()).unwrap(),
+            i32::from(ptr.vmcontext_runtime_limits()),
         );
         save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr, limits);
 
@@ -546,7 +544,7 @@ impl wasmtime_environ::Compiler for Compiler {
             pointer_type,
             mem_flags,
             vmctx,
-            i32::try_from(ptr_size.vmcontext_builtin_functions()).unwrap(),
+            i32::from(ptr_size.vmcontext_builtin_functions()),
         );
         let body_offset = i32::try_from(index.index() * pointer_type.bytes()).unwrap();
         let func_addr = builder
@@ -671,7 +669,7 @@ impl Compiler {
         {
             let values_vec_len = builder
                 .ins()
-                .iconst(ir::types::I32, i64::try_from(values_vec_len).unwrap());
+                .iconst(ir::types::I32, i64::from(values_vec_len));
             self.store_values_to_array(builder, ty.params(), args, values_vec_ptr, values_vec_len);
         }
 
