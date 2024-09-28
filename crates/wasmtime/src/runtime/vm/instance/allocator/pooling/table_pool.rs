@@ -130,10 +130,7 @@ impl TablePool {
             let base = self.get(allocation_index);
 
             unsafe {
-                commit_pages(
-                    base as *mut u8,
-                    self.table_elements * mem::size_of::<*mut u8>(),
-                )?;
+                commit_pages(base, self.table_elements * mem::size_of::<*mut u8>())?;
             }
 
             let ptr = NonNull::new(std::ptr::slice_from_raw_parts_mut(

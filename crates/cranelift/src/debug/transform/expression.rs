@@ -35,12 +35,12 @@ impl ExpressionWriter {
     }
 
     fn write_op(&mut self, op: gimli::DwOp) -> write::Result<()> {
-        self.write_u8(op.0 as u8)
+        self.write_u8(op.0)
     }
 
     fn write_op_reg(&mut self, reg: u16) -> write::Result<()> {
         if reg < 32 {
-            self.write_u8(gimli::constants::DW_OP_reg0.0 as u8 + reg as u8)
+            self.write_u8(gimli::constants::DW_OP_reg0.0 + reg as u8)
         } else {
             self.write_op(gimli::constants::DW_OP_regx)?;
             self.write_uleb128(reg.into())
@@ -49,7 +49,7 @@ impl ExpressionWriter {
 
     fn write_op_breg(&mut self, reg: u16) -> write::Result<()> {
         if reg < 32 {
-            self.write_u8(gimli::constants::DW_OP_breg0.0 as u8 + reg as u8)
+            self.write_u8(gimli::constants::DW_OP_breg0.0 + reg as u8)
         } else {
             self.write_op(gimli::constants::DW_OP_bregx)?;
             self.write_uleb128(reg.into())
@@ -363,7 +363,7 @@ impl CompiledExpression {
                                             true => gimli::constants::DW_OP_bra,
                                             false => gimli::constants::DW_OP_skip,
                                         }
-                                        .0 as u8,
+                                        .0,
                                     );
                                     code_buf.push(!0);
                                     code_buf.push(!0); // these will be relocated below
@@ -404,11 +404,11 @@ impl CompiledExpression {
 fn is_old_expression_format(buf: &[u8]) -> bool {
     // Heuristic to detect old variable expression format without DW_OP_fbreg:
     // DW_OP_plus_uconst op must be present, but not DW_OP_fbreg.
-    if buf.contains(&(gimli::constants::DW_OP_fbreg.0 as u8)) {
+    if buf.contains(&(gimli::constants::DW_OP_fbreg.0)) {
         // Stop check if DW_OP_fbreg exist.
         return false;
     }
-    buf.contains(&(gimli::constants::DW_OP_plus_uconst.0 as u8))
+    buf.contains(&(gimli::constants::DW_OP_plus_uconst.0))
 }
 
 pub fn compile_expression<R>(
@@ -589,7 +589,7 @@ where
             }
             Operation::WasmLocal { index } => {
                 flush_code_chunk!();
-                let label = ValueLabel::from_u32(index as u32);
+                let label = ValueLabel::from_u32(index);
                 push!(CompiledExpressionPart::Local {
                     label,
                     trailing: false,
@@ -1079,7 +1079,7 @@ mod tests {
             DW_OP_plus_uconst,
             1,
             DW_OP_skip,
-            (-11 as i8),
+            (-11_i8),
             (!0), // --> loop
             /* done */ DW_OP_stack_value
         );
