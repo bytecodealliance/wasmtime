@@ -72,7 +72,7 @@ impl Vm {
         func: NonNull<u8>,
         args: &[Val],
         rets: impl IntoIterator<Item = RegType> + 'a,
-    ) -> Result<impl Iterator<Item = Val> + 'a, *mut u8> {
+    ) -> Result<impl Iterator<Item = Val> + 'a, NonNull<u8>> {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
@@ -97,7 +97,7 @@ impl Vm {
             }
         }
 
-        self.run(func.as_ptr())?;
+        self.run(func)?;
 
         let mut x_rets = (0..16).map(|x| XReg::new_unchecked(x));
         let mut f_rets = (0..16).map(|f| FReg::new_unchecked(f));
@@ -119,7 +119,7 @@ impl Vm {
         }))
     }
 
-    unsafe fn run(&mut self, pc: *mut u8) -> Result<(), *mut u8> {
+    unsafe fn run(&mut self, pc: NonNull<u8>) -> Result<(), NonNull<u8>> {
         let mut visitor = InterpreterVisitor {
             state: &mut self.state,
             pc: UnsafeBytecodeStream::new(pc),
@@ -148,23 +148,25 @@ impl Vm {
 
     #[cold]
     #[inline(never)]
-    fn return_to_host(&self) -> Result<(), *mut u8> {
+    fn return_to_host(&self) -> Result<(), NonNull<u8>> {
         Ok(())
     }
 
     #[cold]
     #[inline(never)]
-    fn trap(&self, pc: *mut u8) -> Result<(), *mut u8> {
+    fn trap(&self, pc: NonNull<u8>) -> Result<(), NonNull<u8>> {
         // We are given the VM's PC upon having executed a trap instruction,
         // which is actually pointing to the next instruction after the
         // trap. Back the PC up to point exactly at the trap.
-        let trap_pc = unsafe { pc.byte_sub(ExtendedOpcode::ENCODED_SIZE_OF_TRAP) };
+        let trap_pc = unsafe {
+            NonNull::new_unchecked(pc.as_ptr().byte_sub(ExtendedOpcode::ENCODED_SIZE_OF_TRAP))
+        };
         Err(trap_pc)
     }
 
     #[cold]
     #[inline(never)]
-    fn host_call(&self) -> Result<(), *mut u8> {
+    fn host_call(&self) -> Result<(), NonNull<u8>> {
         todo!()
     }
 }
@@ -624,15 +626,15 @@ impl OpVisitor for InterpreterVisitor<'_> {
             Continuation::ReturnToHost
         } else {
             let return_addr = self.state[XReg::lr].get_ptr();
-            self.pc = unsafe { UnsafeBytecodeStream::new(return_addr) };
+            self.pc = unsafe { UnsafeBytecodeStream::new(NonNull::new_unchecked(return_addr)) };
             // log::trace!("returning to {return_addr:#p}");
             Continuation::Continue
         }
     }
 
     fn call(&mut self, offset: PcRelOffset) -> Self::Return {
-        let return_addr = u64::try_from(self.pc.as_ptr() as usize).unwrap();
-        self.state[XReg::lr].set_u64(return_addr);
+        let return_addr = self.pc.as_ptr();
+        self.state[XReg::lr].set_ptr(return_addr.as_ptr());
         self.pc_rel_jump(offset, 5)
     }
 

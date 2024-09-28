@@ -235,7 +235,16 @@ impl Val {
     /// This method is unsafe for the reasons that [`ExternRef::from_raw`] and
     /// [`Func::from_raw`] are unsafe. Additionally there's no guarantee
     /// otherwise that `raw` should have the type `ty` specified.
-    pub unsafe fn from_raw(store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
+    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        Self::_from_raw(&mut store, raw, &ty)
+    }
+
+    pub(crate) unsafe fn _from_raw(
+        store: &mut AutoAssertNoGc<'_>,
+        raw: ValRaw,
+        ty: &ValType,
+    ) -> Val {
         match ty {
             ValType::I32 => Val::I32(raw.get_i32()),
             ValType::I64 => Val::I64(raw.get_i64()),
@@ -245,12 +254,12 @@ impl Val {
             ValType::Ref(ref_ty) => {
                 let ref_ = match ref_ty.heap_type() {
                     HeapType::Func | HeapType::ConcreteFunc(_) => {
-                        Func::from_raw(store, raw.get_funcref()).into()
+                        Func::_from_raw(store, raw.get_funcref()).into()
                     }
 
                     HeapType::NoFunc => Ref::Func(None),
 
-                    HeapType::Extern => ExternRef::from_raw(store, raw.get_externref()).into(),
+                    HeapType::Extern => ExternRef::_from_raw(store, raw.get_externref()).into(),
 
                     HeapType::NoExtern => Ref::Extern(None),
 
@@ -261,7 +270,7 @@ impl Val {
                     | HeapType::ConcreteArray(_)
                     | HeapType::Struct
                     | HeapType::ConcreteStruct(_) => {
-                        AnyRef::from_raw(store, raw.get_anyref()).into()
+                        AnyRef::_from_raw(store, raw.get_anyref()).into()
                     }
 
                     HeapType::None => Ref::Any(None),

@@ -19,11 +19,16 @@ impl UnwindRegistration {
         unwind_info: *const u8,
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
+        #[cfg(target_arch = "aarch64")]
+        use IMAGE_ARM64_RUNTIME_FUNCTION_ENTRY as Entry;
+        #[cfg(not(target_arch = "aarch64"))]
+        use IMAGE_RUNTIME_FUNCTION_ENTRY as Entry;
+
         assert!(unwind_info as usize % 4 == 0);
-        let unit_len = mem::size_of::<IMAGE_RUNTIME_FUNCTION_ENTRY>();
+        let unit_len = mem::size_of::<Entry>();
         assert!(unwind_len % unit_len == 0);
         if RtlAddFunctionTable(
-            unwind_info as *mut _,
+            unwind_info as *mut Entry,
             (unwind_len / unit_len) as u32,
             base_address as _,
         ) == 0

@@ -6,8 +6,8 @@ use crate::vm::{VMGcHeader, VMStructRef};
 use crate::{
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
-    AsContext, AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted,
-    RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
+    AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
+    ManuallyRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
 };
 use crate::{AnyRef, FieldType};
 use core::mem::{self, MaybeUninit};
@@ -189,12 +189,24 @@ impl Rooted<StructRef> {
     pub fn to_anyref(self) -> Rooted<AnyRef> {
         self.unchecked_cast()
     }
+
+    /// Upcast this `structref` into an `eqref`.
+    #[inline]
+    pub fn to_eqref(self) -> Rooted<EqRef> {
+        self.unchecked_cast()
+    }
 }
 
 impl ManuallyRooted<StructRef> {
     /// Upcast this `structref` into an `anyref`.
     #[inline]
     pub fn to_anyref(self) -> ManuallyRooted<AnyRef> {
+        self.unchecked_cast()
+    }
+
+    /// Upcast this `structref` into an `eqref`.
+    #[inline]
+    pub fn to_eqref(self) -> ManuallyRooted<EqRef> {
         self.unchecked_cast()
     }
 }

@@ -898,10 +898,6 @@ impl Module {
         }
     }
 
-    pub(crate) fn module_info(&self) -> &dyn crate::runtime::vm::ModuleInfo {
-        &*self.inner
-    }
-
     /// Returns the range of bytes in memory where this module's compilation
     /// image resides.
     ///
@@ -1070,6 +1066,31 @@ impl Module {
             .as_ref();
         Ok(images)
     }
+
+    /// Lookup the stack map at a program counter value.
+    pub(crate) fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
+        let text_offset = pc - self.inner.module.text().as_ptr() as usize;
+        let (index, func_offset) = self.inner.module.func_by_text_offset(text_offset)?;
+        let info = self.inner.module.wasm_func_info(index);
+
+        // Do a binary search to find the stack map for the given offset.
+        let index = match info
+            .stack_maps
+            .binary_search_by_key(&func_offset, |i| i.code_offset)
+        {
+            // Found it.
+            Ok(i) => i,
+
+            // No stack map associated with this PC.
+            //
+            // Because we know we are in Wasm code, and we must be at some kind
+            // of call/safepoint, then the Cranelift backend must have avoided
+            // emitting a stack map for this location because no refs were live.
+            Err(_) => return None,
+        };
+
+        Some(&info.stack_maps[index].stack_map)
+    }
 }
 
 /// Describes a function for a given module.
@@ -1106,32 +1127,6 @@ pub struct ModuleExport {
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Module>();
-}
-
-impl crate::runtime::vm::ModuleInfo for ModuleInner {
-    fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
-        let text_offset = pc - self.module.text().as_ptr() as usize;
-        let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
-        let info = self.module.wasm_func_info(index);
-
-        // Do a binary search to find the stack map for the given offset.
-        let index = match info
-            .stack_maps
-            .binary_search_by_key(&func_offset, |i| i.code_offset)
-        {
-            // Found it.
-            Ok(i) => i,
-
-            // No stack map associated with this PC.
-            //
-            // Because we know we are in Wasm code, and we must be at some kind
-            // of call/safepoint, then the Cranelift backend must have avoided
-            // emitting a stack map for this location because no refs were live.
-            Err(_) => return None,
-        };
-
-        Some(&info.stack_maps[index].stack_map)
-    }
 }
 
 /// Helper method to construct a `ModuleMemoryImages` for an associated

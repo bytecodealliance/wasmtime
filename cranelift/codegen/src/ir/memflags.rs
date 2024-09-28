@@ -222,6 +222,20 @@ impl MemFlags {
         }
     }
 
+    /// Return endianness of the memory access, if explicitly specified.
+    ///
+    /// If the endianness is not explicitly specified, this will return `None`,
+    /// which means "native endianness".
+    pub const fn explicit_endianness(self) -> Option<Endianness> {
+        if self.read_bit(BIT_LITTLE_ENDIAN) {
+            Some(Endianness::Little)
+        } else if self.read_bit(BIT_BIG_ENDIAN) {
+            Some(Endianness::Big)
+        } else {
+            None
+        }
+    }
+
     /// Set endianness of the memory access.
     pub fn set_endianness(&mut self, endianness: Endianness) {
         *self = self.with_endianness(endianness);

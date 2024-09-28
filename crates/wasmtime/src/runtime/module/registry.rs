@@ -65,10 +65,10 @@ impl ModuleRegistry {
         }
     }
 
-    /// Fetches information about a registered module given a program counter value.
-    pub fn lookup_module_info(&self, pc: usize) -> Option<&dyn crate::runtime::vm::ModuleInfo> {
+    /// Fetches a registered module given a program counter value.
+    pub fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module> {
         let (module, _) = self.module_and_offset(pc)?;
-        Some(module.module_info())
+        Some(module)
     }
 
     fn code(&self, pc: usize) -> Option<(&LoadedCode, usize)> {

@@ -25,6 +25,10 @@ fn unbarriered_load_gc_ref(
     flags: ir::MemFlags,
 ) -> WasmResult<ir::Value> {
     debug_assert!(ty.is_vmgcref_type());
+    assert!(
+        flags.explicit_endianness().is_none(),
+        "GC references are always native-endian"
+    );
     let gc_ref = builder.ins().load(ir::types::I32, flags, ptr_to_gc_ref, 0);
     if ty != WasmHeapType::I31 {
         builder.declare_value_needs_stack_map(gc_ref);
@@ -40,6 +44,10 @@ fn unbarriered_store_gc_ref(
     flags: ir::MemFlags,
 ) -> WasmResult<()> {
     debug_assert!(ty.is_vmgcref_type());
+    assert!(
+        flags.explicit_endianness().is_none(),
+        "GC references are always native-endian"
+    );
     builder.ins().store(flags, gc_ref, dst, 0);
     Ok(())
 }

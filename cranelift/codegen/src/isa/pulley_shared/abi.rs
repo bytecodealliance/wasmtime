@@ -1,6 +1,7 @@
 //! Implementation of a standard Pulley ABI.
 
 use super::{inst::*, PulleyFlags, PulleyTargetKind};
+use crate::isa::pulley_shared::PulleyBackend;
 use crate::{
     ir::{self, types::*, MemFlags, Signature},
     isa::{self, unwind::UnwindInst},
@@ -657,7 +658,12 @@ impl<P> PulleyABICallSite<P>
 where
     P: PulleyTargetKind,
 {
-    pub fn emit_return_call(self, _ctx: &mut Lower<InstAndKind<P>>, _args: isle::ValueSlice) {
+    pub fn emit_return_call(
+        self,
+        _ctx: &mut Lower<InstAndKind<P>>,
+        _args: isle::ValueSlice,
+        _backend: &PulleyBackend<P>,
+    ) {
         todo!()
     }
 }

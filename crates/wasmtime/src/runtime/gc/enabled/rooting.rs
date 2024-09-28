@@ -1194,6 +1194,47 @@ where
     }
 }
 
+/// Internal version of `RootScope` that only wraps a `&mut StoreOpaque` rather
+/// than a whole `impl AsContextMut<Data = T>`.
+pub(crate) struct OpaqueRootScope<'a> {
+    store: &'a mut StoreOpaque,
+    scope: usize,
+}
+
+impl Drop for OpaqueRootScope<'_> {
+    fn drop(&mut self) {
+        self.store.exit_gc_lifo_scope(self.scope);
+    }
+}
+
+impl Deref for OpaqueRootScope<'_> {
+    type Target = StoreOpaque;
+
+    fn deref(&self) -> &Self::Target {
+        self.store
+    }
+}
+
+// XXX: Don't use this `DerefMut` implementation to `mem::{swap,replace}` or
+// etc... the underlying `StoreOpaque` in a `OpaqueRootScope`! That will result
+// in truncating the store's GC root set's LIFO roots to the wrong length.
+//
+// We don't implement `DerefMut` for `RootScope` for exactly this reason, but
+// allow it for `OpaqueRootScope` because it is only Wasmtime-internal and not
+// publicly exported.
+impl DerefMut for OpaqueRootScope<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.store
+    }
+}
+
+impl<'a> OpaqueRootScope<'a> {
+    pub(crate) fn new(store: &'a mut StoreOpaque) -> Self {
+        let scope = store.gc_roots().enter_lifo_scope();
+        OpaqueRootScope { store, scope }
+    }
+}
+
 /// A rooted reference to a garbage-collected `T` with arbitrary lifetime.
 ///
 /// A `ManuallyRooted<T>` is a strong handle to a garbage-collected `T`,

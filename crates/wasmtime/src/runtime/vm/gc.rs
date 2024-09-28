@@ -23,20 +23,7 @@ use crate::runtime::vm::GcHeapAllocationIndex;
 use core::alloc::Layout;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, StackMap, VMGcKind, VMSharedTypeIndex};
-
-/// Used by the runtime to lookup information about a module given a
-/// program counter value.
-pub trait ModuleInfoLookup {
-    /// Lookup the module information from a program counter value.
-    fn lookup(&self, pc: usize) -> Option<&dyn ModuleInfo>;
-}
-
-/// Used by the runtime to query module information.
-pub trait ModuleInfo {
-    /// Lookup the stack map at a program counter value.
-    fn lookup_stack_map(&self, pc: usize) -> Option<&StackMap>;
-}
+use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
 ///

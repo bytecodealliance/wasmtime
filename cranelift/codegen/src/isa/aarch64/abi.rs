@@ -6,7 +6,7 @@ use crate::ir::types::*;
 use crate::ir::MemFlags;
 use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
-use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
+use crate::isa::aarch64::{inst::*, settings as aarch64_settings, AArch64Backend};
 use crate::isa::unwind::UnwindInst;
 use crate::isa::winch;
 use crate::machinst::*;
@@ -725,6 +725,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
         if incoming_args_diff > 0 {
             // Decrement SP to account for the additional space required by a tail call.
             insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::StackAlloc {
+                        size: incoming_args_diff,
+                    },
+                });
+            }
 
             // Move fp and lr down.
             if setup_frame {
@@ -921,6 +928,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
         if stack_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::StackAlloc { size: stack_size },
+                });
+            }
         }
 
         insts
@@ -1249,7 +1261,7 @@ impl AArch64CallSite {
         mut self,
         ctx: &mut Lower<Inst>,
         args: isle::ValueSlice,
-        isa_flags: &aarch64_settings::Flags,
+        backend: &AArch64Backend,
     ) {
         let new_stack_arg_size =
             u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
@@ -1263,7 +1275,7 @@ impl AArch64CallSite {
 
         let dest = self.dest().clone();
         let uses = self.take_uses();
-        let key = select_api_key(isa_flags, isa::CallConv::Tail, true);
+        let key = select_api_key(&backend.isa_flags, isa::CallConv::Tail, true);
 
         match dest {
             CallDest::ExtName(callee, RelocDistance::Near) => {

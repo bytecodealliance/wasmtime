@@ -29,6 +29,8 @@ unsafe impl GcRuntime for DisabledCollector {
 
 pub enum VMExternRef {}
 
+pub enum VMEqRef {}
+
 pub enum VMStructRef {}
 
 pub enum VMArrayRef {}
