@@ -4,7 +4,7 @@ use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{wasm_unsupported, WasmHeapType, WasmResult};
+use cranelift_wasm::{wasm_unsupported, WasmResult};
 use wasmtime_environ::TypeIndex;
 
 fn disabled<T>() -> WasmResult<T> {
@@ -102,6 +102,18 @@ pub fn translate_array_new_fixed(
     _array_type_index: TypeIndex,
     _elems: &[ir::Value],
 ) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_fill(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _array_type_index: TypeIndex,
+    _array_ref: ir::Value,
+    _index: ir::Value,
+    _value: ir::Value,
+    _n: ir::Value,
+) -> WasmResult<()> {
     disabled()
 }
 
