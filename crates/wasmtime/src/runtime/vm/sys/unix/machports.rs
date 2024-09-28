@@ -31,7 +31,14 @@
 //! function declarations. Many bits and pieces are copied or translated from
 //! the SpiderMonkey implementation and it should pass all the tests!
 
-#![allow(non_snake_case, clippy::cast_sign_loss)]
+#![allow(
+    // FFI bindings here for C/etc don't follow Rust's naming conventions.
+    non_snake_case,
+    // Platform-specific code has a lot of false positives with these lints so
+    // like Unix disable the lints for this module.
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
 
 use crate::runtime::module::lookup_code;
 use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
