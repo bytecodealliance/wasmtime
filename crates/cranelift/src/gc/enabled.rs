@@ -687,7 +687,7 @@ pub fn translate_array_get_s(
     let array_ty = func_env.types[array_type_index]
         .composite_type
         .unwrap_array();
-    let elem_ty = array_ty.0.element_type.clone();
+    let elem_ty = array_ty.0.element_type;
 
     read_field_at_addr(func_env, builder, elem_ty, elem_addr, Some(Extension::Sign))
 }
