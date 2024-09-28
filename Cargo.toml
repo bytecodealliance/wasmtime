@@ -183,6 +183,7 @@ map_clone = 'warn'
 uninlined_format_args = 'warn'
 unnecessary_to_owned = 'warn'
 manual_strip = 'warn'
+unnecessary_mut_passed = 'warn'
 
 [workspace.dependencies]
 arbitrary = { version = "1.3.1" }

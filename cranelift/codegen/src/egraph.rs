@@ -745,7 +745,7 @@ impl<'a> EgraphPass<'a> {
             self.func,
             &self.domtree,
             self.loop_analysis,
-            &mut self.remat_values,
+            &self.remat_values,
             &mut self.stats,
             self.ctrl_plane,
         );

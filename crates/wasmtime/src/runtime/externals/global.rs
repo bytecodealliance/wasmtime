@@ -197,7 +197,7 @@ impl Global {
                     let new = match e {
                         None => None,
                         #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
-                        Some(e) => Some(e.try_gc_ref(&mut store)?.unchecked_copy()),
+                        Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
                     definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
@@ -206,7 +206,7 @@ impl Global {
                     let new = match a {
                         None => None,
                         #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
-                        Some(a) => Some(a.try_gc_ref(&mut store)?.unchecked_copy()),
+                        Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
                     definition.write_gc_ref(store.unwrap_gc_store_mut(), new);

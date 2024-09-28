@@ -23,8 +23,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    let mut nwritten =
-        wasi::fd_pwrite(file_fd, &mut [ciovec], 0).expect("writing bytes at offset 0");
+    let mut nwritten = wasi::fd_pwrite(file_fd, &[ciovec], 0).expect("writing bytes at offset 0");
     assert_eq!(nwritten, 4, "nwritten bytes check");
 
     let contents = &mut [0u8; 4];
@@ -111,7 +110,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    nwritten = wasi::fd_pwrite(file_fd, &mut [ciovec], 2).expect("writing bytes at offset 2");
+    nwritten = wasi::fd_pwrite(file_fd, &[ciovec], 2).expect("writing bytes at offset 2");
     assert_eq!(nwritten, 2, "nwritten bytes check");
 
     let contents = &mut [0u8; 4];
@@ -152,7 +151,7 @@ unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
         buf: [].as_ptr(),
         buf_len: 0,
     };
-    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 2");
+    let n = wasi::fd_pwrite(file_fd, &[ciovec], 50).expect("writing bytes at offset 2");
     assert_eq!(n, 0);
 
     assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);
@@ -165,7 +164,7 @@ unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
         buf: buf.as_ptr(),
         buf_len: buf.len(),
     };
-    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 50");
+    let n = wasi::fd_pwrite(file_fd, &[ciovec], 50).expect("writing bytes at offset 50");
     assert_eq!(n, 1);
 
     assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);

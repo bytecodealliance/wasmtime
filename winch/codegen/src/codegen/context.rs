@@ -444,7 +444,7 @@ impl<'a> CodeGenContext<'a> {
     /// This function exists for cases in which triggering an unconditional
     /// spill is needed, like before entering control flow.
     pub fn spill<M: MacroAssembler>(&mut self, masm: &mut M) {
-        Self::spill_impl(&mut self.stack, &mut self.regalloc, &mut self.frame, masm);
+        Self::spill_impl(&mut self.stack, &mut self.regalloc, &self.frame, masm);
     }
 
     /// Prepares the compiler to emit an uncoditional jump to the given

@@ -1342,7 +1342,7 @@ impl StoreOpaque {
     }
 
     pub(crate) fn fill_func_refs(&mut self) {
-        self.func_refs.fill(&mut self.modules);
+        self.func_refs.fill(&self.modules);
     }
 
     pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[VMFuncRef]>) {

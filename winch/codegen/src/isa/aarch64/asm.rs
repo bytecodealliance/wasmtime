@@ -112,7 +112,7 @@ impl Assembler {
             let jmp = Inst::Jump {
                 dest: BranchTarget::Label(label),
             };
-            jmp.emit(&mut self.buffer, &mut self.emit_info, &mut self.emit_state);
+            jmp.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
             self.buffer
                 .emit_island(needed_space, self.emit_state.ctrl_plane_mut());
             self.buffer

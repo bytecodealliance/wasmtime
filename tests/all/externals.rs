@@ -408,7 +408,7 @@ fn read_write_memory_via_api() {
     assert!(res.is_err());
 
     // Write offset overflow.
-    let res = mem.write(&mut store, usize::MAX, &mut buffer);
+    let res = mem.write(&mut store, usize::MAX, &buffer);
     assert!(res.is_err());
 }
 
