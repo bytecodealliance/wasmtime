@@ -328,10 +328,6 @@ impl Parse for Opt {
                 let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
 
                 paths.extend(list.into_iter());
-
-                if input.peek(Token![,]) {
-                    input.parse::<Token![,]>()?;
-                }
             } else {
                 return Err(l.error());
             };
