@@ -43,6 +43,7 @@
 
 use super::free_list::FreeList;
 use super::{VMArrayRef, VMGcObjectDataMut, VMStructRef};
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
@@ -57,7 +58,6 @@ use core::{
     num::NonZeroUsize,
     ptr::{self, NonNull},
 };
-use hashbrown::HashSet;
 use wasmtime_environ::drc::DrcTypeLayouts;
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex};
 

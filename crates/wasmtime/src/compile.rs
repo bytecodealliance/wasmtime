@@ -22,12 +22,14 @@
 //!   functions. It is up to the caller to serialize the relevant parts of the
 //!   `Artifacts` into the ELF file.
 
+use crate::hash_map::HashMap;
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::Engine;
 use std::{
     any::Any,
     borrow::Cow,
-    collections::{btree_map, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{btree_map, BTreeMap, BTreeSet},
     mem,
 };
 

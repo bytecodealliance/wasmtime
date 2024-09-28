@@ -1,8 +1,8 @@
 //! Index/slot allocator policies for the pooling allocator.
 
+use crate::hash_map::{Entry, HashMap};
 use crate::prelude::*;
 use crate::runtime::vm::CompiledModuleId;
-use std::collections::hash_map::{Entry, HashMap};
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::DefinedMemoryIndex;

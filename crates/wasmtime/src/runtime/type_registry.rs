@@ -3,6 +3,7 @@
 //! Helps implement fast indirect call signature checking, reference type
 //! downcasting, and etc...
 
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::sync::RwLock;
 use crate::vm::GcRuntime;
@@ -20,7 +21,6 @@ use core::{
         Ordering::{AcqRel, Acquire},
     },
 };
-use hashbrown::HashSet;
 use wasmtime_environ::{
     iter_entity_range, packed_option::PackedOption, EngineOrModuleTypeIndex, GcLayout,
     ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, SecondaryMap, TypeTrace, VMSharedTypeIndex,
