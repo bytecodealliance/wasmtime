@@ -426,7 +426,7 @@ block1:
 block2:
     v122 = global_value.i64 gv0
     v123 = global_value.i64 gv1
-    trap user65535
+    trap user1
 
 block3:
     v125 = iadd_imm.i64 v124, 8
@@ -441,7 +441,7 @@ block3:
 block4:
     v134 = global_value.i64 gv2
     v135 = global_value.i64 gv3
-    trap user65535
+    trap user1
 
 block5:
     v137 = iadd_imm.i64 v136, 16
@@ -456,7 +456,7 @@ block5:
 block6:
     v146 = global_value.i64 gv4
     v147 = global_value.i64 gv5
-    trap user65535
+    trap user1
 
 block7:
     v149 = load.i64 v148
@@ -479,7 +479,7 @@ block9:
 block10:
     v158 = global_value.i64 gv6
     v159 = global_value.i64 gv7
-    trap user65535
+    trap user1
 
 block11:
     v161 = load.i64 v160
@@ -502,7 +502,7 @@ block13:
 block14:
     v170 = global_value.i64 gv8
     v171 = global_value.i64 gv9
-    trap user65535
+    trap user1
 
 block15:
     v172 = load.i64 aligned v3
@@ -522,7 +522,7 @@ block16:
 block17:
     v183 = global_value.i64 gv10
     v184 = global_value.i64 gv11
-    trap user65535
+    trap user1
 
 block18:
     v186 = load.i64 v185
@@ -541,7 +541,7 @@ block18:
 
 block164:
     v198 = global_value.i64 gv12
-    trap user0
+    trap user2
 
 block19:
     v199 = load.i64 v12
@@ -561,7 +561,7 @@ block19:
 
 block163:
     v211 = global_value.i64 gv13
-    trap user0
+    trap user2
 
 block20:
     v212 = load.i64 v13
@@ -574,7 +574,7 @@ block20:
 block21:
     v220 = global_value.i64 gv14
     v221 = global_value.i64 gv15
-    trap user65535
+    trap user1
 
 block22:
     v223 = load.i64 v222
@@ -593,7 +593,7 @@ block22:
 
 block162:
     v235 = global_value.i64 gv16
-    trap user0
+    trap user2
 
 block23:
     v236 = load.i64 v16
@@ -620,7 +620,7 @@ block24:
 
 block161:
     v254 = global_value.i64 gv17
-    trap user0
+    trap user2
 
 block25:
     v255 = load.i64 v19
@@ -658,7 +658,7 @@ block27:
 
 block160:
     v280 = global_value.i64 gv18
-    trap user0
+    trap user2
 
 block28:
     v281 = load.i16 v24
@@ -675,7 +675,7 @@ block28:
 
 block159:
     v291 = global_value.i64 gv19
-    trap user0
+    trap user2
 
 block29:
     v292 = load.i16 v25
@@ -695,7 +695,7 @@ block29:
 
 block158:
     v304 = global_value.i64 gv20
-    trap user0
+    trap user2
 
 block30:
     v305 = load.i16 v26
@@ -712,7 +712,7 @@ block30:
 
 block157:
     v315 = global_value.i64 gv21
-    trap user0
+    trap user2
 
 block31:
     v316 = load.i16 v27
@@ -797,7 +797,7 @@ block41:
     v360 = global_value.i64 gv23
     call fn39(v32, v360)
     v361 = global_value.i64 gv24
-    trap user65535
+    trap user1
 
 block42:
     v362 = iconst.i8 1
@@ -860,7 +860,7 @@ block48:
     v400 = global_value.i64 gv26
     call fn46(v42, v400)
     v401 = global_value.i64 gv27
-    trap user65535
+    trap user1
 
 block49(v1006: i16):
         v486 -> v1006
@@ -879,7 +879,7 @@ block49(v1006: i16):
 
 block156:
     v413 = global_value.i64 gv28
-    trap user0
+    trap user2
 
 block50:
     v414 = load.i64 v51
@@ -902,7 +902,7 @@ block50:
 
 block155:
     v426 = global_value.i64 gv29
-    trap user0
+    trap user2
 
 block51:
     v427 = load.i64 v52
@@ -917,7 +917,7 @@ block51:
 
 block154:
     v434 = global_value.i64 gv30
-    trap user0
+    trap user2
 
 block52:
     v436 = iconst.i16 0
@@ -938,7 +938,7 @@ block52:
 
 block153:
     v449 = global_value.i64 gv31
-    trap user0
+    trap user2
 
 block53:
     v450 = load.i64 v53
@@ -959,7 +959,7 @@ block53:
 
 block152:
     v464 = global_value.i64 gv32
-    trap user0
+    trap user2
 
 block54:
     v465 = load.i64 v54
@@ -977,7 +977,7 @@ block54:
 
 block151:
     v476 = global_value.i64 gv33
-    trap user0
+    trap user2
 
 block55:
     v477 = load.i64 v55
@@ -1005,7 +1005,7 @@ block56:
 
 block150:
     v495 = global_value.i64 gv34
-    trap user0
+    trap user2
 
 block57:
     v496 = load.i16 v57
@@ -1022,7 +1022,7 @@ block57:
 
 block149:
     v506 = global_value.i64 gv35
-    trap user0
+    trap user2
 
 block58:
     v507 = load.i16 v58
@@ -1039,7 +1039,7 @@ block58:
 
 block148:
     v519 = global_value.i64 gv36
-    trap user0
+    trap user2
 
 block59:
     v520 = load.i64 v59
@@ -1058,7 +1058,7 @@ block59:
 
 block147:
     v532 = global_value.i64 gv37
-    trap user0
+    trap user2
 
 block60:
     v533 = load.i64 v60
@@ -1076,7 +1076,7 @@ block60:
 
 block146:
     v544 = global_value.i64 gv38
-    trap user0
+    trap user2
 
 block61:
     v545 = load.i64 v61
@@ -1130,7 +1130,7 @@ block62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v
 
 block145:
     v558 = global_value.i64 gv39
-    trap user0
+    trap user2
 
 block63:
     v561 = udiv.i32 v559, v560
@@ -1144,7 +1144,7 @@ block63:
 
 block144:
     v568 = global_value.i64 gv40
-    trap user0
+    trap user2
 
 block64:
     v571 = urem.i32 v569, v570
@@ -1166,7 +1166,7 @@ block65:
 block66:
     v582 = global_value.i64 gv41
     v583 = global_value.i64 gv42
-    trap user65535
+    trap user1
 
 block67:
     jump block68(v574)
@@ -1186,7 +1186,7 @@ block68(v584: i32):
 
 block143:
     v595 = global_value.i64 gv43
-    trap user0
+    trap user2
 
 block69:
     v597 = load.i64 v3
@@ -1197,7 +1197,7 @@ block69:
 
 block142:
     v602 = global_value.i64 gv44
-    trap user0
+    trap user2
 
 block70:
     v603 = load.i64 v3
@@ -1219,7 +1219,7 @@ block70:
 
 block141:
     v620 = global_value.i64 gv45
-    trap user0
+    trap user2
 
 block71:
     v621 = load.i64 v65
@@ -1241,7 +1241,7 @@ block71:
 
 block140:
     v634 = global_value.i64 gv46
-    trap user0
+    trap user2
 
 block72:
     v635 = load.i64 v66
@@ -1258,7 +1258,7 @@ block72:
 
 block139:
     v646 = global_value.i64 gv47
-    trap user0
+    trap user2
 
 block73:
     v647 = load.i64 v67
@@ -1284,7 +1284,7 @@ block74:
 
 block138:
     v664 = global_value.i64 gv48
-    trap user0
+    trap user2
 
 block75:
     v665 = load.i64 v68
@@ -1314,7 +1314,7 @@ block76:
 
 block137:
     v688 = global_value.i64 gv49
-    trap user0
+    trap user2
 
 block77:
     v689 = load.i64 v74
@@ -1394,7 +1394,7 @@ block87:
     v738 = global_value.i64 gv52
     call fn78(v76, v738)
     v739 = global_value.i64 gv53
-    trap user65535
+    trap user1
 
 block88:
     v740 = iconst.i8 1
@@ -1456,7 +1456,7 @@ block94:
     v777 = global_value.i64 gv56
     call fn85(v86, v777)
     v778 = global_value.i64 gv57
-    trap user65535
+    trap user1
 
 block95(v779: i64, v780: i64, v1040: i64, v1045: i64, v1053: i16, v1058: i64):
     v781 = iconst.i64 1
@@ -1477,7 +1477,7 @@ block96:
 
 block136:
     v792 = global_value.i64 gv58
-    trap user0
+    trap user2
 
 block97:
     v793 = load.i16 aligned v95
@@ -1489,7 +1489,7 @@ block97:
 
 block135:
     v799 = global_value.i64 gv59
-    trap user0
+    trap user2
 
 block98:
     v800 = iconst.i32 10
@@ -1530,7 +1530,7 @@ block99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v
 
 block134:
     v815 = global_value.i64 gv60
-    trap user0
+    trap user2
 
 block100:
     v816 = load.i64 v96
@@ -1551,7 +1551,7 @@ block100:
 
 block133:
     v828 = global_value.i64 gv61
-    trap user0
+    trap user2
 
 block101:
     v829 = load.i64 v97
@@ -1574,7 +1574,7 @@ block101:
 
 block132:
     v841 = global_value.i64 gv62
-    trap user0
+    trap user2
 
 block102:
     v842 = load.i64 v98
@@ -1595,7 +1595,7 @@ block102:
 
 block131:
     v854 = global_value.i64 gv63
-    trap user0
+    trap user2
 
 block103:
     v855 = load.i64 v99
@@ -1614,7 +1614,7 @@ block103:
 
 block130:
     v868 = global_value.i64 gv64
-    trap user0
+    trap user2
 
 block104:
     v869 = load.i64 v100
@@ -1632,7 +1632,7 @@ block104:
 
 block129:
     v880 = global_value.i64 gv65
-    trap user0
+    trap user2
 
 block105:
     v881 = load.i64 v101
@@ -1657,7 +1657,7 @@ block106:
 block107:
     v894 = global_value.i64 gv66
     v895 = global_value.i64 gv67
-    trap user65535
+    trap user1
 
 block108:
     jump block109(v886)
@@ -1677,7 +1677,7 @@ block109(v896: i64):
 
 block128:
     v907 = global_value.i64 gv68
-    trap user0
+    trap user2
 
 block110:
     v909 = load.i64 v3
@@ -1688,7 +1688,7 @@ block110:
 
 block127:
     v914 = global_value.i64 gv69
-    trap user0
+    trap user2
 
 block111:
     v915 = load.i64 v3
@@ -1710,7 +1710,7 @@ block111:
 
 block126:
     v932 = global_value.i64 gv70
-    trap user0
+    trap user2
 
 block112:
     v933 = load.i64 v103
@@ -1735,7 +1735,7 @@ block113:
 
 block125:
     v950 = global_value.i64 gv71
-    trap user0
+    trap user2
 
 block114:
     v951 = load.i64 v104
@@ -1765,7 +1765,7 @@ block115:
 
 block123:
     v974 = global_value.i64 gv72
-    trap user0
+    trap user2
 
 block116:
     v975 = load.i64 v110
@@ -1782,7 +1782,7 @@ block116:
 
 block122:
     v986 = global_value.i64 gv73
-    trap user0
+    trap user2
 
 block117:
     v987 = load.i64 v111
@@ -1807,7 +1807,7 @@ block119:
 
 block121:
     v1003 = global_value.i64 gv74
-    trap user0
+    trap user2
 
 block120:
     v1004 = load.i16 aligned v112

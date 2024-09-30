@@ -22,5 +22,5 @@ block1:
     v13 = vconst.i16x4 const1
     v14 = vconst.f32x16 const0
     call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v12, v13, v14)  ; v0 = 0.0, v1 = 0.0, v2 = 0, v3 = 0, v4 = 0, v5 = 0, v7 = 0, v8 = 0, v12 = const2, v13 = const1, v14 = const0
-    trap user0
+    trap user1
 }

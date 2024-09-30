@@ -12,5 +12,5 @@ block0:
     v987 = iconst.i64 0
     v1052 = iconst.i16 0
     call fn0(v0, v105, v1052, v883, v829, v987, v951, v842)  ; v0 = 0, v105 = 0, v1052 = 0, v883 = 0, v829 = 0, v987 = 0, v951 = 0, v842 = 0
-    trap user0
+    trap user1
 }

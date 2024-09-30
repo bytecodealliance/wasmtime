@@ -1646,7 +1646,7 @@ mod tests {
             code: TrapCode::user(1),
         };
         let inst = dfg.make_inst(idata);
-        assert_eq!(dfg.display_inst(inst).to_string(), "trap user0");
+        assert_eq!(dfg.display_inst(inst).to_string(), "trap user1");
 
         // Result slice should be empty.
         assert_eq!(dfg.inst_results(inst), &[]);
