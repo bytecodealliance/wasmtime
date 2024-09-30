@@ -14,9 +14,9 @@ function u0:31() -> i32, i32 system_v {
 @0005                               brif v28, block25, block1
 
                                 block1:
-@0005                               trap unreachable
+@0005                               trap user2
 
                                 block25:
 @0035                               v85 = atomic_cas.i32 v0, v1, v2
-@0036                               trap user0
+@0036                               trap user1
 }

@@ -11,7 +11,7 @@ function u0:0() system_v {
     ss3 = explicit_slot 1536000000
 
 block0:
-    trap user0
+    trap user1
 }
 
 ;; We expect this to fail as well: the rounding-up for alignment after
@@ -20,5 +20,5 @@ function u0:0() system_v {
     ss0 = explicit_slot 0xffffffff
 
 block0:
-    trap user0
+    trap user1
 }

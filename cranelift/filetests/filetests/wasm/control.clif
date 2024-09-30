@@ -41,7 +41,7 @@ block1(v2: i32):
 
 function %undefined() {
 block0:
-    trap user0
+    trap user1
 }
 
 function %br_table(i32) {

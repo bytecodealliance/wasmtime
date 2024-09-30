@@ -29,12 +29,12 @@ block0:
   v97 = iadd v238, v96 ; v96 = 0
   br_table v80, block37, [block36, block38] ; v80 = 0
 block36:
-  trap user0
+  trap user1
 block37:
-  trap unreachable
+  trap user2
 block38:
   v98 = load.i8 notrap v97
   v99 = fcvt_from_uint.f64 v98
   stack_store v99, ss0
-  trap user0
+  trap user1
 }

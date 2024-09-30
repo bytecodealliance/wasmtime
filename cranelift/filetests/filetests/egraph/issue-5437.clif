@@ -18,7 +18,7 @@ function u0:0(i64 vmctx, i64) fast {
 @001d                               brif v3, block3, block2  ; v3 = 0
 
                                 block3:
-@001f                               trap unreachable
+@001f                               trap user1
 
                                 block2:
 @0025                               v4 = bitcast.i16x8 little v2  ; v2 = const0

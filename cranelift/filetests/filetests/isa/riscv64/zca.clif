@@ -268,16 +268,16 @@ block0:
 
 function %c_unimp() {
 block0:
-  trap user0
+  trap user1
 }
 
 ; VCode:
 ; block0:
-;   udf##trap_code=user0
+;   udf##trap_code=user1
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.unimp ; trap: user0
+;   c.unimp ; trap: user1
 
 
 function %c_addi_max(i64) -> i64 {

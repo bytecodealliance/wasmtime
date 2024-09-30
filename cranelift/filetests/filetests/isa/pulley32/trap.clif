@@ -3,12 +3,12 @@ target pulley32
 
 function %trap() {
 block0:
-  trap user0
+  trap user1
 }
 
 ; VCode:
 ; block0:
-;   trap // code = User(0)
+;   trap // code = TrapCode(1)
 ;
 ; Disassembled:
 ;        0: 43 00 00                        trap
@@ -17,14 +17,14 @@ function %trapnz(i64) {
 block0(v0: i64):
   v1 = iconst.i64 42
   v2 = icmp eq v0, v1
-  trapnz v2, user0
+  trapnz v2, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   x2 = xconst8 42
-;   trap_if eq, Size64, x0, x2 // code = User(0)
+;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -37,14 +37,14 @@ function %trapz(i64) {
 block0(v0: i64):
   v1 = iconst.i64 42
   v2 = icmp eq v0, v1
-  trapz v2, user0
+  trapz v2, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   x2 = xconst8 42
-;   trap_if ne, Size64, x0, x2 // code = User(0)
+;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -57,14 +57,14 @@ function %trapnz_icmp_fold(i64) {
 block0(v0: i64):
   v1 = iconst.i64 42
   v2 = icmp eq v0, v1
-  trapnz v2, user0
+  trapnz v2, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   x2 = xconst8 42
-;   trap_if eq, Size64, x0, x2 // code = User(0)
+;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -77,14 +77,14 @@ function %trapz_icmp_fold(i64) {
 block0(v0: i64):
   v1 = iconst.i64 42
   v2 = icmp eq v0, v1
-  trapz v2, user0
+  trapz v2, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   x2 = xconst8 42
-;   trap_if ne, Size64, x0, x2 // code = User(0)
+;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -99,12 +99,12 @@ block0(v0: i64):
 
 block1:
   v1 = iconst.i64 42
-  trapnz v1, user0
+  trapnz v1, user1
   return
 
 block2:
   v2 = iconst.i64 0
-  trapnz v2, user0
+  trapnz v2, user1
   return
 }
 
@@ -116,7 +116,7 @@ block2:
 ; block2:
 ;   x5 = xconst8 42
 ;   x6 = xconst8 0
-;   trap_if ne, Size64, x5, x6 // code = User(0)
+;   trap_if ne, Size64, x5, x6 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -134,12 +134,12 @@ block0(v0: i64):
 
 block1:
   v1 = iconst.i64 42
-  trapz v1, user0
+  trapz v1, user1
   return
 
 block2:
   v2 = iconst.i64 0
-  trapz v2, user0
+  trapz v2, user1
   return
 }
 
@@ -149,7 +149,7 @@ block2:
 ; block1:
 ;   x4 = xconst8 0
 ;   x5 = xconst8 0
-;   trap_if eq, Size64, x4, x5 // code = User(0)
+;   trap_if eq, Size64, x4, x5 // code = TrapCode(1)
 ;   ret
 ; block2:
 ;   ret

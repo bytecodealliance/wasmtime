@@ -366,7 +366,7 @@ function %call_sret() -> i64 {
 block0:
     v1 = iconst.i64 0
     call fn0(v1)
-    trap user0
+    trap user1
 }
 
 ; VCode:
@@ -375,7 +375,7 @@ block0:
 ; block0:
 ;   lghi %r2, 0
 ;   brasl %r14, %g
-;   .word 0x0000 # trap=user0
+;   .word 0x0000 # trap=user1
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -384,5 +384,5 @@ block0:
 ; block1: ; offset 0xa
 ;   lghi %r2, 0
 ;   brasl %r14, 0xe ; reloc_external PLTRel32Dbl %g 2
-;   .byte 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00 ; trap: user1
 

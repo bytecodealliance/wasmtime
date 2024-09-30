@@ -7,7 +7,7 @@ function %nonsense(i32) {
 ; check: digraph "%nonsense" {
 
 block0(v1: i32):
-    trap user0      ; error: terminator instruction was encountered before the end
+    trap user1      ; error: terminator instruction was encountered before the end
     brif v1, block2, block1   ; unordered: block0:inst1 -> block2
                               ; unordered: block0:inst1 -> block1
 

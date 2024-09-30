@@ -77,7 +77,7 @@ function %loop2(i32) system_v {
     block5:
         brif v0, block9, block4 ; dominates: block9
     block9:
-        trap user0
+        trap user1
     block6:
         jump block7       ; dominates: block7
     block7:

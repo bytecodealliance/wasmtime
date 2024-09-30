@@ -17,8 +17,8 @@ block79:
     brif v426, block80, block85(v20, v17)
 
 block80:
-    trap user0
+    trap user1
 
 block85(v462: i128, v874: i128):
-    trap user0
+    trap user1
 }

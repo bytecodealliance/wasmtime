@@ -228,7 +228,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @003b                               v93 = global_value.i64 gv4
 @003b                               v94 = stack_addr.i64 ss6
 @003b                               call fn2(v94, v93)
-@003b                               trap unreachable
+@003b                               trap user1
 
                                 block29:
 @003d                               v95 = global_value.i64 gv5
@@ -243,13 +243,13 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0040                               v100 = global_value.i64 gv7
 @0040                               v101 = stack_addr.i64 ss7
 @0040                               call fn4(v101, v100)
-@0040                               trap unreachable
+@0040                               trap user1
 
                                 block31 cold:
 @0041                               v102 = global_value.i64 gv8
 @0041                               v103 = stack_addr.i64 ss8
 @0041                               call fn5(v103, v102)
-@0041                               trap unreachable
+@0041                               trap user1
 
                                 block32(v104: i32, v105: i8):
                                     v106 -> v104
@@ -273,5 +273,5 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @004a                               return v112, v113
 
                                 block36:
-@0005                               trap unreachable
+@0005                               trap user1
 }

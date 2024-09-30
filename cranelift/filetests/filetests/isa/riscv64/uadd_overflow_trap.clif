@@ -4,7 +4,7 @@ target riscv64
 function %f0(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 127
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -17,7 +17,7 @@ block0(v0: i32):
 ;   srli a3,a1,32
 ;   add a0,a5,a3
 ;   srli a1,a0,32
-;   trap_if user0##(a1 ne zero)
+;   trap_if user1##(a1 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -30,13 +30,13 @@ block0(v0: i32):
 ;   add a0, a5, a3
 ;   srli a1, a0, 0x20
 ;   beqz a1, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %f1(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 127
-    v2 = uadd_overflow_trap v1, v0, user0
+    v2 = uadd_overflow_trap v1, v0, user1
     return v2
 }
 
@@ -49,7 +49,7 @@ block0(v0: i32):
 ;   srli a3,a1,32
 ;   add a0,a5,a3
 ;   srli a1,a0,32
-;   trap_if user0##(a1 ne zero)
+;   trap_if user1##(a1 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -62,12 +62,12 @@ block0(v0: i32):
 ;   add a0, a5, a3
 ;   srli a1, a0, 0x20
 ;   beqz a1, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -79,7 +79,7 @@ block0(v0: i32, v1: i32):
 ;   srli a3,a1,32
 ;   add a0,a5,a3
 ;   srli a1,a0,32
-;   trap_if user0##(a1 ne zero)
+;   trap_if user1##(a1 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -91,13 +91,13 @@ block0(v0: i32, v1: i32):
 ;   add a0, a5, a3
 ;   srli a1, a0, 0x20
 ;   beqz a1, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 127
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -106,7 +106,7 @@ block0(v0: i64):
 ;   mv a1,a0
 ;   li a3,127
 ;   add a0,a1,a3
-;   trap_if user0##(a0 ult a1)
+;   trap_if user1##(a0 ult a1)
 ;   ret
 ;
 ; Disassembled:
@@ -115,13 +115,13 @@ block0(v0: i64):
 ;   addi a3, zero, 0x7f
 ;   add a0, a1, a3
 ;   bgeu a0, a1, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 127
-    v2 = uadd_overflow_trap v1, v0, user0
+    v2 = uadd_overflow_trap v1, v0, user1
     return v2
 }
 
@@ -129,7 +129,7 @@ block0(v0: i64):
 ; block0:
 ;   li a3,127
 ;   add a0,a3,a0
-;   trap_if user0##(a0 ult a3)
+;   trap_if user1##(a0 ult a3)
 ;   ret
 ;
 ; Disassembled:
@@ -137,12 +137,12 @@ block0(v0: i64):
 ;   addi a3, zero, 0x7f
 ;   add a0, a3, a0
 ;   bgeu a0, a3, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -150,7 +150,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   mv a5,a0
 ;   add a0,a5,a1
-;   trap_if user0##(a0 ult a5)
+;   trap_if user1##(a0 ult a5)
 ;   ret
 ;
 ; Disassembled:
@@ -158,6 +158,6 @@ block0(v0: i64, v1: i64):
 ;   mv a5, a0
 ;   add a0, a5, a1
 ;   bgeu a0, a5, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 

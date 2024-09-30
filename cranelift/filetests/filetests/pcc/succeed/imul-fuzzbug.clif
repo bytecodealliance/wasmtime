@@ -13,7 +13,7 @@ function u0:3(i64 vmctx, i64) fast {
         sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
         sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
         stack_limit = gv2
-    
+
 block0(v0 ! mem(mt0, 0x0, 0x0): i64, v1: i64):
     v13 -> v0
     v17 -> v0
@@ -52,7 +52,7 @@ block0(v0 ! mem(mt0, 0x0, 0x0): i64, v1: i64):
     brif v16, block2, block3
 
 block2:
-    trap unreachable
+    trap user1
 
 block3:
     v18 = load.i32 notrap aligned table v17+192
