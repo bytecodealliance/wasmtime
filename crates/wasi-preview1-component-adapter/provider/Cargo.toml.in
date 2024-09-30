@@ -9,7 +9,11 @@ documentation = "https://docs.rs/wasi-preview1-component-adapter-provider/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
-rust-version.workspace = true
+
+# NB: this is intentionally smaller than the workspace as this crate is just a
+# few `include_bytes!` so can have a more conservative version than the rest of
+# the workspace.
+rust-version = "1.60.0"
 
 [lints]
 workspace = true
