@@ -137,10 +137,15 @@ pub fn setup_ocaml_runtime() {
     wasm_spec_interpreter::setup_ocaml_runtime();
 }
 
-#[test]
-fn smoke() {
-    if !wasm_spec_interpreter::support_compiled_in() {
-        return;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smoke() {
+        if !wasm_spec_interpreter::support_compiled_in() {
+            return;
+        }
+        crate::oracles::engine::smoke_test_engine(|_, config| Ok(SpecInterpreter::new(config)))
     }
-    crate::oracles::engine::smoke_test_engine(|_, config| Ok(SpecInterpreter::new(config)))
 }

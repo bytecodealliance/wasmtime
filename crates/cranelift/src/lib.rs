@@ -32,7 +32,7 @@ mod debug;
 mod func_environ;
 mod gc;
 
-/// Trap code used for debug assertions we emit in our JIT code.
+/// User trap code for debug assertions we emit in our JIT code.
 const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
@@ -249,6 +249,7 @@ fn clif_trap_to_env_trap(trap: ir::TrapCode) -> Option<Trap> {
         ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
         ir::TrapCode::NullReference => Trap::NullReference,
         ir::TrapCode::ArrayOutOfBounds => Trap::ArrayOutOfBounds,
+        ir::TrapCode::AllocationTooLarge => Trap::AllocationTooLarge,
 
         // These do not get converted to wasmtime traps, since they
         // shouldn't ever be hit in theory. Instead of catching and handling

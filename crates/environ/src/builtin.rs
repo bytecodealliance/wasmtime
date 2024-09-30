@@ -90,6 +90,62 @@ macro_rules! foreach_builtin_function {
                 align: i32
             ) -> reference;
 
+            // Builtin implementation of the `array.new_data` instruction.
+            #[cfg(feature = "gc")]
+            array_new_data(
+                vmctx: vmctx,
+                array_interned_type_index: i32,
+                data_index: i32,
+                data_offset: i32,
+                len: i32
+            ) -> reference;
+
+            // Builtin implementation of the `array.new_elem` instruction.
+            #[cfg(feature = "gc")]
+            array_new_elem(
+                vmctx: vmctx,
+                array_interned_type_index: i32,
+                elem_index: i32,
+                elem_offset: i32,
+                len: i32
+            ) -> reference;
+
+            // Builtin implementation of the `array.copy` instruction.
+            #[cfg(feature = "gc")]
+            array_copy(
+                vmctx: vmctx,
+                dst_array_interned_type_index: i32,
+                dst_array: reference,
+                dst_index: i32,
+                src_array_interned_type_index: i32,
+                src_array: reference,
+                src_index: i32,
+                len: i32
+            );
+
+            // Builtin implementation of the `array.init_data` instruction.
+            #[cfg(feature = "gc")]
+            array_init_data(
+                vmctx: vmctx,
+                array_interned_type_index: i32,
+                array: reference,
+                dst_index: i32,
+                data_index: i32,
+                data_offset: i32,
+                len: i32
+            );
+
+            // Builtin implementation of the `array.init_elem` instruction.
+            #[cfg(feature = "gc")]
+            array_init_elem(
+                vmctx: vmctx,
+                array_interned_type_index: i32,
+                array: reference,
+                dst_index: i32,
+                elem_index: i32,
+                len: i32
+            );
+
             // Returns an index for Wasm's `table.grow` instruction for GC references.
             #[cfg(feature = "gc")]
             table_grow_gc_ref(vmctx: vmctx, table: i32, delta: i64, init: reference) -> pointer;

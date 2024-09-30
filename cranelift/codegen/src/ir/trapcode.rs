@@ -56,6 +56,10 @@ pub enum TrapCode {
 
     /// A null reference was encountered which was required to be non-null.
     NullReference,
+
+    /// A requested memory allocation was too large: beyond implementation
+    /// limits, would trigger overflows, or etc...
+    AllocationTooLarge,
 }
 
 impl TrapCode {
@@ -96,6 +100,7 @@ impl Display for TrapCode {
             User(x) => return write!(f, "user{x}"),
             NullReference => "null_reference",
             ArrayOutOfBounds => "array_oob",
+            AllocationTooLarge => "alloc_too_large",
         };
         f.write_str(identifier)
     }
@@ -120,6 +125,7 @@ impl FromStr for TrapCode {
             "interrupt" => Ok(Interrupt),
             "null_reference" => Ok(NullReference),
             "array_oob" => Ok(ArrayOutOfBounds),
+            "alloc_too_large" => Ok(AllocationTooLarge),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }

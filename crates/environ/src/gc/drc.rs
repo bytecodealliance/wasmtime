@@ -35,6 +35,10 @@ fn field(size: &mut u32, align: &mut u32, bytes: u32) -> u32 {
 pub struct DrcTypeLayouts;
 
 impl GcTypeLayouts for DrcTypeLayouts {
+    fn array_length_field_offset(&self) -> u32 {
+        ARRAY_LENGTH_OFFSET
+    }
+
     fn array_layout(&self, ty: &WasmArrayType) -> GcArrayLayout {
         let mut size = HEADER_SIZE;
         let mut align = HEADER_ALIGN;
@@ -44,12 +48,11 @@ impl GcTypeLayouts for DrcTypeLayouts {
 
         let elem_size = byte_size_of_wasm_ty_in_gc_heap(&ty.0.element_type);
         let elems_offset = align_up(&mut size, &mut align, elem_size);
+        debug_assert_eq!(elems_offset, size);
 
         GcArrayLayout {
-            size,
+            base_size: size,
             align,
-            length_field_offset,
-            elems_offset,
             elem_size,
         }
     }

@@ -12,10 +12,11 @@ use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    EngineOrModuleTypeIndex, FuncEnvironment as _, FuncIndex, FuncTranslationState, GlobalIndex,
-    GlobalVariable, Heap, HeapData, HeapStyle, IndexType, Memory, MemoryIndex, StructFieldsVec,
-    Table, TableData, TableIndex, TableSize, TargetEnvironment, TypeIndex, WasmCompositeType,
-    WasmFuncType, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType,
+    DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncEnvironment as _, FuncIndex,
+    FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle, IndexType,
+    Memory, MemoryIndex, StructFieldsVec, Table, TableData, TableIndex, TableSize,
+    TargetEnvironment, TypeIndex, WasmCompositeType, WasmFuncType, WasmHeapTopType, WasmHeapType,
+    WasmResult, WasmValType,
 };
 use smallvec::SmallVec;
 use std::mem;
@@ -90,9 +91,9 @@ pub struct FuncEnvironment<'module_environment> {
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
 
     #[cfg(feature = "gc")]
-    pub(crate) ty_to_struct_layout: std::collections::HashMap<
+    pub(crate) ty_to_gc_layout: std::collections::HashMap<
         wasmtime_environ::ModuleInternedTypeIndex,
-        wasmtime_environ::GcStructLayout,
+        wasmtime_environ::GcLayout,
     >,
 
     #[cfg(feature = "wmemcheck")]
@@ -182,7 +183,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             sig_ref_to_ty: SecondaryMap::default(),
 
             #[cfg(feature = "gc")]
-            ty_to_struct_layout: std::collections::HashMap::new(),
+            ty_to_gc_layout: std::collections::HashMap::new(),
 
             heaps: PrimaryMap::default(),
             tables: SecondaryMap::default(),
@@ -1695,7 +1696,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let table = self.table(table_index);
         let ty = table.ref_type.heap_type;
         let grow = if ty.is_vmgcref_type() {
-            gc::gc_ref_table_grow_builtin(ty, self, &mut pos.func)?
+            gc::builtins::table_grow_gc_ref(self, &mut pos.func)?
         } else {
             debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
             self.builtin_functions.table_grow_func_ref(&mut pos.func)
@@ -1817,7 +1818,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let len = self.cast_index_to_i64(&mut pos, len, index_type);
         let ty = table.ref_type.heap_type;
         let libcall = if ty.is_vmgcref_type() {
-            gc::gc_ref_table_fill_builtin(ty, self, &mut pos.func)?
+            gc::builtins::table_fill_gc_ref(self, &mut pos.func)?
         } else {
             debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
             self.builtin_functions.table_fill_func_ref(&mut pos.func)
@@ -1938,6 +1939,240 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             struct_ref,
             value,
         )
+    }
+
+    fn translate_array_new(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        elem: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        gc::translate_array_new(self, builder, array_type_index, elem, len)
+    }
+
+    fn translate_array_new_default(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        gc::translate_array_new_default(self, builder, array_type_index, len)
+    }
+
+    fn translate_array_new_fixed(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        elems: &[ir::Value],
+    ) -> WasmResult<ir::Value> {
+        gc::translate_array_new_fixed(self, builder, array_type_index, elems)
+    }
+
+    fn translate_array_new_data(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        data_index: cranelift_wasm::DataIndex,
+        data_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let libcall = gc::builtins::array_new_data(self, builder.func)?;
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = builder
+            .ins()
+            .iconst(I32, i64::from(interned_type_index.as_u32()));
+        let data_index = builder.ins().iconst(I32, i64::from(data_index.as_u32()));
+        let call_inst = builder.ins().call(
+            libcall,
+            &[vmctx, interned_type_index, data_index, data_offset, len],
+        );
+        Ok(builder.func.dfg.first_result(call_inst))
+    }
+
+    fn translate_array_new_elem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        elem_index: cranelift_wasm::ElemIndex,
+        elem_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let libcall = gc::builtins::array_new_elem(self, builder.func)?;
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = builder
+            .ins()
+            .iconst(I32, i64::from(interned_type_index.as_u32()));
+        let elem_index = builder.ins().iconst(I32, i64::from(elem_index.as_u32()));
+        let call_inst = builder.ins().call(
+            libcall,
+            &[vmctx, interned_type_index, elem_index, elem_offset, len],
+        );
+        Ok(builder.func.dfg.first_result(call_inst))
+    }
+
+    fn translate_array_copy(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        dst_array_type_index: TypeIndex,
+        dst_array: ir::Value,
+        dst_index: ir::Value,
+        src_array_type_index: TypeIndex,
+        src_array: ir::Value,
+        src_index: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()> {
+        let libcall = gc::builtins::array_copy(self, builder.func)?;
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let dst_array_type_index = self.module.types[dst_array_type_index];
+        let dst_array_type_index = builder
+            .ins()
+            .iconst(I32, i64::from(dst_array_type_index.as_u32()));
+        let src_array_type_index = self.module.types[src_array_type_index];
+        let src_array_type_index = builder
+            .ins()
+            .iconst(I32, i64::from(src_array_type_index.as_u32()));
+        builder.ins().call(
+            libcall,
+            &[
+                vmctx,
+                dst_array_type_index,
+                dst_array,
+                dst_index,
+                src_array_type_index,
+                src_array,
+                src_index,
+                len,
+            ],
+        );
+        Ok(())
+    }
+
+    fn translate_array_fill(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+        value: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()> {
+        gc::translate_array_fill(self, builder, array_type_index, array, index, value, len)
+    }
+
+    fn translate_array_init_data(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        dst_index: ir::Value,
+        data_index: DataIndex,
+        data_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()> {
+        let libcall = gc::builtins::array_init_data(self, builder.func)?;
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = builder
+            .ins()
+            .iconst(I32, i64::from(interned_type_index.as_u32()));
+        let data_index = builder.ins().iconst(I32, i64::from(data_index.as_u32()));
+        builder.ins().call(
+            libcall,
+            &[
+                vmctx,
+                interned_type_index,
+                array,
+                dst_index,
+                data_index,
+                data_offset,
+                len,
+            ],
+        );
+        Ok(())
+    }
+
+    fn translate_array_init_elem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        dst_index: ir::Value,
+        elem_index: ElemIndex,
+        elem_offset: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()> {
+        let libcall = gc::builtins::array_init_elem(self, builder.func)?;
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = builder
+            .ins()
+            .iconst(I32, i64::from(interned_type_index.as_u32()));
+        let elem_index = builder.ins().iconst(I32, i64::from(elem_index.as_u32()));
+        builder.ins().call(
+            libcall,
+            &[
+                vmctx,
+                interned_type_index,
+                array,
+                dst_index,
+                elem_index,
+                elem_offset,
+                len,
+            ],
+        );
+        Ok(())
+    }
+
+    fn translate_array_len(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        gc::translate_array_len(self, builder, array)
+    }
+
+    fn translate_array_get(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        gc::translate_array_get(self, builder, array_type_index, array, index)
+    }
+
+    fn translate_array_get_s(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        gc::translate_array_get_s(self, builder, array_type_index, array, index)
+    }
+
+    fn translate_array_get_u(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        gc::translate_array_get_u(self, builder, array_type_index, array, index)
+    }
+
+    fn translate_array_set(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        array_type_index: TypeIndex,
+        array: ir::Value,
+        index: ir::Value,
+        value: ir::Value,
+    ) -> WasmResult<()> {
+        gc::translate_array_set(self, builder, array_type_index, array, index, value)
     }
 
     fn translate_ref_null(

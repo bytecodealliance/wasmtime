@@ -329,6 +329,25 @@ impl FuncTranslationState {
         (v1, v2, v3)
     }
 
+    /// Pop four values. Return them in the order they were pushed.
+    pub(crate) fn pop4(&mut self) -> (Value, Value, Value, Value) {
+        let v4 = self.stack.pop().unwrap();
+        let v3 = self.stack.pop().unwrap();
+        let v2 = self.stack.pop().unwrap();
+        let v1 = self.stack.pop().unwrap();
+        (v1, v2, v3, v4)
+    }
+
+    /// Pop five values. Return them in the order they were pushed.
+    pub(crate) fn pop5(&mut self) -> (Value, Value, Value, Value, Value) {
+        let v5 = self.stack.pop().unwrap();
+        let v4 = self.stack.pop().unwrap();
+        let v3 = self.stack.pop().unwrap();
+        let v2 = self.stack.pop().unwrap();
+        let v1 = self.stack.pop().unwrap();
+        (v1, v2, v3, v4, v5)
+    }
+
     /// Helper to ensure the stack size is at least as big as `n`; note that due to
     /// `debug_assert` this will not execute in non-optimized builds.
     #[inline]

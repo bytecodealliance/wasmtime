@@ -133,6 +133,17 @@ impl<'a> VMGcObjectDataMut<'a> {
         val.write_le(into.try_into().unwrap());
     }
 
+    /// Copy the given slice into this object's data at the given offset.
+    ///
+    /// Panics on out-of-bounds accesses.
+    #[inline]
+    pub fn copy_from_slice(&mut self, offset: u32, src: &[u8]) {
+        let offset = usize::try_from(offset).unwrap();
+        let end = offset.checked_add(src.len()).unwrap();
+        let into = self.data.get_mut(offset..end).expect("out of bounds copy");
+        into.copy_from_slice(src);
+    }
+
     impl_pod_methods! {
         u8, read_u8, write_u8;
         u16, read_u16, write_u16;

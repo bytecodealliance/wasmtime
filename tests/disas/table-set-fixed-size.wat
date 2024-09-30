@@ -50,7 +50,7 @@
 ;; @0056                               v19 = uadd_overflow_trap v17, v18, user65535  ; v18 = 8
 ;; @0056                               v20 = iconst.i64 8
 ;; @0056                               v21 = uadd_overflow_trap v19, v20, user65535  ; v20 = 8
-;; @0056                               v22 = icmp ult v21, v16
+;; @0056                               v22 = icmp ule v21, v16
 ;; @0056                               trapz v22, user65535
 ;; @0056                               v23 = iadd v15, v19
 ;; @0056                               v24 = load.i64 notrap aligned v23
@@ -63,7 +63,7 @@
 ;; @0056                               v31 = uadd_overflow_trap v29, v30, user65535  ; v30 = 8
 ;; @0056                               v32 = iconst.i64 8
 ;; @0056                               v33 = uadd_overflow_trap v31, v32, user65535  ; v32 = 8
-;; @0056                               v34 = icmp ult v33, v28
+;; @0056                               v34 = icmp ule v33, v28
 ;; @0056                               trapz v34, user65535
 ;; @0056                               v35 = iadd v27, v31
 ;; @0056                               store notrap aligned v25, v35
@@ -83,7 +83,7 @@
 ;; @0056                               v42 = uadd_overflow_trap v40, v41, user65535  ; v41 = 8
 ;; @0056                               v43 = iconst.i64 8
 ;; @0056                               v44 = uadd_overflow_trap v42, v43, user65535  ; v43 = 8
-;; @0056                               v45 = icmp ult v44, v39
+;; @0056                               v45 = icmp ule v44, v39
 ;; @0056                               trapz v45, user65535
 ;; @0056                               v46 = iadd v38, v42
 ;; @0056                               v47 = load.i64 notrap aligned v46
@@ -105,7 +105,7 @@
 ;; @0056                               v56 = uadd_overflow_trap v54, v55, user65535  ; v55 = 8
 ;; @0056                               v57 = iconst.i64 8
 ;; @0056                               v58 = uadd_overflow_trap v56, v57, user65535  ; v57 = 8
-;; @0056                               v59 = icmp ult v58, v53
+;; @0056                               v59 = icmp ule v58, v53
 ;; @0056                               trapz v59, user65535
 ;; @0056                               v60 = iadd v52, v56
 ;; @0056                               store.i64 notrap aligned v48, v60
@@ -151,7 +151,7 @@
 ;; @005f                               v19 = uadd_overflow_trap v17, v18, user65535  ; v18 = 8
 ;; @005f                               v20 = iconst.i64 8
 ;; @005f                               v21 = uadd_overflow_trap v19, v20, user65535  ; v20 = 8
-;; @005f                               v22 = icmp ult v21, v16
+;; @005f                               v22 = icmp ule v21, v16
 ;; @005f                               trapz v22, user65535
 ;; @005f                               v23 = iadd v15, v19
 ;; @005f                               v24 = load.i64 notrap aligned v23
@@ -164,7 +164,7 @@
 ;; @005f                               v31 = uadd_overflow_trap v29, v30, user65535  ; v30 = 8
 ;; @005f                               v32 = iconst.i64 8
 ;; @005f                               v33 = uadd_overflow_trap v31, v32, user65535  ; v32 = 8
-;; @005f                               v34 = icmp ult v33, v28
+;; @005f                               v34 = icmp ule v33, v28
 ;; @005f                               trapz v34, user65535
 ;; @005f                               v35 = iadd v27, v31
 ;; @005f                               store notrap aligned v25, v35
@@ -184,7 +184,7 @@
 ;; @005f                               v42 = uadd_overflow_trap v40, v41, user65535  ; v41 = 8
 ;; @005f                               v43 = iconst.i64 8
 ;; @005f                               v44 = uadd_overflow_trap v42, v43, user65535  ; v43 = 8
-;; @005f                               v45 = icmp ult v44, v39
+;; @005f                               v45 = icmp ule v44, v39
 ;; @005f                               trapz v45, user65535
 ;; @005f                               v46 = iadd v38, v42
 ;; @005f                               v47 = load.i64 notrap aligned v46
@@ -206,7 +206,7 @@
 ;; @005f                               v56 = uadd_overflow_trap v54, v55, user65535  ; v55 = 8
 ;; @005f                               v57 = iconst.i64 8
 ;; @005f                               v58 = uadd_overflow_trap v56, v57, user65535  ; v57 = 8
-;; @005f                               v59 = icmp ult v58, v53
+;; @005f                               v59 = icmp ule v58, v53
 ;; @005f                               trapz v59, user65535
 ;; @005f                               v60 = iadd v52, v56
 ;; @005f                               store.i64 notrap aligned v48, v60

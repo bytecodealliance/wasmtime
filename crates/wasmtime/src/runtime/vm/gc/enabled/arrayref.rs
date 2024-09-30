@@ -49,7 +49,7 @@ impl VMGcRef {
     ///
     /// If this is not a GC reference to an `arrayref`, `Err(self)` is
     /// returned.
-    pub fn into_arrayref(self, gc_heap: &impl GcHeap) -> Result<VMArrayRef, VMGcRef> {
+    pub fn into_arrayref(self, gc_heap: &(impl GcHeap + ?Sized)) -> Result<VMArrayRef, VMGcRef> {
         if self.is_arrayref(gc_heap) {
             Ok(self.into_arrayref_unchecked())
         } else {
@@ -144,7 +144,7 @@ impl VMArrayRef {
         ty: &StorageType,
         index: u32,
     ) -> Val {
-        let offset = layout.elems_offset + index * ty.byte_size_in_gc_heap();
+        let offset = layout.elem_offset(index);
         let data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match ty {
             StorageType::I8 => Val::I32(data.read_u8(offset).into()),
@@ -190,7 +190,7 @@ impl VMArrayRef {
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
 
-        let offset = layout.elem_offset(index, ty.byte_size_in_gc_heap());
+        let offset = layout.elem_offset(index);
         let mut data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
@@ -274,7 +274,7 @@ impl VMArrayRef {
         val: Val,
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
-        let offset = layout.elem_offset(index, ty.byte_size_in_gc_heap());
+        let offset = layout.elem_offset(index);
         match val {
             Val::I32(i) if ty.is_i8() => store
                 .gc_store_mut()?
@@ -334,7 +334,7 @@ impl VMArrayRef {
                 // native VMFuncRef pointers out of it and trust them. That
                 // means we need to do the same side table kind of thing we do
                 // with `externref` host data here. This isn't implemented yet.
-                todo!("funcrefs in GC objects")
+                bail!("funcrefs in GC objects are not yet implemented")
             }
         }
         Ok(())

@@ -18,11 +18,11 @@
 //! term and build a tree of Rust control-flow constructs corresponding to each
 //! partition. The root of such a tree is a [Block], and [serialize] constructs
 //! it.
-use std::cmp::Reverse;
 
 use crate::disjointsets::DisjointSets;
 use crate::lexer::Pos;
 use crate::trie_again::{Binding, BindingId, Constraint, Rule, RuleSet};
+use std::cmp::Reverse;
 
 /// Decomposes the rule-set into a tree of [Block]s.
 pub fn serialize(rules: &RuleSet) -> Block {
@@ -835,12 +835,17 @@ fn group_by_mut<T: Eq>(
     })
 }
 
-#[test]
-fn test_group_mut() {
-    let slice = &mut [1, 1, 1, 3, 3, 2, 2, 2];
-    let mut iter = group_by_mut(slice, |a, b| a == b);
-    assert_eq!(iter.next(), Some(&mut [1, 1, 1][..]));
-    assert_eq!(iter.next(), Some(&mut [3, 3][..]));
-    assert_eq!(iter.next(), Some(&mut [2, 2, 2][..]));
-    assert_eq!(iter.next(), None);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_group_mut() {
+        let slice = &mut [1, 1, 1, 3, 3, 2, 2, 2];
+        let mut iter = group_by_mut(slice, |a, b| a == b);
+        assert_eq!(iter.next(), Some(&mut [1, 1, 1][..]));
+        assert_eq!(iter.next(), Some(&mut [3, 3][..]));
+        assert_eq!(iter.next(), Some(&mut [2, 2, 2][..]));
+        assert_eq!(iter.next(), None);
+    }
 }

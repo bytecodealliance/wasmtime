@@ -217,7 +217,12 @@ impl From<wasmi::Value> for DiffValue {
     }
 }
 
-#[test]
-fn smoke() {
-    crate::oracles::engine::smoke_test_engine(|_, config| Ok(WasmiEngine::new(config)))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smoke() {
+        crate::oracles::engine::smoke_test_engine(|_, config| Ok(WasmiEngine::new(config)))
+    }
 }
