@@ -42,7 +42,7 @@ impl TableOps {
         let mut types = TypeSection::new();
 
         // 0: "gc"
-        types.function(
+        types.ty().function(
             vec![],
             // Return a bunch of stuff from `gc` so that we exercise GCing when
             // there is return pointer space allocated on the stack. This is
@@ -59,16 +59,16 @@ impl TableOps {
             params.push(ValType::EXTERNREF);
         }
         let results = vec![];
-        types.function(params, results);
+        types.ty().function(params, results);
 
         // 2: `take_refs`
-        types.function(
+        types.ty().function(
             vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
             vec![],
         );
 
         // 3: `make_refs`
-        types.function(
+        types.ty().function(
             vec![],
             vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
         );

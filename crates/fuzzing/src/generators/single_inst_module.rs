@@ -57,7 +57,7 @@ impl<'a> SingleInstModule<'a> {
 
         // Encode the type section.
         let mut types = TypeSection::new();
-        types.function(
+        types.ty().function(
             self.parameters.iter().cloned(),
             self.results.iter().cloned(),
         );
