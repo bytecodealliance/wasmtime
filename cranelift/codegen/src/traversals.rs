@@ -185,7 +185,7 @@ mod tests {
         // block3:
         //   trap user0
         cur.insert_block(block3);
-        cur.ins().trap(TrapCode::User(0));
+        cur.ins().trap(TrapCode::user(1));
 
         // block1:
         //   v1 = iconst.i32 1

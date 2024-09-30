@@ -2139,7 +2139,7 @@ mod test {
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Udf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
         };
         inst.emit(&mut buf, &info, &mut state);
 
@@ -2151,7 +2151,7 @@ mod test {
         let mut state = Default::default();
         let inst = Inst::TrapIf {
             kind: CondBrKind::NotZero(xreg(0)),
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
         };
         inst.emit(&mut buf2, &info, &mut state);
         let inst = Inst::Nop4;

@@ -269,7 +269,7 @@ impl Mutator for ReplaceInstWithTrap {
                 let status = if func.dfg.insts[prev_inst].opcode() == ir::Opcode::Trap {
                     ProgressStatus::Skip
                 } else {
-                    func.dfg.replace(prev_inst).trap(TrapCode::User(0));
+                    func.dfg.replace(prev_inst).trap(TrapCode::user(1));
                     ProgressStatus::Changed
                 };
                 (func, format!("Replace inst {prev_inst} with trap"), status)
