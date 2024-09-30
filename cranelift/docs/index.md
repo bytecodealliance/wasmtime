@@ -26,9 +26,6 @@
     This crate contains the meta-language utilities and descriptions used by the
     code generator.
 
- - [cranelift-wasm](https://docs.rs/cranelift-wasm)
-    This crate translates WebAssembly code into Cranelift IR.
-
  - [cranelift-frontend](https://docs.rs/cranelift-frontend)
     This crate provides utilities for translating code into Cranelift IR.
 

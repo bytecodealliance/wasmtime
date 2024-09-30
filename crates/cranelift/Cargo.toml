@@ -18,7 +18,6 @@ workspace = true
 anyhow = { workspace = true }
 log = { workspace = true }
 wasmtime-environ = { workspace = true, features = ['compile'] }
-cranelift-wasm = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["host-arch"] }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
@@ -32,6 +31,7 @@ smallvec = { workspace = true }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
+itertools = "0.12"
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]

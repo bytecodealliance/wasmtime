@@ -76,9 +76,6 @@ audit-as-crates-io = true
 [policy.cranelift-serde]
 audit-as-crates-io = true
 
-[policy.cranelift-wasm]
-audit-as-crates-io = true
-
 [policy.isle-fuzz]
 criteria = []
 

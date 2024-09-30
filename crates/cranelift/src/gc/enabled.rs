@@ -1,17 +1,17 @@
-use super::*;
-use crate::{func_environ::FuncEnvironment, DEBUG_ASSERT_TRAP_CODE};
+use super::GcCompiler;
+use crate::func_environ::FuncEnvironment;
+use crate::gc::ArrayInit;
+use crate::translate::{StructFieldsVec, TargetEnvironment};
+use crate::DEBUG_ASSERT_TRAP_CODE;
 use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, condcodes::IntCC, InstBuilder},
 };
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{
-    wasm_unsupported, ModuleInternedTypeIndex, StructFieldsVec, TargetEnvironment, TypeIndex,
-    WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType,
-    WasmValType,
-};
 use wasmtime_environ::{
-    GcArrayLayout, GcLayout, GcStructLayout, PtrSize, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    wasm_unsupported, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex, PtrSize,
+    TypeIndex, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
 };
 
 mod drc;

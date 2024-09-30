@@ -5,10 +5,9 @@ use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::ModuleInternedTypeIndex;
 use std::any::Any;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{PtrSize, Tunables, WasmValType};
+use wasmtime_environ::{ModuleInternedTypeIndex, PtrSize, Tunables, WasmValType};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,

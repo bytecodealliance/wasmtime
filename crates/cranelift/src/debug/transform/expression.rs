@@ -2,12 +2,12 @@
 
 use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
+use crate::translate::get_vmctx_value_label;
 use anyhow::{Context, Error, Result};
 use cranelift_codegen::ir::ValueLabel;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
-use cranelift_wasm::get_vmctx_value_label;
 use gimli::{write, Expression, Operation, Reader, ReaderOffset};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};

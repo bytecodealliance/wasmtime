@@ -20,14 +20,14 @@
 //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 use super::Reachability;
-use crate::{FuncEnvironment, HeapData, HeapStyle};
+use crate::translate::{FuncEnvironment, HeapData, HeapStyle};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
     ir::{Expr, Fact},
 };
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_types::WasmResult;
+use wasmtime_environ::WasmResult;
 use Reachability::*;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native

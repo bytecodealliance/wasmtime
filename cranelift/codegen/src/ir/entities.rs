@@ -181,9 +181,6 @@ impl DynamicType {
 ///
 /// You can create a `GlobalValue` in the following ways:
 ///
-/// - When compiling to WASM, you can use it to load values from a
-///   [`VmContext`](super::GlobalValueData::VMContext) using
-///   [`FuncEnvironment::make_global`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_global).
 /// - When compiling to native code, you can use it for objects in static memory with
 ///   [`Module::declare_data_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/trait.Module.html#method.declare_data_in_func).
 /// - For any compilation target, it can be registered with
@@ -329,9 +326,6 @@ impl JumpTable {
 /// - [`Module::declare_func_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/trait.Module.html#method.declare_func_in_func)
 ///   for functions declared elsewhere in the same native
 ///   [`Module`](https://docs.rs/cranelift-module/*/cranelift_module/trait.Module.html)
-/// - [`FuncEnvironment::make_direct_func`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_direct_func)
-///   for functions declared in the same WebAssembly
-///   [`FuncEnvironment`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_direct_func)
 ///
 /// While the order is stable, it is arbitrary.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

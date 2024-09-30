@@ -1,5 +1,6 @@
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
+use crate::translate::{FuncEnvironment as _, FuncTranslator};
 use crate::DEBUG_ASSERT_TRAP_CODE;
 use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
 use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
@@ -15,9 +16,6 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{CompiledCode, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{
-    DefinedFuncIndex, FuncEnvironment as _, FuncTranslator, WasmFuncType, WasmValType,
-};
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
 use std::any::Any;
@@ -28,10 +26,10 @@ use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
-    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, FlagValue, FunctionBodyData,
-    FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PtrSize, RelocationTarget,
-    StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets,
-    WasmFunctionInfo,
+    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, DefinedFuncIndex, FlagValue,
+    FunctionBodyData, FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PtrSize,
+    RelocationTarget, StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, Tunables,
+    VMOffsets, WasmFuncType, WasmFunctionInfo, WasmValType,
 };
 
 #[cfg(feature = "component-model")]

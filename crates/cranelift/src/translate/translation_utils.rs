@@ -1,10 +1,10 @@
 //! Helper functions and structures for the translation.
-use crate::environ::TargetEnvironment;
-use crate::WasmResult;
+use crate::translate::environ::TargetEnvironment;
 use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use wasmparser::{FuncValidator, WasmModuleResources};
+use wasmtime_environ::WasmResult;
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(

@@ -851,25 +851,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cranelift-wasm"
-version = "0.113.0"
-dependencies = [
- "cranelift-codegen",
- "cranelift-entity",
- "cranelift-frontend",
- "hashbrown 0.14.3",
- "itertools 0.12.1",
- "log",
- "serde",
- "serde_derive",
- "smallvec",
- "target-lexicon",
- "wasmparser 0.218.0",
- "wasmtime-types",
- "wat",
-]
-
-[[package]]
 name = "crc32fast"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3692,8 +3673,8 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-native",
- "cranelift-wasm",
  "gimli",
+ "itertools 0.12.1",
  "log",
  "object",
  "smallvec",
@@ -3790,7 +3771,6 @@ dependencies = [
  "cranelift-interpreter",
  "cranelift-native",
  "cranelift-reader",
- "cranelift-wasm",
  "env_logger 0.11.5",
  "libfuzzer-sys",
  "once_cell",

@@ -6,12 +6,8 @@
 //!
 //! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
-use crate::state::FuncTranslationState;
-use crate::{
-    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData, Memory, MemoryIndex,
-    Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
-    WasmHeapType, WasmResult,
-};
+use crate::translate::state::FuncTranslationState;
+use crate::translate::{Heap, HeapData};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder, Type};
@@ -19,17 +15,15 @@ use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
-use std::boxed::Box;
-use std::string::ToString;
-use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
-use wasmtime_types::{ConstExpr, ModuleInternedTypeIndex};
+use wasmparser::Operator;
+use wasmtime_environ::{
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeConvert, TypeIndex,
+    WasmHeapType, WasmResult,
+};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
 pub enum GlobalVariable {
-    /// This is a constant global with a value known at compile time.
-    Const(ir::Value),
-
     /// This is a variable in memory that should be referenced through a `GlobalValue`.
     Memory {
         /// The address of the global variable storage.
@@ -60,11 +54,6 @@ pub trait TargetEnvironment: TypeConvert {
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
     fn pointer_type(&self) -> ir::Type {
         ir::Type::int(u16::from(self.target_config().pointer_bits())).unwrap()
-    }
-
-    /// Get the size of a native pointer, in bytes.
-    fn pointer_bytes(&self) -> u8 {
-        self.target_config().pointer_bytes()
     }
 
     /// Get the Cranelift reference type to use for the given Wasm reference
@@ -955,267 +944,5 @@ pub trait FuncEnvironment: TargetEnvironment {
         val: ir::Value,
     ) -> ir::Value {
         builder.ins().fcvt_to_uint(ty, val)
-    }
-}
-
-/// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
-/// [`translate_module`](fn.translate_module.html) function. These methods should not be called
-/// by the user, they are only for `cranelift-wasm` internal use.
-pub trait ModuleEnvironment<'data>: TypeConvert {
-    /// Provides the number of types up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_types(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares a function signature to the environment.
-    fn declare_type_func(&mut self, wasm_func_type: WasmFuncType) -> WasmResult<()>;
-
-    /// Translates a type index to its signature index, only called for type
-    /// indices which point to functions.
-    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<ModuleInternedTypeIndex> {
-        let _ = index;
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
-    /// Provides the number of imports up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_imports(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares a function import to the environment.
-    fn declare_func_import(
-        &mut self,
-        index: TypeIndex,
-        module: &'data str,
-        field: &'data str,
-    ) -> WasmResult<()>;
-
-    /// Declares a table import to the environment.
-    fn declare_table_import(
-        &mut self,
-        table: Table,
-        module: &'data str,
-        field: &'data str,
-    ) -> WasmResult<()>;
-
-    /// Declares a memory import to the environment.
-    fn declare_memory_import(
-        &mut self,
-        memory: Memory,
-        module: &'data str,
-        field: &'data str,
-    ) -> WasmResult<()>;
-
-    /// Declares an tag import to the environment.
-    fn declare_tag_import(
-        &mut self,
-        tag: Tag,
-        module: &'data str,
-        field: &'data str,
-    ) -> WasmResult<()> {
-        let _ = (tag, module, field);
-        Err(WasmError::Unsupported("wasm tags".to_string()))
-    }
-
-    /// Declares a global import to the environment.
-    fn declare_global_import(
-        &mut self,
-        global: Global,
-        module: &'data str,
-        field: &'data str,
-    ) -> WasmResult<()>;
-
-    /// Notifies the implementation that all imports have been declared.
-    fn finish_imports(&mut self) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Provides the number of defined functions up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_func_types(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares the type (signature) of a local function in the module.
-    fn declare_func_type(&mut self, index: TypeIndex) -> WasmResult<()>;
-
-    /// Provides the number of defined tables up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_tables(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares a table to the environment.
-    fn declare_table(&mut self, table: Table) -> WasmResult<()>;
-
-    /// Provides the number of defined memories up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_memories(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares a memory to the environment
-    fn declare_memory(&mut self, memory: Memory) -> WasmResult<()>;
-
-    /// Provides the number of defined tags up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_tags(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares an tag to the environment
-    fn declare_tag(&mut self, tag: Tag) -> WasmResult<()> {
-        let _ = tag;
-        Err(WasmError::Unsupported("wasm tags".to_string()))
-    }
-
-    /// Provides the number of defined globals up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_globals(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares a global to the environment.
-    fn declare_global(&mut self, global: Global, init: ConstExpr) -> WasmResult<()>;
-
-    /// Provides the number of exports up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_exports(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares a function export to the environment.
-    fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()>;
-
-    /// Declares a table export to the environment.
-    fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str)
-        -> WasmResult<()>;
-
-    /// Declares a memory export to the environment.
-    fn declare_memory_export(
-        &mut self,
-        memory_index: MemoryIndex,
-        name: &'data str,
-    ) -> WasmResult<()>;
-
-    /// Declares an tag export to the environment.
-    fn declare_tag_export(&mut self, tag_index: TagIndex, name: &'data str) -> WasmResult<()> {
-        let _ = (tag_index, name);
-        Err(WasmError::Unsupported("wasm tags".to_string()))
-    }
-
-    /// Declares a global export to the environment.
-    fn declare_global_export(
-        &mut self,
-        global_index: GlobalIndex,
-        name: &'data str,
-    ) -> WasmResult<()>;
-
-    /// Notifies the implementation that all exports have been declared.
-    fn finish_exports(&mut self) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Declares the optional start function.
-    fn declare_start_func(&mut self, index: FuncIndex) -> WasmResult<()>;
-
-    /// Provides the number of element initializers up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_table_elements(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Fills a declared table with references to functions in the module.
-    fn declare_table_elements(
-        &mut self,
-        table_index: TableIndex,
-        base: Option<GlobalIndex>,
-        offset: u64,
-        elements: Box<[FuncIndex]>,
-    ) -> WasmResult<()>;
-
-    /// Declare a passive element segment.
-    fn declare_passive_element(
-        &mut self,
-        index: ElemIndex,
-        elements: Box<[FuncIndex]>,
-    ) -> WasmResult<()>;
-
-    /// Indicates that a declarative element segment was seen in the wasm
-    /// module.
-    fn declare_elements(&mut self, elements: Box<[FuncIndex]>) -> WasmResult<()> {
-        let _ = elements;
-        Ok(())
-    }
-
-    /// Provides the number of passive data segments up front.
-    ///
-    /// By default this does nothing, but implementations may use this to
-    /// pre-allocate memory if desired.
-    fn reserve_passive_data(&mut self, count: u32) -> WasmResult<()> {
-        let _ = count;
-        Ok(())
-    }
-
-    /// Declare a passive data segment.
-    fn declare_passive_data(&mut self, data_index: DataIndex, data: &'data [u8]) -> WasmResult<()>;
-
-    /// Indicates how many functions the code section reports and the byte
-    /// offset of where the code sections starts.
-    fn reserve_function_bodies(&mut self, bodies: u32, code_section_offset: u64) {
-        let _ = (bodies, code_section_offset);
-    }
-
-    /// Provides the contents of a function body.
-    fn define_function_body(
-        &mut self,
-        validator: FuncValidator<ValidatorResources>,
-        body: FunctionBody<'data>,
-    ) -> WasmResult<()>;
-
-    /// Provides the number of data initializers up front. By default this does nothing, but
-    /// implementations can use this to preallocate memory if desired.
-    fn reserve_data_initializers(&mut self, _num: u32) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Fills a declared memory with bytes at module instantiation.
-    fn declare_data_initialization(
-        &mut self,
-        memory_index: MemoryIndex,
-        base: Option<GlobalIndex>,
-        offset: u64,
-        data: &'data [u8],
-    ) -> WasmResult<()>;
-
-    /// Declares the name of a module to the environment.
-    ///
-    /// By default this does nothing, but implementations can use this to read
-    /// the module name subsection of the custom name section if desired.
-    fn declare_module_name(&mut self, _name: &'data str) {}
-
-    /// Declares the name of a function to the environment.
-    ///
-    /// By default this does nothing, but implementations can use this to read
-    /// the function name subsection of the custom name section if desired.
-    fn declare_func_name(&mut self, _func_index: FuncIndex, _name: &'data str) {}
-
-    /// Declares the name of a function's local to the environment.
-    ///
-    /// By default this does nothing, but implementations can use this to read
-    /// the local name subsection of the custom name section if desired.
-    fn declare_local_name(&mut self, _func_index: FuncIndex, _local_index: u32, _name: &'data str) {
-    }
-
-    /// Indicates that a custom section has been found in the wasm file
-    fn custom_section(&mut self, _name: &'data str, _data: &'data [u8]) -> WasmResult<()> {
-        Ok(())
-    }
-
-    /// Returns the list of enabled wasm features this translation will be using.
-    fn wasm_features(&self) -> WasmFeatures {
-        WasmFeatures::default()
     }
 }

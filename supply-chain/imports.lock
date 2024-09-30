@@ -1061,18 +1061,6 @@ when = "2024-08-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.cranelift-wasm]]
-version = "0.110.1"
-when = "2024-07-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.111.0"
-when = "2024-08-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
 [[publisher.derive_arbitrary]]
 version = "1.3.0"
 when = "2023-03-13"
