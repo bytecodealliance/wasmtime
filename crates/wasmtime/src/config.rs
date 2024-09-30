@@ -1,9 +1,10 @@
+use crate::hash_map::HashMap;
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
-use hashbrown::{HashMap, HashSet};
 use serde_derive::{Deserialize, Serialize};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;

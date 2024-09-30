@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::hash_set::HashSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::RegisteredModuleId;
@@ -324,7 +325,7 @@ pub struct StoreOpaque {
     gc_roots: RootSet,
     gc_roots_list: GcRootsList,
     // Types for which the embedder has created an allocator for.
-    gc_host_alloc_types: hashbrown::HashSet<RegisteredType>,
+    gc_host_alloc_types: HashSet<RegisteredType>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -542,7 +543,7 @@ impl<T> Store<T> {
                 gc_store: None,
                 gc_roots: RootSet::default(),
                 gc_roots_list: GcRootsList::default(),
-                gc_host_alloc_types: hashbrown::HashSet::default(),
+                gc_host_alloc_types: HashSet::default(),
                 modules: ModuleRegistry::default(),
                 func_refs: FuncRefs::default(),
                 host_globals: Vec::new(),

@@ -5,13 +5,13 @@ use crate::component::types;
 use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
+use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::future::Future;
 use core::marker;
 use core::pin::Pin;
-use hashbrown::hash_map::HashMap;
 use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::PrimaryMap;
 

@@ -294,6 +294,8 @@ pub(crate) mod prelude {
     pub use wasmtime_environ::prelude::*;
 }
 
+pub(crate) use hashbrown::{hash_map, hash_set};
+
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
 ///
