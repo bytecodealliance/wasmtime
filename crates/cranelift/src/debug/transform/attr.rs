@@ -100,6 +100,7 @@ where
             AttributeValue::Data1(d) => write::AttributeValue::Data1(d),
             AttributeValue::Data2(d) => write::AttributeValue::Data2(d),
             AttributeValue::Data4(d) => write::AttributeValue::Data4(d),
+            AttributeValue::Data8(d) => write::AttributeValue::Data8(d),
             AttributeValue::Sdata(d) => write::AttributeValue::Sdata(d),
             AttributeValue::Flag(f) => write::AttributeValue::Flag(f),
             AttributeValue::DebugLineRef(line_program_offset) => {
