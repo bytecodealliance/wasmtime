@@ -12,6 +12,9 @@ use clap::error::{Error, ErrorKind};
 use std::marker;
 use std::time::Duration;
 
+/// Characters which can be safely ignored while parsing numeric options to wasmtime
+const IGNORED_NUMBER_CHARS: [char; 1] = ['_'];
+
 #[macro_export]
 macro_rules! wasmtime_option_group {
     (
@@ -300,7 +303,7 @@ impl WasmtimeOptionValue for String {
 impl WasmtimeOptionValue for u32 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
-        let val = String::parse(val)?;
+        let val = String::parse(val)?.replace(IGNORED_NUMBER_CHARS, "");
         match val.strip_prefix("0x") {
             Some(hex) => Ok(u32::from_str_radix(hex, 16)?),
             None => Ok(val.parse()?),
@@ -311,7 +314,7 @@ impl WasmtimeOptionValue for u32 {
 impl WasmtimeOptionValue for u64 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
-        let val = String::parse(val)?;
+        let val = String::parse(val)?.replace(IGNORED_NUMBER_CHARS, "");
         match val.strip_prefix("0x") {
             Some(hex) => Ok(u64::from_str_radix(hex, 16)?),
             None => Ok(val.parse()?),
@@ -322,7 +325,7 @@ impl WasmtimeOptionValue for u64 {
 impl WasmtimeOptionValue for usize {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
-        let val = String::parse(val)?;
+        let val = String::parse(val)?.replace(IGNORED_NUMBER_CHARS, "");
         match val.strip_prefix("0x") {
             Some(hex) => Ok(usize::from_str_radix(hex, 16)?),
             None => Ok(val.parse()?),
@@ -409,5 +412,16 @@ impl WasmtimeOptionValue for KeyValuePair {
                 None => "".to_string(),
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WasmtimeOptionValue;
+
+    #[test]
+    fn numbers_with_underscores() {
+        assert!(<u32 as WasmtimeOptionValue>::parse(Some("123")).is_ok_and(|v| v == 123));
+        assert!(<u32 as WasmtimeOptionValue>::parse(Some("1_2_3")).is_ok_and(|v| v == 123));
     }
 }
