@@ -195,10 +195,10 @@ pub mod foo {
             use wasmtime::component::__internal::anyhow;
             #[wasmtime::component::__internal::async_trait]
             pub trait Host: Send {
-                async fn float32_param(&mut self, x: f32) -> ();
-                async fn float64_param(&mut self, x: f64) -> ();
-                async fn float32_result(&mut self) -> f32;
-                async fn float64_result(&mut self) -> f64;
+                async fn f32_param(&mut self, x: f32) -> ();
+                async fn f64_param(&mut self, x: f64) -> ();
+                async fn f32_result(&mut self) -> f32;
+                async fn f64_result(&mut self) -> f64;
             }
             pub trait GetHost<
                 T,
@@ -221,12 +221,12 @@ pub mod foo {
             {
                 let mut inst = linker.instance("foo:foo/floats")?;
                 inst.func_wrap_async(
-                    "float32-param",
+                    "f32-param",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (f32,)| {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen import", module =
-                            "floats", function = "float32-param",
+                            "floats", function = "f32-param",
                         );
                         wasmtime::component::__internal::Box::new(
                             async move {
@@ -235,7 +235,7 @@ pub mod foo {
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
-                                let r = Host::float32_param(host, arg0).await;
+                                let r = Host::f32_param(host, arg0).await;
                                 tracing::event!(
                                     tracing::Level::TRACE, result = tracing::field::debug(& r),
                                     "return"
@@ -247,12 +247,12 @@ pub mod foo {
                     },
                 )?;
                 inst.func_wrap_async(
-                    "float64-param",
+                    "f64-param",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (f64,)| {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen import", module =
-                            "floats", function = "float64-param",
+                            "floats", function = "f64-param",
                         );
                         wasmtime::component::__internal::Box::new(
                             async move {
@@ -261,7 +261,7 @@ pub mod foo {
                                     "call"
                                 );
                                 let host = &mut host_getter(caller.data_mut());
-                                let r = Host::float64_param(host, arg0).await;
+                                let r = Host::f64_param(host, arg0).await;
                                 tracing::event!(
                                     tracing::Level::TRACE, result = tracing::field::debug(& r),
                                     "return"
@@ -273,18 +273,18 @@ pub mod foo {
                     },
                 )?;
                 inst.func_wrap_async(
-                    "float32-result",
+                    "f32-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen import", module =
-                            "floats", function = "float32-result",
+                            "floats", function = "f32-result",
                         );
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(tracing::Level::TRACE, "call");
                                 let host = &mut host_getter(caller.data_mut());
-                                let r = Host::float32_result(host).await;
+                                let r = Host::f32_result(host).await;
                                 tracing::event!(
                                     tracing::Level::TRACE, result = tracing::field::debug(& r),
                                     "return"
@@ -296,18 +296,18 @@ pub mod foo {
                     },
                 )?;
                 inst.func_wrap_async(
-                    "float64-result",
+                    "f64-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen import", module =
-                            "floats", function = "float64-result",
+                            "floats", function = "f64-result",
                         );
                         wasmtime::component::__internal::Box::new(
                             async move {
                                 tracing::event!(tracing::Level::TRACE, "call");
                                 let host = &mut host_getter(caller.data_mut());
-                                let r = Host::float64_result(host).await;
+                                let r = Host::f64_result(host).await;
                                 tracing::event!(
                                     tracing::Level::TRACE, result = tracing::field::debug(& r),
                                     "return"
@@ -332,17 +332,17 @@ pub mod foo {
             }
             #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn float32_param(&mut self, x: f32) -> () {
-                    Host::float32_param(*self, x).await
+                async fn f32_param(&mut self, x: f32) -> () {
+                    Host::f32_param(*self, x).await
                 }
-                async fn float64_param(&mut self, x: f64) -> () {
-                    Host::float64_param(*self, x).await
+                async fn f64_param(&mut self, x: f64) -> () {
+                    Host::f64_param(*self, x).await
                 }
-                async fn float32_result(&mut self) -> f32 {
-                    Host::float32_result(*self).await
+                async fn f32_result(&mut self) -> f32 {
+                    Host::f32_result(*self).await
                 }
-                async fn float64_result(&mut self) -> f64 {
-                    Host::float64_result(*self).await
+                async fn f64_result(&mut self) -> f64 {
+                    Host::f64_result(*self).await
                 }
             }
         }
@@ -356,17 +356,17 @@ pub mod exports {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::anyhow;
                 pub struct Guest {
-                    float32_param: wasmtime::component::Func,
-                    float64_param: wasmtime::component::Func,
-                    float32_result: wasmtime::component::Func,
-                    float64_result: wasmtime::component::Func,
+                    f32_param: wasmtime::component::Func,
+                    f64_param: wasmtime::component::Func,
+                    f32_result: wasmtime::component::Func,
+                    f64_result: wasmtime::component::Func,
                 }
                 #[derive(Clone)]
                 pub struct GuestIndices {
-                    float32_param: wasmtime::component::ComponentExportIndex,
-                    float64_param: wasmtime::component::ComponentExportIndex,
-                    float32_result: wasmtime::component::ComponentExportIndex,
-                    float64_result: wasmtime::component::ComponentExportIndex,
+                    f32_param: wasmtime::component::ComponentExportIndex,
+                    f64_param: wasmtime::component::ComponentExportIndex,
+                    f32_result: wasmtime::component::ComponentExportIndex,
+                    f64_result: wasmtime::component::ComponentExportIndex,
                 }
                 impl GuestIndices {
                     /// Constructor for [`GuestIndices`] which takes a
@@ -421,15 +421,15 @@ pub mod exports {
                                 })
                         };
                         let _ = &mut lookup;
-                        let float32_param = lookup("float32-param")?;
-                        let float64_param = lookup("float64-param")?;
-                        let float32_result = lookup("float32-result")?;
-                        let float64_result = lookup("float64-result")?;
+                        let f32_param = lookup("f32-param")?;
+                        let f64_param = lookup("f64-param")?;
+                        let f32_result = lookup("f32-result")?;
+                        let f64_result = lookup("f64-result")?;
                         Ok(GuestIndices {
-                            float32_param,
-                            float64_param,
-                            float32_result,
-                            float64_result,
+                            f32_param,
+                            f64_param,
+                            f32_result,
+                            f64_result,
                         })
                     }
                     pub fn load(
@@ -440,40 +440,28 @@ pub mod exports {
                         let mut store = store.as_context_mut();
                         let _ = &mut store;
                         let _instance = instance;
-                        let float32_param = *_instance
-                            .get_typed_func::<
-                                (f32,),
-                                (),
-                            >(&mut store, &self.float32_param)?
+                        let f32_param = *_instance
+                            .get_typed_func::<(f32,), ()>(&mut store, &self.f32_param)?
                             .func();
-                        let float64_param = *_instance
-                            .get_typed_func::<
-                                (f64,),
-                                (),
-                            >(&mut store, &self.float64_param)?
+                        let f64_param = *_instance
+                            .get_typed_func::<(f64,), ()>(&mut store, &self.f64_param)?
                             .func();
-                        let float32_result = *_instance
-                            .get_typed_func::<
-                                (),
-                                (f32,),
-                            >(&mut store, &self.float32_result)?
+                        let f32_result = *_instance
+                            .get_typed_func::<(), (f32,)>(&mut store, &self.f32_result)?
                             .func();
-                        let float64_result = *_instance
-                            .get_typed_func::<
-                                (),
-                                (f64,),
-                            >(&mut store, &self.float64_result)?
+                        let f64_result = *_instance
+                            .get_typed_func::<(), (f64,)>(&mut store, &self.f64_result)?
                             .func();
                         Ok(Guest {
-                            float32_param,
-                            float64_param,
-                            float32_result,
-                            float64_result,
+                            f32_param,
+                            f64_param,
+                            f32_result,
+                            f64_result,
                         })
                     }
                 }
                 impl Guest {
-                    pub async fn call_float32_param<S: wasmtime::AsContextMut>(
+                    pub async fn call_f32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f32,
@@ -484,13 +472,13 @@ pub mod exports {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/floats", function = "float32-param",
+                            "foo:foo/floats", function = "f32-param",
                         );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (f32,),
                                 (),
-                            >::new_unchecked(self.float32_param)
+                            >::new_unchecked(self.f32_param)
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
@@ -502,7 +490,7 @@ pub mod exports {
                             .await?;
                         Ok(())
                     }
-                    pub async fn call_float64_param<S: wasmtime::AsContextMut>(
+                    pub async fn call_f64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f64,
@@ -513,13 +501,13 @@ pub mod exports {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/floats", function = "float64-param",
+                            "foo:foo/floats", function = "f64-param",
                         );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (f64,),
                                 (),
-                            >::new_unchecked(self.float64_param)
+                            >::new_unchecked(self.f64_param)
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
@@ -531,7 +519,7 @@ pub mod exports {
                             .await?;
                         Ok(())
                     }
-                    pub async fn call_float32_result<S: wasmtime::AsContextMut>(
+                    pub async fn call_f32_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f32>
@@ -541,13 +529,13 @@ pub mod exports {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/floats", function = "float32-result",
+                            "foo:foo/floats", function = "f32-result",
                         );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (f32,),
-                            >::new_unchecked(self.float32_result)
+                            >::new_unchecked(self.f32_result)
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
@@ -559,7 +547,7 @@ pub mod exports {
                             .await?;
                         Ok(ret0)
                     }
-                    pub async fn call_float64_result<S: wasmtime::AsContextMut>(
+                    pub async fn call_f64_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f64>
@@ -569,13 +557,13 @@ pub mod exports {
                         use tracing::Instrument;
                         let span = tracing::span!(
                             tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/floats", function = "float64-result",
+                            "foo:foo/floats", function = "f64-result",
                         );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (f64,),
-                            >::new_unchecked(self.float64_result)
+                            >::new_unchecked(self.f64_result)
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())

@@ -74,8 +74,8 @@ fn build_raw_intrinsics() -> Vec<u8> {
     let mut module = Module::new();
 
     let mut types = TypeSection::new();
-    types.function([], [ValType::I32]);
-    types.function([ValType::I32], []);
+    types.ty().function([], [ValType::I32]);
+    types.ty().function([ValType::I32], []);
     module.section(&types);
 
     // Declare the functions, using the type we just added.

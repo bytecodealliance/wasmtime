@@ -259,8 +259,12 @@ fn build_wasm(image: &HeapImage, offset: u32) -> Vec<u8> {
 
     {
         let mut types = wasm_encoder::TypeSection::new();
-        types.function([wasm_encoder::ValType::I64], [wasm_encoder::ValType::I32]);
-        types.function([wasm_encoder::ValType::I64], [wasm_encoder::ValType::I64]);
+        types
+            .ty()
+            .function([wasm_encoder::ValType::I64], [wasm_encoder::ValType::I32]);
+        types
+            .ty()
+            .function([wasm_encoder::ValType::I64], [wasm_encoder::ValType::I64]);
         module.section(&types);
     }
 

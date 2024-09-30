@@ -42,7 +42,7 @@ impl TableOps {
         let mut types = TypeSection::new();
 
         // 0: "gc"
-        types.function(
+        types.ty().function(
             vec![],
             // Return a bunch of stuff from `gc` so that we exercise GCing when
             // there is return pointer space allocated on the stack. This is
@@ -59,16 +59,16 @@ impl TableOps {
             params.push(ValType::EXTERNREF);
         }
         let results = vec![];
-        types.function(params, results);
+        types.ty().function(params, results);
 
         // 2: `take_refs`
-        types.function(
+        types.ty().function(
             vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
             vec![],
         );
 
         // 3: `make_refs`
-        types.function(
+        types.ty().function(
             vec![],
             vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
         );
@@ -322,6 +322,18 @@ mod tests {
   (import "" "gc" (func (;0;) (type 0)))
   (import "" "take_refs" (func (;1;) (type 2)))
   (import "" "make_refs" (func (;2;) (type 3)))
+  (table (;0;) 20 externref)
+  (global (;0;) (mut externref) ref.null extern)
+  (global (;1;) (mut externref) ref.null extern)
+  (global (;2;) (mut externref) ref.null extern)
+  (global (;3;) (mut externref) ref.null extern)
+  (global (;4;) (mut externref) ref.null extern)
+  (global (;5;) (mut externref) ref.null extern)
+  (global (;6;) (mut externref) ref.null extern)
+  (global (;7;) (mut externref) ref.null extern)
+  (global (;8;) (mut externref) ref.null extern)
+  (global (;9;) (mut externref) ref.null extern)
+  (export "run" (func 3))
   (func (;3;) (type 1) (param externref externref externref externref externref externref externref externref externref externref)
     (local externref)
     loop ;; label = @1
@@ -343,18 +355,6 @@ mod tests {
       br 0 (;@1;)
     end
   )
-  (table (;0;) 20 externref)
-  (global (;0;) (mut externref) ref.null extern)
-  (global (;1;) (mut externref) ref.null extern)
-  (global (;2;) (mut externref) ref.null extern)
-  (global (;3;) (mut externref) ref.null extern)
-  (global (;4;) (mut externref) ref.null extern)
-  (global (;5;) (mut externref) ref.null extern)
-  (global (;6;) (mut externref) ref.null extern)
-  (global (;7;) (mut externref) ref.null extern)
-  (global (;8;) (mut externref) ref.null extern)
-  (global (;9;) (mut externref) ref.null extern)
-  (export "run" (func 3))
 )
 "#;
         eprintln!("expected WAT = {expected}");

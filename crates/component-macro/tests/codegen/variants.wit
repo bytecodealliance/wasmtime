@@ -30,7 +30,7 @@ interface variants {
     b: option<tuple<>>,
     c: option<u32>,
     d: option<e1>,
-    e: option<float32>,
+    e: option<f32>,
     g: option<option<bool>>,
   );
   option-result: func() -> tuple<
@@ -38,22 +38,22 @@ interface variants {
     option<tuple<>>,
     option<u32>,
     option<e1>,
-    option<float32>,
+    option<f32>,
     option<option<bool>>,
   >;
 
   variant casts1 {
     a(s32),
-    b(float32),
+    b(f32),
   }
 
   variant casts2 {
-    a(float64),
-    b(float32),
+    a(f64),
+    b(f32),
   }
 
   variant casts3 {
-    a(float64),
+    a(f64),
     b(u64),
   }
 
@@ -63,12 +63,12 @@ interface variants {
   }
 
   variant casts5 {
-    a(float32),
+    a(f32),
     b(s64),
   }
 
   variant casts6 {
-    a(tuple<float32, u32>),
+    a(tuple<f32, u32>),
     b(tuple<u32, u32>),
   }
 

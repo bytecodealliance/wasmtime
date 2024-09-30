@@ -1809,6 +1809,9 @@ pub trait TypeConvert {
             wasmparser::CompositeInnerType::Struct(s) => {
                 WasmCompositeType::Struct(self.convert_struct_type(s))
             }
+            wasmparser::CompositeInnerType::Cont(_) => {
+                unimplemented!("continuation types")
+            }
         }
     }
 
@@ -1892,7 +1895,10 @@ pub trait TypeConvert {
                 wasmparser::AbstractHeapType::Struct => WasmHeapType::Struct,
                 wasmparser::AbstractHeapType::None => WasmHeapType::None,
 
-                wasmparser::AbstractHeapType::Exn | wasmparser::AbstractHeapType::NoExn => {
+                wasmparser::AbstractHeapType::Exn
+                | wasmparser::AbstractHeapType::NoExn
+                | wasmparser::AbstractHeapType::Cont
+                | wasmparser::AbstractHeapType::NoCont => {
                     unimplemented!("unsupported heap type {ty:?}");
                 }
             },

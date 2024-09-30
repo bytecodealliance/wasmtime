@@ -1,10 +1,10 @@
 package foo:foo;
 
 interface floats {
-  float32-param: func(x: float32);
-  float64-param: func(x: float64);
-  float32-result: func() -> float32;
-  float64-result: func() -> float64;
+  f32-param: func(x: f32);
+  f64-param: func(x: f64);
+  f32-result: func() -> f32;
+  f64-result: func() -> f64;
 }
 
 world the-world {

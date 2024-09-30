@@ -599,6 +599,10 @@ where
                     .join()
                     .unwrap()?;
             }
+
+            AssertSuspension { .. } => {
+                bail!("unimplemented wast directive");
+            }
         }
 
         Ok(())

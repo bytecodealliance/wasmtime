@@ -2777,6 +2777,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 "shared-everything-threads operators are not yet implemented"
             ));
         }
+
+        Operator::ContNew { .. }
+        | Operator::ContBind { .. }
+        | Operator::Suspend { .. }
+        | Operator::Resume { .. }
+        | Operator::ResumeThrow { .. }
+        | Operator::Switch { .. } => {
+            return Err(wasm_unsupported!(
+                "stack-switching operators are not yet implemented"
+            ));
+        }
     };
     Ok(())
 }

@@ -12,10 +12,10 @@ mod empty_error {
         package inline:inline;
         world result-playground {
             import imports: interface {
-                empty-error: func(a: float64) -> result<float64>;
+                empty-error: func(a: f64) -> result<f64>;
             }
 
-            export empty-error: func(a: float64) -> result<float64>;
+            export empty-error: func(a: f64) -> result<f64>;
         }",
         trappable_imports: true,
     });
@@ -28,7 +28,7 @@ mod empty_error {
             r#"
             (component
                 (import "imports" (instance $i
-                    (export "empty-error" (func (param "a" float64) (result (result float64))))
+                    (export "empty-error" (func (param "a" f64) (result (result f64))))
                 ))
                 (core module $libc
                     (memory (export "memory") 1)
@@ -51,8 +51,8 @@ mod empty_error {
                 ))
                 (func $f_empty_error
                     (export "empty-error")
-                    (param "a" float64)
-                    (result (result float64))
+                    (param "a" f64)
+                    (result (result f64))
                     (canon lift (core func $i "core_empty_error_export") (memory $libc "memory"))
                 )
             )
@@ -114,10 +114,10 @@ mod string_error {
         package inline:inline;
         world result-playground {
             import imports: interface {
-                string-error: func(a: float64) -> result<float64, string>;
+                string-error: func(a: f64) -> result<f64, string>;
             }
 
-            export string-error: func(a: float64) -> result<float64, string>;
+            export string-error: func(a: f64) -> result<f64, string>;
         }",
         trappable_imports: true,
     });
@@ -131,7 +131,7 @@ mod string_error {
                 r#"
             (component
                 (import "imports" (instance $i
-                    (export "string-error" (func (param "a" float64) (result (result float64 (error string)))))
+                    (export "string-error" (func (param "a" f64) (result (result f64 (error string)))))
                 ))
                 (core module $libc
                     (memory (export "memory") 1)
@@ -163,8 +163,8 @@ mod string_error {
                 ))
                 (func $f_string_error
                     (export "string-error")
-                    (param "a" float64)
-                    (result (result float64 (error string)))
+                    (param "a" f64)
+                    (result (result f64 (error string)))
                     (canon lift (core func $i "core_string_error_export") (memory $libc "memory"))
                 )
             )
@@ -231,13 +231,13 @@ mod enum_error {
         package inline:inline;
         interface imports {
             enum e1 { a, b, c }
-            enum-error: func(a: float64) -> result<float64, e1>;
+            enum-error: func(a: f64) -> result<f64, e1>;
         }
         world result-playground {
             import imports;
             export foo: interface {
                 enum e1 { a, b, c }
-                enum-error: func(a: float64) -> result<float64, e1>;
+                enum-error: func(a: f64) -> result<f64, e1>;
             }
         }",
         trappable_error_type: { "inline:inline/imports/e1" => TrappableE1 },
@@ -288,7 +288,7 @@ mod enum_error {
                 (type $err' (enum "a" "b" "c"))
                 (import (interface "inline:inline/imports") (instance $i
                     (export $err "err" (type (eq $err')))
-                    (export "enum-error" (func (param "a" float64) (result (result float64 (error $err)))))
+                    (export "enum-error" (func (param "a" f64) (result (result f64 (error $err)))))
                 ))
                 (core module $libc
                     (memory (export "memory") 1)
@@ -319,16 +319,16 @@ mod enum_error {
                     (with "libc" (instance $libc))
                 ))
                 (func $f_enum_error
-                    (param "a" float64)
-                    (result (result float64 (error $err')))
+                    (param "a" f64)
+                    (result (result f64 (error $err')))
                     (canon lift (core func $i "core_enum_error_export") (memory $libc "memory"))
                 )
 
                 (component $nested
                     (import "f-err" (type $err (eq $err')))
-                    (import "f" (func $f (param "a" float64) (result (result float64 (error $err)))))
+                    (import "f" (func $f (param "a" f64) (result (result f64 (error $err)))))
                     (export $err2 "err" (type $err'))
-                    (export "enum-error" (func $f) (func (param "a" float64) (result (result float64 (error $err2)))))
+                    (export "enum-error" (func $f) (func (param "a" f64) (result (result f64 (error $err2)))))
                 )
 
                 (instance $n (instantiate $nested
@@ -412,13 +412,13 @@ mod record_error {
         package inline:inline;
         interface imports {
             record e2 { line: u32, col: u32 }
-            record-error: func(a: float64) -> result<float64, e2>;
+            record-error: func(a: f64) -> result<f64, e2>;
         }
         world result-playground {
             import imports;
             export foo: interface {
                 record e2 { line: u32, col: u32 }
-                record-error: func(a: float64) -> result<float64, e2>;
+                record-error: func(a: f64) -> result<f64, e2>;
             }
         }",
         trappable_error_type: { "inline:inline/imports/e2" => TrappableE2 },
@@ -450,8 +450,8 @@ mod record_error {
                 ))
                 (import (interface "inline:inline/imports") (instance $i
                     (export $e2 "e2" (type (eq $e2')))
-                    (type $result (result float64 (error $e2)))
-                    (export "record-error" (func (param "a" float64) (result $result)))
+                    (type $result (result f64 (error $e2)))
+                    (export "record-error" (func (param "a" f64) (result $result)))
                 ))
                 (core module $libc
                     (memory (export "memory") 1)
@@ -482,16 +482,16 @@ mod record_error {
                     (with "libc" (instance $libc))
                 ))
                 (func $f_record_error
-                    (param "a" float64)
-                    (result (result float64 (error (record (field "line" u32) (field "col" u32)))))
+                    (param "a" f64)
+                    (result (result f64 (error (record (field "line" u32) (field "col" u32)))))
                     (canon lift (core func $i "core_record_error_export") (memory $libc "memory"))
                 )
 
                 (component $nested
                     (import "f-e2" (type $f-e2 (eq $e2')))
-                    (import "f" (func $f (param "a" float64) (result (result float64 (error $f-e2)))))
+                    (import "f" (func $f (param "a" f64) (result (result f64 (error $f-e2)))))
                     (export $e2 "e2" (type $e2'))
-                    (export "record-error" (func $f) (func (param "a" float64) (result (result float64 (error $e2)))))
+                    (export "record-error" (func $f) (func (param "a" f64) (result (result f64 (error $e2)))))
                 )
 
                 (instance (export "foo") (instantiate $nested
@@ -582,7 +582,7 @@ mod variant_error {
             enum e1 { a, b, c }
             record e2 { line: u32, col: u32 }
             variant e3 { E1(e1), E2(e2) }
-            variant-error: func(a: float64) -> result<float64, e3>;
+            variant-error: func(a: f64) -> result<f64, e3>;
         }
         world result-playground {
             import imports;
@@ -590,7 +590,7 @@ mod variant_error {
                 enum e1 { a, b, c }
                 record e2 { line: u32, col: u32 }
                 variant e3 { E1(e1), E2(e2) }
-                variant-error: func(a: float64) -> result<float64, e3>;
+                variant-error: func(a: f64) -> result<f64, e3>;
             }
         }",
         trappable_error_type: { "inline:inline/imports/e3" => TrappableE3 },
@@ -630,8 +630,8 @@ mod variant_error {
                         (case "E2" $e2)
                     ))
                     (export $e3 "e3" (type (eq $e3')))
-                    (type $result (result float64 (error $e3)))
-                    (export "variant-error" (func (param "a" float64) (result $result)))
+                    (type $result (result f64 (error $e3)))
+                    (export "variant-error" (func (param "a" f64) (result $result)))
                 ))
                 (core module $libc
                     (memory (export "memory") 1)
@@ -662,8 +662,8 @@ mod variant_error {
                     (with "libc" (instance $libc))
                 ))
                 (func $f_variant_error
-                    (param "a" float64)
-                    (result (result float64 (error $e3')))
+                    (param "a" f64)
+                    (result (result f64 (error $e3')))
                     (canon lift (core func $i "core_variant_error_export") (memory $libc "memory"))
                 )
 
@@ -675,7 +675,7 @@ mod variant_error {
                         (case "E2" $e2i)
                     ))
                     (import "f-e3" (type $e3i (eq $e3i')))
-                    (import "f" (func $f (param "a" float64) (result (result float64 (error $e3i)))))
+                    (import "f" (func $f (param "a" f64) (result (result f64 (error $e3i)))))
                     (export $e1 "e1" (type $e1'))
                     (export $e2 "e2" (type $e2'))
                     (type $e3' (variant
@@ -684,7 +684,7 @@ mod variant_error {
                     ))
                     (export $e3 "e3" (type $e3'))
                     (export "variant-error" (func $f)
-                        (func (param "a" float64) (result (result float64 (error $e3)))))
+                        (func (param "a" f64) (result (result f64 (error $e3)))))
                 )
 
                 (instance (export "foo") (instantiate $nested
@@ -776,17 +776,17 @@ mod multiple_interfaces_error {
         package inline:inline;
         interface types {
             enum e1 { a, b, c }
-            enum-error: func(a: float64) -> result<float64, e1>;
+            enum-error: func(a: f64) -> result<f64, e1>;
         }
         interface imports {
             use types.{e1};
-            enum-error: func(a: float64) -> result<float64, e1>;
+            enum-error: func(a: f64) -> result<f64, e1>;
         }
         world result-playground {
             import imports;
             export foo: interface {
                 enum e1 { a, b, c }
-                enum-error: func(a: float64) -> result<float64, e1>;
+                enum-error: func(a: f64) -> result<f64, e1>;
             }
         }",
         trappable_error_type: { "inline:inline/types/e1" => TrappableE1 },
@@ -817,7 +817,7 @@ mod multiple_interfaces_error {
                 (type $err' (enum "a" "b" "c"))
                 (import (interface "inline:inline/imports") (instance $i
                     (export $e1 "e1" (type (eq $err')))
-                    (export "enum-error" (func (param "a" float64) (result (result float64 (error $e1)))))
+                    (export "enum-error" (func (param "a" f64) (result (result f64 (error $e1)))))
                 ))
                 (core module $libc
                     (memory (export "memory") 1)
@@ -848,16 +848,16 @@ mod multiple_interfaces_error {
                     (with "libc" (instance $libc))
                 ))
                 (func $f_enum_error
-                    (param "a" float64)
-                    (result (result float64 (error $err')))
+                    (param "a" f64)
+                    (result (result f64 (error $err')))
                     (canon lift (core func $i "core_enum_error_export") (memory $libc "memory"))
                 )
 
                 (component $nested
                     (import "f-err" (type $err (eq $err')))
-                    (import "f" (func $f (param "a" float64) (result (result float64 (error $err)))))
+                    (import "f" (func $f (param "a" f64) (result (result f64 (error $err)))))
                     (export $err2 "err" (type $err'))
-                    (export "enum-error" (func $f) (func (param "a" float64) (result (result float64 (error $err2)))))
+                    (export "enum-error" (func $f) (func (param "a" f64) (result (result f64 (error $err2)))))
                 )
 
                 (instance $n (instantiate $nested
@@ -971,7 +971,7 @@ mod with_remapping {
         wasmtime::component::bindgen!({
             interfaces: "
             import imports: interface {
-                empty-error: func(a: float64) -> result<float64>;
+                empty-error: func(a: f64) -> result<f64>;
             }",
             trappable_imports: true,
         });
@@ -982,10 +982,10 @@ mod with_remapping {
         package inline:inline;
         world result-playground {
             import imports: interface {
-                empty-error: func(a: float64) -> result<float64>;
+                empty-error: func(a: f64) -> result<f64>;
             }
 
-            export empty-error: func(a: float64) -> result<float64>;
+            export empty-error: func(a: f64) -> result<f64>;
         }",
         with: {
             "imports": interfaces::imports,
@@ -1001,7 +1001,7 @@ mod with_remapping {
             r#"
             (component
                 (import "imports" (instance $i
-                    (export "empty-error" (func (param "a" float64) (result (result float64))))
+                    (export "empty-error" (func (param "a" f64) (result (result f64))))
                 ))
                 (core module $libc
                     (memory (export "memory") 1)
@@ -1024,8 +1024,8 @@ mod with_remapping {
                 ))
                 (func $f_empty_error
                     (export "empty-error")
-                    (param "a" float64)
-                    (result (result float64))
+                    (param "a" f64)
+                    (result (result f64))
                     (canon lift (core func $i "core_empty_error_export") (memory $libc "memory"))
                 )
             )

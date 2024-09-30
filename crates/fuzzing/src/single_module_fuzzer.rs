@@ -300,7 +300,7 @@ mod tests {
         // should have been the same.
 
         let mut rng = SmallRng::seed_from_u64(0);
-        let max_size = 2048;
+        let max_size = 4096;
         let seed_size = 128;
         let mut buf = vec![0; max_size];
         let mut compares = 0;

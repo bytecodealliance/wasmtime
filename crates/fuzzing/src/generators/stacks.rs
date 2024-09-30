@@ -110,19 +110,23 @@ impl Stacks {
         let mut types = wasm_encoder::TypeSection::new();
 
         let run_type = types.len();
-        types.function(vec![wasm_encoder::ValType::I32], vec![]);
+        types
+            .ty()
+            .function(vec![wasm_encoder::ValType::I32], vec![]);
 
         let get_stack_type = types.len();
-        types.function(
+        types.ty().function(
             vec![],
             vec![wasm_encoder::ValType::I32, wasm_encoder::ValType::I32],
         );
 
         let null_type = types.len();
-        types.function(vec![], vec![]);
+        types.ty().function(vec![], vec![]);
 
         let call_func_type = types.len();
-        types.function(vec![wasm_encoder::ValType::FUNCREF], vec![]);
+        types
+            .ty()
+            .function(vec![wasm_encoder::ValType::FUNCREF], vec![]);
 
         section(&mut module, types);
 
@@ -193,7 +197,9 @@ impl Stacks {
 
         let mut elems = wasm_encoder::ElementSection::new();
         elems.declared(wasm_encoder::Elements::Functions(
-            &(0..num_imported_funcs + u32::try_from(self.funcs.len()).unwrap()).collect::<Vec<_>>(),
+            (0..num_imported_funcs + u32::try_from(self.funcs.len()).unwrap())
+                .collect::<Vec<_>>()
+                .into(),
         ));
         section(&mut module, elems);
 
