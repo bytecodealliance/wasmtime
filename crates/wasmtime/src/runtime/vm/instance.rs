@@ -474,12 +474,22 @@ impl Instance {
     /// borrowing the instance's underlying store) but also access to `Instance`
     /// methods that will internally mutably borrow that store as well.
     pub(crate) fn with_gc_lifo_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let scope = unsafe { (*self.store()).gc_roots().enter_lifo_scope() };
-        let result = f(self);
-        unsafe {
-            (*self.store()).exit_gc_lifo_scope(scope);
+        let store_ptr = self.store();
+        let scope = unsafe { (*store_ptr).gc_roots().enter_lifo_scope() };
+        let _exit_scope = ExitScopeOnDrop(store_ptr, scope);
+        return f(self);
+
+        // Use an RAII type to exit the scope when it's dropped, so that we exit
+        // the scope even if `f` panics.
+        struct ExitScopeOnDrop(*mut dyn VMStore, usize);
+
+        impl Drop for ExitScopeOnDrop {
+            fn drop(&mut self) {
+                unsafe {
+                    (*self.0).exit_gc_lifo_scope(self.1);
+                }
+            }
         }
-        result
     }
 
     pub(crate) unsafe fn set_store(&mut self, store: Option<*mut dyn VMStore>) {
