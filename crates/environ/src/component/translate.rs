@@ -523,6 +523,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ResourceRep(resource, ty)
                         }
+
+                        wasmparser::CanonicalFunction::ThreadSpawn { .. }
+                        | wasmparser::CanonicalFunction::ThreadHwConcurrency => {
+                            bail!("unsupported intrinsic")
+                        }
                     };
                     self.result.initializers.push(init);
                 }

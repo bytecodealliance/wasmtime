@@ -5,7 +5,7 @@ interface multi-return {
   mrb: func() -> ();
   mrc: func() -> u32;
   mrd: func() -> (a: u32);
-  mre: func() -> (a: u32, b: float32);
+  mre: func() -> (a: u32, b: f32);
 }
 
 world the-world {

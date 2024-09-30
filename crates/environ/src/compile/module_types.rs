@@ -404,6 +404,9 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
                         wasmparser::CompositeInnerType::Struct(_) => {
                             WasmHeapType::ConcreteStruct(index)
                         }
+                        wasmparser::CompositeInnerType::Cont(_) => {
+                            panic!("unimplemented continuation types")
+                        }
                     }
                 } else {
                     panic!("forward reference to type outside of rec group?")
@@ -443,6 +446,9 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
                         }
                         wasmparser::CompositeInnerType::Struct(_) => {
                             WasmHeapType::ConcreteStruct(index)
+                        }
+                        wasmparser::CompositeInnerType::Cont(_) => {
+                            panic!("unimplemented continuation types")
                         }
                     }
                 } else {

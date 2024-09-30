@@ -28,7 +28,7 @@ use wasmtime_environ::{
 /// 2. Defines the visitor function and panics when
 ///    matching an unsupported operator.
 macro_rules! def_unsupported {
-    ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
+    ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident $ann:tt)*) => {
         $(
             def_unsupported!(
                 emit

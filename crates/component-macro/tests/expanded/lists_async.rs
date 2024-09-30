@@ -407,11 +407,11 @@ pub mod foo {
                     &mut self,
                     x: wasmtime::component::__internal::Vec<i64>,
                 ) -> ();
-                async fn list_float32_param(
+                async fn list_f32_param(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<f32>,
                 ) -> ();
-                async fn list_float64_param(
+                async fn list_f64_param(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<f64>,
                 ) -> ();
@@ -439,10 +439,10 @@ pub mod foo {
                 async fn list_s64_ret(
                     &mut self,
                 ) -> wasmtime::component::__internal::Vec<i64>;
-                async fn list_float32_ret(
+                async fn list_f32_ret(
                     &mut self,
                 ) -> wasmtime::component::__internal::Vec<f32>;
-                async fn list_float64_ret(
+                async fn list_f64_ret(
                     &mut self,
                 ) -> wasmtime::component::__internal::Vec<f64>;
                 async fn tuple_list(
@@ -618,27 +618,27 @@ pub mod foo {
                     },
                 )?;
                 inst.func_wrap_async(
-                    "list-float32-param",
+                    "list-f32-param",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::__internal::Vec<f32>,)|
                     {
                         wasmtime::component::__internal::Box::new(async move {
                             let host = &mut host_getter(caller.data_mut());
-                            let r = Host::list_float32_param(host, arg0).await;
+                            let r = Host::list_f32_param(host, arg0).await;
                             Ok(r)
                         })
                     },
                 )?;
                 inst.func_wrap_async(
-                    "list-float64-param",
+                    "list-f64-param",
                     move |
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::__internal::Vec<f64>,)|
                     {
                         wasmtime::component::__internal::Box::new(async move {
                             let host = &mut host_getter(caller.data_mut());
-                            let r = Host::list_float64_param(host, arg0).await;
+                            let r = Host::list_f64_param(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -724,21 +724,21 @@ pub mod foo {
                     },
                 )?;
                 inst.func_wrap_async(
-                    "list-float32-ret",
+                    "list-f32-ret",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
                         wasmtime::component::__internal::Box::new(async move {
                             let host = &mut host_getter(caller.data_mut());
-                            let r = Host::list_float32_ret(host).await;
+                            let r = Host::list_f32_ret(host).await;
                             Ok((r,))
                         })
                     },
                 )?;
                 inst.func_wrap_async(
-                    "list-float64-ret",
+                    "list-f64-ret",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
                         wasmtime::component::__internal::Box::new(async move {
                             let host = &mut host_getter(caller.data_mut());
-                            let r = Host::list_float64_ret(host).await;
+                            let r = Host::list_f64_ret(host).await;
                             Ok((r,))
                         })
                     },
@@ -937,17 +937,17 @@ pub mod foo {
                 ) -> () {
                     Host::list_s64_param(*self, x).await
                 }
-                async fn list_float32_param(
+                async fn list_f32_param(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<f32>,
                 ) -> () {
-                    Host::list_float32_param(*self, x).await
+                    Host::list_f32_param(*self, x).await
                 }
-                async fn list_float64_param(
+                async fn list_f64_param(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<f64>,
                 ) -> () {
-                    Host::list_float64_param(*self, x).await
+                    Host::list_f64_param(*self, x).await
                 }
                 async fn list_u8_ret(
                     &mut self,
@@ -989,15 +989,15 @@ pub mod foo {
                 ) -> wasmtime::component::__internal::Vec<i64> {
                     Host::list_s64_ret(*self).await
                 }
-                async fn list_float32_ret(
+                async fn list_f32_ret(
                     &mut self,
                 ) -> wasmtime::component::__internal::Vec<f32> {
-                    Host::list_float32_ret(*self).await
+                    Host::list_f32_ret(*self).await
                 }
-                async fn list_float64_ret(
+                async fn list_f64_ret(
                     &mut self,
                 ) -> wasmtime::component::__internal::Vec<f64> {
-                    Host::list_float64_ret(*self).await
+                    Host::list_f64_ret(*self).await
                 }
                 async fn tuple_list(
                     &mut self,
@@ -1284,8 +1284,8 @@ pub mod exports {
                     list_s16_param: wasmtime::component::Func,
                     list_s32_param: wasmtime::component::Func,
                     list_s64_param: wasmtime::component::Func,
-                    list_float32_param: wasmtime::component::Func,
-                    list_float64_param: wasmtime::component::Func,
+                    list_f32_param: wasmtime::component::Func,
+                    list_f64_param: wasmtime::component::Func,
                     list_u8_ret: wasmtime::component::Func,
                     list_u16_ret: wasmtime::component::Func,
                     list_u32_ret: wasmtime::component::Func,
@@ -1294,8 +1294,8 @@ pub mod exports {
                     list_s16_ret: wasmtime::component::Func,
                     list_s32_ret: wasmtime::component::Func,
                     list_s64_ret: wasmtime::component::Func,
-                    list_float32_ret: wasmtime::component::Func,
-                    list_float64_ret: wasmtime::component::Func,
+                    list_f32_ret: wasmtime::component::Func,
+                    list_f64_ret: wasmtime::component::Func,
                     tuple_list: wasmtime::component::Func,
                     string_list_arg: wasmtime::component::Func,
                     string_list_ret: wasmtime::component::Func,
@@ -1316,8 +1316,8 @@ pub mod exports {
                     list_s16_param: wasmtime::component::ComponentExportIndex,
                     list_s32_param: wasmtime::component::ComponentExportIndex,
                     list_s64_param: wasmtime::component::ComponentExportIndex,
-                    list_float32_param: wasmtime::component::ComponentExportIndex,
-                    list_float64_param: wasmtime::component::ComponentExportIndex,
+                    list_f32_param: wasmtime::component::ComponentExportIndex,
+                    list_f64_param: wasmtime::component::ComponentExportIndex,
                     list_u8_ret: wasmtime::component::ComponentExportIndex,
                     list_u16_ret: wasmtime::component::ComponentExportIndex,
                     list_u32_ret: wasmtime::component::ComponentExportIndex,
@@ -1326,8 +1326,8 @@ pub mod exports {
                     list_s16_ret: wasmtime::component::ComponentExportIndex,
                     list_s32_ret: wasmtime::component::ComponentExportIndex,
                     list_s64_ret: wasmtime::component::ComponentExportIndex,
-                    list_float32_ret: wasmtime::component::ComponentExportIndex,
-                    list_float64_ret: wasmtime::component::ComponentExportIndex,
+                    list_f32_ret: wasmtime::component::ComponentExportIndex,
+                    list_f64_ret: wasmtime::component::ComponentExportIndex,
                     tuple_list: wasmtime::component::ComponentExportIndex,
                     string_list_arg: wasmtime::component::ComponentExportIndex,
                     string_list_ret: wasmtime::component::ComponentExportIndex,
@@ -1399,8 +1399,8 @@ pub mod exports {
                         let list_s16_param = lookup("list-s16-param")?;
                         let list_s32_param = lookup("list-s32-param")?;
                         let list_s64_param = lookup("list-s64-param")?;
-                        let list_float32_param = lookup("list-float32-param")?;
-                        let list_float64_param = lookup("list-float64-param")?;
+                        let list_f32_param = lookup("list-f32-param")?;
+                        let list_f64_param = lookup("list-f64-param")?;
                         let list_u8_ret = lookup("list-u8-ret")?;
                         let list_u16_ret = lookup("list-u16-ret")?;
                         let list_u32_ret = lookup("list-u32-ret")?;
@@ -1409,8 +1409,8 @@ pub mod exports {
                         let list_s16_ret = lookup("list-s16-ret")?;
                         let list_s32_ret = lookup("list-s32-ret")?;
                         let list_s64_ret = lookup("list-s64-ret")?;
-                        let list_float32_ret = lookup("list-float32-ret")?;
-                        let list_float64_ret = lookup("list-float64-ret")?;
+                        let list_f32_ret = lookup("list-f32-ret")?;
+                        let list_f64_ret = lookup("list-f64-ret")?;
                         let tuple_list = lookup("tuple-list")?;
                         let string_list_arg = lookup("string-list-arg")?;
                         let string_list_ret = lookup("string-list-ret")?;
@@ -1429,8 +1429,8 @@ pub mod exports {
                             list_s16_param,
                             list_s32_param,
                             list_s64_param,
-                            list_float32_param,
-                            list_float64_param,
+                            list_f32_param,
+                            list_f64_param,
                             list_u8_ret,
                             list_u16_ret,
                             list_u32_ret,
@@ -1439,8 +1439,8 @@ pub mod exports {
                             list_s16_ret,
                             list_s32_ret,
                             list_s64_ret,
-                            list_float32_ret,
-                            list_float64_ret,
+                            list_f32_ret,
+                            list_f64_ret,
                             tuple_list,
                             string_list_arg,
                             string_list_ret,
@@ -1508,17 +1508,17 @@ pub mod exports {
                                 (),
                             >(&mut store, &self.list_s64_param)?
                             .func();
-                        let list_float32_param = *_instance
+                        let list_f32_param = *_instance
                             .get_typed_func::<
                                 (&[f32],),
                                 (),
-                            >(&mut store, &self.list_float32_param)?
+                            >(&mut store, &self.list_f32_param)?
                             .func();
-                        let list_float64_param = *_instance
+                        let list_f64_param = *_instance
                             .get_typed_func::<
                                 (&[f64],),
                                 (),
-                            >(&mut store, &self.list_float64_param)?
+                            >(&mut store, &self.list_f64_param)?
                             .func();
                         let list_u8_ret = *_instance
                             .get_typed_func::<
@@ -1568,17 +1568,17 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<i64>,),
                             >(&mut store, &self.list_s64_ret)?
                             .func();
-                        let list_float32_ret = *_instance
+                        let list_f32_ret = *_instance
                             .get_typed_func::<
                                 (),
                                 (wasmtime::component::__internal::Vec<f32>,),
-                            >(&mut store, &self.list_float32_ret)?
+                            >(&mut store, &self.list_f32_ret)?
                             .func();
-                        let list_float64_ret = *_instance
+                        let list_f64_ret = *_instance
                             .get_typed_func::<
                                 (),
                                 (wasmtime::component::__internal::Vec<f64>,),
-                            >(&mut store, &self.list_float64_ret)?
+                            >(&mut store, &self.list_f64_ret)?
                             .func();
                         let tuple_list = *_instance
                             .get_typed_func::<
@@ -1655,8 +1655,8 @@ pub mod exports {
                             list_s16_param,
                             list_s32_param,
                             list_s64_param,
-                            list_float32_param,
-                            list_float64_param,
+                            list_f32_param,
+                            list_f64_param,
                             list_u8_ret,
                             list_u16_ret,
                             list_u32_ret,
@@ -1665,8 +1665,8 @@ pub mod exports {
                             list_s16_ret,
                             list_s32_ret,
                             list_s64_ret,
-                            list_float32_ret,
-                            list_float64_ret,
+                            list_f32_ret,
+                            list_f64_ret,
                             tuple_list,
                             string_list_arg,
                             string_list_ret,
@@ -1840,7 +1840,7 @@ pub mod exports {
                         callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
-                    pub async fn call_list_float32_param<S: wasmtime::AsContextMut>(
+                    pub async fn call_list_f32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[f32],
@@ -1852,7 +1852,7 @@ pub mod exports {
                             wasmtime::component::TypedFunc::<
                                 (&[f32],),
                                 (),
-                            >::new_unchecked(self.list_float32_param)
+                            >::new_unchecked(self.list_f32_param)
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
@@ -1860,7 +1860,7 @@ pub mod exports {
                         callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
-                    pub async fn call_list_float64_param<S: wasmtime::AsContextMut>(
+                    pub async fn call_list_f64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[f64],
@@ -1872,7 +1872,7 @@ pub mod exports {
                             wasmtime::component::TypedFunc::<
                                 (&[f64],),
                                 (),
-                            >::new_unchecked(self.list_float64_param)
+                            >::new_unchecked(self.list_f64_param)
                         };
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
@@ -2032,7 +2032,7 @@ pub mod exports {
                         callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
-                    pub async fn call_list_float32_ret<S: wasmtime::AsContextMut>(
+                    pub async fn call_list_f32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f32>>
@@ -2043,7 +2043,7 @@ pub mod exports {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (wasmtime::component::__internal::Vec<f32>,),
-                            >::new_unchecked(self.list_float32_ret)
+                            >::new_unchecked(self.list_f32_ret)
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
@@ -2051,7 +2051,7 @@ pub mod exports {
                         callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
-                    pub async fn call_list_float64_ret<S: wasmtime::AsContextMut>(
+                    pub async fn call_list_f64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f64>>
@@ -2062,7 +2062,7 @@ pub mod exports {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (wasmtime::component::__internal::Vec<f64>,),
-                            >::new_unchecked(self.list_float64_ret)
+                            >::new_unchecked(self.list_f64_ret)
                         };
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())

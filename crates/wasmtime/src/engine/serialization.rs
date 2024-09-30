@@ -234,6 +234,7 @@ impl Metadata<'_> {
             component_model_multiple_returns,
             legacy_exceptions,
             gc_types,
+            stack_switching,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -250,6 +251,7 @@ impl Metadata<'_> {
         assert!(!component_model_nested_names);
         assert!(!shared_everything_threads);
         assert!(!legacy_exceptions);
+        assert!(!stack_switching);
 
         Metadata {
             target: engine.compiler().triple().to_string(),

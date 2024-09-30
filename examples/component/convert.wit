@@ -4,8 +4,8 @@ world convert {
     /// This interface needs to be provided by the host
     import host: interface {
       /// Example function that does a simple a × b operation
-      multiply: func(a: float32, b: float32) -> float32;
+      multiply: func(a: f32, b: f32) -> f32;
     }
     /// Exported function for computing: (°C × 9/5) + 32 = °F
-    export convert-celsius-to-fahrenheit: func(x: float32) -> float32;
+    export convert-celsius-to-fahrenheit: func(x: f32) -> f32;
 }
