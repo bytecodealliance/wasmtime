@@ -2475,6 +2475,18 @@ criteria = "safe-to-deploy"
 delta = "0.6.1 -> 0.7.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.region]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.2.0 -> 3.0.2"
+notes = """
+This release brings a number of refactorings and new platforms to be supported
+in the crate. Lots of `unsafe` code because that's what the crate is
+fundamentally doing, managing virtual memory. That being said it's all largely
+the same as before where it's all as expected and the `unsafe` has to do with
+managing OS APIs.
+"""
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
