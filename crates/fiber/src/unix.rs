@@ -458,6 +458,10 @@ mod asan {
             let end = base + self.0.mapping_len;
             base + page_size()..end
         }
+
+        fn guard_range(&self) -> Range<*mut u8> {
+            self.0.mapping_base..self.0.mapping_base.wrapping_add(page_size())
+        }
     }
 
     impl Drop for AsanFiberStack {
