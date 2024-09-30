@@ -101,13 +101,6 @@ fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
     count
 }
 
-#[test]
-fn inst_size_test() {
-    // This test will help with unintentionally growing the size
-    // of the Inst enum.
-    assert_eq!(32, std::mem::size_of::<Inst>());
-}
-
 impl Inst {
     /// Create an instruction that loads a constant, using one of several options (MOVZ, MOVN,
     /// logical immediate, or constant pool).
@@ -3047,5 +3040,17 @@ impl MachInstLabelUse for LabelUse {
             (Reloc::Arm64Call, 0) => Some(LabelUse::Branch26),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inst_size_test() {
+        // This test will help with unintentionally growing the size
+        // of the Inst enum.
+        assert_eq!(32, std::mem::size_of::<Inst>());
     }
 }

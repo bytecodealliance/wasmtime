@@ -99,18 +99,6 @@ fn midpoint(a: SequenceNumber, b: SequenceNumber) -> Option<SequenceNumber> {
     }
 }
 
-#[test]
-fn test_midpoint() {
-    assert_eq!(midpoint(0, 1), None);
-    assert_eq!(midpoint(0, 2), Some(1));
-    assert_eq!(midpoint(0, 3), Some(1));
-    assert_eq!(midpoint(0, 4), Some(2));
-    assert_eq!(midpoint(1, 4), Some(2));
-    assert_eq!(midpoint(2, 4), Some(3));
-    assert_eq!(midpoint(3, 4), None);
-    assert_eq!(midpoint(3, 4), None);
-}
-
 impl Layout {
     /// Compare the program points `a` and `b` in the same block relative to this program order.
     ///
@@ -763,12 +751,24 @@ mod serde {
 
 #[cfg(test)]
 mod tests {
-    use super::Layout;
+    use super::*;
     use crate::cursor::{Cursor, CursorPosition};
     use crate::entity::EntityRef;
     use crate::ir::{Block, Inst, SourceLoc};
     use alloc::vec::Vec;
     use core::cmp::Ordering;
+
+    #[test]
+    fn test_midpoint() {
+        assert_eq!(midpoint(0, 1), None);
+        assert_eq!(midpoint(0, 2), Some(1));
+        assert_eq!(midpoint(0, 3), Some(1));
+        assert_eq!(midpoint(0, 4), Some(2));
+        assert_eq!(midpoint(1, 4), Some(2));
+        assert_eq!(midpoint(2, 4), Some(3));
+        assert_eq!(midpoint(3, 4), None);
+        assert_eq!(midpoint(3, 4), None);
+    }
 
     struct LayoutCursor<'f> {
         /// Borrowed function layout. Public so it can be re-borrowed from this cursor.

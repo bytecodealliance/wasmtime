@@ -239,19 +239,24 @@ impl Into<DiffValue> for Val {
     }
 }
 
-#[test]
-fn smoke_cranelift() {
-    crate::oracles::engine::smoke_test_engine(|u, config| {
-        WasmtimeEngine::new(u, config, CompilerStrategy::Cranelift)
-    })
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn smoke_winch() {
-    if !cfg!(target_arch = "x86_64") {
-        return;
+    #[test]
+    fn smoke_cranelift() {
+        crate::oracles::engine::smoke_test_engine(|u, config| {
+            WasmtimeEngine::new(u, config, CompilerStrategy::Cranelift)
+        })
     }
-    crate::oracles::engine::smoke_test_engine(|u, config| {
-        WasmtimeEngine::new(u, config, CompilerStrategy::Winch)
-    })
+
+    #[test]
+    fn smoke_winch() {
+        if !cfg!(target_arch = "x86_64") {
+            return;
+        }
+        crate::oracles::engine::smoke_test_engine(|u, config| {
+            WasmtimeEngine::new(u, config, CompilerStrategy::Winch)
+        })
+    }
 }

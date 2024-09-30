@@ -806,38 +806,6 @@ pub fn table_ops(
     }
 }
 
-// Test that the `table_ops` fuzzer eventually runs the gc function in the host.
-// We've historically had issues where this fuzzer accidentally wasn't fuzzing
-// anything for a long time so this is an attempt to prevent that from happening
-// again.
-#[test]
-fn table_ops_eventually_gcs() {
-    use arbitrary::Unstructured;
-    use rand::prelude::*;
-
-    // Skip if we're under emulation because some fuzz configurations will do
-    // large address space reservations that QEMU doesn't handle well.
-    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
-        return;
-    }
-
-    let mut rng = SmallRng::seed_from_u64(0);
-    let mut buf = vec![0; 2048];
-    let n = 100;
-    for _ in 0..n {
-        rng.fill_bytes(&mut buf);
-        let u = Unstructured::new(&buf);
-
-        if let Ok((config, test)) = Arbitrary::arbitrary_take_rest(u) {
-            if table_ops(config, test).unwrap() > 0 {
-                return;
-            }
-        }
-    }
-
-    panic!("after {n} runs nothing ever gc'd, something is probably wrong");
-}
-
 #[derive(Default)]
 struct HelperThread {
     state: Arc<HelperThreadState>,
@@ -1180,5 +1148,42 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
                 Poll::Pending => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test that the `table_ops` fuzzer eventually runs the gc function in the host.
+    // We've historically had issues where this fuzzer accidentally wasn't fuzzing
+    // anything for a long time so this is an attempt to prevent that from happening
+    // again.
+    #[test]
+    fn table_ops_eventually_gcs() {
+        use arbitrary::Unstructured;
+        use rand::prelude::*;
+
+        // Skip if we're under emulation because some fuzz configurations will do
+        // large address space reservations that QEMU doesn't handle well.
+        if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+            return;
+        }
+
+        let mut rng = SmallRng::seed_from_u64(0);
+        let mut buf = vec![0; 2048];
+        let n = 100;
+        for _ in 0..n {
+            rng.fill_bytes(&mut buf);
+            let u = Unstructured::new(&buf);
+
+            if let Ok((config, test)) = Arbitrary::arbitrary_take_rest(u) {
+                if table_ops(config, test).unwrap() > 0 {
+                    return;
+                }
+            }
+        }
+
+        panic!("after {n} runs nothing ever gc'd, something is probably wrong");
     }
 }

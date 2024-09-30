@@ -289,7 +289,9 @@ impl ConstExprEvaluator {
                         .expect("should have an engine type for module type");
                     let ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
 
+                    #[allow(clippy::cast_sign_loss)]
                     let len = self.pop()?.get_i32() as u32;
+
                     let elem = Val::_from_raw(&mut store, self.pop()?, ty.element_type().unpack());
 
                     let pre = ArrayRefPre::_new(&mut store, ty);
@@ -312,7 +314,9 @@ impl ConstExprEvaluator {
                         .expect("should have an engine type for module type");
                     let ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
 
+                    #[allow(clippy::cast_sign_loss)]
                     let len = self.pop()?.get_i32() as u32;
+
                     let elem = Val::default_for_ty(ty.element_type().unpack())
                         .expect("type should have a default value");
 
