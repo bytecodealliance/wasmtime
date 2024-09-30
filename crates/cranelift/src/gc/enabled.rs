@@ -397,6 +397,82 @@ pub fn translate_array_new_fixed(
     gc_compiler(func_env)?.alloc_array(func_env, builder, array_type_index, ArrayInit::Elems(elems))
 }
 
+fn emit_array_fill_impl(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    elem_addr: ir::Value,
+    elem_size: ir::Value,
+    fill_end: ir::Value,
+    mut emit_elem_write: impl FnMut(
+        &mut FuncEnvironment<'_>,
+        &mut FunctionBuilder<'_>,
+        ir::Value,
+    ) -> WasmResult<()>,
+) -> WasmResult<()> {
+    let pointer_ty = func_env.pointer_type();
+
+    assert_eq!(builder.func.dfg.value_type(elem_addr), pointer_ty);
+    assert_eq!(builder.func.dfg.value_type(elem_size), pointer_ty);
+    assert_eq!(builder.func.dfg.value_type(fill_end), pointer_ty);
+
+    // Loop to fill the elements, emitting the equivalent of the following
+    // pseudo-CLIF:
+    //
+    // current_block:
+    //     ...
+    //     jump loop_header_block(elem_addr)
+    //
+    // loop_header_block(elem_addr: i32):
+    //     done = icmp eq elem_addr, fill_end
+    //     brif done, continue_block, loop_body_block
+    //
+    // loop_body_block:
+    //     emit_elem_write()
+    //     next_elem_addr = iadd elem_addr, elem_size
+    //     jump loop_header_block(next_elem_addr)
+    //
+    // continue_block:
+    //     ...
+
+    let current_block = builder.current_block().unwrap();
+    let loop_header_block = builder.create_block();
+    let loop_body_block = builder.create_block();
+    let continue_block = builder.create_block();
+
+    builder.ensure_inserted_block();
+    builder.insert_block_after(loop_header_block, current_block);
+    builder.insert_block_after(loop_body_block, loop_header_block);
+    builder.insert_block_after(continue_block, loop_body_block);
+
+    // Current block: jump to the loop header block with the first element's
+    // address.
+    builder.ins().jump(loop_header_block, &[elem_addr]);
+
+    // Loop header block: check if we're done, then jump to either the continue
+    // block or the loop body block.
+    builder.switch_to_block(loop_header_block);
+    builder.append_block_param(loop_header_block, pointer_ty);
+    let elem_addr = builder.block_params(loop_header_block)[0];
+    let done = builder.ins().icmp(IntCC::Equal, elem_addr, fill_end);
+    builder
+        .ins()
+        .brif(done, continue_block, &[], loop_body_block, &[]);
+
+    // Loop body block: write the value to the current element, compute the next
+    // element's address, and then jump back to the loop header block.
+    builder.switch_to_block(loop_body_block);
+    emit_elem_write(func_env, builder, elem_addr)?;
+    let next_elem_addr = builder.ins().iadd(elem_addr, elem_size);
+    builder.ins().jump(loop_header_block, &[next_elem_addr]);
+
+    // Continue...
+    builder.switch_to_block(continue_block);
+    builder.seal_block(loop_header_block);
+    builder.seal_block(loop_body_block);
+    builder.seal_block(continue_block);
+    Ok(())
+}
+
 pub fn translate_array_fill(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -435,75 +511,28 @@ pub fn translate_array_fill(
         BoundsCheck::Object(obj_size),
     );
 
-    // Loop to fill the elements, emitting the equivalent of the following
-    // pseudo-CLIF:
-    //
-    // current_block:
-    //     ...
-    //     fill_size = imul index, one_elem_size
-    //     fill_end = iadd elem_addr, fill_size
-    //     jump loop_header_block(elem_addr)
-    //
-    // loop_header_block(elem_addr: i32):
-    //     done = icmp eq elem_addr, fill_end
-    //     brif done, continue_block, loop_body_block
-    //
-    // loop_body_block:
-    //     *elem_addr = elem
-    //     next_elem_addr = elem_addr + elem_size
-    //     jump loop_header_block(next_elem_addr)
-    //
-    // continue_block:
-    //     ...
-
-    let current_block = builder.current_block().unwrap();
-    let loop_header_block = builder.create_block();
-    let loop_body_block = builder.create_block();
-    let continue_block = builder.create_block();
-
-    builder.ensure_inserted_block();
-    builder.insert_block_after(loop_header_block, current_block);
-    builder.insert_block_after(loop_body_block, loop_header_block);
-    builder.insert_block_after(continue_block, loop_body_block);
-
-    // Current block: calculate the end address of the elements then jump to the
-    // loop header block.
-    let fill_size = builder.ins().imul(index, one_elem_size);
-    let fill_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), fill_size);
+    // Calculate the end address, just after the filled region.
+    let fill_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), offset_in_elems);
     let fill_end = builder.ins().iadd(elem_addr, fill_size);
-    builder.ins().jump(loop_header_block, &[elem_addr]);
 
-    // Loop header block: check if we're done, then jump to either the continue
-    // block or the loop body block.
-    builder.switch_to_block(loop_header_block);
-    let pointer_type = func_env.pointer_type();
-    builder.append_block_param(loop_header_block, pointer_type);
-    let elem_addr = builder.block_params(loop_header_block)[0];
-    let done = builder.ins().icmp(IntCC::Equal, elem_addr, fill_end);
-    builder
-        .ins()
-        .brif(done, continue_block, &[], loop_body_block, &[]);
-
-    // Loop body block: write the value to the current element, compute the next
-    // element's address, and then jump back to the loop header block.
-    builder.switch_to_block(loop_body_block);
-    let elem_ty = func_env.types[interned_type_index]
-        .composite_type
-        .unwrap_array()
-        .0
-        .element_type;
-    write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)?;
     let one_elem_size =
         uextend_i32_to_pointer_type(builder, func_env.pointer_type(), one_elem_size);
-    let next_elem_addr = builder.ins().iadd(elem_addr, one_elem_size);
-    builder.ins().jump(loop_header_block, &[next_elem_addr]);
 
-    // Continue...
-    builder.switch_to_block(continue_block);
-    builder.seal_block(loop_header_block);
-    builder.seal_block(loop_body_block);
-    builder.seal_block(continue_block);
-    Ok(())
+    emit_array_fill_impl(
+        func_env,
+        builder,
+        elem_addr,
+        one_elem_size,
+        fill_end,
+        |func_env, builder, elem_addr| {
+            let elem_ty = func_env.types[interned_type_index]
+                .composite_type
+                .unwrap_array()
+                .0
+                .element_type;
+            write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
+        },
+    )
 }
 
 pub fn translate_array_len(

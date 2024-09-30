@@ -123,7 +123,7 @@ impl DrcCompiler {
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder<'_>,
         field_addr: ir::Value,
-        ty: &WasmStorageType,
+        ty: WasmStorageType,
         val: ir::Value,
     ) -> WasmResult<()> {
         // Data inside GC objects is always little endian.
@@ -138,7 +138,7 @@ impl DrcCompiler {
                 ));
             }
             WasmStorageType::Val(WasmValType::Ref(r)) => {
-                self.translate_init_gc_reference(func_env, builder, *r, field_addr, val, flags)?;
+                self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags)?;
             }
             WasmStorageType::I8 => {
                 assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
@@ -149,7 +149,7 @@ impl DrcCompiler {
                 builder.ins().istore16(flags, val, field_addr, 0);
             }
             WasmStorageType::Val(_) => {
-                let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(ty);
+                let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty);
                 assert_eq!(builder.func.dfg.value_type(val).bytes(), size_of_access);
                 builder.ins().store(flags, val, field_addr, 0);
             }
@@ -424,74 +424,27 @@ impl GcCompiler for DrcCompiler {
         match init {
             ArrayInit::Elems(elems) => {
                 for val in elems {
-                    self.init_field(func_env, builder, elem_addr, &elem_ty, *val)?;
+                    self.init_field(func_env, builder, elem_addr, elem_ty, *val)?;
                     elem_addr = builder.ins().iadd(elem_addr, elem_size);
                 }
             }
             ArrayInit::Fill { elem, len: _ } => {
-                // To initialize the array by filling it with `elem`, emit the
-                // equivalent of the following pseudo-CLIF:
-                //
-                // current_block:
-                //     ...
-                //     elems_end = elem_addr - base_size + size
-                //     jump loop_header_block(elem_addr)
-                //
-                // loop_header_block(elem_addr: i32):
-                //     done = icmp eq elem_addr, elems_end
-                //     brif done, continue_block, loop_body_block
-                //
-                // loop_body_block:
-                //     *elem_addr = elem
-                //     next_elem_addr = elem_addr + elem_size
-                //     jump loop_header_block(next_elem_addr)
-                //
-                // continue_block:
-                //     ...
-
-                let loop_header_block = builder.create_block();
-                let loop_body_block = builder.create_block();
-                let continue_block = builder.create_block();
-
-                builder.ensure_inserted_block();
-                builder.insert_block_after(loop_header_block, builder.current_block().unwrap());
-                builder.insert_block_after(loop_body_block, loop_header_block);
-                builder.insert_block_after(continue_block, loop_body_block);
-
-                // Current block: compute the end address of the elements then
-                // jump into the loop, passing in the array's first element's
-                // address.
+                // Compute the end address of the elements.
                 let base_size = builder.ins().iconst(pointer_type, i64::from(base_size));
                 let array_addr = builder.ins().isub(elem_addr, base_size);
                 let size = uextend_i32_to_pointer_type(builder, pointer_type, size);
                 let elems_end = builder.ins().iadd(array_addr, size);
-                builder.ins().jump(loop_header_block, &[elem_addr]);
 
-                // Loop header block: check whether we've finished filling the
-                // array.
-                builder.switch_to_block(loop_header_block);
-                builder.append_block_param(loop_header_block, pointer_type);
-                let elem_addr = builder.block_params(loop_header_block)[0];
-                let done = builder.ins().icmp(IntCC::Equal, elem_addr, elems_end);
-                builder
-                    .ins()
-                    .brif(done, continue_block, &[], loop_body_block, &[]);
-
-                // Loop body block: initialize the element, increment the
-                // element address, and jump back to the loop header for the
-                // next iteration of the loop.
-                builder.switch_to_block(loop_body_block);
-                self.init_field(func_env, builder, elem_addr, &elem_ty, elem)?;
-                let next_elem_addr = builder.ins().iadd(elem_addr, elem_size);
-                builder.ins().jump(loop_header_block, &[next_elem_addr]);
-
-                // Continue block: we're done filling the array.
-                builder.switch_to_block(continue_block);
-
-                // No more incoming control-flow edges for these blocks.
-                builder.seal_block(loop_header_block);
-                builder.seal_block(loop_body_block);
-                builder.seal_block(continue_block);
+                emit_array_fill_impl(
+                    func_env,
+                    builder,
+                    elem_addr,
+                    elem_size,
+                    elems_end,
+                    |func_env, builder, elem_addr| {
+                        self.init_field(func_env, builder, elem_addr, elem_ty, elem)
+                    },
+                )?;
             }
         }
 
@@ -551,7 +504,7 @@ impl GcCompiler for DrcCompiler {
                 BoundsCheck::Object(struct_size_val),
             );
 
-            self.init_field(func_env, builder, field_addr, &ty.element_type, *val)?;
+            self.init_field(func_env, builder, field_addr, ty.element_type, *val)?;
         }
 
         Ok(struct_ref)
