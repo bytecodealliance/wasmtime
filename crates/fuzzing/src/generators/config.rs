@@ -168,6 +168,8 @@ impl Config {
             .wasm_tail_call(self.module_config.config.tail_call_enabled)
             .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
             .wasm_threads(self.module_config.config.threads_enabled)
+            .wasm_function_references(self.module_config.config.gc_enabled)
+            .wasm_gc(self.module_config.config.gc_enabled)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
@@ -466,6 +468,12 @@ impl WasmtimeConfig {
         config: &mut wasm_smith::Config,
         u: &mut Unstructured<'_>,
     ) -> arbitrary::Result<()> {
+        // Not implemented in Wasmtime
+        config.exceptions_enabled = false;
+
+        // Not fully implemented in Wasmtime and fuzzing.
+        config.gc_enabled = false;
+
         // Winch doesn't support the same set of wasm proposal as Cranelift at
         // this time, so if winch is selected be sure to disable wasm proposals
         // in `Config` to ensure that Winch can compile the module that
@@ -476,7 +484,6 @@ impl WasmtimeConfig {
             config.gc_enabled = false;
             config.threads_enabled = false;
             config.tail_call_enabled = false;
-            config.exceptions_enabled = false;
             config.reference_types_enabled = false;
 
             // Winch requires host trap handlers to be enabled at this time.

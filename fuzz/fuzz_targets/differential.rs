@@ -57,6 +57,7 @@ fuzz_target!(|data: &[u8]| {
 });
 
 fn execute_one(data: &[u8]) -> Result<()> {
+    wasmtime_fuzzing::init_fuzzing();
     STATS.bump_attempts();
 
     let mut u = Unstructured::new(data);
@@ -83,11 +84,13 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // this is specified by either the ALLOWED_MODULES environment variable or a
     // random selection between wasm-smith and single-inst.
     let build_wasm_smith_module = |u: &mut Unstructured, config: &Config| -> Result<_> {
+        log::debug!("build wasm-smith with {config:?}");
         STATS.wasm_smith_modules.fetch_add(1, SeqCst);
         let module = config.generate(u, Some(1000))?;
         Ok(module.to_bytes())
     };
     let build_single_inst_module = |u: &mut Unstructured, config: &Config| -> Result<_> {
+        log::debug!("build single-inst with {config:?}");
         STATS.single_instruction_modules.fetch_add(1, SeqCst);
         let module = SingleInstModule::new(u, &config.module_config)?;
         Ok(module.to_bytes())
@@ -104,6 +107,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
     log_wasm(&wasm);
 
     // Instantiate the generated wasm file in the chosen differential engine.
+    log::debug!("lhs engine: {}", lhs.name());
     let lhs_instance = lhs.instantiate(&wasm);
     STATS.bump_engine(lhs.name());
 

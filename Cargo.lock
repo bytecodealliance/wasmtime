@@ -3734,6 +3734,7 @@ dependencies = [
  "cranelift-reader",
  "env_logger 0.11.5",
  "libfuzzer-sys",
+ "log",
  "once_cell",
  "proc-macro2",
  "pulley-interpreter-fuzz",

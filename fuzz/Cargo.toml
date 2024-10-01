@@ -31,6 +31,7 @@ wasmtime = { workspace = true, features = ["winch"] }
 wasmtime-fuzzing = { workspace = true }
 component-test-util = { workspace = true }
 component-fuzz-util = { workspace = true }
+log = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }
