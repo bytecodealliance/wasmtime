@@ -19,15 +19,15 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0020                               trapz v2, null_reference
+;; @0020                               trapz v2, user16
 ;; @0020                               v8 = uextend.i64 v2
 ;; @0020                               v9 = iconst.i64 16
-;; @0020                               v10 = uadd_overflow_trap v8, v9, user65535  ; v9 = 16
+;; @0020                               v10 = uadd_overflow_trap v8, v9, user1  ; v9 = 16
 ;;                                     v19 = iconst.i64 24
-;; @0020                               v12 = uadd_overflow_trap v8, v19, user65535  ; v19 = 24
+;; @0020                               v12 = uadd_overflow_trap v8, v19, user1  ; v19 = 24
 ;; @0020                               v7 = load.i64 notrap aligned readonly v0+48
 ;; @0020                               v13 = icmp ule v12, v7
-;; @0020                               trapz v13, user65535
+;; @0020                               trapz v13, user1
 ;; @0020                               v6 = load.i64 notrap aligned readonly v0+40
 ;; @0020                               v14 = iadd v6, v10
 ;; @0020                               v17 = load.i32 notrap aligned little v14
