@@ -448,7 +448,7 @@ impl BumpAlloc {
             unreachable!("invalid alignment");
         }
         let align_offset = self.base.align_offset(align);
-        if align_offset >= self.len {
+        if align_offset > self.len {
             unreachable!("failed to allocate")
         }
         self.len -= align_offset;
