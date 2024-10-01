@@ -50,7 +50,7 @@ impl DiffEngine for V8Engine {
         let mut isolate = self.isolate.borrow_mut();
         let isolate = &mut **isolate;
         let mut scope = v8::HandleScope::new(isolate);
-        let context = v8::Context::new(&mut scope);
+        let context = v8::Context::new(&mut scope, Default::default());
         let global = context.global(&mut scope);
         let mut scope = v8::ContextScope::new(&mut scope, context);
 
