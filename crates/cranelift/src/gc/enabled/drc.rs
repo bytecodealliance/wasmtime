@@ -3,7 +3,7 @@
 
 use super::{
     emit_array_fill_impl, uextend_i32_to_pointer_type, unbarriered_load_gc_ref,
-    unbarriered_store_gc_ref, BoundsCheck, Offset,
+    unbarriered_store_gc_ref, write_func_ref_at_addr, BoundsCheck, Offset,
 };
 use crate::gc::{gc_compiler, ArrayInit};
 use crate::translate::TargetEnvironment;
@@ -13,9 +13,9 @@ use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    drc::DrcTypeLayouts, wasm_unsupported, GcArrayLayout, GcTypeLayouts, ModuleInternedTypeIndex,
-    PtrSize, TypeIndex, VMGcKind, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmStorageType, WasmValType,
+    drc::DrcTypeLayouts, GcArrayLayout, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex,
+    VMGcKind, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType,
 };
 
 #[derive(Default)]
@@ -135,9 +135,7 @@ impl DrcCompiler {
             WasmStorageType::Val(WasmValType::Ref(r))
                 if r.heap_type.top() == WasmHeapTopType::Func =>
             {
-                return Err(wasm_unsupported!(
-                    "funcrefs inside the GC heap are not yet implemented"
-                ));
+                write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?;
             }
             WasmStorageType::Val(WasmValType::Ref(r)) => {
                 self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags)?;

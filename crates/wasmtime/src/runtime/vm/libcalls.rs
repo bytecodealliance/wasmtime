@@ -501,6 +501,59 @@ unsafe fn gc_alloc_raw(
     Ok(gc_ref.as_raw_u32())
 }
 
+// Intern a `funcref` into the GC heap, returning its `FuncRefTableId`.
+//
+// This libcall may not GC.
+#[cfg(feature = "gc")]
+unsafe fn intern_func_ref_for_gc_heap(instance: &mut Instance, func_ref: *mut u8) -> Result<u32> {
+    use crate::{store::AutoAssertNoGc, vm::SendSyncPtr};
+    use core::ptr::NonNull;
+
+    let mut store = AutoAssertNoGc::new((*instance.store()).store_opaque_mut());
+
+    let func_ref = func_ref.cast::<VMFuncRef>();
+    let func_ref = NonNull::new(func_ref).map(SendSyncPtr::new);
+
+    let func_ref_id = store.unwrap_gc_store_mut().func_ref_table.intern(func_ref);
+    Ok(func_ref_id.into_raw())
+}
+
+// Get the raw `VMFuncRef` pointer associated with a `FuncRefTableId` from an
+// earlier `intern_func_ref_for_gc_heap` call.
+//
+// This libcall may not GC.
+#[cfg(feature = "gc")]
+unsafe fn get_interned_func_ref(
+    instance: &mut Instance,
+    func_ref_id: u32,
+    module_interned_type_index: u32,
+) -> *mut u8 {
+    use super::FuncRefTableId;
+    use crate::store::AutoAssertNoGc;
+    use wasmtime_environ::{packed_option::ReservedValue, ModuleInternedTypeIndex};
+
+    let store = AutoAssertNoGc::new((*instance.store()).store_opaque_mut());
+
+    let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
+    let module_interned_type_index = ModuleInternedTypeIndex::from_bits(module_interned_type_index);
+
+    let func_ref = if module_interned_type_index.is_reserved_value() {
+        store
+            .unwrap_gc_store()
+            .func_ref_table
+            .get_untyped(func_ref_id)
+    } else {
+        let types = store.engine().signatures();
+        let engine_ty = instance.engine_type_index(module_interned_type_index);
+        store
+            .unwrap_gc_store()
+            .func_ref_table
+            .get_typed(types, func_ref_id, engine_ty)
+    };
+
+    func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr().cast())
+}
+
 /// Implementation of the `array.new_data` instruction.
 #[cfg(feature = "gc")]
 unsafe fn array_new_data(
@@ -761,6 +814,7 @@ unsafe fn array_init_elem(
     _array: u32,
     _dst_index: u32,
     _elem_index: u32,
+    _src: u32,
     _len: u32,
 ) -> Result<()> {
     bail!("the `array.init_elem` instruction is not yet implemented")

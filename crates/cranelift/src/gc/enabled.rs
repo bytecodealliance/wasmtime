@@ -7,11 +7,12 @@ use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, condcodes::IntCC, InstBuilder},
 };
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::{
-    wasm_unsupported, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex, PtrSize,
-    TypeIndex, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex, PtrSize, TypeIndex,
+    WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType,
+    WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
 };
 
 mod drc;
@@ -86,9 +87,40 @@ fn read_field_at_addr(
                 WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)?
                     .translate_read_gc_reference(func_env, builder, r, addr, flags)?,
                 WasmHeapTopType::Func => {
-                    return Err(wasm_unsupported!(
-                        "funcrefs inside the GC heap are not yet implemented"
-                    ));
+                    let expected_ty = match r.heap_type {
+                        WasmHeapType::Func => ModuleInternedTypeIndex::reserved_value(),
+                        WasmHeapType::ConcreteFunc(ty) => ty.unwrap_module_type_index(),
+                        WasmHeapType::NoFunc => {
+                            let null = builder.ins().iconst(func_env.pointer_type(), 0);
+                            if !r.nullable {
+                                // Because `nofunc` is uninhabited, and this
+                                // reference is non-null, this is unreachable
+                                // code. Unconditionally trap via conditional
+                                // trap instructions to avoid inserting block
+                                // terminators in the middle of this block.
+                                builder
+                                    .ins()
+                                    .trapz(null, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+                            }
+                            return Ok(null);
+                        }
+                        _ => unreachable!("not a function heap type"),
+                    };
+                    let expected_ty = builder
+                        .ins()
+                        .iconst(ir::types::I32, i64::from(expected_ty.as_bits()));
+
+                    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+
+                    let func_ref_id = builder.ins().load(ir::types::I32, flags, addr, 0);
+                    let get_interned_func_ref = func_env
+                        .builtin_functions
+                        .get_interned_func_ref(builder.func);
+
+                    let call_inst = builder
+                        .ins()
+                        .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
+                    builder.func.dfg.first_result(call_inst)
                 }
             },
         },
@@ -101,6 +133,51 @@ fn read_field_at_addr(
     };
 
     Ok(value)
+}
+
+fn write_func_ref_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    ref_type: WasmRefType,
+    flags: ir::MemFlags,
+    field_addr: ir::Value,
+    func_ref: ir::Value,
+) -> WasmResult<()> {
+    assert_eq!(ref_type.heap_type.top(), WasmHeapTopType::Func);
+
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+
+    let intern_func_ref_for_gc_heap = func_env
+        .builtin_functions
+        .intern_func_ref_for_gc_heap(builder.func);
+
+    let func_ref = if ref_type.heap_type == WasmHeapType::NoFunc {
+        let null = builder.ins().iconst(func_env.pointer_type(), 0);
+        if !ref_type.nullable {
+            // Because `nofunc` is uninhabited, and this reference is
+            // non-null, this is unreachable code. Unconditionally trap
+            // via conditional trap instructions to avoid inserting
+            // block terminators in the middle of this block.
+            builder
+                .ins()
+                .trapz(null, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+        }
+        null
+    } else {
+        func_ref
+    };
+
+    // Convert the raw `funcref` into a `FuncRefTableId` for use in the
+    // GC heap.
+    let call_inst = builder
+        .ins()
+        .call(intern_func_ref_for_gc_heap, &[vmctx, func_ref]);
+    let func_ref_id = builder.func.dfg.first_result(call_inst);
+
+    // Store the id in the field.
+    builder.ins().store(flags, func_ref_id, field_addr, 0);
+
+    Ok(())
 }
 
 fn write_field_at_addr(
@@ -121,9 +198,7 @@ fn write_field_at_addr(
             builder.ins().istore16(flags, new_val, field_addr, 0);
         }
         WasmStorageType::Val(WasmValType::Ref(r)) if r.heap_type.top() == WasmHeapTopType::Func => {
-            return Err(wasm_unsupported!(
-                "funcrefs inside the GC heap are not yet implemented"
-            ))
+            write_func_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)?;
         }
         WasmStorageType::Val(WasmValType::Ref(r)) => {
             gc_compiler(func_env)?
