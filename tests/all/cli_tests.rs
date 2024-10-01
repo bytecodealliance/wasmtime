@@ -1161,6 +1161,27 @@ mod test_programs {
     }
 
     #[test]
+    fn cli_stdin_empty() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_STDIN_EMPTY_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()?;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"not to be read")
+            .unwrap();
+        let output = child.wait_with_output()?;
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
     fn cli_stdin() -> Result<()> {
         let mut child = get_wasmtime_command()?
             .args(&["run", "-Wcomponent-model", CLI_STDIN_COMPONENT])
