@@ -172,6 +172,7 @@ trivial_numeric_casts = 'warn'
 unstable_features = 'warn'
 unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
+unused-macro-rules = 'warn'
 
 [workspace.lints.clippy]
 # The default set of lints in Clippy is viewed as "too noisy" right now so

@@ -80,9 +80,6 @@ macro_rules! define_extended_opcode {
             pub const MAX: u16 = define_opcode!( @max $( $name )* );
         }
     };
-
-    ( @max $x:ident ) => { 0 };
-    ( @max $x:ident $( $xs:ident )* ) => { 1 + define_opcode!(@max $( $xs )* ) };
 }
 for_each_extended_op!(define_extended_opcode);
 

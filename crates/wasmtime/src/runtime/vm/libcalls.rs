@@ -144,7 +144,6 @@ pub mod raw {
         (@ty u8) => (u8);
         (@ty reference) => (u32);
         (@ty pointer) => (*mut u8);
-        (@ty vmctx) => (*mut VMContext);
     }
 
     wasmtime_environ::foreach_builtin_function!(libcall);

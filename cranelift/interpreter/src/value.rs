@@ -176,12 +176,6 @@ macro_rules! unary_match {
             _ => unimplemented!()
         }
     };
-    ( $op:tt($arg1:expr); [ $( $data_value_ty:ident ),* ] ) => {
-        match $arg1 {
-            $( DataValue::$data_value_ty(a) => { Ok(DataValue::$data_value_ty($op a)) } )*
-            _ => unimplemented!()
-        }
-    };
 }
 macro_rules! binary_match {
     ( $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
@@ -227,16 +221,6 @@ macro_rules! binary_match {
         match ($arg1, $arg2) {
             $( (DataValue::$data_value_ty(a), DataValue::$rhs(b)) => { Ok(DataValue::$data_value_ty((*a as $a_type).$op(*b as $rhs_type) as _)) } )*
             _ => unimplemented!()
-        }
-    };
-    ( $op:ident($arg1:expr, $arg2:expr); unsigned integers ) => {
-        match ($arg1, $arg2) {
-            (DataValue::I8(a), DataValue::I8(b)) => { Ok(DataValue::I8((u8::try_from(*a)?.$op(u8::try_from(*b)?) as i8))) }
-            (DataValue::I16(a), DataValue::I16(b)) => { Ok(DataValue::I16((u16::try_from(*a)?.$op(u16::try_from(*b)?) as i16))) }
-            (DataValue::I32(a), DataValue::I32(b)) => { Ok(DataValue::I32((u32::try_from(*a)?.$op(u32::try_from(*b)?) as i32))) }
-            (DataValue::I64(a), DataValue::I64(b)) => { Ok(DataValue::I64((u64::try_from(*a)?.$op(u64::try_from(*b)?) as i64))) }
-            (DataValue::I128(a), DataValue::I128(b)) => { Ok(DataValue::I128((u128::try_from(*a)?.$op(u128::try_from(*b)?) as i64))) }
-            _ => { Err(ValueError::InvalidType(ValueTypeClass::Integer, if !($arg1).ty().is_int() { ($arg1).ty() } else { ($arg2).ty() })) }
         }
     };
 }
