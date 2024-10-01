@@ -33,24 +33,28 @@ mod func_environ;
 mod gc;
 mod translate;
 
-const TRAP_DEBUG_ASSERT: TrapCode = TrapCode::user(1);
+const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
 const TRAP_OFFSET: u8 = 2;
-pub const TRAP_ALWAYS: TrapCode = TrapCode::user(Trap::AlwaysTrapAdapter as u8 + TRAP_OFFSET);
+pub const TRAP_ALWAYS: TrapCode =
+    TrapCode::unwrap_user(Trap::AlwaysTrapAdapter as u8 + TRAP_OFFSET);
 pub const TRAP_CANNOT_ENTER: TrapCode =
-    TrapCode::user(Trap::CannotEnterComponent as u8 + TRAP_OFFSET);
+    TrapCode::unwrap_user(Trap::CannotEnterComponent as u8 + TRAP_OFFSET);
 pub const TRAP_INDIRECT_CALL_TO_NULL: TrapCode =
-    TrapCode::user(Trap::IndirectCallToNull as u8 + TRAP_OFFSET);
-pub const TRAP_BAD_SIGNATURE: TrapCode = TrapCode::user(Trap::BadSignature as u8 + TRAP_OFFSET);
-pub const TRAP_NULL_REFERENCE: TrapCode = TrapCode::user(Trap::NullReference as u8 + TRAP_OFFSET);
+    TrapCode::unwrap_user(Trap::IndirectCallToNull as u8 + TRAP_OFFSET);
+pub const TRAP_BAD_SIGNATURE: TrapCode =
+    TrapCode::unwrap_user(Trap::BadSignature as u8 + TRAP_OFFSET);
+pub const TRAP_NULL_REFERENCE: TrapCode =
+    TrapCode::unwrap_user(Trap::NullReference as u8 + TRAP_OFFSET);
 pub const TRAP_ALLOCATION_TOO_LARGE: TrapCode =
-    TrapCode::user(Trap::AllocationTooLarge as u8 + TRAP_OFFSET);
+    TrapCode::unwrap_user(Trap::AllocationTooLarge as u8 + TRAP_OFFSET);
 pub const TRAP_ARRAY_OUT_OF_BOUNDS: TrapCode =
-    TrapCode::user(Trap::ArrayOutOfBounds as u8 + TRAP_OFFSET);
+    TrapCode::unwrap_user(Trap::ArrayOutOfBounds as u8 + TRAP_OFFSET);
 pub const TRAP_UNREACHABLE: TrapCode =
-    TrapCode::user(Trap::UnreachableCodeReached as u8 + TRAP_OFFSET);
-pub const TRAP_HEAP_MISALIGNED: TrapCode = TrapCode::user(Trap::HeapMisaligned as u8 + TRAP_OFFSET);
+    TrapCode::unwrap_user(Trap::UnreachableCodeReached as u8 + TRAP_OFFSET);
+pub const TRAP_HEAP_MISALIGNED: TrapCode =
+    TrapCode::unwrap_user(Trap::HeapMisaligned as u8 + TRAP_OFFSET);
 pub const TRAP_TABLE_OUT_OF_BOUNDS: TrapCode =
-    TrapCode::user(Trap::TableOutOfBounds as u8 + TRAP_OFFSET);
+    TrapCode::unwrap_user(Trap::TableOutOfBounds as u8 + TRAP_OFFSET);
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
 /// given calling convention.
@@ -249,9 +253,9 @@ fn clif_trap_to_env_trap(trap: ir::TrapCode) -> Option<Trap> {
         // These do not get converted to wasmtime traps, since they
         // shouldn't ever be hit in theory. Instead of catching and handling
         // these, we let the signal crash the process.
-        TRAP_DEBUG_ASSERT => return None,
+        TRAP_INTERNAL_ASSERT => return None,
 
-        other => Trap::from_u8(other.as_raw() - TRAP_OFFSET).unwrap(),
+        other => Trap::from_u8(other.as_raw().get() - TRAP_OFFSET).unwrap(),
     })
 }
 

@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::{compiler::Compiler, TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_DEBUG_ASSERT};
+use crate::{compiler::Compiler, TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT};
 use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
@@ -79,7 +79,7 @@ impl<'a> TrampolineCompiler<'a> {
                     // Transcoders can only actually be called by Wasm, so let's assert
                     // that here.
                     Abi::Array => {
-                        self.builder.ins().trap(TRAP_DEBUG_ASSERT);
+                        self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
                     }
                 }
             }
@@ -280,7 +280,7 @@ impl<'a> TrampolineCompiler<'a> {
             .call_indirect(host_sig, host_fn, &[vmctx, code]);
         // debug trap in case execution actually falls through, but this
         // shouldn't ever get hit at runtime.
-        self.builder.ins().trap(TRAP_DEBUG_ASSERT);
+        self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
     }
 
     fn translate_resource_new(&mut self, resource: TypeResourceTableIndex) {
@@ -488,7 +488,9 @@ impl<'a> TrampolineCompiler<'a> {
                 i32::try_from(self.offsets.resource_destructor(index)).unwrap(),
             );
             if cfg!(debug_assertions) {
-                self.builder.ins().trapz(dtor_func_ref, TRAP_DEBUG_ASSERT);
+                self.builder
+                    .ins()
+                    .trapz(dtor_func_ref, TRAP_INTERNAL_ASSERT);
             }
             let func_addr = self.builder.ins().load(
                 pointer_type,
@@ -543,7 +545,7 @@ impl<'a> TrampolineCompiler<'a> {
             // These trampolines can only actually be called by Wasm, so
             // let's assert that here.
             Abi::Array => {
-                self.builder.ins().trap(TRAP_DEBUG_ASSERT);
+                self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
                 return;
             }
         }

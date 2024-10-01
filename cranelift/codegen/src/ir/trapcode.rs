@@ -22,10 +22,12 @@ impl TrapCode {
 
     /// Internal helper to create new reserved trap codes.
     const fn reserved(byte: u8) -> TrapCode {
-        match NonZeroU8::new(byte + Self::RESERVED_START) {
-            Some(nz) => TrapCode(nz),
-            None => panic!("invalid reserved opcode"),
+        if let Some(code) = byte.checked_add(Self::RESERVED_START) {
+            if let Some(nz) = NonZeroU8::new(code) {
+                return TrapCode(nz);
+            }
         }
+        panic!("invalid reserved opcode")
     }
 
     /// The current stack space was exhausted.
@@ -46,34 +48,36 @@ impl TrapCode {
     pub const BAD_CONVERSION_TO_INTEGER: TrapCode = TrapCode::reserved(4);
 
     /// Create a user-defined trap code.
-    pub const fn user(code: u8) -> TrapCode {
-        assert!(
-            code < Self::RESERVED_START,
-            "user code collides with built-in trap code"
-        );
+    ///
+    /// Returns `None` if `code` is zero or too large and is reserved by
+    /// Cranelift.
+    pub const fn user(code: u8) -> Option<TrapCode> {
+        if code >= Self::RESERVED_START {
+            return None;
+        }
         match NonZeroU8::new(code) {
-            Some(nz) => TrapCode(nz),
-            None => panic!("user trap code cannot be zero"),
+            Some(nz) => Some(TrapCode(nz)),
+            None => None,
+        }
+    }
+
+    /// Alias for [`TrapCode::user`] with a panic built-in.
+    pub const fn unwrap_user(code: u8) -> TrapCode {
+        match TrapCode::user(code) {
+            Some(code) => code,
+            None => panic!("invalid user trap code"),
         }
     }
 
     /// Returns the raw byte representing this trap.
-    ///
-    /// The returned byte is never zero and can be passed to `from_raw` later on
-    /// to recreate the trap code.
-    pub const fn as_raw(&self) -> u8 {
-        self.0.get()
+    pub const fn as_raw(&self) -> NonZeroU8 {
+        self.0
     }
 
     /// Creates a trap code from its raw byte, likely returned by
     /// [`TrapCode::as_raw`] previously.
-    ///
-    /// Returns `None` if the `byte` provided is zero.
-    pub const fn from_raw(byte: u8) -> Option<TrapCode> {
-        match NonZeroU8::new(byte) {
-            Some(nz) => Some(TrapCode(nz)),
-            None => None,
-        }
+    pub const fn from_raw(byte: NonZeroU8) -> TrapCode {
+        TrapCode(byte)
     }
 
     /// Returns a slice of all traps except `TrapCode::User` traps
@@ -112,7 +116,10 @@ impl FromStr for TrapCode {
             "int_ovf" => Ok(Self::INTEGER_OVERFLOW),
             "int_divz" => Ok(Self::INTEGER_DIVISION_BY_ZERO),
             "bad_toint" => Ok(Self::BAD_CONVERSION_TO_INTEGER),
-            _ if s.starts_with("user") => s[4..].parse().map(TrapCode::user).map_err(|_| ()),
+            _ if s.starts_with("user") => {
+                let num = s[4..].parse().map_err(|_| ())?;
+                TrapCode::user(num).ok_or(())
+            }
             _ => Err(()),
         }
     }

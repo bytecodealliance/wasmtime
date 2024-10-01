@@ -2,7 +2,7 @@ use crate::translate::{
     FuncEnvironment as _, FuncTranslationState, GlobalVariable, Heap, HeapData, HeapStyle,
     StructFieldsVec, TableData, TableSize, TargetEnvironment,
 };
-use crate::{gc, BuiltinFunctionSignatures, TRAP_DEBUG_ASSERT};
+use crate::{gc, BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
@@ -3252,7 +3252,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 let vmctx = self.vmctx_val(&mut builder.cursor());
                 let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
                 builder.ins().call(libcall, &[vmctx, trap_code]);
-                builder.ins().trap(TRAP_DEBUG_ASSERT);
+                builder.ins().trap(TRAP_INTERNAL_ASSERT);
             }
         }
     }

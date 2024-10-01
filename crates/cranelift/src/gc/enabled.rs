@@ -2,7 +2,7 @@ use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use crate::gc::ArrayInit;
 use crate::translate::{StructFieldsVec, TargetEnvironment};
-use crate::TRAP_DEBUG_ASSERT;
+use crate::TRAP_INTERNAL_ASSERT;
 use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, condcodes::IntCC, InstBuilder},
@@ -666,15 +666,16 @@ fn emit_array_size_info(
     let all_elems_size = builder.ins().imul(one_elem_size, array_len);
 
     let high_bits = builder.ins().ushr_imm(all_elems_size, 32);
-    builder.ins().trapnz(high_bits, TRAP_DEBUG_ASSERT);
+    builder.ins().trapnz(high_bits, TRAP_INTERNAL_ASSERT);
 
     let all_elems_size = builder.ins().ireduce(ir::types::I32, all_elems_size);
     let base_size = builder
         .ins()
         .iconst(ir::types::I32, i64::from(array_layout.base_size));
-    let obj_size = builder
-        .ins()
-        .uadd_overflow_trap(all_elems_size, base_size, TRAP_DEBUG_ASSERT);
+    let obj_size =
+        builder
+            .ins()
+            .uadd_overflow_trap(all_elems_size, base_size, TRAP_INTERNAL_ASSERT);
 
     let one_elem_size = builder.ins().ireduce(ir::types::I32, one_elem_size);
 
@@ -956,9 +957,10 @@ impl FuncEnvironment<'_> {
                 .iconst(pointer_type, i64::try_from(offset).unwrap()),
         };
 
-        let index_and_offset = builder
-            .ins()
-            .uadd_overflow_trap(index, offset, TRAP_DEBUG_ASSERT);
+        let index_and_offset =
+            builder
+                .ins()
+                .uadd_overflow_trap(index, offset, TRAP_INTERNAL_ASSERT);
 
         let end = match check {
             BoundsCheck::Object(object_size) => {
@@ -968,16 +970,18 @@ impl FuncEnvironment<'_> {
                 let object_size = uextend_i32_to_pointer_type(builder, pointer_type, object_size);
                 builder
                     .ins()
-                    .uadd_overflow_trap(index, object_size, TRAP_DEBUG_ASSERT)
+                    .uadd_overflow_trap(index, object_size, TRAP_INTERNAL_ASSERT)
             }
             BoundsCheck::Access(access_size) => {
                 // Check that `index + offset + access_size` is in bounds.
                 let access_size = builder
                     .ins()
                     .iconst(pointer_type, i64::try_from(access_size).unwrap());
-                builder
-                    .ins()
-                    .uadd_overflow_trap(index_and_offset, access_size, TRAP_DEBUG_ASSERT)
+                builder.ins().uadd_overflow_trap(
+                    index_and_offset,
+                    access_size,
+                    TRAP_INTERNAL_ASSERT,
+                )
             }
         };
 
@@ -985,7 +989,7 @@ impl FuncEnvironment<'_> {
             builder
                 .ins()
                 .icmp(ir::condcodes::IntCC::UnsignedLessThanOrEqual, end, bound);
-        builder.ins().trapz(is_in_bounds, TRAP_DEBUG_ASSERT);
+        builder.ins().trapz(is_in_bounds, TRAP_INTERNAL_ASSERT);
 
         // NB: No need to check for overflow here, as that would mean that the
         // GC heap is hanging off the end of the address space, which is

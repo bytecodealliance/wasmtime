@@ -2,6 +2,7 @@
 
 use super::TrapCode;
 use core::fmt;
+use core::num::NonZeroU8;
 use core::str::FromStr;
 
 #[cfg(feature = "enable-serde")]
@@ -342,7 +343,11 @@ impl MemFlags {
     ///
     /// A `None` trap code indicates that this memory access does not trap.
     pub const fn trap_code(self) -> Option<TrapCode> {
-        TrapCode::from_raw(((self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET) as u8)
+        let byte = ((self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET) as u8;
+        match NonZeroU8::new(byte) {
+            Some(code) => Some(TrapCode::from_raw(code)),
+            None => None,
+        }
     }
 
     /// Configures these flags with the specified trap code `code`.
@@ -353,7 +358,7 @@ impl MemFlags {
     /// code that is communicated and which instruction trapped.
     pub const fn with_trap_code(mut self, code: Option<TrapCode>) -> Self {
         let bits = match code {
-            Some(code) => code.as_raw() as u16,
+            Some(code) => code.as_raw().get() as u16,
             None => 0,
         };
         self.bits &= !MASK_TRAP_CODE;

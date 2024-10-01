@@ -7,7 +7,7 @@ use super::{
 };
 use crate::gc::{gc_compiler, ArrayInit};
 use crate::translate::TargetEnvironment;
-use crate::{func_environ::FuncEnvironment, gc::GcCompiler, TRAP_DEBUG_ASSERT};
+use crate::{func_environ::FuncEnvironment, gc::GcCompiler, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
@@ -187,7 +187,7 @@ impl DrcCompiler {
                 builder.ins().store(flags, null, dst, 0);
             } else {
                 let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder.ins().trapz(zero, TRAP_DEBUG_ASSERT);
+                builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
             }
             return Ok(());
         };
@@ -531,7 +531,7 @@ impl GcCompiler for DrcCompiler {
                 // is a block terminator, and we still need to integrate with
                 // the rest of the surrounding code.
                 let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder.ins().trapz(zero, TRAP_DEBUG_ASSERT);
+                builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
             }
             return Ok(null);
         };
@@ -679,7 +679,7 @@ impl GcCompiler for DrcCompiler {
                 // is a block terminator, and we still need to integrate with
                 // the rest of the surrounding code.
                 let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder.ins().trapz(zero, TRAP_DEBUG_ASSERT);
+                builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
             }
             return Ok(());
         };
