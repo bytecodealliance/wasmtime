@@ -1,6 +1,6 @@
 use crate::abi::{self, align_to, scratch, LocalSlot};
 use crate::codegen::{CodeGenContext, FuncEnv};
-use crate::isa::reg::Reg;
+use crate::isa::reg::{writable, Reg, WritableReg};
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
@@ -605,7 +605,7 @@ pub(crate) trait MacroAssembler {
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize);
 
     /// Perform a zero-extended stack load.
-    fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
+    fn load(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize);
 
     /// Perform a WebAssembly load.
     /// A WebAssembly load introduces several additional invariants compared to
@@ -618,26 +618,26 @@ pub(crate) trait MacroAssembler {
     fn wasm_load(
         &mut self,
         src: Self::Address,
-        dst: Reg,
+        dst: WritableReg,
         size: OperandSize,
         kind: Option<ExtendKind>,
     );
 
     /// Alias for `MacroAssembler::load` with the operand size corresponding
     /// to the pointer size of the target.
-    fn load_ptr(&mut self, src: Self::Address, dst: Reg);
+    fn load_ptr(&mut self, src: Self::Address, dst: WritableReg);
 
     /// Loads the effective address into destination.
-    fn load_addr(&mut self, _src: Self::Address, _dst: Reg, _size: OperandSize);
+    fn load_addr(&mut self, _src: Self::Address, _dst: WritableReg, _size: OperandSize);
 
     /// Pop a value from the machine stack into the given register.
-    fn pop(&mut self, dst: Reg, size: OperandSize);
+    fn pop(&mut self, dst: WritableReg, size: OperandSize);
 
     /// Perform a move.
-    fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize);
+    fn mov(&mut self, dst: WritableReg, src: RegImm, size: OperandSize);
 
     /// Perform a conditional move.
-    fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize);
+    fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, size: OperandSize);
 
     /// Performs a memory move of bytes from src to dest.
     /// Bytes are moved in blocks of 8 bytes, where possible.
@@ -661,7 +661,10 @@ pub(crate) trait MacroAssembler {
             dst_offs += word_bytes;
             src_offs += word_bytes;
 
-            self.load_ptr(self.address_from_sp(SPOffset::from_u32(src_offs)), scratch);
+            self.load_ptr(
+                self.address_from_sp(SPOffset::from_u32(src_offs)),
+                writable!(scratch),
+            );
             self.store_ptr(
                 scratch.into(),
                 self.address_from_sp(SPOffset::from_u32(dst_offs)),
@@ -677,7 +680,7 @@ pub(crate) trait MacroAssembler {
 
             self.load(
                 self.address_from_sp(SPOffset::from_u32(src_offs)),
-                scratch,
+                writable!(scratch),
                 ptr_size,
             );
             self.store(
@@ -689,47 +692,54 @@ pub(crate) trait MacroAssembler {
     }
 
     /// Perform add operation.
-    fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
+    fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform a checked unsigned integer addition, emitting the provided trap
     /// if the addition overflows.
-    fn checked_uadd(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize, trap: TrapCode);
+    fn checked_uadd(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: RegImm,
+        size: OperandSize,
+        trap: TrapCode,
+    );
 
     /// Perform subtraction operation.
-    fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
+    fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform multiplication operation.
-    fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
+    fn mul(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform a floating point add operation.
-    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+    fn float_add(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize);
 
     /// Perform a floating point subtraction operation.
-    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+    fn float_sub(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize);
 
     /// Perform a floating point multiply operation.
-    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+    fn float_mul(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize);
 
     /// Perform a floating point divide operation.
-    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+    fn float_div(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize);
 
     /// Perform a floating point minimum operation. In x86, this will emit
     /// multiple instructions.
-    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+    fn float_min(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize);
 
     /// Perform a floating point maximum operation. In x86, this will emit
     /// multiple instructions.
-    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+    fn float_max(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize);
 
     /// Perform a floating point copysign operation. In x86, this will emit
     /// multiple instructions.
-    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+    fn float_copysign(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize);
 
     /// Perform a floating point abs operation.
-    fn float_abs(&mut self, dst: Reg, size: OperandSize);
+    fn float_abs(&mut self, dst: WritableReg, size: OperandSize);
 
     /// Perform a floating point negation operation.
-    fn float_neg(&mut self, dst: Reg, size: OperandSize);
+    fn float_neg(&mut self, dst: WritableReg, size: OperandSize);
 
     /// Perform a floating point floor operation.
     fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
@@ -742,19 +752,26 @@ pub(crate) trait MacroAssembler {
     );
 
     /// Perform a floating point square root operation.
-    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize);
+    fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize);
 
     /// Perform logical and operation.
-    fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
+    fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform logical or operation.
-    fn or(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
+    fn or(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform logical exclusive or operation.
-    fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
+    fn xor(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform a shift operation between a register and an immediate.
-    fn shift_ir(&mut self, dst: Reg, imm: u64, lhs: Reg, kind: ShiftKind, size: OperandSize);
+    fn shift_ir(
+        &mut self,
+        dst: WritableReg,
+        imm: u64,
+        lhs: Reg,
+        kind: ShiftKind,
+        size: OperandSize,
+    );
 
     /// Perform a shift operation between two registers.
     /// This case is special in that some architectures have specific expectations
@@ -794,15 +811,15 @@ pub(crate) trait MacroAssembler {
     /// The initial value in `dst` is the left-hand-side of the comparison and
     /// the initial value in `src` is the right-hand-side of the comparison.
     /// That means for `a < b` then `dst == a` and `src == b`.
-    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize);
+    fn cmp_with_set(&mut self, dst: WritableReg, src: RegImm, kind: IntCmpKind, size: OperandSize);
 
     /// Compare floats in src1 and src2 and put the result in dst.
     /// In x86, this will emit multiple instructions.
     fn float_cmp_with_set(
         &mut self,
+        dst: WritableReg,
         src1: Reg,
         src2: Reg,
-        dst: Reg,
         kind: FloatCmpKind,
         size: OperandSize,
     );
@@ -810,12 +827,12 @@ pub(crate) trait MacroAssembler {
     /// Count the number of leading zeroes in src and put the result in dst.
     /// In x64, this will emit multiple instructions if the `has_lzcnt` flag is
     /// false.
-    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize);
+    fn clz(&mut self, dst: WritableReg, src: Reg, size: OperandSize);
 
     /// Count the number of trailing zeroes in src and put the result in dst.masm
     /// In x64, this will emit multiple instructions if the `has_tzcnt` flag is
     /// false.
-    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize);
+    fn ctz(&mut self, dst: WritableReg, src: Reg, size: OperandSize);
 
     /// Push the register to the stack, returning the stack slot metadata.
     // NB
@@ -829,24 +846,24 @@ pub(crate) trait MacroAssembler {
     fn finalize(self, base: Option<SourceLoc>) -> MachBufferFinalized<Final>;
 
     /// Zero a particular register.
-    fn zero(&mut self, reg: Reg);
+    fn zero(&mut self, reg: WritableReg);
 
     /// Count the number of 1 bits in src and put the result in dst. In x64,
     /// this will emit multiple instructions if the `has_popcnt` flag is false.
     fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize);
 
     /// Converts an i64 to an i32 by discarding the high 32 bits.
-    fn wrap(&mut self, src: Reg, dst: Reg);
+    fn wrap(&mut self, dst: WritableReg, src: Reg);
 
     /// Extends an integer of a given size to a larger size.
-    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind);
+    fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind);
 
     /// Emits one or more instructions to perform a signed truncation of a
     /// float into an integer.
     fn signed_truncate(
         &mut self,
+        dst: WritableReg,
         src: Reg,
-        dst: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
@@ -856,8 +873,8 @@ pub(crate) trait MacroAssembler {
     /// float into an integer.
     fn unsigned_truncate(
         &mut self,
+        dst: WritableReg,
         src: Reg,
-        dst: Reg,
         tmp_fpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
@@ -866,30 +883,36 @@ pub(crate) trait MacroAssembler {
 
     /// Emits one or more instructions to perform a signed convert of an
     /// integer into a float.
-    fn signed_convert(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize);
+    fn signed_convert(
+        &mut self,
+        dst: WritableReg,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    );
 
     /// Emits one or more instructions to perform an unsigned convert of an
     /// integer into a float.
     fn unsigned_convert(
         &mut self,
+        dst: WritableReg,
         src: Reg,
-        dst: Reg,
         tmp_gpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
     );
 
     /// Reinterpret a float as an integer.
-    fn reinterpret_float_as_int(&mut self, src: Reg, dst: Reg, size: OperandSize);
+    fn reinterpret_float_as_int(&mut self, dst: WritableReg, src: Reg, size: OperandSize);
 
     /// Reinterpret an integer as a float.
-    fn reinterpret_int_as_float(&mut self, src: Reg, dst: Reg, size: OperandSize);
+    fn reinterpret_int_as_float(&mut self, dst: WritableReg, src: Reg, size: OperandSize);
 
     /// Demote an f64 to an f32.
-    fn demote(&mut self, src: Reg, dst: Reg);
+    fn demote(&mut self, dst: WritableReg, src: Reg);
 
     /// Promote an f32 to an f64.
-    fn promote(&mut self, src: Reg, dst: Reg);
+    fn promote(&mut self, dst: WritableReg, src: Reg);
 
     /// Zero a given memory range.
     ///
@@ -928,7 +951,7 @@ pub(crate) trait MacroAssembler {
             // given a considerably large amount of slots
             // this will be inefficient.
             let zero = scratch!(Self);
-            self.zero(zero);
+            self.zero(writable!(zero));
             let zero = RegImm::reg(zero);
 
             for step in (start..end).into_iter().step_by(word_size as usize) {

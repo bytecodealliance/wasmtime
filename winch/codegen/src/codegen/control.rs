@@ -10,6 +10,7 @@ use super::{CodeGenContext, OperandSize, Reg, TypedReg};
 use crate::{
     abi::{ABIOperand, ABIResults, ABISig, RetArea, ABI},
     masm::{IntCmpKind, MacroAssembler, MemMoveDirection, RegImm, SPOffset},
+    reg::writable,
     stack::Val,
     CallingConvention,
 };
@@ -918,7 +919,7 @@ impl ControlStackFrame {
                     let base = context
                         .without::<_, M, _>(results.regs(), masm, |cx, masm| cx.any_gpr(masm));
                     let local_addr = masm.local_address(&slot);
-                    masm.load_ptr(local_addr, base);
+                    masm.load_ptr(local_addr, writable!(base));
                     Some(base)
                 }
                 _ => None,

@@ -19,7 +19,7 @@ use crate::{
     masm::{SPOffset, StackSlot},
 };
 use crate::{
-    isa::reg::{Reg, RegClass},
+    isa::reg::{writable, Reg, RegClass, WritableReg},
     masm::CalleeKind,
 };
 use cranelift_codegen::{
@@ -74,7 +74,7 @@ impl Masm for MacroAssembler {
         }
 
         self.asm
-            .mov_rr(stack_pointer, frame_pointer, OperandSize::S64);
+            .mov_rr(stack_pointer, writable!(frame_pointer), OperandSize::S64);
     }
 
     fn check_stack(&mut self, vmctx: Reg) {
@@ -83,12 +83,12 @@ impl Masm for MacroAssembler {
 
         self.load_ptr(
             self.address_at_reg(vmctx, ptr_size.vmcontext_runtime_limits().into()),
-            scratch,
+            writable!(scratch),
         );
 
         self.load_ptr(
             Address::offset(scratch, ptr_size.vmruntime_limits_stack_limit().into()),
-            scratch,
+            writable!(scratch),
         );
 
         self.add_stack_max(scratch);
@@ -146,7 +146,8 @@ impl Masm for MacroAssembler {
             return;
         }
 
-        self.asm.sub_ir(bytes as i32, rsp(), OperandSize::S64);
+        self.asm
+            .sub_ir(bytes as i32, writable!(rsp()), OperandSize::S64);
         self.increment_sp(bytes);
     }
 
@@ -154,7 +155,8 @@ impl Masm for MacroAssembler {
         if bytes == 0 {
             return;
         }
-        self.asm.add_ir(bytes as i32, rsp(), OperandSize::S64);
+        self.asm
+            .add_ir(bytes as i32, writable!(rsp()), OperandSize::S64);
         self.decrement_sp(bytes);
     }
 
@@ -203,9 +205,9 @@ impl Masm for MacroAssembler {
         self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS);
     }
 
-    fn pop(&mut self, dst: Reg, size: OperandSize) {
+    fn pop(&mut self, dst: WritableReg, size: OperandSize) {
         let current_sp = SPOffset::from_u32(self.sp_offset);
-        match (dst.class(), size) {
+        match (dst.to_reg().class(), size) {
             (RegClass::Int, OperandSize::S32) => {
                 let addr = self.address_from_sp(current_sp);
                 self.asm.movzx_mr(&addr, dst, size.into(), TRUSTED_FLAGS);
@@ -244,22 +246,22 @@ impl Masm for MacroAssembler {
         total_stack
     }
 
-    fn load_ptr(&mut self, src: Self::Address, dst: Reg) {
+    fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) {
         self.load(src, dst, self.ptr_size);
     }
 
-    fn load_addr(&mut self, src: Self::Address, dst: Reg, size: OperandSize) {
+    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) {
         self.asm.lea(&src, dst, size);
     }
 
-    fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
+    fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) {
         self.load_impl::<Self>(src, dst, size, TRUSTED_FLAGS);
     }
 
     fn wasm_load(
         &mut self,
         src: Self::Address,
-        dst: Reg,
+        dst: WritableReg,
         size: OperandSize,
         kind: Option<ExtendKind>,
     ) {
@@ -274,19 +276,22 @@ impl Masm for MacroAssembler {
         SPOffset::from_u32(self.sp_offset)
     }
 
-    fn zero(&mut self, reg: Reg) {
-        self.asm
-            .xor_rr(reg, reg, OperandSize::from_bytes(<Self::ABI>::word_bytes()));
+    fn zero(&mut self, reg: WritableReg) {
+        self.asm.xor_rr(
+            reg.to_reg(),
+            reg,
+            OperandSize::from_bytes(<Self::ABI>::word_bytes()),
+        );
     }
 
-    fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
-        match (src, dst) {
-            rr @ (RegImm::Reg(src), dst) => match (src.class(), dst.class()) {
+    fn mov(&mut self, dst: WritableReg, src: RegImm, size: OperandSize) {
+        match (src, dst.to_reg()) {
+            rr @ (RegImm::Reg(src), dst_reg) => match (src.class(), dst_reg.class()) {
                 (RegClass::Int, RegClass::Int) => self.asm.mov_rr(src, dst, size),
                 (RegClass::Float, RegClass::Float) => self.asm.xmm_mov_rr(src, dst, size),
                 _ => Self::handle_invalid_operand_combination(rr.0, rr.1),
             },
-            (RegImm::Imm(imm), dst) => match imm {
+            (RegImm::Imm(imm), _) => match imm {
                 I::I32(v) => self.asm.mov_ir(v as u64, dst, size),
                 I::I64(v) => self.asm.mov_ir(v, dst, size),
                 I::F32(v) => {
@@ -305,24 +310,24 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize) {
-        match (src.class(), dst.class()) {
+    fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, size: OperandSize) {
+        match (src.class(), dst.to_reg().class()) {
             (RegClass::Int, RegClass::Int) => self.asm.cmov(src, dst, cc, size),
             (RegClass::Float, RegClass::Float) => self.asm.xmm_cmov(src, dst, cc, size),
-            _ => Self::handle_invalid_operand_combination(src, dst),
+            _ => Self::handle_invalid_operand_combination(src, dst.to_reg()),
         }
     }
 
-    fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), reg) => {
+            (RegImm::Imm(imm), _) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.add_ir(v, reg, size);
+                    self.asm.add_ir(v, dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.load_constant(&imm, scratch, size);
-                    self.asm.add_rr(scratch, reg, size);
+                    self.load_constant(&imm, writable!(scratch), size);
+                    self.asm.add_rr(scratch, dst, size);
                 }
             }
 
@@ -332,20 +337,27 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn checked_uadd(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize, trap: TrapCode) {
+    fn checked_uadd(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: RegImm,
+        size: OperandSize,
+        trap: TrapCode,
+    ) {
         self.add(dst, lhs, rhs, size);
         self.asm.trapif(CC::B, trap);
     }
 
-    fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         match (rhs, dst) {
             (RegImm::Imm(imm), reg) => {
                 if let Some(v) = imm.to_i32() {
                     self.asm.sub_ir(v, reg, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.load_constant(&imm, scratch, size);
+                    self.load_constant(&imm, writable!(scratch), size);
                     self.asm.sub_rr(scratch, reg, size);
                 }
             }
@@ -356,16 +368,16 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn mul(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), reg) => {
+            (RegImm::Imm(imm), _) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.mul_ir(v, reg, size);
+                    self.asm.mul_ir(v, dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.load_constant(&imm, scratch, size);
-                    self.asm.mul_rr(scratch, reg, size);
+                    self.load_constant(&imm, writable!(scratch), size);
+                    self.asm.mul_rr(scratch, dst, size);
                 }
             }
 
@@ -375,38 +387,38 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn float_add(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         self.asm.xmm_add_rr(rhs, dst, size);
     }
 
-    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn float_sub(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         self.asm.xmm_sub_rr(rhs, dst, size);
     }
 
-    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn float_mul(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         self.asm.xmm_mul_rr(rhs, dst, size);
     }
 
-    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn float_div(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         self.asm.xmm_div_rr(rhs, dst, size);
     }
 
-    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn float_min(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         self.asm.xmm_min_seq(rhs, dst, size);
     }
 
-    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn float_max(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         self.asm.xmm_max_seq(rhs, dst, size);
     }
 
-    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn float_copysign(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         let scratch_gpr = regs::scratch();
         let scratch_xmm = regs::scratch_xmm();
         let sign_mask = match size {
@@ -414,46 +426,50 @@ impl Masm for MacroAssembler {
             OperandSize::S64 => I::I64(0x8000000000000000),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-        self.load_constant(&sign_mask, scratch_gpr, size);
-        self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
+        self.load_constant(&sign_mask, writable!(scratch_gpr), size);
+        self.asm
+            .gpr_to_xmm(scratch_gpr, writable!(scratch_xmm), size);
 
         // Clear everything except sign bit in src.
-        self.asm.xmm_and_rr(scratch_xmm, rhs, size);
+        self.asm.xmm_and_rr(scratch_xmm, writable!(rhs), size);
 
         // Clear sign bit in dst using scratch to store result. Then copy the
         // result back to dst.
-        self.asm.xmm_andn_rr(dst, scratch_xmm, size);
+        self.asm
+            .xmm_andn_rr(dst.to_reg(), writable!(scratch_xmm), size);
         self.asm.xmm_mov_rr(scratch_xmm, dst, size);
 
         // Copy sign bit from src to dst.
         self.asm.xmm_or_rr(rhs, dst, size);
     }
 
-    fn float_neg(&mut self, dst: Reg, size: OperandSize) {
-        assert_eq!(dst.class(), RegClass::Float);
+    fn float_neg(&mut self, dst: WritableReg, size: OperandSize) {
+        assert_eq!(dst.to_reg().class(), RegClass::Float);
         let mask = match size {
             OperandSize::S32 => I::I32(0x80000000),
             OperandSize::S64 => I::I64(0x8000000000000000),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
         let scratch_gpr = regs::scratch();
-        self.load_constant(&mask, scratch_gpr, size);
+        self.load_constant(&mask, writable!(scratch_gpr), size);
         let scratch_xmm = regs::scratch_xmm();
-        self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
+        self.asm
+            .gpr_to_xmm(scratch_gpr, writable!(scratch_xmm), size);
         self.asm.xmm_xor_rr(scratch_xmm, dst, size);
     }
 
-    fn float_abs(&mut self, dst: Reg, size: OperandSize) {
-        assert_eq!(dst.class(), RegClass::Float);
+    fn float_abs(&mut self, dst: WritableReg, size: OperandSize) {
+        assert_eq!(dst.to_reg().class(), RegClass::Float);
         let mask = match size {
             OperandSize::S32 => I::I32(0x7fffffff),
             OperandSize::S64 => I::I64(0x7fffffffffffffff),
             OperandSize::S128 | OperandSize::S16 | OperandSize::S8 => unreachable!(),
         };
         let scratch_gpr = regs::scratch();
-        self.load_constant(&mask, scratch_gpr, size);
+        self.load_constant(&mask, writable!(scratch_gpr), size);
         let scratch_xmm = regs::scratch_xmm();
-        self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
+        self.asm
+            .gpr_to_xmm(scratch_gpr, writable!(scratch_xmm), size);
         self.asm.xmm_and_rr(scratch_xmm, dst, size);
     }
 
@@ -474,20 +490,20 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize) {
+    fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         self.asm.sqrt(src, dst, size);
     }
 
-    fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), reg) => {
+            (RegImm::Imm(imm), _) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.and_ir(v, reg, size);
+                    self.asm.and_ir(v, dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.load_constant(&imm, scratch, size);
-                    self.asm.and_rr(scratch, reg, size);
+                    self.load_constant(&imm, writable!(scratch), size);
+                    self.asm.and_rr(scratch, dst, size);
                 }
             }
 
@@ -497,16 +513,16 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn or(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn or(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), reg) => {
+            (RegImm::Imm(imm), _) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.or_ir(v, reg, size);
+                    self.asm.or_ir(v, dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.load_constant(&imm, scratch, size);
-                    self.asm.or_rr(scratch, reg, size);
+                    self.load_constant(&imm, writable!(scratch), size);
+                    self.asm.or_rr(scratch, dst, size);
                 }
             }
 
@@ -516,27 +532,34 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn xor(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), reg) => {
+            (RegImm::Imm(imm), _) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.xor_ir(v, reg, size);
+                    self.asm.xor_ir(v, dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.load_constant(&imm, scratch, size);
-                    self.asm.xor_rr(scratch, reg, size);
+                    self.load_constant(&imm, writable!(scratch), size);
+                    self.asm.xor_rr(scratch, dst, size);
                 }
             }
 
-            (RegImm::Reg(src), dst) => {
+            (RegImm::Reg(src), _) => {
                 self.asm.xor_rr(src, dst, size);
             }
         }
     }
 
-    fn shift_ir(&mut self, dst: Reg, imm: u64, lhs: Reg, kind: ShiftKind, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
+    fn shift_ir(
+        &mut self,
+        dst: WritableReg,
+        imm: u64,
+        lhs: Reg,
+        kind: ShiftKind,
+        size: OperandSize,
+    ) {
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs);
         self.asm.shift_ir(imm as u8, dst, kind, size)
     }
 
@@ -545,7 +568,8 @@ impl Masm for MacroAssembler {
         let src = context.pop_to_reg(self, Some(regs::rcx()));
         let dst = context.pop_to_reg(self, None);
 
-        self.asm.shift_rr(src.into(), dst.into(), kind, size);
+        self.asm
+            .shift_rr(src.into(), writable!(dst.into()), kind, size);
 
         context.free_reg(src);
         context.stack.push(dst.into());
@@ -597,7 +621,7 @@ impl Masm for MacroAssembler {
 
     fn frame_restore(&mut self) {
         assert_eq!(self.sp_offset, 0);
-        self.asm.pop_r(rbp());
+        self.asm.pop_r(writable!(rbp()));
         self.asm.ret();
     }
 
@@ -620,7 +644,7 @@ impl Masm for MacroAssembler {
                     self.asm.cmp_ir(src1, v, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.load_constant(&imm, scratch, size);
+                    self.load_constant(&imm, writable!(scratch), size);
                     self.asm.cmp_rr(src1, scratch, size);
                 }
             }
@@ -630,16 +654,16 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize) {
-        self.cmp(dst, src, size);
+    fn cmp_with_set(&mut self, dst: WritableReg, src: RegImm, kind: IntCmpKind, size: OperandSize) {
+        self.cmp(dst.to_reg(), src, size);
         self.asm.setcc(kind, dst);
     }
 
     fn float_cmp_with_set(
         &mut self,
+        dst: WritableReg,
         src1: Reg,
         src2: Reg,
-        dst: Reg,
         kind: FloatCmpKind,
         size: OperandSize,
     ) {
@@ -670,21 +694,21 @@ impl Masm for MacroAssembler {
                 // Return false if either operand is NaN by ensuring PF is
                 // unset.
                 let scratch = regs::scratch();
-                self.asm.setnp(scratch);
+                self.asm.setnp(writable!(scratch));
                 self.asm.and_rr(scratch, dst, size);
             }
             FloatCmpKind::Ne => {
                 // Return true if either operand is NaN by checking if PF is
                 // set.
                 let scratch = regs::scratch();
-                self.asm.setp(scratch);
+                self.asm.setp(writable!(scratch));
                 self.asm.or_rr(scratch, dst, size);
             }
             FloatCmpKind::Lt | FloatCmpKind::Le => (),
         }
     }
 
-    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    fn clz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         if self.flags.has_lzcnt() {
             self.asm.lzcnt(src, dst, size);
         } else {
@@ -693,15 +717,15 @@ impl Masm for MacroAssembler {
             // Use the following approach:
             // dst = size.num_bits() - bsr(src) - is_not_zero
             //     = size.num.bits() + -bsr(src) - is_not_zero.
-            self.asm.bsr(src.into(), dst.into(), size);
-            self.asm.setcc(IntCmpKind::Ne, scratch.into());
-            self.asm.neg(dst, dst, size);
+            self.asm.bsr(src.into(), dst, size);
+            self.asm.setcc(IntCmpKind::Ne, writable!(scratch.into()));
+            self.asm.neg(dst.to_reg(), dst, size);
             self.asm.add_ir(size.num_bits() as i32, dst, size);
             self.asm.sub_rr(scratch, dst, size);
         }
     }
 
-    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    fn ctz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         if self.flags.has_bmi1() {
             self.asm.tzcnt(src, dst, size);
         } else {
@@ -714,9 +738,9 @@ impl Masm for MacroAssembler {
             // When the value is 0, BSF outputs 0, correct output for ctz is
             // the number of bits.
             self.asm.bsf(src.into(), dst.into(), size);
-            self.asm.setcc(IntCmpKind::Eq, scratch.into());
+            self.asm.setcc(IntCmpKind::Eq, writable!(scratch.into()));
             self.asm
-                .shift_ir(size.log2(), scratch, ShiftKind::Shl, size);
+                .shift_ir(size.log2(), writable!(scratch), ShiftKind::Shl, size);
             self.asm.add_rr(scratch, dst, size);
         }
     }
@@ -770,8 +794,8 @@ impl Masm for MacroAssembler {
             // The fallback functionality here is based on `MacroAssembler::popcnt64` in:
             // https://searchfox.org/mozilla-central/source/js/src/jit/x64/MacroAssembler-x64-inl.h#495
 
-            let tmp = context.any_gpr(self);
-            let dst = src;
+            let tmp = writable!(context.any_gpr(self));
+            let dst = writable!(src.into());
             let (masks, shift_amt) = match size {
                 OperandSize::S64 => (
                     [
@@ -793,45 +817,45 @@ impl Masm for MacroAssembler {
             self.asm.mov_rr(src.into(), tmp, size);
 
             // x -= (x >> 1) & m1;
-            self.asm.shift_ir(1u8, dst.into(), ShiftKind::ShrU, size);
-            let lhs = dst.reg;
-            self.and(lhs, lhs, RegImm::i64(masks[0]), size);
-            self.asm.sub_rr(dst.into(), tmp, size);
+            self.asm.shift_ir(1u8, dst, ShiftKind::ShrU, size);
+            let lhs = dst.to_reg();
+            self.and(writable!(lhs), lhs, RegImm::i64(masks[0]), size);
+            self.asm.sub_rr(dst.to_reg(), tmp, size);
 
             // x = (x & m2) + ((x >> 2) & m2);
-            self.asm.mov_rr(tmp, dst.into(), size);
+            self.asm.mov_rr(tmp.to_reg(), dst, size);
             // Load `0x3333...` into the scratch reg once, allowing us to use
             // `and_rr` and avoid inadvertently loading it twice as with `and`
             let scratch = regs::scratch();
-            self.load_constant(&I::i64(masks[1]), scratch, size);
-            self.asm.and_rr(scratch, dst.into(), size);
+            self.load_constant(&I::i64(masks[1]), writable!(scratch), size);
+            self.asm.and_rr(scratch, dst, size);
             self.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
             self.asm.and_rr(scratch, tmp, size);
-            self.asm.add_rr(dst.into(), tmp, size);
+            self.asm.add_rr(dst.to_reg(), tmp, size);
 
             // x = (x + (x >> 4)) & m4;
-            self.asm.mov_rr(tmp.into(), dst.into(), size);
+            self.asm.mov_rr(tmp.to_reg(), dst.into(), size);
             self.asm.shift_ir(4u8, dst.into(), ShiftKind::ShrU, size);
-            self.asm.add_rr(tmp, dst.into(), size);
-            let lhs = dst.reg.into();
-            self.and(lhs, lhs, RegImm::i64(masks[2]), size);
+            self.asm.add_rr(tmp.to_reg(), dst, size);
+            let lhs = dst.to_reg();
+            self.and(writable!(lhs), lhs, RegImm::i64(masks[2]), size);
 
             // (x * h01) >> shift_amt
-            let lhs = dst.reg.into();
-            self.mul(lhs, lhs, RegImm::i64(masks[3]), size);
+            let lhs = dst.to_reg();
+            self.mul(writable!(lhs), lhs, RegImm::i64(masks[3]), size);
             self.asm
                 .shift_ir(shift_amt, dst.into(), ShiftKind::ShrU, size);
 
-            context.stack.push(dst.into());
-            context.free_reg(tmp);
+            context.stack.push(src.into());
+            context.free_reg(tmp.to_reg());
         }
     }
 
-    fn wrap(&mut self, src: Reg, dst: Reg) {
-        self.asm.mov_rr(src.into(), dst.into(), OperandSize::S32);
+    fn wrap(&mut self, dst: WritableReg, src: Reg) {
+        self.asm.mov_rr(src.into(), dst, OperandSize::S32);
     }
 
-    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
+    fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind) {
         if let ExtendKind::I64ExtendI32U = kind {
             self.asm.movzx_rr(src, dst, kind);
         } else {
@@ -841,8 +865,8 @@ impl Masm for MacroAssembler {
 
     fn signed_truncate(
         &mut self,
+        dst: WritableReg,
         src: Reg,
-        dst: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
@@ -860,8 +884,8 @@ impl Masm for MacroAssembler {
 
     fn unsigned_truncate(
         &mut self,
+        dst: WritableReg,
         src: Reg,
-        dst: Reg,
         tmp_fpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
@@ -879,43 +903,49 @@ impl Masm for MacroAssembler {
         );
     }
 
-    fn signed_convert(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize) {
+    fn signed_convert(
+        &mut self,
+        dst: WritableReg,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
         self.asm.cvt_sint_to_float(src, dst, src_size, dst_size);
     }
 
     fn unsigned_convert(
         &mut self,
+        dst: WritableReg,
         src: Reg,
-        dst: Reg,
         tmp_gpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
     ) {
         // Need to convert unsigned uint32 to uint64 for conversion instruction sequence.
         if let OperandSize::S32 = src_size {
-            self.extend(src, src, ExtendKind::I64ExtendI32U);
+            self.extend(writable!(src), src, ExtendKind::I64ExtendI32U);
         }
 
         self.asm
             .cvt_uint64_to_float_seq(src, dst, regs::scratch(), tmp_gpr, dst_size);
     }
 
-    fn reinterpret_float_as_int(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    fn reinterpret_float_as_int(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         self.asm.xmm_to_gpr(src, dst, size);
     }
 
-    fn reinterpret_int_as_float(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    fn reinterpret_int_as_float(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         self.asm.gpr_to_xmm(src.into(), dst, size);
     }
 
-    fn demote(&mut self, src: Reg, dst: Reg) {
+    fn demote(&mut self, dst: WritableReg, src: Reg) {
         self.asm
             .cvt_float_to_float(src.into(), dst.into(), OperandSize::S64, OperandSize::S32);
     }
 
-    fn promote(&mut self, src: Reg, dst: Reg) {
+    fn promote(&mut self, dst: WritableReg, src: Reg) {
         self.asm
-            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S32, OperandSize::S64);
+            .cvt_float_to_float(src.into(), dst, OperandSize::S32, OperandSize::S64);
     }
 
     fn unreachable(&mut self) {
@@ -944,9 +974,9 @@ impl Masm for MacroAssembler {
         // are greater.
         let max = default_index;
         let size = OperandSize::S32;
-        self.asm.mov_ir(max as u64, tmp, size);
+        self.asm.mov_ir(max as u64, writable!(tmp), size);
         self.asm.cmp_rr(tmp, index, size);
-        self.asm.cmov(tmp, index, IntCmpKind::LtU, size);
+        self.asm.cmov(tmp, writable!(index), IntCmpKind::LtU, size);
 
         let default = targets[default_index];
         let rest = &targets[0..default_index];
@@ -1015,7 +1045,7 @@ impl MacroAssembler {
         self.sp_offset -= bytes;
     }
 
-    fn load_constant(&mut self, constant: &I, dst: Reg, size: OperandSize) {
+    fn load_constant(&mut self, constant: &I, dst: WritableReg, size: OperandSize) {
         match constant {
             I::I32(v) => self.asm.mov_ir(*v as u64, dst, size),
             I::I64(v) => self.asm.mov_ir(*v, dst, size),
@@ -1024,11 +1054,11 @@ impl MacroAssembler {
     }
 
     /// A common implementation for zero-extend stack loads.
-    fn load_impl<M>(&mut self, src: Address, dst: Reg, size: OperandSize, flags: MemFlags)
+    fn load_impl<M>(&mut self, src: Address, dst: WritableReg, size: OperandSize, flags: MemFlags)
     where
         M: Masm,
     {
-        if dst.is_int() {
+        if dst.to_reg().is_int() {
             let access_bits = size.num_bits() as u16;
 
             let ext_mode = match access_bits {
@@ -1055,7 +1085,7 @@ impl MacroAssembler {
                         // If the immediate doesn't sign extend, use a scratch
                         // register.
                         let scratch = regs::scratch();
-                        self.asm.mov_ir(v, scratch, size);
+                        self.asm.mov_ir(v, writable!(scratch), size);
                         self.asm.mov_rm(scratch, &dst, size, flags);
                     }
                 },
@@ -1065,7 +1095,7 @@ impl MacroAssembler {
                     // Always trusted, since we are loading the constant from
                     // the constant pool.
                     self.asm
-                        .xmm_mov_mr(&addr, float_scratch, size, MemFlags::trusted());
+                        .xmm_mov_mr(&addr, writable!(float_scratch), size, MemFlags::trusted());
                     self.asm.xmm_mov_rm(float_scratch, &dst, size, flags);
                 }
                 I::F64(v) => {
@@ -1074,7 +1104,7 @@ impl MacroAssembler {
                     // Similar to above, always trusted since we are loading the
                     // constant from the constant pool.
                     self.asm
-                        .xmm_mov_mr(&addr, float_scratch, size, MemFlags::trusted());
+                        .xmm_mov_mr(&addr, writable!(float_scratch), size, MemFlags::trusted());
                     self.asm.xmm_mov_rm(float_scratch, &dst, size, flags);
                 }
                 I::V128(v) => {
@@ -1082,8 +1112,12 @@ impl MacroAssembler {
                     let vector_scratch = regs::scratch_xmm();
                     // Always trusted, since we are loading the constant from
                     // the constant pool.
-                    self.asm
-                        .xmm_mov_mr(&addr, vector_scratch, size, MemFlags::trusted());
+                    self.asm.xmm_mov_mr(
+                        &addr,
+                        writable!(vector_scratch),
+                        size,
+                        MemFlags::trusted(),
+                    );
                     self.asm.xmm_mov_rm(vector_scratch, &dst, size, flags);
                 }
             },
