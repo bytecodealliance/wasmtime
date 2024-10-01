@@ -21,9 +21,8 @@ all-features = true
 anyhow = { workspace = true }
 postcard = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
-cranelift-entity = { workspace = true }
+cranelift-entity = { workspace = true, features = ['enable-serde'] }
 cranelift-bitset = { workspace = true, features = ['enable-serde'] }
-wasmtime-types = { workspace = true }
 wasmparser = { workspace = true, features = ['validate', 'serde', 'features'] }
 indexmap = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
@@ -37,6 +36,7 @@ wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 semver = { workspace = true, optional = true, features = ['serde'] }
+smallvec = { workspace = true, features = ['serde'] }
 
 [dev-dependencies]
 clap = { workspace = true, features = ['default'] }
@@ -61,7 +61,6 @@ compile = [
 threads = ['std']
 wmemcheck = ['std']
 std = [
-  'wasmtime-types/std',
   'anyhow/std',
   'object/std',
   'wasmparser/std',

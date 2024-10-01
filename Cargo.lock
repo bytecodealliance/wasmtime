@@ -3665,12 +3665,12 @@ dependencies = [
  "semver",
  "serde",
  "serde_derive",
+ "smallvec",
  "target-lexicon",
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",
  "wasmtime-component-util",
- "wasmtime-types",
  "wat",
 ]
 
@@ -3806,18 +3806,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.60",
-]
-
-[[package]]
-name = "wasmtime-types"
-version = "26.0.0"
-dependencies = [
- "anyhow",
- "cranelift-entity",
- "serde",
- "serde_derive",
- "smallvec",
- "wasmparser",
 ]
 
 [[package]]

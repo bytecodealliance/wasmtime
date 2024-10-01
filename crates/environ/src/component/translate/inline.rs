@@ -46,9 +46,9 @@
 //! final `Component`.
 
 use crate::component::translate::*;
+use crate::{EntityType, IndexType};
 use std::borrow::Cow;
 use wasmparser::types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
-use wasmtime_types::IndexType;
 
 pub(super) fn run(
     types: &mut ComponentTypesBuilder,
@@ -976,7 +976,7 @@ impl<'a> Inliner<'a> {
                 },
                 InstanceModule::Import(ty) => match &memory.item {
                     ExportItem::Name(name) => match types[*ty].exports[name] {
-                        wasmtime_types::EntityType::Memory(m) => match m.idx_type {
+                        EntityType::Memory(m) => match m.idx_type {
                             IndexType::I32 => false,
                             IndexType::I64 => true,
                         },

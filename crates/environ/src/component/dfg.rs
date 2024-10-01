@@ -29,14 +29,13 @@
 
 use crate::component::*;
 use crate::prelude::*;
-use crate::{EntityIndex, EntityRef, PrimaryMap, WasmValType};
+use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use anyhow::Result;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
 use wasmparser::types::ComponentCoreModuleTypeId;
-use wasmtime_types::ModuleInternedTypeIndex;
 
 #[derive(Default)]
 #[allow(missing_docs)]

@@ -13,10 +13,8 @@
 pub mod drc;
 
 use crate::prelude::*;
+use crate::{WasmArrayType, WasmCompositeType, WasmStorageType, WasmStructType, WasmValType};
 use core::alloc::Layout;
-use wasmtime_types::{
-    WasmArrayType, WasmCompositeType, WasmStorageType, WasmStructType, WasmValType,
-};
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
 pub const I31_DISCRIMINANT: u64 = 1;

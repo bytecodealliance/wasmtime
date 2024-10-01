@@ -1856,18 +1856,6 @@ when = "2024-08-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.wasmtime-types]]
-version = "23.0.1"
-when = "2024-07-22"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "24.0.0"
-when = "2024-08-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
 [[publisher.wasmtime-wasi]]
 version = "23.0.1"
 when = "2024-07-22"

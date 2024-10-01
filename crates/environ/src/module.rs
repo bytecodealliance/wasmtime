@@ -1,12 +1,11 @@
 //! Data structures for representing decoded wasm modules.
 
 use crate::prelude::*;
-use crate::{PrimaryMap, Tunables};
+use crate::*;
 use alloc::collections::BTreeMap;
 use core::ops::Range;
 use cranelift_entity::{packed_option::ReservedValue, EntityRef};
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_types::*;
 
 /// Implementation styles for WebAssembly linear memory.
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]

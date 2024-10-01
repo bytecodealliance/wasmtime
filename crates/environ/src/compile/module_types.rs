@@ -1,10 +1,10 @@
-use crate::{EntityRef, Module, ModuleTypes, TypeConvert};
+use crate::{
+    EngineOrModuleTypeIndex, EntityRef, Module, ModuleInternedRecGroupIndex,
+    ModuleInternedTypeIndex, ModuleTypes, TypeConvert, TypeIndex, WasmCompositeType, WasmFuncType,
+    WasmHeapType, WasmResult, WasmSubType,
+};
 use std::{borrow::Cow, collections::HashMap, ops::Index};
 use wasmparser::{UnpackedIndex, Validator, ValidatorId};
-use wasmtime_types::{
-    EngineOrModuleTypeIndex, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, TypeIndex,
-    WasmCompositeType, WasmFuncType, WasmHeapType, WasmResult, WasmSubType,
-};
 
 /// A type marking the start of a recursion group's definition.
 ///

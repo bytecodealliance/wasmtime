@@ -1,8 +1,8 @@
 use crate::component::*;
 use crate::prelude::*;
 use crate::{
-    EntityType, Module, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert, WasmHeapType,
-    WasmValType,
+    EngineOrModuleTypeIndex, EntityType, Module, ModuleInternedTypeIndex, ModuleTypes,
+    ModuleTypesBuilder, PrimaryMap, TypeConvert, WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -12,7 +12,6 @@ use std::ops::Index;
 use wasmparser::names::KebabString;
 use wasmparser::{types, Validator};
 use wasmtime_component_util::FlagsSize;
-use wasmtime_types::ModuleInternedTypeIndex;
 
 mod resources;
 pub use resources::ResourcesBuilder;
@@ -676,10 +675,7 @@ impl TypeConvert for ComponentTypesBuilder {
         panic!("heap types are not supported yet")
     }
 
-    fn lookup_type_index(
-        &self,
-        _index: wasmparser::UnpackedIndex,
-    ) -> wasmtime_types::EngineOrModuleTypeIndex {
+    fn lookup_type_index(&self, _index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
         panic!("typed references are not supported yet")
     }
 }

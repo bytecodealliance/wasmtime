@@ -1,14 +1,13 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::prelude::*;
-use crate::{EntityType, ModuleTypes, PrimaryMap};
+use crate::{EntityType, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap};
 use core::hash::{Hash, Hasher};
 use core::ops::Index;
 use serde_derive::{Deserialize, Serialize};
 use wasmparser::types;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
-use wasmtime_types::ModuleInternedTypeIndex;
 
-pub use wasmtime_types::StaticModuleIndex;
+pub use crate::StaticModuleIndex;
 
 macro_rules! indices {
     ($(
