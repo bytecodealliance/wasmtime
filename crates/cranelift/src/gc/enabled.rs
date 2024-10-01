@@ -955,9 +955,7 @@ impl FuncEnvironment<'_> {
 
         let offset = match offset {
             Offset::Dynamic(offset) => uextend_i32_to_pointer_type(builder, pointer_type, offset),
-            Offset::Static(offset) => builder
-                .ins()
-                .iconst(pointer_type, i64::try_from(offset).unwrap()),
+            Offset::Static(offset) => builder.ins().iconst(pointer_type, i64::from(offset)),
         };
 
         let index_and_offset = builder.ins().uadd_overflow_trap(
@@ -980,9 +978,7 @@ impl FuncEnvironment<'_> {
             }
             BoundsCheck::Access(access_size) => {
                 // Check that `index + offset + access_size` is in bounds.
-                let access_size = builder
-                    .ins()
-                    .iconst(pointer_type, i64::try_from(access_size).unwrap());
+                let access_size = builder.ins().iconst(pointer_type, i64::from(access_size));
                 builder.ins().uadd_overflow_trap(
                     index_and_offset,
                     access_size,
