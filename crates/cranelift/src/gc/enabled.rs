@@ -98,9 +98,7 @@ fn read_field_at_addr(
                                 // code. Unconditionally trap via conditional
                                 // trap instructions to avoid inserting block
                                 // terminators in the middle of this block.
-                                builder
-                                    .ins()
-                                    .trapz(null, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+                                builder.ins().trapz(null, TRAP_INTERNAL_ASSERT);
                             }
                             return Ok(null);
                         }
@@ -158,9 +156,7 @@ fn write_func_ref_at_addr(
             // non-null, this is unreachable code. Unconditionally trap
             // via conditional trap instructions to avoid inserting
             // block terminators in the middle of this block.
-            builder
-                .ins()
-                .trapz(null, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+            builder.ins().trapz(null, TRAP_INTERNAL_ASSERT);
         }
         null
     } else {
