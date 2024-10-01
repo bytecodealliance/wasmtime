@@ -1290,12 +1290,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let fd = self.get_file_fd(fd)?;
         self.as_wasi_impl()
             .advise(fd, offset, len, advice.into())
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `advise`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+            .await?;
+        Ok(())
     }
 
     /// Force the allocation of space in a file.
@@ -1353,11 +1349,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.as_wasi_impl().sync_data(fd).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `sync-data`")
-                .unwrap_or_else(types::Error::trap)
-        })
+        self.as_wasi_impl().sync_data(fd).await?;
+        Ok(())
     }
 
     /// Get the attributes of a file descriptor.
@@ -1439,24 +1432,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 ..
             }) => (fd.borrowed(), *blocking_mode, *append),
         };
-        let flags = self
-            .as_wasi_impl()
-            .get_flags(fd.borrowed())
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `get-flags`")
-                    .unwrap_or_else(types::Error::trap)
-            })?;
+        let flags = self.as_wasi_impl().get_flags(fd.borrowed()).await?;
         let fs_filetype = self
             .as_wasi_impl()
             .get_type(fd.borrowed())
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `get-type`")
-                    .unwrap_or_else(types::Error::trap)
-            })?
+            .await?
             .try_into()
             .map_err(types::Error::trap)?;
         let mut fs_flags = types::Fdflags::empty();
@@ -1568,16 +1548,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                     data_access_timestamp,
                     data_modification_timestamp,
                     status_change_timestamp,
-                } = self.as_wasi_impl().stat(fd.borrowed()).await.map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `stat`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
-                let metadata_hash = self.as_wasi_impl().metadata_hash(fd).await.map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `metadata_hash`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
+                } = self.as_wasi_impl().stat(fd.borrowed()).await?;
+                let metadata_hash = self.as_wasi_impl().metadata_hash(fd).await?;
                 let filetype = type_.try_into().map_err(types::Error::trap)?;
                 let zero = wall_clock::Datetime {
                     seconds: 0,
@@ -1610,11 +1582,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         size: types::Filesize,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.as_wasi_impl().set_size(fd, size).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `set-size`")
-                .unwrap_or_else(types::Error::trap)
-        })
+        self.as_wasi_impl().set_size(fd, size).await?;
+        Ok(())
     }
 
     /// Adjust the timestamps of an open file or directory.
@@ -1640,14 +1609,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         )?;
 
         let fd = self.get_fd(fd)?;
-        self.as_wasi_impl()
-            .set_times(fd, atim, mtim)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `set-times`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+        self.as_wasi_impl().set_times(fd, atim, mtim).await?;
+        Ok(())
     }
 
     /// Read from a file descriptor.
@@ -1751,14 +1714,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 drop(t);
                 let buf = first_non_empty_iovec(memory, iovs)?;
 
-                let stream = self
-                    .as_wasi_impl()
-                    .read_via_stream(fd, offset)
-                    .map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `read-via-stream`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
+                let stream = self.as_wasi_impl().read_via_stream(fd, offset)?;
                 let read = blocking_mode
                     .read(
                         &mut self.as_wasi_impl(),
@@ -1892,12 +1848,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 .checked_add_signed(offset)
                 .ok_or(types::Errno::Inval)?,
             types::Whence::End => {
-                let filesystem::DescriptorStat { size, .. } =
-                    self.as_wasi_impl().stat(fd).await.map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `stat`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
+                let filesystem::DescriptorStat { size, .. } = self.as_wasi_impl().stat(fd).await?;
                 size.checked_add_signed(offset).ok_or(types::Errno::Inval)?
             }
             _ => return Err(types::Errno::Inval.into()),
@@ -1915,11 +1866,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.as_wasi_impl().sync(fd).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `sync`")
-                .unwrap_or_else(types::Error::trap)
-        })
+        self.as_wasi_impl().sync(fd).await?;
+        Ok(())
     }
 
     /// Return the current offset of a file descriptor.
@@ -1947,24 +1895,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         cookie: types::Dircookie,
     ) -> Result<types::Size, types::Error> {
         let fd = self.get_dir_fd(fd)?;
-        let stream = self
-            .as_wasi_impl()
-            .read_directory(fd.borrowed())
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `read-directory`")
-                    .unwrap_or_else(types::Error::trap)
-            })?;
-        let dir_metadata_hash = self
-            .as_wasi_impl()
-            .metadata_hash(fd.borrowed())
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `metadata-hash`")
-                    .unwrap_or_else(types::Error::trap)
-            })?;
+        let stream = self.as_wasi_impl().read_directory(fd.borrowed()).await?;
+        let dir_metadata_hash = self.as_wasi_impl().metadata_hash(fd.borrowed()).await?;
         let cookie = cookie.try_into().map_err(|_| types::Errno::Overflow)?;
 
         let head = [
@@ -1996,20 +1928,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             .into_iter()
             .zip(3u64..)
         {
-            let filesystem::DirectoryEntry { type_, name } = entry.map_err(|e| {
-                e.try_into()
-                    .context("failed to inspect `read-directory` entry")
-                    .unwrap_or_else(types::Error::trap)
-            })?;
+            let filesystem::DirectoryEntry { type_, name } = entry?;
             let metadata_hash = self
                 .as_wasi_impl()
                 .metadata_hash_at(fd.borrowed(), filesystem::PathFlags::empty(), name.clone())
-                .await
-                .map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `metadata-hash-at`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
+                .await?;
             let d_type = type_.try_into().map_err(types::Error::trap)?;
             let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
             dir.push((
@@ -2072,12 +1995,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let path = read_string(memory, path)?;
         self.as_wasi_impl()
             .create_directory_at(dirfd.borrowed(), path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `create-directory-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+            .await?;
+        Ok(())
     }
 
     /// Return the attributes of a file or directory.
@@ -2102,21 +2021,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         } = self
             .as_wasi_impl()
             .stat_at(dirfd.borrowed(), flags.into(), path.clone())
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `stat-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })?;
+            .await?;
         let metadata_hash = self
             .as_wasi_impl()
             .metadata_hash_at(dirfd, flags.into(), path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `metadata-hash-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })?;
+            .await?;
         let filetype = type_.try_into().map_err(types::Error::trap)?;
         let zero = wall_clock::Datetime {
             seconds: 0,
@@ -2165,12 +2074,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let path = read_string(memory, path)?;
         self.as_wasi_impl()
             .set_times_at(dirfd, flags.into(), path, atim, mtim)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `set-times-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+            .await?;
+        Ok(())
     }
 
     /// Create a hard link.
@@ -2191,12 +2096,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let target_path = read_string(memory, target_path)?;
         self.as_wasi_impl()
             .link_at(src_fd, src_flags.into(), src_path, target_fd, target_path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `link-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+            .await?;
+        Ok(())
     }
 
     /// Open a file or directory.
@@ -2242,12 +2143,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let fd = self
             .as_wasi_impl()
             .open_at(dirfd, dirflags.into(), path, oflags.into(), flags)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `open-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })?;
+            .await?;
         let mut t = self.transact()?;
         let desc = match t.view.table().get(&fd)? {
             crate::filesystem::Descriptor::Dir(_) => Descriptor::Directory {
@@ -2281,12 +2177,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let mut path = self
             .as_wasi_impl()
             .readlink_at(dirfd, path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `readlink-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })?
+            .await?
             .into_bytes();
         if let Ok(buf_len) = buf_len.try_into() {
             // `path` cannot be longer than `usize`, only truncate if `buf_len` fits in `usize`
@@ -2306,14 +2197,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(memory, path)?;
-        self.as_wasi_impl()
-            .remove_directory_at(dirfd, path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `remove-directory-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+        self.as_wasi_impl().remove_directory_at(dirfd, path).await?;
+        Ok(())
     }
 
     /// Rename a file or directory.
@@ -2333,12 +2218,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let dest_path = read_string(memory, dest_path)?;
         self.as_wasi_impl()
             .rename_at(src_fd, src_path, dest_fd, dest_path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `rename-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+            .await?;
+        Ok(())
     }
 
     #[instrument(skip(self, memory))]
@@ -2354,12 +2235,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let dest_path = read_string(memory, dest_path)?;
         self.as_wasi_impl()
             .symlink_at(dirfd.borrowed(), src_path, dest_path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `symlink-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+            .await?;
+        Ok(())
     }
 
     #[instrument(skip(self, memory))]
@@ -2373,12 +2250,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let path = memory.as_cow_str(path)?.into_owned();
         self.as_wasi_impl()
             .unlink_file_at(dirfd.borrowed(), path)
-            .await
-            .map_err(|e| {
-                e.try_into()
-                    .context("failed to call `unlink-file-at`")
-                    .unwrap_or_else(types::Error::trap)
-            })
+            .await?;
+        Ok(())
     }
 
     #[instrument(skip(self, memory))]
@@ -2488,11 +2361,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                                 let pos = position.load(Ordering::Relaxed);
                                 let fd = fd.borrowed();
                                 drop(t);
-                                self.as_wasi_impl().read_via_stream(fd, pos).map_err(|e| {
-                                    e.try_into()
-                                        .context("failed to call `read-via-stream`")
-                                        .unwrap_or_else(types::Error::trap)
-                                })?
+                                self.as_wasi_impl().read_via_stream(fd, pos)?
                             }
                             // TODO: Support sockets
                             _ => return Err(types::Errno::Badf.into()),
@@ -2522,18 +2391,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                                 let append = *append;
                                 drop(t);
                                 if append {
-                                    self.as_wasi_impl().append_via_stream(fd).map_err(|e| {
-                                        e.try_into()
-                                            .context("failed to call `append-via-stream`")
-                                            .unwrap_or_else(types::Error::trap)
-                                    })?
+                                    self.as_wasi_impl().append_via_stream(fd)?
                                 } else {
                                     let pos = position.load(Ordering::Relaxed);
-                                    self.as_wasi_impl().write_via_stream(fd, pos).map_err(|e| {
-                                        e.try_into()
-                                            .context("failed to call `write-via-stream`")
-                                            .unwrap_or_else(types::Error::trap)
-                                    })?
+                                    self.as_wasi_impl().write_via_stream(fd, pos)?
                                 }
                             }
                             // TODO: Support sockets

@@ -25,14 +25,14 @@ impl EmitInfo {
 }
 
 pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
-    u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
+    u32::from(m.to_real_reg().unwrap().hw_enc() & 31)
 }
 
 pub(crate) fn reg_to_compressed_gpr_num(m: Reg) -> u32 {
     let real_reg = m.to_real_reg().unwrap().hw_enc();
     debug_assert!(real_reg >= 8 && real_reg < 16);
     let compressed_reg = real_reg - 8;
-    u32::try_from(compressed_reg).unwrap()
+    u32::from(compressed_reg)
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]

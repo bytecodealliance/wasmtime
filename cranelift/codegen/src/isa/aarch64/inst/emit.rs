@@ -95,16 +95,16 @@ pub fn mem_finalize(
 
 pub(crate) fn machreg_to_gpr(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Int);
-    u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
+    u32::from(m.to_real_reg().unwrap().hw_enc() & 31)
 }
 
 pub(crate) fn machreg_to_vec(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Float);
-    u32::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
+    u32::from(m.to_real_reg().unwrap().hw_enc())
 }
 
 fn machreg_to_gpr_or_vec(m: Reg) -> u32 {
-    u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
+    u32::from(m.to_real_reg().unwrap().hw_enc() & 31)
 }
 
 pub(crate) fn enc_arith_rrr(

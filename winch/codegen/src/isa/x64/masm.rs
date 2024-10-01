@@ -69,7 +69,7 @@ impl Masm for MacroAssembler {
 
         if self.shared_flags.unwind_info() {
             self.asm.emit_unwind_inst(UnwindInst::PushFrameRegs {
-                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
+                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().into(),
             })
         }
 
@@ -99,7 +99,7 @@ impl Masm for MacroAssembler {
         // Emit unwind info.
         if self.shared_flags.unwind_info() {
             self.asm.emit_unwind_inst(UnwindInst::DefineNewFrame {
-                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
+                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().into(),
 
                 // The Winch calling convention has no callee-save registers, so nothing will be
                 // clobbered.

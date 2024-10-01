@@ -266,7 +266,7 @@ impl Descriptors {
     fn push(&self, desc: Descriptor) -> Result<Fd, Errno> {
         unsafe {
             let table = (*self.table.get()).as_mut_ptr();
-            let len = usize::try_from(self.table_len.get()).trapping_unwrap();
+            let len = usize::from(self.table_len.get());
             if len >= (*table).len() {
                 return Err(wasi::ERRNO_NOMEM);
             }
@@ -280,7 +280,7 @@ impl Descriptors {
         unsafe {
             std::slice::from_raw_parts(
                 (*self.table.get()).as_ptr().cast(),
-                usize::try_from(self.table_len.get()).trapping_unwrap(),
+                usize::from(self.table_len.get()),
             )
         }
     }
@@ -289,7 +289,7 @@ impl Descriptors {
         unsafe {
             std::slice::from_raw_parts_mut(
                 (*self.table.get()).as_mut_ptr().cast(),
-                usize::try_from(self.table_len.get()).trapping_unwrap(),
+                usize::from(self.table_len.get()),
             )
         }
     }

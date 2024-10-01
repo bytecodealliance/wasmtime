@@ -606,7 +606,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(builder.func);
         let pointer_type = self.pointer_type();
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.ptr.vmctx_epoch_ptr()).unwrap();
+        let offset = i32::from(self.offsets.ptr.vmctx_epoch_ptr());
         let epoch_ptr = builder
             .ins()
             .load(pointer_type, ir::MemFlags::trusted(), base, offset);

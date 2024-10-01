@@ -303,8 +303,8 @@ mod tests {
         func.dfg
             .replace(br_block0_block2_block1)
             .brif(cond, block1, &[], ret_block, &[]);
-        cfg.recompute_block(&mut func, block0);
-        cfg.recompute_block(&mut func, ret_block);
+        cfg.recompute_block(&func, block0);
+        cfg.recompute_block(&func, ret_block);
         let br_block0_block1_ret_block = br_block0_block2_block1;
 
         {

@@ -43,7 +43,7 @@ pub fn generate_global_export(
                 let new = match x {
                     None => None,
                     #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
-                    Some(x) => Some(x.try_gc_ref(&mut store)?.unchecked_copy()),
+                    Some(x) => Some(x.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();
                 global.write_gc_ref(store.gc_store_mut()?, new);
@@ -52,7 +52,7 @@ pub fn generate_global_export(
                 let new = match a {
                     None => None,
                     #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
-                    Some(a) => Some(a.try_gc_ref(&mut store)?.unchecked_copy()),
+                    Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();
                 global.write_gc_ref(store.gc_store_mut()?, new);
