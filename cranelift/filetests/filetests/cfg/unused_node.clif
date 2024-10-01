@@ -13,7 +13,7 @@ function %not_reached(i32) -> i32 {
 ; check:  | <inst4>return v0
 ; check: }"]
 ; check:     block3 [shape=record, label="{block3:
-; check:  | <inst5>trap user0
+; check:  | <inst5>trap user1
 ; check: }"]
 block0(v0: i32):
     brif v0, block2, block3       ; unordered: block0:inst0 -> block2
@@ -27,5 +27,5 @@ block2:
     return v0
 
 block3:
-    trap user0
+    trap user1
 }

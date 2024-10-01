@@ -6,9 +6,9 @@ function u0:0() {
     fn0 = u0:1 sig0
 
 block0:
-    trap user0
+    trap user1
 
 block1(v0: f32, v1: f64, v2: i8, v3: i16, v4: i32, v5: i64, v6: i128, v7: i8, v8: i8, v9: i128, v12: i8x16, v13: i16x4, v14: f32x16):
     call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v12, v13, v14)
-    trap user0
+    trap user1
 }

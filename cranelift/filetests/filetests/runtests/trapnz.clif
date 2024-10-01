@@ -8,7 +8,7 @@ target s390x
 
 function %trapnz(i64) -> i64 {
 block0(v0: i64):
-  trapnz v0, user0
+  trapnz v0, user1
   return v0
 }
 
@@ -16,7 +16,7 @@ block0(v0: i64):
 
 function %trapnz_i128(i128) -> i128 {
 block0(v0: i128):
-  trapnz v0, user0
+  trapnz v0, user1
   return v0
 }
 

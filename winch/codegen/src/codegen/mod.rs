@@ -21,6 +21,7 @@ use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
 };
+use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_TABLE_OUT_OF_BOUNDS};
 
 mod context;
 pub(crate) use context::*;
@@ -366,7 +367,7 @@ where
 
         // Typecheck.
         self.masm.cmp(caller_id, callee_id.into(), OperandSize::S32);
-        self.masm.trapif(IntCmpKind::Ne, TrapCode::BadSignature);
+        self.masm.trapif(IntCmpKind::Ne, TRAP_BAD_SIGNATURE);
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
     }
@@ -623,7 +624,7 @@ where
                     index_offset_and_access_size,
                     RegImm::i64(offset_with_access_size as i64),
                     ptr_size,
-                    TrapCode::HeapOutOfBounds,
+                    TrapCode::HEAP_OUT_OF_BOUNDS,
                 );
 
                 let addr = bounds::load_heap_addr_checked(
@@ -661,7 +662,7 @@ where
             // reachability is restored or when reaching the end of the
             // function.
             HeapStyle::Static { bound } if offset_with_access_size > bound => {
-                self.masm.trap(TrapCode::HeapOutOfBounds);
+                self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS);
                 self.context.reachable = false;
                 None
             }
@@ -811,8 +812,7 @@ where
         let bound_size = table_data.current_elements_size;
         self.masm.load(bound_addr, bound, bound_size.into());
         self.masm.cmp(index, bound.into(), bound_size);
-        self.masm
-            .trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
+        self.masm.trapif(IntCmpKind::GeU, TRAP_TABLE_OUT_OF_BOUNDS);
 
         // Move the index into the scratch register to calculate the table
         // element address.

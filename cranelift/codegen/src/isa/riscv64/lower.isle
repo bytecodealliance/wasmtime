@@ -565,7 +565,7 @@
 ;; Traps if the input register is zero, otherwise returns the same register.
 (decl nonzero_divisor (XReg) XReg)
 (rule (nonzero_divisor val)
-  (let ((_ InstOutput (gen_trapif (IntCC.Equal) val (zero_reg) (TrapCode.IntegerDivisionByZero))))
+  (let ((_ InstOutput (gen_trapif (IntCC.Equal) val (zero_reg) (TrapCode.INTEGER_DIVISION_BY_ZERO))))
     val))
 
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -614,7 +614,7 @@
       (_ InstOutput (gen_trapif
                       (IntCC.Equal)
                       no_int_overflow (zero_reg)
-                      (TrapCode.IntegerOverflow))))
+                      (TrapCode.INTEGER_OVERFLOW))))
       y))
 
 ;;;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2356,11 +2356,11 @@
 ;; Unsure whether that needs to be preserved across function calls and/or would
 ;; cause other problems. Also unsure whether it's actually more performant.
 (rule (lower (has_type ity (fcvt_to_uint v @ (value_type fty))))
-  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
         (min FReg (imm fty (fcvt_umin_bound fty $false)))
-        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
+        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.INTEGER_OVERFLOW)))
         (max FReg (imm fty (fcvt_umax_bound fty ity $false)))
-        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
+        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.INTEGER_OVERFLOW))))
     (lower_inbounds_fcvt_to_uint ity fty v)))
 
 (decl lower_inbounds_fcvt_to_uint (Type Type FReg) XReg)
@@ -2373,11 +2373,11 @@
 
 ;; NB: see above with `fcvt_to_uint` as this is similar
 (rule (lower (has_type ity (fcvt_to_sint v @ (value_type fty))))
-  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
         (min FReg (imm fty (fcvt_smin_bound fty ity $false)))
-        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
+        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.INTEGER_OVERFLOW)))
         (max FReg (imm fty (fcvt_smax_bound fty ity $false)))
-        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
+        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.INTEGER_OVERFLOW))))
     (lower_inbounds_fcvt_to_sint ity fty v)))
 
 (decl lower_inbounds_fcvt_to_sint (Type Type FReg) XReg)

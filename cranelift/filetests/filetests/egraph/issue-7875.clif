@@ -28,7 +28,7 @@ block4(v10: f32):
     v12 = select.f32 v11, v4, v10
     v13 = bitcast.i32 v12
     store v13, v0
-    trap user0
+    trap user1
 
 block3:
     v15 = bitcast.i32 v4

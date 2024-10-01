@@ -3,7 +3,7 @@ target aarch64
 
 function %trap() {
 block0:
-  trap user0
+  trap user1
 }
 
 ; VCode:
@@ -12,18 +12,18 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
 
 function %trap_iadd_ifcout(i64, i64) {
 block0(v0: i64, v1: i64):
-  v2 = uadd_overflow_trap v0, v1, user0
+  v2 = uadd_overflow_trap v0, v1, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   adds x3, x0, x1
-;   b.hs #trap=user0
+;   b.hs #trap=user1
 ;   ret
 ;
 ; Disassembled:
@@ -31,52 +31,52 @@ block0(v0: i64, v1: i64):
 ;   adds x3, x0, x1
 ;   b.hs #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
 
 function %trapz(i64) {
 block0(v0: i64):
-  trapz v0, user0
+  trapz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
-;   cbz x0, #trap=user0
+;   cbz x0, #trap=user1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cbz x0, #8
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
 
 function %trapnz(i64) {
 block0(v0: i64):
-  trapnz v0, user0
+  trapnz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
-;   cbnz x0, #trap=user0
+;   cbnz x0, #trap=user1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cbnz x0, #8
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
 
 function %trapz_i128(i128) {
 block0(v0: i128):
-  trapz v0, user0
+  trapz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   orr x3, x0, x1
-;   cbz x3, #trap=user0
+;   cbz x3, #trap=user1
 ;   ret
 ;
 ; Disassembled:
@@ -84,18 +84,18 @@ block0(v0: i128):
 ;   orr x3, x0, x1
 ;   cbz x3, #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
 
 function %trapnz_i128(i128) {
 block0(v0: i128):
-  trapnz v0, user0
+  trapnz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   orr x3, x0, x1
-;   cbnz x3, #trap=user0
+;   cbnz x3, #trap=user1
 ;   ret
 ;
 ; Disassembled:
@@ -103,4 +103,4 @@ block0(v0: i128):
 ;   orr x3, x0, x1
 ;   cbnz x3, #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1

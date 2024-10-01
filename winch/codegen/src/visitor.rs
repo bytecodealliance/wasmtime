@@ -12,10 +12,10 @@ use crate::masm::{
 };
 use crate::reg::Reg;
 use crate::stack::{TypedReg, Val};
-use cranelift_codegen::ir::TrapCode;
 use regalloc2::RegClass;
 use smallvec::SmallVec;
 use wasmparser::{BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, V128};
+use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
     FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType,
     WasmValType, FUNCREF_INIT_BIT,
@@ -1378,7 +1378,7 @@ where
             TableStyle::CallerChecksSignature { lazy_init: true } => {
                 let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
                 self.masm
-                    .trapz(funcref_ptr.into(), TrapCode::IndirectCallToNull);
+                    .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL);
                 self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
             }
             _ => unimplemented!("Support for eager table init"),

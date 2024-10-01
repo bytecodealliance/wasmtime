@@ -26,7 +26,7 @@
 ;; @001e                               jump block3
 ;;
 ;;                                 block4:
-;; @001f                               trap unreachable
+;; @001f                               trap user11
 ;;
 ;;                                 block3:
 ;; @0021                               v4 = iconst.i32 0

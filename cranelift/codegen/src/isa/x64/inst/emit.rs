@@ -821,7 +821,7 @@ pub(crate) fn emit(
             let inst = match size {
                 OperandSize::Size8 => Inst::div8(
                     DivSignedness::Signed,
-                    TrapCode::IntegerDivisionByZero,
+                    TrapCode::INTEGER_DIVISION_BY_ZERO,
                     RegMem::reg(divisor),
                     Gpr::unwrap_new(regs::rax()),
                     Writable::from_reg(Gpr::unwrap_new(regs::rax())),
@@ -829,7 +829,7 @@ pub(crate) fn emit(
                 _ => Inst::div(
                     size,
                     DivSignedness::Signed,
-                    TrapCode::IntegerDivisionByZero,
+                    TrapCode::INTEGER_DIVISION_BY_ZERO,
                     RegMem::reg(divisor),
                     Gpr::unwrap_new(regs::rax()),
                     Gpr::unwrap_new(regs::rdx()),
@@ -3692,7 +3692,7 @@ pub(crate) fn emit(
                     inst.emit(sink, info, state);
                 }
             } else {
-                let inst = Inst::trap_if(CC::P, TrapCode::BadConversionToInteger);
+                let inst = Inst::trap_if(CC::P, TrapCode::BAD_CONVERSION_TO_INTEGER);
                 inst.emit(sink, info, state);
 
                 // Check if INT_MIN was the correct result: determine the smallest floating point
@@ -3732,7 +3732,7 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
 
                 // no trap if src >= or > threshold
-                let inst = Inst::trap_if(no_overflow_cc.invert(), TrapCode::IntegerOverflow);
+                let inst = Inst::trap_if(no_overflow_cc.invert(), TrapCode::INTEGER_OVERFLOW);
                 inst.emit(sink, info, state);
 
                 // If positive, it was a real overflow.
@@ -3745,7 +3745,7 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
 
                 // no trap if 0 >= src
-                let inst = Inst::trap_if(CC::B, TrapCode::IntegerOverflow);
+                let inst = Inst::trap_if(CC::B, TrapCode::INTEGER_OVERFLOW);
                 inst.emit(sink, info, state);
             }
 
@@ -3857,7 +3857,7 @@ pub(crate) fn emit(
                 sink.bind_label(not_nan, state.ctrl_plane_mut());
             } else {
                 // Trap.
-                let inst = Inst::trap_if(CC::P, TrapCode::BadConversionToInteger);
+                let inst = Inst::trap_if(CC::P, TrapCode::BAD_CONVERSION_TO_INTEGER);
                 inst.emit(sink, info, state);
             }
 
@@ -3887,7 +3887,7 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
             } else {
                 // Trap.
-                let inst = Inst::trap(TrapCode::IntegerOverflow);
+                let inst = Inst::trap(TrapCode::INTEGER_OVERFLOW);
                 inst.emit(sink, info, state);
             }
 
@@ -3928,7 +3928,7 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
                 sink.bind_label(next_is_large, state.ctrl_plane_mut());
             } else {
-                let inst = Inst::trap_if(CC::L, TrapCode::IntegerOverflow);
+                let inst = Inst::trap_if(CC::L, TrapCode::INTEGER_OVERFLOW);
                 inst.emit(sink, info, state);
             }
 

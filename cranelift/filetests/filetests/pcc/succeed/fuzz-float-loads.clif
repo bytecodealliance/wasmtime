@@ -81,5 +81,5 @@ block7(v40: i64):
     v39 = f64const 0x0.0000000005b28p-1022
     v41 = iadd_imm v40, 9
     store notrap aligned v41, v17+8
-    trap unreachable
+    trap user1
 }

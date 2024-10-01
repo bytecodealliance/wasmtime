@@ -842,14 +842,14 @@ impl Assembler {
                 });
                 self.emit(Inst::TrapIf {
                     cc: CC::Z,
-                    trap_code: TrapCode::IntegerDivisionByZero,
+                    trap_code: TrapCode::INTEGER_DIVISION_BY_ZERO,
                 });
                 self.emit(Inst::SignExtendData {
                     size: size.into(),
                     src: dst.0.into(),
                     dst: dst.1.into(),
                 });
-                TrapCode::IntegerOverflow
+                TrapCode::INTEGER_OVERFLOW
             }
 
             // Unsigned division only traps in one case, on divide-by-zero, so
@@ -865,7 +865,7 @@ impl Assembler {
                     src2: dst.1.into(),
                     dst: dst.1.into(),
                 });
-                TrapCode::IntegerDivisionByZero
+                TrapCode::INTEGER_DIVISION_BY_ZERO
             }
         };
         self.emit(Inst::Div {
@@ -920,7 +920,7 @@ impl Assembler {
                 });
                 self.emit(Inst::Div {
                     sign: DivSignedness::Unsigned,
-                    trap: TrapCode::IntegerDivisionByZero,
+                    trap: TrapCode::INTEGER_DIVISION_BY_ZERO,
                     size: size.into(),
                     divisor: GprMem::unwrap_new(RegMem::reg(divisor.into())),
                     dividend_lo: dst.0.into(),

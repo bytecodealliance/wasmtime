@@ -2,7 +2,7 @@ use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use crate::gc::ArrayInit;
 use crate::translate::{StructFieldsVec, TargetEnvironment};
-use crate::DEBUG_ASSERT_TRAP_CODE;
+use crate::TRAP_INTERNAL_ASSERT;
 use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, condcodes::IntCC, InstBuilder},
@@ -98,9 +98,7 @@ fn read_field_at_addr(
                                 // code. Unconditionally trap via conditional
                                 // trap instructions to avoid inserting block
                                 // terminators in the middle of this block.
-                                builder
-                                    .ins()
-                                    .trapz(null, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+                                builder.ins().trapz(null, TRAP_INTERNAL_ASSERT);
                             }
                             return Ok(null);
                         }
@@ -158,9 +156,7 @@ fn write_func_ref_at_addr(
             // non-null, this is unreachable code. Unconditionally trap
             // via conditional trap instructions to avoid inserting
             // block terminators in the middle of this block.
-            builder
-                .ins()
-                .trapz(null, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+            builder.ins().trapz(null, TRAP_INTERNAL_ASSERT);
         }
         null
     } else {
@@ -278,7 +274,7 @@ pub fn translate_struct_get(
     // TODO: If we know we have a `(ref $my_struct)` here, instead of maybe a
     // `(ref null $my_struct)`, we could omit the `trapz`. But plumbing that
     // type info from `wasmparser` and through to here is a bit funky.
-    builder.ins().trapz(struct_ref, ir::TrapCode::NullReference);
+    builder.ins().trapz(struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index];
@@ -316,7 +312,7 @@ fn translate_struct_get_and_extend(
     extension: Extension,
 ) -> WasmResult<ir::Value> {
     // TODO: See comment in `translate_struct_get` about the `trapz`.
-    builder.ins().trapz(struct_ref, ir::TrapCode::NullReference);
+    builder.ins().trapz(struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index];
@@ -394,7 +390,7 @@ pub fn translate_struct_set(
     new_val: ir::Value,
 ) -> WasmResult<()> {
     // TODO: See comment in `translate_struct_get` about the `trapz`.
-    builder.ins().trapz(struct_ref, ir::TrapCode::NullReference);
+    builder.ins().trapz(struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index];
@@ -562,13 +558,13 @@ pub fn translate_array_fill(
     // Check that the full range of elements we want to fill is within bounds.
     let end_index = builder
         .ins()
-        .uadd_overflow_trap(index, n, ir::TrapCode::ArrayOutOfBounds);
+        .uadd_overflow_trap(index, n, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
     let out_of_bounds = builder
         .ins()
         .icmp(IntCC::UnsignedGreaterThan, end_index, len);
     builder
         .ins()
-        .trapnz(out_of_bounds, ir::TrapCode::ArrayOutOfBounds);
+        .trapnz(out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Get the address of the first element we want to fill.
     let interned_type_index = func_env.module.types[array_type_index];
@@ -615,7 +611,7 @@ pub fn translate_array_len(
     builder: &mut FunctionBuilder,
     array_ref: ir::Value,
 ) -> WasmResult<ir::Value> {
-    builder.ins().trapz(array_ref, ir::TrapCode::NullReference);
+    builder.ins().trapz(array_ref, crate::TRAP_NULL_REFERENCE);
 
     let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
     let len_field = func_env.prepare_gc_ref_access(
@@ -666,19 +662,16 @@ fn emit_array_size_info(
     let all_elems_size = builder.ins().imul(one_elem_size, array_len);
 
     let high_bits = builder.ins().ushr_imm(all_elems_size, 32);
-    builder
-        .ins()
-        .trapnz(high_bits, ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE));
+    builder.ins().trapnz(high_bits, TRAP_INTERNAL_ASSERT);
 
     let all_elems_size = builder.ins().ireduce(ir::types::I32, all_elems_size);
     let base_size = builder
         .ins()
         .iconst(ir::types::I32, i64::from(array_layout.base_size));
-    let obj_size = builder.ins().uadd_overflow_trap(
-        all_elems_size,
-        base_size,
-        ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE),
-    );
+    let obj_size =
+        builder
+            .ins()
+            .uadd_overflow_trap(all_elems_size, base_size, TRAP_INTERNAL_ASSERT);
 
     let one_elem_size = builder.ins().ireduce(ir::types::I32, one_elem_size);
 
@@ -719,7 +712,7 @@ fn array_elem_addr(
     let in_bounds = builder.ins().icmp(IntCC::UnsignedLessThan, index, len);
     builder
         .ins()
-        .trapz(in_bounds, ir::TrapCode::ArrayOutOfBounds);
+        .trapz(in_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Compute the size (in bytes) of the whole array object.
     let ArraySizeInfo {
@@ -960,11 +953,10 @@ impl FuncEnvironment<'_> {
                 .iconst(pointer_type, i64::try_from(offset).unwrap()),
         };
 
-        let index_and_offset = builder.ins().uadd_overflow_trap(
-            index,
-            offset,
-            ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
-        );
+        let index_and_offset =
+            builder
+                .ins()
+                .uadd_overflow_trap(index, offset, TRAP_INTERNAL_ASSERT);
 
         let end = match check {
             BoundsCheck::Object(object_size) => {
@@ -972,11 +964,9 @@ impl FuncEnvironment<'_> {
                 // deduplicated across multiple accesses to different fields
                 // within the same object.
                 let object_size = uextend_i32_to_pointer_type(builder, pointer_type, object_size);
-                builder.ins().uadd_overflow_trap(
-                    index,
-                    object_size,
-                    ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
-                )
+                builder
+                    .ins()
+                    .uadd_overflow_trap(index, object_size, TRAP_INTERNAL_ASSERT)
             }
             BoundsCheck::Access(access_size) => {
                 // Check that `index + offset + access_size` is in bounds.
@@ -986,7 +976,7 @@ impl FuncEnvironment<'_> {
                 builder.ins().uadd_overflow_trap(
                     index_and_offset,
                     access_size,
-                    ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
+                    TRAP_INTERNAL_ASSERT,
                 )
             }
         };
@@ -995,10 +985,7 @@ impl FuncEnvironment<'_> {
             builder
                 .ins()
                 .icmp(ir::condcodes::IntCC::UnsignedLessThanOrEqual, end, bound);
-        builder.ins().trapz(
-            is_in_bounds,
-            ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
-        );
+        builder.ins().trapz(is_in_bounds, TRAP_INTERNAL_ASSERT);
 
         // NB: No need to check for overflow here, as that would mean that the
         // GC heap is hanging off the end of the address space, which is

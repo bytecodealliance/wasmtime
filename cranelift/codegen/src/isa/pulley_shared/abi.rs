@@ -220,7 +220,7 @@ where
             },
             src1: limit_reg.try_into().unwrap(),
             src2: pulley_interpreter::regs::XReg::sp.into(),
-            code: ir::TrapCode::StackOverflow,
+            code: ir::TrapCode::STACK_OVERFLOW,
         }
         .into()]
     }

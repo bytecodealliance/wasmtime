@@ -28,7 +28,7 @@
 ;; @002a                               brif v5, block2, block4
 ;;
 ;;                                 block2:
-;; @002c                               trap unreachable
+;; @002c                               trap user11
 ;;
 ;;                                 block4:
 ;; @002e                               v6 = iconst.i32 6

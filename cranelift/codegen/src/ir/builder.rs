@@ -277,6 +277,6 @@ mod tests {
 
         // We are trying to create a Opcode::Return with the InstData::Trap, which is obviously wrong
         pos.ins()
-            .Trap(Opcode::Return, I32, TrapCode::BadConversionToInteger);
+            .Trap(Opcode::Return, I32, TrapCode::BAD_CONVERSION_TO_INTEGER);
     }
 }

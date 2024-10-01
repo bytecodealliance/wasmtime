@@ -4,7 +4,7 @@ target x86_64
 function %f0(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 127
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -14,7 +14,7 @@ block0(v0: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, $127, %eax
-;   jb #trap=user0
+;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -30,12 +30,12 @@ block0(v0: i32):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %f1(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 127
-    v2 = uadd_overflow_trap v1, v0, user0
+    v2 = uadd_overflow_trap v1, v0, user1
     return v2
 }
 
@@ -45,7 +45,7 @@ block0(v0: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, $127, %eax
-;   jb #trap=user0
+;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -61,11 +61,11 @@ block0(v0: i32):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -75,7 +75,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, %esi, %eax
-;   jb #trap=user0
+;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -91,12 +91,12 @@ block0(v0: i32, v1: i32):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 127
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -106,7 +106,7 @@ block0(v0: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, $127, %rax
-;   jb #trap=user0
+;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -122,12 +122,12 @@ block0(v0: i64):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 127
-    v2 = uadd_overflow_trap v1, v0, user0
+    v2 = uadd_overflow_trap v1, v0, user1
     return v2
 }
 
@@ -137,7 +137,7 @@ block0(v0: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, $127, %rax
-;   jb #trap=user0
+;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -153,11 +153,11 @@ block0(v0: i64):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = uadd_overflow_trap v0, v1, user0
+    v2 = uadd_overflow_trap v0, v1, user1
     return v2
 }
 
@@ -167,7 +167,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, %rsi, %rax
-;   jb #trap=user0
+;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -183,5 +183,5 @@ block0(v0: i64, v1: i64):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 

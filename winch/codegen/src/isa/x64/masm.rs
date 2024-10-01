@@ -32,7 +32,7 @@ use cranelift_codegen::{
     },
     settings, Final, MachBufferFinalized, MachLabel,
 };
-
+use wasmtime_cranelift::TRAP_UNREACHABLE;
 use wasmtime_environ::{PtrSize, WasmValType};
 
 /// x64 MacroAssembler.
@@ -94,7 +94,7 @@ impl Masm for MacroAssembler {
         self.add_stack_max(scratch);
 
         self.asm.cmp_rr(scratch, regs::rsp(), self.ptr_size);
-        self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
+        self.asm.trapif(IntCmpKind::GtU, TrapCode::STACK_OVERFLOW);
 
         // Emit unwind info.
         if self.shared_flags.unwind_info() {
@@ -919,7 +919,7 @@ impl Masm for MacroAssembler {
     }
 
     fn unreachable(&mut self) {
-        self.asm.trap(TrapCode::UnreachableCodeReached)
+        self.asm.trap(TRAP_UNREACHABLE)
     }
 
     fn trap(&mut self, code: TrapCode) {

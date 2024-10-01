@@ -7,12 +7,12 @@ use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
-use crate::step::{step, ControlFlow, StepError};
+use crate::step::{step, ControlFlow, CraneliftTrap, StepError};
 use crate::value::{DataValueExt, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type,
+    GlobalValueData, LibCall, MemFlags, StackSlot, Type,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -192,7 +192,7 @@ pub enum InterpreterError {
 }
 
 pub type LibCallValues = SmallVec<[DataValue; 1]>;
-pub type LibCallHandler = fn(LibCall, LibCallValues) -> Result<LibCallValues, TrapCode>;
+pub type LibCallHandler = fn(LibCall, LibCallValues) -> Result<LibCallValues, CraneliftTrap>;
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
@@ -215,7 +215,7 @@ impl Default for InterpreterState<'_> {
         };
         Self {
             functions: FunctionStore::default(),
-            libcall_handler: |_, _| Err(TrapCode::UnreachableCodeReached),
+            libcall_handler: |_, _| Err(CraneliftTrap::UnreachableCodeReached),
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
@@ -563,6 +563,7 @@ mod tests {
     use super::*;
     use crate::step::CraneliftTrap;
     use cranelift_codegen::ir::immediates::Ieee32;
+    use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
     use smallvec::smallvec;
 
@@ -607,7 +608,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerDivisionByZero))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::INTEGER_DIVISION_BY_ZERO))
         );
     }
 
@@ -627,7 +628,7 @@ mod tests {
         let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
         match result {
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerOverflow)) => {}
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::INTEGER_OVERFLOW)) => {}
             _ => panic!("Unexpected ControlFlow: {result:?}"),
         }
     }
@@ -785,7 +786,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HEAP_OUT_OF_BOUNDS))
         );
     }
 
@@ -811,7 +812,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HEAP_OUT_OF_BOUNDS))
         );
     }
 
@@ -836,7 +837,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HEAP_OUT_OF_BOUNDS))
         );
     }
 
@@ -861,7 +862,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HEAP_OUT_OF_BOUNDS))
         );
     }
 
@@ -889,7 +890,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HEAP_OUT_OF_BOUNDS))
         );
     }
 
@@ -917,7 +918,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HEAP_OUT_OF_BOUNDS))
         );
     }
 
@@ -939,7 +940,7 @@ mod tests {
 
         assert_eq!(
             trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerOverflow))
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::INTEGER_OVERFLOW))
         );
     }
 
@@ -992,10 +993,7 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(
-            trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
-        );
+        assert_eq!(trap, ControlFlow::Trap(CraneliftTrap::HeapMisaligned));
     }
 
     #[test]
@@ -1018,10 +1016,7 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(
-            trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
-        );
+        assert_eq!(trap, ControlFlow::Trap(CraneliftTrap::HeapMisaligned));
     }
 
     // When a trap occurs in a function called by another function, the trap was not being propagated
@@ -1062,9 +1057,6 @@ mod tests {
         let trap = Interpreter::new(state).call_by_name("%u1", &[]).unwrap();
 
         // Ensure that the correct trap was propagated.
-        assert_eq!(
-            trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
-        );
+        assert_eq!(trap, ControlFlow::Trap(CraneliftTrap::HeapMisaligned));
     }
 }

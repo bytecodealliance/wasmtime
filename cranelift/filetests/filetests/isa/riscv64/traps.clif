@@ -4,129 +4,129 @@ target riscv64
 
 function %f() {
 block0:
-  trap user0
+  trap user1
 }
 
 ; VCode:
 ; block0:
-;   udf##trap_code=user0
+;   udf##trap_code=user1
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 
 function %trapnz(i64) {
 block0(v0: i64):
-  trapnz v0, user0
+  trapnz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
-;   trap_if user0##(a0 ne zero)
+;   trap_if user1##(a0 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   beqz a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %trapnz_i128(i128) {
 block0(v0: i128):
-  trapnz v0, user0
+  trapnz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   or a3,a1,a0
-;   trap_if user0##(a3 ne zero)
+;   trap_if user1##(a3 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a3, a1, a0
 ;   beqz a3, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %trapnz_icmp_fold(i64) {
 block0(v0: i64):
   v1 = iconst.i64 42
   v2 = icmp eq v0, v1
-  trapnz v2, user0
+  trapnz v2, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   li a2,42
-;   trap_if user0##(a0 eq a2)
+;   trap_if user1##(a0 eq a2)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
 ;   bne a0, a2, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %trapz(i64) {
 block0(v0: i64):
-  trapz v0, user0
+  trapz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
-;   trap_if user0##(a0 eq zero)
+;   trap_if user1##(a0 eq zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bnez a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %trapz_i128(i128) {
 block0(v0: i128):
-  trapz v0, user0
+  trapz v0, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   or a3,a1,a0
-;   trap_if user0##(a3 eq zero)
+;   trap_if user1##(a3 eq zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a3, a1, a0
 ;   bnez a3, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %trapz_icmp_fold(i64) {
 block0(v0: i64):
   v1 = iconst.i64 42
   v2 = icmp eq v0, v1
-  trapz v2, user0
+  trapz v2, user1
   return
 }
 
 ; VCode:
 ; block0:
 ;   li a2,42
-;   trap_if user0##(a0 ne a2)
+;   trap_if user1##(a0 ne a2)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
 ;   beq a0, a2, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
 function %h() {

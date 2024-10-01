@@ -62,7 +62,7 @@
 ;; @004b                               v8 = global_value.i64 gv4
 ;; @004b                               v9 = iadd v8, v7
 ;; @004b                               v10 = sload16.i64 little heap v9
-;; @004e                               trap unreachable
+;; @004e                               trap user11
 ;;
 ;;                                 block6(v6: i32):
 ;; @005d                               v11 = popcnt.i32 v4

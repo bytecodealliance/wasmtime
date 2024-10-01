@@ -138,7 +138,7 @@ pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
                 index.as_typed_reg().into(),
                 RegImm::i64(offset as i64),
                 heap_ty_size,
-                TrapCode::HeapOutOfBounds,
+                TrapCode::HEAP_OUT_OF_BOUNDS,
             );
 
             ImmOffset::from_u32(0)
@@ -165,7 +165,7 @@ where
 {
     let cmp_kind = emit_check_condition(masm, bounds, index);
 
-    masm.trapif(cmp_kind, TrapCode::HeapOutOfBounds);
+    masm.trapif(cmp_kind, TrapCode::HEAP_OUT_OF_BOUNDS);
     let addr = context.any_gpr(masm);
 
     load_heap_addr_unchecked(masm, heap, index, offset, addr, ptr_size);

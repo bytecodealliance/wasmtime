@@ -2,7 +2,7 @@ use crate::translate::{
     FuncEnvironment as _, FuncTranslationState, GlobalVariable, Heap, HeapData, HeapStyle,
     StructFieldsVec, TableData, TableSize, TargetEnvironment,
 };
-use crate::{gc, BuiltinFunctionSignatures};
+use crate::{gc, BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
@@ -1071,7 +1071,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         if self.signals_based_traps() {
             return;
         }
-        self.trapz(builder, rhs, ir::TrapCode::IntegerDivisionByZero);
+        self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO);
     }
 
     /// Helper used when `!self.signals_based_traps()` is enabled to test
@@ -1085,7 +1085,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         if self.signals_based_traps() {
             return;
         }
-        self.trapz(builder, rhs, ir::TrapCode::IntegerDivisionByZero);
+        self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO);
 
         let ty = builder.func.dfg.value_type(rhs);
         let minus_one = builder.ins().iconst(ty, -1);
@@ -1100,7 +1100,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         );
         let lhs_is_int_min = builder.ins().icmp(IntCC::Equal, lhs, int_min);
         let is_integer_overflow = builder.ins().band(rhs_is_minus_one, lhs_is_int_min);
-        self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::IntegerOverflow);
+        self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::INTEGER_OVERFLOW);
     }
 
     /// Helper used when `!self.signals_based_traps()` is enabled to perform
@@ -1300,7 +1300,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // functions, though, then there's no possibility of a trap.
             CheckIndirectCallTypeSignature::StaticMatch { may_be_null } => {
                 if may_be_null {
-                    Some(ir::TrapCode::IndirectCallToNull)
+                    Some(crate::TRAP_INDIRECT_CALL_TO_NULL)
                 } else {
                     None
                 }
@@ -1365,16 +1365,19 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                         let mem_flags = ir::MemFlags::trusted().with_readonly();
                         self.builder.ins().load(
                             sig_id_type,
-                            mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull)),
+                            mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL)),
                             funcref_ptr,
                             i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
                         );
                     } else {
-                        self.env
-                            .trapz(self.builder, funcref_ptr, ir::TrapCode::IndirectCallToNull);
+                        self.env.trapz(
+                            self.builder,
+                            funcref_ptr,
+                            crate::TRAP_INDIRECT_CALL_TO_NULL,
+                        );
                     }
                 }
-                self.env.trap(self.builder, ir::TrapCode::BadSignature);
+                self.env.trap(self.builder, crate::TRAP_BAD_SIGNATURE);
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
@@ -1383,7 +1386,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             WasmHeapType::NoFunc => {
                 assert!(table.table.ref_type.nullable);
                 self.env
-                    .trap(self.builder, ir::TrapCode::IndirectCallToNull);
+                    .trap(self.builder, crate::TRAP_INDIRECT_CALL_TO_NULL);
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
@@ -1430,13 +1433,13 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // Load the callee ID.
         //
         // Note that the callee may be null in which case this load may
-        // trap. If so use the `IndirectCallToNull` trap code.
+        // trap. If so use the `TRAP_INDIRECT_CALL_TO_NULL` trap code.
         let mut mem_flags = ir::MemFlags::trusted().with_readonly();
         if self.env.signals_based_traps() {
-            mem_flags = mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull));
+            mem_flags = mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL));
         } else {
             self.env
-                .trapz(self.builder, funcref_ptr, ir::TrapCode::IndirectCallToNull);
+                .trapz(self.builder, funcref_ptr, crate::TRAP_INDIRECT_CALL_TO_NULL);
         }
         let callee_sig_id = self.builder.ins().load(
             sig_id_type,
@@ -1450,8 +1453,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .builder
             .ins()
             .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
-        self.env
-            .trapz(self.builder, cmp, ir::TrapCode::BadSignature);
+        self.env.trapz(self.builder, cmp, crate::TRAP_BAD_SIGNATURE);
         CheckIndirectCallTypeSignature::Runtime
     }
 
@@ -1468,7 +1470,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // can be `None` instead. This requires feeding type information from
         // wasmparser's validator into this function, however, which is not
         // easily done at this time.
-        let callee_load_trap_code = Some(ir::TrapCode::NullReference);
+        let callee_load_trap_code = Some(crate::TRAP_NULL_REFERENCE);
 
         self.unchecked_call(sig_ref, callee, callee_load_trap_code, args)
     }
@@ -1854,7 +1856,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         // TODO: If we knew we have a `(ref i31)` here, instead of maybe a `(ref
         // null i31)`, we could omit the `trapz`. But plumbing that type info
         // from `wasmparser` and through to here is a bit funky.
-        self.trapz(builder, i31ref, ir::TrapCode::NullReference);
+        self.trapz(builder, i31ref, crate::TRAP_NULL_REFERENCE);
         Ok(builder.ins().sshr_imm(i31ref, 1))
     }
 
@@ -1866,7 +1868,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         // TODO: If we knew we have a `(ref i31)` here, instead of maybe a `(ref
         // null i31)`, we could omit the `trapz`. But plumbing that type info
         // from `wasmparser` and through to here is a bit funky.
-        self.trapz(builder, i31ref, ir::TrapCode::NullReference);
+        self.trapz(builder, i31ref, crate::TRAP_NULL_REFERENCE);
         Ok(builder.ins().ushr_imm(i31ref, 1))
     }
 
@@ -3076,7 +3078,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
             let limit = builder.ins().global_value(self.pointer_type(), gv);
             let sp = builder.ins().get_stack_pointer(self.pointer_type());
             let overflow = builder.ins().icmp(IntCC::UnsignedLessThan, sp, limit);
-            self.conditionally_trap(builder, overflow, ir::TrapCode::StackOverflow);
+            self.conditionally_trap(builder, overflow, ir::TrapCode::STACK_OVERFLOW);
         }
 
         // If the `vmruntime_limits_ptr` variable will get used then we initialize
@@ -3250,9 +3252,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 let vmctx = self.vmctx_val(&mut builder.cursor());
                 let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
                 builder.ins().call(libcall, &[vmctx, trap_code]);
-                builder
-                    .ins()
-                    .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+                builder.ins().trap(TRAP_INTERNAL_ASSERT);
             }
         }
     }

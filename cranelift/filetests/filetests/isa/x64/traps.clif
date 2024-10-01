@@ -4,25 +4,25 @@ target x86_64
 
 function %trap() {
 block0:
-  trap user0
+  trap user1
 }
 
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ud2 user0
+;   ud2 user1
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %trap_iadd_ifcout(i64, i64) {
 block0(v0: i64, v1: i64):
-  v2 = uadd_overflow_trap v0, v1, user0
+  v2 = uadd_overflow_trap v0, v1, user1
   return
 }
 
@@ -31,7 +31,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   addq    %rdi, %rsi, %rdi
-;   jb #trap=user0
+;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -46,11 +46,11 @@ block0(v0: i64, v1: i64):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %trapz(i64) {
 block0(v0: i64):
-  trapz v0, user0
+  trapz v0, user1
   return
 }
 
@@ -59,7 +59,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   testq   %rdi, %rdi
-;   jz #trap=user0
+;   jz #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -74,11 +74,11 @@ block0(v0: i64):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %trapz_i128(i128) {
 block0(v0: i128):
-  trapz v0, user0
+  trapz v0, user1
   return
 }
 
@@ -88,7 +88,7 @@ block0(v0: i128):
 ; block0:
 ;   orq     %rsi, %rdi, %rsi
 ;   testq   %rsi, %rsi
-;   jz #trap=user0
+;   jz #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -104,11 +104,11 @@ block0(v0: i128):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %trapnz(i64) {
 block0(v0: i64):
-  trapnz v0, user0
+  trapnz v0, user1
   return
 }
 
@@ -117,7 +117,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   testq   %rdi, %rdi
-;   jnz #trap=user0
+;   jnz #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -132,11 +132,11 @@ block0(v0: i64):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1
 
 function %trapnz_i128(i128) {
 block0(v0: i128):
-  trapnz v0, user0
+  trapnz v0, user1
   return
 }
 
@@ -146,7 +146,7 @@ block0(v0: i128):
 ; block0:
 ;   orq     %rsi, %rdi, %rsi
 ;   testq   %rsi, %rsi
-;   jnz #trap=user0
+;   jnz #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -162,4 +162,4 @@ block0(v0: i128):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   ud2 ; trap: user0
+;   ud2 ; trap: user1

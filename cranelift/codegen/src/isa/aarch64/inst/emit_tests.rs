@@ -65,7 +65,7 @@ fn test_aarch64_binemit() {
     insns.push((Inst::Csdb, "9F2203D5", "csdb"));
     insns.push((
         Inst::Udf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
         },
         "1FC10000",
         "udf #0xc11f",
@@ -5901,147 +5901,147 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::NotZero(xreg(8)),
         },
         "280000B51FC10000",
-        "cbnz x8, #trap=interrupt",
+        "cbnz x8, #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Zero(xreg(8)),
         },
         "280000B41FC10000",
-        "cbz x8, #trap=interrupt",
+        "cbz x8, #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Ne),
         },
         "210000541FC10000",
-        "b.ne #trap=interrupt",
+        "b.ne #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Eq),
         },
         "200000541FC10000",
-        "b.eq #trap=interrupt",
+        "b.eq #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Lo),
         },
         "230000541FC10000",
-        "b.lo #trap=interrupt",
+        "b.lo #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Hs),
         },
         "220000541FC10000",
-        "b.hs #trap=interrupt",
+        "b.hs #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Pl),
         },
         "250000541FC10000",
-        "b.pl #trap=interrupt",
+        "b.pl #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Mi),
         },
         "240000541FC10000",
-        "b.mi #trap=interrupt",
+        "b.mi #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Vc),
         },
         "270000541FC10000",
-        "b.vc #trap=interrupt",
+        "b.vc #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Vs),
         },
         "260000541FC10000",
-        "b.vs #trap=interrupt",
+        "b.vs #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Ls),
         },
         "290000541FC10000",
-        "b.ls #trap=interrupt",
+        "b.ls #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Hi),
         },
         "280000541FC10000",
-        "b.hi #trap=interrupt",
+        "b.hi #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Lt),
         },
         "2B0000541FC10000",
-        "b.lt #trap=interrupt",
+        "b.lt #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Ge),
         },
         "2A0000541FC10000",
-        "b.ge #trap=interrupt",
+        "b.ge #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Le),
         },
         "2D0000541FC10000",
-        "b.le #trap=interrupt",
+        "b.le #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Gt),
         },
         "2C0000541FC10000",
-        "b.gt #trap=interrupt",
+        "b.gt #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Nv),
         },
         "2F0000541FC10000",
-        "b.nv #trap=interrupt",
+        "b.nv #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            trap_code: TrapCode::Interrupt,
+            trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Al),
         },
         "2E0000541FC10000",
-        "b.al #trap=interrupt",
+        "b.al #trap=stk_ovf",
     ));
 
     insns.push((

@@ -269,7 +269,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             cc: IntCC::UnsignedLessThan,
             rs1: stack_reg(),
             rs2: limit_reg,
-            trap_code: ir::TrapCode::StackOverflow,
+            trap_code: ir::TrapCode::STACK_OVERFLOW,
         });
         insts
     }

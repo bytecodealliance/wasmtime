@@ -474,7 +474,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Inst::TrapIf {
                 // NBE == "> unsigned"; args above are reversed; this tests limit_reg > rsp.
                 cc: CC::NBE,
-                trap_code: TrapCode::StackOverflow,
+                trap_code: TrapCode::STACK_OVERFLOW,
             },
         ]
     }

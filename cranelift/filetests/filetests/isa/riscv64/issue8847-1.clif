@@ -29,19 +29,19 @@ block0:
     brif v112, block40, block39  ; v112 = 0
 
 block40:
-    trap user0
+    trap user1
 
 block39:
     brif.i8 v134, block58, block57  ; v134 = 0
 
 block58:
-    trap user0
+    trap user1
 
 block57:
     brif.i8 v147, block68, block67  ; v147 = 0
 
 block68:
-    trap user0
+    trap user1
 
 block67:
     brif.i8 v154, block73, block72  ; v154 = 0
