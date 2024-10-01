@@ -1055,6 +1055,15 @@ Nothing outside the realm of what one would expect from a bitflags generator,
 all as expected.
 """
 
+[[audits.bitflags]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.4.1 -> 2.6.0"
+notes = """
+Changes in how macros are invoked and various bits and pieces of macro-fu.
+Otherwise no major changes and nothing dealing with `unsafe`.
+"""
+
 [[audits.block-buffer]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
@@ -1469,6 +1478,12 @@ notes = """
 This diff brings in a number of minor updates of which none are related to
 `unsafe` code or anything system-related like filesystems.
 """
+
+[[audits.either]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.8.1 -> 1.13.0"
+notes = "More utilities and such for the `Either` type, no `unsafe` code."
 
 [[audits.embedded-io]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2142,6 +2157,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.7.1 -> 0.8.0"
 notes = "Minor updates, using new Rust features like `const`, no major changes."
+
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.7.4"
+notes = "Very few changes here, only minor updates here and there."
 
 [[audits.mio]]
 who = "Alex Crichton <alex@alexcrichton.com>"
