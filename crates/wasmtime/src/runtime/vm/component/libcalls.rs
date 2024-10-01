@@ -23,7 +23,6 @@ impl VMComponentLibcalls {
 
 macro_rules! signature {
     (@ty size) => (usize);
-    (@ty size_pair) => (usize);
     (@ty ptr_u8) => (*mut u8);
     (@ty ptr_u16) => (*mut u16);
     (@ty ptr_size) => (*mut usize);
@@ -31,9 +30,6 @@ macro_rules! signature {
     (@ty u32) => (u32);
     (@ty u64) => (u64);
     (@ty vmctx) => (*mut VMComponentContext);
-
-    (@retptr size_pair) => (*mut usize);
-    (@retptr $other:ident) => (());
 }
 
 /// Defines a `VMComponentBuiltins` structure which contains any builtins such

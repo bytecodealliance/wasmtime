@@ -223,7 +223,6 @@ macro_rules! def_unsupported {
     (emit I64Load32U $($rest:tt)*) => {};
     (emit I64Load $($rest:tt)*) => {};
     (emit I32Store $($rest:tt)*) => {};
-    (emit I32Store $($rest:tt)*) => {};
     (emit I32Store8 $($rest:tt)*) => {};
     (emit I32Store16 $($rest:tt)*) => {};
     (emit I64Store $($rest:tt)*) => {};
