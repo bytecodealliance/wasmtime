@@ -1643,7 +1643,7 @@ mod tests {
 
         let idata = InstructionData::Trap {
             opcode: Opcode::Trap,
-            code: TrapCode::user(1),
+            code: TrapCode::unwrap_user(1),
         };
         let inst = dfg.make_inst(idata);
         assert_eq!(dfg.display_inst(inst).to_string(), "trap user1");

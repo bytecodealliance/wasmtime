@@ -138,8 +138,8 @@ mod tests {
         }
         assert_eq!("bogus".parse::<TrapCode>(), Err(()));
 
-        assert_eq!(TrapCode::user(17).to_string(), "user17");
-        assert_eq!("user22".parse(), Ok(TrapCode::user(22)));
+        assert_eq!(TrapCode::unwrap_user(17).to_string(), "user17");
+        assert_eq!("user22".parse(), Ok(TrapCode::unwrap_user(22)));
         assert_eq!("user".parse::<TrapCode>(), Err(()));
         assert_eq!("user-1".parse::<TrapCode>(), Err(()));
         assert_eq!("users".parse::<TrapCode>(), Err(()));

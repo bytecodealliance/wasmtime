@@ -541,7 +541,7 @@ mod tests {
         cur.ins().brif(v0, block2, &[], trap_block, &[]);
 
         cur.insert_block(trap_block);
-        cur.ins().trap(TrapCode::user(1));
+        cur.ins().trap(TrapCode::unwrap_user(1));
 
         cur.insert_block(block1);
         let v1 = cur.ins().iconst(I32, 1);
@@ -669,7 +669,7 @@ mod tests {
         let jmp02 = cur.ins().jump(block2, &[]);
 
         cur.insert_block(block1);
-        let trap = cur.ins().trap(TrapCode::user(5));
+        let trap = cur.ins().trap(TrapCode::unwrap_user(5));
 
         cur.insert_block(block2);
         let jmp21 = cur.ins().jump(block1, &[]);
