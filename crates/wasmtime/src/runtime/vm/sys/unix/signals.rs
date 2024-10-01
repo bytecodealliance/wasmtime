@@ -4,8 +4,8 @@ use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
 use std::cell::RefCell;
 use std::io;
-use std::mem::{self, MaybeUninit};
-use std::ptr::{self, null_mut};
+use std::mem;
+use std::ptr::{self, addr_of, addr_of_mut, null_mut};
 
 #[link(name = "wasmtime-helpers")]
 extern "C" {
@@ -26,10 +26,11 @@ extern "C" {
 pub type SignalHandler<'a> =
     dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool + Send + Sync + 'a;
 
-static mut PREV_SIGSEGV: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
-static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
-static mut PREV_SIGILL: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
-static mut PREV_SIGFPE: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
+const UNINIT_SIGACTION: libc::sigaction = unsafe { mem::zeroed() };
+static mut PREV_SIGSEGV: libc::sigaction = UNINIT_SIGACTION;
+static mut PREV_SIGBUS: libc::sigaction = UNINIT_SIGACTION;
+static mut PREV_SIGILL: libc::sigaction = UNINIT_SIGACTION;
+static mut PREV_SIGFPE: libc::sigaction = UNINIT_SIGACTION;
 
 pub struct TrapHandler;
 
@@ -82,20 +83,20 @@ impl TrapHandler {
 
 unsafe fn foreach_handler(mut f: impl FnMut(*mut libc::sigaction, i32)) {
     // Allow handling OOB with signals on all architectures
-    f(PREV_SIGSEGV.as_mut_ptr(), libc::SIGSEGV);
+    f(addr_of_mut!(PREV_SIGSEGV), libc::SIGSEGV);
 
     // Handle `unreachable` instructions which execute `ud2` right now
-    f(PREV_SIGILL.as_mut_ptr(), libc::SIGILL);
+    f(addr_of_mut!(PREV_SIGILL), libc::SIGILL);
 
     // x86 and s390x use SIGFPE to report division by zero
     if cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
-        f(PREV_SIGFPE.as_mut_ptr(), libc::SIGFPE);
+        f(addr_of_mut!(PREV_SIGFPE), libc::SIGFPE);
     }
 
     // Sometimes we need to handle SIGBUS too:
     // - On Darwin, guard page accesses are raised as SIGBUS.
     if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
-        f(PREV_SIGBUS.as_mut_ptr(), libc::SIGBUS);
+        f(addr_of_mut!(PREV_SIGBUS), libc::SIGBUS);
     }
 
     // TODO(#1980): x86-32, if we support it, will also need a SIGFPE handler.
@@ -145,10 +146,10 @@ unsafe extern "C" fn trap_handler(
     context: *mut libc::c_void,
 ) {
     let previous = match signum {
-        libc::SIGSEGV => PREV_SIGSEGV.as_ptr(),
-        libc::SIGBUS => PREV_SIGBUS.as_ptr(),
-        libc::SIGFPE => PREV_SIGFPE.as_ptr(),
-        libc::SIGILL => PREV_SIGILL.as_ptr(),
+        libc::SIGSEGV => addr_of!(PREV_SIGSEGV),
+        libc::SIGBUS => addr_of!(PREV_SIGBUS),
+        libc::SIGFPE => addr_of!(PREV_SIGFPE),
+        libc::SIGILL => addr_of!(PREV_SIGILL),
         _ => panic!("unknown signal: {signum}"),
     };
     let handled = tls::with(|info| {
