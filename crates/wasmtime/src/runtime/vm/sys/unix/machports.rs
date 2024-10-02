@@ -55,7 +55,7 @@ use mach2::thread_act::*;
 use mach2::thread_status::*;
 use mach2::traps::*;
 use std::io;
-use std::mem::{self, MaybeUninit};
+use std::mem;
 use std::ptr::addr_of_mut;
 use std::thread;
 use wasmtime_environ::Trap;
