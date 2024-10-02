@@ -82,7 +82,6 @@ impl Parse for Config {
         let mut inline = None;
         let mut paths = Vec::new();
         let mut async_configured = false;
-        let mut features = Vec::new();
         let mut include_generated_code_from_file = false;
 
         if input.peek(token::Brace) {
@@ -152,9 +151,6 @@ impl Parse for Config {
                     }
                     Opt::Stringify(val) => opts.stringify = val,
                     Opt::SkipMutForwardingImpls(val) => opts.skip_mut_forwarding_impls = val,
-                    Opt::Features(f) => {
-                        features.extend(f.into_iter().map(|f| f.value()));
-                    }
                     Opt::RequireStoreDataSend(val) => opts.require_store_data_send = val,
                     Opt::WasmtimeCrate(f) => {
                         opts.wasmtime_crate = Some(f.into_token_stream().to_string())
@@ -168,7 +164,7 @@ impl Parse for Config {
                 paths.push(input.parse::<syn::LitStr>()?.value());
             }
         }
-        let (resolve, pkgs, files) = parse_source(&paths, &inline, &features)
+        let (resolve, pkgs, files) = parse_source(&paths, &inline)
             .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
 
         let world = select_world(&resolve, &pkgs, world.as_deref())
@@ -186,10 +182,9 @@ impl Parse for Config {
 fn parse_source(
     paths: &Vec<String>,
     inline: &Option<String>,
-    features: &[String],
 ) -> anyhow::Result<(Resolve, Vec<PackageId>, Vec<PathBuf>)> {
     let mut resolve = Resolve::default();
-    resolve.features.extend(features.iter().cloned());
+    resolve.all_features = true;
     let mut files = Vec::new();
     let mut pkgs = Vec::new();
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -283,7 +278,6 @@ mod kw {
     syn::custom_keyword!(additional_derives);
     syn::custom_keyword!(stringify);
     syn::custom_keyword!(skip_mut_forwarding_impls);
-    syn::custom_keyword!(features);
     syn::custom_keyword!(require_store_data_send);
     syn::custom_keyword!(wasmtime_crate);
     syn::custom_keyword!(include_generated_code_from_file);
@@ -304,7 +298,6 @@ enum Opt {
     AdditionalDerives(Vec<syn::Path>),
     Stringify(bool),
     SkipMutForwardingImpls(bool),
-    Features(Vec<syn::LitStr>),
     RequireStoreDataSend(bool),
     WasmtimeCrate(syn::Path),
     IncludeGeneratedCodeFromFile(bool),
@@ -478,13 +471,6 @@ impl Parse for Opt {
             Ok(Opt::SkipMutForwardingImpls(
                 input.parse::<syn::LitBool>()?.value,
             ))
-        } else if l.peek(kw::features) {
-            input.parse::<kw::features>()?;
-            input.parse::<Token![:]>()?;
-            let contents;
-            syn::bracketed!(contents in input);
-            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
-            Ok(Opt::Features(list.into_iter().collect()))
         } else if l.peek(kw::require_store_data_send) {
             input.parse::<kw::require_store_data_send>()?;
             input.parse::<Token![:]>()?;
