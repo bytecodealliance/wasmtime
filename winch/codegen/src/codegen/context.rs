@@ -6,7 +6,7 @@ use crate::{
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
-    reg::Reg,
+    reg::{writable, Reg},
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };
@@ -161,7 +161,7 @@ impl<'a> CodeGenContext<'a> {
         if val.is_mem() {
             let mem = val.unwrap_mem();
             debug_assert_eq!(mem.slot.offset.as_u32(), masm.sp_offset().as_u32());
-            masm.pop(reg, val.ty().into());
+            masm.pop(writable!(reg), val.ty().into());
         } else {
             self.move_val_to_reg(&val, reg, masm);
             // Free the source value if it is a register.
@@ -192,12 +192,12 @@ impl<'a> CodeGenContext<'a> {
                 let slot = self.frame.get_wasm_local(local.index);
                 let scratch = scratch!(M);
                 let local_addr = masm.local_address(&slot);
-                masm.load(local_addr, scratch, size);
+                masm.load(local_addr, writable!(scratch), size);
                 masm.store(scratch.into(), addr, size);
             }
             Val::Memory(_) => {
                 let scratch = scratch!(M, &ty);
-                masm.pop(scratch, size);
+                masm.pop(writable!(scratch), size);
                 masm.store(scratch.into(), addr, size);
             }
         }
@@ -207,20 +207,20 @@ impl<'a> CodeGenContext<'a> {
     pub fn move_val_to_reg<M: MacroAssembler>(&self, src: &Val, dst: Reg, masm: &mut M) {
         let size: OperandSize = src.ty().into();
         match src {
-            Val::Reg(tr) => masm.mov(RegImm::reg(tr.reg), dst, size),
-            Val::I32(imm) => masm.mov(RegImm::i32(*imm), dst, size),
-            Val::I64(imm) => masm.mov(RegImm::i64(*imm), dst, size),
-            Val::F32(imm) => masm.mov(RegImm::f32(imm.bits()), dst, size),
-            Val::F64(imm) => masm.mov(RegImm::f64(imm.bits()), dst, size),
-            Val::V128(imm) => masm.mov(RegImm::v128(*imm), dst, size),
+            Val::Reg(tr) => masm.mov(writable!(dst), RegImm::reg(tr.reg), size),
+            Val::I32(imm) => masm.mov(writable!(dst), RegImm::i32(*imm), size),
+            Val::I64(imm) => masm.mov(writable!(dst), RegImm::i64(*imm), size),
+            Val::F32(imm) => masm.mov(writable!(dst), RegImm::f32(imm.bits()), size),
+            Val::F64(imm) => masm.mov(writable!(dst), RegImm::f64(imm.bits()), size),
+            Val::V128(imm) => masm.mov(writable!(dst), RegImm::v128(*imm), size),
             Val::Local(local) => {
                 let slot = self.frame.get_wasm_local(local.index);
                 let addr = masm.local_address(&slot);
-                masm.load(addr, dst, size);
+                masm.load(addr, writable!(dst), size);
             }
             Val::Memory(mem) => {
                 let addr = masm.address_from_sp(mem.slot.offset);
-                masm.load(addr, dst, size);
+                masm.load(addr, writable!(dst), size);
             }
         }
     }
@@ -339,7 +339,7 @@ impl<'a> CodeGenContext<'a> {
                 .expect("i32 const value at stack top");
             let typed_reg = self.pop_to_reg(masm, None);
             masm.shift_ir(
-                typed_reg.reg,
+                writable!(typed_reg.reg),
                 val as u64,
                 typed_reg.reg,
                 kind,
@@ -364,7 +364,7 @@ impl<'a> CodeGenContext<'a> {
                 .expect("i64 const value at stack top");
             let typed_reg = self.pop_to_reg(masm, None);
             masm.shift_ir(
-                typed_reg.reg,
+                writable!(typed_reg.reg),
                 val as u64,
                 typed_reg.reg,
                 kind,
@@ -559,7 +559,7 @@ impl<'a> CodeGenContext<'a> {
         M: MacroAssembler,
     {
         let addr = masm.local_address(&self.frame.vmctx_slot);
-        masm.load_ptr(addr, vmctx!(M));
+        masm.load_ptr(addr, writable!(vmctx!(M)));
     }
 
     /// Spill locals and registers to memory.
@@ -583,7 +583,7 @@ impl<'a> CodeGenContext<'a> {
                 let slot = frame.get_wasm_local(local.index);
                 let addr = masm.local_address(&slot);
                 let scratch = scratch!(M, &slot.ty);
-                masm.load(addr, scratch, slot.ty.into());
+                masm.load(addr, writable!(scratch), slot.ty.into());
                 let stack_slot = masm.push(scratch, slot.ty.into());
                 *v = Val::mem(slot.ty, stack_slot);
             }

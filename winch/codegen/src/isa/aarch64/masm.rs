@@ -2,7 +2,7 @@ use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::local::LocalSlot,
     codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv},
-    isa::reg::Reg,
+    isa::reg::{writable, Reg, WritableReg},
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
         MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
@@ -51,7 +51,7 @@ impl Masm for MacroAssembler {
         let addr = Address::pre_indexed_from_sp(-16);
 
         self.asm.stp(fp, lr, addr);
-        self.asm.mov_rr(sp, fp, OperandSize::S64);
+        self.asm.mov_rr(sp, writable!(fp), OperandSize::S64);
         self.move_sp_to_shadow_sp();
     }
 
@@ -76,7 +76,8 @@ impl Masm for MacroAssembler {
         }
 
         let sp = regs::sp();
-        self.asm.sub_ir(bytes as u64, sp, sp, OperandSize::S64);
+        self.asm
+            .sub_ir(bytes as u64, sp, writable!(sp), OperandSize::S64);
         self.move_sp_to_shadow_sp();
 
         self.increment_sp(bytes);
@@ -88,7 +89,8 @@ impl Masm for MacroAssembler {
         }
 
         let sp = regs::sp();
-        self.asm.add_ir(bytes as u64, sp, sp, OperandSize::S64);
+        self.asm
+            .add_ir(bytes as u64, sp, writable!(sp), OperandSize::S64);
         self.move_sp_to_shadow_sp();
 
         self.decrement_sp(bytes);
@@ -138,10 +140,11 @@ impl Masm for MacroAssembler {
                     I::V128(_) => unreachable!(),
                 };
                 let scratch = regs::scratch();
-                self.asm.load_constant(imm, scratch);
+                self.asm.load_constant(imm, writable!(scratch));
                 if v.is_float() {
                     let float_scratch = regs::float_scratch();
-                    self.asm.mov_to_fpu(scratch, float_scratch, v.size());
+                    self.asm
+                        .mov_to_fpu(scratch, writable!(float_scratch), v.size());
                     float_scratch
                 } else {
                     scratch
@@ -165,18 +168,18 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
+    fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) {
         self.asm.uload(src, dst, size);
     }
 
-    fn load_ptr(&mut self, src: Self::Address, dst: Reg) {
+    fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) {
         self.load(src, dst, self.ptr_size);
     }
 
     fn wasm_load(
         &mut self,
         src: Self::Address,
-        dst: Reg,
+        dst: WritableReg,
         size: OperandSize,
         kind: Option<ExtendKind>,
     ) {
@@ -189,11 +192,11 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn load_addr(&mut self, _src: Self::Address, _dst: Reg, _size: OperandSize) {
+    fn load_addr(&mut self, _src: Self::Address, _dst: WritableReg, _size: OperandSize) {
         todo!()
     }
 
-    fn pop(&mut self, dst: Reg, size: OperandSize) {
+    fn pop(&mut self, dst: WritableReg, size: OperandSize) {
         let addr = self.address_from_sp(SPOffset::from_u32(self.sp_offset));
         self.asm.uload(addr, dst, size);
         self.free_stack(size.bytes());
@@ -207,7 +210,7 @@ impl Masm for MacroAssembler {
         self.asm.finalize(base)
     }
 
-    fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
+    fn mov(&mut self, dst: WritableReg, src: RegImm, size: OperandSize) {
         match (src, dst) {
             (RegImm::Imm(v), rd) => {
                 let imm = match v {
@@ -219,14 +222,14 @@ impl Masm for MacroAssembler {
                 };
 
                 let scratch = regs::scratch();
-                self.asm.load_constant(imm, scratch);
-                match rd.class() {
+                self.asm.load_constant(imm, writable!(scratch));
+                match rd.to_reg().class() {
                     RegClass::Int => self.asm.mov_rr(scratch, rd, size),
                     RegClass::Float => self.asm.mov_to_fpu(scratch, rd, size),
                     _ => todo!(),
                 }
             }
-            (RegImm::Reg(rs), rd) => match (rs.class(), rd.class()) {
+            (RegImm::Reg(rs), rd) => match (rs.class(), rd.to_reg().class()) {
                 (RegClass::Int, RegClass::Int) => self.asm.mov_rr(rs, rd, size),
                 (RegClass::Float, RegClass::Float) => self.asm.fmov_rr(rs, rd, size),
                 (RegClass::Int, RegClass::Float) => self.asm.mov_to_fpu(rs, rd, size),
@@ -235,11 +238,11 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, _src: Reg, _dst: Reg, _cc: IntCmpKind, _size: OperandSize) {
+    fn cmov(&mut self, _dst: WritableReg, _src: Reg, _cc: IntCmpKind, _size: OperandSize) {
         todo!()
     }
 
-    fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
@@ -259,7 +262,7 @@ impl Masm for MacroAssembler {
 
     fn checked_uadd(
         &mut self,
-        _dst: Reg,
+        _dst: WritableReg,
         _lhs: Reg,
         _rhs: RegImm,
         _size: OperandSize,
@@ -268,7 +271,7 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
@@ -286,7 +289,7 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn mul(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
@@ -304,46 +307,46 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_add(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
         self.asm.fadd_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_sub(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
         self.asm.fsub_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_mul(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
         self.asm.fmul_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_div(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
         self.asm.fdiv_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_min(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
         self.asm.fmin_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_max(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
         self.asm.fmax_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_copysign(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
         let max_shift = match size {
             OperandSize::S32 => 0x1f,
             OperandSize::S64 => 0x3f,
             _ => unreachable!(),
         };
-        self.asm.fushr_rri(rhs, rhs, max_shift, size);
+        self.asm.fushr_rri(rhs, writable!(rhs), max_shift, size);
         self.asm.fsli_rri_mod(lhs, rhs, dst, max_shift, size);
     }
 
-    fn float_neg(&mut self, dst: Reg, size: OperandSize) {
-        self.asm.fneg_rr(dst, dst, size);
+    fn float_neg(&mut self, dst: WritableReg, size: OperandSize) {
+        self.asm.fneg_rr(dst.to_reg(), dst, size);
     }
 
-    fn float_abs(&mut self, dst: Reg, size: OperandSize) {
-        self.asm.fabs_rr(dst, dst, size);
+    fn float_abs(&mut self, dst: WritableReg, size: OperandSize) {
+        self.asm.fabs_rr(dst.to_reg(), dst, size);
     }
 
     fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
@@ -359,11 +362,11 @@ impl Masm for MacroAssembler {
         context.stack.push(src.into());
     }
 
-    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize) {
+    fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         self.asm.fsqrt_rr(src, dst, size);
     }
 
-    fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
@@ -381,7 +384,7 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn or(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn or(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
@@ -399,7 +402,7 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn xor(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
@@ -417,7 +420,14 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn shift_ir(&mut self, dst: Reg, imm: u64, lhs: Reg, kind: ShiftKind, size: OperandSize) {
+    fn shift_ir(
+        &mut self,
+        dst: WritableReg,
+        imm: u64,
+        lhs: Reg,
+        kind: ShiftKind,
+        size: OperandSize,
+    ) {
         self.asm.shift_ir(imm, lhs, dst, kind, size)
     }
 
@@ -426,7 +436,7 @@ impl Masm for MacroAssembler {
         let dst = context.pop_to_reg(self, None);
 
         self.asm
-            .shift_rrr(src.into(), dst.into(), dst.into(), kind, size);
+            .shift_rrr(src.into(), dst.into(), writable!(dst.into()), kind, size);
 
         context.free_reg(src);
         context.stack.push(dst.into());
@@ -440,14 +450,14 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn zero(&mut self, reg: Reg) {
+    fn zero(&mut self, reg: WritableReg) {
         self.asm.load_constant(0, reg);
     }
 
     fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
         let src = context.pop_to_reg(self, None);
         let tmp = regs::float_scratch();
-        self.asm.mov_to_fpu(src.into(), tmp, size);
+        self.asm.mov_to_fpu(src.into(), writable!(tmp), size);
         self.asm.cnt(tmp);
         self.asm.addv(tmp, tmp, VectorSize::Size8x8);
         self.asm.mov_from_vec(tmp, src.into(), 0, OperandSize::S8);
@@ -456,8 +466,8 @@ impl Masm for MacroAssembler {
 
     fn signed_truncate(
         &mut self,
+        _dst: WritableReg,
         _src: Reg,
-        _dst: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
         _kind: TruncKind,
@@ -467,8 +477,8 @@ impl Masm for MacroAssembler {
 
     fn unsigned_truncate(
         &mut self,
+        _dst: WritableReg,
         _src: Reg,
-        _dst: Reg,
         _tmp_fpr: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
@@ -479,8 +489,8 @@ impl Masm for MacroAssembler {
 
     fn signed_convert(
         &mut self,
+        _dst: WritableReg,
         _src: Reg,
-        _dst: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
     ) {
@@ -489,8 +499,8 @@ impl Masm for MacroAssembler {
 
     fn unsigned_convert(
         &mut self,
+        _dst: WritableReg,
         _src: Reg,
-        _dst: Reg,
         _tmp_gpr: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
@@ -498,22 +508,22 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn reinterpret_float_as_int(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+    fn reinterpret_float_as_int(&mut self, _dst: WritableReg, _src: Reg, _size: OperandSize) {
         todo!()
     }
 
-    fn reinterpret_int_as_float(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+    fn reinterpret_int_as_float(&mut self, _dst: WritableReg, _src: Reg, _size: OperandSize) {
         todo!()
     }
 
-    fn demote(&mut self, src: Reg, dst: Reg) {
+    fn demote(&mut self, dst: WritableReg, src: Reg) {
         self.asm
-            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S64, OperandSize::S32);
+            .cvt_float_to_float(src.into(), dst, OperandSize::S64, OperandSize::S32);
     }
 
-    fn promote(&mut self, src: Reg, dst: Reg) {
+    fn promote(&mut self, dst: WritableReg, src: Reg) {
         self.asm
-            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S32, OperandSize::S64);
+            .cvt_float_to_float(src.into(), dst, OperandSize::S32, OperandSize::S64);
     }
 
     fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
@@ -531,8 +541,8 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize) {
-        self.cmp(dst, src, size);
+    fn cmp_with_set(&mut self, dst: WritableReg, src: RegImm, kind: IntCmpKind, size: OperandSize) {
+        self.cmp(dst.to_reg(), src, size);
         self.asm.cset(dst, kind.into());
     }
 
@@ -554,9 +564,9 @@ impl Masm for MacroAssembler {
 
     fn float_cmp_with_set(
         &mut self,
+        dst: WritableReg,
         src1: Reg,
         src2: Reg,
-        dst: Reg,
         kind: FloatCmpKind,
         size: OperandSize,
     ) {
@@ -564,21 +574,21 @@ impl Masm for MacroAssembler {
         self.asm.cset(dst, kind.into());
     }
 
-    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    fn clz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         self.asm.clz(src, dst, size);
     }
 
-    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    fn ctz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
         let scratch = regs::scratch();
-        self.asm.rbit(src, scratch, size);
+        self.asm.rbit(src, writable!(scratch), size);
         self.asm.clz(scratch, dst, size);
     }
 
-    fn wrap(&mut self, src: Reg, dst: Reg) {
+    fn wrap(&mut self, dst: WritableReg, src: Reg) {
         self.asm.mov_rr(src, dst, OperandSize::S32);
     }
 
-    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
+    fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind) {
         self.asm.extend(src, dst, kind);
     }
 
@@ -682,6 +692,6 @@ impl MacroAssembler {
     fn move_sp_to_shadow_sp(&mut self) {
         let sp = regs::sp();
         let shadow_sp = regs::shadow_sp();
-        self.asm.mov_rr(sp, shadow_sp, OperandSize::S64);
+        self.asm.mov_rr(sp, writable!(shadow_sp), OperandSize::S64);
     }
 }

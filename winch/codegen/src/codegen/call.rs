@@ -63,6 +63,7 @@ use crate::{
         CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
         VMContextLoc,
     },
+    reg::writable,
     reg::Reg,
     stack::Val,
     FuncEnv,
@@ -186,11 +187,11 @@ impl FnCall {
             });
         let callee_vmctx_offset = vmoffsets.vmctx_vmfunction_import_vmctx(index);
         let callee_vmctx_addr = masm.address_at_vmctx(callee_vmctx_offset);
-        masm.load_ptr(callee_vmctx_addr, callee_vmctx);
+        masm.load_ptr(callee_vmctx_addr, writable!(callee_vmctx));
 
         let callee_body_offset = vmoffsets.vmctx_vmfunction_import_wasm_call(index);
         let callee_addr = masm.address_at_vmctx(callee_body_offset);
-        masm.load_ptr(callee_addr, callee);
+        masm.load_ptr(callee_addr, writable!(callee));
 
         (
             CalleeKind::indirect(callee),
@@ -224,13 +225,13 @@ impl FnCall {
         // the function call.
         masm.load_ptr(
             masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_vmctx().into()),
-            callee_vmctx,
+            writable!(callee_vmctx),
         );
 
         // Load the function pointer to be called.
         masm.load_ptr(
             masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_wasm_call().into()),
-            funcref,
+            writable!(funcref),
         );
         context.free_reg(funcref_ptr);
 
@@ -250,7 +251,7 @@ impl FnCall {
         {
             match (context_arg, operand) {
                 (VMContextLoc::Pinned, ABIOperand::Reg { ty, reg, .. }) => {
-                    masm.mov(vmctx!(M).into(), *reg, (*ty).into());
+                    masm.mov(writable!(*reg), vmctx!(M).into(), (*ty).into());
                 }
                 (VMContextLoc::Pinned, ABIOperand::Stack { ty, offset, .. }) => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(*offset));
@@ -258,7 +259,7 @@ impl FnCall {
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Reg { ty, reg, .. }) => {
-                    masm.mov((*src).into(), *reg, (*ty).into());
+                    masm.mov(writable!(*reg), (*src).into(), (*ty).into());
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Stack { ty, offset, .. }) => {
@@ -313,14 +314,14 @@ impl FnCall {
 
             match operand {
                 &ABIOperand::Reg { ty, reg, .. } => {
-                    masm.load_addr(addr, reg, ty.into());
+                    masm.load_addr(addr, writable!(reg), ty.into());
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let slot = masm.address_at_sp(SPOffset::from_u32(offset));
                     // Don't rely on `ABI::scratch_for` as we always use
                     // an int register as the return pointer.
                     let scratch = scratch!(M);
-                    masm.load_addr(addr, scratch, ty.into());
+                    masm.load_addr(addr, writable!(scratch), ty.into());
                     masm.store(scratch.into(), slot, ty.into());
                 }
             }
