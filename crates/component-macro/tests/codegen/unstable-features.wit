@@ -1,0 +1,27 @@
+package foo:foo;
+
+@unstable(feature = f1)
+interface the-interface {
+  @unstable(feature = f2)
+  foo: func();
+  
+  @unstable(feature = f3)
+  resource bar {
+    @unstable(feature = f4)
+    foo: func();
+  }
+}
+
+world the-world {
+	@unstable(feature = f5)
+  import the-interface;
+
+  @unstable(feature = f6)
+  import foo: func();
+
+  @unstable(feature = f7)
+  resource baz {
+    @unstable(feature = f8)
+    foo: func();
+  }
+}
