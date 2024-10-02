@@ -4,7 +4,7 @@ use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::Once;
+use std::sync::{Mutex, Once};
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
@@ -22,8 +22,8 @@ static SETUP: Once = Once::new();
 // - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
 // - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
 // - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
-static mut ALLOWED_ENGINES: Vec<&str> = vec![];
-static mut ALLOWED_MODULES: Vec<&str> = vec![];
+static ALLOWED_ENGINES: Mutex<Vec<&str>> = Mutex::new(vec![]);
+static ALLOWED_MODULES: Mutex<Vec<&str>> = Mutex::new(vec![]);
 
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
@@ -45,10 +45,8 @@ fuzz_target!(|data: &[u8]| {
             &["wasm-smith", "single-inst"],
         );
 
-        unsafe {
-            ALLOWED_ENGINES = allowed_engines;
-            ALLOWED_MODULES = allowed_modules;
-        }
+        *ALLOWED_ENGINES.lock().unwrap() = allowed_engines;
+        *ALLOWED_MODULES.lock().unwrap() = allowed_modules;
     });
 
     // Errors in `run` have to do with not enough input in `data`, which we
@@ -69,10 +67,13 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
 
+    let allowed_engines = ALLOWED_ENGINES.lock().unwrap();
+    let allowed_modules = ALLOWED_MODULES.lock().unwrap();
+
     // Choose an engine that Wasmtime will be differentially executed against.
     // The chosen engine is then created, which might update `config`, and
     // returned as a trait object.
-    let lhs = u.choose(unsafe { &*std::ptr::addr_of!(ALLOWED_ENGINES) })?;
+    let lhs = u.choose(&allowed_engines)?;
     let mut lhs = match engine::build(&mut u, lhs, &mut config)? {
         Some(engine) => engine,
         // The chosen engine does not have support compiled into the fuzzer,
@@ -95,10 +96,10 @@ fn execute_one(data: &[u8]) -> Result<()> {
         let module = SingleInstModule::new(u, &config.module_config)?;
         Ok(module.to_bytes())
     };
-    if unsafe { ALLOWED_MODULES.is_empty() } {
+    if allowed_modules.is_empty() {
         panic!("unable to generate a module to fuzz against; check `ALLOWED_MODULES`")
     }
-    let wasm = match *u.choose(unsafe { ALLOWED_MODULES.as_slice() })? {
+    let wasm = match *u.choose(&allowed_modules)? {
         "wasm-smith" => build_wasm_smith_module(&mut u, &config)?,
         "single-inst" => build_single_inst_module(&mut u, &config)?,
         _ => unreachable!(),

@@ -75,18 +75,13 @@ impl FlagsSize {
         } else if count <= 16 {
             FlagsSize::Size2
         } else {
-            let amt = ceiling_divide(count, 32);
+            let amt = count.div_ceil(32);
             if amt > (u8::MAX as usize) {
                 panic!("too many flags");
             }
             FlagsSize::Size4Plus(amt as u8)
         }
     }
-}
-
-/// Divide `n` by `d`, rounding up in the case of a non-zero remainder.
-const fn ceiling_divide(n: usize, d: usize) -> usize {
-    (n + d - 1) / d
 }
 
 /// A simple bump allocator which can be used with modules
