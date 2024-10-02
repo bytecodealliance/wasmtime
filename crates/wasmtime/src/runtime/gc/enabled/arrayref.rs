@@ -694,7 +694,7 @@ impl ArrayRef {
         store: &mut AutoAssertNoGc<'_>,
         gc_ref: VMGcRef,
     ) -> Rooted<Self> {
-        debug_assert!(!gc_ref.is_i31());
+        debug_assert!(gc_ref.is_arrayref(&*store.unwrap_gc_store().gc_heap));
         Rooted::new(store, gc_ref)
     }
 }
