@@ -727,6 +727,7 @@ unsafe fn array_new_elem(
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
+    // Convert indices to their typed forms.
     let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
     let elem_index = ElemIndex::from_u32(elem_index);
 
@@ -808,15 +809,113 @@ unsafe fn array_new_elem(
 
 #[cfg(feature = "gc")]
 unsafe fn array_init_elem(
-    _instance: &mut Instance,
-    _array_type_index: u32,
-    _array: u32,
-    _dst_index: u32,
-    _elem_index: u32,
-    _src: u32,
-    _len: u32,
+    instance: &mut Instance,
+    array_type_index: u32,
+    array: u32,
+    dst: u32,
+    elem_index: u32,
+    src: u32,
+    len: u32,
 ) -> Result<()> {
-    bail!("the `array.init_elem` instruction is not yet implemented")
+    use crate::{
+        store::AutoAssertNoGc,
+        vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
+        ArrayRef, Func, Val,
+    };
+    use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
+
+    // NB: Don't use `OpaqueRootScope` here because we need to borrow the store
+    // through `instance` during const evaluation, which is within the same
+    // region that the `OpaqueRootScope` would otherwise span while borrowing
+    // the same store, resulting in double borrows.
+    instance.with_gc_lifo_scope(|instance| {
+        // Convert the indices into their typed forms.
+        let _array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
+        let elem_index = ElemIndex::from_u32(elem_index);
+
+        log::trace!(
+            "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
+        );
+
+        // Convert the raw GC ref into a `Rooted<ArrayRef>`.
+        let array =
+            VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference.into_anyhow())?;
+        let array = {
+            let mut no_gc = AutoAssertNoGc::new((*instance.store()).store_opaque_mut());
+            ArrayRef::from_cloned_gc_ref(&mut no_gc, array)
+        };
+
+        // Bounds check the destination within the array.
+        let array_len = array._len((*instance.store()).store_opaque())?;
+        log::trace!("array_len = {array_len}");
+        if dst
+            .checked_add(len)
+            .ok_or_else(|| Trap::ArrayOutOfBounds.into_anyhow())?
+            > array_len
+        {
+            return Err(Trap::ArrayOutOfBounds.into_anyhow());
+        }
+
+        // Get the passive element segment.
+        let mut storage = None;
+        let elements = instance.passive_element_segment(&mut storage, elem_index);
+
+        // Convert array offsets into `usize`s.
+        let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds.into_anyhow())?;
+        let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds.into_anyhow())?;
+
+        // Turn the elements into `Val`s.
+        let vals = match elements {
+            TableSegmentElements::Functions(fs) => fs
+                .get(src..)
+                .and_then(|s| s.get(..len))
+                .ok_or_else(|| Trap::TableOutOfBounds.into_anyhow())?
+                .iter()
+                .map(|f| {
+                    let raw_func_ref = instance.get_func_ref(*f).unwrap_or(core::ptr::null_mut());
+                    let func = Func::from_vm_func_ref(
+                        (*instance.store()).store_opaque_mut(),
+                        raw_func_ref,
+                    );
+                    Val::FuncRef(func)
+                })
+                .collect::<Vec<_>>(),
+            TableSegmentElements::Expressions(xs) => {
+                let elem_ty = array
+                    ._ty((*instance.store()).store_opaque())?
+                    .element_type();
+                let elem_ty = elem_ty.unwrap_val_type();
+
+                let mut const_context = ConstEvalContext::new(instance);
+                let mut const_evaluator = ConstExprEvaluator::default();
+
+                xs.get(src..)
+                    .and_then(|s| s.get(..len))
+                    .ok_or_else(|| Trap::TableOutOfBounds.into_anyhow())?
+                    .iter()
+                    .map(|x| unsafe {
+                        let raw = const_evaluator
+                            .eval(&mut const_context, x)
+                            .expect("const expr should be valid");
+                        let mut store = AutoAssertNoGc::new(
+                            (*const_context.instance.store()).store_opaque_mut(),
+                        );
+                        Val::_from_raw(&mut store, raw, elem_ty)
+                    })
+                    .collect::<Vec<_>>()
+            }
+        };
+
+        // Copy the values into the array.
+        let store = (*instance.store()).store_opaque_mut();
+        for (i, val) in vals.into_iter().enumerate() {
+            let i = u32::try_from(i).unwrap();
+            let j = dst.checked_add(i).unwrap();
+            array._set(store, j, val)?;
+        }
+
+        Ok(())
+    })
 }
 
 #[cfg(feature = "gc")]
