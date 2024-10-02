@@ -1,28 +1,10 @@
-//! Internal dependency of Wasmtime and Cranelift that defines types for
-//! WebAssembly.
-
-#![no_std]
-
-extern crate alloc;
-#[cfg(feature = "std")]
-extern crate std;
-
-pub use wasmparser;
-
-#[doc(hidden)]
-pub use alloc::format as __format;
-
-pub mod prelude;
-
+use crate::{wasm_unsupported, WasmResult};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
 use cranelift_entity::entity_impl;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
-
-mod error;
-pub use error::*;
 
 /// A trait for things that can trace all type-to-type edges, aka all type
 /// indices within this thing.
@@ -244,7 +226,9 @@ impl WasmValType {
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WasmRefType {
+    /// Whether or not this reference is nullable.
     pub nullable: bool,
+    /// The heap type that this reference contains.
     pub heap_type: WasmHeapType,
 }
 
@@ -265,10 +249,12 @@ impl TypeTrace for WasmRefType {
 }
 
 impl WasmRefType {
+    /// Shorthand for `externref`
     pub const EXTERNREF: WasmRefType = WasmRefType {
         nullable: true,
         heap_type: WasmHeapType::Extern,
     };
+    /// Shorthand for `funcref`
     pub const FUNCREF: WasmRefType = WasmRefType {
         nullable: true,
         heap_type: WasmHeapType::Func,
@@ -419,6 +405,7 @@ impl EngineOrModuleTypeIndex {
 
 /// WebAssembly heap type -- equivalent of `wasmparser`'s HeapType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub enum WasmHeapType {
     // External types.
     Extern,
@@ -613,6 +600,7 @@ impl TypeTrace for WasmFuncType {
 }
 
 impl WasmFuncType {
+    /// Creates a new function type from the provided `params` and `returns`.
     #[inline]
     pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
         let non_i31_gc_ref_params_count = params
@@ -806,6 +794,7 @@ impl TypeTrace for WasmArrayType {
 /// A concrete struct type.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmStructType {
+    /// The fields that make up this struct type.
     pub fields: Box<[WasmFieldType]>,
 }
 
@@ -843,6 +832,7 @@ impl TypeTrace for WasmStructType {
 
 /// A function, array, or struct type.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub enum WasmCompositeType {
     Array(WasmArrayType),
     Func(WasmFuncType),
@@ -859,6 +849,7 @@ impl fmt::Display for WasmCompositeType {
     }
 }
 
+#[allow(missing_docs)]
 impl WasmCompositeType {
     #[inline]
     pub fn is_array(&self) -> bool {
@@ -970,6 +961,7 @@ impl fmt::Display for WasmSubType {
     }
 }
 
+#[allow(missing_docs)]
 impl WasmSubType {
     #[inline]
     pub fn is_func(&self) -> bool {
@@ -1558,6 +1550,7 @@ impl ConstOp {
 
 /// The type that can be used to index into [Memory] and [Table].
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub enum IndexType {
     I32,
     I64,
@@ -1565,6 +1558,7 @@ pub enum IndexType {
 
 /// The size range of resizeable storage associated with [Memory] types and [Table] types.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Limits {
     pub min: u64,
     pub max: Option<u64>,
@@ -1710,6 +1704,7 @@ impl Memory {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[allow(missing_docs)]
 pub struct SizeOverflow;
 
 impl fmt::Display for SizeOverflow {
@@ -1763,6 +1758,7 @@ impl From<wasmparser::TagType> for Tag {
 }
 
 /// Helpers used to convert a `wasmparser` type to a type in this crate.
+#[allow(missing_docs)]
 pub trait TypeConvert {
     /// Converts a wasmparser table type into a wasmtime type
     fn convert_global_type(&self, ty: &wasmparser::GlobalType) -> Global {

@@ -81,7 +81,7 @@ impl Finality {
 #[derive(Clone, Hash)]
 pub enum ValType {
     // NB: the ordering of variants here is intended to match the ordering in
-    // `wasmtime_types::WasmType` to help improve codegen when converting.
+    // `wasmtime_environ::WasmType` to help improve codegen when converting.
     //
     /// Signed 32 bit integer.
     I32,

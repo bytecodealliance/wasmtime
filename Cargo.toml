@@ -200,7 +200,6 @@ wasmtime-winch = { path = "crates/winch", version = "=26.0.0" }
 wasmtime-environ = { path = "crates/environ", version = "=26.0.0" }
 wasmtime-explorer = { path = "crates/explorer", version = "=26.0.0" }
 wasmtime-fiber = { path = "crates/fiber", version = "=26.0.0" }
-wasmtime-types = { path = "crates/types", version = "26.0.0" }
 wasmtime-jit-debug = { path = "crates/jit-debug", version = "=26.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=26.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "26.0.0", default-features = false }

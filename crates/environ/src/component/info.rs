@@ -48,9 +48,8 @@
 
 use crate::component::*;
 use crate::prelude::*;
-use crate::{EntityIndex, PrimaryMap, WasmValType};
+use crate::{EntityIndex, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Metadata as a result of compiling a component.
 pub struct ComponentTranslation {

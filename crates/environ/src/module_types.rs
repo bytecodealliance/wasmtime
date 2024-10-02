@@ -1,8 +1,7 @@
-use crate::PrimaryMap;
+use crate::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PrimaryMap, WasmSubType};
 use core::ops::{Index, Range};
 use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_types::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, WasmSubType};
 
 /// All types used in a core wasm module.
 ///

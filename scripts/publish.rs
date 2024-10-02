@@ -23,7 +23,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // cranelift
     "cranelift-isle",
     "cranelift-entity",
-    "wasmtime-types",
     "cranelift-bforest",
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",

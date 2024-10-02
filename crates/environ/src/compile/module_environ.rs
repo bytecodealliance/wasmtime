@@ -4,10 +4,11 @@ use crate::module::{
 };
 use crate::prelude::*;
 use crate::{
-    DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
-    InitMemory, MemoryIndex, ModuleTypesBuilder, PrimaryMap, StaticMemoryInitializer, TableIndex,
-    TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType,
-    WasmResult, WasmValType, WasmparserTypeConverter,
+    ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, IndexType, InitMemory, MemoryIndex,
+    ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
+    TableIndex, TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError,
+    WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::packed_option::ReservedValue;
@@ -20,9 +21,6 @@ use wasmparser::{
     types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, KnownCustom, NameSectionReader, Naming, Parser, Payload, TypeRef,
     Validator, ValidatorResources,
-};
-use wasmtime_types::{
-    ConstExpr, ConstOp, IndexType, ModuleInternedTypeIndex, SizeOverflow, WasmHeapTopType,
 };
 
 /// Object containing the standalone environment information.
@@ -307,9 +305,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let interned_index = self.result.module.types[index];
                             self.result.module.num_imported_funcs += 1;
                             self.result.debuginfo.wasm_file.imported_func_count += 1;
-                            EntityType::Function(wasmtime_types::EngineOrModuleTypeIndex::Module(
-                                interned_index,
-                            ))
+                            EntityType::Function(EngineOrModuleTypeIndex::Module(interned_index))
                         }
                         TypeRef::Memory(ty) => {
                             self.result.module.num_imported_memories += 1;
@@ -872,10 +868,7 @@ impl TypeConvert for ModuleEnvironment<'_, '_> {
         WasmparserTypeConverter::new(&self.types, &self.result.module).lookup_heap_type(index)
     }
 
-    fn lookup_type_index(
-        &self,
-        index: wasmparser::UnpackedIndex,
-    ) -> wasmtime_types::EngineOrModuleTypeIndex {
+    fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
         WasmparserTypeConverter::new(&self.types, &self.result.module).lookup_type_index(index)
     }
 }

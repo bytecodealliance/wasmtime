@@ -42,6 +42,8 @@ pub enum WasmError {
 macro_rules! wasm_unsupported {
     ($($arg:tt)*) => { $crate::WasmError::Unsupported($crate::__format!($($arg)*)) }
 }
+#[doc(hidden)]
+pub use alloc::format as __format;
 
 impl From<wasmparser::BinaryReaderError> for WasmError {
     /// Convert from a `BinaryReaderError` to a `WasmError`.

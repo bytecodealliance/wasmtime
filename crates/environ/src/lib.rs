@@ -12,11 +12,12 @@
 extern crate std;
 extern crate alloc;
 
-pub use wasmtime_types::prelude;
+pub mod prelude;
 
 mod address_map;
 mod builtin;
 mod demangling;
+mod error;
 mod gc;
 mod module;
 mod module_artifacts;
@@ -27,11 +28,13 @@ mod scopevec;
 mod stack_map;
 mod trap_encoding;
 mod tunables;
+mod types;
 mod vmoffsets;
 
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::demangling::*;
+pub use crate::error::*;
 pub use crate::gc::*;
 pub use crate::module::*;
 pub use crate::module_artifacts::*;
@@ -41,6 +44,7 @@ pub use crate::scopevec::ScopeVec;
 pub use crate::stack_map::StackMap;
 pub use crate::trap_encoding::*;
 pub use crate::tunables::*;
+pub use crate::types::*;
 pub use crate::vmoffsets::*;
 pub use object;
 
@@ -58,7 +62,6 @@ pub mod fact;
 // much easier to refer to everything through one crate rather than importing
 // one of three and making sure you're using the right one.
 pub use cranelift_entity::*;
-pub use wasmtime_types::*;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

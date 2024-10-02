@@ -10,11 +10,11 @@
 //! use crate::*;
 //! ```
 //!
-//! Externally for crates that depend on `wasmtime-types` they should have this
+//! Externally for crates that depend on `wasmtime-environ` they should have this
 //! in the root of the crate:
 //!
 //! ```rust,ignore
-//! use wasmtime_types::prelude;
+//! use wasmtime_environ::prelude;
 //! ```
 //!
 //! and then `use crate::*` works as usual.

@@ -2,12 +2,13 @@
 //! with `bincode` as part of a module's compilation process.
 
 use crate::prelude::*;
-use crate::{DefinedFuncIndex, FilePos, FuncIndex, Module, PrimaryMap, StackMap};
+use crate::{
+    DefinedFuncIndex, FilePos, FuncIndex, Module, ModuleInternedTypeIndex, PrimaryMap, StackMap,
+};
 use core::fmt;
 use core::ops::Range;
 use core::str;
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Secondary in-memory results of function compilation.
 #[derive(Serialize, Deserialize)]
