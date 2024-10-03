@@ -178,6 +178,26 @@ impl Backtrace {
 
         arch::assert_entry_sp_is_aligned(trampoline_sp);
 
+        // It is possible that the contiguous sequence of Wasm frames is
+        // empty. This is rare, but can happen if:
+        //
+        // * Host calls into Wasm, pushing the entry trampoline frame
+        //
+        // * Entry trampoline calls the actual Wasm function, pushing a Wasm frame
+        //
+        // * Wasm function tail calls to an imported host function, *replacing*
+        //   the Wasm frame with the exit trampoline's frame
+        //
+        // Now we have a stack like `[host, entry trampoline, exit trampoline]`
+        // which has a contiguous sequence of Wasm frames that are empty.
+        //
+        // Therefore, check if we've reached the entry trampoline's SP as the
+        // first thing we do.
+        if arch::reached_entry_sp(fp, trampoline_sp) {
+            log::trace!("=== Empty contiguous sequence of Wasm frames ===");
+            return ControlFlow::Continue(());
+        }
+
         loop {
             // At the start of each iteration of the loop, we know that `fp` is
             // a frame pointer from Wasm code. Therefore, we know it is not
