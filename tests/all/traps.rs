@@ -5,6 +5,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
 #[test]
 fn test_trap_return() -> Result<()> {
@@ -1676,6 +1677,116 @@ fn async_stack_size_ignored_if_disabled() -> Result<()> {
     config.async_support(false);
     config.max_wasm_stack(8 << 20);
     Engine::new(&config)?;
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(tail_call))]
+fn tail_call_to_imported_function(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (import "" "" (func (result i32)))
+
+              (func (export "run") (result i32)
+                return_call 0
+              )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let host_func = Func::wrap(&mut store, || -> Result<i32> { bail!("whoopsie") });
+    let instance = Instance::new(&mut store, &module, &[host_func.into()])?;
+
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    let err = run.call(&mut store, ()).unwrap_err();
+    assert!(err.to_string().contains("whoopsie"));
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(tail_call))]
+fn tail_call_to_imported_function_in_start_function(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (import "" "" (func))
+
+              (func $f
+                return_call 0
+              )
+
+              (start $f)
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let host_func = Func::wrap(&mut store, || -> Result<()> { bail!("whoopsie") });
+    let err = Instance::new(&mut store, &module, &[host_func.into()]).unwrap_err();
+    assert!(err.to_string().contains("whoopsie"));
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(tail_call, function_references))]
+fn return_call_ref_to_imported_function(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (type (func (result i32)))
+              (func (export "run") (param (ref 0)) (result i32)
+                (return_call_ref 0 (local.get 0))
+              )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let host_func = Func::wrap(&mut store, || -> Result<i32> { bail!("whoopsie") });
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let run = instance.get_typed_func::<Func, i32>(&mut store, "run")?;
+    let err = run.call(&mut store, host_func).unwrap_err();
+    assert!(err.to_string().contains("whoopsie"));
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(tail_call, function_references))]
+fn return_call_indirect_to_imported_function(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (import "" "" (func (result i32)))
+              (table 1 funcref (ref.func 0))
+              (func (export "run") (result i32)
+                (return_call_indirect (result i32) (i32.const 0))
+              )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let host_func = Func::wrap(&mut store, || -> Result<i32> { bail!("whoopsie") });
+    let instance = Instance::new(&mut store, &module, &[host_func.into()])?;
+
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    let err = run.call(&mut store, ()).unwrap_err();
+    assert!(err.to_string().contains("whoopsie"));
 
     Ok(())
 }
