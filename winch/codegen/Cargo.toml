@@ -4,7 +4,7 @@ name = "winch-codegen"
 description = "Winch code generation library"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-version = "0.20.0"
+version = "0.20.1"
 edition.workspace = true
 
 [lints]
