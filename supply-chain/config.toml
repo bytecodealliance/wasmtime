@@ -160,7 +160,13 @@ audit-as-crates-io = true
 [policy.wasmtime-wasi-http]
 audit-as-crates-io = true
 
+[policy.wasmtime-wasi-keyvalue]
+audit-as-crates-io = true
+
 [policy.wasmtime-wasi-nn]
+audit-as-crates-io = true
+
+[policy.wasmtime-wasi-runtime-config]
 audit-as-crates-io = true
 
 [policy.wasmtime-wasi-threads]
