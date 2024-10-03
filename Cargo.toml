@@ -224,7 +224,7 @@ wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version 
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=26.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 
-pulley-interpreter = { path = 'pulley', version = "=0.2.0" }
+pulley-interpreter = { path = 'pulley', version = "=26.0.0" }
 pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
 
 cranelift-codegen = { path = "cranelift/codegen", version = "0.113.0", default-features = false, features = ["std", "unwind"] }
@@ -243,7 +243,7 @@ cranelift-bitset = { path = "cranelift/bitset", version = "0.113.0" }
 cranelift-control = { path = "cranelift/control", version = "0.113.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.113.0" }
 
-winch-codegen = { path = "winch/codegen", version = "=0.24.0" }
+winch-codegen = { path = "winch/codegen", version = "=26.0.0" }
 
 wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
 byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }

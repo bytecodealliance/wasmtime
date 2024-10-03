@@ -221,6 +221,10 @@ audited_as = "0.111.0"
 version = "0.2.0"
 audited_as = "0.1.1"
 
+[[unpublished.pulley-interpreter]]
+version = "26.0.0"
+audited_as = "0.1.1"
+
 [[unpublished.wasi-common]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -576,6 +580,10 @@ audited_as = "0.21.1"
 [[unpublished.winch-codegen]]
 version = "0.24.0"
 audited_as = "0.22.0"
+
+[[unpublished.winch-codegen]]
+version = "26.0.0"
+audited_as = "0.23.1"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
@@ -2083,6 +2091,12 @@ user-login = "wasmtime-publish"
 [[publisher.winch-codegen]]
 version = "0.22.0"
 when = "2024-08-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.winch-codegen]]
+version = "0.23.1"
+when = "2024-09-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
