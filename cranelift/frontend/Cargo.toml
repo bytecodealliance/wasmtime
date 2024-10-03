@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-frontend"
-version = "0.112.1"
+version = "0.112.2"
 description = "Cranelift IR builder helper"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-frontend"
