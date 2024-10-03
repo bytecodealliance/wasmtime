@@ -23,6 +23,8 @@ impl SpecInterpreter {
         config.threads_enabled = false;
         config.bulk_memory_enabled = false;
         config.reference_types_enabled = false;
+        config.tail_call_enabled = false;
+        config.relaxed_simd_enabled = false;
 
         Self
     }
