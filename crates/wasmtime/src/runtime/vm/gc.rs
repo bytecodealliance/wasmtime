@@ -23,6 +23,7 @@ pub use i31::*;
 use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
 use core::alloc::Layout;
+use core::mem::MaybeUninit;
 use core::ptr;
 use core::{any::Any, num::NonZeroUsize};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
@@ -94,6 +95,21 @@ impl GcStore {
         } else {
             self.gc_heap.clone_gc_ref(gc_ref)
         }
+    }
+
+    /// Write the `source` GC reference into the uninitialized `destination`
+    /// slot, performing write barriers as necessary.
+    pub fn init_gc_ref(
+        &mut self,
+        destination: &mut MaybeUninit<Option<VMGcRef>>,
+        source: Option<&VMGcRef>,
+    ) {
+        // Initialize the destination to `None`, at which point the regular GC
+        // write barrier is safe to reuse.
+        destination.write(None);
+        let destination = unsafe { destination.assume_init_mut() };
+
+        self.write_gc_ref(destination, source);
     }
 
     /// Write the `source` GC reference into the `destination` slot, performing
@@ -205,6 +221,18 @@ impl GcStore {
         self.gc_heap.gc_object_data(gc_ref)
     }
 
+    /// Get the object datas for the given pair of object references.
+    ///
+    /// Panics if `a` and `b` are the same reference or either is out of bounds.
+    pub fn gc_object_data_pair(
+        &mut self,
+        a: &VMGcRef,
+        b: &VMGcRef,
+    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>) {
+        assert_ne!(a, b);
+        self.gc_heap.gc_object_data_pair(a, b)
+    }
+
     /// Allocate an uninitialized array with the given type index.
     ///
     /// This does NOT check that the index is currently allocated in the types
@@ -297,6 +325,13 @@ unsafe impl GcHeap for DisabledGcHeap {
         unreachable!()
     }
     fn gc_object_data(&mut self, _gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_> {
+        unreachable!()
+    }
+    fn gc_object_data_pair(
+        &mut self,
+        _a: &VMGcRef,
+        _b: &VMGcRef,
+    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>) {
         unreachable!()
     }
     fn alloc_uninit_array(

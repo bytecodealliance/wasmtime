@@ -285,15 +285,15 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// Panics on out-of-bounds accesses.
     fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_>;
 
-    /// Allocate a GC-managed array of the given type and length.
+    /// Get a pair of mutable borrows of the given objects' data.
     ///
-    /// The array's elements are left uninitialized. It is the caller's
-    /// responsibility to initialize them before exposing the array to Wasm or
-    /// triggering a GC. Failure to do this is memory safe, but may result in
-    /// general failures such as panics or incorrect results.
-    ///
-    /// Return values:
-    ///
+    /// Panics if `a == b` or on out-of-bounds accesses.
+    fn gc_object_data_pair(
+        &mut self,
+        a: &VMGcRef,
+        b: &VMGcRef,
+    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>);
+
     /// * `Ok(Some(_))`: The allocation was successful.
     ///
     /// * `Ok(None)`: There is currently no available space for this

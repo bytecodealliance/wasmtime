@@ -4,12 +4,14 @@
 mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
+use crate::prelude::*;
 use crate::runtime::vm::{GcStore, VMGcRef};
+use crate::store::StoreOpaque;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::fmt;
 use core::marker;
-use core::mem;
+use core::mem::{self, MaybeUninit};
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use sptr::Strict;
@@ -423,7 +425,11 @@ impl VMGlobalDefinition {
     /// # Unsafety
     ///
     /// This raw value's type must match the given `WasmValType`.
-    pub unsafe fn from_val_raw(wasm_ty: WasmValType, raw: ValRaw) -> Self {
+    pub unsafe fn from_val_raw(
+        store: &mut StoreOpaque,
+        wasm_ty: WasmValType,
+        raw: ValRaw,
+    ) -> Result<Self> {
         let mut global = Self::new();
         match wasm_ty {
             WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
@@ -433,13 +439,17 @@ impl VMGlobalDefinition {
             WasmValType::V128 => *global.as_u128_mut() = raw.get_v128(),
             WasmValType::Ref(r) => match r.heap_type.top() {
                 WasmHeapTopType::Extern => {
-                    global.init_gc_ref(VMGcRef::from_raw_u32(raw.get_externref()))
+                    let r = VMGcRef::from_raw_u32(raw.get_externref());
+                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
                 }
-                WasmHeapTopType::Any => global.init_gc_ref(VMGcRef::from_raw_u32(raw.get_anyref())),
+                WasmHeapTopType::Any => {
+                    let r = VMGcRef::from_raw_u32(raw.get_anyref());
+                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
+                }
                 WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
             },
         }
-        global
+        Ok(global)
     }
 
     /// Get this global's value as a `ValRaw`.
@@ -447,25 +457,31 @@ impl VMGlobalDefinition {
     /// # Unsafety
     ///
     /// This global's value's type must match the given `WasmValType`.
-    pub unsafe fn to_val_raw(&self, gc_store: &mut GcStore, wasm_ty: WasmValType) -> ValRaw {
-        match wasm_ty {
+    pub unsafe fn to_val_raw(
+        &self,
+        store: &mut StoreOpaque,
+        wasm_ty: WasmValType,
+    ) -> Result<ValRaw> {
+        Ok(match wasm_ty {
             WasmValType::I32 => ValRaw::i32(*self.as_i32()),
             WasmValType::I64 => ValRaw::i64(*self.as_i64()),
             WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
             WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
             WasmValType::V128 => ValRaw::v128(*self.as_u128()),
             WasmValType::Ref(r) => match r.heap_type.top() {
-                WasmHeapTopType::Extern => ValRaw::externref(
-                    self.as_gc_ref()
-                        .map_or(0, |r| gc_store.clone_gc_ref(r).as_raw_u32()),
-                ),
-                WasmHeapTopType::Any => ValRaw::anyref(
-                    self.as_gc_ref()
-                        .map_or(0, |r| gc_store.clone_gc_ref(r).as_raw_u32()),
-                ),
+                WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
+                    Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                    None => 0,
+                }),
+                WasmHeapTopType::Any => ValRaw::anyref({
+                    match self.as_gc_ref() {
+                        Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                        None => 0,
+                    }
+                }),
                 WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
             },
-        }
+        })
     }
 
     /// Return a reference to the value as an i32.
@@ -577,10 +593,16 @@ impl VMGlobalDefinition {
     }
 
     /// Initialize a global to the given GC reference.
-    pub unsafe fn init_gc_ref(&mut self, gc_ref: Option<VMGcRef>) {
+    pub unsafe fn init_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
         assert!(cfg!(feature = "gc") || gc_ref.is_none());
-        let raw_ptr = self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>();
-        ptr::write(raw_ptr, gc_ref);
+
+        let dest = &mut *(self
+            .storage
+            .as_mut()
+            .as_mut_ptr()
+            .cast::<MaybeUninit<Option<VMGcRef>>>());
+
+        gc_store.init_gc_ref(dest, gc_ref)
     }
 
     /// Write a GC reference into this global value.

@@ -1318,34 +1318,12 @@ impl Instance {
             ptr = ptr.add(1);
         }
 
-        // Initialize the defined globals
-        let mut const_evaluator = ConstExprEvaluator::default();
-        self.initialize_vmctx_globals(&mut const_evaluator, module);
-    }
-
-    unsafe fn initialize_vmctx_globals(
-        &mut self,
-        const_evaluator: &mut ConstExprEvaluator,
-        module: &Module,
-    ) {
-        for (index, init) in module.global_initializers.iter() {
-            let mut context = ConstEvalContext::new(self);
-            let raw = const_evaluator
-                .eval(&mut context, init)
-                .expect("should be a valid const expr");
-
-            let to = self.global_ptr(index);
-            let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
-
-            #[cfg(feature = "wmemcheck")]
-            if index.index() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
-                if let Some(wmemcheck) = &mut self.wmemcheck_state {
-                    let size = usize::try_from(raw.get_i32()).unwrap();
-                    wmemcheck.set_stack_size(size);
-                }
-            }
-
-            ptr::write(to, VMGlobalDefinition::from_val_raw(wasm_ty, raw));
+        // Zero-initialize the globals so that nothing is uninitialized memory
+        // after this function returns. The globals are actually initialized
+        // with their const expression initializers after the instance is fully
+        // allocated.
+        for (index, _init) in module.global_initializers.iter() {
+            ptr::write(self.global_ptr(index), VMGlobalDefinition::new());
         }
     }
 
