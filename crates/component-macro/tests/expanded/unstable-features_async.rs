@@ -206,6 +206,7 @@ const _: () = {
         }
         pub fn add_to_linker_imports_get_host<T>(
             linker: &mut wasmtime::component::Linker<T>,
+            options: &wasmtime::component::bindgen::LinkOptions,
             host_getter: impl for<'a> TheWorldImportsGetHost<&'a mut T>,
         ) -> wasmtime::Result<()>
         where
@@ -255,14 +256,15 @@ const _: () = {
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
+            options: &wasmtime::component::bindgen::LinkOptions,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
             T: Send,
             U: foo::foo::the_interface::Host + TheWorldImports + Send,
         {
-            Self::add_to_linker_imports_get_host(linker, get)?;
-            foo::foo::the_interface::add_to_linker(linker, get)?;
+            Self::add_to_linker_imports_get_host(linker, options, get)?;
+            foo::foo::the_interface::add_to_linker(linker, options, get)?;
             Ok(())
         }
     }
@@ -315,6 +317,7 @@ pub mod foo {
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
+                options: &wasmtime::component::bindgen::LinkOptions,
                 host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()>
             where
@@ -361,13 +364,14 @@ pub mod foo {
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
+                options: &wasmtime::component::bindgen::LinkOptions,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
                 U: Host + Send,
                 T: Send,
             {
-                add_to_linker_get_host(linker, get)
+                add_to_linker_get_host(linker, options, get)
             }
             #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {

@@ -17,6 +17,7 @@
 //! ```rust
 //! use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView};
 //! use wasmtime::{Result, Engine, Config};
+//! use wasmtime::component::bindgen::LinkOptions;
 //! use wasmtime::component::Linker;
 //!
 //! wasmtime::component::bindgen!({
@@ -64,7 +65,8 @@
 //!     config.async_support(true);
 //!     let engine = Engine::new(&config)?;
 //!     let mut linker: Linker<MyState> = Linker::new(&engine);
-//!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+//!     let link_options = LinkOptions::default();
+//!     wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
 //!     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
 //!
 //!     // .. use `Linker` to instantiate component ...
@@ -87,6 +89,7 @@
 /// ```rust
 /// use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView};
 /// use wasmtime::{Result, Engine};
+/// use wasmtime::component::bindgen::LinkOptions;
 /// use wasmtime::component::Linker;
 ///
 /// wasmtime::component::bindgen!({
@@ -133,7 +136,8 @@
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
 ///     let mut linker: Linker<MyState> = Linker::new(&engine);
-///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+///     let link_options = LinkOptions::default();
+///     wasmtime_wasi::add_to_linker_sync(&mut linker, &link_options)?;
 ///     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
 ///
 ///     // .. use `Linker` to instantiate component ...
@@ -201,7 +205,7 @@ pub mod sync {
     ///
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
-    /// use wasmtime::component::{ResourceTable, Linker, Component};
+    /// use wasmtime::component::{ResourceTable, Linker, Component, bindgen::LinkOptions};
     /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
     /// use wasmtime_wasi::bindings::sync::Command;
     ///
@@ -216,7 +220,8 @@ pub mod sync {
     ///     // Configure a `Linker` with WASI, compile a component based on
     ///     // command line arguments.
     ///     let mut linker = Linker::<MyState>::new(&engine);
-    ///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+    ///     let link_options = LinkOptions::default();
+    ///     wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
     ///     let component = Component::from_file(&engine, &args[0])?;
     ///
     ///
@@ -264,7 +269,7 @@ pub mod sync {
     ///
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
-    /// use wasmtime::component::{ResourceTable, Linker, Component};
+    /// use wasmtime::component::{ResourceTable, Linker, Component, bindgen::LinkOptions};
     /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
     /// use wasmtime_wasi::bindings::sync::CommandPre;
     ///
@@ -279,7 +284,8 @@ pub mod sync {
     ///     // Configure a `Linker` with WASI, compile a component based on
     ///     // command line arguments, and then pre-instantiate it.
     ///     let mut linker = Linker::<MyState>::new(&engine);
-    ///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+    ///     let link_options = LinkOptions::default();
+    ///     wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
     ///     let component = Component::from_file(&engine, &args[0])?;
     ///     let pre = CommandPre::new(linker.instantiate_pre(&component)?)?;
     ///
@@ -436,7 +442,7 @@ pub use self::async_io::wasi::*;
 ///
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::{ResourceTable, Linker, Component};
+/// use wasmtime::component::{ResourceTable, Linker, Component, bindgen::LinkOptions};
 /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
 /// use wasmtime_wasi::bindings::Command;
 ///
@@ -454,7 +460,8 @@ pub use self::async_io::wasi::*;
 ///     // Configure a `Linker` with WASI, compile a component based on
 ///     // command line arguments, and then pre-instantiate it.
 ///     let mut linker = Linker::<MyState>::new(&engine);
-///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+///     let link_options = LinkOptions::default();
+///     wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
 ///     let component = Component::from_file(&engine, &args[0])?;
 ///
 ///
@@ -502,7 +509,7 @@ pub use self::async_io::Command;
 ///
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::{ResourceTable, Linker, Component};
+/// use wasmtime::component::{ResourceTable, Linker, Component, bindgen::LinkOptions};
 /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
 /// use wasmtime_wasi::bindings::CommandPre;
 ///
@@ -520,7 +527,8 @@ pub use self::async_io::Command;
 ///     // Configure a `Linker` with WASI, compile a component based on
 ///     // command line arguments, and then pre-instantiate it.
 ///     let mut linker = Linker::<MyState>::new(&engine);
-///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+///     let link_options = LinkOptions::default();
+///     wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
 ///     let component = Component::from_file(&engine, &args[0])?;
 ///     let pre = CommandPre::new(linker.instantiate_pre(&component)?)?;
 ///

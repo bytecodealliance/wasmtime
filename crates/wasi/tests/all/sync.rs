@@ -1,6 +1,7 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
+use wasmtime::component::bindgen::LinkOptions;
 use wasmtime_wasi::add_to_linker_sync;
 use wasmtime_wasi::bindings::sync::Command;
 
@@ -9,7 +10,8 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let name = path.file_stem().unwrap().to_str().unwrap();
     let engine = test_programs_artifacts::engine(|_| {});
     let mut linker = Linker::new(&engine);
-    add_to_linker_sync(&mut linker)?;
+    let link_options = LinkOptions::default();
+    add_to_linker_sync(&mut linker, &link_options)?;
 
     let component = Component::from_file(&engine, path)?;
 

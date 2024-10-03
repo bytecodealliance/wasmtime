@@ -9,6 +9,7 @@ use std::{
         Arc,
     },
 };
+use wasmtime::component::bindgen::LinkOptions;
 use wasmtime::component::Linker;
 use wasmtime::{Config, Engine, Memory, MemoryType, Store, StoreLimits};
 use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
@@ -231,6 +232,7 @@ impl ServeCommand {
 
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
         let mut cli = self.run.common.wasi.cli;
+        let link_options = LinkOptions::default();
 
         // Accept -Scommon as a deprecated alias for -Scli.
         if let Some(common) = self.run.common.wasi.common {
@@ -254,7 +256,7 @@ impl ServeCommand {
         // bindings which adds just those interfaces that the proxy interface
         // uses.
         if cli == Some(true) {
-            wasmtime_wasi::add_to_linker_async(linker)?;
+            wasmtime_wasi::add_to_linker_async(linker, &link_options)?;
             wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
         } else {
             wasmtime_wasi_http::add_to_linker_async(linker)?;

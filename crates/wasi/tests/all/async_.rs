@@ -1,6 +1,7 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
+use wasmtime::component::bindgen::LinkOptions;
 use wasmtime_wasi::add_to_linker_async;
 use wasmtime_wasi::bindings::Command;
 
@@ -11,7 +12,8 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         config.async_support(true);
     });
     let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker)?;
+    let link_options = LinkOptions::default();
+    add_to_linker_async(&mut linker, &link_options)?;
 
     let (mut store, _td) = store(&engine, name, |builder| {
         if inherit_stdio {

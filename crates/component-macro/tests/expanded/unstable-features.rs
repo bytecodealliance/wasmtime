@@ -190,6 +190,7 @@ const _: () = {
         }
         pub fn add_to_linker_imports_get_host<T>(
             linker: &mut wasmtime::component::Linker<T>,
+            options: &wasmtime::component::bindgen::LinkOptions,
             host_getter: impl for<'a> TheWorldImportsGetHost<&'a mut T>,
         ) -> wasmtime::Result<()> {
             let mut linker = linker.root();
@@ -229,13 +230,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
+            options: &wasmtime::component::bindgen::LinkOptions,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
             U: foo::foo::the_interface::Host + TheWorldImports,
         {
-            Self::add_to_linker_imports_get_host(linker, get)?;
-            foo::foo::the_interface::add_to_linker(linker, get)?;
+            Self::add_to_linker_imports_get_host(linker, options, get)?;
+            foo::foo::the_interface::add_to_linker(linker, options, get)?;
             Ok(())
         }
     }
@@ -282,6 +284,7 @@ pub mod foo {
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
+                options: &wasmtime::component::bindgen::LinkOptions,
                 host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/the-interface")?;
@@ -318,12 +321,13 @@ pub mod foo {
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
+                options: &wasmtime::component::bindgen::LinkOptions,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
                 U: Host,
             {
-                add_to_linker_get_host(linker, get)
+                add_to_linker_get_host(linker, options, get)
             }
             impl<_T: Host + ?Sized> Host for &mut _T {
                 fn foo(&mut self) -> () {

@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use test_programs_artifacts::{foreach_runtime_config, RUNTIME_CONFIG_GET_COMPONENT};
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
+    component::{bindgen::LinkOptions, Component, Linker, ResourceTable},
     Store,
 };
 use wasmtime_wasi::{add_to_linker_async, bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
@@ -31,7 +31,8 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
 
     let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker)?;
+    let link_options = LinkOptions::default();
+    add_to_linker_async(&mut linker, &link_options)?;
     wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |h: &mut Ctx| {
         WasiRuntimeConfig::from(&h.wasi_runtime_config_vars)
     })?;

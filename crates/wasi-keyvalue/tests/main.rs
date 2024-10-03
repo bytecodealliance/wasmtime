@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use test_programs_artifacts::{foreach_keyvalue, KEYVALUE_MAIN_COMPONENT};
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
+    component::{bindgen::LinkOptions, Component, Linker, ResourceTable},
     Store,
 };
 use wasmtime_wasi::{bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
@@ -31,7 +31,8 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
 
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker_async(&mut linker)?;
+    let link_options = LinkOptions::default();
+    wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
     wasmtime_wasi_keyvalue::add_to_linker(&mut linker, |h: &mut Ctx| {
         WasiKeyValue::new(&h.wasi_keyvalue_ctx, &mut h.table)
     })?;

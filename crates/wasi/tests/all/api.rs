@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
+use wasmtime::component::bindgen::LinkOptions;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::Store;
 use wasmtime_wasi::bindings::Command;
@@ -34,7 +35,8 @@ async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, 
         config.async_support(true);
     });
     let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker)?;
+    let link_options = LinkOptions::default();
+    add_to_linker_async(&mut linker, &link_options)?;
 
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
@@ -142,7 +144,8 @@ async fn api_reactor() -> Result<()> {
         config.async_support(true);
     });
     let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker)?;
+    let link_options = LinkOptions::default();
+    add_to_linker_async(&mut linker, &link_options)?;
 
     let mut store = Store::new(&engine, CommandCtx { table, wasi });
     let component = Component::from_file(&engine, API_REACTOR_COMPONENT)?;
