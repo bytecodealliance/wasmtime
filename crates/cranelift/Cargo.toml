@@ -18,7 +18,7 @@ workspace = true
 anyhow = { workspace = true }
 log = { workspace = true }
 wasmtime-environ = { workspace = true, features = ['compile'] }
-cranelift-codegen = { workspace = true, features = ["host-arch"] }
+cranelift-codegen = { workspace = true, features = ["host-arch", "timing"] }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-native = { workspace = true }
