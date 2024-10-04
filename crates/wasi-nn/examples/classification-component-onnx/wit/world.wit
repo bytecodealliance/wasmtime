@@ -1,6 +1,0 @@
-package example:onnx-classifier;
-
-world classify {
-  include wasi:cli/command@0.2.0;
-  include wasi:nn/ml;
-}
