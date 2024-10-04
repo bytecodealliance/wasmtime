@@ -1,0 +1,55 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst (enum))
+
+(type ALUOp
+  (enum
+    (SDiv)
+))
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+;; BROKEN: zero-extends instead of sign-extends
+;; Place a `Value` into a register, sign extending it to 64-bits
+(spec (put_in_reg_sext64 x) (provide (= (zero_ext 64 x) result)))
+(decl put_in_reg_sext64 (Value) Reg)
+(extern constructor put_in_reg_sext64 put_in_reg_sext64)
+
+;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
+ (spec (put_nonzero_in_reg_sext64 x)
+       (provide (= (sign_ext 64 x) result))
+       (require (not (= #x0000000000000000 result))))
+(decl put_nonzero_in_reg_sext64 (Value) Reg)
+(extern constructor put_nonzero_in_reg_sext64 put_nonzero_in_reg_sext64)
+
+(spec (a64_sdiv ty a b)
+  (provide 
+    (= result 
+       (if (<= ty 32) 
+           (conv_to 64 (bvsdiv (extract 31 0 a) (extract 31 0 b)))
+           (bvsdiv a b)))))
+(decl a64_sdiv (Type Reg Reg) Reg)
+(rule (a64_sdiv ty x y) (alu_rrr (ALUOp.SDiv) ty x y))
+
+;; Check for signed overflow. The only case is min_value / -1.
+;; The following checks must be done in 32-bit or 64-bit, depending
+;; on the input type.
+(spec (trap_if_div_overflow ty x y) 
+      (provide (= x result)
+      (if (= ty 32) 
+          (not (and (= #x00000000 (extract 31 0 y))
+                 (= #x80000000 (extract 31 0 y))))          
+          (not (and (= #x0000000000000000 y)
+                    (= #x8000000000000000 y))))))
+(decl trap_if_div_overflow (Type Reg Reg) Reg)
+(extern constructor trap_if_div_overflow trap_if_div_overflow)
+
+(rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
+      (let ((x64 Reg (put_in_reg_sext64 x))
+            (y64 Reg (put_nonzero_in_reg_sext64 y))
+            (valid_x64 Reg (trap_if_div_overflow ty x64 y64))
+            (result Reg (a64_sdiv $I64 valid_x64 y64)))
+        result))

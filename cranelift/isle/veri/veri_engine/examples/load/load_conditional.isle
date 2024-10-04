@@ -1,0 +1,24 @@
+;; Instruction formats.
+(type MInst (enum))
+
+(form
+  lhs_form
+  ((args Bool (bv 8) (bv 8)) (ret (bv 8)) (canon (bv 8)))
+  ((args Bool (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args Bool (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args Bool (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+
+(spec (lhs cond x y) 
+  (provide (= result (load_effect #x0000 (widthof (if cond x y)) (if cond x y)))))
+(decl lhs (bool Value Value) Inst)
+(extern extractor lhs lhs)
+(instantiate lhs lhs_form)
+
+(spec (rhs x y) 
+  (provide (= result (load_effect #x0000 (widthof x) x))))
+(decl rhs (Value Value) Inst)
+(extern constructor rhs rhs)
+
+(rule (lhs $true x y)
+  (rhs x y))

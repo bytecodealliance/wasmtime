@@ -1,0 +1,160 @@
+(type Reg (primitive Reg))
+(type Value (primitive Value))
+(type Type (primitive Type))
+(type Inst (primitive Inst))
+(type Unit (primitive Unit))
+(type MemFlags (primitive MemFlags))
+(type Gpr (primitive Gpr))
+(type Imm64 (primitive Imm64))
+(type u32 (primitive u32))
+(type u8 (primitive u8))
+
+(type MInst (enum))
+
+(extern const $I64 Type)
+
+(type ExtendKind (enum Sign Zero))
+
+(spec (iconst arg) (provide (= arg (zero_ext 64 result))))
+(decl iconst (Imm64) Inst)
+(extern extractor iconst iconst)
+
+;; fn uimm8(&mut self, x: Imm64) -> Option<u8> {
+;;     let x64: i64 = x.into();
+;;     let x8: u8 = x64.try_into().ok()?;
+;;     Some(x8)
+;; }
+(spec (uimm8 arg)
+    (provide (= result (zero_ext 64 arg)))
+    (require (bvslt result #x0000000000000100)
+             (= (widthof arg) 8)))
+(decl uimm8 (u8) Imm64)
+(extern extractor uimm8 uimm8)
+
+(spec (u8_as_u32 arg)
+    (provide (= result (zero_ext 32 arg)))
+    (require 
+      (= (widthof arg) 8)
+      (= (widthof result) 32)))
+(decl pure u8_as_u32 (u8) u32)
+(extern constructor u8_as_u32 u8_as_u32)
+
+(spec (def_inst arg) (provide (= result arg)))
+(decl def_inst (Inst) Value)
+(extern extractor def_inst def_inst)
+(convert Inst Value def_inst)
+
+(spec (put_in_reg arg) (provide (= result (conv_to 62 arg))))
+(decl put_in_reg (Value) Reg)
+(extern constructor put_in_reg put_in_reg)
+(convert Value Reg put_in_reg)
+
+(spec (gpr_to_reg arg) (provide (= result arg)))
+(decl gpr_to_reg (Gpr) Reg)
+(extern constructor gpr_to_reg gpr_to_reg)
+(convert Gpr Reg gpr_to_reg)
+
+(spec (gpr_new arg) (provide (= result arg)))
+(decl gpr_new (Reg) Gpr)
+(extern constructor gpr_new gpr_new)
+(convert Reg Gpr gpr_new)
+
+;; To make this case study specific to Wasm, contrain to 32 or 64
+(spec (uextend arg) 
+  (provide (= result (zero_ext (widthof result) arg)))
+  (require 
+    (or (= (widthof result) 32) (= (widthof result) 64))
+    (or (= (widthof result) 32) (= (widthof result) 64))
+    (<= (widthof arg) (widthof result))))
+(decl uextend (Value) Inst)
+(extern extractor uextend uextend)
+
+;; fn shift_mask(&mut self, ty: Type) -> ImmLogic {
+;;     let mask = (ty.lane_bits() - 1) as u64;
+;;     ImmLogic::maybe_from_u64(mask, I32).unwrap()
+;; }
+(spec (ishl x y) 
+    (provide 
+        (= result 
+           (bvshl x 
+                  (bvand (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) 
+                                                     #x0000000000000001))
+                         y)))))
+(decl ishl (Value Value) Inst)
+(extern extractor ishl ishl)
+
+;; NOTE: partial spec: ignoring the `flags` argument
+;; NOTE: to get an easier counterexample, set base to 0
+;; Immediate sign-extended and a register
+(spec (Amode.ImmReg simm base flags)
+      (provide (= result (bvadd base (sign_ext 64 simm))))
+      (require
+        (= (widthof simm) 32) 
+        (= (widthof base) 64) 
+        (= base #x0000000000000000) 
+        (= (widthof flags) 4)))
+
+;; NOTE: partial spec: ignoring the `flags` argument
+;; Sign-extend-32-to-64(simm32) + base + (index << shift)
+(spec (Amode.ImmRegRegShift simm base index shift flags) 
+  (provide  
+    (= result 
+      (bvadd 
+        (bvadd base (sign_ext 64 simm))
+        (bvshl index (zero_ext 64 shift)))))
+  (require
+       (= (widthof simm) 32)
+       (= (widthof base) 64)
+       (= flags flags)))
+
+;; An `Amode` represents a possible addressing mode that can be used
+;; in instructions. These denote a 64-bit value only.
+(type Amode (enum
+             ;; Immediate sign-extended and a register
+             (ImmReg (simm32 u32)
+                     (base Reg)
+                     (flags MemFlags))
+                     
+             ;; Sign-extend-32-to-64(simm32) + base + (index << shift)
+             (ImmRegRegShift (simm32 u32)
+                             (base Gpr)
+                             (index Gpr)
+                             (shift u8)
+                             (flags MemFlags))
+            )
+)
+
+(spec (amode_add  x y) (provide (= result (bvadd x (zero_ext 64 y)))))
+(form
+  amode
+  ((args (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 32)))
+  ((args (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64)))
+)
+(instantiate amode_add amode)
+(decl amode_add (Amode Value) Amode)
+(extern extractor amode_add amode_add)
+
+(spec (valid_reg arg) (provide (= result arg)))
+(decl valid_reg (Reg) Reg)
+(extern extractor valid_reg valid_reg)
+
+(spec (u32_lteq  a b)
+    (provide (= result ()))
+    (require (<= a b)
+             (= (widthof a) 32)
+             (= (widthof b) 32)))
+(decl pure u32_lteq (u32 u32) Unit)
+(extern constructor u32_lteq u32_lteq)
+
+(spec (ExtendKind.Zero) (provide (= result #x0000000000000000)))
+(spec (ExtendKind.Sign) (provide (= result #x0000000000000001)))
+
+(spec (put_in_gpr arg) (provide (= result (conv_to 64 arg))))
+(decl put_in_gpr (Value) Gpr)
+(extern constructor put_in_gpr put_in_gpr)
+(convert Value Gpr put_in_gpr)
+
+;; The problematic rule itself
+(rule 2 (amode_add (Amode.ImmReg off (valid_reg base) flags) (ishl index (iconst (uimm8 shift))))
+       (if (u32_lteq (u8_as_u32 shift) 3))
+       (Amode.ImmRegRegShift off base index shift flags))

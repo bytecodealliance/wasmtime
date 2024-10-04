@@ -1,0 +1,42 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+    (BitRR
+        (op BitOp))
+))
+
+(type BitOp
+  (enum
+    (Clz)
+    (RBit)
+))
+
+(decl bit_rr (BitOp Type Reg) Reg)
+(extern constructor bit_rr bit_rr)
+
+(spec (a64_clz ty a)
+  (provide 
+    (= result 
+       (if (= ty 32)
+           (conv_to 64 (clz (extract 31 0 a)))
+           (clz a))))
+  (require (or (= ty 32) (= ty 64))))
+(decl a64_clz (Type Reg) Reg)
+(rule (a64_clz ty x) (bit_rr (BitOp.Clz) ty x))
+
+(spec (rbit ty a)
+  (provide 
+    (= result 
+       (if (= ty 32)
+           (conv_to 64 (rev (extract 31 0 a)))
+           (rev a))))
+  (require (or (= ty 32) (= ty 64))))
+(decl rbit (Type Reg) Reg)
+(rule (rbit ty x) (bit_rr (BitOp.RBit) ty x))
+
+;; Broken: starts with clz instead of ctz
+(rule -1 (lower (has_type ty (clz x)))
+      (a64_clz ty (rbit ty x)))

@@ -1,0 +1,41 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst (enum))
+
+(type ALUOp
+  (enum
+    (SDiv)
+))
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+;; Helper for generating `udiv` instructions.
+(spec (a64_udiv ty a b) 
+  (provide 
+    (= result
+       (if (<= ty 32) 
+           (conv_to 64 (bvudiv (extract 31 0 a) (extract 31 0 b)))
+           (bvudiv a b)))))
+(decl a64_udiv (Type Reg Reg) Reg)
+(extern constructor a64_udiv a64_udiv)
+
+(spec (imm ty x) (provide (= result (sign_ext 64 (conv_to ty x)))))
+(decl imm (Type u64) Reg)
+(extern constructor imm imm)
+
+(spec (put_in_reg_zext64 x) (provide (= result (zero_ext 64 x))))
+(decl put_in_reg_zext64 (Value) Reg)
+(extern constructor put_in_reg_zext64 put_in_reg_zext64)
+
+;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
+(spec (put_nonzero_in_reg_zext64 x)
+      (provide (= result (zero_ext 64 x)))
+      (require (not (= result #x0000000000000000))))
+(decl put_nonzero_in_reg_zext64 (Value) Reg)
+(extern constructor put_nonzero_in_reg_zext64 put_nonzero_in_reg_zext64)
+
+(rule udiv (lower (has_type (fits_in_64 ty) (udiv x y)))
+      (a64_udiv $I64 (put_in_reg_zext64 x) (put_nonzero_in_reg_zext64 y)))

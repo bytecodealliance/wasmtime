@@ -1,0 +1,37 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst (enum))
+
+(type ALUOp
+  (enum
+    (UDiv)
+))
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+(spec (a64_udiv ty a b) 
+  (provide 
+    (= result
+       (if (<= ty 32) 
+           (conv_to 64 (bvudiv (extract 31 0 a) (extract 31 0 b)))
+           (bvudiv a b)))))
+(decl a64_udiv (Type Reg Reg) Reg)
+(rule (a64_udiv ty x y) (alu_rrr (ALUOp.UDiv) ty x y))
+
+(spec (put_nonzero_in_reg_zext64 x)
+      (provide (= result (zero_ext 64 x)))
+      (require (not (= result #x0000000000000000))))
+(decl put_nonzero_in_reg_zext64 (Value) Reg)
+(extern constructor put_nonzero_in_reg_zext64 put_nonzero_in_reg_zext64)
+
+(spec (put_in_reg_sext64 x) (provide (= (sign_ext 64 x) result)))
+(decl put_in_reg_sext64 (Value) Reg)
+(extern constructor put_in_reg_sext64 put_in_reg_sext64)
+
+;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
+;; CLIF's `udiv` the check for zero needs to be manually performed.
+(rule (lower (has_type (fits_in_64 ty) (udiv x y)))
+      (a64_udiv $I64 (put_in_reg_sext64 x) (put_nonzero_in_reg_zext64 y)))

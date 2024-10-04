@@ -1,0 +1,109 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+))
+
+(type ALUOp
+  (enum
+    (Add)
+))
+
+;; Helper type to represent a value and an extend operation fused together.
+(model ExtendedValue (type (bv 67)))
+(type ExtendedValue extern (enum))
+
+;; We represent ExtendedValue as a bv
+;; where the three most significant bits
+;; encode an extend op as follows:
+;;   UXTB = 0b000,
+;;   UXTH = 0b001,
+;;   UXTW = 0b010,
+;;   UXTX = 0b011,
+;;   SXTB = 0b100,
+;;   SXTH = 0b101,
+;;   SXTW = 0b110,
+;;   SXTX = 0b111,
+;; and the remaining bits encode the value.
+
+(model ExtendOp (enum
+    (UXTB #b000)
+    (UXTH #b001)
+    (UXTW #b010)
+    (UXTX #b011)
+    (SXTB #b100)
+    (SXTH #b101)
+    (SXTW #b110)
+    (SXTX #b111)
+))
+
+(type ExtendOp extern
+  (enum
+    (UXTB)
+    (UXTH)
+    (UXTW)
+    (UXTX)
+    (SXTB)
+    (SXTH)
+    (SXTW)
+    (SXTX)
+))
+
+(decl alu_rr_extend_reg (ALUOp Type Reg ExtendedValue) Reg)
+(extern constructor alu_rr_extend_reg alu_rr_extend_reg)
+
+;; (rule (alu_rr_extend_reg op ty src1 extended_reg)
+;;       (let ((src2 Reg (put_extended_in_reg extended_reg))
+;;             (extend ExtendOp (get_extended_op extended_reg)))
+;;         (alu_rrr_extend op ty src1 src2 extend)))
+
+;; Only including the i8 to i32 opcodes, based on the impl of extended_value_from_value
+(spec (extended_value_from_value x)
+  (provide
+    (switch (extract 66 64 x)
+      ((ExtendOp.UXTB) (= (extract 63 0 x) (zero_ext 64 (extract 7 0 (zero_ext 64 result)))))
+      ((ExtendOp.UXTH) (= (extract 63 0 x) (zero_ext 64 (extract 15 0 (zero_ext 64 result)))))
+      ((ExtendOp.UXTW) (= (extract 63 0 x) (zero_ext 64 (extract 31 0 (zero_ext 64 result)))))
+      ((ExtendOp.SXTB) (= (extract 63 0 x) (sign_ext 64 (extract 7 0 (zero_ext 64 result)))))
+      ((ExtendOp.SXTH) (= (extract 63 0 x) (sign_ext 64 (extract 15 0 (zero_ext 64 result)))))
+      ((ExtendOp.SXTW) (= (extract 63 0 x) (sign_ext 64 (extract 31 0 (zero_ext 64 result)))))))
+  (require
+    (bvult (extract 66 64 x) #b110)
+    (not (= (extract 66 64 x) #b011))
+    (= result (conv_to (widthof result) x))
+    (or (= 8 (widthof result)) (= 16 (widthof result)) (= 32 (widthof result)))))
+(decl extended_value_from_value (ExtendedValue) Value)
+(extern extractor extended_value_from_value extended_value_from_value)
+
+;; BROKEN: all sign_extend with no zero_extend
+(spec (add_extend ty x y)
+    (provide
+      (= result
+         (if (<= ty 32)
+            (conv_to 64 (bvadd (extract 31 0 x)
+            (switch (extract 66 64 y)
+                  ((ExtendOp.UXTB) (sign_ext 32 (extract 7 0 y)))
+                  ((ExtendOp.UXTH) (sign_ext 32 (extract 15 0 y)))
+                  ((ExtendOp.UXTW) (sign_ext 32 (extract 31 0 y)))
+                  ((ExtendOp.UXTX) (sign_ext 32 (extract 31 0 y)))
+                  ((ExtendOp.SXTB) (sign_ext 32 (extract 7 0 y)))
+                  ((ExtendOp.SXTH) (sign_ext 32 (extract 15 0 y)))
+                  ((ExtendOp.SXTW) (sign_ext 32 (extract 31 0 y)))
+                  ((ExtendOp.SXTX) (sign_ext 32 (extract 31 0 y))))))
+            (bvadd x
+            (switch (extract 66 64 y)
+                  ((ExtendOp.UXTB) (sign_ext 64 (extract 7 0 y)))
+                  ((ExtendOp.UXTH) (sign_ext 64 (extract 15 0 y)))
+                  ((ExtendOp.UXTW) (sign_ext 64 (extract 31 0 y)))
+                  ((ExtendOp.UXTX) (sign_ext 64 (extract 63 0 y)))
+                  ((ExtendOp.SXTB) (sign_ext 64 (extract 7 0 y)))
+                  ((ExtendOp.SXTH) (sign_ext 64 (extract 15 0 y)))
+                  ((ExtendOp.SXTW) (sign_ext 64 (extract 31 0 y)))
+                  ((ExtendOp.SXTX) (sign_ext 64 (extract 63 0 y)))))))))
+(decl add_extend (Type Reg ExtendedValue) Reg)
+(rule (add_extend ty x y) (alu_rr_extend_reg (ALUOp.Add) ty x y))
+
+(rule 0 (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
+      (add_extend ty x y))

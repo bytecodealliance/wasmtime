@@ -1,0 +1,30 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+    (BitRR
+        (op BitOp))
+))
+
+(type BitOp
+  (enum
+    (Cls)
+))
+
+(decl bit_rr (BitOp Type Reg) Reg)
+(extern constructor bit_rr bit_rr)
+
+(spec (a64_cls ty a) 
+  (provide 
+    (= result 
+       (if (= ty 32)
+           (conv_to 64 (cls (extract 31 0 a)))
+           (cls a))))
+  (require (or (= ty 32) (= ty 64))))
+(decl a64_cls (Type Reg) Reg)
+(rule (a64_cls ty x) (bit_rr (BitOp.Cls) ty x))
+
+(rule (lower (has_type ty (cls x)))
+      (a64_cls ty x))

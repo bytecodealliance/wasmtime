@@ -2,6 +2,8 @@
 
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
+(spec (lower arg)
+      (provide (= result arg)))
 (decl partial lower (Inst) InstOutput)
 
 ;; A variant of the main lowering constructor term, used for branches.
@@ -61,7 +63,7 @@
 ;; but the actual instruction emitted might be an `add` if it's equivalent.
 ;; For more details on this see the `emit.rs` logic to emit
 ;; `LoadEffectiveAddress`.
-(rule -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
+(rule iadd_base_case_32_or_64_lea -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
       (x64_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
 
 ;; Higher-priority cases than the previous two where a load can be sunk into
@@ -2961,11 +2963,11 @@
 ;; 8-bit loads.
 ;;
 ;; By default, we zero-extend all sub-64-bit loads to a GPR.
-(rule -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
+(rule load_sub64_x64_movzx -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
 ;; But if we know that both the `from` and `to` are 64 bits, we simply load with
 ;; no extension.
-(rule -1 (lower (has_type (ty_int_ref_64 ty) (load flags address offset)))
+(rule load_64_x64_movzx -1 (lower (has_type (ty_int_ref_64 ty) (load flags address offset)))
       (x64_mov (to_amode flags address offset)))
 ;; Also, certain scalar loads have a specific `from` width and extension kind
 ;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
@@ -3048,7 +3050,7 @@
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8-, 16-, 32- and 64-bit GPR stores.
-(rule -2 (lower (store flags
+(rule store_x64_movrm -2 (lower (store flags
                     value @ (value_type (is_gpr_type ty))
                     address
                     offset))
@@ -3200,7 +3202,7 @@
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add mem, reg
-(rule 3 (lower
+(rule store_x64_add_mem 3 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (iadd (and

@@ -8,30 +8,50 @@
 
 ;; `()`
 (type Unit (primitive Unit))
+(model Unit (type Unit))
 
 (decl pure unit () Unit)
 (extern constructor unit unit)
 
+(model bool (type Bool))
 (type bool (primitive bool))
 (extern const $true bool)
 (extern const $false bool)
 
+(model u8 (type (bv 8)))
 (type u8 (primitive u8))
+
+(model u16 (type (bv 16)))
 (type u16 (primitive u16))
+
+(model u32 (type (bv 32)))
 (type u32 (primitive u32))
+
+(model u64 (type (bv 64)))
 (type u64 (primitive u64))
 (type u128 (primitive u128))
+
+(model usize (type (bv)))
 (type usize (primitive usize))
 
+(model i8 (type (bv 8)))
 (type i8 (primitive i8))
+
+(model i16 (type (bv 16)))
 (type i16 (primitive i16))
+
+(model i32 (type (bv 32)))
 (type i32 (primitive i32))
+
+(model i64 (type (bv 64)))
 (type i64 (primitive i64))
 (type i128 (primitive i128))
 (type isize (primitive isize))
 
 ;; `cranelift-entity`-based identifiers.
+(model Type (type Int))
 (type Type (primitive Type))
+(model Value (type (bv)))
 (type Value (primitive Value))
 (type ValueList (primitive ValueList))
 (type BlockCall (primitive BlockCall))
@@ -40,6 +60,7 @@
 (type ValueSlice (primitive ValueSlice))
 
 ;; Extract the type of a `Value`.
+(spec (value_type arg) (provide (= arg (widthof result))))
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 
@@ -54,6 +75,11 @@
 
 ;; Pure/fallible constructor that tests if one u32 is less than or
 ;; equal to another.
+(spec (u32_lteq a b)
+    (provide (= result ()))
+    (require (<= a b)
+             (= (widthof a) 32)
+             (= (widthof b) 32)))
 (decl pure partial u32_lteq (u32 u32) Unit)
 (extern constructor u32_lteq u32_lteq)
 
@@ -72,6 +98,11 @@
 (decl pure u8_as_i8 (u8) i8)
 (extern constructor u8_as_i8 u8_as_i8)
 
+(spec (u8_as_u32 arg)
+    (provide (= result (zero_ext 32 arg)))
+    (require
+      (= (widthof arg) 8)
+      (= (widthof result) 32)))
 (decl pure u8_as_u32 (u8) u32)
 (extern constructor u8_as_u32 u8_as_u32)
 (convert u8 u32 u8_as_u32)
@@ -123,9 +154,11 @@
 (extern constructor i32_as_i64 i32_as_i64)
 (convert i32 i64 i32_as_i64)
 
+(spec (i64_as_u64 arg) (provide (= arg result)))
 (decl pure i64_as_u64 (i64) u64)
 (extern constructor i64_as_u64 i64_as_u64)
 
+(spec (i64_neg x) (provide (= result (bvneg x))))
 (decl pure i64_neg (i64) i64)
 (extern constructor i64_neg i64_neg)
 
@@ -161,6 +194,7 @@
 (decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
 
+(spec (u32_sub a b) (provide (= result (bvsub a b))))
 (decl pure u32_sub (u32 u32) u32)
 (extern constructor u32_sub u32_sub)
 
@@ -172,12 +206,17 @@
 
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
+(spec (s32_add_fallible x y)
+      (provide (= result (bvadd x y)))
+      (require (not (bvsaddo x y))))
 (decl pure partial s32_add_fallible (i32 i32) i32)
 (extern constructor s32_add_fallible s32_add_fallible)
 
 (decl pure u64_add (u64 u64) u64)
 (extern constructor u64_add u64_add)
 
+(spec (u64_sub a b)
+      (provide (= result (bvsub a b))))
 (decl pure u64_sub (u64 u64) u64)
 (extern constructor u64_sub u64_sub)
 
@@ -233,6 +272,7 @@
 (decl pure i64_sextend_u64 (Type u64) i64)
 (extern constructor i64_sextend_u64 i64_sextend_u64)
 
+(spec (i64_sextend_imm64 ty a) (provide (= result (sign_ext 64 (conv_to ty a)))))
 (decl pure i64_sextend_imm64 (Type Imm64) i64)
 (extern constructor i64_sextend_imm64 i64_sextend_imm64)
 
@@ -257,6 +297,8 @@
 (decl i64_nonzero (i64) i64)
 (extractor (i64_nonzero x) (and (i64_is_zero $false) x))
 
+;; x & 1 == 1
+(spec (u64_is_odd arg) (provide (= result (= #b1 (extract 0 0 arg)))))
 (decl pure u64_is_odd (u64) bool)
 (extern constructor u64_is_odd u64_is_odd)
 
@@ -395,10 +437,13 @@
 (extern constructor ty_smax ty_smax)
 
 ;; Get the bit width of a given type.
+(spec (ty_bits x) (provide (= result (int2bv 8 x))))
 (decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
+(spec (ty_bits_u16 x) 
+      (provide (= result (int2bv 16 x))))
 (decl pure ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
 
@@ -444,7 +489,12 @@
 
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Provide model for the MemFlags type (declared in generated clif_lower.isle).
+(model MemFlags (type (bv 16)))
+
 ;; `MemFlags::trusted`
+(spec (mem_flags_trusted)
+      (provide (= result #x0003)))
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
@@ -509,10 +559,16 @@
 (extractor (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
 
 ;; An extractor that only matches types that can fit in 16 bits.
+(spec (fits_in_16 arg)
+      (provide (= result arg))
+      (require (<= arg 16)))
 (decl fits_in_16 (Type) Type)
 (extern extractor fits_in_16 fits_in_16)
 
 ;; An extractor that only matches types that can fit in 32 bits.
+(spec (fits_in_32 arg)
+      (provide (= result arg))
+      (require (<= arg 32)))
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)
 
@@ -521,6 +577,9 @@
 (extern extractor lane_fits_in_32 lane_fits_in_32)
 
 ;; An extractor that only matches types that can fit in 64 bits.
+(spec (fits_in_64 arg)
+      (provide (= result arg))
+      (require (<= arg 64)))
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
@@ -534,11 +593,17 @@
 
 ;; A pure constructor/extractor that only matches scalar integers, and
 ;; references that can fit in 64 bits.
+(spec (ty_int_ref_scalar_64 arg)
+    (provide (= result arg))
+    (require (<= arg 64)))
 (decl pure partial ty_int_ref_scalar_64 (Type) Type)
 (extern constructor ty_int_ref_scalar_64 ty_int_ref_scalar_64)
 (extern extractor ty_int_ref_scalar_64 ty_int_ref_scalar_64_extract)
 
 ;; An extractor that matches 32- and 64-bit types only.
+(spec (ty_32_or_64 arg)
+      (provide (= result arg))
+      (require (or (= arg 32) (= arg 64))))
 (decl ty_32_or_64 (Type) Type)
 (extern extractor ty_32_or_64 ty_32_or_64)
 
@@ -563,6 +628,7 @@
 (extern extractor ty_int_ref_16_to_64 ty_int_ref_16_to_64)
 
 ;; An extractor that only matches integers.
+(spec (ty_int a) (provide (= result a)))
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
 
@@ -637,6 +703,7 @@
 (extern extractor infallible u64_from_bool u64_from_bool)
 
 ;; Extract a `u64` from an `Imm64`.
+(spec (u64_from_imm64 arg) (provide (= arg result)))
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor infallible u64_from_imm64 u64_from_imm64)
 
@@ -689,10 +756,12 @@
 (extern extractor ty_dyn128_int ty_dyn128_int)
 
 ;; Convert an `Offset32` to a primitive number.
+(spec (offset32_to_i32 offset) (provide (= result offset)))
 (decl pure offset32_to_i32 (Offset32) i32)
 (extern constructor offset32_to_i32 offset32_to_i32)
 
 ;; Convert a number to an `Offset32`
+(spec (i32_to_offset32 x) (provide (= result x)))
 (decl pure i32_to_offset32 (i32) Offset32)
 (extern constructor i32_to_offset32 i32_to_offset32)
 
@@ -703,6 +772,9 @@
 (extern constructor intcc_unsigned intcc_unsigned)
 
 ;; Pure constructor that only matches signed integer cond codes.
+(spec (signed_cond_code c)
+    (provide (= result c))
+    (require (and (bvuge c #x02) (bvule c #x05))))
 (decl pure partial signed_cond_code (IntCC) IntCC)
 (extern constructor signed_cond_code signed_cond_code)
 
@@ -749,3 +821,29 @@
 
 (convert Offset32 i32 offset32_to_i32)
 (convert i32 Offset32 i32_to_offset32)
+
+;;;; Common Term Signatures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(form
+  bv_unary_8_to_64
+  ((args (bv  8)) (ret (bv  8)) (canon (bv  8)))
+  ((args (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+
+(form
+  bv_binary_8_to_64
+  ((args (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))
+  ((args (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+
+(form
+  bv_ternary_8_to_64
+  ((args (bv  8) (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))
+  ((args (bv 16) (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args (bv 32) (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args (bv 64) (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)

@@ -1,0 +1,88 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+    (BitRR
+      (op BitOp))
+    (AluRRImmLogic
+      (alu_op ALUOp)
+      (size OperandSize)
+      (rd WritableReg)
+      (rn Reg)
+      (imml ImmLogic))
+))
+
+(type ALUOp
+  (enum
+    (Orr)
+))
+
+(type BitOp
+  (enum
+    (Clz)
+    (RBit)
+))
+
+(type ImmLogic (primitive ImmLogic))
+
+(type OperandSize extern
+      (enum Size32
+            Size64))
+
+(decl operand_size (Type) OperandSize)
+(rule (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
+(rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
+
+(decl bit_rr (BitOp Type Reg) Reg)
+(extern constructor bit_rr bit_rr)
+
+(decl alu_rr_imm_logic (ALUOp Type Reg ImmLogic) Reg)
+(rule (alu_rr_imm_logic op ty src imm)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRImmLogic op (operand_size ty) dst src imm))))
+        dst))
+
+(spec (a64_clz ty a)
+  (provide 
+    (= result 
+       (if (= ty 32)
+           (conv_to 64 (clz (extract 31 0 a)))
+           (clz a))))
+  (require (or (= ty 32) (= ty 64))))
+(decl a64_clz (Type Reg) Reg)
+(rule (a64_clz ty x) (bit_rr (BitOp.Clz) ty x))
+
+(spec (orr_imm ty x y)
+  (provide 
+    (= result 
+       (switch ty
+         (32 (conv_to 64 (bvor (extract 31 0 x) (extract 31 0 y))))
+         (64 (bvor x (zero_ext 64 y))))))
+  (require  
+    (or (<= (bv2int y) 4094)
+        (and (<= (bv2int y) 16773119)
+            (= (extract 2 0 y) #b000)))))
+(decl orr_imm (Type Reg ImmLogic) Reg)
+(rule (orr_imm ty x y) (alu_rr_imm_logic (ALUOp.Orr) ty x y))
+
+(spec (rbit ty a)
+  (provide 
+    (= result 
+       (if (= ty 32)
+           (conv_to 64 (rev (extract 31 0 a)))
+           (rev a))))
+  (require (or (= ty 32) (= ty 64))))
+(decl rbit (Type Reg) Reg)
+(rule (rbit ty x) (bit_rr (BitOp.RBit) ty x))
+
+(spec (u64_into_imm_logic ty a)
+      (provide (= result a))
+      (require (or (= ty 32) (= ty 64))))
+(decl u64_into_imm_logic (Type u64) ImmLogic)
+(extern constructor u64_into_imm_logic u64_into_imm_logic)
+
+;; Broken: wrong constant
+(rule (lower (has_type $I16 (ctz x)))
+      (a64_clz $I32 (orr_imm $I32 (rbit $I32 x) (u64_into_imm_logic $I32 0xFFFFFFFF))))

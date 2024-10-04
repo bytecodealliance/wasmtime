@@ -12,6 +12,8 @@
 #
 # - wasm-spec-interpreter: brings in OCaml which is a pain to configure for all
 #   targets, tested as part of the wastime-fuzzing CI job.
+#
+# - veri_engine: requires an SMT solver (z3)
 
 cargo test \
       --workspace \
@@ -20,4 +22,5 @@ cargo test \
       --exclude wasmtime-wasi-nn \
       --exclude wasmtime-fuzzing \
       --exclude wasm-spec-interpreter \
+      --exclude veri_engine \
       $@

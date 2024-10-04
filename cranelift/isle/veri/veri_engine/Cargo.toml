@@ -1,0 +1,33 @@
+[package]
+name = "veri_engine"
+license = "Apache-2.0 WITH LLVM-exception"
+authors = ["Alexa VanHattum", "Monica Pardeshi", "Michael McLoughlin", "Wellesley Programming Systems Lab"]
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "veri_engine_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "crocus"
+path = "src/main.rs"
+
+[dependencies]
+cranelift-isle = { path = "../../isle" }
+cranelift-codegen = { path = "../../../codegen", features = ["all-arch"] }
+cranelift-codegen-meta = { path = "../../../codegen/meta" }
+veri_ir = { path = "../veri_ir" }
+easy-smt = "0.2.2"
+clap = { workspace = true }
+itertools = "0.12.0"
+log = { workspace = true }
+env_logger = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+strum = "0.24.0"
+strum_macros = "0.24.0"

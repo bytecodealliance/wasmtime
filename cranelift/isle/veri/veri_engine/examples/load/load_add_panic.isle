@@ -1,0 +1,24 @@
+;; Instruction formats
+(type MInst (enum))
+
+;; Add with 2 loads spec
+(form
+  lhs_form
+  ((args (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))
+  ((args (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(spec (lhs x y) 
+  (provide (= result (bvadd (load_effect #x0000 (widthof x) x) (load #x0000 (widthof y) y)))))
+(decl lhs (Value Value) Inst)
+(extern extractor lhs lhs)
+(instantiate lhs lhs_form)
+
+(spec (rhs x y) 
+  (provide (= result (bvadd (load_effect #x0000 (widthof x) x) (load #x0000 (widthof y) y)))))
+(decl rhs (Value Value) Inst)
+(extern constructor rhs rhs)
+
+(rule (lhs x y)
+  (rhs x y))

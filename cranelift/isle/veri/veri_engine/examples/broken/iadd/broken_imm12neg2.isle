@@ -1,0 +1,51 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+))
+
+;; Imm12 modeled as the range of intermediates it can represent.
+(model Imm12 (type (bv 24)))
+(type Imm12 (primitive Imm12))
+
+(type ALUOp
+  (enum
+    (Sub)
+))
+
+;; BROKEN: * instead of -
+;; Note that 4094 = 0xffe and 16773119 = 0xffefff
+(spec (sub_imm ty a b)
+  (provide
+    (= result
+       (if (<= ty 32)
+           (conv_to 64 (bvmul (extract 31 0 a) (zero_ext 32 b)))
+           (bvmul a (zero_ext 64 b)))))
+  (require (or (bvult (zero_ext 64 b) #x0000000000000fff)
+                (and (bvult (zero_ext 64 b) #x0000000000fff000)
+                     (= (extract 2 0 (zero_ext 64 b)) #b000)))
+            (= (widthof b) 24)))
+(decl sub_imm (Type Reg Imm12) Reg)
+(rule (sub_imm ty x y) (alu_rr_imm12 (ALUOp.Sub) ty x y))
+
+(decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
+(extern constructor alu_rr_imm12 alu_rr_imm12)
+
+(spec (imm12_from_negated_value arg)
+    (provide (or (bvule (bvneg (zero_ext 64 result)) #x0000000000000fff)
+                    (and (bvule (bvneg (zero_ext 64 result)) #x0000000000fff000)
+                        (= (extract 2 0 (bvneg (zero_ext 64 result))) #b000)))
+    (= result (conv_to (widthof result) (bvneg (zero_ext 64 arg))))))
+(instantiate imm12_from_negated_value
+    ((args (bv 8)) (ret (bv 24)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 24)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 24)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 24)) (canon (bv 64)))
+)
+(decl imm12_from_negated_value (Imm12) Value)
+(extern extractor imm12_from_negated_value imm12_from_negated_value)
+
+(rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_negated_value x) y)))
+      (sub_imm ty y x))

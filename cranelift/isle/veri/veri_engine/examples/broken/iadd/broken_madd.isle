@@ -1,0 +1,28 @@
+(spec (lower arg)
+    (provide (= result arg)))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+))
+
+(type ALUOp3
+  (enum
+    ;; Multiply-add
+    (MAdd)
+))
+
+(spec (madd ty a b c) 
+  (provide 
+    (= result 
+       (if (<= ty 32) 
+           (conv_to 64 (bvadd (extract 31 0 c) (bvmul (extract 31 0 a) (extract 31 0 b))))
+           (bvadd c (bvmul a b))))))
+(decl madd (Type Reg Reg Reg) Reg)
+(rule (madd ty x y z) (alu_rrrr (ALUOp3.MAdd) ty x y z))
+
+(decl alu_rrrr (ALUOp3 Type Reg Reg Reg) Reg)
+(extern constructor alu_rrrr alu_rrrr)
+
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imul y z))))
+      (madd ty x y z))

@@ -1,0 +1,26 @@
+
+(type MInst (enum))
+
+(spec (integral_ty ty)
+  (provide (= result ty))
+  (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+(decl integral_ty (Type) Type)
+(extern extractor integral_ty integral_ty)
+
+;; Try changing this "sign_ext" to "zero_ext": the test fails either way
+;; (spec (imm ty x) (provide (= result (zero_ext 64 (conv_to ty x)))))
+(spec (imm ty x) (provide (= result (sign_ext 64 (conv_to ty x)))))
+(instantiate imm
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 8)))
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 16)))
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 32)))
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(decl imm (Type u64) Reg)
+
+(spec (load_constant64_full x) (provide (= result x)))
+(decl load_constant64_full (u64) Reg)
+(extern constructor load_constant64_full load_constant64_full)
+
+(rule (imm (integral_ty _ty) n)
+       (load_constant64_full n))
