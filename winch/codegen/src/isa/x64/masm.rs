@@ -483,7 +483,8 @@ impl Masm for MacroAssembler {
     ) {
         if self.flags.has_sse41() {
             let src = context.pop_to_reg(self, None);
-            self.asm.xmm_rounds_rr(src.into(), src.into(), mode, size);
+            self.asm
+                .xmm_rounds_rr(src.into(), writable!(src.into()), mode, size);
             context.stack.push(src.into());
         } else {
             fallback(env, context, self);

@@ -358,7 +358,8 @@ impl Masm for MacroAssembler {
         _fallback: F,
     ) {
         let src = context.pop_to_reg(self, None);
-        self.asm.fround_rr(src.into(), src.into(), mode, size);
+        self.asm
+            .fround_rr(src.into(), writable!(src.into()), mode, size);
         context.stack.push(src.into());
     }
 
@@ -458,9 +459,10 @@ impl Masm for MacroAssembler {
         let src = context.pop_to_reg(self, None);
         let tmp = regs::float_scratch();
         self.asm.mov_to_fpu(src.into(), writable!(tmp), size);
-        self.asm.cnt(tmp);
-        self.asm.addv(tmp, tmp, VectorSize::Size8x8);
-        self.asm.mov_from_vec(tmp, src.into(), 0, OperandSize::S8);
+        self.asm.cnt(writable!(tmp));
+        self.asm.addv(tmp, writable!(tmp), VectorSize::Size8x8);
+        self.asm
+            .mov_from_vec(tmp, writable!(src.into()), 0, OperandSize::S8);
         context.stack.push(src.into());
     }
 

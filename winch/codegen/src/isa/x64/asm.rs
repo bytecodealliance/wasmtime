@@ -1224,7 +1224,13 @@ impl Assembler {
 
     /// Perform rounding operation on float register src and place results in
     /// float register dst.
-    pub fn xmm_rounds_rr(&mut self, src: Reg, dst: Reg, mode: RoundingMode, size: OperandSize) {
+    pub fn xmm_rounds_rr(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        mode: RoundingMode,
+        size: OperandSize,
+    ) {
         let op = match size {
             OperandSize::S32 => SseOpcode::Roundss,
             OperandSize::S64 => SseOpcode::Roundsd,
@@ -1242,7 +1248,7 @@ impl Assembler {
             op,
             src: XmmMemAligned::from(Xmm::from(src)),
             imm,
-            dst: dst.into(),
+            dst: dst.map(Into::into),
         })
     }
 

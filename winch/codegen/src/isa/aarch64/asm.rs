@@ -314,9 +314,9 @@ impl Assembler {
         });
     }
 
-    pub fn mov_from_vec(&mut self, rn: Reg, rd: Reg, idx: u8, size: OperandSize) {
+    pub fn mov_from_vec(&mut self, rn: Reg, rd: WritableReg, idx: u8, size: OperandSize) {
         self.emit(Inst::MovFromVec {
-            rd: Writable::from_reg(rd.into()),
+            rd: rd.map(Into::into),
             rn: rn.into(),
             idx,
             size: size.into(),
@@ -341,10 +341,10 @@ impl Assembler {
     }
 
     /// Add across Vector.
-    pub fn addv(&mut self, rn: Reg, rd: Reg, size: VectorSize) {
+    pub fn addv(&mut self, rn: Reg, rd: WritableReg, size: VectorSize) {
         self.emit(Inst::VecLanes {
             op: VecLanesOp::Addv,
-            rd: Writable::from_reg(rd.into()),
+            rd: rd.map(Into::into),
             rn: rn.into(),
             size,
         });
@@ -539,7 +539,7 @@ impl Assembler {
     }
 
     /// Float round (ceil, trunc, floor) with two registers.
-    pub fn fround_rr(&mut self, rn: Reg, rd: Reg, mode: RoundingMode, size: OperandSize) {
+    pub fn fround_rr(&mut self, rn: Reg, rd: WritableReg, mode: RoundingMode, size: OperandSize) {
         let fpu_mode = match (mode, size) {
             (RoundingMode::Nearest, OperandSize::S32) => FpuRoundMode::Nearest32,
             (RoundingMode::Up, OperandSize::S32) => FpuRoundMode::Plus32,
@@ -675,11 +675,11 @@ impl Assembler {
     }
 
     // Population Count per byte.
-    pub fn cnt(&mut self, rd: Reg) {
+    pub fn cnt(&mut self, rd: WritableReg) {
         self.emit(Inst::VecMisc {
             op: VecMisc2::Cnt,
-            rd: Writable::from_reg(rd.into()),
-            rn: rd.into(),
+            rd: rd.map(Into::into),
+            rn: rd.to_reg().into(),
             size: VectorSize::Size8x8,
         });
     }
@@ -828,10 +828,10 @@ impl Assembler {
         });
     }
 
-    fn emit_fpu_round(&mut self, op: FpuRoundMode, rn: Reg, rd: Reg) {
+    fn emit_fpu_round(&mut self, op: FpuRoundMode, rn: Reg, rd: WritableReg) {
         self.emit(Inst::FpuRound {
             op: op,
-            rd: Writable::from_reg(rd.into()),
+            rd: rd.map(Into::into),
             rn: rn.into(),
         });
     }
