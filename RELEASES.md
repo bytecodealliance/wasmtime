@@ -8,6 +8,10 @@ Released 2024-10-09.
   stack trace or trap.
   [GHSA-q8hx-mm92-4wvg](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q8hx-mm92-4wvg)
 
+* Fix a race condition could lead to WebAssembly control-flow integrity and type
+  safety violations.
+  [GHSA-7qmx-3fpx-r45m](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-7qmx-3fpx-r45m)
+
 --------------------------------------------------------------------------------
 
 ## 25.0.1
