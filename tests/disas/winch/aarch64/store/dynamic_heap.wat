@@ -45,7 +45,7 @@
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x5, x5, x4, hi
+;;       csel    x4, x5, x5, hi
 ;;       stur    w0, [x4]
 ;;       ldur    w0, [x28, #4]
 ;;       ldur    w1, [x28, #0xc]
@@ -61,7 +61,7 @@
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x5, x5, x4, hi
+;;       csel    x4, x5, x5, hi
 ;;       stur    w0, [x4]
 ;;       ldur    w0, [x28]
 ;;       ldur    w1, [x28, #0xc]
@@ -80,7 +80,7 @@
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x5, x5, x4, hi
+;;       csel    x4, x5, x5, hi
 ;;       stur    w0, [x4]
 ;;       add     sp, sp, #0x20
 ;;       mov     x28, sp

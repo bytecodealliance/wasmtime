@@ -23,13 +23,13 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     x28, sp
-;;       mov     x9, x0
+;;       mov     x9, x1
 ;;       sub     sp, sp, #0x20
 ;;       mov     x28, sp
-;;       stur    x0, [x28, #0x18]
-;;       stur    x1, [x28, #0x10]
-;;       stur    w2, [x28, #0xc]
-;;       stur    x3, [x28]
+;;       stur    x1, [x28, #0x18]
+;;       stur    x2, [x28, #0x10]
+;;       stur    w3, [x28, #0xc]
+;;       stur    x0, [x28]
 ;;       ldur    w0, [x28, #0xc]
 ;;       ldur    x1, [x9, #0x68]
 ;;       mov     w2, w0
@@ -42,7 +42,7 @@
 ;;       mov     x16, #0
 ;;       mov     x4, x16
 ;;       cmp     x2, x1, uxtx
-;;       csel    x4, x4, x3, hi
+;;       csel    x3, x4, x4, hi
 ;;       ldur    w0, [x3]
 ;;       ldur    w1, [x28, #0xc]
 ;;       ldur    x2, [x9, #0x68]
@@ -57,7 +57,7 @@
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x5, x5, x4, hi
+;;       csel    x4, x5, x5, hi
 ;;       ldur    w1, [x4]
 ;;       ldur    w2, [x28, #0xc]
 ;;       ldur    x3, [x9, #0x68]
@@ -75,7 +75,7 @@
 ;;       mov     x16, #0
 ;;       mov     x6, x16
 ;;       cmp     x4, x3, uxtx
-;;       csel    x6, x6, x5, hi
+;;       csel    x5, x6, x6, hi
 ;;       ldur    w2, [x5]
 ;;       sub     sp, sp, #4
 ;;       mov     x28, sp
