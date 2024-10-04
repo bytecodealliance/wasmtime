@@ -18,3 +18,7 @@ anyhow = { workspace = true, features = ['std'] }
 cranelift-codegen = { workspace = true }
 smallvec = { workspace = true }
 target-lexicon = { workspace = true, features = ['std'] }
+
+[dev-dependencies]
+# Some tests require that the x86_64 target parses for the target specification.
+cranelift-codegen = { workspace = true, features = ['x86'] }
