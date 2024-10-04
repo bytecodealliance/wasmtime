@@ -12,7 +12,7 @@ use crate::{
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
-    isa::aarch64::inst::VectorSize,
+    isa::aarch64::inst::{Cond, VectorSize},
     settings, Final, MachBufferFinalized, MachLabel,
 };
 use regalloc2::RegClass;
@@ -238,8 +238,8 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, _dst: WritableReg, _src: Reg, _cc: IntCmpKind, _size: OperandSize) {
-        todo!()
+    fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, _size: OperandSize) {
+        self.asm.csel(src, src, dst, Cond::from(cc));
     }
 
     fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
@@ -262,13 +262,14 @@ impl Masm for MacroAssembler {
 
     fn checked_uadd(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: RegImm,
-        _size: OperandSize,
-        _trap: TrapCode,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: RegImm,
+        size: OperandSize,
+        trap: TrapCode,
     ) {
-        todo!()
+        self.add(dst, lhs, rhs, size);
+        self.asm.trapif(Cond::Hs, trap);
     }
 
     fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
@@ -632,7 +633,7 @@ impl Masm for MacroAssembler {
     }
 
     fn unreachable(&mut self) {
-        todo!()
+        self.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
@@ -647,16 +648,16 @@ impl Masm for MacroAssembler {
         self.asm.jmp_table(rest, default, index, tmp1, tmp);
     }
 
-    fn trap(&mut self, _code: TrapCode) {
-        todo!()
+    fn trap(&mut self, code: TrapCode) {
+        self.asm.udf(code);
     }
 
     fn trapz(&mut self, _src: Reg, _code: TrapCode) {
         todo!()
     }
 
-    fn trapif(&mut self, _cc: IntCmpKind, _code: TrapCode) {
-        todo!()
+    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) {
+        self.asm.trapif(cc.into(), code);
     }
 
     fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {

@@ -6,6 +6,7 @@ use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
 };
+use cranelift_codegen::ir::TrapCode;
 use cranelift_codegen::isa::aarch64::inst::{
     BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
     FPUOpRI::{self, UShr32, UShr64},
@@ -674,6 +675,17 @@ impl Assembler {
         });
     }
 
+    // If the condition is true, Conditional Select writes rm to rd. If the condition is false,
+    // it writes rn to rd
+    pub fn csel(&mut self, rm: Reg, rn: Reg, rd: WritableReg, cond: Cond) {
+        self.emit(Inst::CSel {
+            rd: rd.map(Into::into),
+            rm: rm.into(),
+            rn: rn.into(),
+            cond,
+        });
+    }
+
     // Population Count per byte.
     pub fn cnt(&mut self, rd: Reg) {
         self.emit(Inst::VecMisc {
@@ -697,6 +709,19 @@ impl Assembler {
     /// Bitwise AND (shifted register), setting flags.
     pub fn ands_rr(&mut self, rn: Reg, rm: Reg, size: OperandSize) {
         self.emit_alu_rrr(ALUOp::AndS, rm, rn, writable!(regs::zero()), size);
+    }
+
+    /// Permanently Undefined.
+    pub fn udf(&mut self, code: TrapCode) {
+        self.emit(Inst::Udf { trap_code: code });
+    }
+
+    /// Conditional trap.
+    pub fn trapif(&mut self, cc: Cond, code: TrapCode) {
+        self.emit(Inst::TrapIf {
+            kind: CondBrKind::Cond(cc),
+            trap_code: code,
+        });
     }
 
     // Helpers for ALU operations.
