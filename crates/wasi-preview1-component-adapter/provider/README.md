@@ -36,10 +36,10 @@ use wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_REACTOR_ADA
 use wit_component::ComponentEncoder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let wasm_p1_bytes = std::fs::read("path/to/your/your-component.p1.wasm");
+    let wasm_p1_bytes = std::fs::read("path/to/your/your-component.p1.wasm")?;
 
     let wasm_p2_bytes = ComponentEncoder::default()
-        .module(&wasm_module_bytes)?
+        .module(&wasm_p1_bytes)?
         .adapter(
             "wasi_snapshot_preview1",
             WASI_SNAPSHOT_PREVIEW1_REACTOR_ADAPTER,
