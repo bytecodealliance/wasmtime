@@ -1,10 +1,13 @@
 use anyhow::{anyhow, Result};
 use test_programs_artifacts::{foreach_keyvalue, KEYVALUE_MAIN_COMPONENT};
 use wasmtime::{
-    component::{bindgen::LinkOptions, Component, Linker, ResourceTable},
+    component::{Component, Linker, ResourceTable},
     Store,
 };
-use wasmtime_wasi::{bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{
+    bindings::{Command, LinkOptions},
+    WasiCtx, WasiCtxBuilder, WasiView,
+};
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
 struct Ctx {

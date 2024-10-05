@@ -1,9 +1,8 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime::component::bindgen::LinkOptions;
 use wasmtime_wasi::add_to_linker_async;
-use wasmtime_wasi::bindings::Command;
+use wasmtime_wasi::bindings::{Command, LinkOptions};
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);

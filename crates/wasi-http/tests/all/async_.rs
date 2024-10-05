@@ -1,7 +1,6 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime::component::bindgen::LinkOptions;
-use wasmtime_wasi::bindings::Command;
+use wasmtime_wasi::bindings::{Command, LinkOptions};
 
 foreach_http!(assert_test_exists);
 

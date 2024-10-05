@@ -1,3 +1,66 @@
+/// Link-time configurations.
+#[derive(Clone, Debug, Default)]
+pub struct LinkOptions {
+    experimental_interface: bool,
+    experimental_interface_function: bool,
+    experimental_interface_resource: bool,
+    experimental_interface_resource_method: bool,
+    experimental_world: bool,
+    experimental_world_function_import: bool,
+    experimental_world_interface_import: bool,
+    experimental_world_resource: bool,
+    experimental_world_resource_method: bool,
+}
+impl LinkOptions {
+    /// Enable members marked as `@unstable(feature = experimental-interface)`
+    pub fn experimental_interface(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_interface = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-interface-function)`
+    pub fn experimental_interface_function(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_interface_function = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-interface-resource)`
+    pub fn experimental_interface_resource(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_interface_resource = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-interface-resource-method)`
+    pub fn experimental_interface_resource_method(
+        &mut self,
+        enabled: bool,
+    ) -> &mut Self {
+        self.experimental_interface_resource_method = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-world)`
+    pub fn experimental_world(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_world = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-world-function-import)`
+    pub fn experimental_world_function_import(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_world_function_import = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-world-interface-import)`
+    pub fn experimental_world_interface_import(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_world_interface_import = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-world-resource)`
+    pub fn experimental_world_resource(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_world_resource = enabled;
+        self
+    }
+    /// Enable members marked as `@unstable(feature = experimental-world-resource-method)`
+    pub fn experimental_world_resource_method(&mut self, enabled: bool) -> &mut Self {
+        self.experimental_world_resource_method = enabled;
+        self
+    }
+}
 pub enum Baz {}
 pub trait HostBaz {
     fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
@@ -9,6 +72,23 @@ impl<_T: HostBaz + ?Sized> HostBaz for &mut _T {
     }
     fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()> {
         HostBaz::drop(*self, rep)
+    }
+}
+impl std::convert::From<LinkOptions> for foo::foo::the_interface::LinkOptions {
+    fn from(src: LinkOptions) -> Self {
+        (&src).into()
+    }
+}
+impl std::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions {
+    fn from(src: &LinkOptions) -> Self {
+        let mut dest = Self::default();
+        dest.experimental_interface(src.experimental_interface);
+        dest.experimental_interface_function(src.experimental_interface_function);
+        dest.experimental_interface_resource(src.experimental_interface_resource);
+        dest.experimental_interface_resource_method(
+            src.experimental_interface_resource_method,
+        );
+        dest
     }
 }
 /// Auto-generated bindings for a pre-instantiated version of a
@@ -190,12 +270,12 @@ const _: () = {
         }
         pub fn add_to_linker_imports_get_host<T>(
             linker: &mut wasmtime::component::Linker<T>,
-            options: &wasmtime::component::bindgen::LinkOptions,
+            options: &LinkOptions,
             host_getter: impl for<'a> TheWorldImportsGetHost<&'a mut T>,
         ) -> wasmtime::Result<()> {
             let mut linker = linker.root();
-            if options.has_feature("experimental-world") {
-                if options.has_feature("experimental-world-resource") {
+            if options.experimental_world {
+                if options.experimental_world_resource {
                     linker
                         .resource(
                             "baz",
@@ -208,7 +288,7 @@ const _: () = {
                             },
                         )?;
                 }
-                if options.has_feature("experimental-world-function-import") {
+                if options.experimental_world_function_import {
                     linker
                         .func_wrap(
                             "foo",
@@ -219,7 +299,7 @@ const _: () = {
                             },
                         )?;
                 }
-                if options.has_feature("experimental-world-resource-method") {
+                if options.experimental_world_resource_method {
                     linker
                         .func_wrap(
                             "[method]baz.foo",
@@ -238,16 +318,20 @@ const _: () = {
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
-            options: &wasmtime::component::bindgen::LinkOptions,
+            options: &LinkOptions,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
             U: foo::foo::the_interface::Host + TheWorldImports,
         {
-            if options.has_feature("experimental-world") {
+            if options.experimental_world {
                 Self::add_to_linker_imports_get_host(linker, options, get)?;
-                if options.has_feature("experimental-world-interface-import") {
-                    foo::foo::the_interface::add_to_linker(linker, options, get)?;
+                if options.experimental_world_interface_import {
+                    foo::foo::the_interface::add_to_linker(
+                        linker,
+                        &options.into(),
+                        get,
+                    )?;
                 }
             }
             Ok(())
@@ -260,6 +344,45 @@ pub mod foo {
         pub mod the_interface {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
+            /// Link-time configurations.
+            #[derive(Clone, Debug, Default)]
+            pub struct LinkOptions {
+                experimental_interface: bool,
+                experimental_interface_function: bool,
+                experimental_interface_resource: bool,
+                experimental_interface_resource_method: bool,
+            }
+            impl LinkOptions {
+                /// Enable members marked as `@unstable(feature = experimental-interface)`
+                pub fn experimental_interface(&mut self, enabled: bool) -> &mut Self {
+                    self.experimental_interface = enabled;
+                    self
+                }
+                /// Enable members marked as `@unstable(feature = experimental-interface-function)`
+                pub fn experimental_interface_function(
+                    &mut self,
+                    enabled: bool,
+                ) -> &mut Self {
+                    self.experimental_interface_function = enabled;
+                    self
+                }
+                /// Enable members marked as `@unstable(feature = experimental-interface-resource)`
+                pub fn experimental_interface_resource(
+                    &mut self,
+                    enabled: bool,
+                ) -> &mut Self {
+                    self.experimental_interface_resource = enabled;
+                    self
+                }
+                /// Enable members marked as `@unstable(feature = experimental-interface-resource-method)`
+                pub fn experimental_interface_resource_method(
+                    &mut self,
+                    enabled: bool,
+                ) -> &mut Self {
+                    self.experimental_interface_resource_method = enabled;
+                    self
+                }
+            }
             pub enum Bar {}
             pub trait HostBar {
                 fn foo(&mut self, self_: wasmtime::component::Resource<Bar>) -> ();
@@ -296,12 +419,12 @@ pub mod foo {
             }
             pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                options: &wasmtime::component::bindgen::LinkOptions,
+                options: &LinkOptions,
                 host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
-                if options.has_feature("experimental-interface") {
+                if options.experimental_interface {
                     let mut inst = linker.instance("foo:foo/the-interface")?;
-                    if options.has_feature("experimental-interface-resource") {
+                    if options.experimental_interface_resource {
                         inst.resource(
                             "bar",
                             wasmtime::component::ResourceType::host::<Bar>(),
@@ -313,7 +436,7 @@ pub mod foo {
                             },
                         )?;
                     }
-                    if options.has_feature("experimental-interface-function") {
+                    if options.experimental_interface_function {
                         inst.func_wrap(
                             "foo",
                             move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
@@ -323,7 +446,7 @@ pub mod foo {
                             },
                         )?;
                     }
-                    if options.has_feature("experimental-interface-resource-method") {
+                    if options.experimental_interface_resource_method {
                         inst.func_wrap(
                             "[method]bar.foo",
                             move |
@@ -341,7 +464,7 @@ pub mod foo {
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
-                options: &wasmtime::component::bindgen::LinkOptions,
+                options: &LinkOptions,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where

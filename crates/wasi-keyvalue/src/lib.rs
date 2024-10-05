@@ -17,9 +17,10 @@
 //!
 //! ```
 //! use wasmtime::{
-//!     component::{Linker, ResourceTable, bindgen::LinkOptions},
+//!     component::{Linker, ResourceTable},
 //!     Config, Engine, Result, Store,
 //! };
+//! use wasmtime_wasi::bindings::LinkOptions;
 //! use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 //! use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 //!

@@ -182,7 +182,6 @@
 
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-use wasmtime::component::bindgen::LinkOptions;
 use wasmtime::component::Linker;
 
 pub mod bindings;
@@ -247,8 +246,9 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 ///
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::{ResourceTable, Linker, bindgen::LinkOptions};
+/// use wasmtime::component::{ResourceTable, Linker};
 /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::bindings::LinkOptions;
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -289,7 +289,7 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 /// ```
 pub fn add_to_linker_async<T: WasiView>(
     linker: &mut Linker<T>,
-    options: &LinkOptions,
+    options: &crate::bindings::LinkOptions,
 ) -> anyhow::Result<()> {
     let l = linker;
     let closure = type_annotate::<T, _>(|t| WasiImpl(t));
@@ -304,7 +304,7 @@ pub fn add_to_linker_async<T: WasiView>(
     crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::exit::add_to_linker_get_host(l, options, closure)?;
+    crate::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
     crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
     crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
     crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
@@ -341,8 +341,9 @@ pub fn add_to_linker_async<T: WasiView>(
 ///
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::{ResourceTable, Linker, bindgen::LinkOptions};
+/// use wasmtime::component::{ResourceTable, Linker};
 /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::bindings::sync::LinkOptions;
 ///
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
@@ -381,7 +382,7 @@ pub fn add_to_linker_async<T: WasiView>(
 /// ```
 pub fn add_to_linker_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
-    options: &LinkOptions,
+    options: &crate::bindings::sync::LinkOptions,
 ) -> anyhow::Result<()> {
     let l = linker;
     let closure = type_annotate::<T, _>(|t| WasiImpl(t));
@@ -396,7 +397,7 @@ pub fn add_to_linker_sync<T: WasiView>(
     crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::exit::add_to_linker_get_host(l, options, closure)?;
+    crate::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
     crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
     crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
     crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;

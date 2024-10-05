@@ -372,6 +372,8 @@ impl Wasmtime {
     fn generate(&mut self, resolve: &Resolve, id: WorldId) -> anyhow::Result<String> {
         self.types.analyze(resolve, id);
 
+        self.world_link_options.write_struct(&mut self.src);
+
         // Resolve the `trappable_error_type` configuration values to `TypeId`
         // values. This is done by iterating over each `trappable_error_type`
         // and then locating the interface that it corresponds to as well as the
@@ -501,6 +503,7 @@ impl Wasmtime {
                 } else {
                     // If this interface is not remapped then it's time to
                     // actually generate bindings here.
+                    gen.gen.interface_link_options[id].write_struct(&mut gen.src);
                     gen.types(*id);
                     let key_name = resolve.name_world_key(name);
                     gen.generate_add_to_linker(*id, &key_name);
@@ -522,6 +525,10 @@ impl Wasmtime {
                 };
                 self.import_interfaces
                     .push((*id, module, self.interface_names[id].clone()));
+
+                let interface_path = self.import_interface_path(id);
+                self.interface_link_options[id]
+                    .write_impl_from_world(&mut self.src, &interface_path);
             }
             WorldItem::Type(ty) => {
                 let name = match name {
@@ -1446,6 +1453,13 @@ impl Wasmtime {
             .collect()
     }
 
+    fn import_interface_path(&self, id: &InterfaceId) -> String {
+        match &self.interface_names[id] {
+            InterfaceName::Path(path) => path.join("::"),
+            InterfaceName::Remapped { name_at_root, .. } => name_at_root.clone(),
+        }
+    }
+
     fn world_host_traits(&self, resolve: &Resolve, world: WorldId) -> Vec<String> {
         let mut traits = self
             .import_interface_paths()
@@ -1468,15 +1482,10 @@ impl Wasmtime {
             return;
         }
 
-        let wt = self.wasmtime_path();
-
         let (options_param, options_arg) = if self.world_link_options.has_any() {
-            (
-                format!("options: &{wt}::component::bindgen::LinkOptions,"),
-                ", options",
-            )
+            ("options: &LinkOptions,", ", options")
         } else {
-            ("".into(), "")
+            ("", "")
         };
 
         let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
@@ -1485,6 +1494,7 @@ impl Wasmtime {
         } else {
             ""
         };
+        let wt = self.wasmtime_path();
         if has_world_imports_trait {
             uwrite!(
                 self.src,
@@ -1544,7 +1554,7 @@ impl Wasmtime {
             }
             for (interface_id, path) in self.import_interface_paths() {
                 let options_arg = if self.interface_link_options[&interface_id].has_any() {
-                    ", options"
+                    ", &options.into()"
                 } else {
                     ""
                 };
@@ -2456,12 +2466,9 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         let (options_param, options_arg) = if self.gen.interface_link_options[&id].has_any() {
-            (
-                format!("options: &{wt}::component::bindgen::LinkOptions,"),
-                ", options",
-            )
+            ("options: &LinkOptions,", ", options")
         } else {
-            ("".into(), "")
+            ("", "")
         };
 
         uwriteln!(
@@ -3091,6 +3098,84 @@ impl LinkOptionsBuilder {
             Stability::Stable { .. } | Stability::Unknown => {}
         }
     }
+    fn write_struct(&self, src: &mut Source) {
+        if !self.has_any() {
+            return;
+        }
+
+        let mut unstable_features = self.unstable_features.iter().cloned().collect::<Vec<_>>();
+        unstable_features.sort();
+
+        uwriteln!(
+            src,
+            "
+            /// Link-time configurations.
+            #[derive(Clone, Debug, Default)]
+            pub struct LinkOptions {{
+            "
+        );
+
+        for feature in unstable_features.iter() {
+            let feature_rust_name = feature.to_snake_case();
+            uwriteln!(src, "{feature_rust_name}: bool,");
+        }
+
+        uwriteln!(src, "}}");
+        uwriteln!(src, "impl LinkOptions {{");
+
+        for feature in unstable_features.iter() {
+            let feature_rust_name = feature.to_snake_case();
+            uwriteln!(
+                src,
+                "
+                /// Enable members marked as `@unstable(feature = {feature})`
+                pub fn {feature_rust_name}(&mut self, enabled: bool) -> &mut Self {{
+                    self.{feature_rust_name} = enabled;
+                    self
+                }}
+            "
+            );
+        }
+
+        uwriteln!(src, "}}");
+    }
+    fn write_impl_from_world(&self, src: &mut Source, path: &str) {
+        if !self.has_any() {
+            return;
+        }
+
+        let mut unstable_features = self.unstable_features.iter().cloned().collect::<Vec<_>>();
+        unstable_features.sort();
+
+        uwriteln!(
+            src,
+            "
+            impl std::convert::From<LinkOptions> for {path}::LinkOptions {{
+                fn from(src: LinkOptions) -> Self {{
+                    (&src).into()
+                }}
+            }}
+
+            impl std::convert::From<&LinkOptions> for {path}::LinkOptions {{
+                fn from(src: &LinkOptions) -> Self {{
+                    let mut dest = Self::default();
+        "
+        );
+
+        for feature in unstable_features.iter() {
+            let feature_rust_name = feature.to_snake_case();
+            uwriteln!(src, "dest.{feature_rust_name}(src.{feature_rust_name});");
+        }
+
+        uwriteln!(
+            src,
+            "
+                    dest
+                }}
+            }}
+        "
+        );
+    }
 }
 
 struct FeatureGate {
@@ -3099,7 +3184,8 @@ struct FeatureGate {
 impl FeatureGate {
     fn open(src: &mut Source, stability: &Stability) -> FeatureGate {
         let close = if let Stability::Unstable { feature, .. } = stability {
-            uwrite!(src, "if options.has_feature(\"{feature}\") {{");
+            let feature_rust_name = feature.to_snake_case();
+            uwrite!(src, "if options.{feature_rust_name} {{");
             true
         } else {
             false

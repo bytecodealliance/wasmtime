@@ -100,7 +100,6 @@
 // rustdoc appears to lie about a warning above, so squelch it for now.
 #![allow(rustdoc::redundant_explicit_links)]
 
-pub mod bindgen;
 mod component;
 mod func;
 mod instance;

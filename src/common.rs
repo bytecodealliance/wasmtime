@@ -4,9 +4,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use std::net::TcpListener;
 use std::{path::Path, time::Duration};
-use wasmtime::component::bindgen::LinkOptions;
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
+use wasmtime_wasi::bindings::LinkOptions;
 use wasmtime_wasi::WasiCtxBuilder;
 
 #[cfg(feature = "component-model")]
@@ -336,11 +336,7 @@ impl RunCommon {
 
     pub fn compute_wasi_features(&self) -> LinkOptions {
         let mut options = LinkOptions::default();
-
-        if let Some(true) = self.common.wasi.cli_exit_with_code {
-            options.with_feature("cli-exit-with-code");
-        }
-
+        options.cli_exit_with_code(self.common.wasi.cli_exit_with_code.unwrap_or(false));
         options
     }
 }

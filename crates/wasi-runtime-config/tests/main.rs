@@ -1,10 +1,14 @@
 use anyhow::{anyhow, Result};
 use test_programs_artifacts::{foreach_runtime_config, RUNTIME_CONFIG_GET_COMPONENT};
 use wasmtime::{
-    component::{bindgen::LinkOptions, Component, Linker, ResourceTable},
+    component::{Component, Linker, ResourceTable},
     Store,
 };
-use wasmtime_wasi::{add_to_linker_async, bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{
+    add_to_linker_async,
+    bindings::{Command, LinkOptions},
+    WasiCtx, WasiCtxBuilder, WasiView,
+};
 use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
 struct Ctx {
