@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
-use wasmtime::component::bindgen::LinkOptions;
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::WasiView;
 
@@ -605,7 +604,6 @@ impl RunCommand {
         module: &RunTarget,
     ) -> Result<()> {
         let mut cli = self.run.common.wasi.cli;
-        let link_options = LinkOptions::default();
 
         // Accept -Scommon as a deprecated alias for -Scli.
         if let Some(common) = self.run.common.wasi.common {
@@ -654,6 +652,7 @@ impl RunCommand {
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
+                    let link_options = self.run.compute_wasi_features();
                     wasmtime_wasi::add_to_linker_async(linker, &link_options)?;
                     self.set_preview2_ctx(store)?;
                 }
