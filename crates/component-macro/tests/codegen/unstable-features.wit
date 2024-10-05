@@ -1,27 +1,28 @@
 package foo:foo;
 
-@unstable(feature = f1)
+@unstable(feature = experimental-interface)
 interface the-interface {
-  @unstable(feature = f2)
+  @unstable(feature = experimental-interface-function)
   foo: func();
   
-  @unstable(feature = f3)
+  @unstable(feature = experimental-interface-resource)
   resource bar {
-    @unstable(feature = f4)
+    @unstable(feature = experimental-interface-resource-method)
     foo: func();
   }
 }
 
+@unstable(feature = experimental-world)
 world the-world {
-	@unstable(feature = f5)
+	@unstable(feature = experimental-world-interface-import)
   import the-interface;
 
-  @unstable(feature = f6)
+  @unstable(feature = experimental-world-function-import)
   import foo: func();
 
-  @unstable(feature = f7)
+  @unstable(feature = experimental-world-resource)
   resource baz {
-    @unstable(feature = f8)
+    @unstable(feature = experimental-world-resource-method)
     foo: func();
   }
 }
