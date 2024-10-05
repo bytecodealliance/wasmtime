@@ -213,45 +213,53 @@ const _: () = {
             T: Send,
         {
             let mut linker = linker.root();
-            linker
-                .resource_async(
-                    "baz",
-                    wasmtime::component::ResourceType::host::<Baz>(),
-                    move |mut store, rep| {
-                        std::boxed::Box::new(async move {
-                            HostBaz::drop(
-                                    &mut host_getter(store.data_mut()),
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
-                        })
-                    },
-                )?;
-            linker
-                .func_wrap_async(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        wasmtime::component::__internal::Box::new(async move {
-                            let host = &mut host_getter(caller.data_mut());
-                            let r = TheWorldImports::foo(host).await;
-                            Ok(r)
-                        })
-                    },
-                )?;
-            linker
-                .func_wrap_async(
-                    "[method]baz.foo",
-                    move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
-                        (arg0,): (wasmtime::component::Resource<Baz>,)|
-                    {
-                        wasmtime::component::__internal::Box::new(async move {
-                            let host = &mut host_getter(caller.data_mut());
-                            let r = HostBaz::foo(host, arg0).await;
-                            Ok(r)
-                        })
-                    },
-                )?;
+            if options.has_feature("experimental-world") {
+                if options.has_feature("experimental-world-resource") {
+                    linker
+                        .resource_async(
+                            "baz",
+                            wasmtime::component::ResourceType::host::<Baz>(),
+                            move |mut store, rep| {
+                                std::boxed::Box::new(async move {
+                                    HostBaz::drop(
+                                            &mut host_getter(store.data_mut()),
+                                            wasmtime::component::Resource::new_own(rep),
+                                        )
+                                        .await
+                                })
+                            },
+                        )?;
+                }
+                if options.has_feature("experimental-world-function-import") {
+                    linker
+                        .func_wrap_async(
+                            "foo",
+                            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let host = &mut host_getter(caller.data_mut());
+                                    let r = TheWorldImports::foo(host).await;
+                                    Ok(r)
+                                })
+                            },
+                        )?;
+                }
+                if options.has_feature("experimental-world-resource-method") {
+                    linker
+                        .func_wrap_async(
+                            "[method]baz.foo",
+                            move |
+                                mut caller: wasmtime::StoreContextMut<'_, T>,
+                                (arg0,): (wasmtime::component::Resource<Baz>,)|
+                            {
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let host = &mut host_getter(caller.data_mut());
+                                    let r = HostBaz::foo(host, arg0).await;
+                                    Ok(r)
+                                })
+                            },
+                        )?;
+                }
+            }
             Ok(())
         }
         pub fn add_to_linker<T, U>(
@@ -263,8 +271,12 @@ const _: () = {
             T: Send,
             U: foo::foo::the_interface::Host + TheWorldImports + Send,
         {
-            Self::add_to_linker_imports_get_host(linker, options, get)?;
-            foo::foo::the_interface::add_to_linker(linker, options, get)?;
+            if options.has_feature("experimental-world") {
+                Self::add_to_linker_imports_get_host(linker, options, get)?;
+                if options.has_feature("experimental-world-interface-import") {
+                    foo::foo::the_interface::add_to_linker(linker, options, get)?;
+                }
+            }
             Ok(())
         }
     }
@@ -323,43 +335,51 @@ pub mod foo {
             where
                 T: Send,
             {
-                let mut inst = linker.instance("foo:foo/the-interface")?;
-                inst.resource_async(
-                    "bar",
-                    wasmtime::component::ResourceType::host::<Bar>(),
-                    move |mut store, rep| {
-                        std::boxed::Box::new(async move {
-                            HostBar::drop(
-                                    &mut host_getter(store.data_mut()),
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
-                        })
-                    },
-                )?;
-                inst.func_wrap_async(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        wasmtime::component::__internal::Box::new(async move {
-                            let host = &mut host_getter(caller.data_mut());
-                            let r = Host::foo(host).await;
-                            Ok(r)
-                        })
-                    },
-                )?;
-                inst.func_wrap_async(
-                    "[method]bar.foo",
-                    move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
-                        (arg0,): (wasmtime::component::Resource<Bar>,)|
-                    {
-                        wasmtime::component::__internal::Box::new(async move {
-                            let host = &mut host_getter(caller.data_mut());
-                            let r = HostBar::foo(host, arg0).await;
-                            Ok(r)
-                        })
-                    },
-                )?;
+                if options.has_feature("experimental-interface") {
+                    let mut inst = linker.instance("foo:foo/the-interface")?;
+                    if options.has_feature("experimental-interface-resource") {
+                        inst.resource_async(
+                            "bar",
+                            wasmtime::component::ResourceType::host::<Bar>(),
+                            move |mut store, rep| {
+                                std::boxed::Box::new(async move {
+                                    HostBar::drop(
+                                            &mut host_getter(store.data_mut()),
+                                            wasmtime::component::Resource::new_own(rep),
+                                        )
+                                        .await
+                                })
+                            },
+                        )?;
+                    }
+                    if options.has_feature("experimental-interface-function") {
+                        inst.func_wrap_async(
+                            "foo",
+                            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let host = &mut host_getter(caller.data_mut());
+                                    let r = Host::foo(host).await;
+                                    Ok(r)
+                                })
+                            },
+                        )?;
+                    }
+                    if options.has_feature("experimental-interface-resource-method") {
+                        inst.func_wrap_async(
+                            "[method]bar.foo",
+                            move |
+                                mut caller: wasmtime::StoreContextMut<'_, T>,
+                                (arg0,): (wasmtime::component::Resource<Bar>,)|
+                            {
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let host = &mut host_getter(caller.data_mut());
+                                    let r = HostBar::foo(host, arg0).await;
+                                    Ok(r)
+                                })
+                            },
+                        )?;
+                    }
+                }
                 Ok(())
             }
             pub fn add_to_linker<T, U>(

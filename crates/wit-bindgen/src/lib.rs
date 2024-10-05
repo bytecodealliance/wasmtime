@@ -1358,8 +1358,8 @@ impl Wasmtime {
         if self.opts.async_.maybe_async() {
             supertraits.push("Send".to_string());
         }
-        for resource in get_world_resources(resolve, world) {
-            supertraits.push(format!("Host{}", resource.to_upper_camel_case()));
+        for (_, name) in get_world_resources(resolve, world) {
+            supertraits.push(format!("Host{}", name.to_upper_camel_case()));
         }
         if !supertraits.is_empty() {
             uwrite!(self.src, ": {}", supertraits.join(" + "));
@@ -1499,19 +1499,22 @@ impl Wasmtime {
                         let mut linker = linker.root();
                 "
             );
-            for name in get_world_resources(resolve, world) {
+            let gate = FeatureGate::open(&mut self.src, &resolve.worlds[world].stability);
+            for (ty, name) in get_world_resources(resolve, world) {
                 Self::generate_add_resource_to_linker(
                     &mut self.src,
                     &self.opts,
                     &wt,
                     "linker",
                     name,
+                    &resolve.types[ty].stability,
                 );
             }
             for f in self.import_functions.iter() {
                 self.src.push_str(&f.add_to_linker);
                 self.src.push_str("\n");
             }
+            gate.close(&mut self.src);
             uwriteln!(self.src, "Ok(())\n}}");
         }
 
@@ -1532,24 +1535,40 @@ impl Wasmtime {
                     {{
                 "
             );
+            let gate = FeatureGate::open(&mut self.src, &resolve.worlds[world].stability);
             if has_world_imports_trait {
                 uwriteln!(
                     self.src,
                     "Self::add_to_linker_imports_get_host(linker {options_arg}, get)?;"
                 );
             }
-            for (id, path) in self.import_interface_paths() {
-                let options_arg = if self.interface_link_options[&id].has_any() {
+            for (interface_id, path) in self.import_interface_paths() {
+                let options_arg = if self.interface_link_options[&interface_id].has_any() {
                     ", options"
                 } else {
                     ""
                 };
 
+                let import_stability = resolve.worlds[world]
+                    .imports
+                    .iter()
+                    .filter_map(|(_, i)| match i {
+                        WorldItem::Interface { id, stability } if *id == interface_id => {
+                            Some(stability.clone())
+                        }
+                        _ => None,
+                    })
+                    .next()
+                    .unwrap_or(Stability::Unknown);
+
+                let gate = FeatureGate::open(&mut self.src, &import_stability);
                 uwriteln!(
                     self.src,
                     "{path}::add_to_linker(linker {options_arg}, get)?;"
                 );
+                gate.close(&mut self.src);
             }
+            gate.close(&mut self.src);
             uwriteln!(self.src, "Ok(())\n}}");
         }
     }
@@ -1560,7 +1579,9 @@ impl Wasmtime {
         wt: &str,
         inst: &str,
         name: &str,
+        stability: &Stability,
     ) {
+        let gate = FeatureGate::open(src, stability);
         let camel = name.to_upper_camel_case();
         if opts.async_.is_drop_async(name) {
             uwriteln!(
@@ -1587,6 +1608,7 @@ impl Wasmtime {
                 )?;"
             )
         }
+        gate.close(src);
     }
 }
 
@@ -2364,8 +2386,8 @@ impl<'a> InterfaceGenerator<'a> {
         if is_maybe_async {
             host_supertraits.push("Send".to_string());
         }
-        for resource in get_resources(self.resolve, id) {
-            host_supertraits.push(format!("Host{}", resource.to_upper_camel_case()));
+        for (_, name) in get_resources(self.resolve, id) {
+            host_supertraits.push(format!("Host{}", name.to_upper_camel_case()));
         }
         if !host_supertraits.is_empty() {
             uwrite!(self.src, ": {}", host_supertraits.join(" + "));
@@ -2472,21 +2494,24 @@ impl<'a> InterfaceGenerator<'a> {
                 {{
             "
         );
+        let gate = FeatureGate::open(&mut self.src, &iface.stability);
         uwriteln!(self.src, "let mut inst = linker.instance(\"{name}\")?;");
 
-        for name in get_resources(self.resolve, id) {
+        for (ty, name) in get_resources(self.resolve, id) {
             Wasmtime::generate_add_resource_to_linker(
                 &mut self.src,
                 &self.gen.opts,
                 &wt,
                 "inst",
                 name,
+                &self.resolve.types[ty].stability,
             );
         }
 
         for (_, func) in iface.functions.iter() {
             self.generate_add_function_to_linker(owner, func, "inst");
         }
+        gate.close(&mut self.src);
         uwriteln!(self.src, "Ok(())");
         uwriteln!(self.src, "}}");
 
@@ -2555,6 +2580,7 @@ impl<'a> InterfaceGenerator<'a> {
     }
 
     fn generate_add_function_to_linker(&mut self, owner: TypeOwner, func: &Function, linker: &str) {
+        let gate = FeatureGate::open(&mut self.src, &func.stability);
         uwrite!(
             self.src,
             "{linker}.{}(\"{}\", ",
@@ -2566,7 +2592,8 @@ impl<'a> InterfaceGenerator<'a> {
             func.name
         );
         self.generate_guest_import_closure(owner, func);
-        uwriteln!(self.src, ")?;")
+        uwriteln!(self.src, ")?;");
+        gate.close(&mut self.src);
     }
 
     fn generate_guest_import_closure(&mut self, owner: TypeOwner, func: &Function) {
@@ -3066,6 +3093,27 @@ impl LinkOptionsBuilder {
     }
 }
 
+struct FeatureGate {
+    close: bool,
+}
+impl FeatureGate {
+    fn open(src: &mut Source, stability: &Stability) -> FeatureGate {
+        let close = if let Stability::Unstable { feature, .. } = stability {
+            uwrite!(src, "if options.has_feature(\"{feature}\") {{");
+            true
+        } else {
+            false
+        };
+        Self { close }
+    }
+
+    fn close(self, src: &mut Source) {
+        if self.close {
+            uwriteln!(src, "}}");
+        }
+    }
+}
+
 /// Produce a string for tracing a function argument.
 fn formatting_for_arg(
     name: &str,
@@ -3193,12 +3241,15 @@ fn func_field_name(resolve: &Resolve, func: &Function) -> String {
     name.to_snake_case()
 }
 
-fn get_resources<'a>(resolve: &'a Resolve, id: InterfaceId) -> impl Iterator<Item = &'a str> + 'a {
+fn get_resources<'a>(
+    resolve: &'a Resolve,
+    id: InterfaceId,
+) -> impl Iterator<Item = (TypeId, &'a str)> + 'a {
     resolve.interfaces[id]
         .types
         .iter()
-        .filter_map(move |(name, ty)| match resolve.types[*ty].kind {
-            TypeDefKind::Resource => Some(name.as_str()),
+        .filter_map(move |(name, ty)| match &resolve.types[*ty].kind {
+            TypeDefKind::Resource => Some((*ty, name.as_str())),
             _ => None,
         })
 }
@@ -3206,14 +3257,14 @@ fn get_resources<'a>(resolve: &'a Resolve, id: InterfaceId) -> impl Iterator<Ite
 fn get_world_resources<'a>(
     resolve: &'a Resolve,
     id: WorldId,
-) -> impl Iterator<Item = &'a str> + 'a {
+) -> impl Iterator<Item = (TypeId, &'a str)> + 'a {
     resolve.worlds[id]
         .imports
         .iter()
         .filter_map(move |(name, item)| match item {
             WorldItem::Type(id) => match resolve.types[*id].kind {
                 TypeDefKind::Resource => Some(match name {
-                    WorldKey::Name(s) => s.as_str(),
+                    WorldKey::Name(s) => (*id, s.as_str()),
                     WorldKey::Interface(_) => unreachable!(),
                 }),
                 _ => None,

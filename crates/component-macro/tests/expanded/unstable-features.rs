@@ -194,38 +194,46 @@ const _: () = {
             host_getter: impl for<'a> TheWorldImportsGetHost<&'a mut T>,
         ) -> wasmtime::Result<()> {
             let mut linker = linker.root();
-            linker
-                .resource(
-                    "baz",
-                    wasmtime::component::ResourceType::host::<Baz>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostBaz::drop(
-                            &mut host_getter(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
-                    },
-                )?;
-            linker
-                .func_wrap(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = TheWorldImports::foo(host);
-                        Ok(r)
-                    },
-                )?;
-            linker
-                .func_wrap(
-                    "[method]baz.foo",
-                    move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
-                        (arg0,): (wasmtime::component::Resource<Baz>,)|
-                    {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostBaz::foo(host, arg0);
-                        Ok(r)
-                    },
-                )?;
+            if options.has_feature("experimental-world") {
+                if options.has_feature("experimental-world-resource") {
+                    linker
+                        .resource(
+                            "baz",
+                            wasmtime::component::ResourceType::host::<Baz>(),
+                            move |mut store, rep| -> wasmtime::Result<()> {
+                                HostBaz::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                            },
+                        )?;
+                }
+                if options.has_feature("experimental-world-function-import") {
+                    linker
+                        .func_wrap(
+                            "foo",
+                            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                                let host = &mut host_getter(caller.data_mut());
+                                let r = TheWorldImports::foo(host);
+                                Ok(r)
+                            },
+                        )?;
+                }
+                if options.has_feature("experimental-world-resource-method") {
+                    linker
+                        .func_wrap(
+                            "[method]baz.foo",
+                            move |
+                                mut caller: wasmtime::StoreContextMut<'_, T>,
+                                (arg0,): (wasmtime::component::Resource<Baz>,)|
+                            {
+                                let host = &mut host_getter(caller.data_mut());
+                                let r = HostBaz::foo(host, arg0);
+                                Ok(r)
+                            },
+                        )?;
+                }
+            }
             Ok(())
         }
         pub fn add_to_linker<T, U>(
@@ -236,8 +244,12 @@ const _: () = {
         where
             U: foo::foo::the_interface::Host + TheWorldImports,
         {
-            Self::add_to_linker_imports_get_host(linker, options, get)?;
-            foo::foo::the_interface::add_to_linker(linker, options, get)?;
+            if options.has_feature("experimental-world") {
+                Self::add_to_linker_imports_get_host(linker, options, get)?;
+                if options.has_feature("experimental-world-interface-import") {
+                    foo::foo::the_interface::add_to_linker(linker, options, get)?;
+                }
+            }
             Ok(())
         }
     }
@@ -287,36 +299,44 @@ pub mod foo {
                 options: &wasmtime::component::bindgen::LinkOptions,
                 host_getter: impl for<'a> GetHost<&'a mut T>,
             ) -> wasmtime::Result<()> {
-                let mut inst = linker.instance("foo:foo/the-interface")?;
-                inst.resource(
-                    "bar",
-                    wasmtime::component::ResourceType::host::<Bar>(),
-                    move |mut store, rep| -> wasmtime::Result<()> {
-                        HostBar::drop(
-                            &mut host_getter(store.data_mut()),
-                            wasmtime::component::Resource::new_own(rep),
-                        )
-                    },
-                )?;
-                inst.func_wrap(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::foo(host);
-                        Ok(r)
-                    },
-                )?;
-                inst.func_wrap(
-                    "[method]bar.foo",
-                    move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
-                        (arg0,): (wasmtime::component::Resource<Bar>,)|
-                    {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = HostBar::foo(host, arg0);
-                        Ok(r)
-                    },
-                )?;
+                if options.has_feature("experimental-interface") {
+                    let mut inst = linker.instance("foo:foo/the-interface")?;
+                    if options.has_feature("experimental-interface-resource") {
+                        inst.resource(
+                            "bar",
+                            wasmtime::component::ResourceType::host::<Bar>(),
+                            move |mut store, rep| -> wasmtime::Result<()> {
+                                HostBar::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                            },
+                        )?;
+                    }
+                    if options.has_feature("experimental-interface-function") {
+                        inst.func_wrap(
+                            "foo",
+                            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                                let host = &mut host_getter(caller.data_mut());
+                                let r = Host::foo(host);
+                                Ok(r)
+                            },
+                        )?;
+                    }
+                    if options.has_feature("experimental-interface-resource-method") {
+                        inst.func_wrap(
+                            "[method]bar.foo",
+                            move |
+                                mut caller: wasmtime::StoreContextMut<'_, T>,
+                                (arg0,): (wasmtime::component::Resource<Bar>,)|
+                            {
+                                let host = &mut host_getter(caller.data_mut());
+                                let r = HostBar::foo(host, arg0);
+                                Ok(r)
+                            },
+                        )?;
+                    }
+                }
                 Ok(())
             }
             pub fn add_to_linker<T, U>(
