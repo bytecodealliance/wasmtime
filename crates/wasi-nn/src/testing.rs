@@ -86,7 +86,7 @@ fn check_openvino_is_installed() -> Result<()> {
 fn check_openvino_artifacts_are_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
     const BASE_URL: &str =
-        "https://github.com/intel/openvino-rs/raw/main/crates/openvino/tests/fixtures/mobilenet";
+        "https://github.com/intel/openvino-rs/raw/72d75601e9be394b3e8c7ff28313d66ef53ff358/crates/openvino/tests/fixtures/mobilenet";
     let artifacts_dir = artifacts_dir();
     if !artifacts_dir.is_dir() {
         fs::create_dir(&artifacts_dir)?;
@@ -126,7 +126,7 @@ fn check_onnx_artifacts_are_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
 
     const OPENVINO_BASE_URL: &str =
-        "https://github.com/intel/openvino-rs/raw/main/crates/openvino/tests/fixtures/mobilenet";
+        "https://github.com/intel/openvino-rs/raw/72d75601e9be394b3e8c7ff28313d66ef53ff358/crates/openvino/tests/fixtures/mobilenet";
     const ONNX_BASE_URL: &str =
         "https://github.com/onnx/models/raw/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/mobilenet/model/mobilenetv2-7.onnx?download=";
 
