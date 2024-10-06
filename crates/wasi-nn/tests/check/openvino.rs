@@ -19,7 +19,7 @@ pub fn is_installed() -> Result<()> {
 pub fn are_artifacts_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = DOWNLOAD_LOCK.lock().unwrap();
     const BASE_URL: &str =
-        "https://github.com/intel/openvino-rs/raw/main/crates/openvino/tests/fixtures/mobilenet";
+        "https://github.com/intel/openvino-rs/raw/72d75601e9be394b3e8c7ff28313d66ef53ff358/crates/openvino/tests/fixtures/mobilenet";
     let artifacts_dir = artifacts_dir();
     if !artifacts_dir.is_dir() {
         fs::create_dir(&artifacts_dir)?;
