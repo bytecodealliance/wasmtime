@@ -629,3 +629,107 @@ mod exported_resources {
         Ok(())
     }
 }
+
+mod unstable_import {
+    use super::*;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            @unstable(feature = experimental-interface)
+            interface my-interface {
+                @unstable(feature = experimental-function)
+                my-function: func();
+            }
+
+            world my-world {
+                @unstable(feature = experimental-import)
+                import my-interface;
+
+                export bar: func();
+            }
+        ",
+    });
+
+    #[test]
+    fn run() -> Result<()> {
+        // In the example above, all features are required for `my-function` to be imported:
+        assert_success(
+            LinkOptions::default()
+                .experimental_interface(true)
+                .experimental_import(true)
+                .experimental_function(true),
+        );
+
+        // And every other incomplete combination should fail:
+        assert_failure(&LinkOptions::default());
+        assert_failure(LinkOptions::default().experimental_function(true));
+        assert_failure(LinkOptions::default().experimental_interface(true));
+        assert_failure(
+            LinkOptions::default()
+                .experimental_interface(true)
+                .experimental_function(true),
+        );
+        assert_failure(
+            LinkOptions::default()
+                .experimental_interface(true)
+                .experimental_import(true),
+        );
+        assert_failure(LinkOptions::default().experimental_import(true));
+        assert_failure(
+            LinkOptions::default()
+                .experimental_import(true)
+                .experimental_function(true),
+        );
+
+        Ok(())
+    }
+
+    fn assert_success(link_options: &LinkOptions) {
+        run_with_options(link_options).unwrap();
+    }
+    fn assert_failure(link_options: &LinkOptions) {
+        let err = run_with_options(link_options).unwrap_err().to_string();
+        assert_eq!(err, "component imports instance `foo:foo/my-interface`, but a matching implementation was not found in the linker");
+    }
+
+    fn run_with_options(link_options: &LinkOptions) -> Result<()> {
+        let engine = engine();
+
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "foo:foo/my-interface" (instance $i
+                        (export "my-function" (func))
+                    ))
+                    (core module $m
+                        (import "" "" (func))
+                        (export "" (func 0))
+                    )
+                    (core func $f (canon lower (func $i "my-function")))
+                    (core instance $r (instantiate $m
+                        (with "" (instance (export "" (func $f))))
+                    ))
+
+                    (func $f (export "bar") (canon lift (core func $r "")))
+                )
+            "#,
+        )?;
+
+        #[derive(Default)]
+        struct MyHost;
+
+        impl foo::foo::my_interface::Host for MyHost {
+            fn my_function(&mut self) {}
+        }
+
+        let mut linker = Linker::new(&engine);
+        MyWorld::add_to_linker(&mut linker, link_options, |h: &mut MyHost| h)?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let one_import = MyWorld::instantiate(&mut store, &component, &linker)?;
+        one_import.call_bar(&mut store)?;
+        Ok(())
+    }
+}
