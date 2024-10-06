@@ -20,6 +20,7 @@ wit_bindgen::generate!({
         "../wasi-keyvalue/wit",
     ],
     world: "wasmtime:test/test",
+    features: ["cli-exit-with-code"],
     generate_all,
 });
 

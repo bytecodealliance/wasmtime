@@ -1327,6 +1327,21 @@ mod test_programs {
     }
 
     #[test]
+    fn cli_exit_with_code() -> Result<()> {
+        let output = get_wasmtime_command()?
+            .args(&[
+                "run",
+                "-Wcomponent-model",
+                "-Scli-exit-with-code",
+                CLI_EXIT_WITH_CODE_COMPONENT,
+            ])
+            .output()?;
+        assert!(!output.status.success());
+        assert_eq!(output.status.code(), Some(42));
+        Ok(())
+    }
+
+    #[test]
     fn cli_exit_panic() -> Result<()> {
         let output = get_wasmtime_command()?
             .args(&["run", "-Wcomponent-model", CLI_EXIT_PANIC_COMPONENT])
