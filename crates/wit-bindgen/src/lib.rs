@@ -3048,7 +3048,7 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
 
 #[derive(Default)]
 struct LinkOptionsBuilder {
-    unstable_features: HashSet<String>,
+    unstable_features: BTreeSet<String>,
 }
 impl LinkOptionsBuilder {
     fn has_any(&self) -> bool {
