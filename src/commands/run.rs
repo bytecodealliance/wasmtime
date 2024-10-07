@@ -650,7 +650,7 @@ impl RunCommand {
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
                     let link_options = self.run.compute_wasi_features();
-                    wasmtime_wasi::add_to_linker_async(linker, &link_options)?;
+                    wasmtime_wasi::add_to_linker_with_options_async(linker, &link_options)?;
                     self.set_preview2_ctx(store)?;
                 }
             }

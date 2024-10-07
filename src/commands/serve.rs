@@ -255,7 +255,7 @@ impl ServeCommand {
         // uses.
         if cli == Some(true) {
             let link_options = self.run.compute_wasi_features();
-            wasmtime_wasi::add_to_linker_async(linker, &link_options)?;
+            wasmtime_wasi::add_to_linker_with_options_async(linker, &link_options)?;
             wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
         } else {
             wasmtime_wasi_http::add_to_linker_async(linker)?;

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::bindings::sync::{Command, LinkOptions};
+use wasmtime_wasi::bindings::sync::Command;
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder};
 use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{wit::WasiNnCtx, Backend, InMemoryRegistry};
@@ -16,11 +16,10 @@ pub fn run(path: &str, backend: Backend, preload_model: bool) -> Result<()> {
     let path = Path::new(path);
     let engine = Engine::new(&Config::new())?;
     let mut linker = Linker::new(&engine);
-    let link_options = LinkOptions::default();
     wasmtime_wasi_nn::wit::add_to_linker(&mut linker, |c: &mut Ctx| {
         WasiNnView::new(&mut c.table, &mut c.wasi_nn)
     })?;
-    wasmtime_wasi::add_to_linker_sync(&mut linker, &link_options)?;
+    wasmtime_wasi::add_to_linker_sync(&mut linker)?;
     let module = Component::from_file(&engine, path)?;
     let mut store = Store::new(&engine, Ctx::new(&artifacts_dir(), preload_model, backend)?);
     let command = Command::instantiate(&mut store, &module, &linker)?;

@@ -4,11 +4,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Store,
 };
-use wasmtime_wasi::{
-    add_to_linker_async,
-    bindings::{Command, LinkOptions},
-    WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::{add_to_linker_async, bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
 struct Ctx {
@@ -35,8 +31,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
 
     let mut linker = Linker::new(&engine);
-    let link_options = LinkOptions::default();
-    add_to_linker_async(&mut linker, &link_options)?;
+    add_to_linker_async(&mut linker)?;
     wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |h: &mut Ctx| {
         WasiRuntimeConfig::from(&h.wasi_runtime_config_vars)
     })?;

@@ -20,7 +20,6 @@
 //!     component::{Linker, ResourceTable},
 //!     Config, Engine, Result, Store,
 //! };
-//! use wasmtime_wasi::bindings::LinkOptions;
 //! use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 //! use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 //!
@@ -37,8 +36,7 @@
 //!     });
 //!
 //!     let mut linker = Linker::<Ctx>::new(&engine);
-//!     let link_options = LinkOptions::default();
-//!     wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
+//!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
 //!     // add `wasi-runtime-config` world's interfaces to the linker
 //!     wasmtime_wasi_keyvalue::add_to_linker(&mut linker, |h: &mut Ctx| {
 //!         WasiKeyValue::new(&h.wasi_keyvalue_ctx, &mut h.table)

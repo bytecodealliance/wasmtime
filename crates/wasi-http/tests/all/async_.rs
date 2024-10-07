@@ -1,6 +1,6 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime_wasi::bindings::{Command, LinkOptions};
+use wasmtime_wasi::bindings::Command;
 
 foreach_http!(assert_test_exists);
 
@@ -12,8 +12,7 @@ async fn run(path: &str, server: &Server) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
     let mut store = store(&engine, server);
     let mut linker = Linker::new(&engine);
-    let link_options = LinkOptions::default();
-    wasmtime_wasi::add_to_linker_async(&mut linker, &link_options)?;
+    wasmtime_wasi::add_to_linker_async(&mut linker)?;
     wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
     let result = command.wasi_cli_run().call_run(&mut store).await?;

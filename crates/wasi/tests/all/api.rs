@@ -34,8 +34,7 @@ async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, 
         config.async_support(true);
     });
     let mut linker = Linker::new(&engine);
-    let link_options = wasmtime_wasi::bindings::LinkOptions::default();
-    add_to_linker_async(&mut linker, &link_options)?;
+    add_to_linker_async(&mut linker)?;
 
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
@@ -143,8 +142,7 @@ async fn api_reactor() -> Result<()> {
         config.async_support(true);
     });
     let mut linker = Linker::new(&engine);
-    let link_options = wasmtime_wasi::bindings::LinkOptions::default();
-    add_to_linker_async(&mut linker, &link_options)?;
+    add_to_linker_async(&mut linker)?;
 
     let mut store = Store::new(&engine, CommandCtx { table, wasi });
     let component = Component::from_file(&engine, API_REACTOR_COMPONENT)?;
