@@ -164,3 +164,12 @@ pub fn translate_array_set(
 ) -> WasmResult<()> {
     disabled()
 }
+
+pub fn translate_ref_test(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _ref_ty: WasmRefType,
+    _gc_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}

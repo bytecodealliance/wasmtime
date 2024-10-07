@@ -94,7 +94,7 @@ use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
     wasm_unsupported, DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex,
-    TypeIndex, WasmResult,
+    TypeIndex, WasmRefType, WasmResult,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -2729,10 +2729,34 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let eq = builder.ins().uextend(ir::types::I32, eq);
             state.push1(eq);
         }
+        Operator::RefTestNonNull { hty } => {
+            let r = state.pop1();
+            let heap_type = environ.convert_heap_type(*hty);
+            let result = environ.translate_ref_test(
+                builder,
+                WasmRefType {
+                    heap_type,
+                    nullable: false,
+                },
+                r,
+            )?;
+            state.push1(result);
+        }
+        Operator::RefTestNullable { hty } => {
+            let r = state.pop1();
+            let heap_type = environ.convert_heap_type(*hty);
+            let result = environ.translate_ref_test(
+                builder,
+                WasmRefType {
+                    heap_type,
+                    nullable: true,
+                },
+                r,
+            )?;
+            state.push1(result);
+        }
 
-        Operator::RefTestNonNull { .. }
-        | Operator::RefTestNullable { .. }
-        | Operator::RefCastNonNull { .. }
+        Operator::RefCastNonNull { .. }
         | Operator::RefCastNullable { .. }
         | Operator::BrOnCast { .. }
         | Operator::BrOnCastFail { .. }

@@ -179,6 +179,15 @@ macro_rules! foreach_builtin_function {
                 len: i32
             );
 
+            // Returns whether `actual_engine_type` is a subtype of
+            // `expected_engine_type`.
+            #[cfg(feature = "gc")]
+            is_subtype(
+                vmctx: vmctx,
+                actual_engine_type: i32,
+                expected_engine_type: i32
+            ) -> i32;
+
             // Returns an index for Wasm's `table.grow` instruction for GC references.
             #[cfg(feature = "gc")]
             table_grow_gc_ref(vmctx: vmctx, table: i32, delta: i64, init: reference) -> pointer;

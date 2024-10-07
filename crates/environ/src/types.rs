@@ -438,6 +438,17 @@ impl From<WasmHeapTopType> for WasmHeapType {
     }
 }
 
+impl From<WasmHeapBottomType> for WasmHeapType {
+    #[inline]
+    fn from(value: WasmHeapBottomType) -> Self {
+        match value {
+            WasmHeapBottomType::NoExtern => Self::NoExtern,
+            WasmHeapBottomType::None => Self::None,
+            WasmHeapBottomType::NoFunc => Self::NoFunc,
+        }
+    }
+}
+
 impl fmt::Display for WasmHeapType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -508,6 +519,12 @@ impl WasmHeapType {
         self.is_vmgcref_type() && *self != Self::I31
     }
 
+    /// Is this heap type the top of its type hierarchy?
+    #[inline]
+    pub fn is_top(&self) -> bool {
+        *self == Self::from(self.top())
+    }
+
     /// Get this type's top type.
     #[inline]
     pub fn top(&self) -> WasmHeapTopType {
@@ -528,6 +545,33 @@ impl WasmHeapType {
             | WasmHeapType::None => WasmHeapTopType::Any,
         }
     }
+
+    /// Is this heap type the bottom of its type hierarchy?
+    #[inline]
+    pub fn is_bottom(&self) -> bool {
+        *self == Self::from(self.bottom())
+    }
+
+    /// Get this type's bottom type.
+    #[inline]
+    pub fn bottom(&self) -> WasmHeapBottomType {
+        match self {
+            WasmHeapType::Extern | WasmHeapType::NoExtern => WasmHeapBottomType::NoExtern,
+
+            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
+                WasmHeapBottomType::NoFunc
+            }
+
+            WasmHeapType::Any
+            | WasmHeapType::Eq
+            | WasmHeapType::I31
+            | WasmHeapType::Array
+            | WasmHeapType::ConcreteArray(_)
+            | WasmHeapType::Struct
+            | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::None => WasmHeapBottomType::None,
+        }
+    }
 }
 
 /// A top heap type.
@@ -539,6 +583,17 @@ pub enum WasmHeapTopType {
     Any,
     /// The common supertype of all function references.
     Func,
+}
+
+/// A bottom heap type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WasmHeapBottomType {
+    /// The common subtype of all external references.
+    NoExtern,
+    /// The common subtype of all internal references.
+    None,
+    /// The common subtype of all function references.
+    NoFunc,
 }
 
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.

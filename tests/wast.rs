@@ -207,7 +207,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
         "br_on_cast.wast",
         "extern.wast",
         "ref_cast.wast",
-        "ref_test.wast",
         "table_sub.wast",
         "type_canon.wast",
         "type_equivalence.wast",
