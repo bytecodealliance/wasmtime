@@ -210,8 +210,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
         "ref_cast.wast",
         "ref_eq.wast",
         "ref_test.wast",
-        "return_call_indirect.wast",
-        "return_call.wast",
         "table_sub.wast",
         "type_canon.wast",
         "type_equivalence.wast",
@@ -281,7 +279,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
     let function_references = gc || memory64 || feature_found(wast, "function-references");
     let reference_types = !(threads && feature_found(wast, "proposals"));
     let relaxed_simd = feature_found(wast, "relaxed-simd");
-    let tail_call = feature_found(wast, "tail-call") || feature_found(wast, "function-references");
+    let tail_call = function_references || feature_found(wast, "tail-call");
     let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
         || feature_found_src(&wast_bytes, "shared)");
     let extended_const = feature_found(wast, "extended-const") || memory64;
