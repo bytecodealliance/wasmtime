@@ -246,6 +246,9 @@ jobs:
           if grep -q debug names.log; then
             echo run-dwarf=true >> $GITHUB_OUTPUT
           fi
+          if grep -q pulley commits.log; then
+            echo test-nightly=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
