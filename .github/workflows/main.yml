@@ -247,7 +247,7 @@ jobs:
           if grep -q debug names.log; then
             echo run-dwarf=true >> $GITHUB_OUTPUT
           fi
-          if grep -q pulley commits.log; then
+          if grep -q pulley names.log; then
             echo test-nightly=true >> $GITHUB_OUTPUT
             echo test-miri=true >> $GITHUB_OUTPUT
           fi
