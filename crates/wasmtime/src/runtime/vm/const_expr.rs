@@ -38,11 +38,7 @@ impl<'a> ConstEvalContext<'a> {
                 .defined_or_imported_global_ptr(index)
                 .as_ref()
                 .unwrap();
-            let mut gc_store = store.unwrap_gc_store_mut();
-            Ok(global.to_val_raw(
-                &mut gc_store,
-                self.instance.env_module().globals[index].wasm_ty,
-            ))
+            global.to_val_raw(store, self.instance.env_module().globals[index].wasm_ty)
         }
     }
 
@@ -169,6 +165,8 @@ impl ConstExprEvaluator {
         context: &mut ConstEvalContext<'_>,
         expr: &ConstExpr,
     ) -> Result<ValRaw> {
+        log::trace!("evaluating const expr: {:?}", expr);
+
         self.stack.clear();
 
         let mut store = (*context.instance.store()).store_opaque_mut();
@@ -372,6 +370,7 @@ impl ConstExprEvaluator {
         }
 
         if self.stack.len() == 1 {
+            log::trace!("const expr evaluated to {:?}", self.stack[0]);
             Ok(self.stack[0])
         } else {
             bail!(

@@ -133,6 +133,28 @@ impl<'a> VMGcObjectDataMut<'a> {
         val.write_le(into.try_into().unwrap());
     }
 
+    /// Get a slice of this object's data.
+    ///
+    /// Panics on out-of-bounds accesses.
+    #[inline]
+    pub fn slice(&self, offset: u32, len: u32) -> &[u8] {
+        let start = usize::try_from(offset).unwrap();
+        let len = usize::try_from(len).unwrap();
+        let end = start.checked_add(len).unwrap();
+        self.data.get(start..end).expect("out of bounds slice")
+    }
+
+    /// Get a mutable slice of this object's data.
+    ///
+    /// Panics on out-of-bounds accesses.
+    #[inline]
+    pub fn slice_mut(&mut self, offset: u32, len: u32) -> &mut [u8] {
+        let start = usize::try_from(offset).unwrap();
+        let len = usize::try_from(len).unwrap();
+        let end = start.checked_add(len).unwrap();
+        self.data.get_mut(start..end).expect("out of bounds slice")
+    }
+
     /// Copy the given slice into this object's data at the given offset.
     ///
     /// Panics on out-of-bounds accesses.

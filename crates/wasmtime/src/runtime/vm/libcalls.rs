@@ -840,6 +840,7 @@ unsafe fn array_init_elem(
         // Convert the raw GC ref into a `Rooted<ArrayRef>`.
         let array =
             VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference.into_anyhow())?;
+        let array = (*instance.store()).unwrap_gc_store_mut().clone_gc_ref(&array);
         let array = {
             let mut no_gc = AutoAssertNoGc::new((*instance.store()).store_opaque_mut());
             ArrayRef::from_cloned_gc_ref(&mut no_gc, array)
@@ -918,18 +919,79 @@ unsafe fn array_init_elem(
     })
 }
 
+// TODO: Specialize this libcall for only non-GC array elements, so we never
+// have to do GC barriers and their associated indirect calls through the `dyn
+// GcHeap`. Instead, implement those copies inline in Wasm code. Then, use bulk
+// `memcpy`-style APIs to do the actual copies here.
 #[cfg(feature = "gc")]
 unsafe fn array_copy(
-    _instance: &mut Instance,
-    _dst_array_type_index: u32,
-    _dst_array: u32,
-    _dst_index: u32,
-    _src_array_type_index: u32,
-    _src_array: u32,
-    _src_index: u32,
-    _len: u32,
+    instance: &mut Instance,
+    dst_array: u32,
+    dst: u32,
+    src_array: u32,
+    src: u32,
+    len: u32,
 ) -> Result<()> {
-    bail!("the `array.copy` instruction is not yet implemented")
+    use crate::{store::AutoAssertNoGc, ArrayRef, OpaqueRootScope};
+
+    log::trace!(
+            "array.copy(dst_array={dst_array:#x}, dst_index={dst}, src_array={src_array:#x}, src_index={src}, len={len})",
+        );
+
+    let store = (*instance.store()).store_opaque_mut();
+    let mut store = OpaqueRootScope::new(store);
+    let mut store = AutoAssertNoGc::new(&mut store);
+
+    // Convert the raw GC refs into `Rooted<ArrayRef>`s.
+    let dst_array =
+        VMGcRef::from_raw_u32(dst_array).ok_or_else(|| Trap::NullReference.into_anyhow())?;
+    let dst_array = store.unwrap_gc_store_mut().clone_gc_ref(&dst_array);
+    let dst_array = ArrayRef::from_cloned_gc_ref(&mut store, dst_array);
+    let src_array =
+        VMGcRef::from_raw_u32(src_array).ok_or_else(|| Trap::NullReference.into_anyhow())?;
+    let src_array = store.unwrap_gc_store_mut().clone_gc_ref(&src_array);
+    let src_array = ArrayRef::from_cloned_gc_ref(&mut store, src_array);
+
+    // Bounds check the destination array's elements.
+    let dst_array_len = dst_array._len(&store)?;
+    if dst
+        .checked_add(len)
+        .ok_or_else(|| Trap::ArrayOutOfBounds.into_anyhow())?
+        > dst_array_len
+    {
+        return Err(Trap::ArrayOutOfBounds.into_anyhow());
+    }
+
+    // Bounds check the source array's elements.
+    let src_array_len = src_array._len(&store)?;
+    if src
+        .checked_add(len)
+        .ok_or_else(|| Trap::ArrayOutOfBounds.into_anyhow())?
+        > src_array_len
+    {
+        return Err(Trap::ArrayOutOfBounds.into_anyhow());
+    }
+
+    let mut store = AutoAssertNoGc::new(&mut store);
+    // If `src_array` and `dst_array` are the same array, then we are
+    // potentially doing an overlapping copy, so make sure to copy elements in
+    // the order that doesn't clobber the source elements before they are
+    // copied. If they are different arrays, the order doesn't matter, but we
+    // simply don't bother checking.
+    if src > dst {
+        for i in 0..len {
+            let src_elem = src_array._get(&mut store, src + i)?;
+            let dst_i = dst + i;
+            dst_array._set(&mut store, dst_i, src_elem)?;
+        }
+    } else {
+        for i in (0..len).rev() {
+            let src_elem = src_array._get(&mut store, src + i)?;
+            let dst_i = dst + i;
+            dst_array._set(&mut store, dst_i, src_elem)?;
+        }
+    }
+    Ok(())
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.

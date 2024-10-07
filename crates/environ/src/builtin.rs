@@ -148,10 +148,8 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             array_copy(
                 vmctx: vmctx,
-                dst_array_interned_type_index: i32,
                 dst_array: reference,
                 dst_index: i32,
-                src_array_interned_type_index: i32,
                 src_array: reference,
                 src_index: i32,
                 len: i32

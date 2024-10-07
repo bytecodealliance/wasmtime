@@ -2020,36 +2020,19 @@ impl<'module_environment> crate::translate::FuncEnvironment
     fn translate_array_copy(
         &mut self,
         builder: &mut FunctionBuilder,
-        dst_array_type_index: TypeIndex,
+        _dst_array_type_index: TypeIndex,
         dst_array: ir::Value,
         dst_index: ir::Value,
-        src_array_type_index: TypeIndex,
+        _src_array_type_index: TypeIndex,
         src_array: ir::Value,
         src_index: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
         let libcall = gc::builtins::array_copy(self, builder.func)?;
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let dst_array_type_index = self.module.types[dst_array_type_index];
-        let dst_array_type_index = builder
-            .ins()
-            .iconst(I32, i64::from(dst_array_type_index.as_u32()));
-        let src_array_type_index = self.module.types[src_array_type_index];
-        let src_array_type_index = builder
-            .ins()
-            .iconst(I32, i64::from(src_array_type_index.as_u32()));
         builder.ins().call(
             libcall,
-            &[
-                vmctx,
-                dst_array_type_index,
-                dst_array,
-                dst_index,
-                src_array_type_index,
-                src_array,
-                src_index,
-                len,
-            ],
+            &[vmctx, dst_array, dst_index, src_array, src_index, len],
         );
         Ok(())
     }

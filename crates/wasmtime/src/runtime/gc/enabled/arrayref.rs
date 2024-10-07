@@ -568,7 +568,7 @@ impl ArrayRef {
         Ok(gc_ref.as_arrayref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcArrayLayout> {
+    pub(crate) fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcArrayLayout> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         let layout = store

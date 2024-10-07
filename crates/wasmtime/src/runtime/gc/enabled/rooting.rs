@@ -905,6 +905,14 @@ impl<T: GcRef> Rooted<T> {
         b: &impl RootedGcRef<T>,
     ) -> Result<bool> {
         let store = store.as_context().0;
+        Self::_ref_eq(store, a, b)
+    }
+
+    pub(crate) fn _ref_eq(
+        store: &StoreOpaque,
+        a: &impl RootedGcRef<T>,
+        b: &impl RootedGcRef<T>,
+    ) -> Result<bool> {
         let a = a.try_gc_ref(store)?;
         let b = b.try_gc_ref(store)?;
         Ok(a == b)
