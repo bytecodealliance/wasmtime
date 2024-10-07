@@ -216,7 +216,7 @@ pub mod sync {
     ///     // Configure a `Linker` with WASI, compile a component based on
     ///     // command line arguments.
     ///     let mut linker = Linker::<MyState>::new(&engine);
-    ///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+    ///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
     ///     let component = Component::from_file(&engine, &args[0])?;
     ///
     ///
@@ -279,7 +279,7 @@ pub mod sync {
     ///     // Configure a `Linker` with WASI, compile a component based on
     ///     // command line arguments, and then pre-instantiate it.
     ///     let mut linker = Linker::<MyState>::new(&engine);
-    ///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+    ///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
     ///     let component = Component::from_file(&engine, &args[0])?;
     ///     let pre = CommandPre::new(linker.instantiate_pre(&component)?)?;
     ///
@@ -320,6 +320,8 @@ pub mod sync {
     pub use self::generated::CommandPre;
 
     pub use self::generated::CommandIndices;
+
+    pub use self::generated::LinkOptions;
 }
 
 mod async_io {
@@ -418,6 +420,7 @@ mod async_io {
 
 pub use self::async_io::exports;
 pub use self::async_io::wasi::*;
+pub use self::async_io::LinkOptions;
 
 /// Asynchronous bindings to execute and run a `wasi:cli/command`.
 ///

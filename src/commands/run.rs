@@ -230,11 +230,8 @@ impl RunCommand {
                 if store.data().preview1_ctx.is_some() {
                     return Err(wasi_common::maybe_exit_on_error(e));
                 } else if store.data().preview2_ctx.is_some() {
-                    if let Some(exit) = e
-                        .downcast_ref::<wasmtime_wasi::I32Exit>()
-                        .map(|c| c.process_exit_code())
-                    {
-                        std::process::exit(exit);
+                    if let Some(exit) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
+                        std::process::exit(exit.0);
                     }
                     if e.is::<wasmtime::Trap>() {
                         eprintln!("Error: {e:?}");
@@ -652,7 +649,8 @@ impl RunCommand {
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    wasmtime_wasi::add_to_linker_async(linker)?;
+                    let link_options = self.run.compute_wasi_features();
+                    wasmtime_wasi::add_to_linker_with_options_async(linker, &link_options)?;
                     self.set_preview2_ctx(store)?;
                 }
             }

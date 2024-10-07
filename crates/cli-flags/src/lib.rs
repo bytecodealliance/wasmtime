@@ -293,6 +293,8 @@ wasmtime_option_group! {
     pub struct WasiOptions {
         /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
         pub cli: Option<bool>,
+        /// Enable WASI APIs marked as: @unstable(feature = cli-exit-with-code)
+        pub cli_exit_with_code: Option<bool>,
         /// Deprecated alias for `cli`
         pub common: Option<bool>,
         /// Enable support for WASI neural network API (experimental)

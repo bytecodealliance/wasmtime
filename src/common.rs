@@ -6,6 +6,7 @@ use std::net::TcpListener;
 use std::{path::Path, time::Duration};
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
+use wasmtime_wasi::bindings::LinkOptions;
 use wasmtime_wasi::WasiCtxBuilder;
 
 #[cfg(feature = "component-model")]
@@ -331,6 +332,12 @@ impl RunCommon {
             listeners.push(stdlistener)
         }
         Ok(listeners)
+    }
+
+    pub fn compute_wasi_features(&self) -> LinkOptions {
+        let mut options = LinkOptions::default();
+        options.cli_exit_with_code(self.common.wasi.cli_exit_with_code.unwrap_or(false));
+        options
     }
 }
 

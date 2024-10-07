@@ -11,4 +11,8 @@ where
         };
         Err(anyhow::anyhow!(I32Exit(status)))
     }
+
+    fn exit_with_code(&mut self, status_code: u8) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!(I32Exit(status_code.into())))
+    }
 }
