@@ -287,11 +287,7 @@ fn exit125_wasi_snapshot0() -> Result<()> {
             None,
         )?;
         dbg!(&output);
-        if cfg!(windows) {
-            assert_eq!(output.status.code().unwrap(), 1);
-        } else {
-            assert_eq!(output.status.code().unwrap(), 125);
-        }
+        assert_eq!(output.status.code().unwrap(), 125);
     }
     Ok(())
 }
@@ -301,11 +297,7 @@ fn exit125_wasi_snapshot0() -> Result<()> {
 fn exit125_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot1.wat")?;
     let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
-    if cfg!(windows) {
-        assert_eq!(output.status.code().unwrap(), 1);
-    } else {
-        assert_eq!(output.status.code().unwrap(), 125);
-    }
+    assert_eq!(output.status.code().unwrap(), 125);
     Ok(())
 }
 
