@@ -2723,9 +2723,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (array, index, elem) = state.pop3();
             environ.translate_array_set(builder, array_type_index, array, index, elem)?;
         }
+        Operator::RefEq => {
+            let (r1, r2) = state.pop2();
+            let eq = builder.ins().icmp(ir::condcodes::IntCC::Equal, r1, r2);
+            let eq = builder.ins().uextend(ir::types::I32, eq);
+            state.push1(eq);
+        }
 
-        Operator::RefEq
-        | Operator::RefTestNonNull { .. }
+        Operator::RefTestNonNull { .. }
         | Operator::RefTestNullable { .. }
         | Operator::RefCastNonNull { .. }
         | Operator::RefCastNullable { .. }
@@ -2733,7 +2738,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::BrOnCastFail { .. }
         | Operator::AnyConvertExtern
         | Operator::ExternConvertAny => {
-            return Err(wasm_unsupported!("GC operators are not yet implemented"));
+            return Err(wasm_unsupported!("GC operator not yet implemented: {op:?}"));
         }
 
         Operator::GlobalAtomicGet { .. }
