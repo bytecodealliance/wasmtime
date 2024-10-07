@@ -1033,7 +1033,7 @@ jobs:
           - "wasmtime-environ"
           - "pulley-interpreter --all-features"
     needs: determine
-    if: (needs.determine.outputs.run-full || needs.determine.outputs.test-miri) && github.repository == 'bytecodealliance/wasmtime'
+    if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'
     name: Miri
     runs-on: ubuntu-latest
     env:
