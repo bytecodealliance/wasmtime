@@ -552,6 +552,13 @@ jobs:
       with:
         toolchain: wasmtime-ci-pinned-nightly
 
+    # Check that `pulley-interpreter` compiles with tail calls enabled.  Don't
+    # actually run the tests with tail calls enabled, because they are not yet
+    # implemented in rustc and cause an ICE.
+    - run: cargo check -p pulley-interpreter
+      env:
+        RUSTFLAGS: "--cfg pulley_tail_calls"
+
     # Ensure that fuzzers still build.
     #
     # Install the OCaml packages necessary for fuzz targets that use the

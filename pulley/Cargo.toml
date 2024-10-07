@@ -27,7 +27,7 @@ arbitrary = ["dep:arbitrary", "arbitrary/derive", "std", "cranelift-bitset/arbit
 encode = []
 decode = []
 disas = ["decode"]
-interp = ["decode"]
+interp = ["decode", "encode"]
 
 [package.metadata.docs.rs]
 all-features = true
