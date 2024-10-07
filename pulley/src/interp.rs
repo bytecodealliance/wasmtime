@@ -125,7 +125,7 @@ impl Vm {
         let mut bytecode = UnsafeBytecodeStream::new(pc);
         match interp_loop::interpreter_loop(self, &mut bytecode) {
             Done::ReturnToHost => self.return_to_host(),
-            Done::Trap => self.trap(pc),
+            Done::Trap(pc) => self.trap(pc),
             Done::HostCall => self.host_call(),
         }
     }
@@ -590,8 +590,8 @@ enum Done {
     /// how the loop normally ends.
     ReturnToHost,
 
-    /// A `trap` instruction was executed.
-    Trap,
+    /// A `trap` instruction was executed at the given PC.
+    Trap(NonNull<u8>),
 
     #[allow(dead_code)]
     HostCall,

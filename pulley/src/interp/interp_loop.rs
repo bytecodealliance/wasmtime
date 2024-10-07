@@ -657,7 +657,7 @@ define_opcode_handlers! {
     fn extended(state: &mut MachineState, pc: &mut UnsafeBytecodeStream, opcode: ExtendedOpcode) {
         match opcode {
             ExtendedOpcode::Nop => ControlFlow::Continue(()),
-            ExtendedOpcode::Trap => ControlFlow::Break(Done::Trap),
+            ExtendedOpcode::Trap => ControlFlow::Break(Done::Trap(pc.as_ptr())),
             ExtendedOpcode::GetSp => {
                 let (dst,) = crate::decode::unwrap_uninhabited(crate::decode::operands::get_sp(pc));
                 let sp = state[XReg::sp].get_u64();
