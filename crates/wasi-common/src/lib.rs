@@ -162,15 +162,8 @@ pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
     // If a specific WASI error code was requested then that's
     // forwarded through to the process here without printing any
     // extra error information.
-    let code = e.downcast_ref::<crate::I32Exit>().map(|e| e.0);
-    if let Some(exit) = code {
-        // Print the error message in the usual way.
-        // On Windows, exit status 3 indicates an abort (see below),
-        // so return 1 indicating a non-zero status to avoid ambiguity.
-        if cfg!(windows) && exit >= 3 {
-            process::exit(1);
-        }
-        process::exit(exit);
+    if let Some(exit) = e.downcast_ref::<crate::I32Exit>() {
+        process::exit(exit.0);
     }
 
     // If the program exited because of a trap, return an error code
