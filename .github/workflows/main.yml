@@ -199,6 +199,7 @@ jobs:
       build-matrix: ${{ steps.calculate.outputs.build-matrix }}
       test-capi: ${{ steps.calculate.outputs.test-capi }}
       test-nightly: ${{ steps.calculate.outputs.test-nightly }}
+      test-miri: ${{ steps.calculate.outputs.test-miri }}
       audit: ${{ steps.calculate.outputs.audit }}
       preview1-adapter: ${{ steps.calculate.outputs.preview1-adapter }}
       run-dwarf: ${{ steps.calculate.outputs.run-dwarf }}
@@ -246,6 +247,10 @@ jobs:
           if grep -q debug names.log; then
             echo run-dwarf=true >> $GITHUB_OUTPUT
           fi
+          if grep -q pulley names.log; then
+            echo test-nightly=true >> $GITHUB_OUTPUT
+            echo test-miri=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
@@ -258,6 +263,7 @@ jobs:
             echo run-full=true >> $GITHUB_OUTPUT
             echo test-capi=true >> $GITHUB_OUTPUT
             echo test-nightly=true >> $GITHUB_OUTPUT
+            echo test-miri=true >> $GITHUB_OUTPUT
             echo audit=true >> $GITHUB_OUTPUT
             echo preview1-adapter=true >> $GITHUB_OUTPUT
             echo run-dwarf=true >> $GITHUB_OUTPUT
@@ -1034,7 +1040,7 @@ jobs:
           - "wasmtime-environ"
           - "pulley-interpreter --all-features"
     needs: determine
-    if: needs.determine.outputs.run-full && github.repository == 'bytecodealliance/wasmtime'
+    if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'
     name: Miri
     runs-on: ubuntu-latest
     env:
