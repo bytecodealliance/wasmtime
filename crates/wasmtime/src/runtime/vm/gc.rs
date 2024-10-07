@@ -106,9 +106,7 @@ impl GcStore {
     ) {
         // Initialize the destination to `None`, at which point the regular GC
         // write barrier is safe to reuse.
-        destination.write(None);
-        let destination = unsafe { destination.assume_init_mut() };
-
+        let destination = destination.write(None);
         self.write_gc_ref(destination, source);
     }
 
