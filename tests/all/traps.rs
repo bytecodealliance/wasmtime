@@ -1790,3 +1790,69 @@ fn return_call_indirect_to_imported_function(config: &mut Config) -> Result<()> 
 
     Ok(())
 }
+
+#[test]
+fn return_call_to_aborting_wasm_function_with_stack_adjustments() -> Result<()> {
+    let engine = Engine::default();
+    let module = Module::new(
+        &engine,
+        r#"
+(module
+  (func (export "entry")
+        (param i64 i64 i64 i64 i64 i64)
+        (result i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
+    return_call $abort
+  )
+  (func $abort (result i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
+    unreachable
+  )
+)
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "entry").unwrap();
+    let args = vec![Val::I64(0); 6];
+    let mut results = vec![Val::I64(0); 10];
+
+    let err = func.call(&mut store, &args, &mut results).unwrap_err();
+
+    let trap: &Trap = err.downcast_ref().unwrap();
+    assert_eq!(*trap, Trap::UnreachableCodeReached);
+
+    let trace: &WasmBacktrace = err.downcast_ref().unwrap();
+    assert_eq!(trace.frames().len(), 1);
+    assert_eq!(trace.frames()[0].func_name(), Some("abort"));
+
+    let module2 = Module::new(
+        &engine,
+        r#"
+(module
+  (func (export "entry")
+        (param i64 i64 i64 i64 i64 i64)
+        (result i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
+    return_call $foo
+  )
+  (func $foo (result i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
+    call $abort
+    unreachable
+  )
+  (func $abort unreachable)
+)
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module2, &[])?;
+    let func = instance.get_func(&mut store, "entry").unwrap();
+
+    let err = func.call(&mut store, &args, &mut results).unwrap_err();
+
+    let trap: &Trap = err.downcast_ref().unwrap();
+    assert_eq!(*trap, Trap::UnreachableCodeReached);
+
+    let trace: &WasmBacktrace = err.downcast_ref().unwrap();
+    assert_eq!(trace.frames().len(), 2);
+    assert_eq!(trace.frames()[0].func_name(), Some("abort"));
+    assert_eq!(trace.frames()[1].func_name(), Some("foo"));
+
+    Ok(())
+}

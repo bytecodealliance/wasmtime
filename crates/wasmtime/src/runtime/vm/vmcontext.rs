@@ -834,7 +834,7 @@ pub struct VMRuntimeLimits {
     ///
     /// Used to find the end of a contiguous sequence of Wasm frames when
     /// walking the stack.
-    pub last_wasm_entry_sp: UnsafeCell<usize>,
+    pub last_wasm_entry_fp: UnsafeCell<usize>,
 }
 
 // The `VMRuntimeLimits` type is a pod-type with no destructor, and we don't
@@ -852,7 +852,7 @@ impl Default for VMRuntimeLimits {
             epoch_deadline: UnsafeCell::new(0),
             last_wasm_exit_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
-            last_wasm_entry_sp: UnsafeCell::new(0),
+            last_wasm_entry_fp: UnsafeCell::new(0),
         }
     }
 }
@@ -888,8 +888,8 @@ mod test_vmruntime_limits {
             usize::from(offsets.ptr.vmruntime_limits_last_wasm_exit_pc())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, last_wasm_entry_sp),
-            usize::from(offsets.ptr.vmruntime_limits_last_wasm_entry_sp())
+            offset_of!(VMRuntimeLimits, last_wasm_entry_fp),
+            usize::from(offsets.ptr.vmruntime_limits_last_wasm_entry_fp())
         );
     }
 }
