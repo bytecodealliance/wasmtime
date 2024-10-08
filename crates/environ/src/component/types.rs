@@ -4,7 +4,7 @@ use crate::{EntityType, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap};
 use core::hash::{Hash, Hasher};
 use core::ops::Index;
 use serde_derive::{Deserialize, Serialize};
-use wasmparser::types;
+use wasmparser::component_types::ComponentAnyTypeId;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 pub use crate::StaticModuleIndex;
@@ -214,7 +214,7 @@ pub enum ComponentItem {
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
-    Type(types::ComponentAnyTypeId),
+    Type(ComponentAnyTypeId),
 }
 
 /// Runtime information about the type information contained within a component.

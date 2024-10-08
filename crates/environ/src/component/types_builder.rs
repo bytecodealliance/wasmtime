@@ -9,8 +9,14 @@ use cranelift_entity::EntityRef;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
+use wasmparser::component_types::{
+    ComponentAnyTypeId, ComponentCoreModuleTypeId, ComponentDefinedType, ComponentDefinedTypeId,
+    ComponentEntityType, ComponentFuncTypeId, ComponentInstanceTypeId, ComponentTypeId,
+    ComponentValType, RecordType, ResourceId, TupleType, VariantType,
+};
 use wasmparser::names::KebabString;
-use wasmparser::{types, Validator};
+use wasmparser::types::TypesRef;
+use wasmparser::Validator;
 use wasmtime_component_util::FlagsSize;
 
 mod resources;
@@ -193,8 +199,8 @@ impl ComponentTypesBuilder {
     /// representation.
     pub fn convert_component_func_type(
         &mut self,
-        types: types::TypesRef<'_>,
-        id: types::ComponentFuncTypeId,
+        types: TypesRef<'_>,
+        id: ComponentFuncTypeId,
     ) -> Result<TypeFuncIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
@@ -219,66 +225,56 @@ impl ComponentTypesBuilder {
     /// representation.
     pub fn convert_component_entity_type(
         &mut self,
-        types: types::TypesRef<'_>,
-        ty: types::ComponentEntityType,
+        types: TypesRef<'_>,
+        ty: ComponentEntityType,
     ) -> Result<TypeDef> {
         assert_eq!(types.id(), self.module_types.validator_id());
         Ok(match ty {
-            types::ComponentEntityType::Module(id) => {
-                TypeDef::Module(self.convert_module(types, id)?)
-            }
-            types::ComponentEntityType::Component(id) => {
+            ComponentEntityType::Module(id) => TypeDef::Module(self.convert_module(types, id)?),
+            ComponentEntityType::Component(id) => {
                 TypeDef::Component(self.convert_component(types, id)?)
             }
-            types::ComponentEntityType::Instance(id) => {
+            ComponentEntityType::Instance(id) => {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
-            types::ComponentEntityType::Func(id) => {
+            ComponentEntityType::Func(id) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::ComponentEntityType::Type { created, .. } => match created {
-                types::ComponentAnyTypeId::Defined(id) => {
+            ComponentEntityType::Type { created, .. } => match created {
+                ComponentAnyTypeId::Defined(id) => {
                     TypeDef::Interface(self.defined_type(types, id)?)
                 }
-                types::ComponentAnyTypeId::Resource(id) => {
+                ComponentAnyTypeId::Resource(id) => {
                     TypeDef::Resource(self.resource_id(id.resource()))
                 }
                 _ => bail!("unsupported type export"),
             },
-            types::ComponentEntityType::Value(_) => bail!("values not supported"),
+            ComponentEntityType::Value(_) => bail!("values not supported"),
         })
     }
 
     /// Converts a wasmparser `Type` into Wasmtime's type representation.
-    pub fn convert_type(
-        &mut self,
-        types: types::TypesRef<'_>,
-        id: types::ComponentAnyTypeId,
-    ) -> Result<TypeDef> {
+    pub fn convert_type(&mut self, types: TypesRef<'_>, id: ComponentAnyTypeId) -> Result<TypeDef> {
         assert_eq!(types.id(), self.module_types.validator_id());
         Ok(match id {
-            types::ComponentAnyTypeId::Defined(id) => {
-                TypeDef::Interface(self.defined_type(types, id)?)
-            }
-            types::ComponentAnyTypeId::Component(id) => {
+            ComponentAnyTypeId::Defined(id) => TypeDef::Interface(self.defined_type(types, id)?),
+            ComponentAnyTypeId::Component(id) => {
                 TypeDef::Component(self.convert_component(types, id)?)
             }
-            types::ComponentAnyTypeId::Instance(id) => {
+            ComponentAnyTypeId::Instance(id) => {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
-            types::ComponentAnyTypeId::Func(id) => {
+            ComponentAnyTypeId::Func(id) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::ComponentAnyTypeId::Resource(id) => {
-                TypeDef::Resource(self.resource_id(id.resource()))
-            }
+            ComponentAnyTypeId::Resource(id) => TypeDef::Resource(self.resource_id(id.resource())),
         })
     }
 
     fn convert_component(
         &mut self,
-        types: types::TypesRef<'_>,
-        id: types::ComponentTypeId,
+        types: TypesRef<'_>,
+        id: ComponentTypeId,
     ) -> Result<TypeComponentIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
@@ -300,8 +296,8 @@ impl ComponentTypesBuilder {
 
     pub(crate) fn convert_instance(
         &mut self,
-        types: types::TypesRef<'_>,
-        id: types::ComponentInstanceTypeId,
+        types: TypesRef<'_>,
+        id: ComponentInstanceTypeId,
     ) -> Result<TypeComponentInstanceIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
@@ -317,8 +313,8 @@ impl ComponentTypesBuilder {
 
     pub(crate) fn convert_module(
         &mut self,
-        types: types::TypesRef<'_>,
-        id: types::ComponentCoreModuleTypeId,
+        types: TypesRef<'_>,
+        id: ComponentCoreModuleTypeId,
     ) -> Result<TypeModuleIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
@@ -339,54 +335,48 @@ impl ComponentTypesBuilder {
 
     fn entity_type(
         &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::EntityType,
+        types: TypesRef<'_>,
+        ty: &wasmparser::types::EntityType,
     ) -> Result<EntityType> {
+        use wasmparser::types::EntityType::*;
+
         assert_eq!(types.id(), self.module_types.validator_id());
         Ok(match ty {
-            types::EntityType::Func(id) => EntityType::Function({
+            Func(id) => EntityType::Function({
                 let module = Module::default();
                 self.module_types_builder_mut()
                     .intern_type(&module, types, *id)?
                     .into()
             }),
-            types::EntityType::Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
-            types::EntityType::Memory(ty) => EntityType::Memory((*ty).into()),
-            types::EntityType::Global(ty) => EntityType::Global(self.convert_global_type(ty)),
-            types::EntityType::Tag(_) => bail!("exceptions proposal not implemented"),
+            Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
+            Memory(ty) => EntityType::Memory((*ty).into()),
+            Global(ty) => EntityType::Global(self.convert_global_type(ty)),
+            Tag(_) => bail!("exceptions proposal not implemented"),
         })
     }
 
     fn defined_type(
         &mut self,
-        types: types::TypesRef<'_>,
-        id: types::ComponentDefinedTypeId,
+        types: TypesRef<'_>,
+        id: ComponentDefinedTypeId,
     ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ret = match &types[id] {
-            types::ComponentDefinedType::Primitive(ty) => ty.into(),
-            types::ComponentDefinedType::Record(e) => {
-                InterfaceType::Record(self.record_type(types, e)?)
-            }
-            types::ComponentDefinedType::Variant(e) => {
+            ComponentDefinedType::Primitive(ty) => ty.into(),
+            ComponentDefinedType::Record(e) => InterfaceType::Record(self.record_type(types, e)?),
+            ComponentDefinedType::Variant(e) => {
                 InterfaceType::Variant(self.variant_type(types, e)?)
             }
-            types::ComponentDefinedType::List(e) => InterfaceType::List(self.list_type(types, e)?),
-            types::ComponentDefinedType::Tuple(e) => {
-                InterfaceType::Tuple(self.tuple_type(types, e)?)
-            }
-            types::ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
-            types::ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
-            types::ComponentDefinedType::Option(e) => {
-                InterfaceType::Option(self.option_type(types, e)?)
-            }
-            types::ComponentDefinedType::Result { ok, err } => {
+            ComponentDefinedType::List(e) => InterfaceType::List(self.list_type(types, e)?),
+            ComponentDefinedType::Tuple(e) => InterfaceType::Tuple(self.tuple_type(types, e)?),
+            ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
+            ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
+            ComponentDefinedType::Option(e) => InterfaceType::Option(self.option_type(types, e)?),
+            ComponentDefinedType::Result { ok, err } => {
                 InterfaceType::Result(self.result_type(types, ok, err)?)
             }
-            types::ComponentDefinedType::Own(r) => {
-                InterfaceType::Own(self.resource_id(r.resource()))
-            }
-            types::ComponentDefinedType::Borrow(r) => {
+            ComponentDefinedType::Own(r) => InterfaceType::Own(self.resource_id(r.resource())),
+            ComponentDefinedType::Borrow(r) => {
                 InterfaceType::Borrow(self.resource_id(r.resource()))
             }
         };
@@ -397,23 +387,15 @@ impl ComponentTypesBuilder {
         Ok(ret)
     }
 
-    fn valtype(
-        &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::ComponentValType,
-    ) -> Result<InterfaceType> {
+    fn valtype(&mut self, types: TypesRef<'_>, ty: &ComponentValType) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
         match ty {
-            types::ComponentValType::Primitive(p) => Ok(p.into()),
-            types::ComponentValType::Type(id) => self.defined_type(types, *id),
+            ComponentValType::Primitive(p) => Ok(p.into()),
+            ComponentValType::Type(id) => self.defined_type(types, *id),
         }
     }
 
-    fn record_type(
-        &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::RecordType,
-    ) -> Result<TypeRecordIndex> {
+    fn record_type(&mut self, types: TypesRef<'_>, ty: &RecordType) -> Result<TypeRecordIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let fields = ty
             .fields
@@ -433,11 +415,7 @@ impl ComponentTypesBuilder {
         Ok(self.add_record_type(TypeRecord { fields, abi }))
     }
 
-    fn variant_type(
-        &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::VariantType,
-    ) -> Result<TypeVariantIndex> {
+    fn variant_type(&mut self, types: TypesRef<'_>, ty: &VariantType) -> Result<TypeVariantIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let cases = ty
             .cases
@@ -465,11 +443,7 @@ impl ComponentTypesBuilder {
         Ok(self.add_variant_type(TypeVariant { cases, abi, info }))
     }
 
-    fn tuple_type(
-        &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::TupleType,
-    ) -> Result<TypeTupleIndex> {
+    fn tuple_type(&mut self, types: TypesRef<'_>, ty: &TupleType) -> Result<TypeTupleIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let types = ty
             .types
@@ -507,8 +481,8 @@ impl ComponentTypesBuilder {
 
     fn option_type(
         &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::ComponentValType,
+        types: TypesRef<'_>,
+        ty: &ComponentValType,
     ) -> Result<TypeOptionIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = self.valtype(types, ty)?;
@@ -518,9 +492,9 @@ impl ComponentTypesBuilder {
 
     fn result_type(
         &mut self,
-        types: types::TypesRef<'_>,
-        ok: &Option<types::ComponentValType>,
-        err: &Option<types::ComponentValType>,
+        types: TypesRef<'_>,
+        ok: &Option<ComponentValType>,
+        err: &Option<ComponentValType>,
     ) -> Result<TypeResultIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ok = match ok {
@@ -538,11 +512,7 @@ impl ComponentTypesBuilder {
         Ok(self.add_result_type(TypeResult { ok, err, abi, info }))
     }
 
-    fn list_type(
-        &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::ComponentValType,
-    ) -> Result<TypeListIndex> {
+    fn list_type(&mut self, types: TypesRef<'_>, ty: &ComponentValType) -> Result<TypeListIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let element = self.valtype(types, ty)?;
         Ok(self.add_list_type(TypeList { element }))
@@ -550,7 +520,7 @@ impl ComponentTypesBuilder {
 
     /// Converts a wasmparser `id`, which must point to a resource, to its
     /// corresponding `TypeResourceTableIndex`.
-    pub fn resource_id(&mut self, id: types::ResourceId) -> TypeResourceTableIndex {
+    pub fn resource_id(&mut self, id: ResourceId) -> TypeResourceTableIndex {
         self.resources.convert(id, &mut self.component_types)
     }
 
