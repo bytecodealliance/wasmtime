@@ -93,6 +93,9 @@ struct PytorchExecutionContext {
     id_type: Option<Id>,
 }
 
+/// `set_input` supports multiple positional parameters with `Id::Index`, and a single named parameter with `Id::Name`.
+/// `set_input` may be removed in the future, with `compute` method taking a list of named parameters.
+/// See [PR #77](https://github.com/WebAssembly/wasi-nn/pull/77), at which point multiple named parameters for `Tensor` inputs is planned to be supported in pytorch backend.
 impl BackendExecutionContext for PytorchExecutionContext {
     fn set_input(&mut self, id: Id, input_tensor: &Tensor) -> Result<(), BackendError> {
         let kind = input_tensor.ty.try_into()?;
