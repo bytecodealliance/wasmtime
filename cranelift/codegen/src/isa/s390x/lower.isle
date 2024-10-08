@@ -2279,7 +2279,7 @@
 (rule (lib_call_tls_get_offset got got_offset symbol)
       (let ((tls_offset WritableReg (temp_writable_reg $I64))
             (_ Unit (abi_for_elf_tls_get_offset))
-            (_ Unit (emit (MInst.ElfTlsGetOffset tls_offset got got_offset (writable_link_reg) symbol))))
+            (_ Unit (emit (MInst.ElfTlsGetOffset tls_offset got got_offset symbol))))
         tls_offset))
 
 (decl abi_for_elf_tls_get_offset () Unit)

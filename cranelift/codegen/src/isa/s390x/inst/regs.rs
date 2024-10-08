@@ -78,6 +78,10 @@ pub fn zero_reg() -> Reg {
     gpr(0)
 }
 
+pub fn link_reg() -> Reg {
+    gpr(14)
+}
+
 pub fn show_reg(reg: Reg) -> String {
     if let Some(rreg) = reg.to_real_reg() {
         match rreg.class() {

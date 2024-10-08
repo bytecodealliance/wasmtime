@@ -873,7 +873,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(rn);
         }
         Inst::AllocateArgs { .. } => {}
-        Inst::Call { link, info, .. } => {
+        Inst::Call { info } => {
             let CallInfo {
                 uses,
                 defs,
@@ -884,14 +884,14 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
                 collector.reg_fixed_use(vreg, *preg);
             }
             let mut clobbers = *clobbers;
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            clobbers.add(link_reg().to_real_reg().unwrap().into());
             for CallRetPair { vreg, preg } in defs {
                 clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
                 collector.reg_fixed_def(vreg, *preg);
             }
             collector.reg_clobbers(clobbers);
         }
-        Inst::CallInd { link, info } => {
+        Inst::CallInd { info } => {
             let CallInfo {
                 dest,
                 uses,
@@ -904,7 +904,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
                 collector.reg_fixed_use(vreg, *preg);
             }
             let mut clobbers = *clobbers;
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            clobbers.add(link_reg().to_real_reg().unwrap().into());
             for CallRetPair { vreg, preg } in defs {
                 clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
                 collector.reg_fixed_def(vreg, *preg);
@@ -928,7 +928,6 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             tls_offset,
             got,
             got_offset,
-            link,
             ..
         } => {
             collector.reg_fixed_use(got, gpr(12));
@@ -936,7 +935,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_fixed_def(tls_offset, gpr(2));
 
             let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            clobbers.add(link_reg().to_real_reg().unwrap().into());
             clobbers.remove(gpr_preg(2));
             collector.reg_clobbers(clobbers);
         }
@@ -1063,8 +1062,8 @@ impl MachInst for Inst {
         // registers.
         match self {
             &Inst::Args { .. } => false,
-            &Inst::Call { ref info, .. } => info.caller_conv != info.callee_conv,
-            &Inst::CallInd { ref info, .. } => info.caller_conv != info.callee_conv,
+            &Inst::Call { ref info } => info.caller_conv != info.callee_conv,
+            &Inst::CallInd { ref info } => info.caller_conv != info.callee_conv,
             &Inst::ElfTlsGetOffset { .. } => false,
             _ => true,
         }
@@ -3141,31 +3140,27 @@ impl Inst {
                     format!("slgfi {}, {}", show_reg(stack_reg()), size)
                 }
             }
-            &Inst::Call { link, ref info } => {
-                let link = link.to_reg();
+            &Inst::Call { ref info } => {
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
                     "".to_string()
                 };
-                debug_assert_eq!(link, gpr(14));
                 format!(
                     "brasl {}, {}{}",
-                    show_reg(link),
+                    show_reg(link_reg()),
                     info.dest.display(None),
                     callee_pop_size
                 )
             }
-            &Inst::CallInd { link, ref info, .. } => {
-                let link = link.to_reg();
+            &Inst::CallInd { ref info, .. } => {
                 let rn = pretty_print_reg(info.dest);
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
                     "".to_string()
                 };
-                debug_assert_eq!(link, gpr(14));
-                format!("basr {}, {}{}", show_reg(link), rn, callee_pop_size)
+                format!("basr {}, {}{}", show_reg(link_reg()), rn, callee_pop_size)
             }
             &Inst::ReturnCall { ref info } => {
                 let callee_pop_size = if info.callee_pop_size > 0 {
@@ -3184,20 +3179,14 @@ impl Inst {
                 };
                 format!("return_call_ind {rn}{callee_pop_size}")
             }
-            &Inst::ElfTlsGetOffset {
-                ref symbol,
-                ref link,
-                ..
-            } => {
-                let link = link.to_reg();
+            &Inst::ElfTlsGetOffset { ref symbol, .. } => {
                 let dest = match &**symbol {
                     SymbolReloc::TlsGd { name } => {
                         format!("tls_gdcall:{}", name.display(None))
                     }
                     _ => unreachable!(),
                 };
-                debug_assert_eq!(link, gpr(14));
-                format!("brasl {}, {}", show_reg(link), dest)
+                format!("brasl {}, {}", show_reg(link_reg()), dest)
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
@@ -3217,9 +3206,8 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret { link } => {
-                debug_assert_eq!(link, gpr(14));
-                let link = show_reg(link);
+            &Inst::Ret => {
+                let link = show_reg(link_reg());
                 format!("br {link}")
             }
             &Inst::Jump { dest } => {

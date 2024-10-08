@@ -13,7 +13,6 @@ use core::fmt;
 ///
 /// An inner node contains at least M/2 node references unless it is the right-most node at its
 /// level. A leaf node contains at least N/2 keys unless it is the right-most leaf.
-#[allow(dead_code)] // workaround for https://github.com/rust-lang/rust/issues/64362
 pub(super) enum NodeData<F: Forest> {
     Inner {
         /// The number of keys in this node.

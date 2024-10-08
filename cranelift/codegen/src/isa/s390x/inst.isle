@@ -893,12 +893,10 @@
 
     ;; A machine call instruction.
     (Call
-      (link WritableReg)
       (info BoxCallInfo))
 
     ;; A machine indirect-call instruction.
     (CallInd
-      (link WritableReg)
       (info BoxCallIndInfo))
 
     ;; A machine tail call instruction.
@@ -920,8 +918,7 @@
     ;; ---- branches (exactly one must appear at end of BB) ----
 
     ;; A machine return instruction.
-    (Ret
-      (link Reg))
+    (Ret)
 
     ;; An unconditional branch.
     (Jump
@@ -1021,7 +1018,6 @@
       (tls_offset WritableReg)
       (got Reg)
       (got_offset Reg)
-      (link WritableReg)
       (symbol BoxSymbolReloc))
 ))
 
@@ -2699,14 +2695,14 @@
         dst))
 
 ;; Helper for emitting `MInst.Call` instructions.
-(decl call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
-(rule (call_impl reg info)
-      (SideEffectNoResult.Inst (MInst.Call reg info)))
+(decl call_impl (BoxCallInfo) SideEffectNoResult)
+(rule (call_impl info)
+      (SideEffectNoResult.Inst (MInst.Call info)))
 
 ;; Helper for emitting `MInst.CallInd` instructions.
-(decl call_ind_impl (WritableReg BoxCallIndInfo) SideEffectNoResult)
-(rule (call_ind_impl reg info)
-      (SideEffectNoResult.Inst (MInst.CallInd reg info)))
+(decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
+(rule (call_ind_impl info)
+      (SideEffectNoResult.Inst (MInst.CallInd info)))
 
 ;; Helper for emitting `MInst.ReturnCall` instructions.
 (decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)
@@ -3581,16 +3577,13 @@
 (decl abi_return_call_stack_args (Sig) MemArg)
 (extern constructor abi_return_call_stack_args abi_return_call_stack_args)
 
-(decl writable_link_reg () WritableReg)
-(rule (writable_link_reg) (writable_gpr 14))
-
 (decl abi_call (Sig ExternalName CallArgList CallRetList) SideEffectNoResult)
 (rule (abi_call abi name uses defs)
-      (call_impl (writable_link_reg) (abi_call_info abi name uses defs)))
+      (call_impl (abi_call_info abi name uses defs)))
 
 (decl abi_call_ind (Sig Reg CallArgList CallRetList) SideEffectNoResult)
 (rule (abi_call_ind abi target uses defs)
-      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target uses defs)))
+      (call_ind_impl (abi_call_ind_info abi target uses defs)))
 
 (decl abi_return_call (Sig ExternalName CallArgList) SideEffectNoResult)
 (rule (abi_return_call abi name uses)
@@ -3613,7 +3606,7 @@
 
 (decl lib_call (BoxCallInfo) SideEffectNoResult)
 (rule (lib_call info)
-      (call_impl (writable_link_reg) info))
+      (call_impl info))
 
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;

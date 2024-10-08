@@ -3257,9 +3257,7 @@ impl Inst {
                 inst.emit(sink, emit_info, state);
                 state.nominal_sp_offset += size;
             }
-            &Inst::Call { link, ref info } => {
-                debug_assert_eq!(link.to_reg(), gpr(14));
-
+            &Inst::Call { ref info } => {
                 let opcode = 0xc05; // BRASL
 
                 // Add relocation for target function.  This has to be done *before*
@@ -3272,21 +3270,19 @@ impl Inst {
                     sink.push_user_stack_map(state, offset, s);
                 }
 
-                put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
+                put(sink, &enc_ril_b(opcode, link_reg(), 0));
                 sink.add_call_site();
 
                 state.nominal_sp_offset -= info.callee_pop_size;
             }
-            &Inst::CallInd { link, ref info } => {
-                debug_assert_eq!(link.to_reg(), gpr(14));
-
+            &Inst::CallInd { ref info } => {
                 if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 2;
                     sink.push_user_stack_map(state, offset, s);
                 }
 
                 let opcode = 0x0d; // BASR
-                put(sink, &enc_rr(opcode, link.to_reg(), info.dest));
+                put(sink, &enc_rr(opcode, link_reg(), info.dest));
                 sink.add_call_site();
 
                 state.nominal_sp_offset -= info.callee_pop_size;
@@ -3319,11 +3315,7 @@ impl Inst {
                 put(sink, &enc_rr(opcode, gpr(15), rn));
                 sink.add_call_site();
             }
-            &Inst::ElfTlsGetOffset {
-                ref symbol, link, ..
-            } => {
-                debug_assert_eq!(link.to_reg(), gpr(14));
-
+            &Inst::ElfTlsGetOffset { ref symbol, .. } => {
                 let opcode = 0xc05; // BRASL
 
                 // Add relocation for target function. This has to be done
@@ -3341,10 +3333,9 @@ impl Inst {
             }
             &Inst::Args { .. } => {}
             &Inst::Rets { .. } => {}
-            &Inst::Ret { link } => {
-                debug_assert_eq!(link, gpr(14));
+            &Inst::Ret => {
                 let opcode = 0x07; // BCR
-                put(sink, &enc_rr(opcode, gpr(15), link));
+                put(sink, &enc_rr(opcode, gpr(15), link_reg()));
             }
             &Inst::Jump { dest } => {
                 let off = sink.cur_offset();

@@ -6982,7 +6982,6 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::Call {
-            link: writable_gpr(14),
             info: Box::new(CallInfo::empty(
                 ExternalName::testcase("test0"),
                 CallConv::SystemV,
@@ -6994,14 +6993,13 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::CallInd {
-            link: writable_gpr(14),
             info: Box::new(CallInfo::empty(gpr(1), CallConv::SystemV)),
         },
         "0DE1",
         "basr %r14, %r1",
     ));
 
-    insns.push((Inst::Ret { link: gpr(14) }, "07FE", "br %r14"));
+    insns.push((Inst::Ret, "07FE", "br %r14"));
 
     insns.push((Inst::Debugtrap, "0001", ".word 0x0001 # debugtrap"));
 

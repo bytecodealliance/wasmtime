@@ -638,7 +638,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         _isa_flags: &s390x_settings::Flags,
         _frame_layout: &FrameLayout,
     ) -> SmallInstVec<Inst> {
-        smallvec![Inst::Ret { link: gpr(14) }]
+        smallvec![Inst::Ret]
     }
 
     fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
