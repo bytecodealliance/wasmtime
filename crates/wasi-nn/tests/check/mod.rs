@@ -17,6 +17,8 @@ use std::{
 pub mod onnx;
 #[cfg(feature = "openvino")]
 pub mod openvino;
+#[cfg(feature = "pytorch")]
+pub mod pytorch;
 #[cfg(all(feature = "winml", target_os = "windows"))]
 pub mod winml;
 
