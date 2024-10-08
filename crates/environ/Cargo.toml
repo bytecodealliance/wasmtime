@@ -48,7 +48,11 @@ name = "factc"
 required-features = ['component-model', 'compile']
 
 [features]
-component-model = ["dep:wasmtime-component-util", "dep:semver"]
+component-model = [
+  "dep:wasmtime-component-util",
+  "dep:semver",
+  "wasmparser/component-model",
+]
 demangle = ['std', 'dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
 compile = [
