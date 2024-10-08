@@ -2161,7 +2161,7 @@
 ;; instruction plus a `CMOV`; recall that `cmove_from_values` here may emit more
 ;; than one instruction for certain types (e.g., XMM-held, I128).
 
-(rule (lower (has_type ty (select (maybe_uextend (icmp cc a @ (value_type (fits_in_64 a_ty)) b)) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (icmp cc a b)) x y)))
       (lower_select_icmp ty (emit_cmp cc a b) x y))
 
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant

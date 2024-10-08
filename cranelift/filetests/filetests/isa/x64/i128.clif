@@ -2141,3 +2141,42 @@ block0(v0: i64, v1: i64):
 ;   popq %rbp
 ;   retq
 
+function %select128(i128, i128) -> i32 {
+block0(v0: i128, v1: i128):
+    v2 = icmp ult v0, v1
+    v3 = iconst.i32 100
+    v4 = iconst.i32 200
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $200, %eax
+;   cmpq    %rdx, %rdi
+;   sbbq    %rsi, %rcx, %rsi
+;   cmovbl  const(0), %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $0xc8, %eax
+;   cmpq %rdx, %rdi
+;   sbbq %rcx, %rsi
+;   cmovbl 0xa(%rip), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %ah, (%rax, %rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
