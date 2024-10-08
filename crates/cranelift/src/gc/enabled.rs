@@ -1304,6 +1304,7 @@ impl FuncEnvironment<'_> {
             .ins()
             .brif(same_ty, continue_block, &[same_ty], diff_tys_block, &[]);
 
+        // Different types block: fall back to the `is_subtype` libcall.
         builder.switch_to_block(diff_tys_block);
         let is_subtype = self.builtin_functions.is_subtype(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -1311,6 +1312,7 @@ impl FuncEnvironment<'_> {
         let result = builder.func.dfg.first_result(call_inst);
         builder.ins().jump(continue_block, &[result]);
 
+        // Continue block: join point for the result.
         builder.switch_to_block(continue_block);
         let result = builder.append_block_param(continue_block, ir::types::I32);
 
