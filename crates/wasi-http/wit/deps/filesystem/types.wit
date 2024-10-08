@@ -1,4 +1,4 @@
-package wasi:filesystem@0.2.1;
+package wasi:filesystem@0.2.2;
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -26,9 +26,9 @@ package wasi:filesystem@0.2.1;
 @since(version = 0.2.0)
 interface types {
     @since(version = 0.2.0)
-    use wasi:io/streams@0.2.1.{input-stream, output-stream, error};
+    use wasi:io/streams@0.2.2.{input-stream, output-stream, error};
     @since(version = 0.2.0)
-    use wasi:clocks/wall-clock@0.2.1.{datetime};
+    use wasi:clocks/wall-clock@0.2.2.{datetime};
 
     /// File size or length of a region within a file.
     @since(version = 0.2.0)
@@ -522,12 +522,6 @@ interface types {
         ) -> result<_, error-code>;
 
         /// Open a file or directory.
-        ///
-        /// The returned descriptor is not guaranteed to be the lowest-numbered
-        /// descriptor not currently open/ it is randomized to prevent applications
-        /// from depending on making assumptions about indexes, since this is
-        /// error-prone in multi-threaded contexts. The returned descriptor is
-        /// guaranteed to be less than 2**31.
         ///
         /// If `flags` contains `descriptor-flags::mutate-directory`, and the base
         /// descriptor doesn't have `descriptor-flags::mutate-directory` set,

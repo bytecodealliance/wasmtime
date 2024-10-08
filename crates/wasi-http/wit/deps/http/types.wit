@@ -4,13 +4,13 @@
 @since(version = 0.2.0)
 interface types {
   @since(version = 0.2.0)
-  use wasi:clocks/monotonic-clock@0.2.1.{duration};
+  use wasi:clocks/monotonic-clock@0.2.2.{duration};
   @since(version = 0.2.0)
-  use wasi:io/streams@0.2.1.{input-stream, output-stream};
+  use wasi:io/streams@0.2.2.{input-stream, output-stream};
   @since(version = 0.2.0)
-  use wasi:io/error@0.2.1.{error as io-error};
+  use wasi:io/error@0.2.2.{error as io-error};
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.1.{pollable};
+  use wasi:io/poll@0.2.2.{pollable};
 
   /// This type corresponds to HTTP standard Methods.
   @since(version = 0.2.0)
@@ -124,12 +124,12 @@ interface types {
   /// setting or appending to a `fields` resource.
   @since(version = 0.2.0)
   variant header-error {
-    /// This error indicates that a `field-key` or `field-value` was
+    /// This error indicates that a `field-name` or `field-value` was
     /// syntactically invalid when used with an operation that sets headers in a
     /// `fields`.
     invalid-syntax,
 
-    /// This error indicates that a forbidden `field-key` was used when trying
+    /// This error indicates that a forbidden `field-name` was used when trying
     /// to set a header in a `fields`.
     forbidden,
 
@@ -138,8 +138,23 @@ interface types {
     immutable,
   }
 
+  /// Field names are always strings.
+  ///
+  /// Field names should always be treated as case insensitive by the `fields`
+  /// resource for the purposes of equality checking.
+  @since(version = 0.2.1)
+  type field-name = field-key;
+
   /// Field keys are always strings.
+  ///
+  /// Field keys should always be treated as case insensitive by the `fields`
+  /// resource for the purposes of equality checking.
+  /// 
+  /// # Deprecation
+  /// 
+  /// This type has been deprecated in favor of the `field-name` type.
   @since(version = 0.2.0)
+  @deprecated(version = 0.2.2)
   type field-key = string;
 
   /// Field values should always be ASCII strings. However, in
@@ -171,70 +186,73 @@ interface types {
     ///
     /// The resulting `fields` is mutable.
     ///
-    /// The list represents each key-value pair in the Fields. Keys
+    /// The list represents each name-value pair in the Fields. Names
     /// which have multiple values are represented by multiple entries in this
-    /// list with the same key.
+    /// list with the same name.
     ///
-    /// The tuple is a pair of the field key, represented as a string, and
+    /// The tuple is a pair of the field name, represented as a string, and
     /// Value, represented as a list of bytes.
     ///
-    /// An error result will be returned if any `field-key` or `field-value` is
+    /// An error result will be returned if any `field-name` or `field-value` is
     /// syntactically invalid, or if a field is forbidden.
     @since(version = 0.2.0)
     from-list: static func(
-      entries: list<tuple<field-key,field-value>>
+      entries: list<tuple<field-name,field-value>>
     ) -> result<fields, header-error>;
 
-    /// Get all of the values corresponding to a key. If the key is not present
+    /// Get all of the values corresponding to a name. If the name is not present
     /// in this `fields` or is syntactically invalid, an empty list is returned.
-    /// However, if the key is present but empty, this is represented by a list
+    /// However, if the name is present but empty, this is represented by a list
     /// with one or more empty field-values present.
     @since(version = 0.2.0)
-    get: func(name: field-key) -> list<field-value>;
+    get: func(name: field-name) -> list<field-value>;
 
-    /// Returns `true` when the key is present in this `fields`. If the key is
+    /// Returns `true` when the name is present in this `fields`. If the name is
     /// syntactically invalid, `false` is returned.
     @since(version = 0.2.0)
-    has: func(name: field-key) -> bool;
+    has: func(name: field-name) -> bool;
 
-    /// Set all of the values for a key. Clears any existing values for that
-    /// key, if they have been set.
+    /// Set all of the values for a name. Clears any existing values for that
+    /// name, if they have been set.
     ///
     /// Fails with `header-error.immutable` if the `fields` are immutable.
     ///
-    /// Fails with `header-error.invalid-syntax` if the `field-key` or any of
+    /// Fails with `header-error.invalid-syntax` if the `field-name` or any of
     /// the `field-value`s are syntactically invalid.
     @since(version = 0.2.0)
-    set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
+    set: func(name: field-name, value: list<field-value>) -> result<_, header-error>;
 
-    /// Delete all values for a key. Does nothing if no values for the key
+    /// Delete all values for a name. Does nothing if no values for the name
     /// exist.
     ///
     /// Fails with `header-error.immutable` if the `fields` are immutable.
     ///
-    /// Fails with `header-error.invalid-syntax` if the `field-key` is
+    /// Fails with `header-error.invalid-syntax` if the `field-name` is
     /// syntactically invalid.
     @since(version = 0.2.0)
-    delete: func(name: field-key) -> result<_, header-error>;
+    delete: func(name: field-name) -> result<_, header-error>;
 
-    /// Append a value for a key. Does not change or delete any existing
-    /// values for that key.
+    /// Append a value for a name. Does not change or delete any existing
+    /// values for that name.
     ///
     /// Fails with `header-error.immutable` if the `fields` are immutable.
     ///
-    /// Fails with `header-error.invalid-syntax` if the `field-key` or
+    /// Fails with `header-error.invalid-syntax` if the `field-name` or
     /// `field-value` are syntactically invalid.
     @since(version = 0.2.0)
-    append: func(name: field-key, value: field-value) -> result<_, header-error>;
+    append: func(name: field-name, value: field-value) -> result<_, header-error>;
 
-    /// Retrieve the full set of keys and values in the Fields. Like the
-    /// constructor, the list represents each key-value pair.
+    /// Retrieve the full set of names and values in the Fields. Like the
+    /// constructor, the list represents each name-value pair.
     ///
-    /// The outer list represents each key-value pair in the Fields. Keys
+    /// The outer list represents each name-value pair in the Fields. Names
     /// which have multiple values are represented by multiple entries in this
-    /// list with the same key.
+    /// list with the same name.
+    ///
+    /// The names and values are always returned in the original casing and in
+    /// the order in which they will be serialized for transport.
     @since(version = 0.2.0)
-    entries: func() -> list<tuple<field-key,field-value>>;
+    entries: func() -> list<tuple<field-name,field-value>>;
 
     /// Make a deep copy of the Fields. Equivalent in behavior to calling the
     /// `fields` constructor on the return value of `entries`. The resulting
