@@ -2248,9 +2248,7 @@ impl Inst {
                 put(sink, &enc_rre(opcode, rd.to_reg(), rm));
             }
             &Inst::MovPReg { rd, rm } => {
-                let rm: Reg = rm.into();
-                debug_assert!([regs::gpr(0), regs::gpr(14), regs::gpr(15)].contains(&rm));
-                Inst::Mov64 { rd, rm }.emit(sink, emit_info, state);
+                Inst::Mov64 { rd, rm: rm.into() }.emit(sink, emit_info, state);
             }
             &Inst::Mov32 { rd, rm } => {
                 let opcode = 0x18; // LR
@@ -3258,8 +3256,6 @@ impl Inst {
                 state.nominal_sp_offset += size;
             }
             &Inst::Call { link, ref info } => {
-                debug_assert_eq!(link.to_reg(), gpr(14));
-
                 let opcode = 0xc05; // BRASL
 
                 // Add relocation for target function.  This has to be done *before*
@@ -3278,8 +3274,6 @@ impl Inst {
                 state.nominal_sp_offset -= info.callee_pop_size;
             }
             &Inst::CallInd { link, ref info } => {
-                debug_assert_eq!(link.to_reg(), gpr(14));
-
                 if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 2;
                     sink.push_user_stack_map(state, offset, s);
@@ -3322,8 +3316,6 @@ impl Inst {
             &Inst::ElfTlsGetOffset {
                 ref symbol, link, ..
             } => {
-                debug_assert_eq!(link.to_reg(), gpr(14));
-
                 let opcode = 0xc05; // BRASL
 
                 // Add relocation for target function. This has to be done
@@ -3336,13 +3328,12 @@ impl Inst {
                     _ => unreachable!(),
                 }
 
-                put(sink, &enc_ril_b(opcode, gpr(14), 0));
+                put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
                 sink.add_call_site();
             }
             &Inst::Args { .. } => {}
             &Inst::Rets { .. } => {}
             &Inst::Ret { link } => {
-                debug_assert_eq!(link, gpr(14));
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
             }
