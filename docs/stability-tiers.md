@@ -73,6 +73,7 @@ For explanations of what each tier means see below.
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
 | WebAssembly Proposal | [`memory64`]               | Unstable wasm proposal      |
 | WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
+| WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
@@ -80,6 +81,7 @@ For explanations of what each tier means see below.
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
 [`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
+[`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
 
 #### Tier 3
 

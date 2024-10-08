@@ -32,6 +32,7 @@ impl V8Engine {
         config.min_memories = config.min_memories.min(1);
         config.max_memories = config.max_memories.min(1);
         config.memory64_enabled = false;
+        config.wide_arithmetic_enabled = false;
 
         Self {
             isolate: Rc::new(RefCell::new(v8::Isolate::new(Default::default()))),

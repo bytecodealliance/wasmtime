@@ -170,6 +170,7 @@ impl Config {
             .wasm_threads(self.module_config.config.threads_enabled)
             .wasm_function_references(self.module_config.config.gc_enabled)
             .wasm_gc(self.module_config.config.gc_enabled)
+            .wasm_wide_arithmetic(self.module_config.config.wide_arithmetic_enabled)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
@@ -474,6 +475,10 @@ impl WasmtimeConfig {
         // Not fully implemented in Wasmtime and fuzzing.
         config.gc_enabled = false;
 
+        // Off-by-default in wasm-smith but implemented in wasmtime, so give the
+        // fuzzers a chance to run it.
+        config.wide_arithmetic_enabled = u.arbitrary()?;
+
         // Winch doesn't support the same set of wasm proposal as Cranelift at
         // this time, so if winch is selected be sure to disable wasm proposals
         // in `Config` to ensure that Winch can compile the module that
@@ -485,6 +490,7 @@ impl WasmtimeConfig {
             config.threads_enabled = false;
             config.tail_call_enabled = false;
             config.reference_types_enabled = false;
+            config.wide_arithmetic_enabled = false;
 
             // Winch requires host trap handlers to be enabled at this time.
             self.signals_based_traps = true;

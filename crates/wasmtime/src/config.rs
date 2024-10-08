@@ -818,6 +818,17 @@ impl Config {
         self
     }
 
+    /// Configures whether the [WebAssembly wide-arithmetic][proposal] will be
+    /// enabled for compilation.
+    ///
+    /// This feature is `false` by default.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/wide-arithmetic
+    pub fn wasm_wide_arithmetic(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::WIDE_ARITHMETIC, enable);
+        self
+    }
+
     /// Configures whether the [WebAssembly Garbage Collection
     /// proposal][proposal] will be enabled for compilation.
     ///

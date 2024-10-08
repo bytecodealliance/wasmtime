@@ -240,6 +240,14 @@ WASMTIME_CONFIG_PROP(void, wasm_multi_memory, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
 
+/**
+ * \brief Configures whether the WebAssembly wide-arithmetic proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
+
 #ifdef WASMTIME_FEATURE_COMPILER
 
 /**
