@@ -174,6 +174,8 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
             "spec_testsuite/simd_store32_lane.wast",
             "spec_testsuite/simd_store64_lane.wast",
             "spec_testsuite/simd_store8_lane.wast",
+            // wide arithmetic
+            "misc_testsuite/wide-arithmetic.wast",
         ];
 
         if unsupported.iter().any(|part| test.ends_with(part)) {
@@ -281,6 +283,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
     let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
         || feature_found_src(&wast_bytes, "shared)");
     let extended_const = feature_found(wast, "extended-const") || memory64;
+    let wide_arithmetic = feature_found(wast, "wide-arithmetic");
 
     if pooling && use_shared_memory {
         log::warn!("skipping pooling test with shared memory");
@@ -303,6 +306,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         .wasm_tail_call(tail_call)
         .wasm_custom_page_sizes(custom_page_sizes)
         .wasm_extended_const(extended_const)
+        .wasm_wide_arithmetic(wide_arithmetic)
         .strategy(strategy);
 
     if is_cranelift {

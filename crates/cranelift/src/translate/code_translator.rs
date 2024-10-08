@@ -2793,13 +2793,37 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             ));
         }
 
-        Operator::I64Add128
-        | Operator::I64Sub128
-        | Operator::I64MulWideS
-        | Operator::I64MulWideU => {
-            return Err(wasm_unsupported!(
-                "wide-arithmetic operators are not yet implemented"
-            ));
+        Operator::I64MulWideS => {
+            let (arg1, arg2) = state.pop2();
+            let arg1 = builder.ins().sextend(I128, arg1);
+            let arg2 = builder.ins().sextend(I128, arg2);
+            let result = builder.ins().imul(arg1, arg2);
+            let (lo, hi) = builder.ins().isplit(result);
+            state.push2(lo, hi);
+        }
+        Operator::I64MulWideU => {
+            let (arg1, arg2) = state.pop2();
+            let arg1 = builder.ins().uextend(I128, arg1);
+            let arg2 = builder.ins().uextend(I128, arg2);
+            let result = builder.ins().imul(arg1, arg2);
+            let (lo, hi) = builder.ins().isplit(result);
+            state.push2(lo, hi);
+        }
+        Operator::I64Add128 => {
+            let (arg1, arg2, arg3, arg4) = state.pop4();
+            let arg1 = builder.ins().iconcat(arg1, arg2);
+            let arg2 = builder.ins().iconcat(arg3, arg4);
+            let result = builder.ins().iadd(arg1, arg2);
+            let (res1, res2) = builder.ins().isplit(result);
+            state.push2(res1, res2);
+        }
+        Operator::I64Sub128 => {
+            let (arg1, arg2, arg3, arg4) = state.pop4();
+            let arg1 = builder.ins().iconcat(arg1, arg2);
+            let arg2 = builder.ins().iconcat(arg3, arg4);
+            let result = builder.ins().isub(arg1, arg2);
+            let (res1, res2) = builder.ins().isplit(result);
+            state.push2(res1, res2);
         }
     };
     Ok(())

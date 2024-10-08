@@ -295,6 +295,12 @@ impl FuncTranslationState {
         self.stack.push(val);
     }
 
+    /// Push two values.
+    pub(crate) fn push2(&mut self, val1: Value, val2: Value) {
+        self.stack.push(val1);
+        self.stack.push(val2);
+    }
+
     /// Push multiple values.
     pub(crate) fn pushn(&mut self, vals: &[Value]) {
         self.stack.extend_from_slice(vals);
