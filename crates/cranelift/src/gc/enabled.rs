@@ -884,17 +884,7 @@ pub fn translate_ref_test(
     // Otherwise, in the general case, we need to inspect our given object's
     // actual type, which also requires null-checking and i31-checking it.
 
-    let is_any_hierarchy = matches!(
-        ref_ty.heap_type,
-        WasmHeapType::Any
-            | WasmHeapType::Eq
-            | WasmHeapType::I31
-            | WasmHeapType::Array
-            | WasmHeapType::ConcreteArray(_)
-            | WasmHeapType::Struct
-            | WasmHeapType::ConcreteStruct(_)
-            | WasmHeapType::None
-    );
+    let is_any_hierarchy = ref_ty.heap_type.top() == WasmHeapTopType::Any;
 
     let non_null_block = builder.create_block();
     let non_null_non_i31_block = builder.create_block();
