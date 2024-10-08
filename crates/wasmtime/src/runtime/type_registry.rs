@@ -145,7 +145,9 @@ impl TypeCollection {
     /// Gets the shared type index given a module type index.
     #[inline]
     pub fn shared_type(&self, index: ModuleInternedTypeIndex) -> Option<VMSharedTypeIndex> {
-        self.types.get(index).copied()
+        let shared_ty = self.types.get(index).copied();
+        log::trace!("TypeCollection::shared_type({index:?}) -> {shared_ty:?}");
+        shared_ty
     }
 
     /// Get the module-level type index of the trampoline type for the given

@@ -10,7 +10,7 @@ use cranelift_codegen::{
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::{
-    GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex, PtrSize, TypeIndex,
+    GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind,
     WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType,
     WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
 };
@@ -826,6 +826,227 @@ pub fn translate_array_set(
     write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
 }
 
+pub fn translate_ref_test(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    ref_ty: WasmRefType,
+    val: ir::Value,
+) -> WasmResult<ir::Value> {
+    use crate::translate::FuncEnvironment as _;
+
+    // First special case: testing for references to bottom types.
+    if ref_ty.heap_type.is_bottom() {
+        let result = if ref_ty.nullable {
+            // All null references (within the same type hierarchy) match null
+            // references to the bottom type.
+            func_env.translate_ref_is_null(builder.cursor(), val)?
+        } else {
+            // `ref.test` is always false for non-nullable bottom types, as the
+            // bottom types are uninhabited.
+            builder.ins().iconst(ir::types::I32, 0)
+        };
+        return Ok(result);
+    }
+
+    // And because `ref.test heap_ty` is only valid on operands whose type is in
+    // the same type hierarchy as `heap_ty`, if `heap_ty` is its hierarchy's top
+    // type, we only need to worry about whether we are testing for nullability
+    // or not.
+    if ref_ty.heap_type.is_top() {
+        let result = if ref_ty.nullable {
+            builder.ins().iconst(ir::types::I32, 1)
+        } else {
+            let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
+            let zero = builder.ins().iconst(ir::types::I32, 0);
+            let one = builder.ins().iconst(ir::types::I32, 1);
+            builder.ins().select(is_null, zero, one)
+        };
+        return Ok(result);
+    }
+
+    // `i31ref`s are a little interesting because they don't point to GC
+    // objects; we test the bit pattern of the reference itself.
+    if ref_ty.heap_type == WasmHeapType::I31 {
+        let i31_mask = builder.ins().iconst(
+            ir::types::I32,
+            i64::try_from(wasmtime_environ::I31_DISCRIMINANT).unwrap(),
+        );
+        let is_i31 = builder.ins().band(val, i31_mask);
+        let result = if ref_ty.nullable {
+            let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
+            builder.ins().bor(is_null, is_i31)
+        } else {
+            is_i31
+        };
+        return Ok(result);
+    }
+
+    // Otherwise, in the general case, we need to inspect our given object's
+    // actual type, which also requires null-checking and i31-checking it.
+
+    let is_any_hierarchy = ref_ty.heap_type.top() == WasmHeapTopType::Any;
+
+    let non_null_block = builder.create_block();
+    let non_null_non_i31_block = builder.create_block();
+    let continue_block = builder.create_block();
+
+    // Current block: check if the reference is null and branch appropriately.
+    let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
+    let is_null_result = if ref_ty.nullable {
+        is_null
+    } else {
+        let zero = builder.ins().iconst(ir::types::I32, 0);
+        let one = builder.ins().iconst(ir::types::I32, 1);
+        builder.ins().select(is_null, zero, one)
+    };
+    builder.ins().brif(
+        is_null,
+        continue_block,
+        &[is_null_result],
+        non_null_block,
+        &[],
+    );
+
+    // Non-null block: We know the GC ref is non-null, but we need to also check
+    // for `i31` references that don't point to GC objects.
+    builder.switch_to_block(non_null_block);
+    if is_any_hierarchy {
+        let i31_mask = builder.ins().iconst(
+            ir::types::I32,
+            i64::try_from(wasmtime_environ::I31_DISCRIMINANT).unwrap(),
+        );
+        let is_i31 = builder.ins().band(val, i31_mask);
+        // If it is an `i31`, then create the result value based on whether we
+        // want `i31`s to pass the test or not.
+        let is_i31_result = if ref_ty.heap_type == WasmHeapType::Eq {
+            is_i31
+        } else {
+            let zero = builder.ins().iconst(ir::types::I32, 0);
+            let one = builder.ins().iconst(ir::types::I32, 1);
+            builder.ins().select(is_i31, zero, one)
+        };
+        builder.ins().brif(
+            is_i31,
+            continue_block,
+            &[is_i31_result],
+            non_null_non_i31_block,
+            &[],
+        );
+    } else {
+        // If we aren't testing the `any` hierarchy, the reference cannot be an
+        // `i31ref`. Jump directly to the non-null and non-i31 block; rely on
+        // branch folding during lowering to clean this up.
+        builder.ins().jump(non_null_non_i31_block, &[]);
+    }
+
+    // Non-null and non-i31 block: Read the actual `VMGcKind` or
+    // `VMSharedTypeIndex` out of the object's header and check whether it
+    // matches the expected type.
+    builder.switch_to_block(non_null_non_i31_block);
+    let check_header_kind = |func_env: &mut FuncEnvironment<'_>,
+                             builder: &mut FunctionBuilder,
+                             val: ir::Value,
+                             expected_kind: VMGcKind|
+     -> ir::Value {
+        let header_size = builder.ins().iconst(
+            ir::types::I32,
+            i64::from(wasmtime_environ::VM_GC_HEADER_SIZE),
+        );
+        let kind_addr = func_env.prepare_gc_ref_access(
+            builder,
+            val,
+            Offset::Static(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET),
+            BoundsCheck::Object(header_size),
+        );
+        let actual_kind = builder.ins().load(
+            ir::types::I32,
+            ir::MemFlags::trusted().with_readonly(),
+            kind_addr,
+            0,
+        );
+        let expected_kind = builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
+        // Inline version of `VMGcKind::matches`.
+        let and = builder.ins().band(actual_kind, expected_kind);
+        let kind_matches = builder
+            .ins()
+            .icmp(ir::condcodes::IntCC::Equal, and, expected_kind);
+        builder.ins().uextend(ir::types::I32, kind_matches)
+    };
+    let result = match ref_ty.heap_type {
+        WasmHeapType::Any
+        | WasmHeapType::None
+        | WasmHeapType::Extern
+        | WasmHeapType::NoExtern
+        | WasmHeapType::Func
+        | WasmHeapType::NoFunc
+        | WasmHeapType::I31 => unreachable!("handled top, bottom, and i31 types above"),
+
+        // For these abstract but non-top and non-bottom types, we check the
+        // `VMGcKind` that is in the object's header.
+        WasmHeapType::Eq => check_header_kind(func_env, builder, val, VMGcKind::EqRef),
+        WasmHeapType::Struct => check_header_kind(func_env, builder, val, VMGcKind::StructRef),
+        WasmHeapType::Array => check_header_kind(func_env, builder, val, VMGcKind::ArrayRef),
+
+        // For concrete types, we need to do a full subtype check between the
+        // `VMSharedTypeIndex` in the object's header and the
+        // `ModuleInternedTypeIndex` we have here.
+        //
+        // TODO: This check should ideally be done inline, but we don't have a
+        // good way to access the `TypeRegistry`'s supertypes arrays from Wasm
+        // code at the moment.
+        WasmHeapType::ConcreteArray(ty) | WasmHeapType::ConcreteStruct(ty) => {
+            let expected_interned_ty = ty.unwrap_module_type_index();
+            let expected_shared_ty =
+                func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
+
+            let ty_addr = func_env.prepare_gc_ref_access(
+                builder,
+                val,
+                Offset::Static(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET),
+                BoundsCheck::Access(wasmtime_environ::VM_GC_HEADER_SIZE),
+            );
+            let actual_shared_ty = builder.ins().load(
+                ir::types::I32,
+                ir::MemFlags::trusted().with_readonly(),
+                ty_addr,
+                0,
+            );
+
+            func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
+        }
+
+        // Same as for concrete arrays and structs except that a `VMFuncRef`
+        // doesn't begin with a `VMGcHeader` and is a raw pointer rather than GC
+        // heap index.
+        WasmHeapType::ConcreteFunc(ty) => {
+            let expected_interned_ty = ty.unwrap_module_type_index();
+            let expected_shared_ty =
+                func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
+
+            let actual_shared_ty = func_env.load_funcref_type_index(
+                &mut builder.cursor(),
+                ir::MemFlags::trusted().with_readonly(),
+                val,
+            );
+
+            func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
+        }
+    };
+    builder.ins().jump(continue_block, &[result]);
+
+    // Control flow join point with the result.
+    builder.switch_to_block(continue_block);
+    let result = builder.append_block_param(continue_block, ir::types::I32);
+
+    builder.seal_block(non_null_block);
+    builder.seal_block(non_null_non_i31_block);
+    builder.seal_block(continue_block);
+
+    Ok(result)
+}
+
 /// A static or dynamic offset from a GC reference.
 enum Offset {
     /// A static offset from a GC reference.
@@ -1064,5 +1285,40 @@ impl FuncEnvironment<'_> {
                     .icmp_imm(ir::condcodes::IntCC::Equal, is_non_null_and_non_i31, 0)
             }
         }
+    }
+
+    // Emit code to check whether `a <: b` for two `VMSharedTypeIndex`es.
+    pub(crate) fn is_subtype(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        a: ir::Value,
+        b: ir::Value,
+    ) -> ir::Value {
+        let diff_tys_block = builder.create_block();
+        let continue_block = builder.create_block();
+
+        // Current block: fast path for when `a == b`.
+        let same_ty = builder.ins().icmp(IntCC::Equal, a, b);
+        let same_ty = builder.ins().uextend(ir::types::I32, same_ty);
+        builder
+            .ins()
+            .brif(same_ty, continue_block, &[same_ty], diff_tys_block, &[]);
+
+        // Different types block: fall back to the `is_subtype` libcall.
+        builder.switch_to_block(diff_tys_block);
+        let is_subtype = self.builtin_functions.is_subtype(builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let call_inst = builder.ins().call(is_subtype, &[vmctx, a, b]);
+        let result = builder.func.dfg.first_result(call_inst);
+        builder.ins().jump(continue_block, &[result]);
+
+        // Continue block: join point for the result.
+        builder.switch_to_block(continue_block);
+        let result = builder.append_block_param(continue_block, ir::types::I32);
+
+        builder.seal_block(diff_tys_block);
+        builder.seal_block(continue_block);
+
+        result
     }
 }

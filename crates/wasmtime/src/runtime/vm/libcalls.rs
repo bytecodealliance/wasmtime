@@ -182,6 +182,13 @@ pub mod raw {
             self
         }
     }
+
+    impl LibcallResult for bool {
+        type Abi = u32;
+        unsafe fn convert(self) -> u32 {
+            self as u32
+        }
+    }
 }
 
 fn memory32_grow(
@@ -992,6 +999,24 @@ unsafe fn array_copy(
         }
     }
     Ok(())
+}
+
+#[cfg(feature = "gc")]
+unsafe fn is_subtype(
+    instance: &mut Instance,
+    actual_engine_type: u32,
+    expected_engine_type: u32,
+) -> bool {
+    use wasmtime_environ::VMSharedTypeIndex;
+
+    let actual = VMSharedTypeIndex::from_u32(actual_engine_type);
+    let expected = VMSharedTypeIndex::from_u32(expected_engine_type);
+
+    (*instance.store())
+        .engine()
+        .signatures()
+        .is_subtype(actual, expected)
+        .into()
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.

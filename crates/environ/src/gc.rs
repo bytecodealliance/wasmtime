@@ -23,6 +23,18 @@ pub const I31_DISCRIMINANT: u64 = 1;
 /// with a single bitwise-and operation.
 pub const NON_NULL_NON_I31_MASK: u64 = !I31_DISCRIMINANT;
 
+/// The size of the `VMGcHeader` in bytes.
+pub const VM_GC_HEADER_SIZE: u32 = 8;
+
+/// The minimum alignment of the `VMGcHeader` in bytes.
+pub const VM_GC_HEADER_ALIGN: u32 = 8;
+
+/// The offset of the `VMGcKind` field in the `VMGcHeader`.
+pub const VM_GC_HEADER_KIND_OFFSET: u32 = 0;
+
+/// The offset of the `VMSharedTypeIndex` field in the `VMGcHeader`.
+pub const VM_GC_HEADER_TYPE_INDEX_OFFSET: u32 = 4;
+
 /// Get the byte size of the given Wasm type when it is stored inside the GC
 /// heap.
 pub fn byte_size_of_wasm_ty_in_gc_heap(ty: &WasmStorageType) -> u32 {
