@@ -6038,24 +6038,6 @@ fn test_s390x_binemit() {
     ));
 
     insns.push((
-        Inst::Mvc {
-            dst: MemArgPair {
-                base: gpr(2),
-                disp: UImm12::maybe_from_u64(0x345).unwrap(),
-                flags: MemFlags::trusted(),
-            },
-            src: MemArgPair {
-                base: gpr(8),
-                disp: UImm12::maybe_from_u64(0x9ab).unwrap(),
-                flags: MemFlags::trusted(),
-            },
-            len_minus_one: 255,
-        },
-        "D2FF234589AB",
-        "mvc 837(255,%r2), 2475(%r8)",
-    ));
-
-    insns.push((
         Inst::LoadMultiple64 {
             rt: writable_gpr(8),
             rt2: writable_gpr(12),

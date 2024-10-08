@@ -148,7 +148,6 @@ impl Inst {
             | Inst::StoreRev16 { .. }
             | Inst::StoreRev32 { .. }
             | Inst::StoreRev64 { .. }
-            | Inst::Mvc { .. }
             | Inst::LoadMultiple64 { .. }
             | Inst::StoreMultiple64 { .. }
             | Inst::Mov32 { .. }
@@ -563,10 +562,6 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         | Inst::StoreImm32SExt16 { mem, .. }
         | Inst::StoreImm64SExt16 { mem, .. } => {
             memarg_operands(mem, collector);
-        }
-        Inst::Mvc { dst, src, .. } => {
-            collector.reg_use(&mut dst.base);
-            collector.reg_use(&mut src.base);
         }
         Inst::LoadMultiple64 { rt, rt2, mem, .. } => {
             memarg_operands(mem, collector);
@@ -1936,22 +1931,6 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("{mem_str}{op} {mem}, {imm}")
-            }
-            &Inst::Mvc {
-                ref dst,
-                ref src,
-                len_minus_one,
-            } => {
-                let dst = dst.clone();
-                let src = src.clone();
-                format!(
-                    "mvc {}({},{}), {}({})",
-                    dst.disp.pretty_print_default(),
-                    len_minus_one,
-                    show_reg(dst.base),
-                    src.disp.pretty_print_default(),
-                    show_reg(src.base)
-                )
             }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.clone();
