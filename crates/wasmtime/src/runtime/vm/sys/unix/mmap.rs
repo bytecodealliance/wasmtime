@@ -14,7 +14,7 @@ pub struct Mmap {
 impl Mmap {
     pub fn new_empty() -> Mmap {
         Mmap {
-            memory: SendSyncPtr::from(&mut [][..]),
+            memory: crate::vm::sys::empty_mmap(),
         }
     }
 
