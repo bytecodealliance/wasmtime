@@ -368,34 +368,6 @@ pub fn mem_imm16_emit(
     }
 }
 
-pub fn mem_mem_emit(
-    dst: &MemArgPair,
-    src: &MemArgPair,
-    len_minus_one: u8,
-    opcode_ss: u8,
-    add_trap: bool,
-    sink: &mut MachBuffer<Inst>,
-    _state: &mut EmitState,
-) {
-    if add_trap {
-        if let Some(trap_code) = dst.flags.trap_code().or(src.flags.trap_code()) {
-            sink.add_trap(trap_code);
-        }
-    }
-
-    put(
-        sink,
-        &enc_ss_a(
-            opcode_ss,
-            dst.base,
-            dst.disp.bits(),
-            src.base,
-            src.disp.bits(),
-            len_minus_one,
-        ),
-    );
-}
-
 pub fn mem_vrx_emit(
     rd: Reg,
     mem: &MemArg,
@@ -960,31 +932,6 @@ fn enc_siy(opcode: u16, b1: Reg, d1: u32, i2: u8) -> [u8; 6] {
     enc[3] = dl1_lo;
     enc[4] = dh1;
     enc[5] = opcode2;
-    enc
-}
-
-/// SSa-type instructions.
-///
-///   47     39 31 27 15 11
-///   opcode  l b1 d1 b2 d2
-///       40 32 28 16 12  0
-///
-///
-fn enc_ss_a(opcode: u8, b1: Reg, d1: u32, b2: Reg, d2: u32, l: u8) -> [u8; 6] {
-    let b1 = machreg_to_gpr(b1) & 0x0f;
-    let d1_lo = (d1 & 0xff) as u8;
-    let d1_hi = ((d1 >> 8) & 0x0f) as u8;
-    let b2 = machreg_to_gpr(b2) & 0x0f;
-    let d2_lo = (d2 & 0xff) as u8;
-    let d2_hi = ((d2 >> 8) & 0x0f) as u8;
-
-    let mut enc: [u8; 6] = [0; 6];
-    enc[0] = opcode;
-    enc[1] = l;
-    enc[2] = b1 << 4 | d1_hi;
-    enc[3] = d1_lo;
-    enc[4] = b2 << 4 | d2_hi;
-    enc[5] = d2_lo;
     enc
 }
 
@@ -2184,16 +2131,6 @@ impl Inst {
                     _ => unreachable!(),
                 };
                 mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state);
-            }
-            &Inst::Mvc {
-                ref dst,
-                ref src,
-                len_minus_one,
-            } => {
-                let dst = dst.clone();
-                let src = src.clone();
-                let opcode = 0xd2; // MVC
-                mem_mem_emit(&dst, &src, len_minus_one, opcode, true, sink, state);
             }
 
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {

@@ -124,53 +124,6 @@ impl MemArg {
     }
 }
 
-/// A memory argument for an instruction with two memory operands.
-/// We cannot use two instances of MemArg, because we do not have
-/// two free temp registers that would be needed to reload two
-/// addresses in the general case.  Also, two copies of MemArg would
-/// increase the size of Inst beyond its current limit.  Use this
-/// simplified form instead that never needs any reloads, and suffices
-/// for all current users.
-#[derive(Clone, Debug)]
-pub struct MemArgPair {
-    pub base: Reg,
-    pub disp: UImm12,
-    pub flags: MemFlags,
-}
-
-impl MemArgPair {
-    /// Convert a MemArg to a MemArgPair if possible.
-    pub fn maybe_from_memarg(mem: &MemArg) -> Option<MemArgPair> {
-        match mem {
-            &MemArg::BXD12 {
-                base,
-                index,
-                disp,
-                flags,
-            } => {
-                if index != zero_reg() {
-                    None
-                } else {
-                    Some(MemArgPair { base, disp, flags })
-                }
-            }
-            &MemArg::RegOffset { reg, off, flags } => {
-                if off < 0 {
-                    None
-                } else {
-                    let disp = UImm12::maybe_from_u64(off as u64)?;
-                    Some(MemArgPair {
-                        base: reg,
-                        disp,
-                        flags,
-                    })
-                }
-            }
-            _ => None,
-        }
-    }
-}
-
 //=============================================================================
 // Instruction sub-components (conditions, branches and branch targets):
 // definitions

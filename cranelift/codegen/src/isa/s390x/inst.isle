@@ -372,12 +372,6 @@
       (rd Reg)
       (mem MemArg))
 
-    ;; A memory copy of 1-256 bytes.
-    (Mvc
-      (dst MemArgPair)
-      (src MemArgPair)
-      (len_minus_one u8))
-
     ;; A load-multiple instruction.
     (LoadMultiple64
       (rt WritableReg)
@@ -1860,25 +1854,6 @@
       inst)
 
 
-;; Accessors for `MemArgPair`.
-
-(type MemArgPair extern (enum))
-
-;; Convert a MemArg to a MemArgPair, reloading the address if necessary.
-(decl memarg_pair (MemArg) MemArgPair)
-(rule 1 (memarg_pair (memarg_pair_from_memarg mem)) mem)
-(rule (memarg_pair mem) (memarg_pair_from_reg
-                          (load_addr mem) (memarg_flags mem)))
-
-;; Convert a MemArg to a MemArgPair if no reloading is necessary.
-(decl memarg_pair_from_memarg (MemArgPair) MemArg)
-(extern extractor memarg_pair_from_memarg memarg_pair_from_memarg)
-
-;; Create a MemArgPair from a single base register.
-(decl memarg_pair_from_reg (Reg MemFlags) MemArgPair)
-(extern constructor memarg_pair_from_reg memarg_pair_from_reg)
-
-
 ;; Helpers for stack-slot addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl stack_addr_impl (Type StackSlot Offset32) Reg)
@@ -2319,11 +2294,6 @@
 (decl storerev64 (Reg MemArg) SideEffectNoResult)
 (rule (storerev64 src addr)
       (SideEffectNoResult.Inst (MInst.StoreRev64 src addr)))
-
-;; Helper for emitting `MInst.Mvc` instructions.
-(decl mvc (MemArgPair MemArgPair u8) SideEffectNoResult)
-(rule (mvc dst src len_minus_one)
-      (SideEffectNoResult.Inst (MInst.Mvc dst src len_minus_one)))
 
 ;; Helper for emitting `MInst.LoadAR` instructions.
 (decl load_ar (u8) Reg)
@@ -2915,14 +2885,6 @@
 (rule 1 (abi_vec_elt_rev callee_lane_order (ty_vec128 ty) reg)
       (if-let $false (lane_order_equal callee_lane_order (lane_order)))
       (vec_elt_rev ty reg))
-
-;; Helpers to emit a memory copy (MVC or memcpy libcall).
-(decl memcpy (MemArg MemArg u64) SideEffectNoResult)
-(rule 1 (memcpy dst src (len_minus_one len))
-      (mvc (memarg_pair dst) (memarg_pair src) len))
-(rule (memcpy dst src len)
-      (lib_call
-        (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len))))
 
 ;; Prepare a stack copy of a single (oversized) argument.
 (decl copy_to_buffer (MemArg ABIArg Value) InstOutput)
@@ -3602,18 +3564,6 @@
 
 (decl abi_lane_order (Sig) LaneOrder)
 (extern constructor abi_lane_order abi_lane_order)
-
-
-;; Helpers for generating calls to library routines ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(type LibCallInfo extern (enum))
-
-(decl lib_call_info_memcpy (Reg Reg Reg) BoxCallInfo)
-(extern constructor lib_call_info_memcpy lib_call_info_memcpy)
-
-(decl lib_call (BoxCallInfo) SideEffectNoResult)
-(rule (lib_call info)
-      (call_impl (writable_link_reg) info))
 
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;

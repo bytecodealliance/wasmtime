@@ -7,8 +7,8 @@ use crate::ir::ExternalName;
 // Types that the generated ISLE code uses via `use super::*`.
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
-    gpr, stack_reg, writable_gpr, zero_reg, Cond, Inst as MInst, LaneOrder, MemArg, MemArgPair,
-    RegPair, ReturnCallInfo, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair,
+    gpr, stack_reg, writable_gpr, zero_reg, Cond, Inst as MInst, LaneOrder, MemArg, RegPair,
+    ReturnCallInfo, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair,
 };
 use crate::isa::s390x::S390xBackend;
 use crate::machinst::isle::*;
@@ -16,8 +16,8 @@ use crate::machinst::{CallInfo, MachLabel, Reg};
 use crate::{
     ir::{
         condcodes::*, immediates::*, types::*, ArgumentExtension, ArgumentPurpose, AtomicRmwOp,
-        BlockCall, Endianness, Inst, InstructionData, KnownSymbol, LibCall, MemFlags, Opcode,
-        TrapCode, Value, ValueList,
+        BlockCall, Endianness, Inst, InstructionData, KnownSymbol, MemFlags, Opcode, TrapCode,
+        Value, ValueList,
     },
     isa::CallConv,
     machinst::abi::ABIMachineSpec,
@@ -306,47 +306,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             dest: target,
             uses: uses.clone(),
             callee_pop_size,
-        })
-    }
-
-    fn lib_call_info_memcpy(
-        &mut self,
-        dst: Reg,
-        src: Reg,
-        len: Reg,
-    ) -> Box<CallInfo<ExternalName>> {
-        let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let callee_conv = CallConv::for_libcall(&self.backend.flags, caller_conv);
-
-        // Clobbers are defined by the calling convention. We will remove return value regs later.
-        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_conv);
-
-        // Libcalls only require the register save area.
-        self.lower_ctx
-            .abi_mut()
-            .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE);
-
-        Box::new(CallInfo {
-            dest: ExternalName::LibCall(LibCall::Memcpy),
-            uses: smallvec![
-                CallArgPair {
-                    vreg: dst,
-                    preg: gpr(2),
-                },
-                CallArgPair {
-                    vreg: src,
-                    preg: gpr(3),
-                },
-                CallArgPair {
-                    vreg: len,
-                    preg: gpr(4),
-                },
-            ],
-            defs: smallvec![],
-            clobbers,
-            caller_conv,
-            callee_conv,
-            callee_pop_size: 0,
         })
     }
 
@@ -913,20 +872,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             Some(off)
         } else {
             None
-        }
-    }
-
-    #[inline]
-    fn memarg_pair_from_memarg(&mut self, mem: &MemArg) -> Option<MemArgPair> {
-        MemArgPair::maybe_from_memarg(mem)
-    }
-
-    #[inline]
-    fn memarg_pair_from_reg(&mut self, reg: Reg, flags: MemFlags) -> MemArgPair {
-        MemArgPair {
-            base: reg,
-            disp: UImm12::zero(),
-            flags,
         }
     }
 
