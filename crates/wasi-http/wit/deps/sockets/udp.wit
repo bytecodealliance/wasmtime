@@ -1,7 +1,7 @@
 @since(version = 0.2.0)
 interface udp {
     @since(version = 0.2.0)
-    use wasi:io/poll@0.2.1.{pollable};
+    use wasi:io/poll@0.2.2.{pollable};
     @since(version = 0.2.0)
     use network.{network, error-code, ip-socket-address, ip-address-family};
 
@@ -184,7 +184,7 @@ interface udp {
 
         /// Create a `pollable` which will resolve once the socket is ready for I/O.
         ///
-        /// Note: this function is here for WASI Preview2 only.
+        /// Note: this function is here for WASI 0.2 only.
         /// It's planned to be removed when `future` is natively supported in Preview3.
         @since(version = 0.2.0)
         subscribe: func() -> pollable;
@@ -220,7 +220,7 @@ interface udp {
 
         /// Create a `pollable` which will resolve once the stream is ready to receive again.
         ///
-        /// Note: this function is here for WASI Preview2 only.
+        /// Note: this function is here for WASI 0.2 only.
         /// It's planned to be removed when `future` is natively supported in Preview3.
         @since(version = 0.2.0)
         subscribe: func() -> pollable;
@@ -280,7 +280,7 @@ interface udp {
         
         /// Create a `pollable` which will resolve once the stream is ready to send again.
         ///
-        /// Note: this function is here for WASI Preview2 only.
+        /// Note: this function is here for WASI 0.2 only.
         /// It's planned to be removed when `future` is natively supported in Preview3.
         @since(version = 0.2.0)
         subscribe: func() -> pollable;

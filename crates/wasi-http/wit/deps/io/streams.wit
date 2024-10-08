@@ -1,4 +1,4 @@
-package wasi:io@0.2.1;
+package wasi:io@0.2.2;
 
 /// WASI I/O is an I/O abstraction API which is currently focused on providing
 /// stream types.
@@ -18,6 +18,9 @@ interface streams {
         /// The last operation (a write or flush) failed before completion.
         ///
         /// More information is available in the `error` payload.
+        ///
+        /// After this, the stream will be closed. All future operations return
+        /// `stream-error::closed`.
         last-operation-failed(error),
         /// The stream is closed: no more input will be accepted by the
         /// stream. A closed output-stream will return this error on all
@@ -205,6 +208,7 @@ interface streams {
         /// The created `pollable` is a child resource of the `output-stream`.
         /// Implementations may trap if the `output-stream` is dropped before
         /// all derived `pollable`s created with this function are dropped.
+        @since(version = 0.2.0)
         subscribe: func() -> pollable;
 
         /// Write zeroes to a stream.

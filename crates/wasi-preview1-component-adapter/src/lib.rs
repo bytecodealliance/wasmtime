@@ -91,12 +91,12 @@ pub mod bindings {
             package wasmtime:adapter;
 
             world adapter {
-                import wasi:clocks/wall-clock@0.2.1;
-                import wasi:clocks/monotonic-clock@0.2.1;
-                import wasi:random/random@0.2.1;
-                import wasi:cli/stdout@0.2.1;
-                import wasi:cli/stderr@0.2.1;
-                import wasi:cli/stdin@0.2.1;
+                import wasi:clocks/wall-clock@0.2.2;
+                import wasi:clocks/monotonic-clock@0.2.2;
+                import wasi:random/random@0.2.2;
+                import wasi:cli/stdout@0.2.2;
+                import wasi:cli/stderr@0.2.2;
+                import wasi:cli/stdin@0.2.2;
             }
         "#,
         world: "wasmtime:adapter/adapter",
@@ -115,7 +115,7 @@ pub mod bindings {
     }
 }
 
-#[export_name = "wasi:cli/run@0.2.1#run"]
+#[export_name = "wasi:cli/run@0.2.2#run"]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -457,7 +457,7 @@ impl BumpAlloc {
 }
 
 #[cfg(not(feature = "proxy"))]
-#[link(wasm_import_module = "wasi:cli/environment@0.2.1")]
+#[link(wasm_import_module = "wasi:cli/environment@0.2.2")]
 extern "C" {
     #[link_name = "get-arguments"]
     fn wasi_cli_get_arguments(rval: *mut WasmStrList);
@@ -2156,7 +2156,7 @@ pub unsafe extern "C" fn poll_oneoff(
             });
         }
 
-        #[link(wasm_import_module = "wasi:io/poll@0.2.1")]
+        #[link(wasm_import_module = "wasi:io/poll@0.2.2")]
         #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
             #[link_name = "poll"]

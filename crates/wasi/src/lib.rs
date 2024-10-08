@@ -323,7 +323,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     crate::bindings::sockets::udp::add_to_linker_get_host(l, closure)?;
     crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
     crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::network::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
     crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
     Ok(())
 }
@@ -422,7 +422,7 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
     crate::bindings::sync::sockets::udp::add_to_linker_get_host(l, closure)?;
     crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
     crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::network::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
     crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
     Ok(())
 }

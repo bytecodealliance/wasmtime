@@ -1,11 +1,11 @@
 @since(version = 0.2.0)
 interface tcp {
     @since(version = 0.2.0)
-    use wasi:io/streams@0.2.1.{input-stream, output-stream};
+    use wasi:io/streams@0.2.2.{input-stream, output-stream};
     @since(version = 0.2.0)
-    use wasi:io/poll@0.2.1.{pollable};
+    use wasi:io/poll@0.2.2.{pollable};
     @since(version = 0.2.0)
-    use wasi:clocks/monotonic-clock@0.2.1.{duration};
+    use wasi:clocks/monotonic-clock@0.2.2.{duration};
     @since(version = 0.2.0)
     use network.{network, error-code, ip-socket-address, ip-address-family};
 
@@ -353,7 +353,7 @@ interface tcp {
         /// See <https://github.com/WebAssembly/wasi-sockets/blob/main/TcpSocketOperationalSemantics.md#pollable-readiness>
         /// for more information.
         ///
-        /// Note: this function is here for WASI Preview2 only.
+        /// Note: this function is here for WASI 0.2 only.
         /// It's planned to be removed when `future` is natively supported in Preview3.
         @since(version = 0.2.0)
         subscribe: func() -> pollable;
