@@ -48,7 +48,7 @@
 use crate::component::translate::*;
 use crate::{EntityType, IndexType};
 use std::borrow::Cow;
-use wasmparser::types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
+use wasmparser::component_types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
 
 pub(super) fn run(
     types: &mut ComponentTypesBuilder,

@@ -56,28 +56,8 @@ fn main() -> Result<()> {
 
             // sections that shouldn't appear in the specially-crafted core wasm
             // adapter self we're processing
-            Payload::DataCountSection { .. }
-            | Payload::ElementSection(_)
-            | Payload::DataSection(_)
-            | Payload::StartSection { .. }
-            | Payload::TagSection(_)
-            | Payload::UnknownSection { .. } => {
+            _ => {
                 bail!("unsupported section {payload:?} found in preview1.wasm")
-            }
-
-            // component-model related things that shouldn't show up
-            Payload::ModuleSection { .. }
-            | Payload::ComponentSection { .. }
-            | Payload::InstanceSection(_)
-            | Payload::ComponentInstanceSection(_)
-            | Payload::ComponentAliasSection(_)
-            | Payload::ComponentCanonicalSection(_)
-            | Payload::ComponentStartSection { .. }
-            | Payload::ComponentImportSection(_)
-            | Payload::CoreTypeSection(_)
-            | Payload::ComponentExportSection(_)
-            | Payload::ComponentTypeSection(_) => {
-                bail!("component section found in preview1.wasm")
             }
         }
     }

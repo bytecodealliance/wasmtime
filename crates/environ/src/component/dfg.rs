@@ -35,7 +35,7 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
-use wasmparser::types::ComponentCoreModuleTypeId;
+use wasmparser::component_types::ComponentCoreModuleTypeId;
 
 #[derive(Default)]
 #[allow(missing_docs)]

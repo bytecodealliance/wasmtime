@@ -239,7 +239,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::TypeSection(types) => {
                 self.validator.type_section(&types)?;
 
-                let count = self.validator.types(0).unwrap().core_type_count();
+                let count = self.validator.types(0).unwrap().core_type_count_in_module();
                 log::trace!("interning {count} Wasm types");
 
                 let capacity = usize::try_from(count).unwrap();
@@ -262,7 +262,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     // Get the rec group for the current type index, which is
                     // always the first type defined in a rec group.
                     log::trace!("looking up wasmparser type for index {type_index}");
-                    let core_type_id = validator_types.core_type_at(type_index).unwrap_sub();
+                    let core_type_id = validator_types.core_type_at_in_module(type_index);
                     log::trace!(
                         "  --> {core_type_id:?} = {:?}",
                         validator_types[core_type_id],

@@ -12,7 +12,7 @@
 use arbitrary::Unstructured;
 use component_fuzz_util::{TestCase, Type, MAX_TYPE_DEPTH};
 use libfuzzer_sys::fuzz_target;
-use wasmparser::types::ComponentAnyTypeId;
+use wasmparser::component_types::ComponentAnyTypeId;
 use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;

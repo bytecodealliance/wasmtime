@@ -205,6 +205,7 @@ struct WasmFeatures {
     component_model_more_flags: bool,
     component_model_multiple_returns: bool,
     gc_types: bool,
+    wide_arithmetic: bool,
 }
 
 impl Metadata<'_> {
@@ -235,6 +236,7 @@ impl Metadata<'_> {
             legacy_exceptions,
             gc_types,
             stack_switching,
+            wide_arithmetic,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -277,6 +279,7 @@ impl Metadata<'_> {
                 component_model_more_flags,
                 component_model_multiple_returns,
                 gc_types,
+                wide_arithmetic,
             },
         }
     }
@@ -488,6 +491,7 @@ impl Metadata<'_> {
             component_model_more_flags,
             component_model_multiple_returns,
             gc_types,
+            wide_arithmetic,
         } = self.features;
 
         use wasmparser::WasmFeatures as F;
@@ -578,6 +582,11 @@ impl Metadata<'_> {
             gc_types,
             other.contains(F::GC_TYPES),
             "support for WebAssembly gc types",
+        )?;
+        Self::check_bool(
+            wide_arithmetic,
+            other.contains(F::WIDE_ARITHMETIC),
+            "WebAssembly wide-arithmetic support",
         )?;
 
         Ok(())

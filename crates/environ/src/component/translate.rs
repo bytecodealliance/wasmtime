@@ -12,10 +12,11 @@ use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
-use wasmparser::types::{
+use wasmparser::component_types::{
     AliasableResourceId, ComponentCoreModuleTypeId, ComponentEntityType, ComponentFuncTypeId,
-    ComponentInstanceTypeId, Types,
+    ComponentInstanceTypeId,
 };
+use wasmparser::types::Types;
 use wasmparser::{Chunk, ComponentImportName, Encoding, Parser, Payload, Validator};
 
 mod adapt;

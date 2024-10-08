@@ -2792,6 +2792,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 "stack-switching operators are not yet implemented"
             ));
         }
+
+        Operator::I64Add128
+        | Operator::I64Sub128
+        | Operator::I64MulWideS
+        | Operator::I64MulWideU => {
+            return Err(wasm_unsupported!(
+                "wide-arithmetic operators are not yet implemented"
+            ));
+        }
     };
     Ok(())
 }
