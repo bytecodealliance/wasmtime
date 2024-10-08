@@ -4,7 +4,7 @@ use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{wasm_unsupported, TypeIndex, WasmResult};
+use wasmtime_environ::{wasm_unsupported, TypeIndex, WasmRefType, WasmResult};
 
 fn disabled<T>() -> WasmResult<T> {
     Err(wasm_unsupported!(
