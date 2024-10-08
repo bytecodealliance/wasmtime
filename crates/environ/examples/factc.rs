@@ -127,7 +127,7 @@ impl Factc {
         let wasm_types = wasm_types.as_ref();
         for i in 0..wasm_types.component_type_count() {
             let ty = match wasm_types.component_any_type_at(i) {
-                wasmparser::types::ComponentAnyTypeId::Func(id) => id,
+                wasmparser::component_types::ComponentAnyTypeId::Func(id) => id,
                 _ => continue,
             };
             let ty = types.convert_component_func_type(wasm_types, ty)?;
