@@ -1909,6 +1909,12 @@ when = "2024-09-30"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-encoder]]
+version = "0.219.0"
+when = "2024-10-08"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasm-metadata]]
 version = "0.214.0"
 when = "2024-07-16"
@@ -1939,6 +1945,12 @@ when = "2024-09-30"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-metadata]]
+version = "0.219.0"
+when = "2024-10-08"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmparser]]
 version = "0.214.0"
 when = "2024-07-16"
@@ -1969,6 +1981,12 @@ when = "2024-09-30"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmparser]]
+version = "0.219.0"
+when = "2024-10-08"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmprinter]]
 version = "0.214.0"
 when = "2024-07-16"
@@ -1996,6 +2014,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmprinter]]
 version = "0.218.0"
 when = "2024-09-30"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmprinter]]
+version = "0.219.0"
+when = "2024-10-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -2449,6 +2473,12 @@ when = "2024-09-30"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wast]]
+version = "219.0.0"
+when = "2024-10-08"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wat]]
 version = "1.214.0"
 when = "2024-07-16"
@@ -2476,6 +2506,12 @@ user-login = "wasmtime-publish"
 [[publisher.wat]]
 version = "1.218.0"
 when = "2024-09-30"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wat]]
+version = "1.219.0"
+when = "2024-10-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3006,6 +3042,12 @@ when = "2024-09-30"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-component]]
+version = "0.219.0"
+when = "2024-10-08"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-parser]]
 version = "0.214.0"
 when = "2024-07-16"
@@ -3033,6 +3075,12 @@ user-login = "wasmtime-publish"
 [[publisher.wit-parser]]
 version = "0.218.0"
 when = "2024-09-30"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-parser]]
+version = "0.219.0"
+when = "2024-10-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
