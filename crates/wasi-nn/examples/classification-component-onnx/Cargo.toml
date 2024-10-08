@@ -6,28 +6,22 @@ authors = ["The Wasmtime Project Developers"]
 readme = "README.md"
 publish = false
 
-[lib]
-crate-type = ["cdylib"]
+[dependencies]
+wit-bindgen = { version = "0.32.0",  default-features = false, features = ["macros"] }
+image = { version = "0.25.2", default-features = false, features = ["jpeg"] }
+ndarray = "0.16.1"
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+debug = false
+strip = true
+lto = true
 
 [package.metadata.component]
 package = "component:classification-component-onnx"
 
 [package.metadata.component.target.dependencies]
-"wasi:cli" = { path = "../../../wasi/wit/deps/cli" }
-"wasi:io" = { path = "../../../wasi/wit/deps/io" }
-"wasi:clocks" = { path = "../../../wasi/wit/deps/clocks" }
-"wasi:filesystem" = { path = "../../../wasi/wit/deps/filesystem" }
-"wasi:sockets" = { path = "../../../wasi/wit/deps/sockets" }
-"wasi:random" = { path = "../../../wasi/wit/deps/random" }
-"wasi:nn" = { path = "../../spec/wit/wasi-nn.wit" }
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-wit-bindgen = { version = "0.16.0", default-features = false, features = ["realloc"] }
-image = { version = "0.24.6", default-features = false, features = ["jpeg"] }
-ndarray = "0.15.3"
-
-
 
 # This crate is built with the wasm32-wasip1 target, so it's separate
 # from the main Wasmtime build, so use this directive to exclude it
