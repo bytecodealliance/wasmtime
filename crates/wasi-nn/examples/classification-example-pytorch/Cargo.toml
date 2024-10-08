@@ -1,0 +1,17 @@
+[package]
+name = "wasi-nn-example-pytorch"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasi-nn = "0.6.0"
+anyhow = "1.0.86"
+image = { version = "0.25.2", default-features = false, features = ["png"] }
+
+# This crate is built with the wasm32-wasip1 target, so it's separate
+# from the main Wasmtime build, so use this directive to exclude it
+# from the parent directory's workspace.
+[workspace]
