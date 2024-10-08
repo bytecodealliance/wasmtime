@@ -589,9 +589,8 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(rm);
         }
         Inst::MovPReg { rd, rm } => {
-            debug_assert!([gpr_preg(0), gpr_preg(14), gpr_preg(15)].contains(rm));
-            debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
+            collector.reg_fixed_nonallocatable(*rm);
         }
         Inst::Mov32 { rd, rm } => {
             collector.reg_def(rd);
@@ -3148,7 +3147,6 @@ impl Inst {
                 } else {
                     "".to_string()
                 };
-                debug_assert_eq!(link, gpr(14));
                 format!(
                     "brasl {}, {}{}",
                     show_reg(link),
@@ -3164,7 +3162,6 @@ impl Inst {
                 } else {
                     "".to_string()
                 };
-                debug_assert_eq!(link, gpr(14));
                 format!("basr {}, {}{}", show_reg(link), rn, callee_pop_size)
             }
             &Inst::ReturnCall { ref info } => {
@@ -3196,7 +3193,6 @@ impl Inst {
                     }
                     _ => unreachable!(),
                 };
-                debug_assert_eq!(link, gpr(14));
                 format!("brasl {}, {}", show_reg(link), dest)
             }
             &Inst::Args { ref args } => {
@@ -3218,7 +3214,6 @@ impl Inst {
                 s
             }
             &Inst::Ret { link } => {
-                debug_assert_eq!(link, gpr(14));
                 let link = show_reg(link);
                 format!("br {link}")
             }
