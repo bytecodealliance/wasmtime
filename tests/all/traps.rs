@@ -5,6 +5,8 @@ use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use wasmtime::*;
+
+#[cfg(not(target_arch = "s390x"))]
 use wasmtime_test_macros::wasmtime_test;
 
 #[test]
