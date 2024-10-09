@@ -55,7 +55,7 @@ make_vendor "wasi-http" "
   http@v0.2.2
 "
 
-make_vendor "wasi-runtime-config" "runtime-config@c667fe6"
+make_vendor "wasi-config" "config@f4d699b"
 
 make_vendor "wasi-keyvalue" "keyvalue@219ea36"
 

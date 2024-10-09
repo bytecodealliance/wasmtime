@@ -1,12 +1,12 @@
 [package]
-name = "wasmtime-wasi-runtime-config"
+name = "wasmtime-wasi-config"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository = "https://github.com/bytecodealliance/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
-description = "Wasmtime implementation of the wasi-runtime-config API"
+description = "Wasmtime implementation of the wasi-config API"
 
 [lints]
 workspace = true

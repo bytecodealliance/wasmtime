@@ -98,14 +98,14 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
-| WASI Proposal        | [`wasi-runtime-config`]           | unstable proposal           |
+| WASI Proposal        | [`wasi-config`]                   | unstable proposal           |
 | WASI Proposal        | [`wasi-keyvalue`]                 | unstable proposal           |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
 
 [`wasi-nn`]: https://github.com/WebAssembly/wasi-nn
 [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
-[`wasi-runtime-config`]: https://github.com/WebAssembly/wasi-runtime-config
+[`wasi-config`]: https://github.com/WebAssembly/wasi-config
 [`wasi-keyvalue`]: https://github.com/WebAssembly/wasi-keyvalue
 [`gc`]: https://github.com/WebAssembly/gc
 

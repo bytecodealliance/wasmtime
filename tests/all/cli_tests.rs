@@ -1923,11 +1923,11 @@ stderr [1] :: after empty
     }
 
     #[tokio::test]
-    async fn cli_serve_runtime_config() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_RUNTIME_CONFIG_COMPONENT, |cmd| {
+    async fn cli_serve_config() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_CONFIG_COMPONENT, |cmd| {
             cmd.arg("-Scli");
-            cmd.arg("-Sruntime-config");
-            cmd.arg("-Sruntime-config-var=hello=world");
+            cmd.arg("-Sconfig");
+            cmd.arg("-Sconfig-var=hello=world");
         })?;
 
         let resp = server
@@ -1945,12 +1945,12 @@ stderr [1] :: after empty
     }
 
     #[test]
-    fn cli_runtime_config() -> Result<()> {
+    fn cli_config() -> Result<()> {
         run_wasmtime(&[
             "run",
-            "-Sruntime-config",
-            "-Sruntime-config-var=hello=world",
-            RUNTIME_CONFIG_GET_COMPONENT,
+            "-Sconfig",
+            "-Sconfig-var=hello=world",
+            CONFIG_GET_COMPONENT,
         ])?;
         Ok(())
     }

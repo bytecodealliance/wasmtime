@@ -1,6 +1,6 @@
 use test_programs::proxy;
 use test_programs::wasi::{
-    config::runtime,
+    config::store,
     http::types::{Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam},
 };
 
@@ -17,7 +17,7 @@ impl proxy::exports::wasi::http::incoming_handler::Guest for T {
         ResponseOutparam::set(outparam, Ok(resp));
 
         let out = body.write().expect("outgoing stream");
-        let config = runtime::get("hello").unwrap().unwrap();
+        let config = store::get("hello").unwrap().unwrap();
         out.blocking_write_and_flush(config.as_bytes())
             .expect("writing response");
 

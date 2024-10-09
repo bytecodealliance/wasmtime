@@ -1,8 +1,8 @@
-//! # Wasmtime's [wasi-runtime-config] Implementation
+//! # Wasmtime's [wasi-config] Implementation
 //!
-//! This crate provides a Wasmtime host implementation of the [wasi-runtime-config]
+//! This crate provides a Wasmtime host implementation of the [wasi-config]
 //! API. With this crate, the runtime can run components that call APIs in
-//! [wasi-runtime-config] and provide configuration variables for the component.
+//! [wasi-config] and provide configuration variables for the component.
 //!
 //! # Examples
 //!
@@ -18,7 +18,7 @@
 //!     Config, Engine, Result, Store,
 //! };
 //! use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
-//! use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
+//! use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
@@ -29,7 +29,7 @@
 //!     let mut store = Store::new(&engine, Ctx {
 //!         table: ResourceTable::new(),
 //!         wasi_ctx: WasiCtxBuilder::new().build(),
-//!         wasi_runtime_config_vars: WasiRuntimeConfigVariables::from_iter(vec![
+//!         wasi_config_vars: WasiConfigVariables::from_iter(vec![
 //!             ("config_key1", "value1"),
 //!             ("config_key2", "value2"),
 //!         ]),
@@ -37,9 +37,9 @@
 //!
 //!     let mut linker = Linker::<Ctx>::new(&engine);
 //!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
-//!     // add `wasi-runtime-config` world's interfaces to the linker
-//!     wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |h: &mut Ctx| {
-//!         WasiRuntimeConfig::from(&h.wasi_runtime_config_vars)
+//!     // add `wasi-config` world's interfaces to the linker
+//!     wasmtime_wasi_config::add_to_linker(&mut linker, |h: &mut Ctx| {
+//!         WasiConfig::from(&h.wasi_config_vars)
 //!     })?;
 //!
 //!     // ... use `linker` to instantiate within `store` ...
@@ -50,7 +50,7 @@
 //! struct Ctx {
 //!     table: ResourceTable,
 //!     wasi_ctx: WasiCtx,
-//!     wasi_runtime_config_vars: WasiRuntimeConfigVariables,
+//!     wasi_config_vars: WasiConfigVariables,
 //! }
 //!
 //! impl WasiView for Ctx {
@@ -59,7 +59,7 @@
 //! }
 //! ```
 //!
-//! [wasi-runtime-config]: https://github.com/WebAssembly/wasi-runtime-config
+//! [wasi-config]: https://github.com/WebAssembly/wasi-config
 //! [wasi:cli]: https://docs.rs/wasmtime-wasi/latest
 //! [wasi:http]: https://docs.rs/wasmtime-wasi-http/latest
 
@@ -75,13 +75,13 @@ mod gen_ {
         trappable_imports: true,
     });
 }
-use self::gen_::wasi::config::runtime as generated;
+use self::gen_::wasi::config::store as generated;
 
-/// Capture the state necessary for use in the `wasi-runtime-config` API implementation.
+/// Capture the state necessary for use in the `wasi-config` API implementation.
 #[derive(Default)]
-pub struct WasiRuntimeConfigVariables(HashMap<String, String>);
+pub struct WasiConfigVariables(HashMap<String, String>);
 
-impl<S: Into<String>> FromIterator<(S, S)> for WasiRuntimeConfigVariables {
+impl<S: Into<String>> FromIterator<(S, S)> for WasiConfigVariables {
     fn from_iter<I: IntoIterator<Item = (S, S)>>(iter: I) -> Self {
         Self(
             iter.into_iter()
@@ -91,7 +91,7 @@ impl<S: Into<String>> FromIterator<(S, S)> for WasiRuntimeConfigVariables {
     }
 }
 
-impl WasiRuntimeConfigVariables {
+impl WasiConfigVariables {
     /// Create a new runtime configuration.
     pub fn new() -> Self {
         Default::default()
@@ -104,30 +104,30 @@ impl WasiRuntimeConfigVariables {
     }
 }
 
-/// A wrapper capturing the needed internal `wasi-runtime-config` state.
-pub struct WasiRuntimeConfig<'a> {
-    vars: &'a WasiRuntimeConfigVariables,
+/// A wrapper capturing the needed internal `wasi-config` state.
+pub struct WasiConfig<'a> {
+    vars: &'a WasiConfigVariables,
 }
 
-impl<'a> From<&'a WasiRuntimeConfigVariables> for WasiRuntimeConfig<'a> {
-    fn from(vars: &'a WasiRuntimeConfigVariables) -> Self {
+impl<'a> From<&'a WasiConfigVariables> for WasiConfig<'a> {
+    fn from(vars: &'a WasiConfigVariables) -> Self {
         Self { vars }
     }
 }
 
-impl<'a> WasiRuntimeConfig<'a> {
-    /// Create a new view into the `wasi-runtime-config` state.
-    pub fn new(vars: &'a WasiRuntimeConfigVariables) -> Self {
+impl<'a> WasiConfig<'a> {
+    /// Create a new view into the `wasi-config` state.
+    pub fn new(vars: &'a WasiConfigVariables) -> Self {
         Self { vars }
     }
 }
 
-impl generated::Host for WasiRuntimeConfig<'_> {
-    fn get(&mut self, key: String) -> Result<Result<Option<String>, generated::ConfigError>> {
+impl generated::Host for WasiConfig<'_> {
+    fn get(&mut self, key: String) -> Result<Result<Option<String>, generated::Error>> {
         Ok(Ok(self.vars.0.get(&key).map(|s| s.to_owned())))
     }
 
-    fn get_all(&mut self) -> Result<Result<Vec<(String, String)>, generated::ConfigError>> {
+    fn get_all(&mut self) -> Result<Result<Vec<(String, String)>, generated::Error>> {
         Ok(Ok(self
             .vars
             .0
@@ -137,10 +137,10 @@ impl generated::Host for WasiRuntimeConfig<'_> {
     }
 }
 
-/// Add all the `wasi-runtime-config` world's interfaces to a [`wasmtime::component::Linker`].
+/// Add all the `wasi-config` world's interfaces to a [`wasmtime::component::Linker`].
 pub fn add_to_linker<T>(
     l: &mut wasmtime::component::Linker<T>,
-    f: impl Fn(&mut T) -> WasiRuntimeConfig<'_> + Send + Sync + Copy + 'static,
+    f: impl Fn(&mut T) -> WasiConfig<'_> + Send + Sync + Copy + 'static,
 ) -> Result<()> {
     generated::add_to_linker_get_host(l, f)?;
     Ok(())
