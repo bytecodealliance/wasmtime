@@ -1,3 +1,19 @@
+## 22.0.1
+
+Released 2024-10-09.
+
+### Fixed
+
+* Fix a runtime crash when combining tail-calls with host imports that capture a
+  stack trace or trap.
+  [GHSA-q8hx-mm92-4wvg](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q8hx-mm92-4wvg)
+
+* Fix a race condition could lead to WebAssembly control-flow integrity and type
+  safety violations.
+  [GHSA-7qmx-3fpx-r45m](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-7qmx-3fpx-r45m)
+
+--------------------------------------------------------------------------------
+
 ## 22.0.0
 
 Released 2024-06-20.
