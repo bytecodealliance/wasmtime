@@ -20,10 +20,9 @@ use core::{
 };
 use hashbrown::{HashMap, HashSet};
 use wasmtime_environ::{
-    iter_entity_range,
-    packed_option::{PackedOption, ReservedValue},
-    EngineOrModuleTypeIndex, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, SecondaryMap,
-    TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
+    iter_entity_range, packed_option::ReservedValue, EngineOrModuleTypeIndex,
+    ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, SecondaryMap, TypeTrace, VMSharedTypeIndex,
+    WasmRecGroup, WasmSubType,
 };
 use wasmtime_slab::{Id as SlabId, Slab};
 
