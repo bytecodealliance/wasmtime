@@ -125,7 +125,7 @@ impl Backtrace {
         let activations = core::iter::once((
             last_wasm_exit_pc,
             last_wasm_exit_fp,
-            *(*limits).last_wasm_entry_sp.get(),
+            *(*limits).last_wasm_entry_fp.get(),
         ))
         .chain(
             state
@@ -135,7 +135,7 @@ impl Backtrace {
                     (
                         state.old_last_wasm_exit_pc(),
                         state.old_last_wasm_exit_fp(),
-                        state.old_last_wasm_entry_sp(),
+                        state.old_last_wasm_entry_fp(),
                     )
                 }),
         )
@@ -162,11 +162,11 @@ impl Backtrace {
     unsafe fn trace_through_wasm(
         mut pc: usize,
         mut fp: usize,
-        trampoline_sp: usize,
+        trampoline_fp: usize,
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
         log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
-        log::trace!("trampoline_sp = 0x{:016x}", trampoline_sp);
+        log::trace!("trampoline_fp = 0x{:016x}", trampoline_fp);
         log::trace!("   initial pc = 0x{:016x}", pc);
         log::trace!("   initial fp = 0x{:016x}", fp);
 
@@ -174,41 +174,60 @@ impl Backtrace {
         // caller.
         assert_ne!(pc, 0);
         assert_ne!(fp, 0);
-        assert_ne!(trampoline_sp, 0);
+        assert_ne!(trampoline_fp, 0);
 
-        arch::assert_entry_sp_is_aligned(trampoline_sp);
-
-        // It is possible that the contiguous sequence of Wasm frames is
-        // empty. This is rare, but can happen if:
+        // This loop will walk the linked list of frame pointers starting at
+        // `fp` and going up until `trampoline_fp`. We know that both `fp` and
+        // `trampoline_fp` are "trusted values" aka generated and maintained by
+        // Cranelift. This means that it should be safe to walk the linked list
+        // of pointers and inspect wasm frames.
         //
-        // * Host calls into Wasm, pushing the entry trampoline frame
+        // Note, though, that any frames outside of this range are not
+        // guaranteed to have valid frame pointers. For example native code
+        // might be using the frame pointer as a general purpose register. Thus
+        // we need to be careful to only walk frame pointers in this one
+        // contiguous linked list.
         //
-        // * Entry trampoline calls the actual Wasm function, pushing a Wasm frame
+        // To know when to stop iteration all architectures' stacks currently
+        // look something like this:
         //
-        // * Wasm function tail calls to an imported host function, *replacing*
-        //   the Wasm frame with the exit trampoline's frame
+        //     | ...               |
+        //     | Native Frames     |
+        //     | ...               |
+        //     |-------------------|
+        //     | ...               | <-- Trampoline FP            |
+        //     | Trampoline Frame  |                              |
+        //     | ...               | <-- Trampoline SP            |
+        //     |-------------------|                            Stack
+        //     | Return Address    |                            Grows
+        //     | Previous FP       | <-- Wasm FP                Down
+        //     | ...               |                              |
+        //     | Wasm Frames       |                              |
+        //     | ...               |                              V
         //
-        // Now we have a stack like `[host, entry trampoline, exit trampoline]`
-        // which has a contiguous sequence of Wasm frames that are empty.
+        // The trampoline records its own frame pointer (`trampoline_fp`),
+        // which is guaranteed to be above all Wasm. To check when we've
+        // reached the trampoline frame, it is therefore sufficient to
+        // check when the next frame pointer is equal to `trampoline_fp`. Once
+        // that's hit then we know that the entire linked list has been
+        // traversed.
         //
-        // Therefore, check if we've reached the entry trampoline's SP as the
-        // first thing we do.
-        if arch::reached_entry_sp(fp, trampoline_sp) {
-            log::trace!("=== Empty contiguous sequence of Wasm frames ===");
-            return ControlFlow::Continue(());
-        }
-
-        loop {
+        // Note that it might be possible that this loop doesn't execute at all.
+        // For example if the entry trampoline called wasm which `return_call`'d
+        // an imported function which is an exit trampoline, then
+        // `fp == trampoline_fp` on the entry of this function, meaning the loop
+        // won't actually execute anything.
+        while fp != trampoline_fp {
             // At the start of each iteration of the loop, we know that `fp` is
             // a frame pointer from Wasm code. Therefore, we know it is not
             // being used as an extra general-purpose register, and it is safe
             // dereference to get the PC and the next older frame pointer.
-
-            // The stack grows down, and therefore any frame pointer we are
-            // dealing with should be less than the stack pointer on entry
-            // to Wasm.
-            assert!(trampoline_sp >= fp, "{trampoline_sp:#x} >= {fp:#x}");
-
+            //
+            // The stack also grows down, and therefore any frame pointer we are
+            // dealing with should be less than the frame pointer on entry to
+            // Wasm. Finally also assert that it's aligned correctly as an
+            // additional sanity check.
+            assert!(trampoline_fp > fp, "{trampoline_fp:#x} > {fp:#x}");
             arch::assert_fp_is_aligned(fp);
 
             log::trace!("--- Tracing through one Wasm frame ---");
@@ -227,55 +246,16 @@ impl Backtrace {
 
             // Get the next older frame pointer from the current Wasm frame
             // pointer.
-            //
-            // The next older frame pointer may or may not be a Wasm frame's
-            // frame pointer, but it is trusted either way (i.e. is actually a
-            // frame pointer and not being used as a general-purpose register)
-            // because we always enter Wasm from the host via a trampoline, and
-            // this trampoline maintains a proper frame pointer.
-            //
-            // We want to detect when we've reached the trampoline, and break
-            // out of this stack-walking loop. All of our architectures' stacks
-            // grow down and look something vaguely like this:
-            //
-            //     | ...               |
-            //     | Native Frames     |
-            //     | ...               |
-            //     |-------------------|
-            //     | ...               | <-- Trampoline FP            |
-            //     | Trampoline Frame  |                              |
-            //     | ...               | <-- Trampoline SP            |
-            //     |-------------------|                            Stack
-            //     | Return Address    |                            Grows
-            //     | Previous FP       | <-- Wasm FP                Down
-            //     | ...               |                              |
-            //     | Wasm Frames       |                              |
-            //     | ...               |                              V
-            //
-            // The trampoline records its own stack pointer (`trampoline_sp`),
-            // which is guaranteed to be above all Wasm frame pointers but at or
-            // below its own frame pointer. It is usually two words above the
-            // Wasm frame pointer (at least on x86-64, exact details vary across
-            // architectures) but not always: if the first Wasm function called
-            // by the host has many arguments, some of them could be passed on
-            // the stack in between the return address and the trampoline's
-            // frame.
-            //
-            // To check when we've reached the trampoline frame, it is therefore
-            // sufficient to check when the next frame pointer is greater than
-            // or equal to `trampoline_sp` (except s390x, where it needs to be
-            // strictly greater than).
             let next_older_fp = *(fp as *mut usize).add(arch::NEXT_OLDER_FP_FROM_FP_OFFSET);
-            if arch::reached_entry_sp(next_older_fp, trampoline_sp) {
-                log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
-                return ControlFlow::Continue(());
-            }
 
             // Because the stack always grows down, the older FP must be greater
             // than the current FP.
             assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
             fp = next_older_fp;
         }
+
+        log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
+        ControlFlow::Continue(())
     }
 
     /// Iterate over the frames inside this backtrace.

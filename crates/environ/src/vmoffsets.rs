@@ -172,8 +172,8 @@ pub trait PtrSize {
         self.vmruntime_limits_last_wasm_exit_fp() + self.size()
     }
 
-    /// Return the offset of the `last_wasm_entry_sp` field of `VMRuntimeLimits`.
-    fn vmruntime_limits_last_wasm_entry_sp(&self) -> u8 {
+    /// Return the offset of the `last_wasm_entry_fp` field of `VMRuntimeLimits`.
+    fn vmruntime_limits_last_wasm_entry_fp(&self) -> u8 {
         self.vmruntime_limits_last_wasm_exit_pc() + self.size()
     }
 

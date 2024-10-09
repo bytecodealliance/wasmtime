@@ -280,7 +280,7 @@ impl wasmtime_environ::Compiler for Compiler {
         debug_assert_vmctx_kind(isa, &mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
         let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
         let vm_runtime_limits_offset = offsets.ptr.vmctx_runtime_limits();
-        save_last_wasm_entry_sp(
+        save_last_wasm_entry_fp(
             &mut builder,
             pointer_type,
             &offsets.ptr,
@@ -969,7 +969,7 @@ fn debug_assert_vmctx_kind(
     }
 }
 
-fn save_last_wasm_entry_sp(
+fn save_last_wasm_entry_fp(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
     ptr_size: &impl PtrSize,
@@ -985,12 +985,12 @@ fn save_last_wasm_entry_sp(
     );
 
     // Then store our current stack pointer into the appropriate slot.
-    let sp = builder.ins().get_stack_pointer(pointer_type);
+    let fp = builder.ins().get_frame_pointer(pointer_type);
     builder.ins().store(
         MemFlags::trusted(),
-        sp,
+        fp,
         limits,
-        ptr_size.vmruntime_limits_last_wasm_entry_sp(),
+        ptr_size.vmruntime_limits_last_wasm_entry_fp(),
     );
 }
 

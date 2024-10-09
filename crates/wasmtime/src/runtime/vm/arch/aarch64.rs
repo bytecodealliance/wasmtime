@@ -50,14 +50,6 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
 // And the current frame pointer points to the next older frame pointer.
 pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
 
-pub fn reached_entry_sp(fp: usize, entry_sp: usize) -> bool {
-    fp >= entry_sp
-}
-
-pub fn assert_entry_sp_is_aligned(sp: usize) {
-    assert_eq!(sp % 16, 0, "stack should always be aligned to 16");
-}
-
 pub fn assert_fp_is_aligned(_fp: usize) {
     // From AAPCS64, section 6.2.3 The Frame Pointer[0]:
     //

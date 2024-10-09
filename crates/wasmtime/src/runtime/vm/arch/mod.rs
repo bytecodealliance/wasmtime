@@ -40,14 +40,6 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
 
 pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = imp::NEXT_OLDER_FP_FROM_FP_OFFSET;
 
-pub fn reached_entry_sp(fp: usize, entry_sp: usize) -> bool {
-    imp::reached_entry_sp(fp, entry_sp)
-}
-
-pub fn assert_entry_sp_is_aligned(sp: usize) {
-    imp::assert_entry_sp_is_aligned(sp)
-}
-
 pub fn assert_fp_is_aligned(fp: usize) {
     imp::assert_fp_is_aligned(fp)
 }

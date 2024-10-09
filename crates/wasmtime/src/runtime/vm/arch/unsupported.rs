@@ -31,14 +31,6 @@ pub unsafe fn get_next_older_pc_from_fp(_fp: usize) -> usize {
 
 pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
 
-pub fn reached_entry_sp(_fp: usize, _entry_sp: usize) -> bool {
-    panic!()
-}
-
-pub fn assert_entry_sp_is_aligned(_sp: usize) {
-    panic!()
-}
-
 pub fn assert_fp_is_aligned(_fp: usize) {
     panic!()
 }
