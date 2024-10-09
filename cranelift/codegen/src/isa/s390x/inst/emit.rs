@@ -3383,6 +3383,36 @@ impl Inst {
                 start_off = sink.cur_offset();
             }
 
+            Inst::StackProbeLoop {
+                probe_count,
+                guard_size,
+            } => {
+                // Emit the loop start label
+                let loop_start = sink.get_label();
+                sink.bind_label(loop_start, state.ctrl_plane_mut());
+
+                // aghi %r15, -GUARD_SIZE
+                let inst = Inst::AluRSImm16 {
+                    alu_op: ALUOp::Add64,
+                    rd: writable_stack_reg(),
+                    ri: stack_reg(),
+                    imm: -guard_size,
+                };
+                inst.emit(sink, emit_info, state);
+
+                // mvi 0(%r15), 0
+                let inst = Inst::StoreImm8 {
+                    imm: 0,
+                    mem: MemArg::reg(stack_reg(), MemFlags::trusted()),
+                };
+                inst.emit(sink, emit_info, state);
+
+                // brct PROBE_COUNT, LOOP_START
+                let opcode = 0xa76; // BRCT
+                sink.use_label_at_offset(sink.cur_offset(), loop_start, LabelUse::BranchRI);
+                put(sink, &enc_ri_b(opcode, probe_count.to_reg(), 0));
+            }
+
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
             }

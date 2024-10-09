@@ -648,12 +648,56 @@ impl ABIMachineSpec for S390xMachineDeps {
     }
 
     fn gen_inline_probestack(
-        _insts: &mut SmallInstVec<Self::I>,
+        insts: &mut SmallInstVec<Self::I>,
         _call_conv: isa::CallConv,
-        _frame_size: u32,
-        _guard_size: u32,
+        frame_size: u32,
+        guard_size: u32,
     ) {
-        unimplemented!("Inline stack probing is unimplemented on S390x");
+        // Number of probes that we need to perform
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+
+        // The stack probe loop currently takes 4 instructions and each unrolled
+        // probe takes 2.  Set this to 2 to keep the max size to 4 instructions.
+        const PROBE_MAX_UNROLL: u32 = 2;
+
+        if probe_count <= PROBE_MAX_UNROLL {
+            // Unrolled probe loop.
+            for _ in 0..probe_count {
+                insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
+
+                insts.push(Inst::StoreImm8 {
+                    imm: 0,
+                    mem: MemArg::reg(stack_reg(), MemFlags::trusted()),
+                });
+            }
+        } else {
+            // Explicit probe loop.
+
+            // Load the number of probes into a register used as loop counter.
+            // `gen_inline_probestack` is called after regalloc2, so we can
+            // use the nonallocatable spilltmp register for this purpose.
+            let probe_count_reg = writable_spilltmp_reg();
+            if let Ok(probe_count) = i16::try_from(probe_count) {
+                insts.push(Inst::Mov32SImm16 {
+                    rd: probe_count_reg,
+                    imm: probe_count,
+                });
+            } else {
+                insts.push(Inst::Mov32Imm {
+                    rd: probe_count_reg,
+                    imm: probe_count,
+                });
+            }
+
+            // Emit probe loop.  The guard size is assumed to fit in 16 bits.
+            insts.push(Inst::StackProbeLoop {
+                probe_count: probe_count_reg,
+                guard_size: i16::try_from(guard_size).unwrap(),
+            });
+        }
+
+        // Restore the stack pointer to its original position.
+        insts.extend(Self::gen_sp_reg_adjust((probe_count * guard_size) as i32));
     }
 
     fn gen_clobber_save(

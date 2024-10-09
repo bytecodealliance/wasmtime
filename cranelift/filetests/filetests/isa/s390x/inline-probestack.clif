@@ -1,0 +1,96 @@
+test compile precise-output
+set enable_probestack=true
+set probestack_strategy=inline
+; This is the default and is equivalent to a page size of 4096
+set probestack_size_log2=12
+target s390x
+
+
+; If the stack size is just one page, we can avoid the stack probe entirely
+function %single_page() -> i64 tail {
+ss0 = explicit_slot 2048
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   aghi %r15, -2048
+; block0:
+;   la %r2, 0(%r15)
+;   aghi %r15, 2048
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   aghi %r15, -0x800
+; block1: ; offset 0x4
+;   la %r2, 0(%r15)
+;   aghi %r15, 0x800
+;   br %r14
+
+function %unrolled() -> i64 tail {
+ss0 = explicit_slot 8192
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   aghi %r15, -4096
+;   mvi 0(%r15), 0
+;   aghi %r15, -4096
+;   mvi 0(%r15), 0
+;   aghi %r15, 8192
+;   aghi %r15, -8192
+; block0:
+;   la %r2, 0(%r15)
+;   aghi %r15, 8192
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   aghi %r15, -0x1000
+;   mvi 0(%r15), 0
+;   aghi %r15, -0x1000
+;   mvi 0(%r15), 0
+;   aghi %r15, 0x2000
+;   aghi %r15, -0x2000
+; block1: ; offset 0x18
+;   la %r2, 0(%r15)
+;   aghi %r15, 0x2000
+;   br %r14
+
+function %large() -> i64 tail {
+ss0 = explicit_slot 100000
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   lhi %r1, 25
+;   0: aghi %r15, -4096 ; mvi 0(%r15), 0 ; brct %r1, 0b
+;   agfi %r15, 102400
+;   agfi %r15, -100000
+; block0:
+;   la %r2, 0(%r15)
+;   agfi %r15, 100000
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lhi %r1, 0x19
+;   aghi %r15, -0x1000
+;   mvi 0(%r15), 0
+;   brct %r1, 4
+;   agfi %r15, 0x19000
+;   agfi %r15, -0x186a0
+; block1: ; offset 0x1c
+;   la %r2, 0(%r15)
+;   agfi %r15, 0x186a0
+;   br %r14
+

@@ -7033,6 +7033,15 @@ fn test_s390x_binemit() {
     ));
 
     insns.push((
+        Inst::StackProbeLoop {
+            probe_count: writable_gpr(1),
+            guard_size: 4096,
+        },
+        "A7FBF0009200F000A716FFFC",
+        "0: aghi %r15, -4096 ; mvi 0(%r15), 0 ; brct %r1, 0b",
+    ));
+
+    insns.push((
         Inst::FpuMove32 {
             rd: writable_vr(8),
             rn: vr(4),

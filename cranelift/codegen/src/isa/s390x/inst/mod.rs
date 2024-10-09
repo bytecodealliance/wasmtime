@@ -226,6 +226,7 @@ impl Inst {
             | Inst::Debugtrap
             | Inst::Trap { .. }
             | Inst::JTSequence { .. }
+            | Inst::StackProbeLoop { .. }
             | Inst::LoadSymbolReloc { .. }
             | Inst::LoadAddr { .. }
             | Inst::Loop { .. }
@@ -968,6 +969,9 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::LoadAddr { rd, mem } => {
             collector.reg_def(rd);
             memarg_operands(mem, collector);
+        }
+        Inst::StackProbeLoop { probe_count, .. } => {
+            collector.reg_early_def(probe_count);
         }
         Inst::Loop { body, .. } => {
             // `reuse_def` constraints can't be permitted in a Loop instruction because the operand
@@ -3285,6 +3289,14 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("{mem_str}{op} {rd}, {mem}")
+            }
+            &Inst::StackProbeLoop {
+                probe_count,
+                guard_size,
+            } => {
+                let probe_count = pretty_print_reg(probe_count.to_reg());
+                let stack_reg = pretty_print_reg(stack_reg());
+                format!("0: aghi {stack_reg}, -{guard_size} ; mvi 0({stack_reg}), 0 ; brct {probe_count}, 0b")
             }
             &Inst::Loop { ref body, cond } => {
                 let body = body
