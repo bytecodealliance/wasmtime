@@ -337,6 +337,7 @@ fn tail_call_defaults() -> Result<()> {
 /// Smoke test for registering and unregistering modules (and their rec group
 /// entries) concurrently.
 #[test]
+#[cfg_attr(miri, ignore)]
 fn concurrent_type_registry_modifications() -> Result<()> {
     let _ = env_logger::try_init();
 
@@ -482,11 +483,15 @@ fn concurrent_type_registry_modifications() -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(function_references))]
-fn concurrent_type_modifications_and_checks(config: &mut Config) -> Result<()> {
+#[test]
+#[cfg_attr(miri, ignore)]
+fn concurrent_type_modifications_and_checks() -> Result<()> {
     const THREADS_CHECKING: usize = 4;
 
     let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
 
     let engine = Engine::new(&config)?;
 
