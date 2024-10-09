@@ -305,8 +305,8 @@ wasmtime_option_group! {
         pub threads: Option<bool>,
         /// Enable support for WASI HTTP API (experimental)
         pub http: Option<bool>,
-        /// Enable support for WASI runtime config API (experimental)
-        pub runtime_config: Option<bool>,
+        /// Enable support for WASI config API (experimental)
+        pub config: Option<bool>,
         /// Enable support for WASI key-value API (experimental)
         pub keyvalue: Option<bool>,
         /// Inherit environment variables and file descriptors following the
@@ -346,8 +346,8 @@ wasmtime_option_group! {
         ///
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
-        /// Pass a wasi runtime config variable to the program.
-        pub runtime_config_var: Vec<KeyValuePair>,
+        /// Pass a wasi config variable to the program.
+        pub config_var: Vec<KeyValuePair>,
         /// Preset data for the In-Memory provider of WASI key-value API.
         pub keyvalue_in_memory_data: Vec<KeyValuePair>,
     }

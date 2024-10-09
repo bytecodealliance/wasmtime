@@ -16,7 +16,7 @@ wit_bindgen::generate!({
     ",
     path: [
         "../wasi-http/wit",
-        "../wasi-runtime-config/wit",
+        "../wasi-config/wit",
         "../wasi-keyvalue/wit",
     ],
     world: "wasmtime:test/test",

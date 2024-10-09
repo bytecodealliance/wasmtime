@@ -3773,10 +3773,10 @@ dependencies = [
  "wasmtime-explorer",
  "wasmtime-test-macros",
  "wasmtime-wasi",
+ "wasmtime-wasi-config",
  "wasmtime-wasi-http",
  "wasmtime-wasi-keyvalue",
  "wasmtime-wasi-nn",
- "wasmtime-wasi-runtime-config",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
  "wast 219.0.0",
@@ -4051,6 +4051,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-wasi-config"
+version = "27.0.0"
+dependencies = [
+ "anyhow",
+ "test-programs-artifacts",
+ "tokio",
+ "wasmtime",
+ "wasmtime-wasi",
+]
+
+[[package]]
 name = "wasmtime-wasi-http"
 version = "27.0.0"
 dependencies = [
@@ -4105,17 +4116,6 @@ dependencies = [
  "wasmtime-wasi",
  "wiggle",
  "windows",
-]
-
-[[package]]
-name = "wasmtime-wasi-runtime-config"
-version = "27.0.0"
-dependencies = [
- "anyhow",
- "test-programs-artifacts",
- "tokio",
- "wasmtime",
- "wasmtime-wasi",
 ]
 
 [[package]]

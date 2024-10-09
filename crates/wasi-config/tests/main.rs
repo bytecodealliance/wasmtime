@@ -1,16 +1,16 @@
 use anyhow::{anyhow, Result};
-use test_programs_artifacts::{foreach_runtime_config, RUNTIME_CONFIG_GET_COMPONENT};
+use test_programs_artifacts::{foreach_config, CONFIG_GET_COMPONENT};
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Store,
 };
 use wasmtime_wasi::{add_to_linker_async, bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
+use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 
 struct Ctx {
     table: ResourceTable,
     wasi_ctx: WasiCtx,
-    wasi_runtime_config_vars: WasiRuntimeConfigVariables,
+    wasi_config_vars: WasiConfigVariables,
 }
 
 impl WasiView for Ctx {
@@ -32,8 +32,8 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
 
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
-    wasmtime_wasi_runtime_config::add_to_linker(&mut linker, |h: &mut Ctx| {
-        WasiRuntimeConfig::from(&h.wasi_runtime_config_vars)
+    wasmtime_wasi_config::add_to_linker(&mut linker, |h: &mut Ctx| {
+        WasiConfig::from(&h.wasi_config_vars)
     })?;
 
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
@@ -51,18 +51,16 @@ macro_rules! assert_test_exists {
     };
 }
 
-foreach_runtime_config!(assert_test_exists);
+foreach_config!(assert_test_exists);
 
 #[tokio::test(flavor = "multi_thread")]
-async fn runtime_config_get() -> Result<()> {
+async fn config_get() -> Result<()> {
     run_wasi(
-        RUNTIME_CONFIG_GET_COMPONENT,
+        CONFIG_GET_COMPONENT,
         Ctx {
             table: ResourceTable::new(),
             wasi_ctx: WasiCtxBuilder::new().build(),
-            wasi_runtime_config_vars: WasiRuntimeConfigVariables::from_iter(vec![(
-                "hello", "world",
-            )]),
+            wasi_config_vars: WasiConfigVariables::from_iter(vec![("hello", "world")]),
         },
     )
     .await

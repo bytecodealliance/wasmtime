@@ -1,6 +1,0 @@
-package wasi:config@0.2.0-draft;
-
-world imports {
-    /// The runtime interface for config
-    import runtime;
-}

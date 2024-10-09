@@ -17,12 +17,12 @@ use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
+#[cfg(feature = "wasi-config")]
+use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnCtx;
-#[cfg(feature = "wasi-runtime-config")]
-use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
 struct Host {
     table: wasmtime::component::ResourceTable,
@@ -34,8 +34,8 @@ struct Host {
     #[cfg(feature = "wasi-nn")]
     nn: Option<WasiNnCtx>,
 
-    #[cfg(feature = "wasi-runtime-config")]
-    wasi_runtime_config: Option<WasiRuntimeConfigVariables>,
+    #[cfg(feature = "wasi-config")]
+    wasi_config: Option<WasiConfigVariables>,
 
     #[cfg(feature = "wasi-keyvalue")]
     wasi_keyvalue: Option<WasiKeyValueCtx>,
@@ -157,8 +157,8 @@ impl ServeCommand {
 
             #[cfg(feature = "wasi-nn")]
             nn: None,
-            #[cfg(feature = "wasi-runtime-config")]
-            wasi_runtime_config: None,
+            #[cfg(feature = "wasi-config")]
+            wasi_config: None,
             #[cfg(feature = "wasi-keyvalue")]
             wasi_keyvalue: None,
         };
@@ -179,18 +179,18 @@ impl ServeCommand {
             }
         }
 
-        if self.run.common.wasi.runtime_config == Some(true) {
-            #[cfg(feature = "wasi-runtime-config")]
+        if self.run.common.wasi.config == Some(true) {
+            #[cfg(feature = "wasi-config")]
             {
-                let vars = WasiRuntimeConfigVariables::from_iter(
+                let vars = WasiConfigVariables::from_iter(
                     self.run
                         .common
                         .wasi
-                        .runtime_config_var
+                        .config_var
                         .iter()
                         .map(|v| (v.key.clone(), v.value.clone())),
                 );
-                host.wasi_runtime_config.replace(vars);
+                host.wasi_config.replace(vars);
             }
         }
 
@@ -275,15 +275,15 @@ impl ServeCommand {
             }
         }
 
-        if self.run.common.wasi.runtime_config == Some(true) {
-            #[cfg(not(feature = "wasi-runtime-config"))]
+        if self.run.common.wasi.config == Some(true) {
+            #[cfg(not(feature = "wasi-config"))]
             {
-                bail!("support for wasi-runtime-config was disabled at compile time");
+                bail!("support for wasi-config was disabled at compile time");
             }
-            #[cfg(feature = "wasi-runtime-config")]
+            #[cfg(feature = "wasi-config")]
             {
-                wasmtime_wasi_runtime_config::add_to_linker(linker, |h| {
-                    WasiRuntimeConfig::from(h.wasi_runtime_config.as_ref().unwrap())
+                wasmtime_wasi_config::add_to_linker(linker, |h| {
+                    WasiConfig::from(h.wasi_config.as_ref().unwrap())
                 })?;
             }
         }
