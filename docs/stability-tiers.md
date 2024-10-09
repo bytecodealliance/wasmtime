@@ -149,12 +149,7 @@ features to figure out how best to implement them and at least move them to Tier
 * Target: SPARC
 * Target: PowerPC
 * Target: RISC-V 32-bit
-* [WebAssembly proposal: `branch-hinting`](https://github.com/WebAssembly/branch-hinting)
-* [WebAssembly proposal: `exception-handling`](https://github.com/WebAssembly/exception-handling)
-* [WebAssembly proposal: `extended-const`](https://github.com/WebAssembly/extended-const)
-* [WebAssembly proposal: `flexible-vectors`](https://github.com/WebAssembly/flexible-vectors)
-* [WebAssembly proposal: `memory-control`](https://github.com/WebAssembly/memory-control)
-* [WebAssembly proposal: `stack-switching`](https://github.com/WebAssembly/stack-switching)
+* WebAssembly Proposals: see [documentation here](./stability-wasm-proposals.md)
 * [WASI proposal: `proxy-wasm`](https://github.com/proxy-wasm/spec)
 * [WASI proposal: `wasi-blob-store`](https://github.com/WebAssembly/wasi-blob-store)
 * [WASI proposal: `wasi-crypto`](https://github.com/WebAssembly/wasi-crypto)
@@ -305,6 +300,9 @@ Tier 1 features include:
 
 * Major changes affecting Tier 1 features require an RFC and prior agreement on
   the change before an implementation is committed.
+
+* WebAssembly proposals meet [all stabilization
+  requirements](./stability-wasm-proposals.md).
 
 A major inclusion point for this tier is intended to be the continuous fuzzing
 of Wasmtime. This implies a significant commitment of resources for fixing

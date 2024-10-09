@@ -45,6 +45,7 @@
   - [Release Process](./stability-release.md)
   - [Tiers of support](./stability-tiers.md)
   - [Platform Support](./stability-platform-support.md)
+  - [Wasm Proposals](./stability-wasm-proposals.md)
 - [Security](security.md)
   - [Disclosure Policy](./security-disclosure.md)
   - [What is considered a security bug?](./security-what-is-considered-a-security-vulnerability.md)

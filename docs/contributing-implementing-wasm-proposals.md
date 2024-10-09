@@ -6,52 +6,23 @@ The following checkboxes enumerate the steps required to add support for a new
 WebAssembly proposal to Wasmtime. They can be completed over the course of
 multiple pull requests.
 
-* <input type="checkbox"/> Add support to the
-  [`wasmparser`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser)
-  crate.
-
-* <input type="checkbox"/> Add support to the
-  [`wat`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wat)
-  and
-  [`wast`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wast)
-  crates.
-
-* <input type="checkbox"/> Add support to the
-  [`wasmprinter`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmprinter)
-  crate.
-
-* <input type="checkbox"/> Add support to the
-  [`wasm-encoder`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder)
-  crate.
-
-* <input type="checkbox"/> Add support to the
-  [`wasm-smith`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-smith)
-  crate.
-
-* <input type="checkbox"/> Add a `wasmtime::Config::enable_foo_bar` method to
-  the `wasmtime` crate.
-
-* <input type="checkbox"/> Add a `--enable-foo-bar` command line flag to the
-  `wasmtime` binary.
-
-* <input type="checkbox"/> Enable the spec tests in
-  [`build.rs`](https://github.com/bytecodealliance/wasmtime/blob/c7cd70fcec3eee66c9d7b5aa6fb4580d5a802218/build.rs#L41-L52)
-  but [mark them as
-  ignored](https://github.com/bytecodealliance/wasmtime/blob/c7cd70fcec3eee66c9d7b5aa6fb4580d5a802218/build.rs#L196)
-  for now.
-
-* <input type="checkbox"/> Stop ignoring individual spec tests and get them
-  passing one by one.
-
-* <input type="checkbox"/> Enable the proposal in [the fuzz
-  targets](./contributing-fuzzing.html).
-
-  * <input type="checkbox"/> Add examples from the spec tests to [the relevant
-    corpora](https://github.com/bytecodealliance/wasmtime-libfuzzer-corpus).
-
-    > The `wast2json` tool from [WABT] is useful for this.
-
-  * <input type="checkbox"/> Write a custom fuzz target, oracle, and/or test
+* [ ] Implement support for the proposal in the [`wasm-tools` repository].
+  [(example)](https://github.com/bytecodealliance/wasm-tools/pull/1853)
+  * [ ] [`wast`] - text parsing
+  * [ ] [`wasmparser`] - binary decoding and validation
+  * [ ] [`wasmprinter`] - binary-to-text
+  * [ ] [`wasm-encoder`] - binary encoding
+  * [ ] [`wasm-smith`] - fuzz test case generation
+* [ ] Update Wasmtime to use these `wasm-tools` crates, but leave the new
+  proposal unimplemented for now (implementation comes in subsequent PRs).
+  [(example)](https://github.com/bytecodealliance/wasmtime/pull/9399)
+* [ ] Add `Config::wasm_your_proposal` to the `wasmtime` crate.
+* [ ] Implement the proposal in `wasmtime`, gated behind this flag.
+* [ ] Add `-Wyour-proposal` to the `wasmtime-cli-flags` crate.
+* [ ] Update `tests/wast.rs` to spec tests should pass for this proposal.
+* [ ] Write custom tests in `tests/misc_testsuite/*.wast` for this proposal.
+* [ ] Enable the proposal in [the fuzz targets](./contributing-fuzzing.html).
+  * [ ] Write a custom fuzz target, oracle, and/or test
     case generator for fuzzing this proposal in particular.
 
     > For example, we wrote a [custom
@@ -61,69 +32,30 @@ multiple pull requests.
     > target](https://github.com/bytecodealliance/wasmtime/blob/c7cd70fcec3eee66c9d7b5aa6fb4580d5a802218/fuzz/fuzz_targets/table_ops.rs)
     > for exercising `table.{get,set}` instructions and their interaction with
     > GC while implementing the reference types proposal.
-
-* <input type="checkbox"/> Expose the proposal's new functionality in the
-  `wasmtime` crate's API.
+* [ ] Expose the proposal's new functionality in the `wasmtime` crate's API.
 
   > For example, the bulk memory operations proposal introduced a `table.copy`
   > instruction, and we exposed its functionality as the `wasmtime::Table::copy`
   > method.
-
-* <input type="checkbox"/> Expose the proposal's new functionality in the C API.
+* [ ] Expose the proposal's new functionality in the C API.
 
   > This may require extensions to the standard C API, and if so, should be
   > defined in
   > [`wasmtime.h`](https://github.com/bytecodealliance/wasmtime/blob/c7cd70fcec3eee66c9d7b5aa6fb4580d5a802218/crates/c-api/include/wasmtime.h)
   > and prefixed with `wasmtime_`.
+* [ ] Update `docs/stability-tiers.md` with an implementation status of the
+  proposal.
 
-* <input type="checkbox"/> Use the C API to expose the proposal's new
-  functionality in the other language embedding APIs:
 
-  * <input type="checkbox"/> [Python](https://github.com/bytecodealliance/wasmtime-py/)
+[`wasm-tools` repository]: https://github.com/bytecodealliance/wasm-tools
+[`wasmparser`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser
+[`wast`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wast
+[`wasmprinter`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmprinter
+[`wasm-encoder`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder
+[`wasm-smith`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wams-smith
 
-  * <input type="checkbox"/> [Go](https://github.com/bytecodealliance/wasmtime-go/)
-
-  * <input type="checkbox"/> [.NET](https://github.com/bytecodealliance/wasmtime-dotnet/)
-
-* <input type="checkbox"/> Document support for the proposal in
-  `wasmtime/docs/stability-wasm-proposals-support.md`.
-
-## Enabling Support for a Proposal by Default
-
-These are the standards that must be met to enable support for a proposal by
-default in Wasmtime, and can be used as a review checklist.
-
-* <input type="checkbox"/> The proposal must be in phase 4, or greater, of [the
-  WebAssembly standardization process][phases].
-
-* <input type="checkbox"/> All spec tests must be passing in Wasmtime.
-
-* <input type="checkbox"/> No open questions, design concerns, or serious known
-  bugs.
-
-* <input type="checkbox"/> Has been fuzzed for at least a week minimum.
-
-* <input type="checkbox"/> We are confident that the fuzzers are fully
-  exercising the proposal's functionality.
-
-  > For example, it would *not* have been enough to simply enable reference
-  > types in the `compile` fuzz target to enable that proposal by
-  > default. Compiling a module that uses reference types but not instantiating
-  > it nor running any of its functions doesn't exercise any of the GC
-  > implementation and does not run the inline fast paths for `table` operations
-  > emitted by the JIT. Exercising these things was the motivation for writing
-  > the custom fuzz target for `table.{get,set}` instructions.
-
-* <input type="checkbox"/> The proposal's functionality is exposed in the
-  `wasmtime` crate's API.
-
-* <input type="checkbox"/> The proposal's functionality is exposed in the C API.
-
-* <input type="checkbox"/> The proposal's functionality is exposed in at least
-  one of the other languages' APIs.
-
-[phases]: https://github.com/WebAssembly/meetings/blob/master/process/phases.md
-[WABT]: https://github.com/WebAssembly/wabt/
+For information about the status of implementation of various proposals in
+Wasmtime see the [associated documentation](./stability-wasm-proposals.md).
 
 ## Adding component functionality to WASI
 The [cap-std](https://github.com/bytecodealliance/cap-std) repository contains
