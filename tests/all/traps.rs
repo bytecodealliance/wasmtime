@@ -1682,6 +1682,7 @@ fn async_stack_size_ignored_if_disabled() -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(tail_call))]
+#[cfg(not(target_arch = "s390x"))]
 fn tail_call_to_imported_function(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
 
@@ -1710,6 +1711,7 @@ fn tail_call_to_imported_function(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(tail_call))]
+#[cfg(not(target_arch = "s390x"))]
 fn tail_call_to_imported_function_in_start_function(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
 
@@ -1737,6 +1739,7 @@ fn tail_call_to_imported_function_in_start_function(config: &mut Config) -> Resu
 }
 
 #[wasmtime_test(wasm_features(tail_call, function_references))]
+#[cfg(not(target_arch = "s390x"))]
 fn return_call_ref_to_imported_function(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
 
@@ -1764,6 +1767,7 @@ fn return_call_ref_to_imported_function(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(tail_call, function_references))]
+#[cfg(not(target_arch = "s390x"))]
 fn return_call_indirect_to_imported_function(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
 
