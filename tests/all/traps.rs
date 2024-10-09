@@ -5,7 +5,6 @@ use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use wasmtime::*;
-use wasmtime_test_macros::wasmtime_test;
 
 #[test]
 fn test_trap_return() -> Result<()> {
@@ -1681,9 +1680,11 @@ fn async_stack_size_ignored_if_disabled() -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(tail_call))]
-fn tail_call_to_imported_function(config: &mut Config) -> Result<()> {
-    let engine = Engine::new(config)?;
+#[test]
+fn tail_call_to_imported_function() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -1709,9 +1710,11 @@ fn tail_call_to_imported_function(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(tail_call))]
-fn tail_call_to_imported_function_in_start_function(config: &mut Config) -> Result<()> {
-    let engine = Engine::new(config)?;
+#[test]
+fn tail_call_to_imported_function_in_start_function() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -1736,9 +1739,11 @@ fn tail_call_to_imported_function_in_start_function(config: &mut Config) -> Resu
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(tail_call, function_references))]
-fn return_call_ref_to_imported_function(config: &mut Config) -> Result<()> {
-    let engine = Engine::new(config)?;
+#[test]
+fn return_call_ref_to_imported_function() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -1763,9 +1768,11 @@ fn return_call_ref_to_imported_function(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(tail_call, function_references))]
-fn return_call_indirect_to_imported_function(config: &mut Config) -> Result<()> {
-    let engine = Engine::new(config)?;
+#[test]
+fn return_call_indirect_to_imported_function() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
