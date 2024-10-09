@@ -340,6 +340,8 @@ wasmtime_option_group! {
         pub tcp: Option<bool>,
         /// Indicates whether `wasi:sockets` UDP support is enabled or not.
         pub udp: Option<bool>,
+        /// Enable WASI APIs marked as: @unstable(feature = network-error-code)
+        pub network_error_code: Option<bool>,
         /// Allows imports from the `wasi_unstable` core wasm module.
         pub preview0: Option<bool>,
         /// Inherit all environment variables from the parent process.

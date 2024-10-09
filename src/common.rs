@@ -337,6 +337,7 @@ impl RunCommon {
     pub fn compute_wasi_features(&self) -> LinkOptions {
         let mut options = LinkOptions::default();
         options.cli_exit_with_code(self.common.wasi.cli_exit_with_code.unwrap_or(false));
+        options.network_error_code(self.common.wasi.network_error_code.unwrap_or(false));
         options
     }
 }

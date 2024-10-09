@@ -19,7 +19,11 @@ where
 
     fn network_error_code(&mut self, err: Resource<Error>) -> anyhow::Result<Option<ErrorCode>> {
         let err = self.table().get(&err)?;
-        let _ = err; // TODO: should fill in this implementation
+
+        if let Some(err) = err.downcast_ref::<std::io::Error>() {
+            return Ok(Some(ErrorCode::from(err)));
+        }
+
         Ok(None)
     }
 }
@@ -39,8 +43,14 @@ where
 
 impl From<io::Error> for ErrorCode {
     fn from(value: io::Error) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&io::Error> for ErrorCode {
+    fn from(value: &io::Error) -> Self {
         // Attempt the more detailed native error code first:
-        if let Some(errno) = Errno::from_io_error(&value) {
+        if let Some(errno) = Errno::from_io_error(value) {
             return errno.into();
         }
 
@@ -69,7 +79,13 @@ impl From<io::Error> for ErrorCode {
 
 impl From<Errno> for ErrorCode {
     fn from(value: Errno) -> Self {
-        match value {
+        (&value).into()
+    }
+}
+
+impl From<&Errno> for ErrorCode {
+    fn from(value: &Errno) -> Self {
+        match *value {
             Errno::WOULDBLOCK => ErrorCode::WouldBlock,
             #[allow(unreachable_patterns)] // EWOULDBLOCK and EAGAIN can have the same value.
             Errno::AGAIN => ErrorCode::WouldBlock,
