@@ -304,6 +304,7 @@ fn cross_engine_module_exports() -> Result<()> {
 /// Smoke test for registering and unregistering modules (and their rec group
 /// entries) concurrently.
 #[wasmtime_test(wasm_features(gc, function_references))]
+#[cfg_attr(miri, ignore)]
 fn concurrent_type_registry_modifications(config: &mut Config) -> Result<()> {
     let _ = env_logger::try_init();
 
@@ -446,6 +447,7 @@ fn concurrent_type_registry_modifications(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(function_references))]
+#[cfg_attr(miri, ignore)]
 fn concurrent_type_modifications_and_checks(config: &mut Config) -> Result<()> {
     const THREADS_CHECKING: usize = 4;
 
