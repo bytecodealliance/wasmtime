@@ -144,7 +144,6 @@ features to figure out how best to implement them and at least move them to Tier
 * Target: [FreeBSD](https://github.com/bytecodealliance/wasmtime/issues/5499)
 * Target: [NetBSD/OpenBSD](https://github.com/bytecodealliance/wasmtime/issues/6962)
 * Target: [i686 (32-bit Intel targets)](https://github.com/bytecodealliance/wasmtime/issues/1980)
-* Target: Android
 * Target: MIPS
 * Target: SPARC
 * Target: PowerPC
