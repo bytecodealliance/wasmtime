@@ -113,46 +113,8 @@ Like above human interaction is indicated with **bold** text in these steps.
 
 ## Releasing a security patch
 
-When making a patch release that has a security-related fix the contents of the
-patch are often kept private until the day of the patch release which means that
-the process here is slightly different from the patch release process above. In
-addition the precise [runbook is currently under discussion in an
-RFC](https://github.com/bytecodealliance/rfcs/pull/20) for security patches, so
-this intends to document what we've been doing so far and it'll get updated when
-the runbook is merged.
-
-1. **The fix for the security issue is developed in a GitHub Security
-   Advisory**
-   * This will not have any CI run, it's recommended to run `./ci/run-tests.sh`
-     locally at least.
-   * Develop fixes for all branches that will get a patch release in the
-     advisory, one PR per branch. When the advisory is published all branches
-     will be merged simultaneously. Be sure to run `./ci/run-tests.sh` in each
-     branch.
-   * Don't forget to update `RELEASES.md` with notes about the release on
-     each branch.
-2. **Send a PR for the version bump when an email goes out announcing there will
-   be a security release**
-   * An email is sent to the bytecodealliance security mailing list ahead of a
-     patch release to announce that a patch release will happen. At this time you
-     should [trigger the version bump][ci-trigger] against the appropriate
-     `release-x.y.z` branches with the `release-patch` argument.
-   * This will send a PR, but you should not merge it. Instead use this PR and
-     the time ahead of the security release to fix any issues with CI. Older
-     `release-x.y.z` branches haven't run CI in awhile so they may need to
-     backport fixes of one variety or another. DO NOT include the actual fix for
-     the security issue into the PR, that comes in the next step.
-3. **Make the advisories/patches public**
-   * Publishing the GitHub Security Advisory will merge all the PRs into each
-     branch from the advisory. Note that CI will run for release branches but
-     `main` will probably fail CI since it expected to be merged through the
-     merge queue, but that's ok.
-   * Double-check that CI for release branches finishes and completes
-     successfully.
-4. **Merge the version-bump PR**
-   * Like the patch release process this will kick everything else into motion.
-     Note that the actual security fixes should be merged either before or as
-     part of this PR.
+For security releases see the documentation [of the vulnerability
+runbook](./security-vulnerability-runbook.md).
 
 ## Releasing Notes
 

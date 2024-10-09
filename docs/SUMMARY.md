@@ -48,6 +48,7 @@
 - [Security](security.md)
   - [Disclosure Policy](./security-disclosure.md)
   - [What is considered a security bug?](./security-what-is-considered-a-security-vulnerability.md)
+  - [Vulnerability runbook](./security-vulnerability-runbook.md)
 - [Contributing](contributing.md)
   - [Architecture](./contributing-architecture.md)
   - [Building](./contributing-building.md)
