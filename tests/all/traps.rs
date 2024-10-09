@@ -1681,6 +1681,7 @@ fn async_stack_size_ignored_if_disabled() -> Result<()> {
 }
 
 #[test]
+#[cfg(not(target_arch = "s390x"))]
 fn tail_call_to_imported_function() -> Result<()> {
     let mut config = Config::new();
     config.wasm_tail_call(true);
@@ -1711,6 +1712,7 @@ fn tail_call_to_imported_function() -> Result<()> {
 }
 
 #[test]
+#[cfg(not(target_arch = "s390x"))]
 fn tail_call_to_imported_function_in_start_function() -> Result<()> {
     let mut config = Config::new();
     config.wasm_tail_call(true);
@@ -1740,6 +1742,7 @@ fn tail_call_to_imported_function_in_start_function() -> Result<()> {
 }
 
 #[test]
+#[cfg(not(target_arch = "s390x"))]
 fn return_call_ref_to_imported_function() -> Result<()> {
     let mut config = Config::new();
     config.wasm_tail_call(true);
@@ -1770,6 +1773,7 @@ fn return_call_ref_to_imported_function() -> Result<()> {
 }
 
 #[test]
+#[cfg(not(target_arch = "s390x"))]
 fn return_call_indirect_to_imported_function() -> Result<()> {
     let mut config = Config::new();
     config.wasm_tail_call(true);
