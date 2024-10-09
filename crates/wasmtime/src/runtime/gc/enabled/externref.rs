@@ -1,5 +1,6 @@
 //! Implementation of `externref` in Wasmtime.
 
+use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
@@ -58,12 +59,14 @@ use core::mem::MaybeUninit;
 ///     |mut caller: Caller<'_, ()>, a: Rooted<ExternRef>, b: Rooted<ExternRef>| -> Result<Rooted<ExternRef>> {
 ///         let mut s = a
 ///             .data(&caller)?
+///             .ok_or_else(|| Error::msg("externref has no host data"))?
 ///             .downcast_ref::<Cow<str>>()
 ///             .ok_or_else(|| Error::msg("externref was not a string"))?
 ///             .clone()
 ///             .into_owned();
 ///         let b = b
 ///             .data(&caller)?
+///             .ok_or_else(|| Error::msg("externref has no host data"))?
 ///             .downcast_ref::<Cow<str>>()
 ///             .ok_or_else(|| Error::msg("externref was not a string"))?;
 ///         s.push_str(&b);
@@ -99,7 +102,11 @@ use core::mem::MaybeUninit;
 ///
 /// // The module should have concatenated the strings together!
 /// assert_eq!(
-///     result.data(&store)?.downcast_ref::<Cow<str>>().unwrap(),
+///     result
+///         .data(&store)?
+///         .expect("externref should have host data")
+///         .downcast_ref::<Cow<str>>()
+///         .expect("host data should be a `Cow<str>`"),
 ///     "Hello, World!"
 /// );
 /// # Ok(())
@@ -212,6 +219,63 @@ impl ExternRef {
         Ok(Self::from_cloned_gc_ref(&mut ctx, gc_ref.into()))
     }
 
+    /// Convert an `anyref` into an `externref`.
+    ///
+    /// This is equivalent to the `extern.convert_any` instruction in Wasm.
+    ///
+    /// You can get the underlying `anyref` again via the
+    /// [`AnyRef::convert_extern`] method or the `any.convert_extern` Wasm
+    /// instruction.
+    ///
+    /// The resulting `ExternRef` will not have any host data associated with
+    /// it, so [`ExternRef::data`] and [`ExternRef::data_mut`] will both return
+    /// `None`.
+    ///
+    /// Returns an error if the `anyref` GC reference has been unrooted (eg if
+    /// you attempt to use a `Rooted<AnyRef>` after exiting the scope it was
+    /// rooted within). See the documentation for [`Rooted<T>`][crate::Rooted]
+    /// for more details.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use wasmtime::*;
+    /// # fn foo() -> Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    ///
+    /// // Create an `anyref`.
+    /// let i31 = I31::wrapping_u32(0x1234);
+    /// let anyref = AnyRef::from_i31(&mut store, i31);
+    ///
+    /// // Convert that `anyref` into an `externref`.
+    /// let externref = ExternRef::convert_any(&mut store, anyref)?;
+    ///
+    /// // This `externref` doesn't have any associated host data.
+    /// assert!(externref.data(&store)?.is_none());
+    ///
+    /// // We can convert it back to an `anyref` and get its underlying `i31`
+    /// // data.
+    /// let anyref = AnyRef::convert_extern(&mut store, externref)?;
+    /// assert_eq!(anyref.unwrap_i31(&store)?.get_u32(), 0x1234);
+    /// # Ok(()) }
+    /// # foo().unwrap();
+    pub fn convert_any(
+        mut context: impl AsContextMut,
+        anyref: Rooted<AnyRef>,
+    ) -> Result<Rooted<ExternRef>> {
+        let mut store = AutoAssertNoGc::new(context.as_context_mut().0);
+        Self::_convert_any(&mut store, anyref)
+    }
+
+    pub(crate) fn _convert_any(
+        store: &mut AutoAssertNoGc<'_>,
+        anyref: Rooted<AnyRef>,
+    ) -> Result<Rooted<ExternRef>> {
+        let gc_ref = anyref.try_clone_gc_ref(store)?;
+        Ok(Self::from_cloned_gc_ref(store, gc_ref))
+    }
+
     /// Creates a new, manually-rooted instance of `ExternRef` wrapping the
     /// given value.
     ///
@@ -280,13 +344,18 @@ impl ExternRef {
         gc_ref: VMGcRef,
     ) -> Rooted<Self> {
         assert!(
-            gc_ref.is_extern_ref(&*store.unwrap_gc_store().gc_heap),
-            "GC reference {gc_ref:#p} is not an externref"
+            gc_ref.is_extern_ref(&*store.unwrap_gc_store().gc_heap)
+                || gc_ref.is_any_ref(&*store.unwrap_gc_store().gc_heap),
+            "GC reference {gc_ref:#p} should be an externref or anyref"
         );
         Rooted::new(store, gc_ref)
     }
 
     /// Get a shared borrow of the underlying data for this `ExternRef`.
+    ///
+    /// Returns `None` if this is an `externref` wrapper of an `anyref` created
+    /// by the `extern.convert_any` instruction or the
+    /// [`ExternRef::convert_any`] method.
     ///
     /// Returns an error if this `externref` GC reference has been unrooted (eg
     /// if you attempt to use a `Rooted<ExternRef>` after exiting the scope it
@@ -303,7 +372,7 @@ impl ExternRef {
     /// let externref = ExternRef::new(&mut store, "hello")?;
     ///
     /// // Access the `externref`'s host data.
-    /// let data = externref.data(&store)?;
+    /// let data = externref.data(&store)?.ok_or_else(|| Error::msg("no host data"))?;
     /// // Dowcast it to a `&str`.
     /// let data = data.downcast_ref::<&str>().ok_or_else(|| Error::msg("not a str"))?;
     /// // We should have got the data we created the `externref` with!
@@ -314,17 +383,25 @@ impl ExternRef {
     pub fn data<'a, T>(
         &self,
         store: impl Into<StoreContext<'a, T>>,
-    ) -> Result<&'a (dyn Any + Send + Sync)>
+    ) -> Result<Option<&'a (dyn Any + Send + Sync)>>
     where
         T: 'a,
     {
         let store = store.into().0;
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let externref = gc_ref.as_externref_unchecked();
-        Ok(store.gc_store()?.externref_host_data(externref))
+        let gc_store = store.gc_store()?;
+        if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
+            Ok(Some(gc_store.externref_host_data(externref)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get an exclusive borrow of the underlying data for this `ExternRef`.
+    ///
+    /// Returns `None` if this is an `externref` wrapper of an `anyref` created
+    /// by the `extern.convert_any` instruction or the
+    /// [`ExternRef::convert_any`] constructor.
     ///
     /// Returns an error if this `externref` GC reference has been unrooted (eg
     /// if you attempt to use a `Rooted<ExternRef>` after exiting the scope it
@@ -341,7 +418,7 @@ impl ExternRef {
     /// let externref = ExternRef::new::<usize>(&mut store, 0)?;
     ///
     /// // Access the `externref`'s host data.
-    /// let data = externref.data_mut(&mut store)?;
+    /// let data = externref.data_mut(&mut store)?.ok_or_else(|| Error::msg("no host data"))?;
     /// // Dowcast it to a `usize`.
     /// let data = data.downcast_mut::<usize>().ok_or_else(|| Error::msg("not a usize"))?;
     /// // We initialized to zero.
@@ -354,7 +431,7 @@ impl ExternRef {
     pub fn data_mut<'a, T>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<&'a mut (dyn Any + Send + Sync)>
+    ) -> Result<Option<&'a mut (dyn Any + Send + Sync)>>
     where
         T: 'a,
     {
@@ -363,8 +440,12 @@ impl ExternRef {
         // so that we can get the store's GC store. But importantly we cannot
         // trigger a GC while we are working with `gc_ref` here.
         let gc_ref = self.inner.try_gc_ref(store)?.unchecked_copy();
-        let externref = gc_ref.as_externref_unchecked();
-        Ok(store.gc_store_mut()?.externref_host_data_mut(externref))
+        let gc_store = store.gc_store_mut()?;
+        if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
+            Ok(Some(gc_store.externref_host_data_mut(externref)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Creates a new strongly-owned [`ExternRef`] from the raw value provided.

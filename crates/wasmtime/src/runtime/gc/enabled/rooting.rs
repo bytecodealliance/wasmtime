@@ -496,6 +496,7 @@ impl RootSet {
 /// // have a `Rooted<ExternRef>`.
 /// let data = hello
 ///     .data(&store)?
+///     .ok_or_else(|| Error::msg("externref has no host data"))?
 ///     .downcast_ref::<&str>()
 ///     .ok_or_else(|| Error::msg("not a str"))?;
 /// assert_eq!(*data, "hello");
@@ -785,8 +786,8 @@ impl<T: GcRef> Rooted<T> {
     ///
     /// // Now we can still access the reference outside the scope it was
     /// // originally defined within.
-    /// let data = y.data(&store)?;
-    /// let data = data.downcast_ref::<&str>().unwrap();
+    /// let data = y.data(&store)?.expect("should have host data");
+    /// let data = data.downcast_ref::<&str>().expect("host data should be str");
     /// assert_eq!(*data, "hello!");
     ///
     /// // But we have to manually unroot `y`.

@@ -2755,13 +2755,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             )?;
             state.push1(result);
         }
+        Operator::AnyConvertExtern => {
+            // Pop an `externref`, push an `anyref`. But they have the same
+            // representation, so we don't actually need to do anything.
+        }
+        Operator::ExternConvertAny => {
+            // Pop an `anyref`, push an `externref`. But they have the same
+            // representation, so we don't actually need to do anything.
+        }
 
         Operator::RefCastNonNull { .. }
         | Operator::RefCastNullable { .. }
         | Operator::BrOnCast { .. }
-        | Operator::BrOnCastFail { .. }
-        | Operator::AnyConvertExtern
-        | Operator::ExternConvertAny => {
+        | Operator::BrOnCastFail { .. } => {
             return Err(wasm_unsupported!("GC operator not yet implemented: {op:?}"));
         }
 
