@@ -1,3 +1,6 @@
+use anyhow::Context;
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::Arc;
 use wasmtime::*;
 
 #[test]
@@ -295,5 +298,241 @@ fn call_indirect_caching_out_of_bounds_table_index() -> Result<()> {
         err.contains("table index out of bounds"),
         "bad error: {err}"
     );
+    Ok(())
+}
+
+/// Smoke test for registering and unregistering modules (and their rec group
+/// entries) concurrently.
+#[test]
+fn concurrent_type_registry_modifications() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    // The number of seconds to run the smoke test.
+    const TEST_DURATION_SECONDS: u64 = 5;
+
+    // The number of worker threads to spawn for this smoke test.
+    const NUM_WORKER_THREADS: usize = 32;
+
+    let engine = Engine::new(&config)?;
+
+    /// Tests of various kinds of modifications to the type registry.
+    enum Test {
+        /// Creating a module (from its text format) should register new entries
+        /// in the type registry.
+        Module(&'static str),
+        /// Creating an individual func type registers a singleton entry in the
+        /// registry which is managed slightly differently from modules.
+        Func(fn(&Engine) -> FuncType),
+        /// Create a single struct type like a single function type.
+        Struct(fn(&Engine) -> StructType),
+        /// Create a single array type like a single function type.
+        Array(fn(&Engine) -> ArrayType),
+    }
+    const TESTS: &'static [Test] = &[
+        Test::Func(|engine| FuncType::new(engine, [], [])),
+        Test::Func(|engine| FuncType::new(engine, [], [ValType::I32])),
+        Test::Func(|engine| FuncType::new(engine, [ValType::I32], [])),
+        Test::Struct(|engine| StructType::new(engine, []).unwrap()),
+        Test::Array(|engine| {
+            ArrayType::new(engine, FieldType::new(Mutability::Const, StorageType::I8))
+        }),
+        Test::Array(|engine| {
+            ArrayType::new(engine, FieldType::new(Mutability::Var, StorageType::I8))
+        }),
+        Test::Module(
+            r#"
+                (module
+                    ;; A handful of function types.
+                    (type (func))
+                    (type (func (param i32)))
+                    (type (func (result i32)))
+                    (type (func (param i32) (result i32)))
+
+                    ;; A handful of recursive types.
+                    (rec)
+                    (rec (type $s (struct (field (ref null $s)))))
+                    (rec (type $a (struct (field (ref null $b))))
+                         (type $b (struct (field (ref null $a)))))
+                    (rec (type $c (struct (field (ref null $b))
+                                          (field (ref null $d))))
+                         (type $d (struct (field (ref null $a))
+                                          (field (ref null $c)))))
+
+                    ;; Some GC types
+                    (type (struct))
+                    (type (array i8))
+                    (type (array (mut i8)))
+                )
+            "#,
+        ),
+        Test::Module(
+            r#"
+                (module
+                    ;; Just the function types.
+                    (type (func))
+                    (type (func (param i32)))
+                    (type (func (result i32)))
+                    (type (func (param i32) (result i32)))
+                )
+            "#,
+        ),
+        Test::Module(
+            r#"
+                (module
+                    ;; Just the recursive types.
+                    (rec)
+                    (rec (type $s (struct (field (ref null $s)))))
+                    (rec (type $a (struct (field (ref null $b))))
+                         (type $b (struct (field (ref null $a)))))
+                    (rec (type $c (struct (field (ref null $b))
+                                          (field (ref null $d))))
+                         (type $d (struct (field (ref null $a))
+                                          (field (ref null $c)))))
+                )
+            "#,
+        ),
+        Test::Module(
+            r#"
+                (module
+                    ;; One of each kind of type.
+                    (type (func (param i32) (result i32)))
+                    (rec (type $a (struct (field (ref null $b))))
+                         (type $b (struct (field (ref null $a)))))
+                )
+            "#,
+        ),
+    ];
+
+    // Spawn the worker threads, each of them just registering and unregistering
+    // modules (and their types) constantly for the duration of the smoke test.
+    let handles = (0..NUM_WORKER_THREADS)
+        .map(|_| {
+            let engine = engine.clone();
+            std::thread::spawn(move || -> Result<()> {
+                let mut tests = TESTS.iter().cycle();
+                let start = std::time::Instant::now();
+                while start.elapsed().as_secs() < TEST_DURATION_SECONDS {
+                    match tests.next() {
+                        Some(Test::Module(wat)) => {
+                            let _ = Module::new(&engine, wat)?;
+                        }
+                        Some(Test::Func(ctor)) => {
+                            let _ = ctor(&engine);
+                        }
+                        Some(Test::Struct(ctor)) => {
+                            let _ = ctor(&engine);
+                        }
+                        Some(Test::Array(ctor)) => {
+                            let _ = ctor(&engine);
+                        }
+                        None => unreachable!(),
+                    }
+                }
+
+                Ok(())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    // Join all of the thread handles.
+    for handle in handles {
+        handle
+            .join()
+            .expect("should join thread handle")
+            .context("error during thread execution")?;
+    }
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(function_references))]
+fn concurrent_type_modifications_and_checks(config: &mut Config) -> Result<()> {
+    const THREADS_CHECKING: usize = 4;
+
+    let _ = env_logger::try_init();
+
+    let engine = Engine::new(&config)?;
+
+    let mut threads = Vec::new();
+    let keep_going = Arc::new(AtomicBool::new(true));
+
+    // Spawn a number of threads that are all working with a module and testing
+    // various properties about type-checks in the module.
+    for _ in 0..THREADS_CHECKING {
+        threads.push(std::thread::spawn({
+            let engine = engine.clone();
+            let keep_going = keep_going.clone();
+            move || -> Result<()> {
+                while keep_going.load(Relaxed) {
+                    let module = Module::new(
+                        &engine,
+                        r#"
+                            (module
+                                (func (export "f") (param funcref)
+                                    i32.const 0
+                                    local.get 0
+                                    table.set
+                                    i32.const 0
+                                    call_indirect (result f64)
+                                    drop
+                                )
+
+                                (table 1 funcref)
+                            )
+                        "#,
+                    )?;
+                    let ty = FuncType::new(&engine, [], [ValType::I32]);
+                    let mut store = Store::new(&engine, ());
+                    let func = Func::new(&mut store, ty, |_, _, results| {
+                        results[0] = Val::I32(0);
+                        Ok(())
+                    });
+
+                    let instance = Instance::new(&mut store, &module, &[])?;
+                    assert!(instance.get_typed_func::<(), i32>(&mut store, "f").is_err());
+                    assert!(instance.get_typed_func::<(), f64>(&mut store, "f").is_err());
+                    let f = instance.get_typed_func::<Func, ()>(&mut store, "f")?;
+                    let err = f.call(&mut store, func).unwrap_err();
+                    assert_eq!(err.downcast::<Trap>()?, Trap::BadSignature);
+                }
+                Ok(())
+            }
+        }));
+    }
+
+    // Spawn threads in the background creating/destroying `FuncType`s related
+    // to the module above.
+    threads.push(std::thread::spawn({
+        let engine = engine.clone();
+        let keep_going = keep_going.clone();
+        move || -> Result<()> {
+            while keep_going.load(Relaxed) {
+                FuncType::new(&engine, [], [ValType::F64]);
+            }
+            Ok(())
+        }
+    }));
+    threads.push(std::thread::spawn({
+        let engine = engine.clone();
+        let keep_going = keep_going.clone();
+        move || -> Result<()> {
+            while keep_going.load(Relaxed) {
+                FuncType::new(&engine, [], [ValType::I32]);
+            }
+            Ok(())
+        }
+    }));
+
+    std::thread::sleep(std::time::Duration::new(2, 0));
+    keep_going.store(false, Relaxed);
+
+    for thread in threads {
+        thread.join().unwrap()?;
+    }
+
     Ok(())
 }
