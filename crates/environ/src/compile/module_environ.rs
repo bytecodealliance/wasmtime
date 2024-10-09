@@ -239,7 +239,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::TypeSection(types) => {
                 self.validator.type_section(&types)?;
 
-                let count = types.count();
+                let count = self.validator.types(0).unwrap().core_type_count();
+                log::trace!("interning {count} Wasm types");
+
                 let capacity = usize::try_from(count).unwrap();
                 self.result.module.types.reserve(capacity);
                 self.types.reserve_wasm_signatures(capacity);
@@ -254,15 +256,16 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 // groups, we need copy the duplicates over (shallowly) as well,
                 // so that our types index space doesn't have holes.
                 let mut type_index = 0;
-                for _ in 0..count {
+                while type_index < count {
                     let validator_types = self.validator.types(0).unwrap();
 
                     // Get the rec group for the current type index, which is
                     // always the first type defined in a rec group.
+                    log::trace!("looking up wasmparser type for index {type_index}");
                     let core_type_id = validator_types.core_type_at(type_index).unwrap_sub();
                     log::trace!(
-                        "about to intern rec group for {core_type_id:?} = {:?}",
-                        validator_types[core_type_id]
+                        "  --> {core_type_id:?} = {:?}",
+                        validator_types[core_type_id],
                     );
                     let rec_group_id = validator_types.rec_group_id_of(core_type_id);
                     debug_assert_eq!(
