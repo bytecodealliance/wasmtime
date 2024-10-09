@@ -44,10 +44,14 @@ column is below.
 |--------------------------|---------|-------|----------|--------|-----|-------|
 | [`memory64`]             | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
-| [`gc`]                   | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
+| [`gc`] [^6]              | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 
-Unsupported WebAssembly proposals that Wasmtime does not have support for:
+[^6]: There is also a [tracking
+    issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
+    GC proposal.
+
+## Unsupported proposals
 
 * [`branch-hinting`]
 * [`exception-handling`]
@@ -80,7 +84,9 @@ Unsupported WebAssembly proposals that Wasmtime does not have support for:
 [`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
 [`gc`]: https://github.com/WebAssembly/gc
 
-For each column in the above table, this is a further explanation of its meaning:
+## Feature requirements
+
+For each column in the above tables, this is a further explanation of its meaning:
 
 * **Phase 4** - The proposal must be in phase 4, or greater, of [the
   WebAssembly standardization process][phases].
