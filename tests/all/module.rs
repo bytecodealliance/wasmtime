@@ -459,7 +459,6 @@ fn concurrent_type_modifications_and_checks() -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_function_references(true);
-
     let engine = Engine::new(&config)?;
 
     let mut threads = Vec::new();
