@@ -1743,6 +1743,7 @@ fn tail_call_to_imported_function_in_start_function() -> Result<()> {
 fn return_call_ref_to_imported_function() -> Result<()> {
     let mut config = Config::new();
     config.wasm_tail_call(true);
+    config.wasm_function_references(true);
     let engine = Engine::new(&config)?;
 
     let module = Module::new(
@@ -1772,6 +1773,7 @@ fn return_call_ref_to_imported_function() -> Result<()> {
 fn return_call_indirect_to_imported_function() -> Result<()> {
     let mut config = Config::new();
     config.wasm_tail_call(true);
+    config.wasm_function_references(true);
     let engine = Engine::new(&config)?;
 
     let module = Module::new(
