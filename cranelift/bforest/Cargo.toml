@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-bforest"
-version = "0.112.1"
+version = "0.112.2"
 description = "A forest of B+-trees"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-bforest"
