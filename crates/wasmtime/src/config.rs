@@ -8,7 +8,6 @@ use core::str::FromStr;
 use serde_derive::{Deserialize, Serialize};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
-use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -2068,16 +2067,14 @@ impl Config {
 
         let target = self.compiler_target();
 
-        // On supported targets, we enable stack probing by default.
+        // We enable stack probing by default on all targets.
         // This is required on Windows because of the way Windows
         // commits its stacks, but it's also a good idea on other
         // platforms to ensure guard pages are hit for large frame
         // sizes.
-        if probestack_supported(target.architecture) {
-            self.compiler_config
-                .flags
-                .insert("enable_probestack".into());
-        }
+        self.compiler_config
+            .flags
+            .insert("enable_probestack".into());
 
         if let Some(unwind_requested) = self.native_unwind_info {
             if !self
@@ -3019,13 +3016,6 @@ impl PoolingAllocationConfig {
         self.config.limits.total_gc_heaps = count;
         self
     }
-}
-
-pub(crate) fn probestack_supported(arch: Architecture) -> bool {
-    matches!(
-        arch,
-        Architecture::X86_64 | Architecture::Aarch64(_) | Architecture::Riscv64(_)
-    )
 }
 
 #[cfg(feature = "std")]

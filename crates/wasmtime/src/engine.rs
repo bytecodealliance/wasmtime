@@ -306,7 +306,7 @@ impl Engine {
             // runtime.
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
-            "enable_probestack" => *value == FlagValue::Bool(crate::config::probestack_supported(target.architecture)),
+            "enable_probestack" => *value == FlagValue::Bool(true),
             "probestack_strategy" => *value == FlagValue::Enum("inline".into()),
 
             // Features wasmtime doesn't use should all be disabled, since

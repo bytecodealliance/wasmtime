@@ -977,6 +977,11 @@
       (ridx Reg)
       (targets BoxVecMachLabel))
 
+    ;; Stack probe loop sequence, as one compound instruction.
+    (StackProbeLoop
+      (probe_count WritableReg)
+      (guard_size i16))
+
     ;; Load an inline symbol reference with relocation.
     (LoadSymbolReloc
       (rd WritableReg)
