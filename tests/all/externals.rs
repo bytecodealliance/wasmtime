@@ -165,8 +165,17 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
     let hello = ExternRef::new(&mut store, "hello".to_string())?;
     global.set(&mut store, hello.into())?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
-    assert!(r.data(&store)?.is::<String>());
-    assert_eq!(r.data(&store)?.downcast_ref::<String>().unwrap(), "hello");
+    assert!(r
+        .data(&store)?
+        .expect("should have host data")
+        .is::<String>());
+    assert_eq!(
+        r.data(&store)?
+            .expect("should have host data")
+            .downcast_ref::<String>()
+            .unwrap(),
+        "hello"
+    );
 
     // Initialize with a non-null externref.
 
@@ -177,8 +186,15 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
         externref.into(),
     )?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
-    assert!(r.data(&store)?.is::<i32>());
-    assert_eq!(r.data(&store)?.downcast_ref::<i32>().copied().unwrap(), 42);
+    assert!(r.data(&store)?.expect("should have host data").is::<i32>());
+    assert_eq!(
+        r.data(&store)?
+            .expect("should have host data")
+            .downcast_ref::<i32>()
+            .copied()
+            .unwrap(),
+        42
+    );
 
     Ok(())
 }
@@ -298,6 +314,7 @@ fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
             .unwrap_extern()
             .unwrap()
             .data(&store)?
+            .expect("should have host data")
             .downcast_ref::<usize>()
             .unwrap(),
         42
@@ -336,6 +353,7 @@ fn fill_externref_tables_via_api() -> anyhow::Result<()> {
                 .unwrap_extern()
                 .unwrap()
                 .data(&store)?
+                .expect("should have host data")
                 .downcast_ref::<usize>()
                 .unwrap(),
             42

@@ -346,7 +346,7 @@ pub unsafe extern "C" fn wasmtime_externref_data(
     externref
         .and_then(|e| e.as_wasmtime())
         .and_then(|e| {
-            let data = e.data(cx).ok()?;
+            let data = e.data(cx).ok()??;
             Some(data.downcast_ref::<crate::ForeignData>().unwrap().data)
         })
         .unwrap_or(ptr::null_mut())

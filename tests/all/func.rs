@@ -644,6 +644,7 @@ fn import_works() -> Result<()> {
                     f.as_ref()
                         .unwrap()
                         .data(&caller)?
+                        .unwrap()
                         .downcast_ref::<String>()
                         .unwrap(),
                     "hello"
@@ -652,6 +653,7 @@ fn import_works() -> Result<()> {
                     g.as_ref()
                         .unwrap()
                         .data(&caller)?
+                        .unwrap()
                         .downcast_ref::<String>()
                         .unwrap(),
                     "goodbye"
@@ -1510,7 +1512,12 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     }
     fn assert_my_externref(store: impl AsContext, externref: Option<Rooted<ExternRef>>) {
         assert_eq!(
-            externref.unwrap().data(&store).unwrap().downcast_ref(),
+            externref
+                .unwrap()
+                .data(&store)
+                .unwrap()
+                .unwrap()
+                .downcast_ref(),
             Some(&99u32)
         );
     }

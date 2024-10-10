@@ -23,10 +23,10 @@
 ;; @0025                               trapnz v46, user18  ; v46 = 0
 ;; @0025                               v6 = iconst.i32 24
 ;; @0025                               v12 = uadd_overflow_trap v6, v6, user18  ; v6 = 24, v6 = 24
-;; @0025                               v14 = iconst.i32 -1543503872
+;; @0025                               v14 = iconst.i32 -1476395008
 ;; @0025                               v15 = iconst.i32 0
 ;; @0025                               v16 = iconst.i32 8
-;; @0025                               v17 = call fn0(v0, v14, v15, v12, v16)  ; v14 = -1543503872, v15 = 0, v16 = 8
+;; @0025                               v17 = call fn0(v0, v14, v15, v12, v16)  ; v14 = -1476395008, v15 = 0, v16 = 8
 ;; @0025                               v21 = uextend.i64 v17
 ;; @0025                               v22 = iconst.i64 16
 ;; @0025                               v23 = uadd_overflow_trap v21, v22, user1  ; v22 = 16

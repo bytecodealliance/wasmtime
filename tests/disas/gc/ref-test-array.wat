@@ -41,9 +41,9 @@
 ;; @001b                               v16 = load.i64 notrap aligned readonly v0+40
 ;; @001b                               v24 = iadd v16, v20
 ;; @001b                               v25 = load.i32 notrap aligned readonly v24
-;; @001b                               v26 = iconst.i32 -1543503872
-;; @001b                               v27 = band v25, v26  ; v26 = -1543503872
-;; @001b                               v28 = icmp eq v27, v26  ; v26 = -1543503872
+;; @001b                               v26 = iconst.i32 -1476395008
+;; @001b                               v27 = band v25, v26  ; v26 = -1476395008
+;; @001b                               v28 = icmp eq v27, v26  ; v26 = -1476395008
 ;; @001b                               v29 = uextend.i32 v28
 ;; @001b                               jump block4(v29)
 ;;

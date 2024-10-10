@@ -292,6 +292,7 @@ fn import_works() -> Result<()> {
                     .unwrap()
                     .data(&caller)
                     .unwrap()
+                    .unwrap()
                     .downcast_ref::<String>()
                     .unwrap(),
                 "hello"
