@@ -207,14 +207,12 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
         "binary_gc.wast",
         "br_on_cast_fail.wast",
         "br_on_cast.wast",
-        "ref_cast.wast",
         "table_sub.wast",
         "type_canon.wast",
         "type_equivalence.wast",
         "type-rec.wast",
         "type-subtyping.wast",
         "unreached_valid.wast",
-        "i31.wast",
     ];
 
     for part in test.iter() {
