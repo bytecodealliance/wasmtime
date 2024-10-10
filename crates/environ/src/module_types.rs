@@ -85,8 +85,6 @@ impl ModuleTypes {
 #[cfg(feature = "compile")]
 impl ModuleTypes {
     /// Associate `trampoline_ty` as the trampoline type for `for_ty`.
-    ///
-    /// This is really only for use by the `ModuleTypesBuilder`.
     pub fn set_trampoline_type(
         &mut self,
         for_ty: ModuleInternedTypeIndex,
