@@ -74,7 +74,7 @@ wasmtime_option_group! {
 
         /// The number of decommits to do per batch. A batch size of 1
         /// effectively disables decommit batching. (default: 1)
-        pub pooling_decommit_batch_size: Option<u32>,
+        pub pooling_decommit_batch_size: Option<usize>,
 
         /// How many bytes to keep resident between instantiations for the
         /// pooling allocator in linear memories.
