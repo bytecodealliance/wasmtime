@@ -22,11 +22,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0020                               v6 = iconst.i32 -1476395008
+;; @0020                               v6 = iconst.i32 -1342177280
 ;; @0020                               v7 = iconst.i32 0
 ;; @0020                               v4 = iconst.i32 24
 ;; @0020                               v8 = iconst.i32 8
-;; @0020                               v9 = call fn0(v0, v6, v7, v4, v8)  ; v6 = -1476395008, v7 = 0, v4 = 24, v8 = 8
+;; @0020                               v9 = call fn0(v0, v6, v7, v4, v8)  ; v6 = -1342177280, v7 = 0, v4 = 24, v8 = 8
 ;;                                     v24 = stack_addr.i64 ss0
 ;;                                     store notrap v9, v24
 ;; @0020                               v13 = uextend.i64 v9

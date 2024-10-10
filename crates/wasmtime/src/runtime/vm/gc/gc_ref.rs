@@ -16,11 +16,11 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 ///
 /// ```ignore
 /// struct VMGcHeader {
-///     // Highest 6 bits.
+///     // Highest 5 bits.
 ///     kind: VMGcKind,
 ///
-///     // 26 bits available for the `GcRuntime` to make use of however it sees fit.
-///     reserved: u26,
+///     // 27 bits available for the `GcRuntime` to make use of however it sees fit.
+///     reserved: u27,
 ///
 ///     // The `VMSharedTypeIndex` for this GC object, if it isn't an
 ///     // `externref` (or an `externref` re-wrapped as an `anyref`). `None` is
@@ -31,7 +31,7 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 #[repr(C, align(8))]
 #[derive(Debug, Clone, Copy)]
 pub struct VMGcHeader {
-    /// The object's `VMGcKind` and 26 bits of space reserved for however the GC
+    /// The object's `VMGcKind` and 27 bits of space reserved for however the GC
     /// sees fit to use it.
     kind: u32,
 
@@ -72,20 +72,20 @@ impl VMGcHeader {
         VMGcKind::from_high_bits_of_u32(self.kind)
     }
 
-    /// Get the reserved 26 bits in this header.
+    /// Get the reserved 27 bits in this header.
     ///
     /// These are bits are reserved for `GcRuntime` implementations to make use
     /// of however they see fit.
-    pub fn reserved_u26(&self) -> u32 {
+    pub fn reserved_u27(&self) -> u32 {
         self.kind & VMGcKind::UNUSED_MASK
     }
 
-    /// Set the 26-bit reserved value.
+    /// Set the 27-bit reserved value.
     ///
     /// # Panics
     ///
     /// Panics if the given `value` has any of the upper 6 bits set.
-    pub fn set_reserved_u26(&mut self, value: u32) {
+    pub fn set_reserved_u27(&mut self, value: u32) {
         assert!(
             VMGcKind::value_fits_in_unused_bits(value),
             "VMGcHeader::set_reserved_u26 with value using more than 26 bits"
@@ -93,11 +93,11 @@ impl VMGcHeader {
         self.kind |= value;
     }
 
-    /// Set the 26-bit reserved value.
+    /// Set the 27-bit reserved value.
     ///
     /// # Safety
     ///
-    /// The given `value` must only use the lower 26 bits; its upper 6 bits must
+    /// The given `value` must only use the lower 27 bits; its upper 5 bits must
     /// be unset.
     pub unsafe fn unchecked_set_reserved_u26(&mut self, value: u32) {
         debug_assert_eq!(value & VMGcKind::MASK, 0);
@@ -388,6 +388,15 @@ impl VMGcRef {
     pub fn is_extern_ref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> bool {
         self.gc_header(gc_heap)
             .map_or(false, |h| h.kind().matches(VMGcKind::ExternRef))
+    }
+
+    /// Is this `VMGcRef` an `anyref`?
+    #[inline]
+    pub fn is_any_ref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> bool {
+        self.is_i31()
+            || self
+                .gc_header(gc_heap)
+                .map_or(false, |h| h.kind().matches(VMGcKind::AnyRef))
     }
 }
 

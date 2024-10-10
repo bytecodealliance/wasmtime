@@ -58,7 +58,7 @@ impl VMGcRef {
 
     /// Get this GC reference as an `externref` reference, if it actually is an
     /// `externref` reference.
-    pub fn as_externref(&self, gc_heap: &impl GcHeap) -> Option<&VMExternRef> {
+    pub fn as_externref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> Option<&VMExternRef> {
         if self.is_i31() {
             return None;
         }

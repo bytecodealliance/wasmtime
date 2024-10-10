@@ -19,10 +19,14 @@ fn main() -> Result<()> {
 
     println!("Creating new `externref`...");
     let externref = ExternRef::new(&mut store, "Hello, World!")?;
-    assert!(externref.data(&store)?.is::<&'static str>());
+    assert!(externref
+        .data(&store)?
+        .expect("should have host data")
+        .is::<&'static str>());
     assert_eq!(
         *externref
             .data(&store)?
+            .expect("should have host data")
             .downcast_ref::<&'static str>()
             .unwrap(),
         "Hello, World!"

@@ -1,6 +1,6 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::fmt::{Display, LowerHex};
-use wasmtime::{ExternRef, Store, Val};
+use wasmtime::{AnyRef, ExternRef, Store, Val};
 use wast::core::{AbstractHeapType, HeapType, NanPattern, V128Pattern, WastArgCore, WastRetCore};
 use wast::token::{F32, F64};
 
@@ -31,6 +31,11 @@ pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
             ty: AbstractHeapType::None,
         }) => Val::AnyRef(None),
         RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x)?)),
+        RefHost(x) => {
+            let x = ExternRef::new(&mut *store, *x)?;
+            let x = AnyRef::convert_extern(&mut *store, x)?;
+            Val::AnyRef(Some(x))
+        }
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
 }
@@ -51,7 +56,7 @@ fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
     (bytes >> (lane * 64)) as i64
 }
 
-pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> Result<()> {
+pub fn match_val<T>(store: &mut Store<T>, actual: &Val, expected: &WastRetCore) -> Result<()> {
     match (actual, expected) {
         (_, WastRetCore::Either(expected)) => {
             for expected in expected {
@@ -89,11 +94,15 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
                 shared: false,
             })),
         ) => {
-            let x = x
-                .data(store)?
-                .downcast_ref::<u32>()
-                .expect("only u32 externrefs created in wast test suites");
-            bail!("expected null externref, found non-null externref of {x}");
+            match x.data(store)?.map(|x| {
+                x.downcast_ref::<u32>()
+                    .expect("only u32 externrefs created in wast test suites")
+            }) {
+                None => {
+                    bail!("expected null externref, found non-null externref without host data")
+                }
+                Some(x) => bail!("expected null externref, found non-null externref of {x}"),
+            }
         }
         (Val::ExternRef(Some(_)) | Val::FuncRef(Some(_)), WastRetCore::RefNull(_)) => {
             bail!("expected null, found non-null reference: {actual:?}")
@@ -101,9 +110,13 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
 
         // Non-null references.
         (Val::FuncRef(Some(_)), WastRetCore::RefFunc(_)) => Ok(()),
+        (Val::ExternRef(Some(_)), WastRetCore::RefExtern(None)) => Ok(()),
         (Val::ExternRef(Some(x)), WastRetCore::RefExtern(Some(y))) => {
             let x = x
                 .data(store)?
+                .ok_or_else(|| {
+                    anyhow!("expected an externref of a u32, found externref without host data")
+                })?
                 .downcast_ref::<u32>()
                 .expect("only u32 externrefs created in wast test suites");
             if x == y {
@@ -140,6 +153,24 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
                 Ok(())
             } else {
                 bail!("expected a array reference, found {x:?}")
+            }
+        }
+        (Val::AnyRef(Some(x)), WastRetCore::RefHost(y)) => {
+            let x = ExternRef::convert_any(&mut *store, *x)?;
+            let x = x
+                .data(&mut *store)?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "expected anyref of externref of u32, found anyref that is \
+                         not a converted externref"
+                    )
+                })?
+                .downcast_ref::<u32>()
+                .expect("only u32 externrefs created in wast test suites");
+            if x == y {
+                Ok(())
+            } else {
+                bail!("expected anyref of externref of {y}, found anyref of externref of {x}")
             }
         }
 

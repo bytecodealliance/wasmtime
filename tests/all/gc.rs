@@ -185,6 +185,7 @@ fn many_live_refs() -> Result<()> {
                 .unwrap()
                 .data(&caller)
                 .unwrap()
+                .unwrap()
                 .downcast_ref::<CountLiveRefs>()
                 .unwrap();
             assert!(r.live_refs.load(SeqCst) > 0);
@@ -449,6 +450,7 @@ fn no_gc_middle_of_args() -> Result<()> {
             assert_eq!(
                 a.data(&caller)
                     .expect("rooted")
+                    .expect("host data")
                     .downcast_ref::<String>()
                     .expect("is string"),
                 "a"
@@ -456,6 +458,7 @@ fn no_gc_middle_of_args() -> Result<()> {
             assert_eq!(
                 b.data(&caller)
                     .expect("rooted")
+                    .expect("host data")
                     .downcast_ref::<String>()
                     .expect("is string"),
                 "b"
@@ -463,6 +466,7 @@ fn no_gc_middle_of_args() -> Result<()> {
             assert_eq!(
                 c.data(&caller)
                     .expect("rooted")
+                    .expect("host data")
                     .downcast_ref::<String>()
                     .expect("is string"),
                 "c"
@@ -616,15 +620,27 @@ fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
             let b = b.unwrap();
             let c = c.unwrap();
             assert_eq!(
-                a.data(&caller).unwrap().downcast_ref::<String>().unwrap(),
+                a.data(&caller)
+                    .unwrap()
+                    .unwrap()
+                    .downcast_ref::<String>()
+                    .unwrap(),
                 "a"
             );
             assert_eq!(
-                b.data(&caller).unwrap().downcast_ref::<String>().unwrap(),
+                b.data(&caller)
+                    .unwrap()
+                    .unwrap()
+                    .downcast_ref::<String>()
+                    .unwrap(),
                 "b"
             );
             assert_eq!(
-                c.data(&caller).unwrap().downcast_ref::<String>().unwrap(),
+                c.data(&caller)
+                    .unwrap()
+                    .unwrap()
+                    .downcast_ref::<String>()
+                    .unwrap(),
                 "c"
             );
         },

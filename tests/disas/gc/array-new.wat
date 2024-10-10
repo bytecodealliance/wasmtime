@@ -29,10 +29,10 @@
 ;;                                     v45 = iconst.i32 3
 ;;                                     v46 = ishl v3, v45  ; v45 = 3
 ;; @0022                               v10 = uadd_overflow_trap v5, v46, user18  ; v5 = 24
-;; @0022                               v12 = iconst.i32 -1543503872
+;; @0022                               v12 = iconst.i32 -1476395008
 ;; @0022                               v13 = iconst.i32 0
 ;;                                     v43 = iconst.i32 8
-;; @0022                               v15 = call fn0(v0, v12, v13, v10, v43)  ; v12 = -1543503872, v13 = 0, v43 = 8
+;; @0022                               v15 = call fn0(v0, v12, v13, v10, v43)  ; v12 = -1476395008, v13 = 0, v43 = 8
 ;; @0022                               v19 = uextend.i64 v15
 ;; @0022                               v20 = iconst.i64 16
 ;; @0022                               v21 = uadd_overflow_trap v19, v20, user1  ; v20 = 16

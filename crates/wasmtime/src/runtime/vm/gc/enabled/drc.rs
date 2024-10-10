@@ -480,7 +480,7 @@ impl VMDrcHeader {
     ///
     /// This is stored in the inner `VMGcHeader`'s reserved bits.
     fn object_size(&self) -> usize {
-        let size = self.header.reserved_u26();
+        let size = self.header.reserved_u27();
         usize::try_from(size).unwrap()
     }
 }
@@ -596,8 +596,8 @@ unsafe impl GcHeap for DrcHeap {
             Some(index) => VMGcRef::from_heap_index(index).unwrap(),
         };
 
-        debug_assert_eq!(header.reserved_u26(), 0);
-        header.set_reserved_u26(size);
+        debug_assert_eq!(header.reserved_u27(), 0);
+        header.set_reserved_u27(size);
 
         *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
             header,

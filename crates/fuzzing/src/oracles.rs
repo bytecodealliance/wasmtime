@@ -707,15 +707,27 @@ pub fn table_ops(
                     // run into a use-after-free bug with one of these refs we
                     // are more likely to trigger a segfault.
                     if let Some(a) = a {
-                        let a = a.data(&caller)?.downcast_ref::<CountDrops>().unwrap();
+                        let a = a
+                            .data(&caller)?
+                            .unwrap()
+                            .downcast_ref::<CountDrops>()
+                            .unwrap();
                         assert!(a.0.load(SeqCst) <= expected_drops.load(SeqCst));
                     }
                     if let Some(b) = b {
-                        let b = b.data(&caller)?.downcast_ref::<CountDrops>().unwrap();
+                        let b = b
+                            .data(&caller)?
+                            .unwrap()
+                            .downcast_ref::<CountDrops>()
+                            .unwrap();
                         assert!(b.0.load(SeqCst) <= expected_drops.load(SeqCst));
                     }
                     if let Some(c) = c {
-                        let c = c.data(&caller)?.downcast_ref::<CountDrops>().unwrap();
+                        let c = c
+                            .data(&caller)?
+                            .unwrap()
+                            .downcast_ref::<CountDrops>()
+                            .unwrap();
                         assert!(c.0.load(SeqCst) <= expected_drops.load(SeqCst));
                     }
                     Ok(())

@@ -12,9 +12,9 @@
     (array.new_default $arr_i8 (i32.const -1))
   )
 
-  ;; Larger than can fit in `VMGcHeader`'s reserved 26 bits.
+  ;; Larger than can fit in `VMGcHeader`'s reserved 27 bits.
   (func (export "bigger-than-reserved-bits") (result (ref $arr_i8))
-    (array.new_default $arr_i8 (i32.shl (i32.const 1) (i32.const 26)))
+    (array.new_default $arr_i8 (i32.shl (i32.const 1) (i32.const 27)))
   )
 )
 

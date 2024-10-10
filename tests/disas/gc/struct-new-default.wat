@@ -21,11 +21,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0021                               v8 = iconst.i32 -1476395008
+;; @0021                               v8 = iconst.i32 -1342177280
 ;; @0021                               v4 = iconst.i32 0
 ;; @0021                               v6 = iconst.i32 32
 ;; @0021                               v10 = iconst.i32 8
-;; @0021                               v11 = call fn0(v0, v8, v4, v6, v10)  ; v8 = -1476395008, v4 = 0, v6 = 32, v10 = 8
+;; @0021                               v11 = call fn0(v0, v8, v4, v6, v10)  ; v8 = -1342177280, v4 = 0, v6 = 32, v10 = 8
 ;; @0021                               v15 = uextend.i64 v11
 ;; @0021                               v16 = iconst.i64 16
 ;; @0021                               v17 = uadd_overflow_trap v15, v16, user1  ; v16 = 16

@@ -24,11 +24,11 @@
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
 ;;                                     v71 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v71
-;; @002a                               v8 = iconst.i32 -1476395008
+;; @002a                               v8 = iconst.i32 -1342177280
 ;; @002a                               v9 = iconst.i32 0
 ;; @002a                               v6 = iconst.i32 32
 ;; @002a                               v10 = iconst.i32 8
-;; @002a                               v11 = call fn0(v0, v8, v9, v6, v10), stack_map=[i32 @ ss0+0]  ; v8 = -1476395008, v9 = 0, v6 = 32, v10 = 8
+;; @002a                               v11 = call fn0(v0, v8, v9, v6, v10), stack_map=[i32 @ ss0+0]  ; v8 = -1342177280, v9 = 0, v6 = 32, v10 = 8
 ;; @002a                               v15 = uextend.i64 v11
 ;; @002a                               v16 = iconst.i64 16
 ;; @002a                               v17 = uadd_overflow_trap v15, v16, user1  ; v16 = 16

@@ -1,5 +1,6 @@
 //! Implementation of `anyref` in Wasmtime.
 
+use super::{ExternRef, RootedGcRefImpl};
 use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
@@ -183,6 +184,64 @@ impl AnyRef {
         Rooted::new(store, gc_ref)
     }
 
+    /// Convert an `externref` into an `anyref`.
+    ///
+    /// This is equivalent to the `any.convert_extern` instruction in Wasm.
+    ///
+    /// You can recover the underlying `externref` again via the
+    /// [`ExternRef::convert_any`] method or the `extern.convert_any` Wasm
+    /// instruction.
+    ///
+    /// Returns an error if the `externref` GC reference has been unrooted (eg
+    /// if you attempt to use a `Rooted<ExternRef>` after exiting the scope it
+    /// was rooted within). See the documentation for
+    /// [`Rooted<T>`][crate::Rooted] for more details.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use wasmtime::*;
+    /// # fn foo() -> Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    ///
+    /// // Create an `externref`.
+    /// let externref = ExternRef::new(&mut store, "hello")?;
+    ///
+    /// // Convert that `externref` into an `anyref`.
+    /// let anyref = AnyRef::convert_extern(&mut store, externref)?;
+    ///
+    /// // The converted value is an `anyref` but is not an `eqref`.
+    /// assert_eq!(anyref.matches_ty(&store, &HeapType::Any)?, true);
+    /// assert_eq!(anyref.matches_ty(&store, &HeapType::Eq)?, false);
+    ///
+    /// // We can convert it back to the original `externref` and get its
+    /// // associated host data again.
+    /// let externref = ExternRef::convert_any(&mut store, anyref)?;
+    /// let data = externref
+    ///     .data(&store)?
+    ///     .expect("externref should have host data")
+    ///     .downcast_ref::<&str>()
+    ///     .expect("host data should be a str");
+    /// assert_eq!(*data, "hello");
+    /// # Ok(()) }
+    /// # foo().unwrap();
+    pub fn convert_extern(
+        mut store: impl AsContextMut,
+        externref: Rooted<ExternRef>,
+    ) -> Result<Rooted<Self>> {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        Self::_convert_extern(&mut store, externref)
+    }
+
+    pub(crate) fn _convert_extern(
+        store: &mut AutoAssertNoGc<'_>,
+        externref: Rooted<ExternRef>,
+    ) -> Result<Rooted<Self>> {
+        let gc_ref = externref.try_clone_gc_ref(store)?;
+        Ok(Self::from_cloned_gc_ref(store, gc_ref))
+    }
+
     /// Creates a new strongly-owned [`AnyRef`] from the raw value provided.
     ///
     /// This is intended to be used in conjunction with [`Func::new_unchecked`],
@@ -238,6 +297,11 @@ impl AnyRef {
                     .header(&gc_ref)
                     .kind()
                     .matches(VMGcKind::AnyRef)
+                || store
+                    .unwrap_gc_store()
+                    .header(&gc_ref)
+                    .kind()
+                    .matches(VMGcKind::ExternRef)
         );
         Rooted::new(store, gc_ref)
     }
@@ -291,6 +355,13 @@ impl AnyRef {
         }
 
         let header = store.gc_store()?.header(gc_ref);
+
+        if header.kind().matches(VMGcKind::ExternRef) {
+            return Ok(HeapType::Any);
+        }
+
+        debug_assert!(header.kind().matches(VMGcKind::AnyRef));
+        debug_assert!(header.kind().matches(VMGcKind::EqRef));
 
         if header.kind().matches(VMGcKind::StructRef) {
             return Ok(HeapType::ConcreteStruct(

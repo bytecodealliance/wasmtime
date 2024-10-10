@@ -338,7 +338,7 @@ where
         )))
     }
 
-    fn assert_return(&self, result: Outcome, results: &[WastRet<'_>]) -> Result<()> {
+    fn assert_return(&mut self, result: Outcome, results: &[WastRet<'_>]) -> Result<()> {
         match result.into_result()? {
             Results::Core(values) => {
                 if values.len() != results.len() {
@@ -351,7 +351,7 @@ where
                             bail!("expected component value found core value")
                         }
                     };
-                    core::match_val(&self.store, v, e)
+                    core::match_val(&mut self.store, v, e)
                         .with_context(|| format!("result {i} didn't match"))?;
                 }
             }

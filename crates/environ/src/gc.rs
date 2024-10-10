@@ -225,25 +225,23 @@ impl GcStructLayout {
 /// VMGcKind::EqRef`.
 ///
 /// Furthermore, this type only uses the highest 6 bits of its `u32`
-/// representation, allowing the lower 26 bytes to be bitpacked with other stuff
+/// representation, allowing the lower 27 bytes to be bitpacked with other stuff
 /// as users see fit.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[rustfmt::skip]
 #[allow(missing_docs)]
 pub enum VMGcKind {
-    ExternRef      = 0b010000 << 26,
-    ExternOfAnyRef = 0b011000 << 26,
-    AnyRef         = 0b100000 << 26,
-    AnyOfExternRef = 0b100100 << 26,
-    EqRef          = 0b101000 << 26,
-    ArrayRef       = 0b101001 << 26,
-    StructRef      = 0b101010 << 26,
+    ExternRef      = 0b01000 << 27,
+    AnyRef         = 0b10000 << 27,
+    EqRef          = 0b10100 << 27,
+    ArrayRef       = 0b10101 << 27,
+    StructRef      = 0b10110 << 27,
 }
 
 impl VMGcKind {
     /// Mask this value with a `u32` to get just the bits that `VMGcKind` uses.
-    pub const MASK: u32 = 0b111111 << 26;
+    pub const MASK: u32 = 0b11111 << 27;
 
     /// Mask this value with a `u32` that potentially contains a `VMGcKind` to
     /// get the bits that `VMGcKind` doesn't use.
@@ -262,9 +260,7 @@ impl VMGcKind {
         let masked = val & Self::MASK;
         match masked {
             x if x == Self::ExternRef.as_u32() => Self::ExternRef,
-            x if x == Self::ExternOfAnyRef.as_u32() => Self::ExternOfAnyRef,
             x if x == Self::AnyRef.as_u32() => Self::AnyRef,
-            x if x == Self::AnyOfExternRef.as_u32() => Self::AnyOfExternRef,
             x if x == Self::EqRef.as_u32() => Self::EqRef,
             x if x == Self::ArrayRef.as_u32() => Self::ArrayRef,
             x if x == Self::StructRef.as_u32() => Self::StructRef,
@@ -294,21 +290,11 @@ mod tests {
 
     #[test]
     fn kind_matches() {
-        let all = [
-            ExternRef,
-            ExternOfAnyRef,
-            AnyRef,
-            AnyOfExternRef,
-            EqRef,
-            ArrayRef,
-            StructRef,
-        ];
+        let all = [ExternRef, AnyRef, EqRef, ArrayRef, StructRef];
 
         for (sup, subs) in [
-            (ExternRef, vec![ExternOfAnyRef]),
-            (ExternOfAnyRef, vec![]),
-            (AnyRef, vec![AnyOfExternRef, EqRef, ArrayRef, StructRef]),
-            (AnyOfExternRef, vec![]),
+            (ExternRef, vec![]),
+            (AnyRef, vec![EqRef, ArrayRef, StructRef]),
             (EqRef, vec![ArrayRef, StructRef]),
             (ArrayRef, vec![]),
             (StructRef, vec![]),

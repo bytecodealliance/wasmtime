@@ -970,7 +970,10 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
         "",
         "test",
         |cx: Caller<'_, _>, val: i32, handle: Option<Rooted<ExternRef>>| -> Result<()> {
-            assert_eq!(handle.unwrap().data(&cx)?.downcast_ref(), Some(&val));
+            assert_eq!(
+                handle.unwrap().data(&cx)?.unwrap().downcast_ref(),
+                Some(&val)
+            );
             Ok(())
         },
     )?;
