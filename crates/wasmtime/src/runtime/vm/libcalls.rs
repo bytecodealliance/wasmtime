@@ -520,7 +520,7 @@ unsafe fn intern_func_ref_for_gc_heap(instance: &mut Instance, func_ref: *mut u8
     let func_ref = func_ref.cast::<VMFuncRef>();
     let func_ref = NonNull::new(func_ref).map(SendSyncPtr::new);
 
-    let func_ref_id = store.unwrap_gc_store_mut().func_ref_table.intern(func_ref);
+    let func_ref_id = store.gc_store_mut()?.func_ref_table.intern(func_ref);
     Ok(func_ref_id.into_raw())
 }
 

@@ -3,7 +3,8 @@ use crate::{
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
     store::AutoAssertNoGc,
-    AnyRef, ExternRef, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
+    vm::{FuncRefTableId, SendSyncPtr},
+    AnyRef, ExternRef, Func, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
 };
 use core::fmt;
 use wasmtime_environ::{GcStructLayout, VMGcKind};
@@ -157,7 +158,20 @@ impl VMStructRef {
                     let raw = data.read_u32(offset);
                     Val::AnyRef(AnyRef::_from_raw(store, raw))
                 }
-                HeapType::Func => todo!("funcrefs inside gc objects not yet implemented"),
+                HeapType::Func => {
+                    let func_ref_id = data.read_u32(offset);
+                    let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
+                    let func_ref = store
+                        .unwrap_gc_store()
+                        .func_ref_table
+                        .get_untyped(func_ref_id);
+                    Val::FuncRef(unsafe {
+                        Func::from_vm_func_ref(
+                            store,
+                            func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr()),
+                        )
+                    })
+                }
                 otherwise => unreachable!("not a top type: {otherwise:?}"),
             },
         }
@@ -230,7 +244,14 @@ impl VMStructRef {
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
 
-            Val::FuncRef(_) => todo!("funcrefs inside gc objects not yet implemented"),
+            Val::FuncRef(f) => {
+                let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
+                let id = unsafe { store.gc_store_mut()?.func_ref_table.intern(f) };
+                store
+                    .gc_store_mut()?
+                    .gc_object_data(self.as_gc_ref())
+                    .write_u32(offset, id.into_raw());
+            }
         }
         Ok(())
     }
@@ -323,12 +344,13 @@ impl VMStructRef {
                     .write_u32(offset, x);
             }
 
-            Val::FuncRef(_) => {
-                // TODO: we can't trust the GC heap, which means we can't read
-                // native VMFuncRef pointers out of it and trust them. That
-                // means we need to do the same side table kind of thing we do
-                // with `externref` host data here. This isn't implemented yet.
-                todo!("funcrefs in GC objects")
+            Val::FuncRef(f) => {
+                let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
+                let id = unsafe { store.gc_store_mut()?.func_ref_table.intern(f) };
+                store
+                    .gc_store_mut()?
+                    .gc_object_data(self.as_gc_ref())
+                    .write_u32(offset, id.into_raw());
             }
         }
         Ok(())

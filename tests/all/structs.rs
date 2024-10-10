@@ -707,3 +707,33 @@ fn instantiate_with_struct_global() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn can_put_funcrefs_in_structs() -> Result<()> {
+    let mut store = gc_store()?;
+
+    let struct_ty = StructType::new(
+        store.engine(),
+        [FieldType::new(Mutability::Var, RefType::FUNCREF.into())],
+    )?;
+
+    let f0 = Func::wrap(&mut store, |_caller: Caller<()>| -> u32 { 0x1234 });
+    let f1 = Func::wrap(&mut store, |_caller: Caller<()>| -> u32 { 0x5678 });
+
+    let pre = StructRefPre::new(&mut store, struct_ty.clone());
+    let s = StructRef::new(&mut store, &pre, &[f0.clone().into()])?;
+
+    let f = s.field(&mut store, 0)?;
+    let f = f.unwrap_funcref().unwrap();
+    let f = f.typed::<(), u32>(&store)?;
+    assert_eq!(f.call(&mut store, ())?, 0x1234);
+
+    s.set_field(&mut store, 0, f1.clone().into())?;
+
+    let f = s.field(&mut store, 0)?;
+    let f = f.unwrap_funcref().unwrap();
+    let f = f.typed::<(), u32>(&store)?;
+    assert_eq!(f.call(&mut store, ())?, 0x5678);
+
+    Ok(())
+}
