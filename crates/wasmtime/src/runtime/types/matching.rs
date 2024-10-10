@@ -1,6 +1,5 @@
-use crate::type_registry::RegisteredType;
-use crate::{linker::DefinitionType, Engine, FuncType};
-use crate::{prelude::*, ArrayType, StructType};
+use crate::prelude::*;
+use crate::{linker::DefinitionType, Engine};
 use wasmtime_environ::{
     EntityType, Global, IndexType, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex,
     WasmHeapType, WasmRefType, WasmSubType, WasmValType,
@@ -17,30 +16,10 @@ impl MatchCx<'_> {
     }
 
     fn type_reference(&self, expected: VMSharedTypeIndex, actual: VMSharedTypeIndex) -> Result<()> {
-        // Avoid matching on structure for subtyping checks when we have
-        // precisely the same type.
-        let matches = expected == actual || {
-            let expected = RegisteredType::root(self.engine, expected).unwrap();
-            let actual = RegisteredType::root(self.engine, actual).unwrap();
-            if expected.is_array() && actual.is_array() {
-                let expected = ArrayType::from_registered_type(expected);
-                let actual = ArrayType::from_registered_type(actual);
-                actual.matches(&expected)
-            } else if expected.is_func() && actual.is_func() {
-                let expected = FuncType::from_registered_type(expected);
-                let actual = FuncType::from_registered_type(actual);
-                actual.matches(&expected)
-            } else if expected.is_struct() && actual.is_struct() {
-                let expected = StructType::from_registered_type(expected);
-                let actual = StructType::from_registered_type(actual);
-                actual.matches(&expected)
-            } else {
-                false
-            }
-        };
-        if matches {
+        if self.engine.signatures().is_subtype(actual, expected) {
             return Ok(());
         }
+
         let msg = "types incompatible";
         let expected = match self.engine.signatures().borrow(expected) {
             Some(ty) => ty,

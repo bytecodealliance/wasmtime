@@ -204,7 +204,7 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
         }
     }
 
-    let unsupported_gc_tests = ["type-rec.wast", "type-subtyping.wast"];
+    let unsupported_gc_tests = ["type-subtyping.wast"];
 
     for part in test.iter() {
         // Not implemented in Wasmtime yet

@@ -119,12 +119,15 @@ impl TypeCollection {
             .write()
             .register_module_types(&**gc_runtime, module_types);
 
+        log::trace!("Begin building module's shared-to-module-trampoline-types map");
         let mut trampolines = SecondaryMap::with_capacity(types.len());
-        for (module_ty, trampoline) in module_types.trampoline_types() {
+        for (module_ty, module_trampoline_ty) in module_types.trampoline_types() {
             let shared_ty = types[module_ty];
-            let trampoline_ty = registry.trampoline_type(shared_ty);
-            trampolines[trampoline_ty] = Some(trampoline).into();
+            let trampoline_shared_ty = registry.trampoline_type(shared_ty);
+            trampolines[trampoline_shared_ty] = Some(module_trampoline_ty).into();
+            log::trace!("--> shared_to_module_trampolines[{trampoline_shared_ty:?}] = {module_trampoline_ty:?}");
         }
+        log::trace!("Done building module's shared-to-module-trampoline-types map");
 
         Self {
             engine,
@@ -711,14 +714,21 @@ impl TypeRegistryInner {
         // type in the rec group.
         for shared_type_index in entry.0.shared_type_indices.iter().copied() {
             let slab_id = shared_type_index_to_slab_id(shared_type_index);
-            if let Some(f) = self.types[slab_id].as_func() {
-                match f.trampoline_type() {
-                    Cow::Borrowed(_) => {
+            let sub_ty = &self.types[slab_id];
+            if let Some(f) = sub_ty.as_func() {
+                let trampoline = f.trampoline_type();
+                match &trampoline {
+                    Cow::Borrowed(_) if sub_ty.is_final && sub_ty.supertype.is_none() => {
                         // The function type is its own trampoline type. Leave
                         // its entry in `type_to_trampoline` empty to signal
                         // this.
+                        log::trace!(
+                            "function type is its own trampoline type: \n\
+                             --> trampoline_type[{shared_type_index:?}] = {shared_type_index:?}\n\
+                             --> trampoline_type[{f}] = {f}"
+                        );
                     }
-                    Cow::Owned(trampoline) => {
+                    Cow::Borrowed(_) | Cow::Owned(_) => {
                         // This will recursively call into rec group
                         // registration, but at most once since trampoline
                         // function types are their own trampoline type.
@@ -728,13 +738,23 @@ impl TypeRegistryInner {
                                 is_final: true,
                                 supertype: None,
                                 composite_type: wasmtime_environ::WasmCompositeType::Func(
-                                    trampoline,
+                                    trampoline.into_owned(),
                                 ),
                             },
                         );
                         let trampoline_index = trampoline_entry.0.shared_type_indices[0];
                         log::trace!(
-                            "Registering trampoline {trampoline_index:?} for function type {shared_type_index:?}"
+                            "Registering trampoline type:\n\
+                             --> trampoline_type[{shared_type_index:?}] = {trampoline_index:?}\n\
+                             --> trampoline_type[{f}] = {g}",
+                            f = {
+                                let slab_id = shared_type_index_to_slab_id(shared_type_index);
+                                self.types[slab_id].unwrap_func()
+                            },
+                            g = {
+                                let slab_id = shared_type_index_to_slab_id(trampoline_index);
+                                self.types[slab_id].unwrap_func()
+                            }
                         );
                         debug_assert_ne!(shared_type_index, trampoline_index);
                         self.type_to_trampoline[shared_type_index] = Some(trampoline_index).into();
