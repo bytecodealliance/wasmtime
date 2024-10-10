@@ -2783,6 +2783,73 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE);
             state.push1(r);
         }
+        Operator::BrOnCast {
+            relative_depth,
+            to_ref_type,
+            // TODO: we should take advantage of our knowledge of the type we
+            // are casting from when generating the test.
+            from_ref_type: _,
+        } => {
+            let r = state.peek1();
+
+            let to_ref_type = environ.convert_ref_type(*to_ref_type);
+            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r)?;
+
+            let (cast_succeeds_block, inputs) = translate_br_if_args(*relative_depth, state);
+            let cast_fails_block = builder.create_block();
+            canonicalise_brif(
+                builder,
+                cast_is_okay,
+                cast_succeeds_block,
+                inputs,
+                cast_fails_block,
+                &[
+                    // NB: the `cast_fails_block` is dominated by the current
+                    // block, and therefore doesn't need any block params.
+                ],
+            );
+
+            // The only predecessor is the current block.
+            builder.seal_block(cast_fails_block);
+
+            // The next Wasm instruction is executed when the cast failed and we
+            // did not branch away.
+            builder.switch_to_block(cast_fails_block);
+        }
+        Operator::BrOnCastFail {
+            relative_depth,
+            to_ref_type,
+            // TODO: we should take advantage of our knowledge of the type we
+            // are casting from when generating the test.
+            from_ref_type: _,
+        } => {
+            let r = state.peek1();
+
+            let to_ref_type = environ.convert_ref_type(*to_ref_type);
+            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r)?;
+
+            let (cast_fails_block, inputs) = translate_br_if_args(*relative_depth, state);
+            let cast_succeeds_block = builder.create_block();
+            canonicalise_brif(
+                builder,
+                cast_is_okay,
+                cast_succeeds_block,
+                &[
+                    // NB: the `cast_succeeds_block` is dominated by the current
+                    // block, and therefore doesn't need any block params.
+                ],
+                cast_fails_block,
+                inputs,
+            );
+
+            // The only predecessor is the current block.
+            builder.seal_block(cast_succeeds_block);
+
+            // The next Wasm instruction is executed when the cast succeeded and
+            // we did not branch away.
+            builder.switch_to_block(cast_succeeds_block);
+        }
+
         Operator::AnyConvertExtern => {
             // Pop an `externref`, push an `anyref`. But they have the same
             // representation, so we don't actually need to do anything.
@@ -2790,10 +2857,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::ExternConvertAny => {
             // Pop an `anyref`, push an `externref`. But they have the same
             // representation, so we don't actually need to do anything.
-        }
-
-        Operator::BrOnCast { .. } | Operator::BrOnCastFail { .. } => {
-            return Err(wasm_unsupported!("GC operator not yet implemented: {op:?}"));
         }
 
         Operator::GlobalAtomicGet { .. }
