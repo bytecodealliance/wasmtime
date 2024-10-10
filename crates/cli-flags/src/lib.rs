@@ -74,7 +74,7 @@ wasmtime_option_group! {
 
         /// The number of decommits to do per batch. A batch size of 1
         /// effectively disables decommit batching. (default: 1)
-        pub pooling_decommit_batch_size: Option<u32>,
+        pub pooling_decommit_batch_size: Option<usize>,
 
         /// How many bytes to keep resident between instantiations for the
         /// pooling allocator in linear memories.
@@ -86,7 +86,11 @@ wasmtime_option_group! {
 
         /// Enable memory protection keys for the pooling allocator; this can
         /// optimize the size of memory slots.
-        pub memory_protection_keys: Option<bool>,
+        pub pooling_memory_protection_keys: Option<bool>,
+
+        /// Sets an upper limit on how many memory protection keys (MPK) Wasmtime
+        /// will use. (default: 16)
+        pub pooling_max_memory_protection_keys: Option<usize>,
 
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
@@ -123,6 +127,43 @@ wasmtime_option_group! {
         /// The maximum size, in bytes, allocated for a core instance's metadata
         /// when using the pooling allocator.
         pub pooling_max_core_instance_size: Option<usize>,
+
+        /// Configures the maximum number of "unused warm slots" to retain in the
+        /// pooling allocator. (default: 100)
+        pub pooling_max_unused_warm_slots: Option<u32>,
+
+        /// Configures whether or not stacks used for async futures are reset to
+        /// zero after usage. (default: false)
+        pub pooling_async_stack_zeroing: Option<bool>,
+
+        /// How much memory, in bytes, to keep resident for async stacks allocated
+        /// with the pooling allocator. (default: 0)
+        pub pooling_async_stack_keep_resident: Option<usize>,
+
+        /// The maximum size, in bytes, allocated for a component instance's
+        /// `VMComponentContext` metadata. (default: 1MiB)
+        pub pooling_max_component_instance_size: Option<usize>,
+
+        /// The maximum number of core instances a single component may contain
+        /// (default is unlimited).
+        pub pooling_max_core_instances_per_component: Option<u32>,
+
+        /// The maximum number of Wasm linear memories that a single component may
+        /// transitively contain (default is unlimited).
+        pub pooling_max_memories_per_component: Option<u32>,
+
+        /// The maximum number of tables that a single component may transitively
+        /// contain (default is unlimited).
+        pub pooling_max_tables_per_component: Option<u32>,
+
+        /// The maximum number of defined tables for a core module. (default: 1)
+        pub pooling_max_tables_per_module: Option<u32>,
+
+        /// The maximum number of defined linear memories for a module. (default: 1)
+        pub pooling_max_memories_per_module: Option<u32>,
+
+        /// The maximum number of concurrent GC heaps supported. (default: 1000)
+        pub pooling_total_gc_heaps: Option<u32>,
 
         /// Enable or disable the use of host signal handlers for traps.
         pub signals_based_traps: Option<bool>,
@@ -646,16 +687,60 @@ impl CommonOptions {
                         limit => cfg.total_stacks(limit),
                         _ => err,
                     }
-                    if let Some(limit) = self.opts.pooling_max_memory_size {
-                        cfg.max_memory_size(limit);
+                    if let Some(max) = self.opts.pooling_max_memory_size {
+                        cfg.max_memory_size(max);
+                    }
+                    if let Some(size) = self.opts.pooling_decommit_batch_size {
+                        cfg.decommit_batch_size(size);
+                    }
+                    if let Some(max) = self.opts.pooling_max_unused_warm_slots {
+                        cfg.max_unused_warm_slots(max);
                     }
                     match_feature! {
-                        ["memory-protection-keys" : self.opts.memory_protection_keys]
+                        ["async" : self.opts.pooling_async_stack_zeroing]
+                        enable => cfg.async_stack_zeroing(enable),
+                        _ => err,
+                    }
+                    match_feature! {
+                        ["async" : self.opts.pooling_async_stack_keep_resident]
+                        size => cfg.async_stack_keep_resident(size),
+                        _ => err,
+                    }
+                    if let Some(max) = self.opts.pooling_max_component_instance_size {
+                        cfg.max_component_instance_size(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_core_instances_per_component {
+                        cfg.max_core_instances_per_component(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_memories_per_component {
+                        cfg.max_memories_per_component(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_tables_per_component {
+                        cfg.max_tables_per_component(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_tables_per_module {
+                        cfg.max_tables_per_module(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_memories_per_module {
+                        cfg.max_memories_per_module(max);
+                    }
+                    match_feature! {
+                        ["memory-protection-keys" : self.opts.pooling_memory_protection_keys]
                         enable => cfg.memory_protection_keys(if enable {
                             wasmtime::MpkEnabled::Enable
                         } else {
                             wasmtime::MpkEnabled::Disable
                         }),
+                        _ => err,
+                    }
+                    match_feature! {
+                        ["memory-protection-keys" : self.opts.pooling_max_memory_protection_keys]
+                        max => cfg.max_memory_protection_keys(max),
+                        _ => err,
+                    }
+                    match_feature! {
+                        ["gc" : self.opts.pooling_total_gc_heaps]
+                        max => cfg.total_gc_heaps(max),
                         _ => err,
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
@@ -664,10 +749,18 @@ impl CommonOptions {
             true => err,
         }
 
-        if self.opts.memory_protection_keys.unwrap_or(false)
+        if self.opts.pooling_memory_protection_keys.unwrap_or(false)
             && !self.opts.pooling_allocator.unwrap_or(false)
         {
             anyhow::bail!("memory protection keys require the pooling allocator");
+        }
+
+        if self.opts.pooling_max_memory_protection_keys.is_some()
+            && !self.opts.pooling_memory_protection_keys.unwrap_or(false)
+        {
+            anyhow::bail!(
+                "max memory protection keys requires memory protection keys to be enabled"
+            );
         }
 
         match_feature! {
