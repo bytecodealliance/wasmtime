@@ -162,6 +162,9 @@ wasmtime_option_group! {
         /// The maximum number of defined linear memories for a module. (default: 1)
         pub pooling_max_memories_per_module: Option<u32>,
 
+        /// The maximum number of concurrent GC heaps supported. (default: 1000)
+        pub pooling_total_gc_heaps: Option<u32>,
+
         /// Enable or disable the use of host signal handlers for traps.
         pub signals_based_traps: Option<bool>,
     }
@@ -733,6 +736,11 @@ impl CommonOptions {
                     match_feature! {
                         ["memory-protection-keys" : self.opts.pooling_max_memory_protection_keys]
                         max => cfg.max_memory_protection_keys(max),
+                        _ => err,
+                    }
+                    match_feature! {
+                        ["gc" : self.opts.pooling_total_gc_heaps]
+                        max => cfg.total_gc_heaps(max),
                         _ => err,
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
