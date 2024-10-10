@@ -680,8 +680,42 @@ impl CommonOptions {
                         limit => cfg.total_stacks(limit),
                         _ => err,
                     }
-                    if let Some(limit) = self.opts.pooling_max_memory_size {
-                        cfg.max_memory_size(limit);
+                    if let Some(max) = self.opts.pooling_max_memory_size {
+                        cfg.max_memory_size(max);
+                    }
+                    if let Some(size) = self.opts.pooling_decommit_batch_size {
+                        cfg.decommit_batch_size(size);
+                    }
+                    if let Some(max) = self.opts.pooling_max_unused_warm_slots {
+                        cfg.max_unused_warm_slots(max);
+                    }
+                    match_feature! {
+                        ["async" : self.opts.pooling_async_stack_zeroing]
+                        enable => cfg.async_stack_zeroing(enable),
+                        _ => err,
+                    }
+                    match_feature! {
+                        ["async" : self.opts.pooling_async_stack_keep_resident]
+                        size => cfg.async_stack_keep_resident(size),
+                        _ => err,
+                    }
+                    if let Some(max) = self.opts.pooling_max_component_instance_size {
+                        cfg.max_component_instance_size(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_core_instances_per_component {
+                        cfg.max_core_instances_per_component(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_memories_per_component {
+                        cfg.max_memories_per_component(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_tables_per_component {
+                        cfg.max_tables_per_component(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_tables_per_module {
+                        cfg.max_tables_per_module(max);
+                    }
+                    if let Some(max) = self.opts.pooling_max_memories_per_module {
+                        cfg.max_memories_per_module(max);
                     }
                     match_feature! {
                         ["memory-protection-keys" : self.opts.memory_protection_keys]
