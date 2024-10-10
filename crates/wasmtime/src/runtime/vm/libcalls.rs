@@ -1012,11 +1012,14 @@ unsafe fn is_subtype(
     let actual = VMSharedTypeIndex::from_u32(actual_engine_type);
     let expected = VMSharedTypeIndex::from_u32(expected_engine_type);
 
-    (*instance.store())
+    let is_subtype: bool = (*instance.store())
         .engine()
         .signatures()
         .is_subtype(actual, expected)
-        .into()
+        .into();
+
+    log::trace!("is_subtype(actual={actual:?}, expected={expected:?}) -> {is_subtype}",);
+    is_subtype
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.
