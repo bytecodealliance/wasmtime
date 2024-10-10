@@ -2755,6 +2755,34 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             )?;
             state.push1(result);
         }
+        Operator::RefCastNonNull { hty } => {
+            let r = state.pop1();
+            let heap_type = environ.convert_heap_type(*hty);
+            let cast_okay = environ.translate_ref_test(
+                builder,
+                WasmRefType {
+                    heap_type,
+                    nullable: false,
+                },
+                r,
+            )?;
+            environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE);
+            state.push1(r);
+        }
+        Operator::RefCastNullable { hty } => {
+            let r = state.pop1();
+            let heap_type = environ.convert_heap_type(*hty);
+            let cast_okay = environ.translate_ref_test(
+                builder,
+                WasmRefType {
+                    heap_type,
+                    nullable: true,
+                },
+                r,
+            )?;
+            environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE);
+            state.push1(r);
+        }
         Operator::AnyConvertExtern => {
             // Pop an `externref`, push an `anyref`. But they have the same
             // representation, so we don't actually need to do anything.
@@ -2764,10 +2792,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // representation, so we don't actually need to do anything.
         }
 
-        Operator::RefCastNonNull { .. }
-        | Operator::RefCastNullable { .. }
-        | Operator::BrOnCast { .. }
-        | Operator::BrOnCastFail { .. } => {
+        Operator::BrOnCast { .. } | Operator::BrOnCastFail { .. } => {
             return Err(wasm_unsupported!("GC operator not yet implemented: {op:?}"));
         }
 
