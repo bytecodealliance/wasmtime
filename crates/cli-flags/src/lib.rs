@@ -124,6 +124,40 @@ wasmtime_option_group! {
         /// when using the pooling allocator.
         pub pooling_max_core_instance_size: Option<usize>,
 
+        /// Configures the maximum number of "unused warm slots" to retain in the
+        /// pooling allocator. (default: 100)
+        pub pooling_max_unused_warm_slots: Option<u32>,
+
+        /// Configures whether or not stacks used for async futures are reset to
+        /// zero after usage. (default: false)
+        pub pooling_async_stack_zeroing: Option<bool>,
+
+        /// How much memory, in bytes, to keep resident for async stacks allocated
+        /// with the pooling allocator.
+        pub pooling_async_stack_keep_resident: Option<usize>,
+
+        /// The maximum size, in bytes, allocated for a component instance's
+        /// `VMComponentContext` metadata. (default: 1MiB)
+        pub pooling_max_component_instance_size: Option<usize>,
+
+        /// The maximum number of core instances a single component may contain
+        /// (default is unlimited).
+        pub pooling_max_core_instances_per_component: Option<u32>,
+
+        /// The maximum number of Wasm linear memories that a single component may
+        /// transitively contain (default is unlimited).
+        pub pooling_max_memories_per_component: Option<u32>,
+
+        /// The maximum number of tables that a single component may transitively
+        /// contain (default is unlimited).
+        pub pooling_max_tables_per_component: Option<u32>,
+
+        /// The maximum number of defined tables for a core module. (default: 1)
+        pub pooling_max_tables_per_module: Option<u32>,
+
+        /// The maximum number of defined linear memories for a module. (default: 1)
+        pub pooling_max_memories_per_module: Option<u32>,
+
         /// Enable or disable the use of host signal handlers for traps.
         pub signals_based_traps: Option<bool>,
     }
