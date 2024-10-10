@@ -205,8 +205,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
     }
     let unsupported_gc_tests = [
         "binary_gc.wast",
-        "br_on_cast_fail.wast",
-        "br_on_cast.wast",
         "table_sub.wast",
         "type_canon.wast",
         "type_equivalence.wast",
