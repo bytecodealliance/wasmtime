@@ -469,16 +469,6 @@ impl WasmtimeConfig {
         config: &mut wasm_smith::Config,
         u: &mut Unstructured<'_>,
     ) -> arbitrary::Result<()> {
-        // Not implemented in Wasmtime
-        config.exceptions_enabled = false;
-
-        // Not fully implemented in Wasmtime and fuzzing.
-        config.gc_enabled = false;
-
-        // Off-by-default in wasm-smith but implemented in wasmtime, so give the
-        // fuzzers a chance to run it.
-        config.wide_arithmetic_enabled = u.arbitrary()?;
-
         // Winch doesn't support the same set of wasm proposal as Cranelift at
         // this time, so if winch is selected be sure to disable wasm proposals
         // in `Config` to ensure that Winch can compile the module that
