@@ -89,7 +89,7 @@ wasmtime_option_group! {
         pub pooling_memory_protection_keys: Option<bool>,
 
         /// Sets an upper limit on how many memory protection keys (MPK) Wasmtime
-        /// will use.
+        /// will use. (default: 16)
         pub pooling_max_memory_protection_keys: Option<usize>,
 
         /// Configure attempting to initialize linear memory via a
@@ -137,7 +137,7 @@ wasmtime_option_group! {
         pub pooling_async_stack_zeroing: Option<bool>,
 
         /// How much memory, in bytes, to keep resident for async stacks allocated
-        /// with the pooling allocator.
+        /// with the pooling allocator. (default: 0)
         pub pooling_async_stack_keep_resident: Option<usize>,
 
         /// The maximum size, in bytes, allocated for a component instance's
