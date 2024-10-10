@@ -17,7 +17,7 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use smallvec::SmallVec;
 use std::mem;
-use wasmparser::Operator;
+use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
     IndexType, Memory, MemoryIndex, MemoryPlan, MemoryStyle, Module, ModuleInternedTypeIndex,
@@ -1294,6 +1294,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// Do an indirect call through the given funcref table.
     pub fn indirect_call(
         mut self,
+        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
@@ -1301,6 +1302,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         call_args: &[ir::Value],
     ) -> WasmResult<Option<ir::Inst>> {
         let (code_ptr, callee_vmctx) = match self.check_and_load_code_and_callee_vmctx(
+            features,
             table_index,
             ty_index,
             callee,
@@ -1316,6 +1318,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
     fn check_and_load_code_and_callee_vmctx(
         &mut self,
+        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         callee: ir::Value,
@@ -1333,7 +1336,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         );
 
         // If necessary, check the signature.
-        let check = self.check_indirect_call_type_signature(table_index, ty_index, funcref_ptr);
+        let check =
+            self.check_indirect_call_type_signature(features, table_index, ty_index, funcref_ptr);
 
         let trap_code = match check {
             // `funcref_ptr` is checked at runtime that its type matches,
@@ -1367,6 +1371,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
     fn check_indirect_call_type_signature(
         &mut self,
+        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         funcref_ptr: ir::Value,
@@ -1402,33 +1407,40 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     };
                 }
 
-                // Otherwise if the types don't match then either (a) this is a
-                // null pointer or (b) it's a pointer with the wrong type.
-                // Figure out which and trap here.
-                //
-                // If it's possible to have a null here then try to load the
-                // type information. If that fails due to the function being a
-                // null pointer, then this was a call to null. Otherwise if it
-                // succeeds then we know it won't match, so trap anyway.
-                if table.table.ref_type.nullable {
-                    if self.env.signals_based_traps() {
-                        let mem_flags = ir::MemFlags::trusted().with_readonly();
-                        self.builder.ins().load(
-                            sig_id_type,
-                            mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL)),
-                            funcref_ptr,
-                            i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
-                        );
-                    } else {
-                        self.env.trapz(
-                            self.builder,
-                            funcref_ptr,
-                            crate::TRAP_INDIRECT_CALL_TO_NULL,
-                        );
+                if features.gc() {
+                    // If we are in the Wasm GC world, then we need to perform
+                    // an actual subtype check at runtime. Fall through to below
+                    // to do that.
+                } else {
+                    // Otherwise if the types don't match then either (a) this
+                    // is a null pointer or (b) it's a pointer with the wrong
+                    // type. Figure out which and trap here.
+                    //
+                    // If it's possible to have a null here then try to load the
+                    // type information. If that fails due to the function being
+                    // a null pointer, then this was a call to null. Otherwise
+                    // if it succeeds then we know it won't match, so trap
+                    // anyway.
+                    if table.table.ref_type.nullable {
+                        if self.env.signals_based_traps() {
+                            let mem_flags = ir::MemFlags::trusted().with_readonly();
+                            self.builder.ins().load(
+                                sig_id_type,
+                                mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL)),
+                                funcref_ptr,
+                                i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
+                            );
+                        } else {
+                            self.env.trapz(
+                                self.builder,
+                                funcref_ptr,
+                                crate::TRAP_INDIRECT_CALL_TO_NULL,
+                            );
+                        }
                     }
+                    self.env.trap(self.builder, crate::TRAP_BAD_SIGNATURE);
+                    return CheckIndirectCallTypeSignature::StaticTrap;
                 }
-                self.env.trap(self.builder, crate::TRAP_BAD_SIGNATURE);
-                return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
             // Tables of `nofunc` can only be inhabited by null, so go ahead and
@@ -1480,12 +1492,18 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             self.env
                 .load_funcref_type_index(&mut self.builder.cursor(), mem_flags, funcref_ptr);
 
-        // Check that they match.
-        let cmp = self
-            .builder
-            .ins()
-            .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
-        self.env.trapz(self.builder, cmp, crate::TRAP_BAD_SIGNATURE);
+        // Check that they match: in the case of Wasm GC, this means doing a
+        // full subtype check. Otherwise, we do a simple equality check.
+        let matches = if features.gc() {
+            self.env
+                .is_subtype(self.builder, callee_sig_id, caller_sig_id)
+        } else {
+            self.builder
+                .ins()
+                .icmp(IntCC::Equal, callee_sig_id, caller_sig_id)
+        };
+        self.env
+            .trapz(self.builder, matches, crate::TRAP_BAD_SIGNATURE);
         CheckIndirectCallTypeSignature::Runtime
     }
 
@@ -2617,13 +2635,21 @@ impl<'module_environment> crate::translate::FuncEnvironment
     fn translate_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
+        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<Option<ir::Inst>> {
-        Call::new(builder, self).indirect_call(table_index, ty_index, sig_ref, callee, call_args)
+        Call::new(builder, self).indirect_call(
+            features,
+            table_index,
+            ty_index,
+            sig_ref,
+            callee,
+            call_args,
+        )
     }
 
     fn translate_call(
@@ -2660,6 +2686,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
     fn translate_return_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
+        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
@@ -2667,6 +2694,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
         Call::new_tail(builder, self).indirect_call(
+            features,
             table_index,
             ty_index,
             sig_ref,

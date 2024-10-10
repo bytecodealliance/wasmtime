@@ -204,8 +204,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
         }
     }
 
-    let unsupported_gc_tests = ["type-subtyping.wast"];
-
     for part in test.iter() {
         // Not implemented in Wasmtime yet
         if part == "exception-handling" {
@@ -228,15 +226,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
             {
                 return true;
             }
-            if unsupported_gc_tests.iter().any(|i| test.ends_with(i)) {
-                return true;
-            }
-        }
-
-        // Implementation of the GC proposal is a work-in-progress, this is
-        // a list of all currently known-to-fail tests.
-        if part == "gc" {
-            return unsupported_gc_tests.iter().any(|i| test.ends_with(i));
         }
     }
 
