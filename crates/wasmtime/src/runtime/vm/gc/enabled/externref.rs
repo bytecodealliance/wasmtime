@@ -71,19 +71,6 @@ impl VMGcRef {
             None
         }
     }
-
-    /// Get this GC reference as an `externref` reference without checking if it
-    /// actually is an `externref` reference.
-    ///
-    /// Calling this method on a non-`externref` reference is memory safe, but
-    /// will lead to general incorrectness like panics and wrong results.
-    pub fn as_externref_unchecked(&self) -> &VMExternRef {
-        debug_assert!(!self.is_i31());
-        let ptr = self as *const VMGcRef;
-        let ret = unsafe { &*ptr.cast() };
-        assert!(matches!(ret, VMExternRef(VMGcRef { .. })));
-        ret
-    }
 }
 
 impl VMExternRef {
