@@ -44,12 +44,15 @@ column is below.
 |--------------------------|---------|-------|----------|--------|-----|-------|
 | [`memory64`]             | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
-| [`gc`] [^6]              | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
+| [`gc`] [^6]              | ✅      | ✅    | ❌[^7]   | ❌     | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
     GC proposal.
+[^7]: The implementation of GC has [known performance
+    issues](https://github.com/bytecodealliance/wasmtime/issues/9351) which can
+    affect non-GC code when the GC proposal is enabled.
 
 ## Unsupported proposals
 
