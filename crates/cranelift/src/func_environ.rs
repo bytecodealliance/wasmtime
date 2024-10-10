@@ -1495,8 +1495,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // Check that they match: in the case of Wasm GC, this means doing a
         // full subtype check. Otherwise, we do a simple equality check.
         let matches = if features.gc() {
-            self.env
-                .is_subtype(self.builder, callee_sig_id, caller_sig_id)
+            #[cfg(feature = "gc")]
+            {
+                self.env
+                    .is_subtype(self.builder, callee_sig_id, caller_sig_id)
+            }
+            #[cfg(not(feature = "gc"))]
+            {
+                unreachable!()
+            }
         } else {
             self.builder
                 .ins()
