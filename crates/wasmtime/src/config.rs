@@ -1822,10 +1822,16 @@ impl Config {
         // On-by-default features that wasmtime has. Note that these are all
         // subject to the criteria at
         // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
+        // and
+        // https://docs.wasmtime.dev/stability-wasm-proposals.html
         features |= WasmFeatures::MULTI_MEMORY;
         features |= WasmFeatures::RELAXED_SIMD;
         features |= WasmFeatures::TAIL_CALL;
         features |= WasmFeatures::EXTENDED_CONST;
+        // NB: if you add a feature above this line please double-check
+        // https://docs.wasmtime.dev/stability-wasm-proposals.html
+        // to ensure all requirements are met and/or update the documentation
+        // there too.
 
         // Set some features to their conditionally-enabled defaults depending
         // on crate compile-time features.
