@@ -103,6 +103,8 @@ For each column in the above tables, this is a further explanation of its meanin
 
 * **Fuzzed** - Has been fuzzed for at least a week minimum. We are also
   confident that the fuzzers are fully exercising the proposal's functionality.
+  The `module_generation_uses_expected_proposals` test in the `wasmtime-fuzzing`
+  crate must be updated to include this proposal.
 
   > For example, it would *not* have been enough to simply enable reference
   > types in the `compile` fuzz target to enable that proposal by
