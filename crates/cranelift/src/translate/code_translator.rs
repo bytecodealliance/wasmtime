@@ -650,6 +650,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
             let call = environ.translate_call_indirect(
                 builder,
+                validator.features(),
                 TableIndex::from_u32(*table_index),
                 TypeIndex::from_u32(*type_index),
                 sigref,
@@ -717,6 +718,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
             environ.translate_return_call_indirect(
                 builder,
+                validator.features(),
                 TableIndex::from_u32(*table_index),
                 TypeIndex::from_u32(*type_index),
                 sigref,

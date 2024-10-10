@@ -15,7 +15,7 @@ use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
-use wasmparser::Operator;
+use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeConvert, TypeIndex,
     WasmHeapType, WasmRefType, WasmResult,
@@ -196,6 +196,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn translate_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
+        features: &WasmFeatures,
         table_index: TableIndex,
         sig_index: TypeIndex,
         sig_ref: ir::SigRef,
@@ -235,6 +236,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn translate_return_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
+        features: &WasmFeatures,
         table_index: TableIndex,
         sig_index: TypeIndex,
         sig_ref: ir::SigRef,
