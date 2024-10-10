@@ -290,15 +290,7 @@ mod tests {
 
     #[test]
     fn kind_matches() {
-        let all = [
-            ExternRef,
-            ExternOfAnyRef,
-            AnyRef,
-            AnyOfExternRef,
-            EqRef,
-            ArrayRef,
-            StructRef,
-        ];
+        let all = [ExternRef, AnyRef, EqRef, ArrayRef, StructRef];
 
         for (sup, subs) in [
             (ExternRef, vec![]),
