@@ -86,7 +86,11 @@ wasmtime_option_group! {
 
         /// Enable memory protection keys for the pooling allocator; this can
         /// optimize the size of memory slots.
-        pub memory_protection_keys: Option<bool>,
+        pub pooling_memory_protection_keys: Option<bool>,
+
+        /// Sets an upper limit on how many memory protection keys (MPK) Wasmtime
+        /// will use.
+        pub pooling_max_memory_protection_keys: Option<usize>,
 
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
@@ -718,12 +722,17 @@ impl CommonOptions {
                         cfg.max_memories_per_module(max);
                     }
                     match_feature! {
-                        ["memory-protection-keys" : self.opts.memory_protection_keys]
+                        ["memory-protection-keys" : self.opts.pooling_memory_protection_keys]
                         enable => cfg.memory_protection_keys(if enable {
                             wasmtime::MpkEnabled::Enable
                         } else {
                             wasmtime::MpkEnabled::Disable
                         }),
+                        _ => err,
+                    }
+                    match_feature! {
+                        ["memory-protection-keys" : self.opts.pooling_max_memory_protection_keys]
+                        max => cfg.max_memory_protection_keys(max),
                         _ => err,
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
@@ -732,10 +741,18 @@ impl CommonOptions {
             true => err,
         }
 
-        if self.opts.memory_protection_keys.unwrap_or(false)
+        if self.opts.pooling_memory_protection_keys.unwrap_or(false)
             && !self.opts.pooling_allocator.unwrap_or(false)
         {
             anyhow::bail!("memory protection keys require the pooling allocator");
+        }
+
+        if self.opts.pooling_max_memory_protection_keys.is_some()
+            && !self.opts.pooling_memory_protection_keys.unwrap_or(false)
+        {
+            anyhow::bail!(
+                "max memory protection keys requires memory protection keys to be enabled"
+            );
         }
 
         match_feature! {
