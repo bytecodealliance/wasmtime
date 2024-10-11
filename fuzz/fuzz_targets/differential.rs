@@ -76,7 +76,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let lhs = match *u.choose(&allowed_engines)? {
         Some(engine) => engine,
         None => {
-            log::debug!("test case uses a runtime-disabled engien");
+            log::debug!("test case uses a runtime-disabled engine");
             return Ok(());
         }
     };
