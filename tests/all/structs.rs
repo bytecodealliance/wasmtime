@@ -721,14 +721,14 @@ fn can_put_funcrefs_in_structs() -> Result<()> {
     let f1 = Func::wrap(&mut store, |_caller: Caller<()>| -> u32 { 0x5678 });
 
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s = StructRef::new(&mut store, &pre, &[f0.clone().into()])?;
+    let s = StructRef::new(&mut store, &pre, &[f0.into()])?;
 
     let f = s.field(&mut store, 0)?;
     let f = f.unwrap_funcref().unwrap();
     let f = f.typed::<(), u32>(&store)?;
     assert_eq!(f.call(&mut store, ())?, 0x1234);
 
-    s.set_field(&mut store, 0, f1.clone().into())?;
+    s.set_field(&mut store, 0, f1.into())?;
 
     let f = s.field(&mut store, 0)?;
     let f = f.unwrap_funcref().unwrap();
