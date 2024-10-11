@@ -69,6 +69,7 @@ impl PoolingAllocationConfig {
         cfg.async_stack_keep_resident(self.async_stack_keep_resident);
 
         cfg.memory_protection_keys(self.memory_protection_keys);
+        cfg.max_memory_protection_keys(self.max_memory_protection_keys);
 
         cfg
     }
@@ -115,7 +116,7 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
             async_stack_keep_resident: u.int_in_range(0..=1 << 20)?,
 
             memory_protection_keys: *u.choose(&[MpkEnabled::Auto, MpkEnabled::Disable])?,
-            max_memory_protection_keys: u.int_in_range(0..=20)?,
+            max_memory_protection_keys: u.int_in_range(1..=20)?,
         })
     }
 }

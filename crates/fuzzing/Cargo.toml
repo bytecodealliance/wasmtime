@@ -29,7 +29,7 @@ wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = "0.31.1"
+wasmi = "0.38.0"
 futures = { workspace = true }
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled

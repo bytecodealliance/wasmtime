@@ -1513,6 +1513,13 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
+[[publisher.libm]]
+version = "0.2.8"
+when = "2023-10-06"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
 [[publisher.linux-raw-sys]]
 version = "0.3.8"
 when = "2023-05-19"

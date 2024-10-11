@@ -2650,6 +2650,12 @@ Most of the rest of the changes are adding some new unstable features which
 aren't enabled by default.
 """
 
+[[audits.smallvec]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.11.0 -> 1.13.2"
+notes = "Mostly minor updates, the one semi-substantial update looks good."
+
 [[audits.socket2]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
