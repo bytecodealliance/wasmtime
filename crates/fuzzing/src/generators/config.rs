@@ -9,7 +9,7 @@ use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use std::sync::Arc;
 use std::time::Duration;
-use wasmtime::{Engine, Module, Store};
+use wasmtime::{Engine, Module, MpkEnabled, Store};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.
@@ -78,6 +78,12 @@ impl Config {
             pooling.total_memories = config.max_memories as u32;
             pooling.max_memory_size = 10 << 16;
             pooling.max_memories_per_module = config.max_memories as u32;
+            if pooling.memory_protection_keys == MpkEnabled::Auto
+                && pooling.max_memory_protection_keys > 1
+            {
+                pooling.total_memories =
+                    pooling.total_memories * (pooling.max_memory_protection_keys as u32);
+            }
 
             pooling.total_tables = config.max_tables as u32;
             pooling.table_elements = 1_000;
