@@ -114,6 +114,8 @@ default = [
   'async',
   'cache',
   'gc',
+  'gc-drc',
+  'gc-null',
   'wat',
   'profiling',
   'parallel-compilation',
@@ -247,7 +249,16 @@ runtime = [
 #
 # When the `runtime` Cargo feature is enabled, this feature gates the ability to
 # load and run Wasm that uses those proposals.
+#
+# You can additionally configure which GC implementations are enabled via the
+# `gc-drc` and `gc-null` features.
 gc = ["wasmtime-environ/gc", "wasmtime-cranelift?/gc"]
+
+# Enable the deferred reference counting garbage collector.
+gc-drc = ["gc", "wasmtime-environ/gc-drc", "wasmtime-cranelift?/gc-drc"]
+
+# Enable the null garbage collector.
+gc-null = ["gc", "wasmtime-environ/gc-null", "wasmtime-cranelift?/gc-null"]
 
 # Enable runtime support for the WebAssembly threads proposal.
 threads = ["wasmtime-cranelift?/threads", "std"]

@@ -2,16 +2,11 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{
-    ExternRefHostDataId, ExternRefHostDataTable, SendSyncPtr, VMArrayRef, VMExternRef, VMGcHeader,
-    VMGcRef, VMStructRef,
+    ExternRefHostDataId, ExternRefHostDataTable, GcHeapObject, SendSyncPtr, TypedGcRef, VMArrayRef,
+    VMExternRef, VMGcHeader, VMGcObjectDataMut, VMGcRef, VMStructRef,
 };
-use core::alloc::Layout;
-use core::marker;
-use core::ptr;
-use core::{any::Any, num::NonZeroUsize};
+use core::{alloc::Layout, any::Any, marker, mem, num::NonZeroUsize, ops::Range, ptr};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex};
-
-use super::VMGcObjectDataMut;
 
 /// Trait for integrating a garbage collector with the runtime.
 ///
@@ -110,13 +105,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     fn exit_no_gc_scope(&mut self);
 
     ////////////////////////////////////////////////////////////////////////////
-    // GC Object Header Methods
-
-    /// Get a shared borrow of the `VMGcHeader` that this GC reference is
-    /// pointing to.
-    fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader;
-
-    ////////////////////////////////////////////////////////////////////////////
     // GC Barriers
 
     /// Read barrier called every time the runtime clones a GC reference.
@@ -208,7 +196,20 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     fn externref_host_data(&self, externref: &VMExternRef) -> ExternRefHostDataId;
 
     ////////////////////////////////////////////////////////////////////////////
-    // Struct and Array methods
+    // Struct, array, and general GC object methods
+
+    /// Get the header of the object that `gc_ref` points to.
+    fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader;
+
+    /// Get the header of the object that `gc_ref` points to.
+    fn header_mut(&mut self, gc_ref: &VMGcRef) -> &mut VMGcHeader;
+
+    /// Get the size (in bytes) of the object referenced by `gc_ref`.
+    ///
+    /// # Panics
+    ///
+    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    fn object_size(&self, gc_ref: &VMGcRef) -> usize;
 
     /// Allocate a raw, uninitialized GC-managed object with the given header
     /// and layout.
@@ -280,20 +281,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// valid GC references, or something like that.
     fn dealloc_uninit_struct(&mut self, structref: VMStructRef);
 
-    /// Get a mutable borrow of the the given object's data.
-    ///
-    /// Panics on out-of-bounds accesses.
-    fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_>;
-
-    /// Get a pair of mutable borrows of the given objects' data.
-    ///
-    /// Panics if `a == b` or on out-of-bounds accesses.
-    fn gc_object_data_pair(
-        &mut self,
-        a: &VMGcRef,
-        b: &VMGcRef,
-    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>);
-
     /// * `Ok(Some(_))`: The allocation was successful.
     ///
     /// * `Ok(None)`: There is currently no available space for this
@@ -356,34 +343,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ////////////////////////////////////////////////////////////////////////////
     // JIT-Code Interaction Methods
 
-    /// Get the GC heap's base pointer.
-    ///
-    /// # Safety
-    ///
-    /// The memory region
-    ///
-    /// ```ignore
-    /// self.vmctx_gc_heap_base..self.vmctx_gc_heap_base + self.vmctx_gc_heap_bound
-    /// ```
-    ///
-    /// must be the GC heap region, and must remain valid for JIT code as long
-    /// as `self` is not dropped.
-    unsafe fn vmctx_gc_heap_base(&self) -> *mut u8;
-
-    /// Get the GC heap's bound.
-    ///
-    /// # Safety
-    ///
-    /// The memory region
-    ///
-    /// ```ignore
-    /// self.vmctx_gc_heap_base..self.vmctx_gc_heap_base + self.vmctx_gc_heap_bound
-    /// ```
-    ///
-    /// must be the GC heap region, and must remain valid for JIT code as long
-    /// as `self` is not dropped.
-    unsafe fn vmctx_gc_heap_bound(&self) -> usize;
-
     /// Get the pointer that will be stored in the `VMContext::gc_heap_data`
     /// field and be accessible from JIT code via collaboration with the
     /// corresponding `GcCompiler` trait.
@@ -413,6 +372,131 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// This method is only used with the pooling allocator.
     #[cfg(feature = "pooling-allocator")]
     fn reset(&mut self);
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Accessors for the raw bytes of the GC heap
+
+    /// Get a slice of the raw bytes of the GC heap.
+    ///
+    /// # Implementation Safety
+    ///
+    /// The heap slice must be the GC heap region, and the region must remain
+    /// valid (i.e. not moved or resized) for JIT code until `self` is dropped
+    /// or `self.reset()` is called.
+    fn heap_slice(&self) -> &[u8];
+
+    /// Get a mutable slice of the raw bytes of the GC heap.
+    ///
+    /// # Implementation Safety
+    ///
+    /// The heap slice must be the GC heap region, and the region must remain
+    /// valid (i.e. not moved or resized) for JIT code until `self` is dropped
+    /// or `self.reset()` is called.
+    fn heap_slice_mut(&mut self) -> &mut [u8];
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Provided helper methods.
+
+    /// Index into this heap and get a shared reference to the `T` that `gc_ref`
+    /// points to.
+    ///
+    /// # Panics
+    ///
+    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    fn index<T>(&self, gc_ref: &TypedGcRef<T>) -> &T
+    where
+        Self: Sized,
+        T: GcHeapObject,
+    {
+        assert!(!mem::needs_drop::<T>());
+        let gc_ref = gc_ref.as_untyped();
+        let start = gc_ref.as_heap_index().unwrap().get();
+        let start = usize::try_from(start).unwrap();
+        let len = mem::size_of::<T>();
+        let slice = &self.heap_slice()[start..][..len];
+        unsafe { &*(slice.as_ptr().cast::<T>()) }
+    }
+
+    /// Index into this heap and get an exclusive reference to the `T` that
+    /// `gc_ref` points to.
+    ///
+    /// # Panics
+    ///
+    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    fn index_mut<T>(&mut self, gc_ref: &TypedGcRef<T>) -> &mut T
+    where
+        Self: Sized,
+        T: GcHeapObject,
+    {
+        assert!(!mem::needs_drop::<T>());
+        let gc_ref = gc_ref.as_untyped();
+        let start = gc_ref.as_heap_index().unwrap().get();
+        let start = usize::try_from(start).unwrap();
+        let len = mem::size_of::<T>();
+        let slice = &mut self.heap_slice_mut()[start..][..len];
+        unsafe { &mut *(slice.as_mut_ptr().cast::<T>()) }
+    }
+
+    /// Get the range of bytes that the given object occupies in the heap.
+    ///
+    /// # Panics
+    ///
+    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    fn object_range(&self, gc_ref: &VMGcRef) -> Range<usize> {
+        let start = gc_ref.as_heap_index().unwrap().get();
+        let start = usize::try_from(start).unwrap();
+        let size = self.object_size(gc_ref);
+        let end = start.checked_add(size).unwrap();
+        start..end
+    }
+
+    /// Get a mutable borrow of the the given object's data.
+    ///
+    /// # Panics
+    ///
+    /// Panics on out-of-bounds accesses or if the `gc_ref` is an `i31ref`.
+    fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_> {
+        let range = self.object_range(gc_ref);
+        let data = &mut self.heap_slice_mut()[range];
+        VMGcObjectDataMut::new(data)
+    }
+
+    /// Get a pair of mutable borrows of the given objects' data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `a == b` or on out-of-bounds accesses or if either GC ref is
+    /// an `i31ref`.
+    fn gc_object_data_pair(
+        &mut self,
+        a: &VMGcRef,
+        b: &VMGcRef,
+    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>) {
+        assert_ne!(a, b);
+
+        let a_range = self.object_range(a);
+        let b_range = self.object_range(b);
+
+        // Assert that the two objects do not overlap.
+        assert!(a_range.start <= a_range.end);
+        assert!(b_range.start <= b_range.end);
+        assert!(a_range.end <= b_range.start || b_range.end <= a_range.start);
+
+        let (a_data, b_data) = if a_range.start < b_range.start {
+            let (a_half, b_half) = self.heap_slice_mut().split_at_mut(b_range.start);
+            let b_len = b_range.end - b_range.start;
+            (&mut a_half[a_range], &mut b_half[..b_len])
+        } else {
+            let (b_half, a_half) = self.heap_slice_mut().split_at_mut(a_range.start);
+            let a_len = a_range.end - a_range.start;
+            (&mut a_half[..a_len], &mut b_half[b_range])
+        };
+
+        (
+            VMGcObjectDataMut::new(a_data),
+            VMGcObjectDataMut::new(b_data),
+        )
+    }
 }
 
 /// A list of GC roots.

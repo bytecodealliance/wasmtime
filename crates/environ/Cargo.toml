@@ -55,6 +55,8 @@ component-model = [
 ]
 demangle = ['std', 'dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
+gc-drc = ["gc"]
+gc-null = ["gc"]
 compile = [
   'gimli/write',
   'object/write_core',

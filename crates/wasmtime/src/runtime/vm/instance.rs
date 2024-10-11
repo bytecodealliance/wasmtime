@@ -513,8 +513,9 @@ impl Instance {
 
     unsafe fn set_gc_heap(&mut self, gc_store: Option<&mut GcStore>) {
         if let Some(gc_store) = gc_store {
-            *self.gc_heap_base() = gc_store.gc_heap.vmctx_gc_heap_base();
-            *self.gc_heap_bound() = gc_store.gc_heap.vmctx_gc_heap_bound();
+            let heap = gc_store.gc_heap.heap_slice();
+            *self.gc_heap_base() = heap.as_ptr().cast_mut();
+            *self.gc_heap_bound() = heap.len();
             *self.gc_heap_data() = gc_store.gc_heap.vmctx_gc_heap_data();
         } else {
             *self.gc_heap_base() = ptr::null_mut();

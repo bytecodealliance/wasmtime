@@ -369,6 +369,12 @@ jobs:
               -p wasmtime --no-default-features --features gc
               -p wasmtime --no-default-features --features runtime,gc
               -p wasmtime --no-default-features --features cranelift,gc
+              -p wasmtime --no-default-features --features gc-drc
+              -p wasmtime --no-default-features --features runtime,gc-drc
+              -p wasmtime --no-default-features --features cranelift,gc-drc
+              -p wasmtime --no-default-features --features gc-null
+              -p wasmtime --no-default-features --features runtime,gc-null
+              -p wasmtime --no-default-features --features cranelift,gc-null
               -p wasmtime --no-default-features --features runtime
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads

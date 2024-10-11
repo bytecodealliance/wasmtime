@@ -70,18 +70,18 @@ macro_rules! foreach_builtin_function {
             // once it will no longer be used again. (Note: `val` is not of type
             // `reference` because it needn't appear in any stack maps, as it
             // must not be live after this call.)
-            #[cfg(feature = "gc")]
+            #[cfg(feature = "gc-drc")]
             drop_gc_ref(vmctx: vmctx, val: i32);
 
             // Do a GC, treating the optional `root` as a GC root and returning
             // the updated `root` (so that, in the case of moving collectors,
             // callers have a valid version of `root` again).
-            #[cfg(feature = "gc")]
+            #[cfg(feature = "gc-drc")]
             gc(vmctx: vmctx, root: reference) -> reference;
 
             // Allocate a new, uninitialized GC object and return a reference to
             // it.
-            #[cfg(feature = "gc")]
+            #[cfg(feature = "gc-drc")]
             gc_alloc_raw(
                 vmctx: vmctx,
                 kind: i32,
