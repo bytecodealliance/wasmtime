@@ -34,7 +34,7 @@ pub fn interpreter_loop(vm: &mut Vm, bytecode: &mut UnsafeBytecodeStream) -> Don
 /// when compiling without `#![feature(explicit_tail_calls)]` enabled (via
 /// `--cfg pulley_tail_calls`).
 ///
-/// It seems rustc first parses the the function, encounters `become` and emits
+/// It seems rustc first parses the function, encounters `become` and emits
 /// an error about using an unstable keyword on a stable compiler, then applies
 /// `#[cfg(...)` after parsing to disable the function.
 ///
