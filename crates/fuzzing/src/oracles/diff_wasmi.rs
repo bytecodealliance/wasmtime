@@ -21,8 +21,6 @@ impl WasmiEngine {
         config.exceptions_enabled = false;
         config.gc_enabled = false;
         config.wide_arithmetic_enabled = false;
-        config.max_memories = config.max_memories.min(1);
-        config.min_memories = config.min_memories.min(1);
 
         let mut wasmi_config = wasmi::Config::default();
         wasmi_config
@@ -35,9 +33,30 @@ impl WasmiEngine {
             .wasm_bulk_memory(config.bulk_memory_enabled)
             .wasm_reference_types(config.reference_types_enabled)
             .wasm_tail_call(config.tail_call_enabled)
+            .wasm_multi_memory(config.max_memories > 1)
             .wasm_extended_const(true);
         Self {
             engine: wasmi::Engine::new(&wasmi_config),
+        }
+    }
+
+    fn trap_code(&self, err: &Error) -> Option<wasmi::core::TrapCode> {
+        let err = err.downcast_ref::<wasmi::Error>()?;
+        if let Some(code) = err.as_trap_code() {
+            return Some(code);
+        }
+
+        match err.kind() {
+            wasmi::errors::ErrorKind::Instantiation(
+                wasmi::errors::InstantiationError::ElementSegmentDoesNotFit { .. },
+            ) => Some(wasmi::core::TrapCode::TableOutOfBounds),
+            wasmi::errors::ErrorKind::Memory(wasmi::errors::MemoryError::OutOfBoundsAccess) => {
+                Some(wasmi::core::TrapCode::MemoryOutOfBounds)
+            }
+            _ => {
+                log::trace!("unknown wasmi error: {:?}", err.kind());
+                None
+            }
         }
     }
 }
@@ -59,53 +78,17 @@ impl DiffEngine for WasmiEngine {
     }
 
     fn assert_error_match(&self, trap: &Trap, err: &Error) {
-        // Acquire a `wasmi::Trap` from the wasmi error which we'll use to
-        // assert that it has the same kind of trap as the wasmtime-based trap.
-        let wasmi = match err.downcast_ref::<wasmi::Error>() {
-            Some(wasmi::Error::Trap(trap)) => trap,
-
-            // Out-of-bounds data segments turn into this category which
-            // Wasmtime reports as a `MemoryOutOfBounds`.
-            Some(wasmi::Error::Memory(msg)) => {
-                assert_eq!(
-                    *trap,
-                    Trap::MemoryOutOfBounds,
-                    "wasmtime error did not match wasmi: {msg}"
-                );
-                return;
-            }
-
-            // Ignore this for now, looks like "elements segment does not fit"
-            // falls into this category and to avoid doing string matching this
-            // is just ignored.
-            Some(wasmi::Error::Instantiation(msg)) => {
-                log::debug!("ignoring wasmi instantiation error: {msg}");
-                return;
-            }
-
-            Some(other) => panic!("unexpected wasmi error: {other}"),
-
-            None => err
-                .downcast_ref::<wasmi::core::Trap>()
-                .expect(&format!("not a trap: {err:?}")),
-        };
-        assert!(wasmi.trap_code().is_some());
-        assert_eq!(
-            wasmi_to_wasmtime_trap_code(wasmi.trap_code().unwrap()),
-            *trap
-        );
+        match self.trap_code(err) {
+            Some(code) => assert_eq!(wasmi_to_wasmtime_trap_code(code), *trap),
+            None => panic!("unexpected wasmi error {err:?}"),
+        }
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
-        let trap = match err.downcast_ref::<wasmi::Error>() {
-            Some(wasmi::Error::Trap(trap)) => trap,
-            Some(_) => return false,
-            None => match err.downcast_ref::<wasmi::core::Trap>() {
-                Some(trap) => trap,
-                None => return false,
-            },
-        };
-        matches!(trap.trap_code(), Some(wasmi::core::TrapCode::StackOverflow))
+        matches!(
+            self.trap_code(err),
+            Some(wasmi::core::TrapCode::StackOverflow)
+        )
     }
 }
 
@@ -150,7 +133,7 @@ impl DiffInstance for WasmiInstance {
             .and_then(wasmi::Extern::into_func)
             .unwrap();
         let arguments: Vec<_> = arguments.iter().map(|x| x.into()).collect();
-        let mut results = vec![wasmi::Value::I32(0); result_tys.len()];
+        let mut results = vec![wasmi::Val::I32(0); result_tys.len()];
         function
             .call(&mut self.store, &arguments, &mut results)
             .context("wasmi function trap")?;
@@ -183,9 +166,9 @@ impl DiffInstance for WasmiInstance {
     }
 }
 
-impl From<&DiffValue> for wasmi::Value {
+impl From<&DiffValue> for wasmi::Val {
     fn from(v: &DiffValue) -> Self {
-        use wasmi::Value as WasmiValue;
+        use wasmi::Val as WasmiValue;
         match *v {
             DiffValue::I32(n) => WasmiValue::I32(n),
             DiffValue::I64(n) => WasmiValue::I64(n),
@@ -205,9 +188,9 @@ impl From<&DiffValue> for wasmi::Value {
     }
 }
 
-impl From<wasmi::Value> for DiffValue {
-    fn from(value: wasmi::Value) -> Self {
-        use wasmi::Value as WasmiValue;
+impl From<wasmi::Val> for DiffValue {
+    fn from(value: wasmi::Val) -> Self {
+        use wasmi::Val as WasmiValue;
         match value {
             WasmiValue::I32(n) => DiffValue::I32(n),
             WasmiValue::I64(n) => DiffValue::I64(n),
