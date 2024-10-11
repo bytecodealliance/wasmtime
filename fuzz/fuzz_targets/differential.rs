@@ -22,8 +22,8 @@ static SETUP: Once = Once::new();
 // - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
 // - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
 // - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
-static ALLOWED_ENGINES: Mutex<Vec<&str>> = Mutex::new(vec![]);
-static ALLOWED_MODULES: Mutex<Vec<&str>> = Mutex::new(vec![]);
+static ALLOWED_ENGINES: Mutex<Vec<Option<&str>>> = Mutex::new(vec![]);
+static ALLOWED_MODULES: Mutex<Vec<Option<&str>>> = Mutex::new(vec![]);
 
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
@@ -73,7 +73,13 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // Choose an engine that Wasmtime will be differentially executed against.
     // The chosen engine is then created, which might update `config`, and
     // returned as a trait object.
-    let lhs = u.choose(&allowed_engines)?;
+    let lhs = match *u.choose(&allowed_engines)? {
+        Some(engine) => engine,
+        None => {
+            log::debug!("test case uses a runtime-disabled engine");
+            return Ok(());
+        }
+    };
     let mut lhs = match engine::build(&mut u, lhs, &mut config)? {
         Some(engine) => engine,
         // The chosen engine does not have support compiled into the fuzzer,
@@ -100,8 +106,12 @@ fn execute_one(data: &[u8]) -> Result<()> {
         panic!("unable to generate a module to fuzz against; check `ALLOWED_MODULES`")
     }
     let wasm = match *u.choose(&allowed_modules)? {
-        "wasm-smith" => build_wasm_smith_module(&mut u, &config)?,
-        "single-inst" => build_single_inst_module(&mut u, &config)?,
+        Some("wasm-smith") => build_wasm_smith_module(&mut u, &config)?,
+        Some("single-inst") => build_single_inst_module(&mut u, &config)?,
+        None => {
+            log::debug!("test case uses a runtime-disabled module strategy");
+            return Ok(());
+        }
         _ => unreachable!(),
     };
 
