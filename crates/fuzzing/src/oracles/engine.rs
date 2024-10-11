@@ -93,14 +93,17 @@ pub fn setup_engine_runtimes() {
 /// Build a list of allowed values from the given `defaults` using the
 /// `env_list`.
 ///
+/// The entries in `defaults` are preserved, in order, and are replaced with
+/// `None` in the returned list if they are disabled.
+///
 /// ```
 /// # use wasmtime_fuzzing::oracles::engine::build_allowed_env_list;
 /// // Passing no `env_list` returns the defaults:
-/// assert_eq!(build_allowed_env_list(None, &["a"]), vec!["a"]);
+/// assert_eq!(build_allowed_env_list(None, &["a"]), vec![Some("a")]);
 /// // We can build up a subset of the defaults:
-/// assert_eq!(build_allowed_env_list(Some(vec!["b".to_string()]), &["a","b"]), vec!["b"]);
+/// assert_eq!(build_allowed_env_list(Some(vec!["b".to_string()]), &["a","b"]), vec![None, Some("b")]);
 /// // Alternately we can subtract from the defaults:
-/// assert_eq!(build_allowed_env_list(Some(vec!["-a".to_string()]), &["a","b"]), vec!["b"]);
+/// assert_eq!(build_allowed_env_list(Some(vec!["-a".to_string()]), &["a","b"]), vec![None, Some("b")]);
 /// ```
 /// ```should_panic
 /// # use wasmtime_fuzzing::oracles::engine::build_allowed_env_list;
@@ -116,7 +119,7 @@ pub fn setup_engine_runtimes() {
 pub fn build_allowed_env_list<'a>(
     env_list: Option<Vec<String>>,
     defaults: &[&'a str],
-) -> Vec<&'a str> {
+) -> Vec<Option<&'a str>> {
     if let Some(configured) = &env_list {
         // Check that the names are either all additions or all subtractions.
         let subtract_from_defaults = configured.iter().all(|c| c.starts_with("-"));
@@ -141,12 +144,14 @@ pub fn build_allowed_env_list<'a>(
         for &d in defaults {
             let mentioned = configured.iter().any(|c| &c[start..] == d);
             if (add_from_defaults && mentioned) || (subtract_from_defaults && !mentioned) {
-                allowed.push(d);
+                allowed.push(Some(d));
+            } else {
+                allowed.push(None);
             }
         }
         allowed
     } else {
-        defaults.to_vec()
+        defaults.iter().copied().map(Some).collect()
     }
 }
 
