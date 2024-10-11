@@ -615,6 +615,8 @@ impl Func {
     /// | `Rooted<StructRef>`               | `(ref struct)`                            |
     /// | `Option<Rooted<ArrayRef>>`        | `(ref null array)`                        |
     /// | `Rooted<ArrayRef>`                | `(ref array)`                             |
+    /// | `Option<NoneRef>`                 | `nullref` aka `(ref null none)`           |
+    /// | `NoneRef`                         | `(ref none)`                              |
     ///
     /// Note that anywhere a `Rooted<T>` appears, a `ManuallyRooted<T>` may also
     /// be used.
@@ -1444,6 +1446,8 @@ impl Func {
     /// | `(ref struct)`                            | `Rooted<StructRef>`                   |
     /// | `arrayref` aka `(ref null array)`         | `Option<Rooted<ArrayRef>>`            |
     /// | `(ref array)`                             | `Rooted<ArrayRef>`                    |
+    /// | `nullref` aka `(ref null none)`           | `Option<NoneRef>`                     |
+    /// | `(ref none)`                              | `NoneRef`                             |
     /// | `funcref` aka `(ref null func)`           | `Option<Func>`                        |
     /// | `(ref func)`                              | `Func`                                |
     /// | `(ref null <func type index>)`            | `Option<Func>`                        |

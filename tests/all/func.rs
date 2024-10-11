@@ -413,6 +413,8 @@ fn func_constructors() {
     Func::wrap(&mut store, || -> Option<NoFunc> { None });
     Func::wrap(&mut store, || -> NoExtern { loop {} });
     Func::wrap(&mut store, || -> Option<NoExtern> { None });
+    Func::wrap(&mut store, || -> NoneRef { loop {} });
+    Func::wrap(&mut store, || -> Option<NoneRef> { None });
 
     Func::wrap(&mut store, || -> Result<()> { loop {} });
     Func::wrap(&mut store, || -> Result<i32> { loop {} });
@@ -444,6 +446,8 @@ fn func_constructors() {
     Func::wrap(&mut store, || -> Result<Option<NoFunc>> { loop {} });
     Func::wrap(&mut store, || -> Result<NoExtern> { loop {} });
     Func::wrap(&mut store, || -> Result<Option<NoExtern>> { loop {} });
+    Func::wrap(&mut store, || -> Result<NoneRef> { loop {} });
+    Func::wrap(&mut store, || -> Result<Option<NoneRef>> { loop {} });
 }
 
 #[test]
