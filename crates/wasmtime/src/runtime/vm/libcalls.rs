@@ -411,7 +411,7 @@ unsafe fn table_get_lazy_init_func_ref(
 }
 
 /// Drop a GC reference.
-#[cfg(feature = "gc")]
+#[cfg(feature = "gc-drc")]
 unsafe fn drop_gc_ref(instance: &mut Instance, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
@@ -422,7 +422,7 @@ unsafe fn drop_gc_ref(instance: &mut Instance, gc_ref: u32) {
 
 /// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
 /// reference.
-#[cfg(feature = "gc")]
+#[cfg(feature = "gc-drc")]
 unsafe fn gc(instance: &mut Instance, gc_ref: u32) -> Result<u32> {
     let gc_ref = VMGcRef::from_raw_u32(gc_ref);
     let gc_ref = gc_ref.map(|r| (*instance.store()).unwrap_gc_store_mut().clone_gc_ref(&r));
@@ -455,7 +455,7 @@ unsafe fn gc(instance: &mut Instance, gc_ref: u32) -> Result<u32> {
 /// Allocate a raw, unininitialized GC object for Wasm code.
 ///
 /// The Wasm code is responsible for initializing the object.
-#[cfg(feature = "gc")]
+#[cfg(feature = "gc-drc")]
 unsafe fn gc_alloc_raw(
     instance: &mut Instance,
     kind: u32,

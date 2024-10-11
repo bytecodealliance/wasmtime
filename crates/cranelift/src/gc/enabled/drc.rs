@@ -1,11 +1,8 @@
 //! Compiler for the deferred reference-counting (DRC) collector and its
 //! barriers.
 
-use super::{
-    emit_array_fill_impl, uextend_i32_to_pointer_type, unbarriered_load_gc_ref,
-    unbarriered_store_gc_ref, write_func_ref_at_addr, BoundsCheck, Offset,
-};
-use crate::gc::{gc_compiler, ArrayInit};
+use super::*;
+use crate::gc::gc_compiler;
 use crate::translate::TargetEnvironment;
 use crate::{func_environ::FuncEnvironment, gc::GcCompiler, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::condcodes::IntCC;
@@ -13,9 +10,8 @@ use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    drc::DrcTypeLayouts, GcArrayLayout, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex,
-    VMGcKind, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType,
+    drc::DrcTypeLayouts, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind,
+    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
 };
 
 #[derive(Default)]
@@ -258,62 +254,6 @@ impl DrcCompiler {
     }
 }
 
-/// Emit CLIF to compute an array object's total size, given the dynamic length
-/// in its initialization.
-///
-/// Traps if the size overflows.
-fn emit_array_size(
-    builder: &mut FunctionBuilder<'_>,
-    array_layout: &GcArrayLayout,
-    init: ArrayInit<'_>,
-) -> ir::Value {
-    let base_size = builder
-        .ins()
-        .iconst(ir::types::I32, i64::from(array_layout.base_size));
-    let len = match init {
-        ArrayInit::Fill { elem: _, len } => len,
-        ArrayInit::Elems(elems) => builder
-            .ins()
-            .iconst(ir::types::I32, i64::try_from(elems.len()).unwrap()),
-    };
-
-    // `elems_size = len * elem_size`
-    //
-    // Check for multiplication overflow and trap if it occurs, since that
-    // means Wasm is attempting to allocate an array that is larger than our
-    // implementation limits. (Note: there is no standard implementation
-    // limit for array length beyond `u32::MAX`.)
-    //
-    // We implement this check by encoding our logically-32-bit operands as
-    // i64 values, doing a 64-bit multiplication, and then checking the high
-    // 32 bits of the multiplication's result. If the high 32 bits are not
-    // all zeros, then the multiplication overflowed.
-    let len = builder.ins().uextend(ir::types::I64, len);
-    let elems_size_64 = builder
-        .ins()
-        .imul_imm(len, i64::from(array_layout.elem_size));
-    let high_bits = builder.ins().ushr_imm(elems_size_64, 32);
-    builder
-        .ins()
-        .trapnz(high_bits, crate::TRAP_ALLOCATION_TOO_LARGE);
-    let elems_size = builder.ins().ireduce(ir::types::I32, elems_size_64);
-
-    // And if adding the base size and elements size overflows, then the
-    // allocation is too large.
-    let size =
-        builder
-            .ins()
-            .uadd_overflow_trap(base_size, elems_size, crate::TRAP_ALLOCATION_TOO_LARGE);
-
-    // NB: No need to check that the array's size can fit within the unused bits
-    // of a `VMGcKind`, even though the DRC collector stores the object's size
-    // in the kind's unused bits. The `gc_alloc_raw` libcall will call
-    // `<DrcCollector as GcRuntime>::alloc_raw` which will perform that check
-    // itself.
-
-    size
-}
-
 /// Emit CLIF to call the `gc_raw_alloc` libcall.
 ///
 /// It is the caller's responsibility to ensure that `size` fits within the
@@ -365,7 +305,6 @@ impl GcCompiler for DrcCompiler {
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
         let array_layout = func_env.array_layout(interned_type_index);
         let base_size = array_layout.base_size;
-        let elem_size = array_layout.elem_size;
         let align = array_layout.align;
         let len_to_elems_delta = base_size.checked_sub(len_offset).unwrap();
 
@@ -393,61 +332,27 @@ impl GcCompiler for DrcCompiler {
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
         let object_addr = builder.ins().iadd(base, extended_array_ref);
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
-        let len = match init {
-            ArrayInit::Fill { len, .. } => len,
-            ArrayInit::Elems(e) => {
-                let len = u32::try_from(e.len()).unwrap();
-                builder.ins().iconst(ir::types::I32, i64::from(len))
-            }
-        };
+        let len = init.len(&mut builder.cursor());
         builder
             .ins()
             .store(ir::MemFlags::trusted(), len, len_addr, 0);
 
-        // Compute the address of the first element in the array.
-
+        // Finally, initialize the elements.
         let len_to_elems_delta = builder
             .ins()
             .iconst(ir::types::I64, i64::from(len_to_elems_delta));
-        let mut elem_addr = builder.ins().iadd(len_addr, len_to_elems_delta);
-
-        // Finally, initialize each of the newly-allocated array's elements.
-
-        let array_ty = func_env.types[interned_type_index]
-            .composite_type
-            .unwrap_array();
-        let elem_ty = array_ty.0.element_type;
-
-        let pointer_type = func_env.pointer_type();
-        let elem_size = builder.ins().iconst(pointer_type, i64::from(elem_size));
-
-        match init {
-            ArrayInit::Elems(elems) => {
-                for val in elems {
-                    self.init_field(func_env, builder, elem_addr, elem_ty, *val)?;
-                    elem_addr = builder.ins().iadd(elem_addr, elem_size);
-                }
-            }
-            ArrayInit::Fill { elem, len: _ } => {
-                // Compute the end address of the elements.
-                let base_size = builder.ins().iconst(pointer_type, i64::from(base_size));
-                let array_addr = builder.ins().isub(elem_addr, base_size);
-                let size = uextend_i32_to_pointer_type(builder, pointer_type, size);
-                let elems_end = builder.ins().iadd(array_addr, size);
-
-                emit_array_fill_impl(
-                    func_env,
-                    builder,
-                    elem_addr,
-                    elem_size,
-                    elems_end,
-                    |func_env, builder, elem_addr| {
-                        self.init_field(func_env, builder, elem_addr, elem_ty, elem)
-                    },
-                )?;
-            }
-        }
-
+        let elems_addr = builder.ins().iadd(len_addr, len_to_elems_delta);
+        init.initialize(
+            func_env,
+            builder,
+            interned_type_index,
+            base_size,
+            size,
+            elems_addr,
+            |func_env, builder, elem_ty, elem_addr, val| {
+                self.init_field(func_env, builder, elem_addr, elem_ty, val)
+            },
+        )?;
         Ok(array_ref)
     }
 
@@ -487,27 +392,20 @@ impl GcCompiler for DrcCompiler {
         //
         // Note: we don't need to bounds-check the GC ref access here, since we
         // trust the results of the allocation libcall.
-
         let base = func_env.get_gc_heap_base(builder);
         let extended_struct_ref =
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), struct_ref);
-        let struct_addr = builder.ins().iadd(base, extended_struct_ref);
-
-        let struct_ty = match &func_env.types[interned_type_index].composite_type {
-            WasmCompositeType::Struct(s) => s,
-            _ => unreachable!(),
-        };
-        let field_types: SmallVec<[_; 8]> = struct_ty.fields.iter().cloned().collect();
-        assert_eq!(field_vals.len(), field_types.len());
-
-        for ((ty, val), offset) in field_types.into_iter().zip(field_vals).zip(field_offsets) {
-            let size_of_access =
-                wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
-            assert!(offset + size_of_access <= struct_size);
-
-            let field_addr = builder.ins().iadd_imm(struct_addr, i64::from(offset));
-            self.init_field(func_env, builder, field_addr, ty.element_type, *val)?;
-        }
+        let raw_ptr_to_struct = builder.ins().iadd(base, extended_struct_ref);
+        initialize_struct_fields(
+            func_env,
+            builder,
+            interned_type_index,
+            raw_ptr_to_struct,
+            field_vals,
+            |func_env, builder, ty, field_addr, val| {
+                self.init_field(func_env, builder, field_addr, ty, val)
+            },
+        )?;
 
         Ok(struct_ref)
     }

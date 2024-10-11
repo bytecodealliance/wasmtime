@@ -15,25 +15,6 @@ pub fn default_gc_runtime() -> impl GcRuntime {
     DisabledCollector
 }
 
-struct DisabledCollector;
-
-unsafe impl GcRuntime for DisabledCollector {
-    fn new_gc_heap(&self) -> Result<Box<dyn GcHeap>> {
-        unreachable!()
-    }
-
-    fn layouts(&self) -> &dyn GcTypeLayouts {
-        unreachable!()
-    }
-}
-
-pub enum VMExternRef {}
-
-pub enum VMEqRef {}
-
-pub enum VMStructRef {}
-
-pub enum VMArrayRef {}
 
 pub struct VMGcObjectDataMut<'a> {
     inner: VMStructRef,

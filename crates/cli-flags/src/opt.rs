@@ -385,6 +385,17 @@ impl WasmtimeOptionValue for wasmtime::Strategy {
     }
 }
 
+impl WasmtimeOptionValue for wasmtime::Collector {
+    const VAL_HELP: &'static str = "=drc|null";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match String::parse(val)?.as_str() {
+            "drc" => Ok(wasmtime::Collector::DeferredReferenceCounting),
+            "null" => Ok(wasmtime::Collector::Null),
+            other => bail!("unknown collector `{other}` only `drc` and `null` accepted",),
+        }
+    }
+}
+
 impl WasmtimeOptionValue for WasiNnGraph {
     const VAL_HELP: &'static str = "=<format>::<dir>";
     fn parse(val: Option<&str>) -> Result<Self> {

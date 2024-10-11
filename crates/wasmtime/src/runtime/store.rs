@@ -83,10 +83,9 @@ use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
-    Backtrace, ExportGlobal, GcHeapAllocationIndex, GcRootsList, GcStore,
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleRuntimeInfo,
-    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef, VMGcRef,
-    VMRuntimeLimits, WasmFault,
+    Backtrace, ExportGlobal, GcRootsList, GcStore, InstanceAllocationRequest, InstanceAllocator,
+    InstanceHandle, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler, StoreBox,
+    StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits, WasmFault,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::type_registry::RegisteredType;
@@ -1538,16 +1537,13 @@ impl StoreOpaque {
 
         #[cfg(feature = "gc")]
         fn allocate_gc_store(engine: &Engine) -> Result<GcStore> {
-            let (index, heap) = if engine.features().gc_types() {
-                engine
-                    .allocator()
-                    .allocate_gc_heap(&**engine.gc_runtime())?
-            } else {
-                (
-                    GcHeapAllocationIndex::default(),
-                    crate::runtime::vm::disabled_gc_heap(),
-                )
-            };
+            ensure!(
+                engine.features().gc_types(),
+                "cannot allocate a GC store when GC is disabled at configuration time"
+            );
+            let (index, heap) = engine
+                .allocator()
+                .allocate_gc_heap(&**engine.gc_runtime()?)?;
             Ok(GcStore::new(index, heap))
         }
 
@@ -2758,14 +2754,8 @@ impl Drop for StoreOpaque {
 
             #[cfg(feature = "gc")]
             if let Some(gc_store) = self.gc_store.take() {
-                if self.engine.features().gc_types() {
-                    allocator.deallocate_gc_heap(gc_store.allocation_index, gc_store.gc_heap);
-                } else {
-                    // If GC types are not enabled, we are just dealing with a
-                    // dummy GC heap.
-                    debug_assert_eq!(gc_store.allocation_index, GcHeapAllocationIndex::default());
-                    debug_assert!(gc_store.gc_heap.as_any().is::<crate::vm::DisabledGcHeap>());
-                }
+                debug_assert!(self.engine.features().gc_types());
+                allocator.deallocate_gc_heap(gc_store.allocation_index, gc_store.gc_heap);
             }
 
             #[cfg(feature = "component-model")]
