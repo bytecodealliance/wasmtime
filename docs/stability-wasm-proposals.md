@@ -46,6 +46,7 @@ column is below.
 | [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
 | [`gc`] [^6]              | ✅      | ✅    | ❌[^7]   | ❌     | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`custom-page-sizes`]    | ❌      | ✅    | ❌       | ⚠️[^8]  | ✅  | ❌    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
@@ -53,6 +54,8 @@ column is below.
 [^7]: The implementation of GC has [known performance
     issues](https://github.com/bytecodealliance/wasmtime/issues/9351) which can
     affect non-GC code when the GC proposal is enabled.
+[^8]: A custom fuzzer exists but this isn't enabled yet for general-purpose
+    fuzzing.
 
 ## Unsupported proposals
 
@@ -86,6 +89,7 @@ column is below.
 [`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
 [`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
 [`gc`]: https://github.com/WebAssembly/gc
+[`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
 
 ## Feature requirements
 
@@ -116,6 +120,10 @@ For each column in the above tables, this is a further explanation of its meanin
   > implementation and does not run the inline fast paths for `table` operations
   > emitted by the JIT. Exercising these things was the motivation for writing
   > the custom fuzz target for `table.{get,set}` instructions.
+
+  One indication of the status of fuzzing is [this
+  file](https://github.com/bytecodealliance/wasmtime/blob/main/crates/fuzzing/src/generators/module.rs#L16)
+  which controls module configuration during fuzzing.
 
 * **API** - The proposal's functionality is exposed in the `wasmtime` crate's
   API. At minimum this is `Config::wasm_the_proposal` but proposals such as
