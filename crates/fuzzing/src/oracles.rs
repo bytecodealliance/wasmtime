@@ -1166,6 +1166,28 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arbitrary::Unstructured;
+    use rand::prelude::*;
+    use wasmparser::{Validator, WasmFeatures};
+
+    fn gen_until_pass<T: for<'a> Arbitrary<'a>>(
+        mut f: impl FnMut(T, &mut Unstructured<'_>) -> Result<bool>,
+    ) -> bool {
+        let mut rng = SmallRng::seed_from_u64(0);
+        let mut buf = vec![0; 2048];
+        let n = 2000;
+        for _ in 0..n {
+            rng.fill_bytes(&mut buf);
+            let mut u = Unstructured::new(&buf);
+
+            if let Ok(config) = u.arbitrary() {
+                if f(config, &mut u).unwrap() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 
     // Test that the `table_ops` fuzzer eventually runs the gc function in the host.
     // We've historically had issues where this fuzzer accidentally wasn't fuzzing
@@ -1173,29 +1195,81 @@ mod tests {
     // again.
     #[test]
     fn table_ops_eventually_gcs() {
-        use arbitrary::Unstructured;
-        use rand::prelude::*;
-
         // Skip if we're under emulation because some fuzz configurations will do
         // large address space reservations that QEMU doesn't handle well.
         if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
             return;
         }
 
-        let mut rng = SmallRng::seed_from_u64(0);
-        let mut buf = vec![0; 2048];
-        let n = 100;
-        for _ in 0..n {
-            rng.fill_bytes(&mut buf);
-            let u = Unstructured::new(&buf);
+        let ok = gen_until_pass(|(config, test), _| {
+            let result = table_ops(config, test)?;
+            Ok(result > 0)
+        });
 
-            if let Ok((config, test)) = Arbitrary::arbitrary_take_rest(u) {
-                if table_ops(config, test).unwrap() > 0 {
-                    return;
+        if !ok {
+            panic!("gc was never found");
+        }
+    }
+
+    #[test]
+    fn module_generation_uses_expected_proposals() {
+        // Proposals that Wasmtime supports. Eventually a module should be
+        // generated that needs these proposals.
+        let mut expected = WasmFeatures::MUTABLE_GLOBAL
+            | WasmFeatures::FLOATS
+            | WasmFeatures::SIGN_EXTENSION
+            | WasmFeatures::SATURATING_FLOAT_TO_INT
+            | WasmFeatures::MULTI_VALUE
+            | WasmFeatures::BULK_MEMORY
+            | WasmFeatures::REFERENCE_TYPES
+            | WasmFeatures::SIMD
+            | WasmFeatures::MULTI_MEMORY
+            | WasmFeatures::RELAXED_SIMD
+            | WasmFeatures::THREADS
+            | WasmFeatures::TAIL_CALL
+            | WasmFeatures::WIDE_ARITHMETIC
+            | WasmFeatures::MEMORY64
+            | WasmFeatures::GC_TYPES;
+
+        // All other features that wasmparser supports, which is presumably a
+        // superset of the features that wasm-smith supports, are listed here as
+        // unexpected. This means, for example, that if wasm-smith updates to
+        // include a new proposal by default that wasmtime implements then it
+        // will be required to be listed above.
+        let unexpected = WasmFeatures::all() ^ expected;
+
+        let ok = gen_until_pass(|config: generators::Config, u| {
+            let wasm = config.generate(u, None)?.to_bytes();
+
+            // Double-check the module is valid
+            Validator::new_with_features(WasmFeatures::all()).validate_all(&wasm)?;
+
+            // If any of the unexpected features are removed then this module
+            // should always be valid, otherwise something went wrong.
+            for feature in unexpected.iter() {
+                let ok =
+                    Validator::new_with_features(WasmFeatures::all() ^ feature).validate_all(&wasm);
+                if ok.is_err() {
+                    anyhow::bail!("generated a module with {feature:?} but that wasn't expected");
                 }
             }
-        }
 
-        panic!("after {n} runs nothing ever gc'd, something is probably wrong");
+            // If any of `expected` is removed and the module fails to validate,
+            // then that means the module requires that feature. Remove that
+            // from the set of features we're then expecting.
+            for feature in expected.iter() {
+                let ok =
+                    Validator::new_with_features(WasmFeatures::all() ^ feature).validate_all(&wasm);
+                if ok.is_err() {
+                    expected ^= feature;
+                }
+            }
+
+            Ok(expected.is_empty())
+        });
+
+        if !ok {
+            panic!("never generated wasm module using {expected:?}");
+        }
     }
 }
