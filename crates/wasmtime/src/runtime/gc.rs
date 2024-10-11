@@ -11,6 +11,9 @@ pub use disabled::*;
 mod noextern;
 pub use noextern::NoExtern;
 
+mod none_ref;
+pub use none_ref::NoneRef;
+
 use core::fmt;
 use core::ops::Deref;
 
