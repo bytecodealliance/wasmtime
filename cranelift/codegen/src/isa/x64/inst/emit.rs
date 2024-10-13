@@ -115,6 +115,7 @@ pub(crate) fn emit(
         match iset_requirement {
             // Cranelift assumes SSE2 at least.
             InstructionSet::SSE | InstructionSet::SSE2 => true,
+            InstructionSet::CMPXCHG16b => info.isa_flags.use_cmpxchg16b(),
             InstructionSet::SSSE3 => info.isa_flags.use_ssse3(),
             InstructionSet::SSE41 => info.isa_flags.use_sse41(),
             InstructionSet::SSE42 => info.isa_flags.use_sse42(),
@@ -4037,6 +4038,38 @@ pub(crate) fn emit(
             emit_std_reg_mem(sink, prefix, opcodes, 2, replacement, &amode, rex, 0);
         }
 
+        Inst::LockCmpxchg16b {
+            replacement_low,
+            replacement_high,
+            expected_low,
+            expected_high,
+            mem,
+            dst_old_low,
+            dst_old_high,
+        } => {
+            let mem = mem.clone();
+            debug_assert_eq!(*replacement_low, regs::rbx());
+            debug_assert_eq!(*replacement_high, regs::rcx());
+            debug_assert_eq!(*expected_low, regs::rax());
+            debug_assert_eq!(*expected_high, regs::rdx());
+            debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
+            debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
+
+            let amode = mem.finalize(state, sink);
+            // lock cmpxchg16b (mem)
+            // Note that 0xF0 is the Lock prefix.
+            emit_std_enc_mem(
+                sink,
+                LegacyPrefixes::_F0,
+                0x0FC7,
+                2,
+                1,
+                &amode,
+                RexFlags::set_w(),
+                0,
+            );
+        }
+
         Inst::AtomicRmwSeq {
             ty,
             op,
@@ -4152,6 +4185,182 @@ pub(crate) fn emit(
                 dst_old,
             };
             i4.emit(sink, info, state);
+
+            // jnz again
+            one_way_jmp(sink, CC::NZ, again_label);
+        }
+
+        Inst::Atomic128RmwSeq {
+            op,
+            mem,
+            operand_low,
+            operand_high,
+            temp_low,
+            temp_high,
+            dst_old_low,
+            dst_old_high,
+        } => {
+            let operand_low = *operand_low;
+            let operand_high = *operand_high;
+            let temp_low = *temp_low;
+            let temp_high = *temp_high;
+            let dst_old_low = *dst_old_low;
+            let dst_old_high = *dst_old_high;
+            debug_assert_eq!(temp_low.to_reg(), regs::rbx());
+            debug_assert_eq!(temp_high.to_reg(), regs::rcx());
+            debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
+            debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
+            let mem = mem.finalize(state, sink).clone();
+
+            let again_label = sink.get_label();
+
+            // Load the initial value.
+            Inst::load(types::I64, mem.clone(), dst_old_low, ExtKind::ZeroExtend)
+                .emit(sink, info, state);
+            Inst::load(types::I64, mem.offset(8), dst_old_high, ExtKind::ZeroExtend)
+                .emit(sink, info, state);
+
+            // again:
+            sink.bind_label(again_label, state.ctrl_plane_mut());
+
+            // Move old value to temp registers.
+            Inst::mov_r_r(OperandSize::Size64, dst_old_low.to_reg(), temp_low)
+                .emit(sink, info, state);
+            Inst::mov_r_r(OperandSize::Size64, dst_old_high.to_reg(), temp_high)
+                .emit(sink, info, state);
+
+            // Perform the operation.
+            let operand_low_rmi = RegMemImm::reg(operand_low);
+            let operand_high_rmi = RegMemImm::reg(operand_high);
+            use inst_common::MachAtomicRmwOp as RmwOp;
+            match op {
+                RmwOp::Xchg => panic!("use `Atomic128XchgSeq` instead"),
+                RmwOp::Nand => {
+                    // temp &= operand
+                    Inst::alu_rmi_r(
+                        OperandSize::Size64,
+                        AluRmiROpcode::And,
+                        operand_low_rmi,
+                        temp_low,
+                    )
+                    .emit(sink, info, state);
+                    Inst::alu_rmi_r(
+                        OperandSize::Size64,
+                        AluRmiROpcode::And,
+                        operand_high_rmi,
+                        temp_high,
+                    )
+                    .emit(sink, info, state);
+
+                    // temp = !temp
+                    Inst::not(OperandSize::Size64, temp_low).emit(sink, info, state);
+                    Inst::not(OperandSize::Size64, temp_high).emit(sink, info, state);
+                }
+                RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
+                    // Do a comparison with LHS temp and RHS operand.
+                    // `cmp_rmi_r` and `alu_rmi_r` have opposite argument orders.
+                    Inst::cmp_rmi_r(OperandSize::Size64, temp_low.to_reg(), operand_low_rmi)
+                        .emit(sink, info, state);
+                    // Thie will clobber `temp_high`
+                    Inst::alu_rmi_r(
+                        OperandSize::Size64,
+                        AluRmiROpcode::Sbb,
+                        operand_high_rmi,
+                        temp_high,
+                    )
+                    .emit(sink, info, state);
+                    // Restore the clobbered value
+                    Inst::mov_r_r(OperandSize::Size64, dst_old_high.to_reg(), temp_high)
+                        .emit(sink, info, state);
+                    let cc = match op {
+                        RmwOp::Umin => CC::NB,
+                        RmwOp::Umax => CC::B,
+                        RmwOp::Smin => CC::NL,
+                        RmwOp::Smax => CC::L,
+                        _ => unreachable!(),
+                    };
+                    Inst::cmove(OperandSize::Size64, cc, operand_low.into(), temp_low)
+                        .emit(sink, info, state);
+                    Inst::cmove(OperandSize::Size64, cc, operand_high.into(), temp_high)
+                        .emit(sink, info, state);
+                }
+                _ => {
+                    // temp op= operand
+                    let (op_low, op_high) = match op {
+                        RmwOp::Add => (AluRmiROpcode::Add, AluRmiROpcode::Adc),
+                        RmwOp::Sub => (AluRmiROpcode::Sub, AluRmiROpcode::Sbb),
+                        RmwOp::And => (AluRmiROpcode::And, AluRmiROpcode::And),
+                        RmwOp::Or => (AluRmiROpcode::Or, AluRmiROpcode::Or),
+                        RmwOp::Xor => (AluRmiROpcode::Xor, AluRmiROpcode::Xor),
+                        RmwOp::Xchg
+                        | RmwOp::Nand
+                        | RmwOp::Umin
+                        | RmwOp::Umax
+                        | RmwOp::Smin
+                        | RmwOp::Smax => unreachable!(),
+                    };
+                    Inst::alu_rmi_r(OperandSize::Size64, op_low, operand_low_rmi, temp_low)
+                        .emit(sink, info, state);
+                    Inst::alu_rmi_r(OperandSize::Size64, op_high, operand_high_rmi, temp_high)
+                        .emit(sink, info, state);
+                }
+            }
+
+            // cmpxchg16b (mem)
+            Inst::LockCmpxchg16b {
+                replacement_low: temp_low.to_reg(),
+                replacement_high: temp_high.to_reg(),
+                expected_low: dst_old_low.to_reg(),
+                expected_high: dst_old_high.to_reg(),
+                mem: Box::new(mem.into()),
+                dst_old_low,
+                dst_old_high,
+            }
+            .emit(sink, info, state);
+
+            // jnz again
+            one_way_jmp(sink, CC::NZ, again_label);
+        }
+
+        Inst::Atomic128XchgSeq {
+            mem,
+            operand_low,
+            operand_high,
+            dst_old_low,
+            dst_old_high,
+        } => {
+            let operand_low = *operand_low;
+            let operand_high = *operand_high;
+            let dst_old_low = *dst_old_low;
+            let dst_old_high = *dst_old_high;
+            debug_assert_eq!(operand_low, regs::rbx());
+            debug_assert_eq!(operand_high, regs::rcx());
+            debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
+            debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
+            let mem = mem.finalize(state, sink).clone();
+
+            let again_label = sink.get_label();
+
+            // Load the initial value.
+            Inst::load(types::I64, mem.clone(), dst_old_low, ExtKind::ZeroExtend)
+                .emit(sink, info, state);
+            Inst::load(types::I64, mem.offset(8), dst_old_high, ExtKind::ZeroExtend)
+                .emit(sink, info, state);
+
+            // again:
+            sink.bind_label(again_label, state.ctrl_plane_mut());
+
+            // cmpxchg16b (mem)
+            Inst::LockCmpxchg16b {
+                replacement_low: operand_low,
+                replacement_high: operand_high,
+                expected_low: dst_old_low.to_reg(),
+                expected_high: dst_old_high.to_reg(),
+                mem: Box::new(mem.into()),
+                dst_old_low,
+                dst_old_high,
+            }
+            .emit(sink, info, state);
 
             // jnz again
             one_way_jmp(sink, CC::NZ, again_label);

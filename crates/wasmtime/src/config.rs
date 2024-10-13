@@ -3066,6 +3066,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
     #[cfg(target_arch = "x86_64")]
     {
         return match feature {
+            "cmpxchg16b" => Some(std::is_x86_feature_detected!("cmpxchg16b")),
             "sse3" => Some(std::is_x86_feature_detected!("sse3")),
             "ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
             "sse4.1" => Some(std::is_x86_feature_detected!("sse4.1")),

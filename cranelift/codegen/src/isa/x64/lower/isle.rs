@@ -39,6 +39,7 @@ type BoxCallIndInfo = Box<CallInfo<RegMem>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecArgPair = Vec<ArgPair>;
+type BoxSyntheticAmode = Box<SyntheticAmode>;
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -238,6 +239,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn use_sse42(&mut self) -> bool {
         self.backend.x64_flags.use_sse42()
+    }
+
+    #[inline]
+    fn use_cmpxchg16b(&mut self) -> bool {
+        self.backend.x64_flags.use_cmpxchg16b()
     }
 
     #[inline]
@@ -615,6 +621,15 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn mach_atomic_rmw_op_is_xchg(&mut self, op: &MachAtomicRmwOp) -> Option<()> {
+        if *op == MachAtomicRmwOp::Xchg {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn preg_rbp(&mut self) -> PReg {
         regs::rbp().to_real_reg().unwrap().into()
     }
@@ -938,6 +953,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn writable_invalid_gpr(&mut self) -> WritableGpr {
         let reg = Gpr::new(self.invalid_reg()).unwrap();
         WritableGpr::from_reg(reg)
+    }
+
+    fn box_synthetic_amode(&mut self, amode: &SyntheticAmode) -> BoxSyntheticAmode {
+        Box::new(amode.clone())
     }
 }
 

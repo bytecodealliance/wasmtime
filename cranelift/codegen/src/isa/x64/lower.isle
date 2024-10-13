@@ -3348,31 +3348,40 @@
 ;; sequencing to satisfy the CLIF synchronisation requirements for `AtomicLoad`
 ;; without the need for any fence instructions.
 ;;
-;; As described in the `atomic_load` documentation, this lowering is only valid
-;; for I8, I16, I32, and I64. The sub-64-bit types are zero extended, as with a
-;; normal load.
+;; This lowering is only valid for I8, I16, I32, and I64. The sub-64-bit types
+;; are zero extended, as with a normal load.
 (rule 1 (lower (has_type $I64 (atomic_load flags address)))
       (x64_mov (to_amode flags address (zero_offset))))
 (rule (lower (has_type (and (fits_in_32 ty) (ty_int _)) (atomic_load flags address)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address (zero_offset))))
+;; Lower 128-bit `atomic_load` using `cmpxchg16b`.
+(rule 1 (lower (has_type $I128 (atomic_load flags address)))
+      (if-let $true (use_cmpxchg16b))
+      (x64_cmpxchg16b (value_regs (imm $I64 0) (imm $I64 0)) (value_regs (imm $I64 0) (imm $I64 0)) (to_amode flags address (zero_offset))))
 
 ;; Rules for `atomic_store` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; This is a normal store followed by an `mfence` instruction. As described in
-;; the `atomic_load` documentation, this lowering is only valid for I8, I16,
-;; I32, and I64.
+;; This is a normal store followed by an `mfence` instruction. This lowering is
+;; only valid for I8, I16, I32, and I64.
 (rule (lower (atomic_store flags
                            value @ (value_type (and (fits_in_64 ty) (ty_int _)))
                            address))
       (side_effect (side_effect_concat
        (x64_movrm ty (to_amode flags address (zero_offset)) value)
        (x64_mfence))))
+;; Lower 128-bit `atomic_store` using `cmpxchg16b`.
+(rule 1 (lower (atomic_store flags value @ (value_type $I128) address))
+      (if-let $true (use_cmpxchg16b))
+      (side_effect (x64_atomic_128_store_seq (to_amode flags address (zero_offset)) value)))
 
 ;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_cas flags address expected replacement)))
       (x64_cmpxchg ty expected replacement (to_amode flags address (zero_offset))))
+(rule 1 (lower (has_type $I128 (atomic_cas flags address expected replacement)))
+        (if-let $true (use_cmpxchg16b))
+        (x64_cmpxchg16b expected replacement (to_amode flags address (zero_offset))))
 
 ;; Rules for `atomic_rmw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3389,6 +3398,9 @@
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw flags op address input)))
       (x64_atomic_rmw_seq ty op (to_amode flags address (zero_offset)) input))
+(rule 1 (lower (has_type $I128 (atomic_rmw flags op address input)))
+        (if-let $true (use_cmpxchg16b))
+        (x64_atomic_128_rmw_seq op (to_amode flags address (zero_offset)) input))
 
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -959,6 +959,7 @@ pub enum CmpOpcode {
 pub(crate) enum InstructionSet {
     SSE,
     SSE2,
+    CMPXCHG16b,
     SSSE3,
     SSE41,
     SSE42,
