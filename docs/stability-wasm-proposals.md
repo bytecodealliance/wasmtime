@@ -57,14 +57,16 @@ column is below.
 [^8]: A custom fuzzer exists but this isn't enabled yet for general-purpose
     fuzzing.
 
-## Unsupported proposals
+## Unimplemented proposals
 
-* [`branch-hinting`]
-* [`exception-handling`]
-* [`flexible-vectors`]
-* [`memory-control`]
-* [`stack-switching`]
-* [`shared-everything-threads`]
+| Proposal                      | Tracking Issue |
+|-------------------------------|----------------|
+| [`branch-hinting`]            | [#9463](https://github.com/bytecodealliance/wasmtime/issues/9463) |
+| [`exception-handling`]        | [#3427](https://github.com/bytecodealliance/wasmtime/issues/3427) |
+| [`flexible-vectors`]          | [#9464](https://github.com/bytecodealliance/wasmtime/issues/9464) |
+| [`memory-control`]            | [#9467](https://github.com/bytecodealliance/wasmtime/issues/9467) |
+| [`stack-switching`]           | [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465) |
+| [`shared-everything-threads`] | [#9466](https://github.com/bytecodealliance/wasmtime/issues/9466) |
 
 [`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
 [`sign-extension-ops`]: https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md
