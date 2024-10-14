@@ -7,8 +7,12 @@ your system.
     - `export LIBTORCH=/path/to/libtorch`
 2. Build Wasmtime  with `wasmtime-wasi-nn/pytorch` feature.
 3. Navigate to this example directory `crates/wasi-nn/examples/classification-example-pytorch`.
+4. Download `squeezenet1_1.pt` model 
+```
+curl https://github.com/rahulchaphalkar/libtorch-models/releases/download/v0.1/squeezenet1_1.pt --output fixture/model.pt -L
+```
 4. Build this example `cargo build --target=wasm32-wasip1`.
-5. Run the generated wasm file with wasmtime after mapping the directory containing Resnet18 `model.pt` and sample image `kitten.png`
+5. Run the generated wasm file with wasmtime after mapping the directory containing squeezenet1.1 `model.pt` and sample image `kitten.png`
     ```
     ${Wasmtime_root_dir}/target/debug/wasmtime -S nn --dir ${Wasmtime_root_dir}/crates/wasi-nn/examples/classification-example-pytorch::. ${Wasmtime_root_dir}/crates/wasi-nn/examples/classification-example-pytorch/target/wasm32-wasip1/debug/wasi-nn-example-pytorch.wasm
     ```
