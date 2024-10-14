@@ -4261,7 +4261,7 @@ pub(crate) fn emit(
                     // `cmp_rmi_r` and `alu_rmi_r` have opposite argument orders.
                     Inst::cmp_rmi_r(OperandSize::Size64, temp_low.to_reg(), operand_low_rmi)
                         .emit(sink, info, state);
-                    // Thie will clobber `temp_high`
+                    // This will clobber `temp_high`
                     Inst::alu_rmi_r(
                         OperandSize::Size64,
                         AluRmiROpcode::Sbb,
