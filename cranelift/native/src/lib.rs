@@ -49,6 +49,9 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
             return Err("x86 support requires SSE2");
         }
 
+        if std::is_x86_feature_detected!("cmpxchg16b") {
+            isa_builder.enable("has_cmpxchg16b").unwrap();
+        }
         if std::is_x86_feature_detected!("sse3") {
             isa_builder.enable("has_sse3").unwrap();
         }

@@ -426,6 +426,7 @@ impl Engine {
             "has_mie2" => "mie2",
 
             // x64 features to detect
+            "has_cmpxchg16b" => "cmpxchg16b",
             "has_sse3" => "sse3",
             "has_ssse3" => "ssse3",
             "has_sse41" => "sse4.1",

@@ -98,6 +98,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                 "x86_64" => {
                     test: is_x86_feature_detected,
 
+                    std:"cmpxchg16b" => clif:"has_cmpxchg16b",
                     std:"sse3" => clif:"has_sse3",
                     std:"ssse3" => clif:"has_ssse3",
                     std:"sse4.1" => clif:"has_sse41",

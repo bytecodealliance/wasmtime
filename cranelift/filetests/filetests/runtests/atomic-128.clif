@@ -1,0 +1,274 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64 has_cmpxchg16b
+
+function %atomic_load(i128) -> i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128):
+    stack_store.i128 v0, ss0
+    v1 = stack_addr.i64 ss0
+    v2 = atomic_load.i128 v1
+    return v2
+}
+; run: %atomic_load(0) == 0
+; run: %atomic_load(-1) == -1
+; run: %atomic_load(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %atomic_load(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0xFFFFFFFF_FFFFFFFF_00000000_00000000
+; run: %atomic_load(0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == 0xFEDCBA98_76543210_F7E6D5C4_B3A29180
+; run: %atomic_load(0xA00A00A0_0A00A00A_00A00A00_A00A00A0) == 0xA00A00A0_0A00A00A_00A00A00_A00A00A0
+; run: %atomic_load(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678) == 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678
+
+
+function %atomic_store(i128) -> i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128):
+    v1 = stack_addr.i64 ss0
+    atomic_store.i128 v0, v1
+    v2 = stack_load.i128 ss0
+    return v2
+}
+; run: %atomic_store(0) == 0
+; run: %atomic_store(-1) == -1
+; run: %atomic_store(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %atomic_store(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0xFFFFFFFF_FFFFFFFF_00000000_00000000
+; run: %atomic_store(0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == 0xFEDCBA98_76543210_F7E6D5C4_B3A29180
+; run: %atomic_store(0xA00A00A0_0A00A00A_00A00A00_A00A00A0) == 0xA00A00A0_0A00A00A_00A00A00_A00A00A0
+; run: %atomic_store(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678) == 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678
+
+
+function %atomic_cas(i128, i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128, v2: i128):
+    stack_store.i128 v0, ss0
+    v3 = stack_addr.i64 ss0
+    v4 = atomic_cas.i128 v3, v1, v2
+    v5 = stack_load.i128 ss0
+    return v5, v4
+}
+
+; run: %atomic_cas(0, 0, 2) == [2, 0]
+; run: %atomic_cas(1, 0, 2) == [1, 1]
+; run: %atomic_cas(0, 1, 2) == [0, 0]
+; run: %atomic_cas(0, 0xC0FFEEEE_ABCDEF01_00000000_00000000, 0xDECAFFFF_12345678) == [0, 0]
+; run: %atomic_cas(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xFEDCBA98_76543210_F7E6D5C4_B3A29180, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_add(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 add v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_add(0, 0) == [0, 0]
+; run: %atomic_add(1, 0) == [1, 1]
+; run: %atomic_add(0, 1) == [1, 0]
+; run: %atomic_add(1, 1) == [2, 1]
+; run: %atomic_add(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xDECAFFFF_12345678]
+; run: %atomic_add(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xBFDCA987_22222112_D6B1D5C3_C5D6E7F8, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_sub(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 sub v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_sub(0, 0) == [0, 0]
+; run: %atomic_sub(1, 0) == [1, 1]
+; run: %atomic_sub(0, 1) == [-1, 0]
+; run: %atomic_sub(1, 1) == [0, 1]
+; run: %atomic_sub(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0x3F001111_543210FF_DECAFFFF_12345678, 0xDECAFFFF_12345678]
+; run: %atomic_sub(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xC2233456_3579BCF0_E6E42A3A_5E91C4F8, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_and(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 and v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_and(0, 0) == [0, 0]
+; run: %atomic_and(1, 0) == [0, 1]
+; run: %atomic_and(0, 1) == [0, 0]
+; run: %atomic_and(1, 1) == [1, 1]
+; run: %atomic_and(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0, 0xDECAFFFF_12345678]
+; run: %atomic_and(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xC0DCAA88_22442200_D6C2D5C4_12201000, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_nand(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 nand v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_nand(0, 0) == [-1, 0]
+; run: %atomic_nand(1, 0) == [-1, 1]
+; run: %atomic_nand(0, 1) == [-1, 0]
+; run: %atomic_nand(1, 1) == [-2, 1]
+; run: %atomic_nand(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [-1, 0xDECAFFFF_12345678]
+; run: %atomic_nand(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0x3F235577_DDBBDDFF_293D2A3B_EDDFEFFF, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_or(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 or v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_or(0, 0) == [0, 0]
+; run: %atomic_or(1, 0) == [1, 1]
+; run: %atomic_or(0, 1) == [1, 0]
+; run: %atomic_or(1, 1) == [1, 1]
+; run: %atomic_or(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xDECAFFFF_12345678]
+; run: %atomic_or(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xFEFFFEFE_FFDDFF11_FFEEFFFF_B3B6D7F8, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_xor(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 xor v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_xor(0, 0) == [0, 0]
+; run: %atomic_xor(1, 0) == [1, 1]
+; run: %atomic_xor(0, 1) == [1, 0]
+; run: %atomic_xor(1, 1) == [0, 1]
+; run: %atomic_xor(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xDECAFFFF_12345678]
+; run: %atomic_xor(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0x3E235476_DD99DD11_292C2A3B_A196C7F8, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_xchg(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 xchg v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_xchg(0, 0) == [0, 0]
+; run: %atomic_xchg(1, 0) == [0, 1]
+; run: %atomic_xchg(0, 1) == [1, 0]
+; run: %atomic_xchg(1, 1) == [1, 1]
+; run: %atomic_xchg(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xC0FFEEEE_ABCDEF01_00000000_00000000, 0xDECAFFFF_12345678]
+; run: %atomic_xchg(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xFEDCBA98_76543210_F7E6D5C4_B3A29180, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_umin(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 umin v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_umin(0, 0) == [0, 0]
+; run: %atomic_umin(1, 0) == [0, 1]
+; run: %atomic_umin(0, 1) == [0, 0]
+; run: %atomic_umin(1, 1) == [1, 1]
+; run: %atomic_umin(-1, 1) == [1, -1]
+; run: %atomic_umin(1, -1) == [1, 1]
+; run: %atomic_umin(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xDECAFFFF_12345678, 0xDECAFFFF_12345678]
+; run: %atomic_umin(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_umax(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 umax v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_umax(0, 0) == [0, 0]
+; run: %atomic_umax(1, 0) == [1, 1]
+; run: %atomic_umax(0, 1) == [1, 0]
+; run: %atomic_umax(1, 1) == [1, 1]
+; run: %atomic_umax(-1, 1) == [-1, -1]
+; run: %atomic_umax(1, -1) == [-1, 1]
+; run: %atomic_umax(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xC0FFEEEE_ABCDEF01_00000000_00000000, 0xDECAFFFF_12345678]
+; run: %atomic_umax(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xFEDCBA98_76543210_F7E6D5C4_B3A29180, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_smin(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 smin v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_smin(0, 0) == [0, 0]
+; run: %atomic_smin(1, 0) == [0, 1]
+; run: %atomic_smin(0, 1) == [0, 0]
+; run: %atomic_smin(1, 1) == [1, 1]
+; run: %atomic_smin(-1, 1) == [-1, -1]
+; run: %atomic_smin(1, -1) == [-1, 1]
+; run: %atomic_smin(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xC0FFEEEE_ABCDEF01_00000000_00000000, 0xDECAFFFF_12345678]
+; run: %atomic_smin(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+
+function %atomic_smax(i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128):
+    stack_store.i128 v0, ss0
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i128 smax v2, v1
+    v4 = stack_load.i128 ss0
+    return v4, v3
+}
+
+; run: %atomic_smax(0, 0) == [0, 0]
+; run: %atomic_smax(1, 0) == [1, 1]
+; run: %atomic_smax(0, 1) == [1, 0]
+; run: %atomic_smax(1, 1) == [1, 1]
+; run: %atomic_smax(-1, 1) == [1, -1]
+; run: %atomic_smax(1, -1) == [1, 1]
+; run: %atomic_smax(0xDECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_00000000_00000000) == [0xDECAFFFF_12345678, 0xDECAFFFF_12345678]
+; run: %atomic_smax(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xFEDCBA98_76543210_F7E6D5C4_B3A29180, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]

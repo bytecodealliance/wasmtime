@@ -4984,6 +4984,20 @@ fn test_x64_emit() {
         "lock cmpxchgq %r10, -12345(%rcx,%rsi,8), expected=%rax, dst_old=%rax",
     ));
 
+    insns.push((
+        Inst::LockCmpxchg16b {
+            mem: Box::new(am2.clone()),
+            replacement_low: rbx,
+            replacement_high: rcx,
+            expected_low: rax,
+            expected_high: rdx,
+            dst_old_low: w_rax,
+            dst_old_high: w_rdx,
+        },
+        "F0480FC78CF1C7CFFFFF",
+        "lock cmpxchg16b -12345(%rcx,%rsi,8), replacement=%rcx:%rbx, expected=%rdx:%rax, dst_old=%rdx:%rax",
+    ));
+
     // AtomicRmwSeq
     insns.push((
         Inst::AtomicRmwSeq {
@@ -5044,6 +5058,75 @@ fn test_x64_emit() {
         },
         "498B014989C34D01D3F04D0FB1190F85EFFFFFFF",
         "atomically { 64_bits_at_[%r9]) Add= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
+    ));
+
+    // Atomic128RmwSeq
+    insns.push((
+        Inst::Atomic128RmwSeq {
+            op: inst_common::MachAtomicRmwOp::Or,
+            mem: Box::new(am3.clone()),
+            operand_low: r10,
+            operand_high: r11,
+            temp_low: w_rbx,
+            temp_high: w_rcx,
+            dst_old_low: w_rax,
+            dst_old_high: w_rdx,
+        },
+        "498B01498B51084889C34889D14C09D34C09D9F0490FC7090F85E9FFFFFF",
+        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Or %r11:%r10; 0(%r9) = %rcx:%rbx }",
+    ));
+    insns.push((
+        Inst::Atomic128RmwSeq {
+            op: inst_common::MachAtomicRmwOp::And,
+            mem: Box::new(am3.clone()),
+            operand_low: r10,
+            operand_high: r11,
+            temp_low: w_rbx,
+            temp_high: w_rcx,
+            dst_old_low: w_rax,
+            dst_old_high: w_rdx,
+        },
+        "498B01498B51084889C34889D14C21D34C21D9F0490FC7090F85E9FFFFFF",
+        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax And %r11:%r10; 0(%r9) = %rcx:%rbx }"
+    ));
+    insns.push((
+        Inst::Atomic128RmwSeq {
+            op: inst_common::MachAtomicRmwOp::Umin,
+            mem: Box::new(am3.clone()),
+            operand_low: r10,
+            operand_high: r11,
+            temp_low: w_rbx,
+            temp_high: w_rcx,
+            dst_old_low: w_rax,
+            dst_old_high: w_rdx,
+        },
+        "498B01498B51084889C34889D14C39D34C19D94889D1490F43DA490F43CBF0490FC7090F85DEFFFFFF",
+        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Umin %r11:%r10; 0(%r9) = %rcx:%rbx }"
+    ));
+    insns.push((
+        Inst::Atomic128RmwSeq {
+            op: inst_common::MachAtomicRmwOp::Add,
+            mem: Box::new(am3.clone()),
+            operand_low: r10,
+            operand_high: r11,
+            temp_low: w_rbx,
+            temp_high: w_rcx,
+            dst_old_low: w_rax,
+            dst_old_high: w_rdx,
+        },
+        "498B01498B51084889C34889D14C01D34C11D9F0490FC7090F85E9FFFFFF",
+        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Add %r11:%r10; 0(%r9) = %rcx:%rbx }"
+    ));
+    insns.push((
+        Inst::Atomic128XchgSeq {
+            mem: am3.clone(),
+            operand_low: rbx,
+            operand_high: rcx,
+            dst_old_low: w_rax,
+            dst_old_high: w_rdx,
+        },
+        "498B01498B5108F0490FC7090F85F5FFFFFF",
+        "atomically { %rdx:%rax = 0(%r9); 0(%r9) = %rcx:%rbx }",
     ));
 
     // Fence
@@ -5115,6 +5198,7 @@ fn test_x64_emit() {
 
     use crate::settings::Configurable;
     let mut isa_flag_builder = x64::settings::builder();
+    isa_flag_builder.enable("has_cmpxchg16b").unwrap();
     isa_flag_builder.enable("has_ssse3").unwrap();
     isa_flag_builder.enable("has_sse41").unwrap();
     isa_flag_builder.enable("has_fma").unwrap();

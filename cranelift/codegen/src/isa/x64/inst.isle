@@ -664,6 +664,24 @@
                     (mem SyntheticAmode)
                     (dst_old WritableReg))
 
+       ;; A standard (native) `lock cmpxchg16b (amode)`, with register
+       ;; conventions:
+       ;;
+       ;; `mem`                    (read) address
+       ;; %rbx (low), %rcx (high)  (read) replacement value
+       ;; %rax (low), %rdx (high)  (modified) in: expected value, out: value that was actually at `dst`
+       ;; %rflags is written.  Do not assume anything about it after the instruction.
+       ;;
+       ;; The instruction "succeeded" iff the bits of %rax and %rdx
+       ;; afterwards are the same as they were before.
+       (LockCmpxchg16b (replacement_low Reg)
+                       (replacement_high Reg)
+                       (expected_low Reg)
+                       (expected_high Reg)
+                       (mem BoxSyntheticAmode)
+                       (dst_old_low WritableReg)
+                       (dst_old_high WritableReg))
+
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg` instruction.
        ;;
@@ -695,6 +713,46 @@
                      (operand Reg)
                      (temp WritableReg)
                      (dst_old WritableReg))
+
+       ;; A synthetic instruction, based on a loop around a native `lock
+       ;; cmpxchg16b` instruction.
+       ;;
+       ;; This is the same as `AtomicRmwSeq`, but for 128-bit integers.
+       ;;
+       ;; For `MachAtomicRmwOp::Xchg`, use `Atomic128XchgSeq` instead.
+       ;;
+       ;; This instruction sequence has fixed register uses as follows:
+       ;; - %rax (low), %rdx (high)  (written) the old value at `mem`
+       ;; - %rbx (low), %rcx (high)  (written) used as temp registers to hold
+       ;;   the replacement value
+       ;; - %rflags is written.  Do not assume anything about it after the
+       ;;   instruction.
+       (Atomic128RmwSeq (op MachAtomicRmwOp)
+                        (mem BoxSyntheticAmode)
+                        (operand_low Reg)
+                        (operand_high Reg)
+                        (temp_low WritableReg)
+                        (temp_high WritableReg)
+                        (dst_old_low WritableReg)
+                        (dst_old_high WritableReg))
+
+       ;; A synthetic instruction, based on a loop around a native `lock
+       ;; cmpxchg16b` instruction.
+       ;;
+       ;; This is `Atomic128XchgSeq` but only for `MachAtomicRmwOp::Xchg`. As
+       ;; the replacement value is the same every time, this instruction doesn't
+       ;; require any temporary registers.
+       ;;
+       ;; This instruction sequence has fixed register uses as follows:
+       ;; - %rax (low), %rdx (high)  (written) the old value at `mem`
+       ;; - %rbx (low), %rcx (high)  (read) the replacement value
+       ;; - %rflags is written.  Do not assume anything about it after the
+       ;;   instruction.
+       (Atomic128XchgSeq (mem SyntheticAmode)
+                         (operand_low Reg)
+                         (operand_high Reg)
+                         (dst_old_low WritableReg)
+                         (dst_old_high WritableReg))
 
        ;; A memory fence (mfence, lfence or sfence).
        (Fence (kind FenceKind))
@@ -762,6 +820,11 @@
 (type BoxCallIndInfo extern (enum))
 (type BoxReturnCallInfo extern (enum))
 (type BoxReturnCallIndInfo extern (enum))
+(type BoxSyntheticAmode extern (enum))
+
+(decl pure box_synthetic_amode (SyntheticAmode) BoxSyntheticAmode)
+(extern constructor box_synthetic_amode box_synthetic_amode)
+(convert SyntheticAmode BoxSyntheticAmode box_synthetic_amode)
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
@@ -1861,6 +1924,9 @@
 
 (decl pure use_avx2 () bool)
 (extern constructor use_avx2 use_avx2)
+
+(decl pure use_cmpxchg16b () bool)
+(extern constructor use_cmpxchg16b use_cmpxchg16b)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -5214,12 +5280,53 @@
             (_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr dst))))
         dst))
 
+(decl x64_cmpxchg16b (ValueRegs ValueRegs SyntheticAmode) ValueRegs)
+(rule (x64_cmpxchg16b expected replacement addr)
+      (let ((expected_low Gpr (value_regs_get_gpr expected 0))
+            (expected_high Gpr (value_regs_get_gpr expected 1))
+            (replacement_low Gpr (value_regs_get_gpr replacement 0))
+            (replacement_high Gpr (value_regs_get_gpr replacement 1))
+            (dst_low WritableGpr (temp_writable_gpr))
+            (dst_high WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.LockCmpxchg16b replacement_low replacement_high expected_low expected_high addr dst_low dst_high))))
+        (value_regs dst_low dst_high)))
+
 (decl x64_atomic_rmw_seq (Type MachAtomicRmwOp SyntheticAmode Gpr) Gpr)
 (rule (x64_atomic_rmw_seq ty op mem input)
       (let ((dst WritableGpr (temp_writable_gpr))
             (tmp WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.AtomicRmwSeq ty op mem input tmp dst))))
         dst))
+
+(decl x64_atomic_128_rmw_seq (MachAtomicRmwOp SyntheticAmode ValueRegs) ValueRegs)
+(rule (x64_atomic_128_rmw_seq op mem input)
+      (let ((dst_low WritableGpr (temp_writable_gpr))
+            (dst_high WritableGpr (temp_writable_gpr))
+            (tmp_low WritableGpr (temp_writable_gpr))
+            (tmp_high WritableGpr (temp_writable_gpr))
+            (input_low Gpr (value_regs_get_gpr input 0))
+            (input_high Gpr (value_regs_get_gpr input 1))
+            (_ Unit (emit (MInst.Atomic128RmwSeq op mem input_low input_high tmp_low tmp_high dst_low dst_high))))
+        (value_regs dst_low dst_high)))
+
+(rule 1 (x64_atomic_128_rmw_seq (mach_atomic_rmw_op_xchg) mem input)
+        (let ((dst_low WritableGpr (temp_writable_gpr))
+              (dst_high WritableGpr (temp_writable_gpr))
+              (input_low Gpr (value_regs_get_gpr input 0))
+              (input_high Gpr (value_regs_get_gpr input 1))
+              (_ Unit (emit (MInst.Atomic128XchgSeq mem input_low input_high dst_low dst_high))))
+          (value_regs dst_low dst_high)))
+
+(decl x64_atomic_128_store_seq (SyntheticAmode ValueRegs) SideEffectNoResult)
+(rule (x64_atomic_128_store_seq mem input)
+        (let ((dst_low WritableGpr (temp_writable_gpr))
+              (dst_high WritableGpr (temp_writable_gpr))
+              (input_low Gpr (value_regs_get_gpr input 0))
+              (input_high Gpr (value_regs_get_gpr input 1)))
+          (SideEffectNoResult.Inst (MInst.Atomic128XchgSeq mem input_low input_high dst_low dst_high))))
+
+(decl mach_atomic_rmw_op_xchg () MachAtomicRmwOp)
+(extern extractor mach_atomic_rmw_op_xchg mach_atomic_rmw_op_is_xchg)
 
 ;; CLIF IR has one enumeration for atomic operations (`AtomicRmwOp`) while the
 ;; mach backend has another (`MachAtomicRmwOp`)--this converts one to the other.

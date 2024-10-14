@@ -3637,7 +3637,7 @@ pub(crate) fn define(
     let AtomicMem = &TypeVar::new(
         "AtomicMem",
         "Any type that can be stored in memory, which can be used in an atomic operation",
-        TypeSetBuilder::new().ints(8..64).build(),
+        TypeSetBuilder::new().ints(8..128).build(),
     );
 
     ig.push(
@@ -3645,10 +3645,11 @@ pub(crate) fn define(
             "atomic_rmw",
             r#"
         Atomically read-modify-write memory at `p`, with second operand `x`.  The old value is
-        returned.  `p` has the type of the target word size, and `x` may be an integer type of
-        8, 16, 32 or 64 bits, even on a 32-bit target.  The type of the returned value is the
-        same as the type of `x`.  This operation is sequentially consistent and creates
-        happens-before edges that order normal (non-atomic) loads and stores.
+        returned.  `p` has the type of the target word size, and `x` may be any integer type; note
+        that some targets require specific target features to be enabled in order to support 128-bit
+        integer atomics.  The type of the returned value is the same as the type of `x`.  This
+        operation is sequentially consistent and creates happens-before edges that order normal
+        (non-atomic) loads and stores.
         "#,
             &formats.atomic_rmw,
         )
@@ -3673,11 +3674,11 @@ pub(crate) fn define(
         Perform an atomic compare-and-swap operation on memory at `p`, with expected value `e`,
         storing `x` if the value at `p` equals `e`.  The old value at `p` is returned,
         regardless of whether the operation succeeds or fails.  `p` has the type of the target
-        word size, and `x` and `e` must have the same type and the same size, which may be an
-        integer type of 8, 16, 32 or 64 bits, even on a 32-bit target.  The type of the returned
-        value is the same as the type of `x` and `e`.  This operation is sequentially
-        consistent and creates happens-before edges that order normal (non-atomic) loads and
-        stores.
+        word size, and `x` and `e` must have the same type and the same size, which may be any
+        integer type; note that some targets require specific target features to be enabled in order
+        to support 128-bit integer atomics.  The type of the returned value is the same as the type
+        of `x` and `e`.  This operation is sequentially consistent and creates happens-before edges
+        that order normal (non-atomic) loads and stores.
         "#,
             &formats.atomic_cas,
         )
@@ -3702,9 +3703,10 @@ pub(crate) fn define(
         Atomically load from memory at `p`.
 
         This is a polymorphic instruction that can load any value type which has a memory
-        representation.  It should only be used for integer types with 8, 16, 32 or 64 bits.
-        This operation is sequentially consistent and creates happens-before edges that order
-        normal (non-atomic) loads and stores.
+        representation.  It can only be used for integer types; note that some targets require
+        specific target features to be enabled in order to support 128-bit integer atomics. This
+        operation is sequentially consistent and creates happens-before edges that order normal
+        (non-atomic) loads and stores.
         "#,
             &formats.load_no_offset,
         )
@@ -3726,9 +3728,10 @@ pub(crate) fn define(
         Atomically store `x` to memory at `p`.
 
         This is a polymorphic instruction that can store any value type with a memory
-        representation.  It should only be used for integer types with 8, 16, 32 or 64 bits.
-        This operation is sequentially consistent and creates happens-before edges that order
-        normal (non-atomic) loads and stores.
+        representation.  It can only be used for integer types; note that some targets require
+        specific target features to be enabled in order to support 128-bit integer atomics This
+        operation is sequentially consistent and creates happens-before edges that order normal
+        (non-atomic) loads and stores.
         "#,
             &formats.store_no_offset,
         )
