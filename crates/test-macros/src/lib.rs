@@ -218,7 +218,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         };
         let func_name = &func.sig.ident;
         let ret = match &func.sig.output {
-            ReturnType::Default => quote! { () },
+            ReturnType::Default => quote! {},
             ReturnType::Type(_, ty) => quote! { -> #ty },
         };
         let test_name = Ident::new(
