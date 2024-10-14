@@ -46,7 +46,7 @@ column is below.
 | [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
 | [`gc`] [^6]              | ✅      | ✅    | ❌[^7]   | ❌     | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`custom-page-sizes`]    | ❌      | ✅    | ❌       | ⚠️[^8]  | ✅  | ❌    |
+| [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
@@ -54,8 +54,6 @@ column is below.
 [^7]: The implementation of GC has [known performance
     issues](https://github.com/bytecodealliance/wasmtime/issues/9351) which can
     affect non-GC code when the GC proposal is enabled.
-[^8]: A custom fuzzer exists but this isn't enabled yet for general-purpose
-    fuzzing.
 
 ## Unsupported proposals
 

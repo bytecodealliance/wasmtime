@@ -176,6 +176,7 @@ impl Config {
             .wasm_threads(self.module_config.config.threads_enabled)
             .wasm_function_references(self.module_config.config.gc_enabled)
             .wasm_gc(self.module_config.config.gc_enabled)
+            .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
             .wasm_wide_arithmetic(self.module_config.config.wide_arithmetic_enabled)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)

@@ -25,6 +25,7 @@ impl SpecInterpreter {
         config.reference_types_enabled = false;
         config.tail_call_enabled = false;
         config.relaxed_simd_enabled = false;
+        config.custom_page_sizes_enabled = false;
         config.wide_arithmetic_enabled = false;
 
         Self
