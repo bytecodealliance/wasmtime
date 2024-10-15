@@ -6,4 +6,4 @@ by the [WASI Subgroup] of the Wasm Community Group of the W3C.
 To learn more about WASI, see the [Interfaces page on wasi.dev].
 
 [WASI Subgroup]: https://github.com/WebAssembly/wasi
-[wasi.dev]: https://wasi.dev/interfaces
+[Interfaces page on wasi.dev]: https://wasi.dev/interfaces
