@@ -21,8 +21,6 @@ pub struct CompiledModule {
     wasm_to_array_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
     meta: Metadata,
     code_memory: Arc<CodeMemory>,
-    #[cfg(feature = "debug-builtins")]
-    dbg_jit_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
     func_names: Vec<FunctionName>,
@@ -54,30 +52,19 @@ impl CompiledModule {
             module: Arc::new(info.module),
             funcs: info.funcs,
             wasm_to_array_trampolines: info.wasm_to_array_trampolines,
-            #[cfg(feature = "debug-builtins")]
-            dbg_jit_registration: None,
             code_memory,
             meta: info.meta,
             unique_id: CompiledModuleId::new(),
             func_names: info.func_names,
         };
-        ret.register_debug_and_profiling(profiler)?;
+        ret.register_profiling(profiler)?;
 
         Ok(ret)
     }
 
-    fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
-        #[cfg(feature = "debug-builtins")]
-        if self.meta.native_debug_info_present {
-            let text = self.text();
-            let bytes = crate::debug::create_gdbjit_image(
-                self.mmap().to_vec(),
-                (text.as_ptr(), text.len()),
-            )
-            .context("failed to create jit image for gdb")?;
-            let reg = crate::runtime::vm::GdbJitImageRegistration::register(bytes);
-            self.dbg_jit_registration = Some(reg);
-        }
+    fn register_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
+        // TODO-Bug?: "code_memory" is not exclusive for this module in the case of components,
+        // so we may be registering the same code range multiple times here.
         profiler.register_module(&self.code_memory.mmap()[..], &|addr| {
             let (idx, _) = self.func_by_text_offset(addr)?;
             let idx = self.module.func_index(idx);
@@ -279,7 +266,7 @@ impl CompiledModule {
                     let (_, range) = &self.meta.dwarf[i];
                     let start = range.start.try_into().ok()?;
                     let end = range.end.try_into().ok()?;
-                    self.code_memory().dwarf().get(start..end)
+                    self.code_memory().wasm_dwarf().get(start..end)
                 })
                 .unwrap_or(&[]);
             Ok(EndianSlice::new(data, gimli::LittleEndian))

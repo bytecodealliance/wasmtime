@@ -237,7 +237,6 @@ impl<'a> ObjectBuilder<'a> {
             wasm_to_array_trampolines,
             func_names,
             meta: Metadata {
-                native_debug_info_present: self.tunables.generate_native_debuginfo,
                 has_unparsed_debuginfo,
                 code_section_offset: debuginfo.wasm_file.code_section_offset,
                 has_wasm_debuginfo: self.tunables.parse_wasm_debuginfo,

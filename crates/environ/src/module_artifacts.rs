@@ -93,9 +93,6 @@ pub struct FunctionName {
 /// Metadata associated with a compiled ELF artifact.
 #[derive(Serialize, Deserialize)]
 pub struct Metadata {
-    /// Whether or not native debug information is available in `obj`
-    pub native_debug_info_present: bool,
-
     /// Whether or not the original wasm module contained debug information that
     /// we skipped and did not parse.
     pub has_unparsed_debuginfo: bool,

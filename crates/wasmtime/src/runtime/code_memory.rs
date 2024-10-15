@@ -19,8 +19,12 @@ pub struct CodeMemory {
     // dropped first since it refers to memory owned by `mmap`.
     mmap: ManuallyDrop<MmapVec>,
     unwind_registration: ManuallyDrop<Option<UnwindRegistration>>,
+    #[cfg(feature = "debug-builtins")]
+    debug_registration: ManuallyDrop<Option<crate::runtime::vm::GdbJitImageRegistration>>,
     published: bool,
     enable_branch_protection: bool,
+    #[cfg(feature = "debug-builtins")]
+    has_native_debug_info: bool,
 
     relocations: Vec<(usize, obj::LibCall)>,
 
@@ -32,7 +36,7 @@ pub struct CodeMemory {
     address_map_data: Range<usize>,
     func_name_data: Range<usize>,
     info_data: Range<usize>,
-    dwarf: Range<usize>,
+    wasm_dwarf: Range<usize>,
 }
 
 impl Drop for CodeMemory {
@@ -40,6 +44,7 @@ impl Drop for CodeMemory {
         // Drop `unwind_registration` before `self.mmap`
         unsafe {
             ManuallyDrop::drop(&mut self.unwind_registration);
+            ManuallyDrop::drop(&mut self.debug_registration);
             ManuallyDrop::drop(&mut self.mmap);
         }
     }
@@ -65,12 +70,14 @@ impl CodeMemory {
         let mut text = 0..0;
         let mut unwind = 0..0;
         let mut enable_branch_protection = None;
+        #[cfg(feature = "debug-builtins")]
+        let mut has_native_debug_info = false;
         let mut trap_data = 0..0;
         let mut wasm_data = 0..0;
         let mut address_map_data = 0..0;
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
-        let mut dwarf = 0..0;
+        let mut wasm_dwarf = 0..0;
         for section in obj.sections() {
             let data = section.data().err2anyhow()?;
             let name = section.name().err2anyhow()?;
@@ -124,7 +131,9 @@ impl CodeMemory {
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
-                obj::ELF_WASMTIME_DWARF => dwarf = range,
+                obj::ELF_WASMTIME_DWARF => wasm_dwarf = range,
+                #[cfg(feature = "debug-builtins")]
+                ".debug_info" => has_native_debug_info = true,
 
                 _ => log::debug!("ignoring section {name}"),
             }
@@ -132,15 +141,19 @@ impl CodeMemory {
         Ok(Self {
             mmap: ManuallyDrop::new(mmap),
             unwind_registration: ManuallyDrop::new(None),
+            #[cfg(feature = "debug-builtins")]
+            debug_registration: ManuallyDrop::new(None),
             published: false,
             enable_branch_protection: enable_branch_protection
                 .ok_or_else(|| anyhow!("missing `{}` section", obj::ELF_WASM_BTI))?,
+            #[cfg(feature = "debug-builtins")]
+            has_native_debug_info,
             text,
             unwind,
             trap_data,
             address_map_data,
             func_name_data,
-            dwarf,
+            wasm_dwarf,
             info_data,
             wasm_data,
             relocations,
@@ -162,8 +175,8 @@ impl CodeMemory {
 
     /// Returns the contents of the `ELF_WASMTIME_DWARF` section.
     #[inline]
-    pub fn dwarf(&self) -> &[u8] {
-        &self.mmap[self.dwarf.clone()]
+    pub fn wasm_dwarf(&self) -> &[u8] {
+        &self.mmap[self.wasm_dwarf.clone()]
     }
 
     /// Returns the data in the `ELF_NAME_DATA` section.
@@ -211,6 +224,7 @@ impl CodeMemory {
     ///
     /// * Change page protections from read/write to read/execute.
     /// * Register unwinding information with the OS
+    /// * Register this image with the debugger if native DWARF is present
     ///
     /// After this function executes all JIT code should be ready to execute.
     pub fn publish(&mut self) -> Result<()> {
@@ -268,6 +282,9 @@ impl CodeMemory {
             // runtime that there's unwinding information available for all
             // our just-published JIT functions.
             self.register_unwind_info()?;
+
+            #[cfg(feature = "debug-builtins")]
+            self.register_debug_image()?;
         }
 
         Ok(())
@@ -315,6 +332,23 @@ impl CodeMemory {
             UnwindRegistration::new(text.as_ptr(), unwind_info.as_ptr(), unwind_info.len())
                 .context("failed to create unwind info registration")?;
         *self.unwind_registration = Some(registration);
+        Ok(())
+    }
+
+    #[cfg(feature = "debug-builtins")]
+    fn register_debug_image(&mut self) -> Result<()> {
+        if !self.has_native_debug_info {
+            return Ok(());
+        }
+
+        // TODO-DebugInfo: we're copying the whole image here, which is pretty wasteful.
+        // Use the existing memory by teaching code here about relocations in DWARF sections
+        // and anything else necessary that is done in "create_gdbjit_image" right now.
+        let image = self.mmap().to_vec();
+        let text: &[u8] = self.text();
+        let bytes = crate::debug::create_gdbjit_image(image, (text.as_ptr(), text.len()))?;
+        let reg = crate::runtime::vm::GdbJitImageRegistration::register(bytes);
+        *self.debug_registration = Some(reg);
         Ok(())
     }
 
