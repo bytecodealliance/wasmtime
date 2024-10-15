@@ -13,7 +13,7 @@ use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
 };
 use wasmtime_environ::{
-    GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType,
+    GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
     FUNCREF_MASK,
 };
 
@@ -77,6 +77,12 @@ where
     /// Flag indicating whether during translation an unsupported instruction
     /// was found.
     pub found_unsupported_instruction: Option<&'static str>,
+
+    /// Compilation settings for code generation.
+    pub tunables: &'a Tunables,
+
+    /// Local counter to track fuel consumption.
+    pub fuel_consumed: i64,
 }
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
@@ -84,6 +90,7 @@ where
     M: MacroAssembler,
 {
     pub fn new(
+        tunables: &'a Tunables,
         masm: &'a mut M,
         context: CodeGenContext<'a>,
         env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
@@ -94,9 +101,12 @@ where
             context,
             masm,
             env,
+            tunables,
             source_location: Default::default(),
             control_frames: Default::default(),
             found_unsupported_instruction: None,
+            // Empty functions should consume at least 1 fuel unit.
+            fuel_consumed: 1,
         }
     }
 
@@ -134,6 +144,7 @@ where
         self.masm.start_source_loc(Default::default());
         // We need to use the vmctx parameter before pinning it for stack checking.
         self.masm.prologue(vmctx);
+
         // Pin the `VMContext` pointer.
         self.masm.mov(
             writable!(vmctx!(M)),
@@ -144,6 +155,10 @@ where
         self.masm.reserve_stack(self.context.frame.locals_size);
 
         self.masm.end_source_loc();
+
+        if self.tunables.consume_fuel {
+            self.emit_fuel_check();
+        }
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
@@ -188,7 +203,7 @@ where
 
     pub fn handle_unreachable_end(&mut self) {
         let mut frame = self.control_frames.pop().unwrap();
-        // We just popped the outermost block.
+        // We j;ust popped the outermost block.
         let is_outermost = self.control_frames.len() == 0;
 
         if frame.is_next_sequence_reachable() {
@@ -250,17 +265,11 @@ where
                 $(
                     fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                         self.0.$visit($($($arg.clone()),*)?)?;
-                        // Only visit operators if the compiler is in a reachable code state. If
-                        // the compiler is in an unreachable code state, most of the operators are
-                        // ignored except for If, Block, Loop, Else and End. These operators need
-                        // to be observed in order to keep the control stack frames balanced and to
-                        // determine if reachability should be restored.
-                        let visit_when_unreachable = visit_op_when_unreachable(Operator::$op $({ $($arg: $arg.clone()),* })?);
-                        if self.1.is_reachable() || visit_when_unreachable  {
-                            let location = SourceLoc::new(self.2 as u32);
-                            self.1.start(location);
+                        let op = Operator::$op $({ $($arg: $arg.clone()),* })?;
+                        if self.1.visit(&op) {
+                            self.1.before_visit_op(&op, self.2);
                             let res = Ok(self.1.$visit($($($arg),*)?));
-                            self.1.end();
+                            self.1.after_visit_op();
                             res
                         } else {
                             Ok(U::Output::default())
@@ -270,7 +279,7 @@ where
             };
         }
 
-        fn visit_op_when_unreachable(op: Operator) -> bool {
+        fn visit_op_when_unreachable(op: &Operator) -> bool {
             use Operator::*;
             match op {
                 If { .. } | Block { .. } | Loop { .. } | Else | End => true,
@@ -278,51 +287,52 @@ where
             }
         }
 
-        /// Trait to handle reachability state.
-        trait ReachableState {
-            /// Returns true if the current state of the program is reachable.
-            fn is_reachable(&self) -> bool;
+        /// Trait to handle hooks that must happen before and after visiting an
+        /// operator.
+        trait VisitorHooks {
+            /// Hook prior to visiting an operator.
+            fn before_visit_op(&mut self, operator: &Operator, offset: usize);
+            /// Hook after visiting an operator.
+            fn after_visit_op(&mut self);
+
+            /// Returns `true` if the operator will be visited.
+            ///
+            /// Operators will be visited if the following invariants are met:
+            /// * The compiler is in a reachable state.
+            /// * The compiler is in an unreachable state, but the current
+            ///   operator is a control flow operator. These operators need to be
+            ///   visited in order to keep the control stack frames balanced and
+            ///   to determine if the reachability state must be restored.
+            fn visit(&self, op: &Operator) -> bool;
         }
 
-        /// Trait to map source locations to machine code.
-        trait SourceLocator {
-            fn start(&mut self, loc: SourceLoc);
-            fn end(&mut self);
-        }
-
-        impl<'a, 'translation, 'data, M: MacroAssembler> ReachableState
+        impl<'a, 'translation, 'data, M: MacroAssembler> VisitorHooks
             for CodeGen<'a, 'translation, 'data, M>
         {
-            fn is_reachable(&self) -> bool {
-                self.context.reachable
-            }
-        }
-
-        impl<'a, 'translation, 'data, M: MacroAssembler> SourceLocator
-            for CodeGen<'a, 'translation, 'data, M>
-        {
-            fn start(&mut self, loc: SourceLoc) {
-                let rel = self.source_loc_from(loc);
-                self.source_location.current = self.masm.start_source_loc(rel);
+            fn visit(&self, op: &Operator) -> bool {
+                self.context.reachable || visit_op_when_unreachable(op)
             }
 
-            fn end(&mut self) {
-                // Because in Winch binary emission is done in a single pass
-                // and because the MachBuffer performs optimizations during
-                // emission, we have to be careful when calling
-                // [MacroAssembler::end_source_location] to avoid breaking the
-                // invariant that checks that the end [CodeOffset] must be equal
-                // or greater than the start [CodeOffset].
-                if self.masm.current_code_offset() >= self.source_location.current.0 {
-                    self.masm.end_source_loc();
+            fn before_visit_op(&mut self, operator: &Operator, offset: usize) {
+                // Handle source location mapping.
+                self.source_location_before_visit_op(offset);
+
+                // Handle fuel.
+                if self.tunables.consume_fuel {
+                    self.fuel_before_visit_op(operator);
                 }
+            }
+
+            fn after_visit_op(&mut self) {
+                // Handle source code location mapping.
+                self.source_location_after_visit_op();
             }
         }
 
         impl<'a, T, U> VisitOperator<'a> for ValidateThenVisit<'_, T, U>
         where
             T: VisitOperator<'a, Output = wasmparser::Result<()>>,
-            U: VisitOperator<'a> + ReachableState + SourceLocator,
+            U: VisitOperator<'a> + VisitorHooks,
             U::Output: Default,
         {
             type Output = Result<U::Output>;
@@ -665,6 +675,7 @@ where
             // reachability is restored or when reaching the end of the
             // function.
             HeapStyle::Static { bound } if offset_with_access_size > bound => {
+                self.emit_fuel_increment();
                 self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS);
                 self.context.reachable = false;
                 None
@@ -906,6 +917,177 @@ where
             heap_data.ty.into(),
         );
         self.context.stack.push(dst.into());
+    }
+
+    /// Emit a series of instructions that check the current fuel usage by
+    /// performing a zero-comparison with the number of units stored in
+    /// `VMRuntimeLimits`.
+    pub fn emit_fuel_check(&mut self) {
+        let fuel_var = self.emit_load_fuel_consumed();
+        let continuation = self.masm.get_label();
+
+        // Fuel is stored as a negative i64, so if the number is less than zero,
+        // we're still under the fuel limits.
+        self.masm.branch(
+            IntCmpKind::LtS,
+            fuel_var,
+            RegImm::i64(0),
+            continuation,
+            OperandSize::S64,
+        );
+        // Out-of-fuel branch.
+        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>();
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(out_of_fuel.clone()),
+        );
+        // Under fuel limits branch.
+        self.masm.bind(continuation);
+        self.context.free_reg(fuel_var);
+    }
+
+    /// Increments the fuel consumed in `VMRuntimeLimits` by flushing
+    /// `self.fuel_consumed` to memory.
+    fn emit_fuel_increment(&mut self) {
+        let fuel_at_point = std::mem::replace(&mut self.fuel_consumed, 0);
+        if fuel_at_point == 0 {
+            return;
+        }
+
+        let limits = self.env.resolve_vmruntime_limits();
+        let limits_var = self.context.any_gpr(self.masm);
+
+        // Load `VMRuntimeLimits` into the `limits_var` reg.
+        self.masm.load_ptr(
+            self.masm.address_at_vmctx(limits.ptr_offset),
+            writable!(limits_var),
+        );
+
+        // Load the fuel consumed at point into the scratch register.
+        self.masm.load(
+            self.masm
+                .address_at_reg(limits_var, limits.fuel_consumed_offset),
+            writable!(scratch!(M)),
+            OperandSize::S64,
+        );
+
+        // Add the fuel consumed at point with the value in the scratch
+        // register.
+        self.masm.add(
+            writable!(scratch!(M)),
+            scratch!(M),
+            RegImm::i64(fuel_at_point),
+            OperandSize::S64,
+        );
+
+        // Store the updated fuel consumed to `VMRuntimeLimits`.
+        self.masm.store(
+            scratch!(M).into(),
+            self.masm
+                .address_at_reg(limits_var, limits.fuel_consumed_offset),
+            OperandSize::S64,
+        );
+
+        self.context.free_reg(limits_var);
+    }
+
+    /// Emits a series of instructions that load the `fuel_consumed` field from
+    /// `VMRuntimeLimits`.
+    fn emit_load_fuel_consumed(&mut self) -> Reg {
+        let limits = self.env.resolve_vmruntime_limits();
+        let fuel_var = self.context.any_gpr(self.masm);
+        self.masm.load_ptr(
+            self.masm.address_at_vmctx(limits.ptr_offset),
+            writable!(fuel_var),
+        );
+
+        self.masm.load(
+            self.masm
+                .address_at_reg(fuel_var, limits.fuel_consumed_offset),
+            writable!(fuel_var),
+            // Fuel is an i64.
+            OperandSize::S64,
+        );
+
+        fuel_var
+    }
+
+    /// Hook to handle fuel before visiting an operator.
+    fn fuel_before_visit_op(&mut self, op: &Operator) {
+        if !self.context.reachable {
+            // `self.fuel_consumed` must be correctly flushed to memory when
+            // entering an unreachable state.
+            debug_assert_eq!(self.fuel_consumed, 0);
+            return;
+        }
+
+        // Generally, most instructions require 1 fuel unit.
+        //
+        // However, there are exceptions, which are detailed in the code below.
+        // Note that the fuel accounting semantics align with those of
+        // Cranelift; for further information, refer to
+        // `crates/cranelift/src/func_environ.rs`.
+        //
+        // The primary distinction between the two implementations is that Winch
+        // does not utilize a local-based cache to track fuel consumption.
+        // Instead, each increase in fuel necessitates loading from and storing
+        // to memory.
+        //
+        // Memory traffic will undoubtedly impact runtime performance. One
+        // potential optimization is to designate a register as non-allocatable,
+        // when fuel consumption is enabled, effectively using it as a local
+        // fuel cache.
+        self.fuel_consumed += match op {
+            Operator::Nop | Operator::Drop => 0,
+            Operator::Block { .. }
+            | Operator::Loop { .. }
+            | Operator::Unreachable
+            | Operator::Return
+            | Operator::Else
+            | Operator::End => 0,
+            _ => 1,
+        };
+
+        match op {
+            Operator::Unreachable
+            | Operator::Loop { .. }
+            | Operator::If { .. }
+            | Operator::Else { .. }
+            | Operator::Br { .. }
+            | Operator::BrIf { .. }
+            | Operator::BrTable { .. }
+            | Operator::End
+            | Operator::Return
+            | Operator::CallIndirect { .. }
+            | Operator::Call { .. }
+            | Operator::ReturnCall { .. }
+            | Operator::ReturnCallIndirect { .. } => {
+                self.emit_fuel_increment();
+            }
+            _ => {}
+        }
+    }
+
+    // Hook to handle source location mapping before visiting an operator.
+    fn source_location_before_visit_op(&mut self, offset: usize) {
+        let loc = SourceLoc::new(offset as u32);
+        let rel = self.source_loc_from(loc);
+        self.source_location.current = self.masm.start_source_loc(rel);
+    }
+
+    // Hook to handle source location mapping after visiting an operator.
+    fn source_location_after_visit_op(&mut self) {
+        // Because in Winch binary emission is done in a single pass
+        // and because the MachBuffer performs optimizations during
+        // emission, we have to be careful when calling
+        // [`MacroAssembler::end_source_location`] to avoid breaking the
+        // invariant that checks that the end [CodeOffset] must be equal
+        // or greater than the start [CodeOffset].
+        if self.masm.current_code_offset() >= self.source_location.current.0 {
+            self.masm.end_source_loc();
+        }
     }
 }
 
