@@ -109,6 +109,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 types,
                 &mut context.builtins,
                 &mut validator,
+                &self.tunables,
             )
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_context(context, validator.into_allocations());
