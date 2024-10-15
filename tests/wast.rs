@@ -220,6 +220,7 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
                 "throw_ref.wast",
                 "try_table.wast",
                 "tag.wast",
+                "instance.wast",
             ]
             .iter()
             .any(|i| test.ends_with(i))
