@@ -1119,8 +1119,8 @@ impl FuncEnvironment<'_> {
         self.gc_layout(type_index).unwrap_struct()
     }
 
-    /// Get the GC heap's base pointer and bound.
-    fn get_gc_heap_base_bound(&mut self, builder: &mut FunctionBuilder) -> (ir::Value, ir::Value) {
+    /// Get the GC heap's base pointer.
+    fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let ptr_ty = self.pointer_type();
         let flags = ir::MemFlags::trusted().with_readonly();
 
@@ -1130,12 +1130,27 @@ impl FuncEnvironment<'_> {
         let base_offset = self.offsets.ptr.vmctx_gc_heap_base();
         let base_offset = i32::from(base_offset);
 
+        builder.ins().load(ptr_ty, flags, vmctx, base_offset)
+    }
+
+    /// Get the GC heap's bound.
+    fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
+        let ptr_ty = self.pointer_type();
+        let flags = ir::MemFlags::trusted().with_readonly();
+
+        let vmctx = self.vmctx(builder.func);
+        let vmctx = builder.ins().global_value(ptr_ty, vmctx);
+
         let bound_offset = self.offsets.ptr.vmctx_gc_heap_bound();
         let bound_offset = i32::from(bound_offset);
 
-        let base = builder.ins().load(ptr_ty, flags, vmctx, base_offset);
-        let bound = builder.ins().load(ptr_ty, flags, vmctx, bound_offset);
+        builder.ins().load(ptr_ty, flags, vmctx, bound_offset)
+    }
 
+    /// Get the GC heap's base pointer and bound.
+    fn get_gc_heap_base_bound(&mut self, builder: &mut FunctionBuilder) -> (ir::Value, ir::Value) {
+        let base = self.get_gc_heap_base(builder);
+        let bound = self.get_gc_heap_bound(builder);
         (base, bound)
     }
 

@@ -18,19 +18,19 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001f                               trapz v2, user16
-;; @001f                               v7 = uextend.i64 v2
-;; @001f                               v8 = iconst.i64 16
-;; @001f                               v9 = uadd_overflow_trap v7, v8, user1  ; v8 = 16
-;; @001f                               v10 = iconst.i64 4
-;; @001f                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 4
-;; @001f                               v6 = load.i64 notrap aligned readonly v0+48
-;; @001f                               v12 = icmp ule v11, v6
-;; @001f                               trapz v12, user1
+;; @001f                               v8 = uextend.i64 v2
+;; @001f                               v9 = iconst.i64 16
+;; @001f                               v10 = uadd_overflow_trap v8, v9, user1  ; v9 = 16
+;; @001f                               v11 = iconst.i64 4
+;; @001f                               v12 = uadd_overflow_trap v10, v11, user1  ; v11 = 4
+;; @001f                               v7 = load.i64 notrap aligned readonly v0+48
+;; @001f                               v13 = icmp ule v12, v7
+;; @001f                               trapz v13, user1
 ;; @001f                               v5 = load.i64 notrap aligned readonly v0+40
-;; @001f                               v13 = iadd v5, v9
-;; @001f                               v14 = load.i32 notrap aligned v13
+;; @001f                               v14 = iadd v5, v10
+;; @001f                               v15 = load.i32 notrap aligned v14
 ;; @0021                               jump block1
 ;;
 ;;                                 block1:
-;; @0021                               return v14
+;; @0021                               return v15
 ;; }

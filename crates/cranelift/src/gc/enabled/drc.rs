@@ -388,7 +388,7 @@ impl GcCompiler for DrcCompiler {
         //
         // Note: we don't need to bounds-check the GC ref access here, since we
         // trust the results of the allocation libcall.
-        let (base, _bound) = func_env.get_gc_heap_base_bound(builder);
+        let base = func_env.get_gc_heap_base(builder);
         let extended_array_ref =
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
         let object_addr = builder.ins().iadd(base, extended_array_ref);

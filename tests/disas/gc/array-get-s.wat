@@ -18,37 +18,37 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0022                               trapz v2, user16
-;; @0022                               v8 = uextend.i64 v2
-;; @0022                               v9 = iconst.i64 16
-;; @0022                               v10 = uadd_overflow_trap v8, v9, user1  ; v9 = 16
-;; @0022                               v11 = iconst.i64 4
-;; @0022                               v12 = uadd_overflow_trap v10, v11, user1  ; v11 = 4
-;; @0022                               v7 = load.i64 notrap aligned readonly v0+48
-;; @0022                               v13 = icmp ule v12, v7
-;; @0022                               trapz v13, user1
+;; @0022                               v9 = uextend.i64 v2
+;; @0022                               v10 = iconst.i64 16
+;; @0022                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
+;; @0022                               v12 = iconst.i64 4
+;; @0022                               v13 = uadd_overflow_trap v11, v12, user1  ; v12 = 4
+;; @0022                               v8 = load.i64 notrap aligned readonly v0+48
+;; @0022                               v14 = icmp ule v13, v8
+;; @0022                               trapz v14, user1
 ;; @0022                               v6 = load.i64 notrap aligned readonly v0+40
-;; @0022                               v14 = iadd v6, v10
-;; @0022                               v15 = load.i32 notrap aligned v14
-;; @0022                               v16 = icmp ult v3, v15
-;; @0022                               trapz v16, user17
-;; @0022                               v18 = uextend.i64 v15
-;;                                     v39 = iconst.i64 32
-;; @0022                               v20 = ushr v18, v39  ; v39 = 32
-;; @0022                               trapnz v20, user1
-;; @0022                               v22 = iconst.i32 20
-;; @0022                               v23 = uadd_overflow_trap v15, v22, user1  ; v22 = 20
-;; @0022                               v26 = iadd v3, v22  ; v22 = 20
-;; @0022                               v31 = uextend.i64 v26
-;; @0022                               v32 = uadd_overflow_trap v8, v31, user1
-;; @0022                               v33 = uextend.i64 v23
-;; @0022                               v34 = uadd_overflow_trap v8, v33, user1
-;; @0022                               v35 = icmp ule v34, v7
-;; @0022                               trapz v35, user1
-;; @0022                               v36 = iadd v6, v32
-;; @0022                               v37 = load.i8 notrap aligned little v36
+;; @0022                               v15 = iadd v6, v11
+;; @0022                               v16 = load.i32 notrap aligned v15
+;; @0022                               v17 = icmp ult v3, v16
+;; @0022                               trapz v17, user17
+;; @0022                               v19 = uextend.i64 v16
+;;                                     v41 = iconst.i64 32
+;; @0022                               v21 = ushr v19, v41  ; v41 = 32
+;; @0022                               trapnz v21, user1
+;; @0022                               v23 = iconst.i32 20
+;; @0022                               v24 = uadd_overflow_trap v16, v23, user1  ; v23 = 20
+;; @0022                               v27 = iadd v3, v23  ; v23 = 20
+;; @0022                               v33 = uextend.i64 v27
+;; @0022                               v34 = uadd_overflow_trap v9, v33, user1
+;; @0022                               v35 = uextend.i64 v24
+;; @0022                               v36 = uadd_overflow_trap v9, v35, user1
+;; @0022                               v37 = icmp ule v36, v8
+;; @0022                               trapz v37, user1
+;; @0022                               v38 = iadd v6, v34
+;; @0022                               v39 = load.i8 notrap aligned little v38
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:
-;; @0022                               v38 = sextend.i32 v37
-;; @0025                               return v38
+;; @0022                               v40 = sextend.i32 v39
+;; @0025                               return v40
 ;; }

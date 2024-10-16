@@ -19,8 +19,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64):
-;;                                     v43 = iconst.i64 0
-;; @0025                               trapnz v43, user18  ; v43 = 0
+;;                                     v42 = iconst.i64 0
+;; @0025                               trapnz v42, user18  ; v42 = 0
 ;; @0025                               v6 = iconst.i32 24
 ;; @0025                               v12 = uadd_overflow_trap v6, v6, user18  ; v6 = 24, v6 = 24
 ;; @0025                               v14 = iconst.i32 -1476395008
@@ -29,20 +29,20 @@
 ;; @0025                               v17 = call fn0(v0, v14, v15, v12, v16)  ; v14 = -1476395008, v15 = 0, v16 = 8
 ;; @0025                               v7 = iconst.i32 3
 ;; @0025                               v19 = load.i64 notrap aligned readonly v0+40
-;; @0025                               v21 = uextend.i64 v17
-;; @0025                               v22 = iadd v19, v21
-;;                                     v33 = iconst.i64 16
-;; @0025                               v23 = iadd v22, v33  ; v33 = 16
-;; @0025                               store notrap aligned v7, v23  ; v7 = 3
-;;                                     v35 = iconst.i64 24
-;;                                     v50 = iadd v22, v35  ; v35 = 24
-;; @0025                               store notrap aligned little v2, v50
-;;                                     v32 = iconst.i64 32
-;;                                     v57 = iadd v22, v32  ; v32 = 32
-;; @0025                               store notrap aligned little v3, v57
-;;                                     v59 = iconst.i64 40
-;;                                     v65 = iadd v22, v59  ; v59 = 40
-;; @0025                               store notrap aligned little v4, v65
+;; @0025                               v20 = uextend.i64 v17
+;; @0025                               v21 = iadd v19, v20
+;;                                     v32 = iconst.i64 16
+;; @0025                               v22 = iadd v21, v32  ; v32 = 16
+;; @0025                               store notrap aligned v7, v22  ; v7 = 3
+;;                                     v34 = iconst.i64 24
+;;                                     v49 = iadd v21, v34  ; v34 = 24
+;; @0025                               store notrap aligned little v2, v49
+;;                                     v31 = iconst.i64 32
+;;                                     v56 = iadd v21, v31  ; v31 = 32
+;; @0025                               store notrap aligned little v3, v56
+;;                                     v58 = iconst.i64 40
+;;                                     v64 = iadd v21, v58  ; v58 = 40
+;; @0025                               store notrap aligned little v4, v64
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
