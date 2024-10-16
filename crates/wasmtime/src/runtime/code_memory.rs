@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
-use core::mem::ManuallyDrop;
 use core::ops::Range;
 use object::endian::NativeEndian;
 use object::read::{elf::ElfFile64, Object, ObjectSection};
@@ -15,12 +14,10 @@ use wasmtime_jit_icache_coherence as icache_coherence;
 /// This type consumes ownership of a region of memory and will manage the
 /// executable permissions of the contained JIT code as necessary.
 pub struct CodeMemory {
-    // NB: these are `ManuallyDrop` because `unwind_registration` must be
-    // dropped first since it refers to memory owned by `mmap`.
-    mmap: ManuallyDrop<MmapVec>,
-    unwind_registration: ManuallyDrop<Option<UnwindRegistration>>,
+    mmap: MmapVec,
+    unwind_registration: Option<UnwindRegistration>,
     #[cfg(feature = "debug-builtins")]
-    debug_registration: ManuallyDrop<Option<crate::runtime::vm::GdbJitImageRegistration>>,
+    debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     published: bool,
     enable_branch_protection: bool,
     #[cfg(feature = "debug-builtins")]
@@ -41,13 +38,10 @@ pub struct CodeMemory {
 
 impl Drop for CodeMemory {
     fn drop(&mut self) {
-        // Drop `unwind_registration` before `self.mmap`
-        unsafe {
-            ManuallyDrop::drop(&mut self.unwind_registration);
-            #[cfg(feature = "debug-builtins")]
-            ManuallyDrop::drop(&mut self.debug_registration);
-            ManuallyDrop::drop(&mut self.mmap);
-        }
+        // Drop the registrations before `self.mmap` since they (implicitly) refer to it.
+        let _ = self.unwind_registration.take();
+        #[cfg(feature = "debug-builtins")]
+        let _ = self.debug_registration.take();
     }
 }
 
@@ -140,10 +134,10 @@ impl CodeMemory {
             }
         }
         Ok(Self {
-            mmap: ManuallyDrop::new(mmap),
-            unwind_registration: ManuallyDrop::new(None),
+            mmap,
+            unwind_registration: None,
             #[cfg(feature = "debug-builtins")]
-            debug_registration: ManuallyDrop::new(None),
+            debug_registration: None,
             published: false,
             enable_branch_protection: enable_branch_protection
                 .ok_or_else(|| anyhow!("missing `{}` section", obj::ELF_WASM_BTI))?,
@@ -332,7 +326,7 @@ impl CodeMemory {
         let registration =
             UnwindRegistration::new(text.as_ptr(), unwind_info.as_ptr(), unwind_info.len())
                 .context("failed to create unwind info registration")?;
-        *self.unwind_registration = Some(registration);
+        self.unwind_registration = Some(registration);
         Ok(())
     }
 
@@ -349,7 +343,7 @@ impl CodeMemory {
         let text: &[u8] = self.text();
         let bytes = crate::debug::create_gdbjit_image(image, (text.as_ptr(), text.len()))?;
         let reg = crate::runtime::vm::GdbJitImageRegistration::register(bytes);
-        *self.debug_registration = Some(reg);
+        self.debug_registration = Some(reg);
         Ok(())
     }
 
