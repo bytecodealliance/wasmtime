@@ -1051,6 +1051,12 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::FcvtFromSint, &[I8X16], &[F64X2]),
                 (Opcode::FcvtFromSint, &[I16X8], &[F64X2]),
                 (Opcode::FcvtFromSint, &[I32X4], &[F64X2]),
+                // Only supported on x64 with a feature at this time, so 128-bit
+                // atomics are not suitable to fuzz yet.
+                (Opcode::AtomicRmw, _, &[I128]),
+                (Opcode::AtomicCas, _, &[I128]),
+                (Opcode::AtomicLoad, _, &[I128]),
+                (Opcode::AtomicStore, &[I128, _], _),
             )
         })
         .filter(|(op, ..)| {
