@@ -100,7 +100,7 @@ impl DrcCompiler {
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
         let activations_table = builder.ins().load(
             ptr_ty,
-            ir::MemFlags::trusted(),
+            ir::MemFlags::trusted().with_readonly(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         );

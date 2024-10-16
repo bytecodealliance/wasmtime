@@ -33,7 +33,7 @@
 ;; @0034                               brif v6, block5, block2
 ;;
 ;;                                 block2:
-;; @0034                               v8 = load.i64 notrap aligned v0+56
+;; @0034                               v8 = load.i64 notrap aligned readonly v0+56
 ;; @0034                               v9 = load.i64 notrap aligned v8
 ;; @0034                               v10 = load.i64 notrap aligned v8+8
 ;; @0034                               v11 = icmp eq v9, v10

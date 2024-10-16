@@ -35,7 +35,7 @@
 ;;
 ;;                                 block2:
 ;; @008f                               v10 = global_value.i64 gv3
-;; @008f                               v11 = load.i64 notrap aligned v10+56
+;; @008f                               v11 = load.i64 notrap aligned readonly v10+56
 ;; @008f                               v12 = load.i64 notrap aligned v11
 ;; @008f                               v13 = load.i64 notrap aligned v11+8
 ;; @008f                               v14 = icmp eq v12, v13
@@ -94,7 +94,7 @@
 ;;
 ;;                                 block6:
 ;; @0091                               v46 = global_value.i64 gv3
-;; @0091                               v47 = load.i64 notrap aligned v46+56
+;; @0091                               v47 = load.i64 notrap aligned readonly v46+56
 ;; @0091                               v48 = load.i64 notrap aligned v47
 ;; @0091                               v49 = load.i64 notrap aligned v47+8
 ;; @0091                               v50 = icmp eq v48, v49

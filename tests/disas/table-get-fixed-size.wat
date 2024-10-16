@@ -47,7 +47,7 @@
 ;; @0054                               brif v13, block5, block2
 ;;
 ;;                                 block2:
-;; @0054                               v15 = load.i64 notrap aligned v0+56
+;; @0054                               v15 = load.i64 notrap aligned readonly v0+56
 ;; @0054                               v16 = load.i64 notrap aligned v15
 ;; @0054                               v17 = load.i64 notrap aligned v15+8
 ;; @0054                               v18 = icmp eq v16, v17
@@ -136,7 +136,7 @@
 ;; @005b                               brif v13, block5, block2
 ;;
 ;;                                 block2:
-;; @005b                               v15 = load.i64 notrap aligned v0+56
+;; @005b                               v15 = load.i64 notrap aligned readonly v0+56
 ;; @005b                               v16 = load.i64 notrap aligned v15
 ;; @005b                               v17 = load.i64 notrap aligned v15+8
 ;; @005b                               v18 = icmp eq v16, v17
