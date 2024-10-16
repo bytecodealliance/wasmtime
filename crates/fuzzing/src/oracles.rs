@@ -1229,7 +1229,8 @@ mod tests {
             | WasmFeatures::TAIL_CALL
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::MEMORY64
-            | WasmFeatures::GC_TYPES;
+            | WasmFeatures::GC_TYPES
+            | WasmFeatures::CUSTOM_PAGE_SIZES;
 
         // All other features that wasmparser supports, which is presumably a
         // superset of the features that wasm-smith supports, are listed here as
