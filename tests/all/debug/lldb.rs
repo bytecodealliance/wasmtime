@@ -63,10 +63,6 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 pub fn test_debug_dwarf_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
@@ -104,10 +100,6 @@ check: exited with status
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 pub fn test_debug_dwarf5_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
@@ -145,10 +137,6 @@ check: exited with status
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 pub fn test_debug_split_dwarf4_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
@@ -186,10 +174,6 @@ check: exited with status
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
@@ -220,10 +204,6 @@ check: resuming
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result<()> {
     let output = lldb_with_script(
         &[
@@ -247,10 +227,6 @@ check: exited with status
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
     let output = lldb_with_script(
         &[
@@ -305,10 +281,6 @@ int main()
  */
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 pub fn test_debug_dwarf5_fission_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
@@ -341,10 +313,6 @@ check: exited with status = 0
     Ok(())
 }
 
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 mod test_programs {
     use super::{check_lldb_output, lldb_with_script};
     use anyhow::Result;
