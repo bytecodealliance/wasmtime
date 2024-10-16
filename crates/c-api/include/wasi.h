@@ -171,12 +171,27 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
  * filesystem, but only that directory (its whole contents but nothing above
  * it).
  *
- * The `path` argument here is a path name on the host filesystem, and
+ * The `host_path` argument here is a path name on the host filesystem, and
  * `guest_path` is the name by which it will be known in wasm.
+ *
+ * The `dir_perms` argument is the permissions that wasm will have to operate on
+ * `guest_path`. This can be used, for example, to provide readonly access to a
+ * directory. This argument is a bitmask with the following flag values:
+ * - 0b01: This directory can be read, for example its entries can be iterated
+           over and files can be opened.
+ * - 0b10: This directory can be mutated, for example by creating new files within it.
+ *
+ * The `file_perms` argument is similar to `dir_perms` but corresponds to the maximum
+ * set of permissions that can be used for any file in this directory.
+ * This argument is a bitmask with the following flag values:
+ * - 0b01: This file can be read.
+ * - 0b10: This file can be written to.
  */
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t *config,
-                                             const char *path,
-                                             const char *guest_path);
+                                             const char *host_path,
+                                             const char *guest_path,
+                                             size_t dir_perms,
+                                             size_t file_perms);
 
 #undef own
 

@@ -282,13 +282,13 @@ impl WasiCtxBuilder {
     /// Configures a "preopened directory" to be available to WebAssembly.
     ///
     /// By default WebAssembly does not have access to the filesystem because
-    /// the are no preopened directories. All filesystem operations, such as
+    /// there are no preopened directories. All filesystem operations, such as
     /// opening a file, are done through a preexisting handle. This means that
     /// to provide WebAssembly access to a directory it must be configured
     /// through this API.
     ///
     /// WASI will also prevent access outside of files provided here. For
-    /// example `..` can't be used to traverse up from the `dir` provided here
+    /// example `..` can't be used to traverse up from the `host_path` provided here
     /// to the containing directory.
     ///
     /// * `host_path` - a path to a directory on the host to open and make
@@ -298,9 +298,9 @@ impl WasiCtxBuilder {
     ///   perspective. Note that this does not need to match the host's name for
     ///   the directory.
     /// * `dir_perms` - this is the permissions that wasm will have to operate on
-    ///   `dir`. This can be used, for example, to provide readonly access to a
+    ///   `guest_path`. This can be used, for example, to provide readonly access to a
     ///   directory.
-    /// * `file_perms` - similar to `perms` but corresponds to the maximum set
+    /// * `file_perms` - similar to `dir_perms` but corresponds to the maximum set
     ///   of permissions that can be used for any file in this directory.
     ///
     /// # Errors

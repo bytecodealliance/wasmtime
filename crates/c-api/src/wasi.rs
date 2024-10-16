@@ -172,6 +172,8 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     config: &mut wasi_config_t,
     path: *const c_char,
     guest_path: *const c_char,
+    dir_perms: usize,
+    file_perms: usize,
 ) -> bool {
     let guest_path = match cstr_to_str(guest_path) {
         Some(p) => p,
@@ -183,13 +185,16 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
         None => return false,
     };
 
+    let dir_perms = wasmtime_wasi::DirPerms::from_bits_truncate(dir_perms);
+    let file_perms = wasmtime_wasi::FilePerms::from_bits_truncate(file_perms);
+
     config
         .builder
         .preopened_dir(
             host_path,
             guest_path,
-            wasmtime_wasi::DirPerms::all(),
-            wasmtime_wasi::FilePerms::all(),
+            dir_perms,
+            file_perms,
         )
         .is_ok()
 }
