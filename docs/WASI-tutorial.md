@@ -303,10 +303,10 @@ hello world
 ```
 
 Or, you can compile the `.wat` WebAssembly text format into the wasm binary format
-yourself using the [wabt] command line tools:
+yourself using the [wasm-tools] command line tools:
 
 ```
-$ wat2wasm demo.wat
+$ wasm-tools parse demo.wat -o demo.wasm
 ```
 
 The created `.wasm` file can now be executed with `wasmtime` directly like so:
@@ -316,8 +316,7 @@ $ wasmtime demo.wasm
 hello world
 ```
 
-To run this example within the browser, simply upload the compiled `.wasm` file to
-the [WASI browser polyfill].
+To run this example within the browser, use [jco].
 
-[wabt]: https://github.com/WebAssembly/wabt
-[WASI browser polyfill]: https://wasi.dev/polyfill/
+[wasm-tools]: https://github.com/bytecodealliance/wasm-tools
+[jco]: https://github.com/bytecodealliance/jco
