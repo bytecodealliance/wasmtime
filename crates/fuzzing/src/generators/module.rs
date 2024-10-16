@@ -36,14 +36,13 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         let _ = config.tail_call_enabled;
         config.exceptions_enabled = false;
         config.gc_enabled = false;
+        config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
         config.memory64_enabled = u.ratio(1, 20)?;
         // Allow the threads proposal if memory64 is not already enabled. FIXME:
         // to allow threads and memory64 to coexist, see
         // https://github.com/bytecodealliance/wasmtime/issues/4267.
         config.threads_enabled = !config.memory64_enabled && u.ratio(1, 20)?;
-        // FIXME: this may be safe to enable
-        config.custom_page_sizes_enabled = false;
         // Allow multi-memory but make it unlikely
         if u.ratio(1, 20)? {
             config.max_memories = config.max_memories.max(2);

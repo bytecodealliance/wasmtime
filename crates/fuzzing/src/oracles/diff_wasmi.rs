@@ -20,6 +20,7 @@ impl WasmiEngine {
         config.threads_enabled = false;
         config.exceptions_enabled = false;
         config.gc_enabled = false;
+        config.custom_page_sizes_enabled = false;
         config.wide_arithmetic_enabled = false;
 
         let mut wasmi_config = wasmi::Config::default();
