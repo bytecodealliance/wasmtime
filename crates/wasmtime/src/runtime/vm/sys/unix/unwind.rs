@@ -2,8 +2,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use core::ptr::{self, NonNull};
-use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use core::ptr::NonNull;
 
 /// Represents a registration of function unwind information for System V ABI.
 pub struct UnwindRegistration {
