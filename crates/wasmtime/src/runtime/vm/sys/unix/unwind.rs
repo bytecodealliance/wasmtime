@@ -14,6 +14,8 @@ extern "C" {
     // libunwind import
     fn __register_frame(fde: *const u8);
     fn __deregister_frame(fde: *const u8);
+    #[wasmtime_versioned_export_macros::versioned_link]
+    fn wasmtime_using_libunwind() -> bool;
 }
 
 /// There are two primary unwinders on Unix platforms: libunwind and libgcc.
@@ -33,43 +35,10 @@ extern "C" {
 /// https://www.nongnu.org/libunwind/ but that doesn't appear to have
 /// `__register_frame` so I don't think that interacts with this.
 fn using_libunwind() -> bool {
-    static USING_LIBUNWIND: AtomicUsize = AtomicUsize::new(LIBUNWIND_UNKNOWN);
-
-    const LIBUNWIND_UNKNOWN: usize = 0;
-    const LIBUNWIND_YES: usize = 1;
-    const LIBUNWIND_NO: usize = 2;
-
     // On macOS the libgcc interface is never used so libunwind is always used.
-    if cfg!(target_os = "macos") {
-        return true;
-    }
-
-    // On other platforms the unwinder can vary. Sometimes the unwinder is
-    // selected at build time and sometimes it differs at build time and runtime
-    // (or at least I think that's possible). Fall back to a `libc::dlsym` to
-    // figure out what we're using and branch based on that.
-    //
-    // Note that the result of `libc::dlsym` is cached to only look this up
-    // once.
-    match USING_LIBUNWIND.load(Relaxed) {
-        LIBUNWIND_YES => true,
-        LIBUNWIND_NO => false,
-        LIBUNWIND_UNKNOWN => {
-            let looks_like_libunwind = unsafe {
-                !libc::dlsym(ptr::null_mut(), c"__unw_add_dynamic_fde".as_ptr()).is_null()
-            };
-            USING_LIBUNWIND.store(
-                if looks_like_libunwind {
-                    LIBUNWIND_YES
-                } else {
-                    LIBUNWIND_NO
-                },
-                Relaxed,
-            );
-            looks_like_libunwind
-        }
-        _ => unreachable!(),
-    }
+    // Otherwise delegate to `helpers.c` since weak symbols can't be used from
+    // Rust at this time.
+    cfg!(target_os = "macos") || unsafe { wasmtime_using_libunwind() }
 }
 
 impl UnwindRegistration {

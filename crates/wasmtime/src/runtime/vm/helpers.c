@@ -6,6 +6,7 @@
 #include <setjmp.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #if (defined(__GNUC__) && !defined(__clang__))
 #define WASMTIME_GCC 1
@@ -116,3 +117,15 @@ __attribute__((weak))
 struct JITDescriptor *VERSIONED_SYMBOL(wasmtime_jit_debug_descriptor)() {
   return &__jit_debug_descriptor;
 }
+
+// For more information about this see `unix/unwind.rs` and the
+// `using_libunwind` function. The basic idea is that weak symbols aren't stable
+// in Rust so we use a bit of C to work around that.
+#ifndef CFG_TARGET_OS_windows
+__attribute__((weak))
+extern void __unw_add_dynamic_fde();
+
+bool VERSIONED_SYMBOL(wasmtime_using_libunwind)() {
+  return __unw_add_dynamic_fde != NULL;
+}
+#endif
