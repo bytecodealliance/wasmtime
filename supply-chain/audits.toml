@@ -3727,23 +3727,26 @@ delta = "1.2.0 -> 1.3.1"
 notes = "Minor changes to MacOS-specific code."
 
 [[audits.zstd]]
-who = "Alex Crichton <alex@alexcrichton.com>"
+who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
-delta = "0.11.1+zstd.1.5.2 -> 0.13.0"
-notes = """
-No major updates to the crate here. Small updates to `unsafe` code which are
-refactorings of what was there prior.
-"""
+version = "0.13.0"
+
+[[audits.zstd]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+violation = "<0.13.0"
+notes = "Buffer overrun fixed in https://github.com/gyscos/zstd-rs/pull/231"
 
 [[audits.zstd-safe]]
-who = "Alex Crichton <alex@alexcrichton.com>"
+who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
-delta = "5.0.1+zstd.1.5.2 -> 7.0.0"
-notes = """
-Lots of new comments around methods and refactorings for updates in zstd itself.
-Does contain new unsafe code, notably an implementation of an internal trait for
-the standard library `io::Cursor` type.
-"""
+version = "7.0.0"
+
+[[audits.zstd-safe]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+violation = "<7.0.0"
+notes = "Buffer overrun fixed in https://github.com/gyscos/zstd-rs/pull/231"
 
 [[trusted.aho-corasick]]
 criteria = "safe-to-deploy"
