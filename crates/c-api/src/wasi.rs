@@ -185,16 +185,16 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
         None => return false,
     };
 
-    let dir_perms = wasmtime_wasi::DirPerms::from_bits_truncate(dir_perms);
-    let file_perms = wasmtime_wasi::FilePerms::from_bits_truncate(file_perms);
+    let dir_perms = wasmtime_wasi::DirPerms::from_bits(dir_perms);
+    let file_perms = wasmtime_wasi::FilePerms::from_bits(file_perms);
 
-    config
-        .builder
-        .preopened_dir(
-            host_path,
-            guest_path,
-            dir_perms,
-            file_perms,
-        )
+    dir_perms
+        .and_then(|dir_perms| {
+            file_perms.map(|file_perms| {
+                config
+                    .builder
+                    .preopened_dir(host_path, guest_path, dir_perms, file_perms)
+            })
+        })
         .is_ok()
 }

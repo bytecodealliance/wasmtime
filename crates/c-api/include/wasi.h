@@ -164,6 +164,28 @@ WASI_API_EXTERN bool wasi_config_set_stderr_file(wasi_config_t *config,
 WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
 
 /**
+ * \brief This directory can be read, for example its entries can be iterated
+ * over and files can be opened.
+ */
+#define WASMTIME_WASI_DIR_PERMS_READ 1
+
+/**
+ * \brief This directory can be mutated, for example by creating new files
+ * within it.
+ */
+#define WASMTIME_WASI_DIR_PERMS_WRITE 2
+
+/**
+ * \brief This file can be read.
+ */
+#define WASMTIME_WASI_FILE_PERMS_READ 1
+
+/**
+ * \brief This file can be written to.
+ */
+#define WASMTIME_WASI_FILE_PERMS_WRITE 2
+
+/**
  * \brief Configures a "preopened directory" to be available to WASI APIs.
  *
  * By default WASI programs do not have access to anything on the filesystem.
@@ -177,15 +199,14 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
  * The `dir_perms` argument is the permissions that wasm will have to operate on
  * `guest_path`. This can be used, for example, to provide readonly access to a
  * directory. This argument is a bitmask with the following flag values:
- * - 0b01: This directory can be read, for example its entries can be iterated
-           over and files can be opened.
- * - 0b10: This directory can be mutated, for example by creating new files within it.
+ * - WASMTIME_WASI_DIR_PERMS_READ
+ * - WASMTIME_WASI_DIR_PERMS_WRITE
  *
- * The `file_perms` argument is similar to `dir_perms` but corresponds to the maximum
- * set of permissions that can be used for any file in this directory.
+ * The `file_perms` argument is similar to `dir_perms` but corresponds to the
+ * maximum set of permissions that can be used for any file in this directory.
  * This argument is a bitmask with the following flag values:
- * - 0b01: This file can be read.
- * - 0b10: This file can be written to.
+ * - WASMTIME_WASI_FILE_PERMS_READ
+ * - WASMTIME_WASI_FILE_PERMS_WRITE
  */
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t *config,
                                              const char *host_path,
