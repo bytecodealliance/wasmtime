@@ -44,6 +44,7 @@ impl Drop for CodeMemory {
         // Drop `unwind_registration` before `self.mmap`
         unsafe {
             ManuallyDrop::drop(&mut self.unwind_registration);
+            #[cfg(feature = "debug-builtins")]
             ManuallyDrop::drop(&mut self.debug_registration);
             ManuallyDrop::drop(&mut self.mmap);
         }
