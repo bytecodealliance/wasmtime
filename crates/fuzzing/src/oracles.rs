@@ -70,6 +70,8 @@ pub struct StoreLimits(Arc<LimitsState>);
 struct LimitsState {
     /// Remaining memory, in bytes, left to allocate
     remaining_memory: AtomicUsize,
+    /// Remaining times memories/tables can be grown
+    remaining_growths: AtomicUsize,
     /// Whether or not an allocation request has been denied
     oom: AtomicBool,
 }
@@ -81,12 +83,30 @@ impl StoreLimits {
             // Limits tables/memories within a store to at most 1gb for now to
             // exercise some larger address but not overflow various limits.
             remaining_memory: AtomicUsize::new(1 << 30),
+            // Also limit the number of times a memory or table may be grown.
+            // Otherwise infinite growths can exhibit quadratic behavior. For
+            // example Wasmtime could be configured with dynamic memories and no
+            // guard regions to grow into, meaning each memory growth could be a
+            // `memcpy`. As more data is added over time growths get more and
+            // more expensive meaning that fuel may not be effective at limiting
+            // execution time.
+            remaining_growths: AtomicUsize::new(100),
             oom: AtomicBool::new(false),
         }))
     }
 
     fn alloc(&mut self, amt: usize) -> bool {
         log::trace!("alloc {amt:#x} bytes");
+        if self
+            .0
+            .remaining_growths
+            .fetch_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(1))
+            .is_err()
+        {
+            self.0.oom.store(true, SeqCst);
+            log::debug!("too many growths, rejecting allocation");
+            return false;
+        }
         match self
             .0
             .remaining_memory
