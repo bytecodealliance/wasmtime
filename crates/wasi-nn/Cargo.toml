@@ -30,7 +30,7 @@ wasmtime = { workspace = true, features = [
 # These dependencies are necessary for the wasi-nn implementation:
 tracing = { workspace = true }
 thiserror = { workspace = true }
-openvino = { version = "0.7.2", features = [
+openvino = { version = "0.8.0", features = [
     "runtime-linking",
 ], optional = true }
 
