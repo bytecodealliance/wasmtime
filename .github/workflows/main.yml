@@ -766,10 +766,8 @@ jobs:
     - uses: ./.github/actions/install-rust
 
     # Install OpenVINO
-    - uses: abrown/install-openvino-action@v8
+    - uses: abrown/install-openvino-action@v9
       if: runner.arch == 'X64'
-      with:
-        version: 2024.4.0
 
     # Install WinML for testing wasi-nn WinML backend. WinML is only available
     # on Windows clients and Windows Server with desktop experience enabled.
