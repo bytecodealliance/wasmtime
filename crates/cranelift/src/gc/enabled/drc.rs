@@ -484,6 +484,14 @@ impl GcCompiler for DrcCompiler {
         );
 
         // Second, initialize each of the newly-allocated struct's fields.
+        //
+        // Note: we don't need to bounds-check the GC ref access here, since we
+        // trust the results of the allocation libcall.
+
+        let base = func_env.get_gc_heap_base(builder);
+        let extended_struct_ref =
+            uextend_i32_to_pointer_type(builder, func_env.pointer_type(), struct_ref);
+        let struct_addr = builder.ins().iadd(base, extended_struct_ref);
 
         let struct_ty = match &func_env.types[interned_type_index].composite_type {
             WasmCompositeType::Struct(s) => s,
@@ -497,13 +505,7 @@ impl GcCompiler for DrcCompiler {
                 wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
             assert!(offset + size_of_access <= struct_size);
 
-            let field_addr = func_env.prepare_gc_ref_access(
-                builder,
-                struct_ref,
-                Offset::Static(offset),
-                BoundsCheck::Object(struct_size_val),
-            );
-
+            let field_addr = builder.ins().iadd_imm(struct_addr, i64::from(offset));
             self.init_field(func_env, builder, field_addr, ty.element_type, *val)?;
         }
 
