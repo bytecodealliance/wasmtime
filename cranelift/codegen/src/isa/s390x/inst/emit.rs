@@ -3250,9 +3250,7 @@ impl Inst {
                 put(sink, &enc_rr(opcode, gpr(15), rn));
                 sink.add_call_site();
             }
-            &Inst::ElfTlsGetOffset {
-                ref symbol, link, ..
-            } => {
+            &Inst::ElfTlsGetOffset { ref symbol, .. } => {
                 let opcode = 0xc05; // BRASL
 
                 // Add relocation for target function. This has to be done
@@ -3265,7 +3263,7 @@ impl Inst {
                     _ => unreachable!(),
                 }
 
-                put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
+                put(sink, &enc_ril_b(opcode, gpr(14), 0));
                 sink.add_call_site();
             }
             &Inst::Args { .. } => {}
