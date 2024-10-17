@@ -26,7 +26,7 @@ pub use imp::*;
 
 /// How to initialize a newly-allocated array's elements.
 #[derive(Clone, Copy)]
-#[cfg_attr(not(feature = "gc"), allow(dead_code))]
+#[cfg_attr(not(any(feature = "gc-null", feature = "gc-drc")), allow(dead_code))]
 pub enum ArrayInit<'a> {
     /// Initialize the array's elements with the given values.
     Elems(&'a [ir::Value]),

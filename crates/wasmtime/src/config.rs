@@ -2068,11 +2068,7 @@ impl Config {
         #[cfg(feature = "gc")]
         #[cfg_attr(
             not(any(feature = "gc-null", feature = "gc-drc")),
-            allow(unreachable_code)
-        )]
-        #[cfg_attr(
-            not(any(feature = "gc-null", feature = "gc-drc")),
-            allow(unused_variables)
+            allow(unused_variables, unreachable_code)
         )]
         {
             Ok(Some(match self.collector.try_not_auto()? {
