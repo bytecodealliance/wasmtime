@@ -2,23 +2,26 @@
 
 mod arrayref;
 mod data;
-mod drc;
 mod externref;
 mod free_list;
 mod structref;
 
 pub use arrayref::*;
 pub use data::*;
-pub use drc::*;
 pub use externref::*;
 pub use structref::*;
 
-use crate::runtime::vm::GcRuntime;
+#[cfg(feature = "gc-drc")]
+mod drc;
+#[cfg(feature = "gc-drc")]
+pub use drc::*;
 
-/// Get the default GC runtime.
-pub fn default_gc_runtime() -> impl GcRuntime {
-    DrcCollector::default()
-}
+#[cfg(feature = "gc-null")]
+mod null;
+#[cfg(feature = "gc-null")]
+pub use null::*;
+
+use crate::runtime::vm::GcRuntime;
 
 /// The default GC heap capacity: 512KiB.
 #[cfg(not(miri))]
