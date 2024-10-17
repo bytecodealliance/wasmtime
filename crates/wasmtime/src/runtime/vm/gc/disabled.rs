@@ -15,7 +15,6 @@ pub fn default_gc_runtime() -> impl GcRuntime {
     DisabledCollector
 }
 
-
 pub struct VMGcObjectDataMut<'a> {
     inner: VMStructRef,
     _phantom: core::marker::PhantomData<&'a mut ()>,
