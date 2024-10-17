@@ -1549,10 +1549,7 @@ impl StoreOpaque {
 
         #[cfg(not(feature = "gc"))]
         fn allocate_gc_store(_engine: &Engine) -> Result<GcStore> {
-            Ok(GcStore::new(
-                GcHeapAllocationIndex::default(),
-                crate::runtime::vm::disabled_gc_heap(),
-            ))
+            bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
         }
     }
 

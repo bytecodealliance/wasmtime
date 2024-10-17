@@ -53,6 +53,7 @@ pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompi
     }
 }
 
+#[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
 fn unbarriered_load_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
@@ -1413,6 +1414,7 @@ impl FuncEnvironment<'_> {
     /// reference is null or is an `i31ref`; otherwise, it will be zero.
     ///
     /// This method is collector-agnostic.
+    #[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
     fn gc_ref_is_null_or_i31(
         &mut self,
         builder: &mut FunctionBuilder,

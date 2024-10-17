@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, VMExternRef, VMGcRef};
+use crate::runtime::vm::{GcStore, VMGcRef};
 use crate::{
     runtime::Uninhabited,
     store::{AutoAssertNoGc, StoreOpaque},
