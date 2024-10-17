@@ -53,7 +53,30 @@ impl CompilerBuilder for Builder {
     }
 
     fn set_tunables(&mut self, tunables: Tunables) -> Result<()> {
-        assert!(tunables.winch_callable);
+        if !tunables.winch_callable {
+            bail!("Winch requires the winch calling convention");
+        }
+
+        if !tunables.table_lazy_init {
+            bail!("Winch requires the table-lazy-init option to be enabled");
+        }
+
+        if !tunables.signals_based_traps {
+            bail!("Winch requires the signals-based-traps option to be enabled");
+        }
+
+        if tunables.epoch_interruption {
+            bail!("Winch does not currently support epoch based interruption");
+        }
+
+        if tunables.consume_fuel {
+            bail!("Winch does not currently support fuel based interruption");
+        }
+
+        if tunables.generate_native_debuginfo {
+            bail!("Winch does not currently support generating native debug information");
+        }
+
         self.tunables = Some(tunables.clone());
         self.cranelift.set_tunables(tunables)?;
         Ok(())

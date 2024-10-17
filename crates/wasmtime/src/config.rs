@@ -411,6 +411,7 @@ impl Config {
     /// guest WebAssembly programs.
     ///
     /// By default this option is `false`.
+    /// **Note** Enabling this option is not compatible with the Winch compiler.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
         self.tunables.generate_native_debuginfo = Some(enable);
         self
@@ -514,6 +515,8 @@ impl Config {
     /// executing some code.
     ///
     /// By default this option is `false`.
+    ///
+    /// **Note** Enabling this option is not compatible with the Winch compiler.
     ///
     /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
@@ -620,6 +623,8 @@ impl Config {
     /// always either complete or trap with an out-of-fuel error,
     /// deterministically, then fuel with a fixed bound should be
     /// used.
+    ///
+    /// **Note** Enabling this option is not compatible with the Winch compiler.
     ///
     /// # See Also
     ///
@@ -1559,6 +1564,8 @@ impl Config {
     /// are initialized eagerly during instantiation from any active element
     /// segments that apply to them.
     ///
+    /// **Note** Disabling this option is not compatible with the Winch compiler.
+    ///
     /// ## Default
     ///
     /// This value defaults to `true`.
@@ -1970,14 +1977,6 @@ impl Config {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             tunables.winch_callable = self.compiler_config.strategy == Some(Strategy::Winch);
-
-            if tunables.winch_callable && !tunables.table_lazy_init {
-                bail!("Winch requires the table-lazy-init configuration option");
-            }
-
-            if tunables.winch_callable && !tunables.signals_based_traps {
-                bail!("Winch requires signals-based traps to be enabled");
-            }
         }
 
         if tunables.static_memory_offset_guard_size < tunables.dynamic_memory_offset_guard_size {
@@ -2280,6 +2279,8 @@ impl Config {
     ///
     /// This option defaults to `true` meaning that signals-based trap handlers
     /// are enabled by default.
+    ///
+    /// **Note** Disabling this option is not compatible with the Winch compiler.
     pub fn signals_based_traps(&mut self, enable: bool) -> &mut Self {
         self.tunables.signals_based_traps = Some(enable);
         self

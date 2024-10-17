@@ -448,3 +448,23 @@ async fn drop_future_on_epoch_yield() {
 
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn ensure_compatibility_between_winch_and_epoch() -> Result<()> {
+    let mut config = Config::new();
+    config.epoch_interruption(true);
+    config.strategy(Strategy::Winch);
+    let result = Engine::new(&config);
+    match result {
+        Ok(_) => anyhow::bail!("Expected incompatibility between epoch interruption and Winch"),
+        Err(e) => {
+            assert_eq!(
+                e.to_string(),
+                "Winch does not currently support epoch based interruption"
+            );
+        }
+    }
+
+    Ok(())
+}

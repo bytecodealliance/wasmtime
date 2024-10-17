@@ -256,3 +256,23 @@ fn get_fuel_clamps_at_zero() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn ensure_compatibility_between_winch_and_fuel() -> Result<()> {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    config.strategy(Strategy::Winch);
+    let result = Engine::new(&config);
+    match result {
+        Ok(_) => anyhow::bail!("Expected incompatibility between fuel and Winch"),
+        Err(e) => {
+            assert_eq!(
+                e.to_string(),
+                "Winch does not currently support fuel based interruption"
+            );
+        }
+    }
+
+    Ok(())
+}
