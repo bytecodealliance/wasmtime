@@ -337,107 +337,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn vm_drc_header_size_align() {
+    fn vm_gc_null_header_size_align() {
         assert_eq!(
-            (wasmtime_environ::drc::HEADER_SIZE as usize),
-            core::mem::size_of::<VMDrcHeader>()
+            (wasmtime_environ::null::HEADER_SIZE as usize),
+            core::mem::size_of::<VMGcHeader>()
         );
         assert_eq!(
-            (wasmtime_environ::drc::HEADER_ALIGN as usize),
-            core::mem::align_of::<VMDrcHeader>()
-        );
-    }
-
-    #[test]
-    fn vm_drc_array_header_length_offset() {
-        assert_eq!(
-            wasmtime_environ::drc::ARRAY_LENGTH_OFFSET,
-            u32::try_from(core::mem::offset_of!(VMDrcArrayHeader, length)).unwrap(),
+            (wasmtime_environ::null::HEADER_ALIGN as usize),
+            core::mem::align_of::<VMGcHeader>()
         );
     }
 
     #[test]
-    fn ref_count_is_at_correct_offset() {
-        let extern_data = VMDrcHeader {
-            header: VMGcHeader::externref(),
-            ref_count: UnsafeCell::new(0),
-        };
-
-        let extern_data_ptr = &extern_data as *const _;
-        let ref_count_ptr = &extern_data.ref_count as *const _;
-
-        let actual_offset = (ref_count_ptr as usize) - (extern_data_ptr as usize);
-
-        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: 8,
-            num_imported_functions: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            num_defined_tables: 0,
-            num_defined_memories: 0,
-            num_owned_memories: 0,
-            num_defined_globals: 0,
-            num_escaped_funcs: 0,
-        });
-
+    fn vm_null_array_header_length_offset() {
         assert_eq!(
-            offsets.vm_drc_header_ref_count(),
-            u32::try_from(actual_offset).unwrap(),
-        );
-    }
-
-    #[test]
-    fn table_next_is_at_correct_offset() {
-        let table = VMGcRefActivationsTable::new();
-
-        let table_ptr = &table as *const _;
-        let next_ptr = &table.alloc.next as *const _;
-
-        let actual_offset = (next_ptr as usize) - (table_ptr as usize);
-
-        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: 8,
-            num_imported_functions: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            num_defined_tables: 0,
-            num_defined_memories: 0,
-            num_owned_memories: 0,
-            num_defined_globals: 0,
-            num_escaped_funcs: 0,
-        });
-        assert_eq!(
-            offsets.vm_gc_ref_activation_table_next() as usize,
-            actual_offset
-        );
-    }
-
-    #[test]
-    fn table_end_is_at_correct_offset() {
-        let table = VMGcRefActivationsTable::new();
-
-        let table_ptr = &table as *const _;
-        let end_ptr = &table.alloc.end as *const _;
-
-        let actual_offset = (end_ptr as usize) - (table_ptr as usize);
-
-        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: 8,
-            num_imported_functions: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            num_defined_tables: 0,
-            num_defined_memories: 0,
-            num_owned_memories: 0,
-            num_defined_globals: 0,
-            num_escaped_funcs: 0,
-        });
-        assert_eq!(
-            offsets.vm_gc_ref_activation_table_end() as usize,
-            actual_offset
+            wasmtime_environ::null::ARRAY_LENGTH_OFFSET,
+            u32::try_from(core::mem::offset_of!(VMNullArrayHeader, length)).unwrap(),
         );
     }
 }
