@@ -1156,8 +1156,7 @@ impl Instance {
 
         if elt_ty == TableElementType::Func {
             for i in range {
-                let gc_store = unsafe { (*self.store()).unwrap_gc_store_mut() };
-                let value = match self.tables[idx].1.get(gc_store, i) {
+                let value = match self.tables[idx].1.get(None, i) {
                     Some(value) => value,
                     None => {
                         // Out-of-bounds; caller will handle by likely

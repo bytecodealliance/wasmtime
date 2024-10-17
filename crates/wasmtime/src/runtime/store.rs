@@ -1570,6 +1570,17 @@ impl StoreOpaque {
         Ok(self.unwrap_gc_store_mut())
     }
 
+    /// If this store is configured with a GC heap, return a mutable reference
+    /// to it. Otherwise, return `None`.
+    #[inline]
+    pub(crate) fn optional_gc_store_mut(&mut self) -> Result<Option<&mut GcStore>> {
+        if cfg!(not(feature = "gc")) || !self.engine.features().gc_types() {
+            Ok(None)
+        } else {
+            Ok(Some(self.gc_store_mut()?))
+        }
+    }
+
     #[inline]
     #[cfg(feature = "gc")]
     pub(crate) fn unwrap_gc_store(&self) -> &GcStore {

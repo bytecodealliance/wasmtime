@@ -483,10 +483,11 @@ impl Table {
     ///
     /// # Panics
     ///
-    /// Panics if `val` does not have a type that matches this table.
+    /// Panics if `val` does not have a type that matches this table, or if
+    /// `gc_store.is_none()` and this is a table of GC references.
     pub fn fill(
         &mut self,
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst: u64,
         val: TableElement,
         len: u64,
@@ -507,6 +508,9 @@ impl Table {
                 funcrefs[start..end].fill(TaggedFuncRef::from(f, lazy_init));
             }
             TableElement::GcRef(r) => {
+                let gc_store =
+                    gc_store.expect("must provide a GcStore for tables of GC references");
+
                 // Clone the init GC reference into each table slot.
                 for slot in &mut self.gc_refs_mut()[start..end] {
                     gc_store.write_gc_ref(slot, r.as_ref());
@@ -619,7 +623,7 @@ impl Table {
         }
 
         self.fill(
-            store.store_opaque_mut().unwrap_gc_store_mut(),
+            store.store_opaque_mut().optional_gc_store_mut()?,
             u64::try_from(old_size).unwrap(),
             init_value,
             u64::try_from(delta).unwrap(),
@@ -632,7 +636,9 @@ impl Table {
     /// Get reference to the specified element.
     ///
     /// Returns `None` if the index is out of bounds.
-    pub fn get(&self, gc_store: &mut GcStore, index: u64) -> Option<TableElement> {
+    ///
+    /// Panics if this is a table of GC references and `gc_store` is `None`.
+    pub fn get(&self, gc_store: Option<&mut GcStore>, index: u64) -> Option<TableElement> {
         let index = usize::try_from(index).ok()?;
         match self.element_type() {
             TableElementType::Func => {
@@ -643,7 +649,7 @@ impl Table {
                     .map(|e| e.into_table_element(lazy_init))
             }
             TableElementType::GcRef => self.gc_refs().get(index).map(|r| {
-                let r = r.as_ref().map(|r| gc_store.clone_gc_ref(r));
+                let r = r.as_ref().map(|r| gc_store.unwrap().clone_gc_ref(r));
                 TableElement::GcRef(r)
             }),
         }
@@ -684,7 +690,7 @@ impl Table {
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables.
     pub unsafe fn copy(
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst_table: *mut Self,
         src_table: *mut Self,
         dst_index: u64,
@@ -835,7 +841,7 @@ impl Table {
     }
 
     fn copy_elements(
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst_table: &mut Self,
         src_table: &Self,
         dst_range: Range<usize>,
@@ -860,6 +866,7 @@ impl Table {
                 );
                 assert!(dst_range.end <= dst_table.gc_refs().len());
                 assert!(src_range.end <= src_table.gc_refs().len());
+                let gc_store = gc_store.unwrap();
                 for (dst, src) in dst_range.zip(src_range) {
                     gc_store.write_gc_ref(
                         &mut dst_table.gc_refs_mut()[dst],
@@ -872,7 +879,7 @@ impl Table {
 
     fn copy_elements_within(
         &mut self,
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst_range: Range<usize>,
         src_range: Range<usize>,
     ) {
@@ -894,6 +901,8 @@ impl Table {
                 funcrefs.copy_within(src_range, dst_range.start);
             }
             TableElementType::GcRef => {
+                let gc_store = gc_store.unwrap();
+
                 // We need to clone each `externref` while handling overlapping
                 // ranges
                 let elements = self.gc_refs_mut();
