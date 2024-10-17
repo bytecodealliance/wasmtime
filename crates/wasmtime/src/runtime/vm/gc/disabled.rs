@@ -11,11 +11,21 @@ use wasmtime_environ::{
     GcArrayLayout, GcStructLayout, GcTypeLayouts, WasmArrayType, WasmStructType,
 };
 
-pub fn default_gc_runtime() -> impl GcRuntime {
-    DisabledCollector
-}
+pub enum VMExternRef {}
+
+pub enum VMEqRef {}
+
+pub enum VMStructRef {}
+
+pub enum VMArrayRef {}
 
 pub struct VMGcObjectDataMut<'a> {
     inner: VMStructRef,
     _phantom: core::marker::PhantomData<&'a mut ()>,
+}
+
+impl VMGcObjectDataMut<'_> {
+    pub fn new(_data: &mut [u8]) -> Self {
+        unreachable!()
+    }
 }

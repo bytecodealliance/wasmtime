@@ -106,6 +106,7 @@ impl core::hash::Hash for ModuleVersionStrategy {
 pub struct Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler_config: CompilerConfig,
+    #[cfg(feature = "gc")]
     collector: Collector,
     profiling_strategy: ProfilingStrategy,
     tunables: ConfigTunables,
@@ -1997,12 +1998,17 @@ impl Config {
         }
 
         tunables.collector = if self.features().gc_types() {
-            use wasmtime_environ::Collector as EnvCollector;
-            Some(match self.collector.try_not_auto()? {
-                Collector::DeferredReferenceCounting => EnvCollector::DeferredReferenceCounting,
-                Collector::Null => EnvCollector::Null,
-                Collector::Auto => unreachable!(),
-            })
+            #[cfg(feature = "gc")]
+            {
+                use wasmtime_environ::Collector as EnvCollector;
+                Some(match self.collector.try_not_auto()? {
+                    Collector::DeferredReferenceCounting => EnvCollector::DeferredReferenceCounting,
+                    Collector::Null => EnvCollector::Null,
+                    Collector::Auto => unreachable!(),
+                })
+            }
+            #[cfg(not(feature = "gc"))]
+            bail!("cannot use GC types: the `gc` feature was disabled at compile time")
         } else {
             None
         };
@@ -2057,6 +2063,10 @@ impl Config {
             return Ok(None);
         }
 
+        #[cfg(not(feature = "gc"))]
+        bail!("cannot create a GC runtime: the `gc` feature was disabled at compile time");
+
+        #[cfg(feature = "gc")]
         #[cfg_attr(
             not(any(feature = "gc-null", feature = "gc-drc")),
             allow(unreachable_code)
@@ -2065,23 +2075,25 @@ impl Config {
             not(any(feature = "gc-null", feature = "gc-drc")),
             allow(unused_variables)
         )]
-        Ok(Some(match self.collector.try_not_auto()? {
-            #[cfg(feature = "gc-drc")]
-            Collector::DeferredReferenceCounting => {
-                Arc::new(crate::runtime::vm::DrcCollector::default()) as Arc<dyn GcRuntime>
-            }
-            #[cfg(not(feature = "gc-drc"))]
-            Collector::DeferredReferenceCounting => unreachable!(),
+        {
+            Ok(Some(match self.collector.try_not_auto()? {
+                #[cfg(feature = "gc-drc")]
+                Collector::DeferredReferenceCounting => {
+                    Arc::new(crate::runtime::vm::DrcCollector::default()) as Arc<dyn GcRuntime>
+                }
+                #[cfg(not(feature = "gc-drc"))]
+                Collector::DeferredReferenceCounting => unreachable!(),
 
-            #[cfg(feature = "gc-null")]
-            Collector::Null => {
-                Arc::new(crate::runtime::vm::NullCollector::default()) as Arc<dyn GcRuntime>
-            }
-            #[cfg(not(feature = "gc-null"))]
-            Collector::Null => unreachable!(),
+                #[cfg(feature = "gc-null")]
+                Collector::Null => {
+                    Arc::new(crate::runtime::vm::NullCollector::default()) as Arc<dyn GcRuntime>
+                }
+                #[cfg(not(feature = "gc-null"))]
+                Collector::Null => unreachable!(),
 
-            Collector::Auto => unreachable!(),
-        }))
+                Collector::Auto => unreachable!(),
+            }))
+        }
     }
 
     #[cfg(feature = "runtime")]
