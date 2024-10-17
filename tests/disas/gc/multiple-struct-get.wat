@@ -20,26 +20,26 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0023                               trapz v2, user16
-;; @0023                               v9 = uextend.i64 v2
-;; @0023                               v10 = iconst.i64 16
-;; @0023                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
-;;                                     v30 = iconst.i64 24
-;; @0023                               v13 = uadd_overflow_trap v9, v30, user1  ; v30 = 24
-;; @0023                               v8 = load.i64 notrap aligned readonly v0+48
-;; @0023                               v14 = icmp ule v13, v8
-;; @0023                               trapz v14, user1
+;; @0023                               v10 = uextend.i64 v2
+;; @0023                               v11 = iconst.i64 16
+;; @0023                               v12 = uadd_overflow_trap v10, v11, user1  ; v11 = 16
+;;                                     v32 = iconst.i64 24
+;; @0023                               v14 = uadd_overflow_trap v10, v32, user1  ; v32 = 24
+;; @0023                               v9 = load.i64 notrap aligned readonly v0+48
+;; @0023                               v15 = icmp ule v14, v9
+;; @0023                               trapz v15, user1
 ;; @0023                               v7 = load.i64 notrap aligned readonly v0+40
-;; @0023                               v15 = iadd v7, v11
-;; @0023                               v16 = load.f32 notrap aligned little v15
+;; @0023                               v16 = iadd v7, v12
+;; @0023                               v17 = load.f32 notrap aligned little v16
 ;; @0029                               trapz v2, user16
-;; @0029                               v22 = iconst.i64 20
-;; @0029                               v23 = uadd_overflow_trap v9, v22, user1  ; v22 = 20
-;; @0029                               trapz v14, user1
-;; @0029                               v27 = iadd v7, v23
-;; @0029                               v28 = load.i8 notrap aligned little v27
+;; @0029                               v24 = iconst.i64 20
+;; @0029                               v25 = uadd_overflow_trap v10, v24, user1  ; v24 = 20
+;; @0029                               trapz v15, user1
+;; @0029                               v29 = iadd v7, v25
+;; @0029                               v30 = load.i8 notrap aligned little v29
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:
-;; @0029                               v29 = sextend.i32 v28
-;; @002d                               return v16, v29
+;; @0029                               v31 = sextend.i32 v30
+;; @002d                               return v17, v31
 ;; }

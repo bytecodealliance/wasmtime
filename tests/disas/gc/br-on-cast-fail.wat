@@ -31,60 +31,60 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v44 = stack_addr.i64 ss0
-;;                                     store notrap v2, v44
-;;                                     v46 = iconst.i32 0
-;; @002e                               v4 = icmp eq v2, v46  ; v46 = 0
+;;                                     v45 = stack_addr.i64 ss0
+;;                                     store notrap v2, v45
+;;                                     v47 = iconst.i32 0
+;; @002e                               v4 = icmp eq v2, v47  ; v47 = 0
 ;; @002e                               v5 = uextend.i32 v4
 ;; @002e                               v7 = iconst.i32 1
-;;                                     v54 = select v2, v7, v46  ; v7 = 1, v46 = 0
-;; @002e                               brif v5, block5(v54), block3
+;;                                     v55 = select v2, v7, v47  ; v7 = 1, v47 = 0
+;; @002e                               brif v5, block5(v55), block3
 ;;
 ;;                                 block3:
-;;                                     v61 = iconst.i32 1
-;;                                     v62 = band.i32 v2, v61  ; v61 = 1
-;;                                     v63 = iconst.i32 0
-;;                                     v64 = select v62, v63, v61  ; v63 = 0, v61 = 1
-;; @002e                               brif v62, block5(v64), block4
+;;                                     v62 = iconst.i32 1
+;;                                     v63 = band.i32 v2, v62  ; v62 = 1
+;;                                     v64 = iconst.i32 0
+;;                                     v65 = select v63, v64, v62  ; v64 = 0, v62 = 1
+;; @002e                               brif v63, block5(v65), block4
 ;;
 ;;                                 block4:
-;; @002e                               v20 = uextend.i64 v2
-;; @002e                               v21 = iconst.i64 4
-;; @002e                               v22 = uadd_overflow_trap v20, v21, user1  ; v21 = 4
-;; @002e                               v23 = iconst.i64 8
-;; @002e                               v24 = uadd_overflow_trap v22, v23, user1  ; v23 = 8
-;; @002e                               v19 = load.i64 notrap aligned readonly v0+48
-;; @002e                               v25 = icmp ule v24, v19
-;; @002e                               trapz v25, user1
+;; @002e                               v21 = uextend.i64 v2
+;; @002e                               v22 = iconst.i64 4
+;; @002e                               v23 = uadd_overflow_trap v21, v22, user1  ; v22 = 4
+;; @002e                               v24 = iconst.i64 8
+;; @002e                               v25 = uadd_overflow_trap v23, v24, user1  ; v24 = 8
+;; @002e                               v20 = load.i64 notrap aligned readonly v0+48
+;; @002e                               v26 = icmp ule v25, v20
+;; @002e                               trapz v26, user1
 ;; @002e                               v18 = load.i64 notrap aligned readonly v0+40
-;; @002e                               v26 = iadd v18, v22
-;; @002e                               v27 = load.i32 notrap aligned readonly v26
+;; @002e                               v27 = iadd v18, v23
+;; @002e                               v28 = load.i32 notrap aligned readonly v27
 ;; @002e                               v15 = load.i64 notrap aligned readonly v0+80
 ;; @002e                               v16 = load.i32 notrap aligned readonly v15
-;; @002e                               v28 = icmp eq v27, v16
-;; @002e                               v29 = uextend.i32 v28
-;; @002e                               brif v29, block7(v29), block6
+;; @002e                               v29 = icmp eq v28, v16
+;; @002e                               v30 = uextend.i32 v29
+;; @002e                               brif v30, block7(v30), block6
 ;;
 ;;                                 block6:
-;; @002e                               v31 = call fn0(v0, v27, v16), stack_map=[i32 @ ss0+0]
-;; @002e                               jump block7(v31)
+;; @002e                               v32 = call fn0(v0, v28, v16), stack_map=[i32 @ ss0+0]
+;; @002e                               jump block7(v32)
 ;;
-;;                                 block7(v32: i32):
-;; @002e                               jump block5(v32)
+;;                                 block7(v33: i32):
+;; @002e                               jump block5(v33)
 ;;
-;;                                 block5(v33: i32):
-;;                                     v40 = load.i32 notrap v44
-;; @002e                               brif v33, block8, block2
+;;                                 block5(v34: i32):
+;;                                     v41 = load.i32 notrap v45
+;; @002e                               brif v34, block8, block2
 ;;
 ;;                                 block8:
-;; @0034                               v35 = load.i64 notrap aligned readonly v0+88
-;; @0034                               v36 = load.i64 notrap aligned readonly v0+104
-;; @0034                               call_indirect sig1, v35(v36, v0)
+;; @0034                               v36 = load.i64 notrap aligned readonly v0+88
+;; @0034                               v37 = load.i64 notrap aligned readonly v0+104
+;; @0034                               call_indirect sig1, v36(v37, v0)
 ;; @0036                               return
 ;;
 ;;                                 block2:
-;; @0038                               v38 = load.i64 notrap aligned readonly v0+112
-;; @0038                               v39 = load.i64 notrap aligned readonly v0+128
-;; @0038                               call_indirect sig2, v38(v39, v0)
+;; @0038                               v39 = load.i64 notrap aligned readonly v0+112
+;; @0038                               v40 = load.i64 notrap aligned readonly v0+128
+;; @0038                               call_indirect sig2, v39(v40, v0)
 ;; @003a                               return
 ;; }

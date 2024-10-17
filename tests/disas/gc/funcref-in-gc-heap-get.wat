@@ -20,21 +20,21 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0020                               trapz v2, user16
-;; @0020                               v8 = uextend.i64 v2
-;; @0020                               v9 = iconst.i64 16
-;; @0020                               v10 = uadd_overflow_trap v8, v9, user1  ; v9 = 16
-;;                                     v19 = iconst.i64 24
-;; @0020                               v12 = uadd_overflow_trap v8, v19, user1  ; v19 = 24
-;; @0020                               v7 = load.i64 notrap aligned readonly v0+48
-;; @0020                               v13 = icmp ule v12, v7
-;; @0020                               trapz v13, user1
+;; @0020                               v9 = uextend.i64 v2
+;; @0020                               v10 = iconst.i64 16
+;; @0020                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
+;;                                     v20 = iconst.i64 24
+;; @0020                               v13 = uadd_overflow_trap v9, v20, user1  ; v20 = 24
+;; @0020                               v8 = load.i64 notrap aligned readonly v0+48
+;; @0020                               v14 = icmp ule v13, v8
+;; @0020                               trapz v14, user1
 ;; @0020                               v6 = load.i64 notrap aligned readonly v0+40
-;; @0020                               v14 = iadd v6, v10
-;; @0020                               v17 = load.i32 notrap aligned little v14
-;; @0020                               v15 = iconst.i32 -1
-;; @0020                               v18 = call fn0(v0, v17, v15)  ; v15 = -1
+;; @0020                               v15 = iadd v6, v11
+;; @0020                               v18 = load.i32 notrap aligned little v15
+;; @0020                               v16 = iconst.i32 -1
+;; @0020                               v19 = call fn0(v0, v18, v16)  ; v16 = -1
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:
-;; @0024                               return v18
+;; @0024                               return v19
 ;; }

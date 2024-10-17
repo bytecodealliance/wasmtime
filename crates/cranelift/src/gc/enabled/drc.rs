@@ -100,7 +100,7 @@ impl DrcCompiler {
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
         let activations_table = builder.ins().load(
             ptr_ty,
-            ir::MemFlags::trusted(),
+            ir::MemFlags::trusted().with_readonly(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         );
@@ -385,12 +385,14 @@ impl GcCompiler for DrcCompiler {
         );
 
         // Write the array's length into the appropriate slot.
-        let len_addr = func_env.prepare_gc_ref_access(
-            builder,
-            array_ref,
-            Offset::Static(len_offset),
-            BoundsCheck::Object(size),
-        );
+        //
+        // Note: we don't need to bounds-check the GC ref access here, since we
+        // trust the results of the allocation libcall.
+        let base = func_env.get_gc_heap_base(builder);
+        let extended_array_ref =
+            uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
+        let object_addr = builder.ins().iadd(base, extended_array_ref);
+        let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
         let len = match init {
             ArrayInit::Fill { len, .. } => len,
             ArrayInit::Elems(e) => {

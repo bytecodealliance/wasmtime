@@ -20,18 +20,18 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64):
 ;; @0022                               trapz v2, user16
-;; @0022                               v8 = uextend.i64 v2
-;; @0022                               v9 = iconst.i64 16
-;; @0022                               v10 = uadd_overflow_trap v8, v9, user1  ; v9 = 16
-;;                                     v17 = iconst.i64 24
-;; @0022                               v12 = uadd_overflow_trap v8, v17, user1  ; v17 = 24
-;; @0022                               v7 = load.i64 notrap aligned readonly v0+48
-;; @0022                               v13 = icmp ule v12, v7
-;; @0022                               trapz v13, user1
-;; @0022                               v16 = call fn0(v0, v3)
+;; @0022                               v9 = uextend.i64 v2
+;; @0022                               v10 = iconst.i64 16
+;; @0022                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
+;;                                     v18 = iconst.i64 24
+;; @0022                               v13 = uadd_overflow_trap v9, v18, user1  ; v18 = 24
+;; @0022                               v8 = load.i64 notrap aligned readonly v0+48
+;; @0022                               v14 = icmp ule v13, v8
+;; @0022                               trapz v14, user1
+;; @0022                               v17 = call fn0(v0, v3)
 ;; @0022                               v6 = load.i64 notrap aligned readonly v0+40
-;; @0022                               v14 = iadd v6, v10
-;; @0022                               store notrap aligned little v16, v14
+;; @0022                               v15 = iadd v6, v11
+;; @0022                               store notrap aligned little v17, v15
 ;; @0026                               jump block1
 ;;
 ;;                                 block1:
