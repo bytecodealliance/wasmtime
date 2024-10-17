@@ -459,15 +459,11 @@ impl RegImm {
     }
 
     /// F32 immediate, stored using its bits representation.
-    // Temporary until support for f32.const is added.
-    #[allow(dead_code)]
     pub fn f32(bits: u32) -> Self {
         RegImm::Imm(Imm::f32(bits))
     }
 
     /// F64 immediate, stored using its bits representation.
-    // Temporary until support for f64.const is added.
-    #[allow(dead_code)]
     pub fn f64(bits: u64) -> Self {
         RegImm::Imm(Imm::f64(bits))
     }
