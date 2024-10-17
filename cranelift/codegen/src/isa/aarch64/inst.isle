@@ -3527,7 +3527,7 @@
         (c_lo Reg (value_regs_get c 0))
         (c_hi Reg (value_regs_get c 1))
         (c_test Reg (orr $I64 c_lo c_hi)))
-      (side_effect 
+      (side_effect
        (SideEffectNoResult.Inst
         (MInst.TrapIf (zero_cond_to_cond_br zero_cond c_test) trap_code)))))
 
@@ -4036,8 +4036,14 @@
         (fpu_extend (vec_dup_imm imm $false (VectorSize.Size64x2)) (ScalarSize.Size64)))
 
 (rule 1 (splat_const n size)
+        (if-let $true (vec_dup_fp_imm_supports_lane_size (vector_lane_size size)))
         (if-let imm (asimd_fp_mod_imm_from_u64 n (vector_lane_size size)))
         (vec_dup_fp_imm imm size))
+
+(decl pure vec_dup_fp_imm_supports_lane_size (ScalarSize) bool)
+(rule 1 (vec_dup_fp_imm_supports_lane_size (ScalarSize.Size32)) $true)
+(rule 1 (vec_dup_fp_imm_supports_lane_size (ScalarSize.Size64)) $true)
+(rule (vec_dup_fp_imm_supports_lane_size _) $false)
 
 ;; The base case for splat is to use `vec_dup` with the immediate loaded into a
 ;; register.
