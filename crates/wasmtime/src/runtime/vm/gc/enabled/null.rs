@@ -23,7 +23,7 @@ use wasmtime_environ::{
     VMSharedTypeIndex,
 };
 
-/// TODO FITZGEN
+/// The null collector.
 #[derive(Default)]
 pub struct NullCollector {
     layouts: NullTypeLayouts,
@@ -40,7 +40,7 @@ unsafe impl GcRuntime for NullCollector {
     }
 }
 
-/// TODO FITZGEN
+/// A GC heap for the null collector.
 #[repr(C)]
 struct NullHeap {
     /// Bump-allocation finger indexing within `1..self.heap.len()`.
