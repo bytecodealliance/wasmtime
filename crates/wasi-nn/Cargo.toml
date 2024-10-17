@@ -38,6 +38,7 @@ ort = { version = "2.0.0-rc.2", default-features = false, features = [
     "copy-dylibs",
     "download-binaries",
 ], optional = true }
+tch = { version = "0.17.0", default-features = false, optional = true}
 
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.52"
@@ -69,6 +70,8 @@ openvino = ["dep:openvino"]
 onnx = ["dep:ort"]
 # WinML is only available on Windows 10 1809 and later.
 winml = ["dep:windows"]
+# PyTorch is available on all platforms; requires Libtorch to be installed
+pytorch = ["dep:tch"]
 
 [[test]]
 name = "test-programs"

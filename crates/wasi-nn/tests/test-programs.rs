@@ -87,6 +87,10 @@ fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
             nn_witx_image_classification_winml_named,
             IgnoreCheck::for_winml(),
         ),
+        "nn_witx_image_classification_pytorch" => (
+            nn_witx_image_classification_pytorch,
+            IgnoreCheck::for_pytorch(),
+        ),
         // WIT-based tests:
         "nn_wit_image_classification_openvino" => (
             nn_wit_image_classification_openvino,
@@ -102,6 +106,10 @@ fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
         "nn_wit_image_classification_winml_named" => (
             nn_wit_image_classification_winml_named,
             IgnoreCheck::for_winml(),
+        ),
+        "nn_wit_image_classification_pytorch" => (
+            nn_wit_image_classification_pytorch,
+            IgnoreCheck::for_pytorch(),
         ),
         _ => panic!("unknown test program: {name} (add to this `match`)"),
     }
@@ -144,6 +152,17 @@ fn nn_witx_image_classification_winml_named() -> Result<()> {
     anyhow::bail!("this test requires the `winml` feature and only runs on windows")
 }
 
+#[cfg(feature = "pytorch")]
+fn nn_witx_image_classification_pytorch() -> Result<()> {
+    check::pytorch::are_artifacts_available()?;
+    let backend = Backend::from(backend::pytorch::PytorchBackend::default());
+    exec::witx::run(NN_WITX_IMAGE_CLASSIFICATION_PYTORCH, backend, false)
+}
+#[cfg(not(feature = "pytorch"))]
+fn nn_witx_image_classification_pytorch() -> Result<()> {
+    anyhow::bail!("this test requires the `pytorch` feature")
+}
+
 fn nn_wit_image_classification_openvino() -> Result<()> {
     check::openvino::is_installed()?;
     check::openvino::are_artifacts_available()?;
@@ -175,6 +194,21 @@ fn nn_wit_image_classification_onnx() -> Result<()> {
 #[cfg(not(feature = "onnx"))]
 fn nn_wit_image_classification_onnx() -> Result<()> {
     anyhow::bail!("this test requires the `onnx` feature")
+}
+
+#[cfg(feature = "pytorch")]
+fn nn_wit_image_classification_pytorch() -> Result<()> {
+    check::pytorch::are_artifacts_available()?;
+    let backend = Backend::from(backend::pytorch::PytorchBackend::default());
+    exec::wit::run(
+        NN_WIT_IMAGE_CLASSIFICATION_PYTORCH_COMPONENT,
+        backend,
+        false,
+    )
+}
+#[cfg(not(feature = "pytorch"))]
+fn nn_wit_image_classification_pytorch() -> Result<()> {
+    anyhow::bail!("this test requires the `pytorch` feature")
 }
 
 #[cfg(all(feature = "winml", target_os = "windows"))]
@@ -249,6 +283,23 @@ impl IgnoreCheck {
         }
         #[cfg(not(feature = "onnx"))]
         Ignore("requires the `onnx` feature".into())
+    }
+
+    fn for_pytorch() -> Self {
+        use IgnoreCheck::*;
+        #[cfg(feature = "pytorch")]
+        if !cfg!(target_arch = "x86_64") && !cfg!(target_arch = "aarch64") {
+            Fail("requires x86_64 or aarch64".into())
+        } else if !cfg!(target_os = "linux")
+            && !cfg!(target_os = "windows")
+            && !cfg!(target_os = "macos")
+        {
+            Fail("requires linux, windows, or macos".into())
+        } else {
+            Run
+        }
+        #[cfg(not(feature = "pytorch"))]
+        Ignore("requires the `pytorch` feature".into())
     }
 
     fn for_winml() -> IgnoreCheck {
