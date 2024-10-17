@@ -41,8 +41,6 @@ pub(crate) fn isa_builder(triple: Triple) -> Builder {
 }
 
 /// Aarch64 ISA.
-// Until Aarch64 emission is supported.
-#[allow(dead_code)]
 pub(crate) struct Aarch64 {
     /// The target triple.
     triple: Triple,
