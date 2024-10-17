@@ -2056,6 +2056,14 @@ impl Config {
             return Ok(None);
         }
 
+        #[cfg_attr(
+            not(any(feature = "gc-null", feature = "gc-drc")),
+            allow(unreachable_code)
+        )]
+        #[cfg_attr(
+            not(any(feature = "gc-null", feature = "gc-drc")),
+            allow(unused_variables)
+        )]
         Ok(Some(match self.collector.try_not_auto()? {
             #[cfg(feature = "gc-drc")]
             Collector::DeferredReferenceCounting => {
@@ -2545,7 +2553,7 @@ impl Collector {
             #[cfg(feature = "gc-null")]
             Some(c @ Collector::Null) => Ok(c),
             #[cfg(not(feature = "gc-null"))]
-            Some(Collector::DeferredReferenceCounting) => bail!(
+            Some(Collector::Null) => bail!(
                 "cannot create an engine using the null collector because \
                  the `gc-null` feature was not enabled at compile time",
             ),
