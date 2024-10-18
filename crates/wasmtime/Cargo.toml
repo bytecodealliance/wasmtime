@@ -278,3 +278,19 @@ call-hook = []
 # Enables support for "memory protection keys" which can be used in conjunction
 # with the pooling allocator on x64 to compact linear memory allocations.
 memory-protection-keys = ["pooling-allocator"]
+
+# Enables a re-export of wasmparser, so that an embedder of Wasmtime can use
+# exactly the version of the parser library that Wasmtime does. Sometimes this
+# is necessary, e.g. to guarantee that there will not be any mismatches in
+# which modules are accepted due to Wasm feature configuration or support
+# levels.
+#
+# Note that when this feature is enabled, the version of wasmparser that is
+# re-exported is *not subject to semver*: we reserve the right to make patch
+# releases of Wasmtime that bump the version of wasmparser used, and hence the
+# version re-exported, in semver-incompatible ways. This is the tradeoff that
+# the embedder needs to opt into: in order to stay exactly in sync with an
+# internal detail of Wasmtime, the cost is visibility into potential internal
+# version changes. This is why the re-export is guarded by a feature flag which
+# is off by default.
+reexport-wasmparser = []
