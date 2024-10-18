@@ -1,11 +1,7 @@
 //! X64 register definition.
 
-use crate::{
-    isa::{reg::Reg, CallingConvention},
-    masm::OperandSize,
-};
+use crate::isa::reg::Reg;
 use regalloc2::{PReg, RegClass};
-use smallvec::{smallvec, SmallVec};
 
 const ENC_RAX: u8 = 0;
 const ENC_RCX: u8 = 1;
@@ -182,54 +178,3 @@ pub(crate) const NON_ALLOCATABLE_FPR: u32 = 1 << 15;
 pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;
 /// Bitmask to represent the available floating point registers.
 pub(crate) const ALL_FPR: u32 = ALLOCATABLE_FPR & !NON_ALLOCATABLE_FPR;
-
-/// Returns the callee-saved registers according to a particular calling
-/// convention.
-///
-/// This function will return the set of registers that need to be saved
-/// according to the system ABI and that are known not to be saved during the
-/// prologue emission.
-pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
-    use CallingConvention::*;
-    use OperandSize::*;
-    let regs: SmallVec<[_; 18]> = match call_conv {
-        SystemV => {
-            smallvec![rbx(), r12(), r13(), r14(), r15(),]
-        }
-        WindowsFastcall => {
-            smallvec![
-                rbx(),
-                rdi(),
-                rsi(),
-                r12(),
-                r13(),
-                r14(),
-                r15(),
-                xmm6(),
-                xmm7(),
-                xmm8(),
-                xmm9(),
-                xmm10(),
-                xmm11(),
-                xmm12(),
-                xmm13(),
-                xmm14(),
-                xmm15(),
-            ]
-        }
-        _ => unreachable!(),
-    };
-
-    regs.into_iter()
-        .map(|r| {
-            // The fastcall calling convention expects the entirety of the
-            // floating point registers (xmm6-xmm15) to be saved.  See
-            // https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#callercallee-saved-registers
-            if r.is_int() {
-                (r, S64)
-            } else {
-                (r, S128)
-            }
-        })
-        .collect()
-}
