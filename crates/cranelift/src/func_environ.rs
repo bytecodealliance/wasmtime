@@ -118,7 +118,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// Offsets to struct fields accessed by JIT code.
     pub(crate) offsets: VMOffsets<u8>,
 
-    tunables: &'module_environment Tunables,
+    pub(crate) tunables: &'module_environment Tunables,
 
     /// A function-local variable which stores the cached value of the amount of
     /// fuel remaining to execute. If used this is modified frequently so it's
@@ -1130,7 +1130,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         *builder.func.dfg.inst_results(call).first().unwrap()
     }
 
-    fn vmshared_type_index_ty(&self) -> Type {
+    /// Get the `ir::Type` for a `VMSharedTypeIndex`.
+    pub(crate) fn vmshared_type_index_ty(&self) -> Type {
         Type::int_with_byte_size(self.offsets.size_of_vmshared_type_index().into()).unwrap()
     }
 
