@@ -200,6 +200,7 @@ impl Config {
         let compiler_strategy = &self.wasmtime.compiler_strategy;
         let cranelift_strategy = *compiler_strategy == CompilerStrategy::Cranelift;
         cfg.strategy(self.wasmtime.compiler_strategy.to_wasmtime());
+        cfg.collector(self.wasmtime.collector.to_wasmtime());
 
         self.wasmtime.codegen.configure(&mut cfg);
 
@@ -429,6 +430,7 @@ pub struct WasmtimeConfig {
     native_unwind_info: bool,
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
+    collector: Collector,
     table_lazy_init: bool,
 
     /// Whether or not fuzzing should enable PCC.
@@ -638,5 +640,20 @@ impl Arbitrary<'_> for CompilerStrategy {
         // compiler features for things such as trampolines, so it's only used
         // on fuzz targets that don't need those trampolines.
         Ok(Self::Cranelift)
+    }
+}
+
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Collector {
+    DeferredReferenceCounting,
+    Null,
+}
+
+impl Collector {
+    fn to_wasmtime(&self) -> wasmtime::Collector {
+        match self {
+            Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
+            Collector::Null => wasmtime::Collector::Null,
+        }
     }
 }
