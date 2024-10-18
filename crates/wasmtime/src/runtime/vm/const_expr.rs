@@ -1,7 +1,7 @@
 //! Evaluating const expressions.
 
 use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
-use crate::store::AutoAssertNoGc;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     prelude::*, ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val,
 };
@@ -166,6 +166,7 @@ impl ConstExprEvaluator {
     /// the correct type.
     pub unsafe fn eval(
         &mut self,
+        store: &mut StoreOpaque,
         context: &mut ConstEvalContext<'_>,
         expr: &ConstExpr,
     ) -> Result<ValRaw> {
@@ -173,13 +174,11 @@ impl ConstExprEvaluator {
 
         self.stack.clear();
 
-        let mut store = (*context.instance.store()).store_opaque_mut();
-
         // Ensure that we don't permanently root any GC references we allocate
         // during const evaluation, keeping them alive for the duration of the
         // store's lifetime.
         #[cfg(feature = "gc")]
-        let mut store = crate::OpaqueRootScope::new(&mut store);
+        let mut store = crate::OpaqueRootScope::new(store);
 
         // We cannot allow GC during const evaluation because the stack of
         // `ValRaw`s are not rooted. If we had a GC reference on our stack, and

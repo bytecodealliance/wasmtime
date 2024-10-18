@@ -300,7 +300,7 @@ unsafe fn call_host_and_handle_result<T>(
     let instance = (*cx).instance();
     let types = (*instance).component_types();
     let raw_store = (*instance).store();
-    let mut store = StoreContextMut::from_raw(raw_store);
+    let mut store = StoreContextMut(&mut *raw_store.cast());
 
     let res = crate::runtime::vm::catch_unwind_and_longjmp(|| {
         store.0.call_hook(CallHook::CallingHost)?;

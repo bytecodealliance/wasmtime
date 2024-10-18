@@ -2,6 +2,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{self as runtime};
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_table_export;
+use crate::vm::ExportTable;
 use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
 use core::iter;
 use core::ptr::NonNull;
@@ -138,9 +139,11 @@ impl Table {
         lazy_init_range: impl Iterator<Item = u64>,
     ) -> *mut runtime::Table {
         unsafe {
-            let export = &store[self.0];
-            crate::runtime::vm::Instance::from_vmctx(export.vmctx, |handle| {
-                let idx = handle.table_index(&*export.definition);
+            let ExportTable {
+                vmctx, definition, ..
+            } = store[self.0];
+            crate::runtime::vm::Instance::from_vmctx(vmctx, |handle| {
+                let idx = handle.table_index(&*definition);
                 handle.get_defined_table_with_lazy_init(idx, lazy_init_range)
             })
         }

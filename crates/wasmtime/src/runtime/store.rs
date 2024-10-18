@@ -608,16 +608,16 @@ impl<T> Store<T> {
 
             // Note the erasure of the lifetime here into `'static`, so in
             // general usage of this trait object must be strictly bounded to
-            // the `Store` itself, and is a variant that we have to maintain
-            // throughout Wasmtime.
+            // the `Store` itself, and this is an invariant that we have to
+            // maintain throughout Wasmtime.
             unsafe {
                 let traitobj = mem::transmute::<
                     *mut (dyn crate::runtime::vm::VMStore + '_),
                     *mut (dyn crate::runtime::vm::VMStore + 'static),
                 >(&mut *inner);
                 instance.set_store(traitobj);
+                instance
             }
-            instance
         };
 
         Self {
@@ -1914,8 +1914,9 @@ impl StoreOpaque {
         self.default_caller.vmctx()
     }
 
+    #[inline]
     pub fn traitobj(&self) -> *mut dyn crate::runtime::vm::VMStore {
-        self.default_caller.store()
+        self.default_caller.traitobj(self)
     }
 
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get
@@ -2626,7 +2627,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "gc")]
-    fn gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
+    fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
         let mut scope = RootScope::new(self);
         let store = scope.as_context_mut().0;
         let store_id = store.id();

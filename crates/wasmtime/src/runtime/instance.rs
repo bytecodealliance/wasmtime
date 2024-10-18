@@ -340,13 +340,11 @@ impl Instance {
         // items from this instance into other instances should be ok when
         // those items are loaded and run we'll have all the metadata to
         // look at them.
-        instance_handle.initialize(
-            compiled_module.module(),
-            store
-                .engine()
-                .features()
-                .contains(WasmFeatures::BULK_MEMORY),
-        )?;
+        let bulk_memory = store
+            .engine()
+            .features()
+            .contains(WasmFeatures::BULK_MEMORY);
+        instance_handle.initialize(store, compiled_module.module(), bulk_memory)?;
 
         Ok((instance, compiled_module.module().start_func))
     }

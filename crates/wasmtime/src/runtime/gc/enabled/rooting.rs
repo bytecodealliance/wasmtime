@@ -103,6 +103,7 @@
 //! across the block of code that is manipulating raw GC references.
 
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
+use crate::vm::VMStore;
 use crate::{prelude::*, ValRaw};
 use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
@@ -447,7 +448,7 @@ impl RootSet {
 
     pub(crate) fn with_lifo_scope<S, T>(store: &mut S, f: impl FnOnce(&mut S) -> T) -> T
     where
-        S: DerefMut<Target = StoreOpaque>,
+        S: ?Sized + DerefMut<Target = StoreOpaque>,
     {
         let scope = store.gc_roots().enter_lifo_scope();
         let ret = f(store);
@@ -1203,24 +1204,60 @@ where
     }
 }
 
-/// Internal version of `RootScope` that only wraps a `&mut StoreOpaque` rather
-/// than a whole `impl AsContextMut<Data = T>`.
-pub(crate) struct OpaqueRootScope<'a> {
-    store: &'a mut StoreOpaque,
-    scope: usize,
+pub(crate) trait AsStoreOpaqueMut {
+    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque;
 }
 
-impl Drop for OpaqueRootScope<'_> {
-    fn drop(&mut self) {
-        self.store.exit_gc_lifo_scope(self.scope);
+impl<T> AsStoreOpaqueMut for T
+where
+    T: DerefMut<Target = StoreOpaque>,
+{
+    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque {
+        &mut **self
     }
 }
 
-impl Deref for OpaqueRootScope<'_> {
-    type Target = StoreOpaque;
+impl AsStoreOpaqueMut for StoreOpaque {
+    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
+impl<'a> AsStoreOpaqueMut for &'a mut dyn VMStore {
+    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque {
+        self.store_opaque_mut()
+    }
+}
+
+/// Internal version of `RootScope` that only wraps a `&mut StoreOpaque` rather
+/// than a whole `impl AsContextMut<Data = T>`.
+pub(crate) struct OpaqueRootScope<S>
+where
+    S: AsStoreOpaqueMut,
+{
+    store: S,
+    scope: usize,
+}
+
+impl<S> Drop for OpaqueRootScope<S>
+where
+    S: AsStoreOpaqueMut,
+{
+    fn drop(&mut self) {
+        self.store
+            .as_store_opaque_mut()
+            .exit_gc_lifo_scope(self.scope);
+    }
+}
+
+impl<S> Deref for OpaqueRootScope<S>
+where
+    S: AsStoreOpaqueMut,
+{
+    type Target = S;
 
     fn deref(&self) -> &Self::Target {
-        self.store
+        &self.store
     }
 }
 
@@ -1231,15 +1268,21 @@ impl Deref for OpaqueRootScope<'_> {
 // We don't implement `DerefMut` for `RootScope` for exactly this reason, but
 // allow it for `OpaqueRootScope` because it is only Wasmtime-internal and not
 // publicly exported.
-impl DerefMut for OpaqueRootScope<'_> {
+impl<S> DerefMut for OpaqueRootScope<S>
+where
+    S: AsStoreOpaqueMut,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.store
+        &mut self.store
     }
 }
 
-impl<'a> OpaqueRootScope<'a> {
-    pub(crate) fn new(store: &'a mut StoreOpaque) -> Self {
-        let scope = store.gc_roots().enter_lifo_scope();
+impl<S> OpaqueRootScope<S>
+where
+    S: AsStoreOpaqueMut,
+{
+    pub(crate) fn new(mut store: S) -> Self {
+        let scope = store.as_store_opaque_mut().gc_roots().enter_lifo_scope();
         OpaqueRootScope { store, scope }
     }
 }

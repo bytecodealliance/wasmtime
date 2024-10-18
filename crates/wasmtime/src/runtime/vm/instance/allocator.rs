@@ -6,7 +6,7 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMFuncRef, VMGcRef, VMStore};
-use crate::store::AutoAssertNoGc;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::vm::VMGlobalDefinition;
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
@@ -526,7 +526,11 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
 // must use the defaults. This blanket impl provides both of those things.
 impl<T: InstanceAllocatorImpl> InstanceAllocator for T {}
 
-fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
+fn check_table_init_bounds(
+    store: &mut StoreOpaque,
+    instance: &mut Instance,
+    module: &Module,
+) -> Result<()> {
     let mut const_evaluator = ConstExprEvaluator::default();
 
     for segment in module.table_initialization.segments.iter() {
@@ -534,7 +538,7 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
         let mut context = ConstEvalContext::new(instance);
         let start = unsafe {
             const_evaluator
-                .eval(&mut context, &segment.offset)
+                .eval(store, &mut context, &segment.offset)
                 .expect("const expression should be valid")
         };
         let start = usize::try_from(start.get_u32()).unwrap();
@@ -554,6 +558,7 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
 }
 
 fn initialize_tables(
+    store: &mut StoreOpaque,
     context: &mut ConstEvalContext<'_>,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
@@ -566,7 +571,7 @@ fn initialize_tables(
             TableInitialValue::Expr(expr) => {
                 let raw = unsafe {
                     const_evaluator
-                        .eval(context, expr)
+                        .eval(store, context, expr)
                         .expect("const expression should be valid")
                 };
                 let idx = module.table_index(table);
@@ -574,7 +579,7 @@ fn initialize_tables(
                 match module.tables[idx].ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
-                        let gc_store = unsafe { (*context.instance.store()).gc_store_mut()? };
+                        let gc_store = store.gc_store_mut()?;
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items).err2anyhow()?;
@@ -582,7 +587,7 @@ fn initialize_tables(
 
                     WasmHeapTopType::Any => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
-                        let gc_store = unsafe { (*context.instance.store()).gc_store_mut()? };
+                        let gc_store = store.gc_store_mut()?;
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items).err2anyhow()?;
@@ -608,12 +613,13 @@ fn initialize_tables(
     for segment in module.table_initialization.segments.iter() {
         let start = unsafe {
             const_evaluator
-                .eval(context, &segment.offset)
+                .eval(store, context, &segment.offset)
                 .expect("const expression should be valid")
         };
         context
             .instance
             .table_init_segment(
+                store,
                 const_evaluator,
                 segment.table_index,
                 &segment.elements,
@@ -627,10 +633,14 @@ fn initialize_tables(
     Ok(())
 }
 
-fn get_memory_init_start(init: &MemoryInitializer, instance: &mut Instance) -> Result<u64> {
+fn get_memory_init_start(
+    store: &mut StoreOpaque,
+    init: &MemoryInitializer,
+    instance: &mut Instance,
+) -> Result<u64> {
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
-    unsafe { const_evaluator.eval(&mut context, &init.offset) }.map(|v| {
+    unsafe { const_evaluator.eval(store, &mut context, &init.offset) }.map(|v| {
         match instance.env_module().memories[init.memory_index].idx_type {
             wasmtime_environ::IndexType::I32 => v.get_u32().into(),
             wasmtime_environ::IndexType::I64 => v.get_u64(),
@@ -639,12 +649,13 @@ fn get_memory_init_start(init: &MemoryInitializer, instance: &mut Instance) -> R
 }
 
 fn check_memory_init_bounds(
+    store: &mut StoreOpaque,
     instance: &mut Instance,
     initializers: &[MemoryInitializer],
 ) -> Result<()> {
     for init in initializers {
         let memory = instance.get_memory(init.memory_index);
-        let start = get_memory_init_start(init, instance)?;
+        let start = get_memory_init_start(store, init, instance)?;
         let end = usize::try_from(start)
             .ok()
             .and_then(|start| start.checked_add(init.data.len()));
@@ -663,6 +674,7 @@ fn check_memory_init_bounds(
 }
 
 fn initialize_memories(
+    store: &mut StoreOpaque,
     context: &mut ConstEvalContext<'_>,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
@@ -678,6 +690,7 @@ fn initialize_memories(
 
     struct InitMemoryAtInstantiation<'a, 'b> {
         module: &'a Module,
+        store: &'a mut StoreOpaque,
         context: &'a mut ConstEvalContext<'b>,
         const_evaluator: &'a mut ConstExprEvaluator,
     }
@@ -697,7 +710,7 @@ fn initialize_memories(
             memory: wasmtime_environ::MemoryIndex,
             expr: &wasmtime_environ::ConstExpr,
         ) -> Option<u64> {
-            let val = unsafe { self.const_evaluator.eval(self.context, expr) }
+            let val = unsafe { self.const_evaluator.eval(self.store, self.context, expr) }
                 .expect("const expression should be valid");
             Some(
                 match self.context.instance.env_module().memories[memory].idx_type {
@@ -743,6 +756,7 @@ fn initialize_memories(
         .memory_initialization
         .init_memory(&mut InitMemoryAtInstantiation {
             module,
+            store,
             context,
             const_evaluator,
         });
@@ -753,12 +767,16 @@ fn initialize_memories(
     Ok(())
 }
 
-fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
-    check_table_init_bounds(instance, module)?;
+fn check_init_bounds(
+    store: &mut StoreOpaque,
+    instance: &mut Instance,
+    module: &Module,
+) -> Result<()> {
+    check_table_init_bounds(store, instance, module)?;
 
     match &module.memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
-            check_memory_init_bounds(instance, initializers)?;
+            check_memory_init_bounds(store, instance, initializers)?;
         }
         // Statically validated already to have everything in-bounds.
         MemoryInitialization::Static { .. } => {}
@@ -768,16 +786,19 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
 }
 
 fn initialize_globals(
+    store: &mut StoreOpaque,
     context: &mut ConstEvalContext<'_>,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
 ) -> Result<()> {
     assert!(core::ptr::eq(&**context.instance.env_module(), module));
 
+    let mut store = AutoAssertNoGc::new(store);
+
     for (index, init) in module.global_initializers.iter() {
         let raw = unsafe {
             const_evaluator
-                .eval(context, init)
+                .eval(&mut store, context, init)
                 .expect("should be a valid const expr")
         };
 
@@ -792,9 +813,6 @@ fn initialize_globals(
             }
         }
 
-        let store = unsafe { (*context.instance.store()).store_opaque_mut() };
-        let mut store = AutoAssertNoGc::new(store);
-
         // This write is safe because we know we have the correct module for
         // this instance and its vmctx due to the assert above.
         unsafe {
@@ -808,6 +826,7 @@ fn initialize_globals(
 }
 
 pub(super) fn initialize_instance(
+    store: &mut StoreOpaque,
     instance: &mut Instance,
     module: &Module,
     is_bulk_memory: bool,
@@ -817,15 +836,15 @@ pub(super) fn initialize_instance(
     // in-order and side effects are observed up to the point of an out-of-bounds
     // initializer, so the early checking is not desired.
     if !is_bulk_memory {
-        check_init_bounds(instance, module)?;
+        check_init_bounds(store, instance, module)?;
     }
 
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
 
-    initialize_globals(&mut context, &mut const_evaluator, module)?;
-    initialize_tables(&mut context, &mut const_evaluator, module)?;
-    initialize_memories(&mut context, &mut const_evaluator, &module)?;
+    initialize_globals(store, &mut context, &mut const_evaluator, module)?;
+    initialize_tables(store, &mut context, &mut const_evaluator, module)?;
+    initialize_memories(store, &mut context, &mut const_evaluator, &module)?;
 
     Ok(())
 }
