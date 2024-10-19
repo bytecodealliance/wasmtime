@@ -570,14 +570,6 @@ criteria = "safe-to-deploy"
 version = "1.7.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.zstd]]
-version = "0.11.1+zstd.1.5.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.zstd-safe]]
-version = "5.0.1+zstd.1.5.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.zstd-sys]]
 version = "2.0.9+zstd.1.5.5"
 criteria = "safe-to-deploy"
