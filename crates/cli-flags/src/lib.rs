@@ -547,19 +547,7 @@ impl CommonOptions {
         }
         match_feature! {
             ["gc" : self.codegen.collector]
-            collector => match collector {
-                #[cfg(not(feature = "gc-drc"))]
-                wasmtime::Collector::DeferredReferenceCounting => anyhow::bail!(
-                    "support for the `drc` collector is unavailable because the \
-                     `gc-drc` feature was disabled at compile time",
-                ),
-                #[cfg(not(feature = "gc-null"))]
-                wasmtime::Collector::Null => anyhow::bail!(
-                    "support for the `null` collector is unavailable because the \
-                     `gc-null` feature was disabled at compile time",
-                ),
-                _ => config.collector(collector),
-            },
+            collector => config.collector(collector),
             _ => err,
         }
         match_feature! {

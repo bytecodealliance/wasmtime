@@ -1996,7 +1996,7 @@ impl Config {
             tunables.winch_callable = self.compiler_config.strategy == Some(Strategy::Winch);
         }
 
-        tunables.collector = if self.features().gc_types() {
+        tunables.collector = if features.gc_types() {
             #[cfg(feature = "gc")]
             {
                 use wasmtime_environ::Collector as EnvCollector;
