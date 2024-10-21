@@ -40,7 +40,6 @@ impl Reg {
     }
 
     /// Create a new floating point register from encoding.
-    #[allow(dead_code)]
     pub fn float(enc: usize) -> Self {
         Self::new(PReg::new(enc, RegClass::Float))
     }
