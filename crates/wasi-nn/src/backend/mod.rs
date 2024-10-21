@@ -6,6 +6,8 @@
 pub mod onnx;
 #[cfg(feature = "openvino")]
 pub mod openvino;
+#[cfg(feature = "pytorch")]
+pub mod pytorch;
 #[cfg(all(feature = "winml", target_os = "windows"))]
 pub mod winml;
 
@@ -13,6 +15,8 @@ pub mod winml;
 use self::onnx::OnnxBackend;
 #[cfg(feature = "openvino")]
 use self::openvino::OpenvinoBackend;
+#[cfg(feature = "pytorch")]
+use self::pytorch::PytorchBackend;
 #[cfg(all(feature = "winml", target_os = "windows"))]
 use self::winml::WinMLBackend;
 
@@ -38,6 +42,10 @@ pub fn list() -> Vec<Backend> {
     #[cfg(feature = "onnx")]
     {
         backends.push(Backend::from(OnnxBackend::default()));
+    }
+    #[cfg(feature = "pytorch")]
+    {
+        backends.push(Backend::from(PytorchBackend::default()));
     }
     backends
 }
