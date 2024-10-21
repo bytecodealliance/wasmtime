@@ -489,8 +489,13 @@ impl WasmtimeConfig {
             config.reference_types_enabled = false;
             config.wide_arithmetic_enabled = false;
 
-            // Winch requires host trap handlers to be enabled at this time.
+            // Tuning  the following engine options is currently not supported
+            // by Winch.
             self.signals_based_traps = true;
+            self.table_lazy_init = true;
+            self.epoch_interruption = false;
+            self.consume_fuel = false;
+            self.debug_info = false;
         }
 
         // If using the pooling allocator, constrain the memory and module configurations
