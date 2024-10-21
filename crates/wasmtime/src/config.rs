@@ -1997,7 +1997,7 @@ impl Config {
             }
         }
 
-        tunables.collector = if self.features().gc_types() {
+        tunables.collector = if features.gc_types() {
             #[cfg(feature = "gc")]
             {
                 use wasmtime_environ::Collector as EnvCollector;
