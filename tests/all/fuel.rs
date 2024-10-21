@@ -1,4 +1,5 @@
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 use wast::parser::{self, Parse, ParseBuffer, Parser};
 use wast::token::Span;
 
@@ -257,12 +258,10 @@ fn get_fuel_clamps_at_zero() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(strategies(not(Cranelift)))]
 #[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_fuel() -> Result<()> {
-    let mut config = Config::new();
+fn ensure_compatibility_between_winch_and_fuel(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
-    config.strategy(Strategy::Winch);
     let result = Engine::new(&config);
     match result {
         Ok(_) => anyhow::bail!("Expected incompatibility between fuel and Winch"),

@@ -1,11 +1,10 @@
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
-#[test]
+#[wasmtime_test(strategies(not(Cranelift)))]
 #[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_table_lazy_init() -> Result<()> {
-    let mut config = Config::new();
+fn ensure_compatibility_between_winch_and_table_lazy_init(config: &mut Config) -> Result<()> {
     config.table_lazy_init(false);
-    config.strategy(Strategy::Winch);
     let result = Engine::new(&config);
     match result {
         Ok(_) => {
@@ -22,12 +21,10 @@ fn ensure_compatibility_between_winch_and_table_lazy_init() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(strategies(not(Cranelift)))]
 #[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_signals_based_traps() -> Result<()> {
-    let mut config = Config::new();
+fn ensure_compatibility_between_winch_and_signals_based_traps(config: &mut Config) -> Result<()> {
     config.signals_based_traps(false);
-    config.strategy(Strategy::Winch);
     let result = Engine::new(&config);
     match result {
         Ok(_) => {
@@ -46,12 +43,12 @@ fn ensure_compatibility_between_winch_and_signals_based_traps() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(strategies(not(Cranelift)))]
 #[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_generate_native_debuginfo() -> Result<()> {
-    let mut config = Config::new();
+fn ensure_compatibility_between_winch_and_generate_native_debuginfo(
+    config: &mut Config,
+) -> Result<()> {
     config.debug_info(true);
-    config.strategy(Strategy::Winch);
     let result = Engine::new(&config);
     match result {
         Ok(_) => {
