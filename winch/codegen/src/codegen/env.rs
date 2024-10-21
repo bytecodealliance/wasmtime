@@ -56,15 +56,6 @@ pub enum HeapStyle {
     Dynamic,
 }
 
-/// Resolved offsets to the VM limits.
-pub struct VMRuntimeLimits {
-    /// The offset to the `VMRuntimeLimits` pointer, relative to the `VMContext`
-    /// pointer.
-    pub(crate) ptr_offset: u32,
-    /// The offset to the fuel consumed field in the `VMRuntimeLimits` pointer.
-    pub(crate) fuel_consumed_offset: u32,
-}
-
 /// Heap metadata.
 ///
 /// Heaps represent a WebAssembly linear memory.
@@ -145,8 +136,6 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     table_access_spectre_mitigation: bool,
     name_map: PrimaryMap<UserExternalNameRef, UserExternalName>,
     name_intern: HashMap<UserExternalName, UserExternalNameRef>,
-    /// Metadata about the offset to and fields of `VMRuntimeLimits`.
-    vmruntime_limits: Option<VMRuntimeLimits>,
 }
 
 pub fn ptr_type_from_ptr_size(size: u8) -> WasmValType {
@@ -180,7 +169,6 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             builtins,
             name_map: Default::default(),
             name_intern: Default::default(),
-            vmruntime_limits: None,
         }
     }
 
@@ -397,15 +385,6 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     pub fn take_name_map(&mut self) -> PrimaryMap<UserExternalNameRef, UserExternalName> {
         self.name_intern.clear();
         mem::take(&mut self.name_map)
-    }
-
-    /// Lazily calculates and returns [`VMRuntimeLimits`].
-    pub fn resolve_vmruntime_limits(&mut self) -> &VMRuntimeLimits {
-        self.vmruntime_limits
-            .get_or_insert_with(|| VMRuntimeLimits {
-                ptr_offset: self.vmoffsets.ptr.vmctx_runtime_limits() as u32,
-                fuel_consumed_offset: self.vmoffsets.ptr.vmruntime_limits_fuel_consumed() as u32,
-            })
     }
 }
 

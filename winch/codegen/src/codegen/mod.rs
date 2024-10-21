@@ -203,7 +203,7 @@ where
 
     pub fn handle_unreachable_end(&mut self) {
         let mut frame = self.control_frames.pop().unwrap();
-        // We j;ust popped the outermost block.
+        // We just popped the outermost block.
         let is_outermost = self.control_frames.len() == 0;
 
         if frame.is_next_sequence_reachable() {
@@ -956,19 +956,19 @@ where
             return;
         }
 
-        let limits = self.env.resolve_vmruntime_limits();
+        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
         let limits_var = self.context.any_gpr(self.masm);
 
         // Load `VMRuntimeLimits` into the `limits_var` reg.
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(limits.ptr_offset),
+            self.masm.address_at_vmctx(u32::from(limits_offset)),
             writable!(limits_var),
         );
 
         // Load the fuel consumed at point into the scratch register.
         self.masm.load(
-            self.masm
-                .address_at_reg(limits_var, limits.fuel_consumed_offset),
+            self.masm.address_at_reg(limits_var, u32::from(fuel_offset)),
             writable!(scratch!(M)),
             OperandSize::S64,
         );
@@ -985,8 +985,7 @@ where
         // Store the updated fuel consumed to `VMRuntimeLimits`.
         self.masm.store(
             scratch!(M).into(),
-            self.masm
-                .address_at_reg(limits_var, limits.fuel_consumed_offset),
+            self.masm.address_at_reg(limits_var, u32::from(fuel_offset)),
             OperandSize::S64,
         );
 
@@ -996,16 +995,16 @@ where
     /// Emits a series of instructions that load the `fuel_consumed` field from
     /// `VMRuntimeLimits`.
     fn emit_load_fuel_consumed(&mut self) -> Reg {
-        let limits = self.env.resolve_vmruntime_limits();
+        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
         let fuel_var = self.context.any_gpr(self.masm);
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(limits.ptr_offset),
+            self.masm.address_at_vmctx(u32::from(limits_offset)),
             writable!(fuel_var),
         );
 
         self.masm.load(
-            self.masm
-                .address_at_reg(fuel_var, limits.fuel_consumed_offset),
+            self.masm.address_at_reg(fuel_var, u32::from(fuel_offset)),
             writable!(fuel_var),
             // Fuel is an i64.
             OperandSize::S64,
