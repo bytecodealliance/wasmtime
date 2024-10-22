@@ -24,14 +24,15 @@ impl<'a> Parse<'a> for FuelWast<'a> {
     }
 }
 
-#[test]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn run() -> Result<()> {
+fn run(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
     let test = std::fs::read_to_string("tests/all/fuel.wast")?;
     let buf = ParseBuffer::new(&test)?;
     let mut wast = parser::parse::<FuelWast<'_>>(&buf)?;
     for (span, fuel, module) in wast.assertions.iter_mut() {
-        let consumed = fuel_consumed(&module.encode()?);
+        let consumed = fuel_consumed(&config, &module.encode()?);
         if consumed == *fuel {
             continue;
         }
@@ -47,9 +48,7 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn fuel_consumed(wasm: &[u8]) -> u64 {
-    let mut config = Config::new();
-    config.consume_fuel(true);
+fn fuel_consumed(config: &Config, wasm: &[u8]) -> u64 {
     let engine = Engine::new(&config).unwrap();
     let module = Module::new(&engine, wasm).unwrap();
     let mut store = Store::new(&engine, ());
@@ -58,10 +57,12 @@ fn fuel_consumed(wasm: &[u8]) -> u64 {
     u64::MAX - store.get_fuel().unwrap()
 }
 
-#[test]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn iloop() {
+fn iloop(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
     iloop_aborts(
+        &config,
         r#"
             (module
                 (start 0)
@@ -70,6 +71,7 @@ fn iloop() {
         "#,
     );
     iloop_aborts(
+        &config,
         r#"
             (module
                 (start 0)
@@ -78,6 +80,7 @@ fn iloop() {
         "#,
     );
     iloop_aborts(
+        &config,
         r#"
             (module
                 (start 0)
@@ -86,6 +89,7 @@ fn iloop() {
         "#,
     );
     iloop_aborts(
+        &config,
         r#"
             (module
                 (start 0)
@@ -110,9 +114,7 @@ fn iloop() {
         "#,
     );
 
-    fn iloop_aborts(wat: &str) {
-        let mut config = Config::new();
-        config.consume_fuel(true);
+    fn iloop_aborts(config: &Config, wat: &str) {
         let engine = Engine::new(&config).unwrap();
         let module = Module::new(&engine, wat).unwrap();
         let mut store = Store::new(&engine, ());
@@ -120,11 +122,12 @@ fn iloop() {
         let error = Instance::new(&mut store, &module, &[]).err().unwrap();
         assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     }
+
+    Ok(())
 }
 
-#[test]
-fn manual_fuel() {
-    let mut config = Config::new();
+#[wasmtime_test]
+fn manual_fuel(config: &mut Config) {
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
@@ -134,11 +137,10 @@ fn manual_fuel() {
     assert_eq!(store.get_fuel().ok(), Some(1));
 }
 
-#[test]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn host_function_consumes_all() {
+fn host_function_consumes_all(config: &mut Config) {
     const FUEL: u64 = 10_000;
-    let mut config = Config::new();
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
     let module = Module::new(
@@ -167,9 +169,8 @@ fn host_function_consumes_all() {
     assert_eq!(trap.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
 }
 
-#[test]
-fn manual_edge_cases() {
-    let mut config = Config::new();
+#[wasmtime_test]
+fn manual_edge_cases(config: &mut Config) {
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
@@ -177,10 +178,9 @@ fn manual_edge_cases() {
     assert_eq!(store.get_fuel().unwrap(), u64::MAX);
 }
 
-#[test]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
-    let mut config = Config::new();
+fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping(config: &mut Config) {
     config.consume_fuel(true);
     config.static_memory_maximum_size(0x1_0000);
 
@@ -221,10 +221,11 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
     assert!(consumed_fuel > 0);
 }
 
-#[test]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn get_fuel_clamps_at_zero() -> Result<()> {
-    let engine = Engine::new(Config::new().consume_fuel(true))?;
+fn get_fuel_clamps_at_zero(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(
         &engine,
@@ -254,24 +255,6 @@ fn get_fuel_clamps_at_zero() -> Result<()> {
 
     // Any further attempts should fail.
     assert!(add2.call(&mut store, 10).is_err());
-
-    Ok(())
-}
-
-#[wasmtime_test(strategies(not(Cranelift)))]
-#[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_fuel(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let result = Engine::new(&config);
-    match result {
-        Ok(_) => anyhow::bail!("Expected incompatibility between fuel and Winch"),
-        Err(e) => {
-            assert_eq!(
-                e.to_string(),
-                "Winch does not currently support fuel based interruption"
-            );
-        }
-    }
 
     Ok(())
 }

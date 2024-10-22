@@ -19,7 +19,7 @@ use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_cranelift::CompiledFunction;
-use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, Tunables, VMOffsets, WasmFuncType};
 
 mod abi;
 mod address;
@@ -90,6 +90,7 @@ impl TargetIsa for Aarch64 {
         types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
+        tunables: &Tunables,
     ) -> Result<CompiledFunction> {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
@@ -122,7 +123,7 @@ impl TargetIsa for Aarch64 {
         );
         let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
-        let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
+        let mut codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
         let names = codegen.env.take_name_map();

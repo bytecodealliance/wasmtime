@@ -62,7 +62,7 @@ pub enum HeapStyle {
 #[derive(Debug, Copy, Clone)]
 pub struct HeapData {
     /// The offset to the base of the heap.
-    /// Relative to the VMContext pointer if the WebAssembly memory is locally
+    /// Relative to the `VMContext` pointer if the WebAssembly memory is locally
     /// defined. Else this is relative to the location of the imported WebAssembly
     /// memory location.
     pub offset: u32,

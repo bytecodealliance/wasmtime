@@ -19,7 +19,7 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_cranelift::CompiledFunction;
-use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, Tunables, VMOffsets, WasmFuncType};
 
 use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
 
@@ -94,6 +94,7 @@ impl TargetIsa for X64 {
         types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
+        tunables: &Tunables,
     ) -> Result<CompiledFunction> {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
@@ -133,7 +134,7 @@ impl TargetIsa for X64 {
 
         let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
-        let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
+        let mut codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
         let base = codegen.source_location.base;
