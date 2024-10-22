@@ -192,6 +192,9 @@ wasmtime_option_group! {
         pub parallel_compilation: Option<bool>,
         /// Whether to enable proof-carrying code (PCC)-based validation.
         pub pcc: Option<bool>,
+        /// Controls whether native unwind information is present in compiled
+        /// object files.
+        pub native_unwind_info: Option<bool>,
 
         #[prefixed = "cranelift"]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
@@ -651,6 +654,9 @@ impl CommonOptions {
         }
         if let Some(enable) = self.opts.signals_based_traps {
             config.signals_based_traps(enable);
+        }
+        if let Some(enable) = self.codegen.native_unwind_info {
+            config.native_unwind_info(enable);
         }
 
         match_feature! {
