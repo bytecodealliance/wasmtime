@@ -24,7 +24,8 @@
        (AluRM (size OperandSize) ;; 1, 2, 4 or 8
               (op AluRmiROpcode)
               (src1_dst SyntheticAmode)
-              (src2 Gpr))
+              (src2 Gpr)
+              (lock bool))
 
        ;; Integer arithmetic binary op that relies on the VEX prefix.
        ;; NOTE: we don't currently support emitting VEX instructions with memory
@@ -682,6 +683,18 @@
                        (dst_old_low WritableReg)
                        (dst_old_high WritableReg))
 
+       ;; A standard (native) `lock xadd src, (amode)`
+       (LockXadd (size OperandSize)
+                 (operand Reg)
+                 (mem SyntheticAmode)
+                 (dst_old WritableReg))
+
+       ;; A standard (native) `xchg src, (amode)`
+       (Xchg (size OperandSize)
+                 (operand Reg)
+                 (mem SyntheticAmode)
+                 (dst_old WritableReg))
+
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg` instruction.
        ;;
@@ -708,7 +721,7 @@
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
        (AtomicRmwSeq (ty Type) ;; I8, I16, I32, or I64
-                     (op MachAtomicRmwOp)
+                     (op AtomicRmwSeqOp)
                      (mem SyntheticAmode)
                      (operand Reg)
                      (temp WritableReg)
@@ -719,7 +732,7 @@
        ;;
        ;; This is the same as `AtomicRmwSeq`, but for 128-bit integers.
        ;;
-       ;; For `MachAtomicRmwOp::Xchg`, use `Atomic128XchgSeq` instead.
+       ;; For `AtomicRmwOp::Xchg`, use `Atomic128XchgSeq` instead.
        ;;
        ;; This instruction sequence has fixed register uses as follows:
        ;; - %rax (low), %rdx (high)  (written) the old value at `mem`
@@ -727,7 +740,7 @@
        ;;   the replacement value
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
-       (Atomic128RmwSeq (op MachAtomicRmwOp)
+       (Atomic128RmwSeq (op Atomic128RmwSeqOp)
                         (mem BoxSyntheticAmode)
                         (operand_low Reg)
                         (operand_high Reg)
@@ -739,8 +752,8 @@
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg16b` instruction.
        ;;
-       ;; This is `Atomic128XchgSeq` but only for `MachAtomicRmwOp::Xchg`. As
-       ;; the replacement value is the same every time, this instruction doesn't
+       ;; This is `Atomic128XchgSeq` but only for `AtomicRmwOp::Xchg`. As the
+       ;; replacement value is the same every time, this instruction doesn't
        ;; require any temporary registers.
        ;;
        ;; This instruction sequence has fixed register uses as follows:
@@ -4899,7 +4912,7 @@
 (decl alu_rm (Type AluRmiROpcode Amode Gpr) SideEffectNoResult)
 (rule (alu_rm ty opcode src1_dst src2)
       (let ((size OperandSize (operand_size_of_type_32_64 ty)))
-        (SideEffectNoResult.Inst (MInst.AluRM size opcode src1_dst src2))))
+        (SideEffectNoResult.Inst (MInst.AluRM size opcode src1_dst src2 $false))))
 
 (decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)
@@ -5291,14 +5304,51 @@
             (_ Unit (emit (MInst.LockCmpxchg16b replacement_low replacement_high expected_low expected_high addr dst_low dst_high))))
         (value_regs dst_low dst_high)))
 
-(decl x64_atomic_rmw_seq (Type MachAtomicRmwOp SyntheticAmode Gpr) Gpr)
+(decl x64_xadd (OperandSize SyntheticAmode Gpr) Gpr)
+(rule (x64_xadd size addr operand)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.LockXadd size operand addr dst))))
+        dst))
+
+(decl x64_xchg (OperandSize SyntheticAmode Gpr) Gpr)
+(rule (x64_xchg size addr operand)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Xchg size operand addr dst))))
+        dst))
+
+(decl lock_alu_rm (OperandSize AluRmiROpcode SyntheticAmode Gpr) Reg)
+(rule (lock_alu_rm size opcode addr operand)
+      (let ((_ Unit (emit (MInst.AluRM size opcode addr operand $true))))
+        (invalid_reg)))
+
+(decl x64_lock_add (OperandSize SyntheticAmode Gpr) Reg)
+(rule (x64_lock_add size addr operand)
+      (lock_alu_rm size (AluRmiROpcode.Add) addr operand))
+
+(decl x64_lock_sub (OperandSize SyntheticAmode Gpr) Reg)
+(rule (x64_lock_sub size addr operand)
+      (lock_alu_rm size (AluRmiROpcode.Sub) addr operand))
+
+(decl x64_lock_and (OperandSize SyntheticAmode Gpr) Reg)
+(rule (x64_lock_and size addr operand)
+      (lock_alu_rm size (AluRmiROpcode.And) addr operand))
+
+(decl x64_lock_or (OperandSize SyntheticAmode Gpr) Reg)
+(rule (x64_lock_or size addr operand)
+      (lock_alu_rm size (AluRmiROpcode.Or) addr operand))
+
+(decl x64_lock_xor (OperandSize SyntheticAmode Gpr) Reg)
+(rule (x64_lock_xor size addr operand)
+      (lock_alu_rm size (AluRmiROpcode.Xor) addr operand))
+
+(decl x64_atomic_rmw_seq (Type AtomicRmwSeqOp SyntheticAmode Gpr) Gpr)
 (rule (x64_atomic_rmw_seq ty op mem input)
       (let ((dst WritableGpr (temp_writable_gpr))
             (tmp WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.AtomicRmwSeq ty op mem input tmp dst))))
         dst))
 
-(decl x64_atomic_128_rmw_seq (MachAtomicRmwOp SyntheticAmode ValueRegs) ValueRegs)
+(decl x64_atomic_128_rmw_seq (AtomicRmwOp SyntheticAmode ValueRegs) ValueRegs)
 (rule (x64_atomic_128_rmw_seq op mem input)
       (let ((dst_low WritableGpr (temp_writable_gpr))
             (dst_high WritableGpr (temp_writable_gpr))
@@ -5306,10 +5356,10 @@
             (tmp_high WritableGpr (temp_writable_gpr))
             (input_low Gpr (value_regs_get_gpr input 0))
             (input_high Gpr (value_regs_get_gpr input 1))
-            (_ Unit (emit (MInst.Atomic128RmwSeq op mem input_low input_high tmp_low tmp_high dst_low dst_high))))
+            (_ Unit (emit (MInst.Atomic128RmwSeq (atomic_128_rmw_seq_op op) mem input_low input_high tmp_low tmp_high dst_low dst_high))))
         (value_regs dst_low dst_high)))
 
-(rule 1 (x64_atomic_128_rmw_seq (mach_atomic_rmw_op_xchg) mem input)
+(rule 1 (x64_atomic_128_rmw_seq (AtomicRmwOp.Xchg) mem input)
         (let ((dst_low WritableGpr (temp_writable_gpr))
               (dst_high WritableGpr (temp_writable_gpr))
               (input_low Gpr (value_regs_get_gpr input 0))
@@ -5325,14 +5375,50 @@
               (input_high Gpr (value_regs_get_gpr input 1)))
           (SideEffectNoResult.Inst (MInst.Atomic128XchgSeq mem input_low input_high dst_low dst_high))))
 
-(decl mach_atomic_rmw_op_xchg () MachAtomicRmwOp)
-(extern extractor mach_atomic_rmw_op_xchg mach_atomic_rmw_op_is_xchg)
 
-;; CLIF IR has one enumeration for atomic operations (`AtomicRmwOp`) while the
-;; mach backend has another (`MachAtomicRmwOp`)--this converts one to the other.
-(type MachAtomicRmwOp extern (enum))
-(decl atomic_rmw_op_to_mach_atomic_rmw_op (AtomicRmwOp) MachAtomicRmwOp)
-(extern constructor atomic_rmw_op_to_mach_atomic_rmw_op atomic_rmw_op_to_mach_atomic_rmw_op)
+(type AtomicRmwSeqOp
+      (enum And
+            Nand
+            Or
+            Xor
+            Umin
+            Umax
+            Smin
+            Smax))
+
+(decl atomic_rmw_seq_op (AtomicRmwOp) AtomicRmwSeqOp)
+(rule (atomic_rmw_seq_op (AtomicRmwOp.And)) (AtomicRmwSeqOp.And))
+(rule (atomic_rmw_seq_op (AtomicRmwOp.Nand)) (AtomicRmwSeqOp.Nand))
+(rule (atomic_rmw_seq_op (AtomicRmwOp.Or)) (AtomicRmwSeqOp.Or))
+(rule (atomic_rmw_seq_op (AtomicRmwOp.Xor)) (AtomicRmwSeqOp.Xor))
+(rule (atomic_rmw_seq_op (AtomicRmwOp.Umin)) (AtomicRmwSeqOp.Umin))
+(rule (atomic_rmw_seq_op (AtomicRmwOp.Umax)) (AtomicRmwSeqOp.Umax))
+(rule (atomic_rmw_seq_op (AtomicRmwOp.Smin)) (AtomicRmwSeqOp.Smin))
+(rule (atomic_rmw_seq_op (AtomicRmwOp.Smax)) (AtomicRmwSeqOp.Smax))
+
+(type Atomic128RmwSeqOp
+      (enum Add
+            Sub
+            And
+            Nand
+            Or
+            Xor
+            Umin
+            Umax
+            Smin
+            Smax))
+
+(decl atomic_128_rmw_seq_op (AtomicRmwOp) Atomic128RmwSeqOp)
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Add)) (Atomic128RmwSeqOp.Add))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Sub)) (Atomic128RmwSeqOp.Sub))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.And)) (Atomic128RmwSeqOp.And))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Nand)) (Atomic128RmwSeqOp.Nand))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Or)) (Atomic128RmwSeqOp.Or))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Xor)) (Atomic128RmwSeqOp.Xor))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Umin)) (Atomic128RmwSeqOp.Umin))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Umax)) (Atomic128RmwSeqOp.Umax))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Smin)) (Atomic128RmwSeqOp.Smin))
+(rule (atomic_128_rmw_seq_op (AtomicRmwOp.Smax)) (Atomic128RmwSeqOp.Smax))
 
 ;;;; Casting ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -5559,7 +5645,6 @@
 (convert VCodeConstant RegMem const_to_reg_mem)
 
 (convert IntCC CC intcc_to_cc)
-(convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
 
 (convert SinkableLoad RegMem sink_load_to_reg_mem)
 (convert SinkableLoad GprMem sink_load_to_gpr_mem)

@@ -163,6 +163,7 @@ pub(crate) fn check(
             op: _,
             ref src1_dst,
             src2: _,
+            lock: _,
         } => {
             check_load(ctx, None, src1_dst, vcode, size.to_type(), 64)?;
             check_store(ctx, None, src1_dst, vcode, size.to_type())
@@ -895,6 +896,28 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst_old_low.to_reg())?;
             ensure_no_fact(vcode, dst_old_high.to_reg())?;
             check_store(ctx, None, mem, vcode, I128)?;
+            Ok(())
+        }
+
+        Inst::LockXadd {
+            size,
+            ref mem,
+            dst_old,
+            operand: _,
+        } => {
+            ensure_no_fact(vcode, dst_old.to_reg())?;
+            check_store(ctx, None, mem, vcode, size.to_type())?;
+            Ok(())
+        }
+
+        Inst::Xchg {
+            size,
+            ref mem,
+            dst_old,
+            operand: _,
+        } => {
+            ensure_no_fact(vcode, dst_old.to_reg())?;
+            check_store(ctx, None, mem, vcode, size.to_type())?;
             Ok(())
         }
 
