@@ -10,9 +10,8 @@
 
 use crate::sched::subscription::{RwEventFlags, Subscription};
 use crate::{file::WasiFile, sched::Poll, Error, ErrorExt};
-use once_cell::sync::Lazy;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -144,7 +143,7 @@ struct StdinPoll {
     notify_rx: Receiver<PollState>,
 }
 
-static STDIN_POLL: Lazy<Mutex<StdinPoll>> = Lazy::new(StdinPoll::new);
+static STDIN_POLL: LazyLock<Mutex<StdinPoll>> = LazyLock::new(StdinPoll::new);
 
 impl StdinPoll {
     pub fn new() -> Mutex<Self> {

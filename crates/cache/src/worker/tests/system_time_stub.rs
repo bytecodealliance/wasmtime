@@ -1,7 +1,7 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::time::{Duration, SystemTime, SystemTimeError};
 
-pub static NOW: Lazy<SystemTime> = Lazy::new(SystemTime::now);
+pub static NOW: LazyLock<SystemTime> = LazyLock::new(SystemTime::now);
 
 #[derive(PartialOrd, PartialEq, Ord, Eq)]
 pub struct SystemTimeStub(SystemTime);

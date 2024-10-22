@@ -17,10 +17,9 @@ workspace = true
 # `build-libinterpret` feature set by this crate's parent).
 [dependencies]
 ocaml-interop = { version = "0.8", optional = true }
-once_cell = { workspace = true, optional = true }
 
 [dev-dependencies]
 wat = { workspace = true }
 
 [features]
-build-libinterpret = ["ocaml-interop", "once_cell"]
+build-libinterpret = ["ocaml-interop"]

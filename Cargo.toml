@@ -61,7 +61,6 @@ clap = { workspace = true }
 clap_complete = { workspace = true, optional = true }
 anyhow = { workspace = true, features = ['std'] }
 target-lexicon = { workspace = true }
-once_cell = { workspace = true }
 listenfd = { version = "1.0.0", optional = true }
 wat = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -299,7 +298,6 @@ clap = { version = "4.5.17", default-features = false, features = ["std", "deriv
 clap_complete = "4.4.7"
 hashbrown = { version = "0.14", default-features = false }
 capstone = "0.12.0"
-once_cell = { version = "1.12.0", default-features = false }
 smallvec = { version = "1.6.1", features = ["union"] }
 tracing = "0.1.26"
 bitflags = "2.0"

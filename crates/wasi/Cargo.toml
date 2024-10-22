@@ -35,7 +35,6 @@ async-trait = { workspace = true }
 system-interface = { workspace = true}
 futures = { workspace = true }
 url = { workspace = true }
-once_cell = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros", "fs"] }

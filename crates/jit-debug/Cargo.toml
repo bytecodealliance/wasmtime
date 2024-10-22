@@ -15,7 +15,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-once_cell = { workspace = true, optional = true }
 object = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 
@@ -23,5 +22,5 @@ wasmtime-versioned-export-macros = { workspace = true }
 rustix = { workspace = true, features = ["mm", "param", "time"], optional = true }
 
 [features]
-gdb_jit_int = ["once_cell"]
+gdb_jit_int = []
 perf_jitdump = ["rustix", "object"]

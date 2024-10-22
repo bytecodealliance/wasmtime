@@ -67,7 +67,7 @@ impl Mmap {
 
     #[inline]
     pub fn len(&self) -> usize {
-        unsafe { (*self.memory.as_ptr()).len() }
+        self.memory.as_ptr().len()
     }
 
     pub unsafe fn make_executable(
@@ -102,7 +102,7 @@ impl Drop for Mmap {
     fn drop(&mut self) {
         unsafe {
             let ptr = self.memory.as_ptr().cast();
-            let len = (*self.memory.as_ptr()).len();
+            let len = self.memory.as_ptr().len();
             if len == 0 {
                 return;
             }

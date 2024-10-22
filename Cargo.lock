@@ -815,7 +815,6 @@ dependencies = [
  "arbitrary",
  "cranelift",
  "cranelift-native",
- "once_cell",
  "target-lexicon",
 ]
 
@@ -3589,7 +3588,6 @@ dependencies = [
  "io-lifetimes",
  "libc",
  "log",
- "once_cell",
  "rustix",
  "system-interface",
  "tempfile",
@@ -3739,7 +3737,6 @@ name = "wasm-spec-interpreter"
 version = "0.0.0"
 dependencies = [
  "ocaml-interop",
- "once_cell",
  "wat",
 ]
 
@@ -3925,7 +3922,6 @@ dependencies = [
  "env_logger 0.11.5",
  "futures",
  "log",
- "once_cell",
  "tokio",
  "tracing",
  "wasmtime",
@@ -3951,7 +3947,6 @@ dependencies = [
  "directories-next",
  "filetime",
  "log",
- "once_cell",
  "postcard",
  "pretty_env_logger",
  "rustix",
@@ -3996,7 +3991,6 @@ dependencies = [
  "memchr",
  "num_cpus",
  "object",
- "once_cell",
  "pulley-interpreter",
  "rayon",
  "rustix",
@@ -4183,7 +4177,6 @@ dependencies = [
  "env_logger 0.11.5",
  "libfuzzer-sys",
  "log",
- "once_cell",
  "proc-macro2",
  "pulley-interpreter-fuzz",
  "quote",
@@ -4228,7 +4221,6 @@ name = "wasmtime-jit-debug"
 version = "27.0.0"
 dependencies = [
  "object",
- "once_cell",
  "rustix",
  "wasmtime-versioned-export-macros",
 ]
@@ -4283,7 +4275,6 @@ dependencies = [
  "futures",
  "io-extras",
  "io-lifetimes",
- "once_cell",
  "rustix",
  "system-interface",
  "tempfile",

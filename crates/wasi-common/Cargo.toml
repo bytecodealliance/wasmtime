@@ -43,7 +43,6 @@ libc = { workspace = true, optional = true }
 rustix = { workspace = true, features = ["fs", "event"] }
 
 [target.'cfg(windows)'.dependencies]
-once_cell = { workspace = true }
 io-extras = { workspace = true }
 rustix = { workspace = true, features = ["net"] }
 

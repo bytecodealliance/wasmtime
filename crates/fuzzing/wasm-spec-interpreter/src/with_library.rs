@@ -34,10 +34,9 @@
 
 use crate::{SpecExport, SpecInstance, SpecValue};
 use ocaml_interop::{BoxRoot, OCamlRuntime, ToOCaml};
-use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-static INTERPRET: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static INTERPRET: Mutex<()> = Mutex::new(());
 
 /// Instantiate the WebAssembly module in the spec interpreter.
 pub fn instantiate(module: &[u8]) -> Result<SpecInstance, String> {
