@@ -205,7 +205,19 @@ pub fn wasmtime_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
-    let mut tests = vec![quote! { #func }];
+    let mut tests = if test_config.strategies.len() == 1
+        && test_config.strategies.get(0).map(|s| s.to_string()) == Some("Winch".to_string())
+    {
+        vec![quote! {
+            // This prevents dead code warning when the macro is invoked as:
+            //     #[wasmtime_test(strategies(not(Cranelift))]
+            // Given that Winch only fully supports x86_64.
+            #[allow(dead_code)]
+            #func
+        }]
+    } else {
+        vec![quote! { #func }]
+    };
     let attrs = &func.attrs;
 
     for ident in &test_config.strategies {
