@@ -1,5 +1,5 @@
 use crate::{wasm_externtype_t, wasm_name_t, CExternType};
-use once_cell::unsync::OnceCell;
+use std::cell::OnceCell;
 
 #[repr(C)]
 #[derive(Clone)]

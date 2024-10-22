@@ -2,15 +2,13 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use once_cell::sync::Lazy;
 use std::fs;
 use std::path::PathBuf;
 use wasmtime::{CodeBuilder, CodeHint, Engine};
 use wasmtime_cli_flags::CommonOptions;
 
-static AFTER_HELP: Lazy<String> = Lazy::new(|| {
-    format!(
-        "By default, no CPU features or presets will be enabled for the compilation.\n\
+const AFTER_HELP: &str =
+    "By default, no CPU features or presets will be enabled for the compilation.\n\
         \n\
         Usage examples:\n\
         \n\
@@ -24,15 +22,13 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| {
         \n\
         Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
         \n  \
-        wasmtime compile --target x86_64-unknown-linux -Ccranelift-skylake foo.wasm\n",
-    )
-});
+        wasmtime compile --target x86_64-unknown-linux -Ccranelift-skylake foo.wasm\n";
 
 /// Compiles a WebAssembly module.
 #[derive(Parser, PartialEq)]
 #[command(
     version,
-    after_help = AFTER_HELP.as_str()
+    after_help = AFTER_HELP,
 )]
 pub struct CompileCommand {
     #[command(flatten)]

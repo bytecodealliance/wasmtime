@@ -35,6 +35,5 @@ rustix = { workspace = true, features = ["process"] }
 
 [dev-dependencies]
 filetime = "0.2.7"
-once_cell = { workspace = true }
 pretty_env_logger = { workspace = true }
 tempfile = "3"

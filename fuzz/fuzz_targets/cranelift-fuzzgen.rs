@@ -10,11 +10,11 @@ use libfuzzer_sys::arbitrary;
 use libfuzzer_sys::arbitrary::Arbitrary;
 use libfuzzer_sys::arbitrary::Unstructured;
 use libfuzzer_sys::fuzz_target;
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::LazyLock;
 
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{LibCall, TrapCode};
@@ -320,7 +320,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
     interpreter
 }
 
-static STATISTICS: Lazy<Statistics> = Lazy::new(Statistics::default);
+static STATISTICS: LazyLock<Statistics> = LazyLock::new(Statistics::default);
 
 fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult) {
     for args in &testcase.inputs {

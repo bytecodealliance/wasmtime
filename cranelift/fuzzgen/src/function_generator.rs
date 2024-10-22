@@ -19,10 +19,10 @@ use cranelift::prelude::{
     EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData,
     StackSlotKind,
 };
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::str::FromStr;
+use std::sync::LazyLock;
 use target_lexicon::{Architecture, Triple};
 
 type BlockSignature = Vec<Type>;
@@ -789,7 +789,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
 
 type OpcodeSignature = (Opcode, Vec<Type>, Vec<Type>);
 
-static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
+static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
     let types = &[
         I8, I16, I32, I64, I128, // Scalar Integers
         F32, F64, // Scalar Floats

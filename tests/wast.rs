@@ -1,9 +1,8 @@
 use anyhow::{bail, Context};
 use bstr::ByteSlice;
 use libtest_mimic::{Arguments, FormatSetting, Trial};
-use once_cell::sync::Lazy;
 use std::path::Path;
-use std::sync::{Condvar, Mutex};
+use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
     Strategy,
@@ -444,7 +443,7 @@ fn feature_found_src(bytes: &[u8], name: &str) -> bool {
 fn lock_pooling() -> impl Drop {
     const MAX_CONCURRENT_POOLING: u32 = 4;
 
-    static ACTIVE: Lazy<MyState> = Lazy::new(MyState::default);
+    static ACTIVE: LazyLock<MyState> = LazyLock::new(MyState::default);
 
     #[derive(Default)]
     struct MyState {
