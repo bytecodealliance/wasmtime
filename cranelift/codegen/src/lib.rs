@@ -1,5 +1,7 @@
 //! Cranelift code generation library.
 #![deny(missing_docs)]
+// Display feature requirements in the documentation when building on docs.rs
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![no_std]
 // Various bits and pieces of this crate might only be used for one platform or
 // another, but it's not really too useful to learn about that all the time. On

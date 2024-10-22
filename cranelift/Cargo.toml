@@ -13,13 +13,21 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+# Ask Cargo to build docs with `--all-features` set to true
+all-features = true
+
 [[bin]]
 name = "clif-util"
 path = "src/clif-util.rs"
 
 [dependencies]
 cfg-if = { workspace = true }
-cranelift-codegen = { workspace = true, features = ["disas", "trace-log", "timing"] }
+cranelift-codegen = { workspace = true, features = [
+    "disas",
+    "trace-log",
+    "timing",
+] }
 cranelift-entity = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-reader = { workspace = true }
@@ -44,13 +52,18 @@ clap = { workspace = true, features = ['default'] }
 similar = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
-rustc-hash  = { workspace = true }
+rustc-hash = { workspace = true }
 # Note that this just enables `trace-log` for `clif-util` and doesn't turn it on
 # for all of Cranelift, which would be bad.
 regalloc2 = { workspace = true, features = ["trace-log"] }
 
 [features]
-default = ["disas", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]
+default = [
+    "disas",
+    "cranelift-codegen/all-arch",
+    "cranelift-codegen/trace-log",
+    "souper-harvest",
+]
 disas = ["capstone"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
 all-arch = ["cranelift-codegen/all-arch"]
