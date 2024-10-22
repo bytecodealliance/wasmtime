@@ -1,6 +1,6 @@
 ## 26.0.0
 
-Released 2024-10-20.
+Released 2024-10-22.
 
 ### Added
 
