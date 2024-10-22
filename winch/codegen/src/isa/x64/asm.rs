@@ -2,7 +2,9 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{DivKind, ExtendKind, IntCmpKind, OperandSize, RemKind, RoundingMode, ShiftKind},
+    masm::{
+        DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode, ShiftKind,
+    },
 };
 use cranelift_codegen::{
     ir::{
@@ -1361,6 +1363,45 @@ impl Assembler {
             addr,
             dst: dst.map(Into::into),
             size: size.into(),
+        });
+    }
+
+    pub fn adc_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Adc,
+            src1: dst.to_reg().into(),
+            src2: src.into(),
+            dst: dst.map(Into::into),
+        });
+    }
+
+    pub fn sbb_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Sbb,
+            src1: dst.to_reg().into(),
+            src2: src.into(),
+            dst: dst.map(Into::into),
+        });
+    }
+
+    pub fn mul_wide(
+        &mut self,
+        dst_lo: WritableReg,
+        dst_hi: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: MulWideKind,
+        size: OperandSize,
+    ) {
+        self.emit(Inst::Mul {
+            signed: kind == MulWideKind::Signed,
+            size: size.into(),
+            src1: lhs.into(),
+            src2: rhs.into(),
+            dst_lo: dst_lo.to_reg().into(),
+            dst_hi: dst_hi.to_reg().into(),
         });
     }
 }

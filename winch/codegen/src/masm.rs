@@ -27,6 +27,12 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+#[derive(Eq, PartialEq)]
+pub(crate) enum MulWideKind {
+    Signed,
+    Unsigned,
+}
+
 /// The direction to perform the memory move.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum MemMoveDirection {
@@ -1019,4 +1025,33 @@ pub(crate) trait MacroAssembler {
 
     /// The current offset, in bytes from the beginning of the function.
     fn current_code_offset(&self) -> CodeOffset;
+
+    /// Performs a 128-bit addition
+    fn add128(
+        &mut self,
+        dst_lo: WritableReg,
+        dst_hi: WritableReg,
+        lhs_lo: Reg,
+        lhs_hi: Reg,
+        rhs_lo: Reg,
+        rhs_hi: Reg,
+    );
+
+    /// Performs a 128-bit subtraction
+    fn sub128(
+        &mut self,
+        dst_lo: WritableReg,
+        dst_hi: WritableReg,
+        lhs_lo: Reg,
+        lhs_hi: Reg,
+        rhs_lo: Reg,
+        rhs_hi: Reg,
+    );
+
+    /// Performs a widening multiplication from two 64-bit operands into a
+    /// 128-bit result.
+    ///
+    /// Note that some platforms require special handling of registers in this
+    /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
+    fn mul_wide(&mut self, context: &mut CodeGenContext, kind: MulWideKind);
 }

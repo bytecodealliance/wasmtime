@@ -7,8 +7,8 @@
 use crate::abi::RetArea;
 use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
-    RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, MulWideKind,
+    OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
 };
 use crate::reg::{writable, Reg};
 use crate::stack::{TypedReg, Val};
@@ -243,6 +243,10 @@ macro_rules! def_unsupported {
     (emit I64TruncSatF64U $($rest:tt)*) => {};
     (emit V128Load $($rest:tt)*) => {};
     (emit V128Store $($rest:tt)*) => {};
+    (emit I64Add128 $($rest:tt)*) => {};
+    (emit I64Sub128 $($rest:tt)*) => {};
+    (emit I64MulWideS $($rest:tt)*) => {};
+    (emit I64MulWideU $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2186,6 +2190,44 @@ where
                 );
             },
         );
+    }
+
+    fn visit_i64_add128(&mut self) {
+        self.context
+            .binop128(self.masm, |masm, lhs_lo, lhs_hi, rhs_lo, rhs_hi| {
+                masm.add128(
+                    writable!(lhs_lo),
+                    writable!(lhs_hi),
+                    lhs_lo,
+                    lhs_hi,
+                    rhs_lo,
+                    rhs_hi,
+                );
+                (TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi))
+            });
+    }
+
+    fn visit_i64_sub128(&mut self) {
+        self.context
+            .binop128(self.masm, |masm, lhs_lo, lhs_hi, rhs_lo, rhs_hi| {
+                masm.sub128(
+                    writable!(lhs_lo),
+                    writable!(lhs_hi),
+                    lhs_lo,
+                    lhs_hi,
+                    rhs_lo,
+                    rhs_hi,
+                );
+                (TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi))
+            });
+    }
+
+    fn visit_i64_mul_wide_s(&mut self) {
+        self.masm.mul_wide(&mut self.context, MulWideKind::Signed);
+    }
+
+    fn visit_i64_mul_wide_u(&mut self) {
+        self.masm.mul_wide(&mut self.context, MulWideKind::Unsigned);
     }
 
     wasmparser::for_each_operator!(def_unsupported);

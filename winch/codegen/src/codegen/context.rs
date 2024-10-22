@@ -590,4 +590,22 @@ impl<'a> CodeGenContext<'a> {
             _ => {}
         });
     }
+
+    /// Prepares for emitting a binary operation where four 64-bit operands are
+    /// used to produce two 64-bit operands, e.g. a 128-bit binop.
+    pub fn binop128<F, M>(&mut self, masm: &mut M, emit: F)
+    where
+        F: FnOnce(&mut M, Reg, Reg, Reg, Reg) -> (TypedReg, TypedReg),
+        M: MacroAssembler,
+    {
+        let rhs_hi = self.pop_to_reg(masm, None);
+        let rhs_lo = self.pop_to_reg(masm, None);
+        let lhs_hi = self.pop_to_reg(masm, None);
+        let lhs_lo = self.pop_to_reg(masm, None);
+        let (lo, hi) = emit(masm, lhs_lo.reg, lhs_hi.reg, rhs_lo.reg, rhs_hi.reg);
+        self.free_reg(rhs_hi);
+        self.free_reg(rhs_lo);
+        self.stack.push(lo.into());
+        self.stack.push(hi.into());
+    }
 }

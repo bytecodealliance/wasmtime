@@ -5,8 +5,8 @@ use crate::{
     isa::reg::{writable, Reg, WritableReg},
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
-        MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
-        StackSlot, TrapCode, TruncKind,
+        MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset,
+        ShiftKind, StackSlot, TrapCode, TruncKind,
     },
 };
 use cranelift_codegen::{
@@ -672,6 +672,37 @@ impl Masm for MacroAssembler {
 
     fn current_code_offset(&self) -> CodeOffset {
         self.asm.buffer().cur_offset()
+    }
+
+    fn add128(
+        &mut self,
+        dst_lo: WritableReg,
+        dst_hi: WritableReg,
+        lhs_lo: Reg,
+        lhs_hi: Reg,
+        rhs_lo: Reg,
+        rhs_hi: Reg,
+    ) {
+        let _ = (dst_lo, dst_hi, lhs_lo, lhs_hi, rhs_lo, rhs_hi);
+        todo!()
+    }
+
+    fn sub128(
+        &mut self,
+        dst_lo: WritableReg,
+        dst_hi: WritableReg,
+        lhs_lo: Reg,
+        lhs_hi: Reg,
+        rhs_lo: Reg,
+        rhs_hi: Reg,
+    ) {
+        let _ = (dst_lo, dst_hi, lhs_lo, lhs_hi, rhs_lo, rhs_hi);
+        todo!()
+    }
+
+    fn mul_wide(&mut self, context: &mut CodeGenContext, kind: MulWideKind) {
+        let _ = (context, kind);
+        todo!()
     }
 }
 
