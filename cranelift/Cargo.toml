@@ -13,10 +13,6 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
-[package.metadata.docs.rs]
-# Ask Cargo to build docs with `--all-features` set to true
-all-features = true
-
 [[bin]]
 name = "clif-util"
 path = "src/clif-util.rs"

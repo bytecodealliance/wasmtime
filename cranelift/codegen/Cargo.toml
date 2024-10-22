@@ -16,6 +16,10 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+# Ask Cargo to build docs with features `all-arch` 
+features = ["all-arch"]
+
 [dependencies]
 anyhow = { workspace = true, optional = true, features = ['std'] }
 bumpalo = "3"
