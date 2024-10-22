@@ -9,15 +9,7 @@ inputs:
   msrv_range:
     description: 'Versions later-than-latest-Rust the MSRV supports'
     required: false
-    # Note that this is currently set to 3 as the MSRV is 1.78 and current
-    # stable is 1.81. Currently MSRV cannot be updated as it would break the
-    # build on OSS-Fuzz which hasn't updated its Rust compiler in quite some time.
-    #
-    # Updating OSS-Fuzz is being done in
-    # https://github.com/google/oss-fuzz/pull/12365 but it's taking some time,
-    # so for now this'll get bumped instead of MSRV while we wait for the update
-    # to happen.
-    default: '3'
+    default: '2'
 
 runs:
   using: composite
@@ -36,7 +28,7 @@ runs:
         elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
           echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-pinned-nightly" ]; then
-          echo "version=nightly-2024-10-01" >> "$GITHUB_OUTPUT"
+          echo "version=nightly-2024-10-02" >> "$GITHUB_OUTPUT"
         else
           echo "version=${{ inputs.toolchain }}" >> "$GITHUB_OUTPUT"
         fi
