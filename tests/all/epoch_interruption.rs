@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
 fn build_engine() -> Arc<Engine> {
     let mut config = Config::new();
@@ -447,4 +448,22 @@ async fn drop_future_on_epoch_yield() {
     let _ = PollOnce::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
 
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
+}
+
+#[wasmtime_test(strategies(not(Cranelift)))]
+#[cfg_attr(miri, ignore)]
+fn ensure_compatibility_between_winch_and_epoch(config: &mut Config) -> Result<()> {
+    config.epoch_interruption(true);
+    let result = Engine::new(&config);
+    match result {
+        Ok(_) => anyhow::bail!("Expected incompatibility between epoch interruption and Winch"),
+        Err(e) => {
+            assert_eq!(
+                e.to_string(),
+                "Winch does not currently support epoch based interruption"
+            );
+        }
+    }
+
+    Ok(())
 }
