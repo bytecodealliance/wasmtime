@@ -620,6 +620,7 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
     actual.contains(expected)
         // slight difference in error messages
         || (expected.contains("unknown elem segment") && actual.contains("unknown element segment"))
+        || (expected.contains("type mismatch") && actual.contains("indirect calls must go through a table with type <= funcref"))
         // The same test here is asserted to have one error message in
         // `memory.wast` and a different error message in
         // `memory64/memory.wast`, so we equate these two error messages to get
