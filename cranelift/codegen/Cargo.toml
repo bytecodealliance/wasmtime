@@ -17,7 +17,7 @@ rust-version.workspace = true
 workspace = true
 
 [package.metadata.docs.rs]
-# Ask Cargo to build docs with features `all-arch` 
+# Ask Cargo to build docs with the feature `all-arch` 
 features = ["all-arch"]
 
 [dependencies]
