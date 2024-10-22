@@ -258,21 +258,3 @@ fn get_fuel_clamps_at_zero(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
-
-#[wasmtime_test(strategies(not(Cranelift)))]
-#[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_fuel(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let result = Engine::new(&config);
-    match result {
-        Ok(_) => anyhow::bail!("Expected incompatibility between fuel and Winch"),
-        Err(e) => {
-            assert_eq!(
-                e.to_string(),
-                "Winch does not currently support fuel based interruption"
-            );
-        }
-    }
-
-    Ok(())
-}

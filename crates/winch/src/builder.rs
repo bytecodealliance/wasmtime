@@ -69,10 +69,6 @@ impl CompilerBuilder for Builder {
             bail!("Winch does not currently support epoch based interruption");
         }
 
-        if tunables.consume_fuel {
-            bail!("Winch does not currently support fuel based interruption");
-        }
-
         if tunables.generate_native_debuginfo {
             bail!("Winch does not currently support generating native debug information");
         }
