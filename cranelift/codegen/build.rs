@@ -264,5 +264,5 @@ fn rustfmt(code: &str) -> std::io::Result<String> {
         ));
     }
 
-    Ok(String::from_utf8(data).expect("rustfmt always writs utf-8 to stdout"))
+    Ok(String::from_utf8(data).expect("rustfmt always writes utf-8 to stdout"))
 }
