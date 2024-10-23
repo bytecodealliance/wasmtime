@@ -1088,6 +1088,7 @@ jobs:
       with:
         submodules: true
 
+    - uses: ./.github/actions/install-ninja
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
@@ -1107,13 +1108,6 @@ jobs:
       if: contains(matrix.target, 'android')
       with:
         target: ${{ matrix.target }}
-
-    - name: Install ninja (macOS)
-      run: brew install ninja
-      if: runner.os == 'macOS'
-    - name: Install ninja (Windows)
-      run: choco install ninja
-      if: runner.os == 'Windows'
 
     - run: $CENTOS ./ci/build-release-artifacts.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
