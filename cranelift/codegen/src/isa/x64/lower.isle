@@ -3386,19 +3386,53 @@
 ;; Rules for `atomic_rmw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; This is a simple, general-case atomic update, based on a loop involving
-;; `cmpxchg`.  Note that we could do much better than this in the case where the
-;; old value at the location (that is to say, the SSA `Value` computed by this
-;; CLIF instruction) is not required.  In that case, we could instead implement
-;; this using a single `lock`-prefixed x64 read-modify-write instruction.  Also,
-;; even in the case where the old value is required, for the `add` and `sub`
-;; cases, we can use the single instruction `lock xadd`.  However, those
-;; improvements have been left for another day. TODO: filed as
-;; https://github.com/bytecodealliance/wasmtime/issues/2153.
-
+;; `cmpxchg`.
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw flags op address input)))
-      (x64_atomic_rmw_seq ty op (to_amode flags address (zero_offset)) input))
-(rule 1 (lower (has_type $I128 (atomic_rmw flags op address input)))
+      (x64_atomic_rmw_seq ty (atomic_rmw_seq_op op) (to_amode flags address (zero_offset)) input))
+
+;; `Add` and `Sub` can use `lock xadd`
+(rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
+                  (atomic_rmw flags (AtomicRmwOp.Add) address input)))
+      (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+(rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
+                  (atomic_rmw flags (AtomicRmwOp.Sub) address input)))
+      (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) (x64_neg ty input)))
+;; `Xchg` can use `xchg`
+(rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
+                  (atomic_rmw flags (AtomicRmwOp.Xchg) address input)))
+      (x64_xchg (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+
+;; `Add`, `Sub`, `And`, `Or` and `Xor` can use `lock`-prefixed instructions if
+;; the old value is not required.
+(rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
+                  (atomic_rmw flags (AtomicRmwOp.Add) address input)))
+      (if-let (first_result res) i)
+      (if-let $true (value_is_unused res))
+      (x64_lock_add (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+(rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
+                  (atomic_rmw flags (AtomicRmwOp.Sub) address input)))
+      (if-let (first_result res) i)
+      (if-let $true (value_is_unused res))
+      (x64_lock_sub (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+(rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
+                  (atomic_rmw flags (AtomicRmwOp.And) address input)))
+      (if-let (first_result res) i)
+      (if-let $true (value_is_unused res))
+      (x64_lock_and (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+(rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
+                  (atomic_rmw flags (AtomicRmwOp.Or) address input)))
+      (if-let (first_result res) i)
+      (if-let $true (value_is_unused res))
+      (x64_lock_or (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+(rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
+                  (atomic_rmw flags (AtomicRmwOp.Xor) address input)))
+      (if-let (first_result res) i)
+      (if-let $true (value_is_unused res))
+      (x64_lock_xor (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+
+;; 128-bit integers always use a `lock cmpxchg16b` loop.
+(rule 3 (lower (has_type $I128 (atomic_rmw flags op address input)))
         (if-let $true (use_cmpxchg16b))
         (x64_atomic_128_rmw_seq op (to_amode flags address (zero_offset)) input))
 

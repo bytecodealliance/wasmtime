@@ -16,7 +16,7 @@ function u0:1302(i64) -> i64 system_v {
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   atomically { 64_bits_at_[%r9]) Add= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
+;   lock addq    %rdi, 0(%rdi)
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -27,11 +27,7 @@ function u0:1302(i64) -> i64 system_v {
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rcx
-;   addq %rdi, %rcx
-;   lock cmpxchgq %rcx, (%rdi) ; trap: heap_oob
-;   jne 7
+;   lock addq %rdi, (%rdi) ; trap: heap_oob
 ;   movq %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp

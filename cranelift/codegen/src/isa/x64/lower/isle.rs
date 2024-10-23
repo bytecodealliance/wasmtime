@@ -22,8 +22,8 @@ use crate::{
         inst::{args::*, regs, ReturnCallInfo},
     },
     machinst::{
-        isle::*, ArgPair, CallInfo, InsnInput, InstOutput, IsTailCall, MachAtomicRmwOp, MachInst,
-        VCodeConstant, VCodeConstantData,
+        isle::*, ArgPair, CallInfo, InsnInput, InstOutput, IsTailCall, MachInst, VCodeConstant,
+        VCodeConstantData,
     },
 };
 use alloc::vec::Vec;
@@ -613,20 +613,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn zero_offset(&mut self) -> Offset32 {
         Offset32::new(0)
-    }
-
-    #[inline]
-    fn atomic_rmw_op_to_mach_atomic_rmw_op(&mut self, op: &AtomicRmwOp) -> MachAtomicRmwOp {
-        MachAtomicRmwOp::from(*op)
-    }
-
-    #[inline]
-    fn mach_atomic_rmw_op_is_xchg(&mut self, op: &MachAtomicRmwOp) -> Option<()> {
-        if *op == MachAtomicRmwOp::Xchg {
-            Some(())
-        } else {
-            None
-        }
     }
 
     #[inline]
