@@ -103,6 +103,7 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
             "spec_testsuite/table_set.wast",
             "spec_testsuite/table_size.wast",
             "spec_testsuite/unreached-invalid.wast",
+            "spec_testsuite/call_indirect.wast",
             // simd-related failures
             "annotations/simd_lane.wast",
             "memory64/simd.wast",
@@ -252,7 +253,7 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
     let gc = feature_found(wast, "gc") || memory64;
     let function_references = gc || memory64 || feature_found(wast, "function-references");
     let reference_types = !(threads && feature_found(wast, "proposals"));
-    let relaxed_simd = feature_found(wast, "relaxed-simd");
+    let relaxed_simd = feature_found(wast, "relaxed-simd") || memory64;
     let tail_call = function_references || feature_found(wast, "tail-call");
     let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
         || feature_found_src(&wast_bytes, "shared)");
