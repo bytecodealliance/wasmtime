@@ -1,7 +1,6 @@
 //! Instruction operand sub-components (aka "parts"): definitions and printing.
 
 use super::regs::{self};
-use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::MemFlags;
@@ -574,21 +573,20 @@ impl SyntheticAmode {
         }
     }
 
-    pub(crate) fn finalize(&self, state: &mut EmitState, buffer: &mut MachBuffer<Inst>) -> Amode {
+    pub(crate) fn finalize(&self, frame: &FrameLayout, buffer: &mut MachBuffer<Inst>) -> Amode {
         match self {
             SyntheticAmode::Real(addr) => addr.clone(),
             SyntheticAmode::IncomingArg { offset } => {
-                // NOTE: this could be made relative to RSP by adding additional offsets from the
-                // frame_layout.
-                let args_max_fp_offset =
-                    state.frame_layout().tail_args_size + state.frame_layout().setup_area_size;
+                // NOTE: this could be made relative to RSP by adding additional
+                // offsets from the frame_layout.
+                let args_max_fp_offset = frame.tail_args_size + frame.setup_area_size;
                 Amode::imm_reg(
                     i32::try_from(args_max_fp_offset - offset).unwrap(),
                     regs::rbp(),
                 )
             }
             SyntheticAmode::SlotOffset { simm32 } => {
-                let off = *simm32 as i64 + i64::from(state.frame_layout().outgoing_args_size);
+                let off = *simm32 as i64 + i64::from(frame.outgoing_args_size);
                 Amode::imm_reg(off.try_into().expect("invalid sp offset"), regs::rsp())
             }
             SyntheticAmode::ConstantOffset(c) => {
