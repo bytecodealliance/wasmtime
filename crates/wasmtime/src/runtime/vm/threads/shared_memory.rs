@@ -6,7 +6,7 @@ use crate::runtime::vm::{Memory, RuntimeLinearMemory, VMStore, WaitResult};
 use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap};
 
@@ -24,7 +24,7 @@ pub struct SharedMemory(Arc<SharedMemoryInner>);
 struct SharedMemoryInner {
     memory: RwLock<Box<dyn RuntimeLinearMemory>>,
     spot: ParkingSpot,
-    ty: wasmtime_environ::Memory,
+    ty: Mutex<wasmtime_environ::Memory>,
     def: LongTermVMMemoryDefinition,
 }
 
@@ -33,6 +33,7 @@ impl SharedMemory {
     pub fn new(plan: MemoryPlan) -> Result<Self> {
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
         let mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
+        println!("JUAN SharedMemory::new");
         Self::wrap(&plan, Box::new(mmap_memory), plan.memory)
     }
 
@@ -53,7 +54,7 @@ impl SharedMemory {
             "cannot re-wrap a shared memory"
         );
         Ok(Self(Arc::new(SharedMemoryInner {
-            ty,
+            ty: Mutex::new(ty),
             spot: ParkingSpot::default(),
             def: LongTermVMMemoryDefinition(memory.vmmemory()),
             memory: RwLock::new(memory),
@@ -62,7 +63,9 @@ impl SharedMemory {
 
     /// Return the memory type for this [`SharedMemory`].
     pub fn ty(&self) -> wasmtime_environ::Memory {
-        self.0.ty
+        // self.0.ty is a Mutex, so we need to lock it to access the value.
+        self.0.ty.lock().unwrap().clone()
+        //self.0.ty
     }
 
     /// Convert this shared memory into a [`Memory`].

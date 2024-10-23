@@ -71,20 +71,28 @@ pub extern "C" fn wasmtime_memorytype_new(
     maximum_specified: bool,
     maximum: u64,
     memory64: bool,
+    shared: bool,
 ) -> Box<wasm_memorytype_t> {
     let maximum = if maximum_specified {
         Some(maximum)
     } else {
         None
     };
-    Box::new(wasm_memorytype_t::new(if memory64 {
-        MemoryType::new64(minimum, maximum)
-    } else {
-        MemoryType::new(
+    Box::new(if shared {
+        wasm_memorytype_t::new(MemoryType::shared(
             u32::try_from(minimum).unwrap(),
-            maximum.map(|i| u32::try_from(i).unwrap()),
-        )
-    }))
+            maximum.map(|i| u32::try_from(i).unwrap()).unwrap(),
+        ))
+    } else {
+        wasm_memorytype_t::new(if memory64 {
+            MemoryType::new64(minimum, maximum)
+        } else {
+            MemoryType::new(
+                u32::try_from(minimum).unwrap(),
+                maximum.map(|i| u32::try_from(i).unwrap()),
+            )
+        })
+    })
 }
 
 #[no_mangle]

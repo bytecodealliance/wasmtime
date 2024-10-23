@@ -23,6 +23,7 @@ pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Result<Extern> {
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)?),
         ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)?),
         ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)?),
+        ExternType::SharedMemory(mem_ty) => Extern::SharedMemory(dummy_memory(store, mem_ty)?),
     })
 }
 

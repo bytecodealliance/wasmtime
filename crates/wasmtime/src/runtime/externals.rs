@@ -1,3 +1,6 @@
+use core::mem::ManuallyDrop;
+use std::boxed::Box;
+
 use crate::store::StoreOpaque;
 use crate::{AsContext, Engine, ExternType, Func, Memory, SharedMemory};
 
@@ -29,7 +32,7 @@ pub enum Extern {
     Memory(Memory),
     /// A WebAssembly shared memory; these are handled separately from
     /// [`Memory`].
-    SharedMemory(SharedMemory),
+    SharedMemory(ManuallyDrop<Box<SharedMemory>>),
 }
 
 impl Extern {
@@ -77,7 +80,7 @@ impl Extern {
     /// memory.
     ///
     /// Returns `None` if this is not a shared memory.
-    pub fn into_shared_memory(self) -> Option<SharedMemory> {
+    pub fn into_shared_memory(self) -> Option<ManuallyDrop<Box<SharedMemory>>> {
         match self {
             Extern::SharedMemory(memory) => Some(memory),
             _ => None,
@@ -112,11 +115,13 @@ impl Extern {
                 Extern::Func(Func::from_wasmtime_function(f, store))
             }
             crate::runtime::vm::Export::Memory(m) => {
-                if m.memory.memory.shared {
-                    Extern::SharedMemory(SharedMemory::from_wasmtime_memory(m, store))
-                } else {
-                    Extern::Memory(Memory::from_wasmtime_memory(m, store))
-                }
+                // if m.memory.memory.shared {
+                //     let shared_memory =
+                //         ManuallyDrop::new(Box::new(SharedMemory::from_wasmtime_memory(m, store)));
+                //     Extern::SharedMemory(&shared_memory)
+                // } else {
+                Extern::Memory(Memory::from_wasmtime_memory(m, store))
+                // }
             }
             crate::runtime::vm::Export::Global(g) => {
                 Extern::Global(Global::from_wasmtime_global(g, store))
@@ -158,7 +163,7 @@ impl From<Memory> for Extern {
 
 impl From<SharedMemory> for Extern {
     fn from(r: SharedMemory) -> Self {
-        Extern::SharedMemory(r)
+        Extern::SharedMemory(ManuallyDrop::new(Box::new(r)))
     }
 }
 

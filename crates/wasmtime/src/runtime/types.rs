@@ -1156,6 +1156,8 @@ pub enum ExternType {
     Table(TableType),
     /// This external type is the type of a WebAssembly memory.
     Memory(MemoryType),
+    /// This external type is the type of a WebAssembly shared memory.
+    SharedMemory(MemoryType),
 }
 
 macro_rules! extern_type_accessors {
