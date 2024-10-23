@@ -1,21 +1,19 @@
-//! Encodes instructions in the standard x86 encoding mode. This is called IA-32E mode in the Intel
-//! manuals but corresponds to the addition of the REX-prefix format (hence the name of this module)
-//! that allowed encoding instructions in both compatibility mode (32-bit instructions running on a
+//! Encodes instructions in the standard x86 encoding mode. This is called
+//! IA-32E mode in the Intel manuals but corresponds to the addition of the
+//! REX-prefix format (hence the name of this module) that allowed encoding
+//! instructions in both compatibility mode (32-bit instructions running on a
 //! 64-bit OS) and in 64-bit mode (using the full 64-bit address space).
 //!
-//! For all of the routines that take both a memory-or-reg operand (sometimes called "E" in the
-//! Intel documentation, see the Intel Developer's manual, vol. 2, section A.2) and a reg-only
-//! operand ("G" in Intelese), the order is always G first, then E. The term "enc" in the following
-//! means "hardware register encoding number".
+//! For all of the routines that take both a memory-or-reg operand (sometimes
+//! called "E" in the Intel documentation, see the Intel Developer's manual,
+//! vol. 2, section A.2) and a reg-only operand ("G" in Intel-ese), the order is
+//! always G first, then E. The term "enc" in the following means "hardware
+//! register encoding number".
 
-use crate::machinst::{Reg, RegClass};
-use crate::{
-    isa::x64::inst::{
-        args::{Amode, OperandSize},
-        regs, Inst, LabelUse,
-    },
-    machinst::MachBuffer,
-};
+use super::ByteSink;
+use crate::isa::x64::inst::args::{Amode, OperandSize};
+use crate::isa::x64::inst::{regs, Inst, LabelUse};
+use crate::machinst::{MachBuffer, Reg, RegClass};
 
 pub(crate) fn low8_will_sign_extend_to_64(x: u32) -> bool {
     let xs = (x as i32) as i64;
@@ -81,11 +79,23 @@ impl RexFlags {
         Self(1)
     }
 
+    /// True if 64-bit operands are used.
+    #[inline(always)]
+    pub fn must_clear_w(&self) -> bool {
+        (self.0 & 1) != 0
+    }
+
     /// Require that the REX prefix is emitted.
     #[inline(always)]
     pub fn always_emit(&mut self) -> &mut Self {
         self.0 = self.0 | 2;
         self
+    }
+
+    /// True if the REX prefix must always be emitted.
+    #[inline(always)]
+    pub fn must_always_emit(&self) -> bool {
+        (self.0 & 2) != 0
     }
 
     /// Emit the rex prefix if the referenced register would require it for 8-bit operations.
@@ -98,21 +108,9 @@ impl RexFlags {
         self
     }
 
-    /// True if 64-bit operands are used.
-    #[inline(always)]
-    pub fn must_clear_w(&self) -> bool {
-        (self.0 & 1) != 0
-    }
-
-    /// True if the REX prefix must always be emitted.
-    #[inline(always)]
-    pub fn must_always_emit(&self) -> bool {
-        (self.0 & 2) != 0
-    }
-
     /// Emit a unary instruction.
     #[inline(always)]
-    pub fn emit_one_op(&self, sink: &mut MachBuffer<Inst>, enc_e: u8) {
+    pub fn emit_one_op<BS: ByteSink + ?Sized>(&self, sink: &mut BS, enc_e: u8) {
         // Register Operand coded in Opcode Byte
         // REX.R and REX.X unused
         // REX.B == 1 accesses r8-r15
@@ -128,7 +126,7 @@ impl RexFlags {
 
     /// Emit a binary instruction.
     #[inline(always)]
-    pub fn emit_two_op(&self, sink: &mut MachBuffer<Inst>, enc_g: u8, enc_e: u8) {
+    pub fn emit_two_op<BS: ByteSink + ?Sized>(&self, sink: &mut BS, enc_g: u8, enc_e: u8) {
         let w = if self.must_clear_w() { 0 } else { 1 };
         let r = (enc_g >> 3) & 1;
         let x = 0;
@@ -141,9 +139,9 @@ impl RexFlags {
 
     /// Emit a ternary instruction.
     #[inline(always)]
-    pub fn emit_three_op(
+    pub fn emit_three_op<BS: ByteSink + ?Sized>(
         &self,
-        sink: &mut MachBuffer<Inst>,
+        sink: &mut BS,
         enc_g: u8,
         enc_index: u8,
         enc_base: u8,
@@ -155,6 +153,31 @@ impl RexFlags {
         let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
         if rex != 0x40 || self.must_always_emit() {
             sink.put1(rex);
+        }
+    }
+
+    /// Emit a four-operand instruction.
+    pub fn emit_mem_op<BS: ByteSink + ?Sized>(&self, sink: &mut BS, enc_g: u8, mem_e: &Amode) {
+        match *mem_e {
+            Amode::ImmReg { base, .. } => {
+                let enc_e = int_reg_enc(base);
+                self.emit_two_op(sink, enc_g, enc_e);
+            }
+
+            Amode::ImmRegRegShift {
+                base: reg_base,
+                index: reg_index,
+                ..
+            } => {
+                let enc_base = int_reg_enc(*reg_base);
+                let enc_index = int_reg_enc(*reg_index);
+                self.emit_three_op(sink, enc_g, enc_index, enc_base);
+            }
+
+            Amode::RipRelative { .. } => {
+                // note REX.B = 0.
+                self.emit_two_op(sink, enc_g, 0);
+            }
         }
     }
 }
@@ -232,7 +255,7 @@ pub enum LegacyPrefixes {
 impl LegacyPrefixes {
     /// Emit the legacy prefix as bytes (e.g. in REX instructions).
     #[inline(always)]
-    pub(crate) fn emit(&self, sink: &mut MachBuffer<Inst>) {
+    pub(crate) fn emit<BS: ByteSink + ?Sized>(&self, sink: &mut BS) {
         match self {
             Self::_66 => sink.put1(0x66),
             Self::_F0 => sink.put1(0xF0),
@@ -501,7 +524,7 @@ impl Imm {
         }
     }
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>) {
+    fn emit<BS: ByteSink + ?Sized>(&self, sink: &mut BS) {
         match self {
             Imm::None => {}
             Imm::Imm8(n) => sink.put1(*n as u8),
@@ -514,8 +537,8 @@ impl Imm {
 ///
 /// This is conceptually the same as emit_modrm_sib_enc_ge, except it is for the case where the E
 /// operand is a register rather than memory.  Hence it is much simpler.
-pub(crate) fn emit_std_enc_enc(
-    sink: &mut MachBuffer<Inst>,
+pub(crate) fn emit_std_enc_enc<BS: ByteSink + ?Sized>(
+    sink: &mut BS,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     mut num_opcodes: usize,
@@ -571,8 +594,8 @@ pub(crate) fn emit_std_reg_mem(
     );
 }
 
-pub(crate) fn emit_std_reg_reg(
-    sink: &mut MachBuffer<Inst>,
+pub(crate) fn emit_std_reg_reg<BS: ByteSink + ?Sized>(
+    sink: &mut BS,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     num_opcodes: usize,
@@ -586,7 +609,7 @@ pub(crate) fn emit_std_reg_reg(
 }
 
 /// Write a suitable number of bits from an imm64 to the sink.
-pub(crate) fn emit_simm(sink: &mut MachBuffer<Inst>, size: u8, simm32: u32) {
+pub(crate) fn emit_simm<BS: ByteSink + ?Sized>(sink: &mut BS, size: u8, simm32: u32) {
     match size {
         8 | 4 => sink.put4(simm32),
         2 => sink.put2(simm32 as u16),
