@@ -45,6 +45,7 @@ cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --featu
 mkdir -p target/c-api-build
 cd target/c-api-build
 cmake \
+  -G Ninja \
   ../../crates/c-api \
   $cmake_flags \
   -DCMAKE_BUILD_TYPE=Release \
