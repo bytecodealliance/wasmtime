@@ -487,7 +487,6 @@ impl WasmtimeConfig {
             config.threads_enabled = false;
             config.tail_call_enabled = false;
             config.reference_types_enabled = false;
-            config.wide_arithmetic_enabled = false;
 
             // Tuning  the following engine options is currently not supported
             // by Winch.

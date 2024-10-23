@@ -6,13 +6,14 @@ use super::{
 };
 
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize,
-    RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, MulWideKind,
+    OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TruncKind, TRUSTED_FLAGS,
+    UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
     codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv},
-    stack::Val,
+    stack::{TypedReg, Val},
 };
 use crate::{
     abi::{vmctx, ABI},
@@ -995,6 +996,68 @@ impl Masm for MacroAssembler {
 
     fn current_code_offset(&self) -> CodeOffset {
         self.asm.buffer().cur_offset()
+    }
+
+    fn add128(
+        &mut self,
+        dst_lo: WritableReg,
+        dst_hi: WritableReg,
+        lhs_lo: Reg,
+        lhs_hi: Reg,
+        rhs_lo: Reg,
+        rhs_hi: Reg,
+    ) {
+        Self::ensure_two_argument_form(&dst_lo.to_reg(), &lhs_lo);
+        Self::ensure_two_argument_form(&dst_hi.to_reg(), &lhs_hi);
+        self.asm.add_rr(rhs_lo, dst_lo, OperandSize::S64);
+        self.asm.adc_rr(rhs_hi, dst_hi, OperandSize::S64);
+    }
+
+    fn sub128(
+        &mut self,
+        dst_lo: WritableReg,
+        dst_hi: WritableReg,
+        lhs_lo: Reg,
+        lhs_hi: Reg,
+        rhs_lo: Reg,
+        rhs_hi: Reg,
+    ) {
+        Self::ensure_two_argument_form(&dst_lo.to_reg(), &lhs_lo);
+        Self::ensure_two_argument_form(&dst_hi.to_reg(), &lhs_hi);
+        self.asm.sub_rr(rhs_lo, dst_lo, OperandSize::S64);
+        self.asm.sbb_rr(rhs_hi, dst_hi, OperandSize::S64);
+    }
+
+    fn mul_wide(&mut self, context: &mut CodeGenContext, kind: MulWideKind) {
+        // Reserve rax/rdx since they're required by the `mul_wide` instruction
+        // being used here.
+        let rax = context.reg(regs::rax(), self);
+        let rdx = context.reg(regs::rdx(), self);
+
+        // The rhs of this binop can be in any register
+        let rhs = context.pop_to_reg(self, None);
+        // Mark rax as allocatable. and then force the lhs operand to be placed
+        // in `rax`.
+        context.free_reg(rax);
+        let lhs = context.pop_to_reg(self, Some(rax));
+
+        self.asm.mul_wide(
+            writable!(rax),
+            writable!(rdx),
+            lhs.reg,
+            rhs.reg,
+            kind,
+            OperandSize::S64,
+        );
+
+        // No longer using the rhs register after the multiplication has been
+        // executed.
+        context.free_reg(rhs);
+
+        // The low bits of the result are in rax, where `lhs` was allocated to
+        context.stack.push(lhs.into());
+        // The high bits of the result are in rdx, which we previously reserved.
+        context.stack.push(Val::Reg(TypedReg::i64(rdx)));
     }
 }
 

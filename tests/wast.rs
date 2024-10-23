@@ -173,8 +173,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
             "spec_testsuite/simd_store32_lane.wast",
             "spec_testsuite/simd_store64_lane.wast",
             "spec_testsuite/simd_store8_lane.wast",
-            // wide arithmetic
-            "misc_testsuite/wide-arithmetic.wast",
         ];
 
         if unsupported.iter().any(|part| test.ends_with(part)) {
