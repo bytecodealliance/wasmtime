@@ -95,6 +95,30 @@ fn test_tcp_connect_dual_stack(net: &Network) {
     ));
 }
 
+/// Client sockets can be explicitly bound.
+fn test_tcp_connect_explicit_bind(net: &Network, family: IpAddressFamily) {
+    let ip = IpAddress::new_loopback(family);
+
+    let listener = {
+        let bind_address = IpSocketAddress::new(ip, 0);
+        let listener = TcpSocket::new(family).unwrap();
+        listener.blocking_bind(&net, bind_address).unwrap();
+        listener.blocking_listen().unwrap();
+        listener
+    };
+
+    let listener_address = listener.local_address().unwrap();
+    let client = TcpSocket::new(family).unwrap();
+
+    // Manually bind the client:
+    client
+        .blocking_bind(net, IpSocketAddress::new(ip, 0))
+        .unwrap();
+
+    // Connect should work:
+    client.blocking_connect(net, listener_address).unwrap();
+}
+
 fn main() {
     let net = Network::default();
 
@@ -110,4 +134,7 @@ fn main() {
     test_tcp_connect_non_unicast(&net);
 
     test_tcp_connect_dual_stack(&net);
+
+    test_tcp_connect_explicit_bind(&net, IpAddressFamily::Ipv4);
+    test_tcp_connect_explicit_bind(&net, IpAddressFamily::Ipv6);
 }
