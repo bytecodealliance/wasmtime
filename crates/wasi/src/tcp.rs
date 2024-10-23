@@ -238,7 +238,7 @@ impl TcpSocket {
 
     pub fn start_connect(&mut self, remote_address: SocketAddr) -> SocketResult<()> {
         match self.tcp_state {
-            TcpState::Default(..) => {}
+            TcpState::Default(..) | TcpState::Bound(..) => {}
 
             TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
@@ -251,7 +251,7 @@ impl TcpSocket {
         network::util::validate_remote_address(&remote_address)?;
         network::util::validate_address_family(&remote_address, &self.family)?;
 
-        let TcpState::Default(tokio_socket) =
+        let (TcpState::Default(tokio_socket) | TcpState::Bound(tokio_socket)) =
             std::mem::replace(&mut self.tcp_state, TcpState::Closed)
         else {
             unreachable!();
