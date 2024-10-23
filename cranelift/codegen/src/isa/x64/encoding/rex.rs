@@ -155,31 +155,6 @@ impl RexFlags {
             sink.put1(rex);
         }
     }
-
-    /// Emit a four-operand instruction.
-    pub fn emit_mem_op<BS: ByteSink + ?Sized>(&self, sink: &mut BS, enc_g: u8, mem_e: &Amode) {
-        match *mem_e {
-            Amode::ImmReg { base, .. } => {
-                let enc_e = int_reg_enc(base);
-                self.emit_two_op(sink, enc_g, enc_e);
-            }
-
-            Amode::ImmRegRegShift {
-                base: reg_base,
-                index: reg_index,
-                ..
-            } => {
-                let enc_base = int_reg_enc(*reg_base);
-                let enc_index = int_reg_enc(*reg_index);
-                self.emit_three_op(sink, enc_g, enc_index, enc_base);
-            }
-
-            Amode::RipRelative { .. } => {
-                // note REX.B = 0.
-                self.emit_two_op(sink, enc_g, 0);
-            }
-        }
-    }
 }
 
 /// Generate the proper Rex flags for the given operand size.
