@@ -388,7 +388,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                 if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
                     return Err(crate::CodegenError::Unsupported(
                         "Too many return values to fit in registers. \
-                        Use a StructReturn argument instead"
+                        Use a StructReturn argument instead. (#9510)"
                             .to_owned(),
                     ));
                 }

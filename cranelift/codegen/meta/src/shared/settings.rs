@@ -216,13 +216,23 @@ pub(crate) fn define() -> SettingGroup {
             return value has to be returned through the introduction of a
             return area pointer. Normally this return area pointer has to be
             introduced as `ArgumentPurpose::StructReturn` parameter, but for
-            back compat reasons Cranelift also supports implicitly introducing
-            this parameter and writing the return values through it.
+            backward compatibility reasons Cranelift also supports implicitly
+            introducing this parameter and writing the return values through it.
 
-            **This option violates the ABI of all targets and the used ABI should
-            not be assumed to remain the same between Cranelift versions.**
+            **This option currently does not conform to platform ABIs and the
+            used ABI should not be assumed to remain the same between Cranelift
+            versions.**
 
             This option is **deprecated** and will be removed in the future.
+
+            Because of the above issues, and complexities of native ABI support
+            for the concept in general, Cranelift's support for multiple return
+            values may also be removed in the future (#9510). For the most
+            robust solution, it is recommended to build a convention on top of
+            Cranelift's primitives for passing multiple return values, for
+            example by allocating a stackslot in the caller, passing it as an
+            explicit StructReturn argument, storing return values in the callee,
+            and loading results in the caller.
         "#,
         false,
     );
