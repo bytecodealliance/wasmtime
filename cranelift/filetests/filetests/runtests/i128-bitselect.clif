@@ -1,9 +1,10 @@
 test run
 set opt_level=none
 set enable_llvm_abi_extensions=true
+target x86_64
+set enable_multi_ret_implicit_sret
 target s390x
 target s390x has_mie2
-target x86_64
 
 function %bitselect_i128(i128, i128, i128) -> i128 {
 block0(v0: i128, v1: i128, v2: i128):
