@@ -1,6 +1,7 @@
 test interpret
 test run
 set enable_llvm_abi_extensions
+set enable_multi_ret_implicit_sret
 target x86_64
 target aarch64
 

@@ -2081,6 +2081,11 @@ impl Config {
             .flags
             .insert("enable_probestack".into());
 
+        // The current wasm multivalue implementation depends on this.
+        self.compiler_config
+            .flags
+            .insert("enable_multi_ret_implicit_sret".into());
+
         if let Some(unwind_requested) = self.native_unwind_info {
             if !self
                 .compiler_config

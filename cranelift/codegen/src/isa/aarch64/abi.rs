@@ -16,6 +16,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
@@ -297,7 +298,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 };
 
                 let push_to_reg = if is_winch_return {
-                    // Winch uses the first registry to return the last result
+                    // Winch uses the first register to return the last result
                     i == params.len() - 1
                 } else {
                     // Use max_per_class_reg_vals & remaining_reg_vals otherwise
@@ -329,6 +330,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
             }
 
             // Spill to the stack
+
+            if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
+                return Err(crate::CodegenError::Unsupported(
+                    "Too many return values to fit in registers. \
+                    Use a StructReturn argument instead"
+                        .to_owned(),
+                ));
+            }
 
             // Compute the stack slot's size.
             let size = (ty_bits(param.value_type) / 8) as u32;

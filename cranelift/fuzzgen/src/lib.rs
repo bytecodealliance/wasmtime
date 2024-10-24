@@ -239,6 +239,9 @@ where
             builder.enable("enable_llvm_abi_extensions")?;
         }
 
+        // FIXME remove once this option is permanently disabled
+        builder.enable("enable_multi_ret_implicit_sret")?;
+
         // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
         builder.enable("enable_verifier")?;
 

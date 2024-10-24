@@ -147,6 +147,7 @@ use crate::CodegenResult;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
@@ -290,7 +291,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn compute_arg_locs(
         call_conv: isa::CallConv,
-        _flags: &settings::Flags,
+        flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
@@ -384,6 +385,14 @@ impl ABIMachineSpec for S390xMachineDeps {
                     extension: param.extension,
                 }
             } else {
+                if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
+                    return Err(crate::CodegenError::Unsupported(
+                        "Too many return values to fit in registers. \
+                        Use a StructReturn argument instead"
+                            .to_owned(),
+                    ));
+                }
+
                 // Compute size. Every argument or return value takes a slot of
                 // at least 8 bytes.
                 let size = (ty_bits(param.value_type) / 8) as u32;

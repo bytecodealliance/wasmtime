@@ -1,5 +1,6 @@
 test compile precise-output
 set opt_level=speed
+set enable_multi_ret_implicit_sret
 target s390x
 
 function %mul_uextend_i64(i64, i64) -> i128 {

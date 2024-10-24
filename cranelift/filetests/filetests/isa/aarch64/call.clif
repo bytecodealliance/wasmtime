@@ -2,6 +2,7 @@ test compile precise-output
 set unwind_info=false
 set enable_probestack=false
 set enable_llvm_abi_extensions
+set enable_multi_ret_implicit_sret
 target aarch64
 
 function %f1(i64) -> i64 {

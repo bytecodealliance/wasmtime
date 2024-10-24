@@ -1,5 +1,5 @@
-
 test compile precise-output
+set enable_multi_ret_implicit_sret
 target s390x
 
 ; FIXME: add immediate operand versions

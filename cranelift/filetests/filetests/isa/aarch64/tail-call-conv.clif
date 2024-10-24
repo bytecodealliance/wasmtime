@@ -1,4 +1,5 @@
 test compile precise-output
+set enable_multi_ret_implicit_sret
 target aarch64
 
 ;; Test the `tail` calling convention with non-tail calls and stack arguments.

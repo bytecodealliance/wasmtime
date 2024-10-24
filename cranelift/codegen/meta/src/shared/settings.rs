@@ -209,6 +209,25 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
+        "enable_multi_ret_implicit_sret",
+        "Enable support for sret arg introduction when there are too many ret vals.",
+        r#"
+            When there are more returns than available return registers, the
+            return value has to be returned through the introduction of a
+            return area pointer. Normally this return area pointer has to be
+            introduced as `ArgumentPurpose::StructReturn` parameter, but for
+            back compat reasons Cranelift also supports implicitly introducing
+            this parameter and writing the return values through it.
+
+            **This option violates the ABI of all targets and the used ABI should
+            not be assumed to remain the same between Cranelift versions.**
+
+            This option is **deprecated** and will be removed in the future.
+        "#,
+        false,
+    );
+
+    settings.add_bool(
         "unwind_info",
         "Generate unwind information.",
         r#"
