@@ -4,6 +4,7 @@ set enable_llvm_abi_extensions=true
 target x86_64
 target aarch64
 target riscv64
+set enable_multi_ret_implicit_sret
 target s390x
 
 function %trapnz(i64) -> i64 {

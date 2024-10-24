@@ -1,5 +1,6 @@
 test compile precise-output
 set enable_llvm_abi_extensions=true
+set enable_multi_ret_implicit_sret
 target x86_64
 
 function %f0(i128, i128) -> i128 {

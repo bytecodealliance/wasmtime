@@ -4,6 +4,7 @@ test compile
 set bb_padding_log2_minus_one=4
 set enable_alias_analysis=false
 set enable_llvm_abi_extensions=true
+set enable_multi_ret_implicit_sret
 set machine_code_cfg_info=true
 set enable_jump_tables=false
 set enable_heap_access_spectre_mitigation=false

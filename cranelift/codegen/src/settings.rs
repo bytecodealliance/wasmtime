@@ -529,6 +529,7 @@ enable_pinned_reg = false
 enable_atomics = true
 enable_safepoints = false
 enable_llvm_abi_extensions = false
+enable_multi_ret_implicit_sret = false
 unwind_info = true
 preserve_frame_pointers = false
 machine_code_cfg_info = false

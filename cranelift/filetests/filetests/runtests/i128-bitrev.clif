@@ -1,13 +1,14 @@
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
-target s390x
 target x86_64
 target riscv64
 target riscv64 has_zbb
 target riscv64 has_zbkb
 target riscv64 has_zbb has_zbkb
 target riscv64 has_c has_zcb
+set enable_multi_ret_implicit_sret
+target s390x
 
 function %reverse_bits_zero() -> i8 {
 block0:

@@ -1,5 +1,6 @@
 test interpret
 test run
+set enable_multi_ret_implicit_sret
 target aarch64
 target s390x
 target x86_64

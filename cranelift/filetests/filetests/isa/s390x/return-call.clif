@@ -1,4 +1,5 @@
 test compile precise-output
+set enable_multi_ret_implicit_sret
 set preserve_frame_pointers=true
 target s390x
 

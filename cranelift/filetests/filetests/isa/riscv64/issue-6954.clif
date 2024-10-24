@@ -1,4 +1,5 @@
 test compile precise-output
+set enable_multi_ret_implicit_sret
 target riscv64gc has_v has_zbkb has_zba has_zbb has_zbc has_zbs
 
 

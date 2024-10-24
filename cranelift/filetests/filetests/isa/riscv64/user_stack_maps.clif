@@ -1,5 +1,6 @@
 test compile precise-output
 set unwind_info=false
+set enable_multi_ret_implicit_sret
 set enable_probestack=false
 target riscv64
 

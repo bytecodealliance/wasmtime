@@ -308,6 +308,7 @@ impl Engine {
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
             "enable_probestack" => *value == FlagValue::Bool(true),
             "probestack_strategy" => *value == FlagValue::Enum("inline".into()),
+            "enable_multi_ret_implicit_sret" => *value == FlagValue::Bool(true),
 
             // Features wasmtime doesn't use should all be disabled, since
             // otherwise if they are enabled it could change the behavior of

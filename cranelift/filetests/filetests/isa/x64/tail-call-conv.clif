@@ -1,5 +1,6 @@
 test compile precise-output
 set enable_llvm_abi_extensions
+set enable_multi_ret_implicit_sret
 set preserve_frame_pointers
 target x86_64
 
