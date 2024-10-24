@@ -1088,6 +1088,7 @@ jobs:
       with:
         submodules: true
 
+    - uses: ./.github/actions/install-ninja
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
