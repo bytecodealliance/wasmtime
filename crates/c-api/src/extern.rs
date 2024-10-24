@@ -110,7 +110,7 @@ impl wasmtime_extern_t {
             WASMTIME_EXTERN_GLOBAL => Extern::Global(self.of.global),
             WASMTIME_EXTERN_TABLE => Extern::Table(self.of.table),
             WASMTIME_EXTERN_MEMORY => Extern::Memory(self.of.memory),
-            WASMTIME_EXTERN_SHAREDMEMORY => Extern::SharedMemory(self.of.sharedmemory),
+            WASMTIME_EXTERN_SHAREDMEMORY => Extern::SharedMemory((**self.of.sharedmemory).clone()),
             other => panic!("unknown wasmtime_extern_kind_t: {other}"),
         }
     }
@@ -138,7 +138,7 @@ impl From<Extern> for wasmtime_extern_t {
             Extern::SharedMemory(sharedmemory) => wasmtime_extern_t {
                 kind: WASMTIME_EXTERN_SHAREDMEMORY,
                 of: wasmtime_extern_union {
-                    sharedmemory: sharedmemory,
+                    sharedmemory: ManuallyDrop::new(Box::new(sharedmemory)),
                 },
             },
         }

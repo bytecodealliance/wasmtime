@@ -11,7 +11,6 @@ use crate::{
     StoreContext, StoreContextMut, Table, TypedFunc,
 };
 use alloc::sync::Arc;
-use core::mem::ManuallyDrop;
 use core::ptr::NonNull;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::{
@@ -578,7 +577,7 @@ impl Instance {
         &self,
         mut store: impl AsContextMut,
         name: &str,
-    ) -> Option<ManuallyDrop<Box<SharedMemory>>> {
+    ) -> Option<SharedMemory> {
         let mut store = store.as_context_mut();
         self.get_export(&mut store, name)?.into_shared_memory()
     }
