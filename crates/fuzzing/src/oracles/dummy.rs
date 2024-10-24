@@ -23,7 +23,9 @@ pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Result<Extern> {
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)?),
         ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)?),
         ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)?),
-        ExternType::SharedMemory(mem_ty) => Extern::SharedMemory(dummy_memory(store, mem_ty)?),
+        ExternType::SharedMemory(mem_ty) => {
+            Extern::SharedMemory(dummy_shared_memory(store.engine(), mem_ty)?)
+        }
     })
 }
 
@@ -78,8 +80,14 @@ pub fn dummy_memory<T>(store: &mut Store<T>, ty: MemoryType) -> Result<Memory> {
     Memory::new(store, ty)
 }
 
+/// Construct a dummy shared memory for the given memory type.
+pub fn dummy_shared_memory(engine: &Engine, ty: MemoryType) -> Result<SharedMemory> {
+    SharedMemory::new(engine, ty)
+}
+
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     fn store() -> Store<()> {
@@ -113,6 +121,13 @@ mod tests {
         let mut store = store();
         let memory = dummy_memory(&mut store, MemoryType::new(1, None)).unwrap();
         assert_eq!(memory.size(&store), 1);
+    }
+
+    #[test]
+    fn dummy_shared_memory_import() {
+        let store = store();
+        let shared_memory = dummy_shared_memory(store.engine(), MemoryType::shared(1, 1)).unwrap();
+        assert_eq!(shared_memory.size(), 1);
     }
 
     #[test]
