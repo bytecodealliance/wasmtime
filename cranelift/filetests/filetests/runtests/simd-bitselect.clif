@@ -3,8 +3,10 @@ target aarch64
 target s390x
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
+set enable_multi_ret_implicit_sret=false
 
 set opt_level=speed
 target aarch64

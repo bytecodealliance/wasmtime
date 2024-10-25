@@ -2,6 +2,7 @@ test run
 test interpret
 target aarch64
 target s390x
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
 ; i8 and i16 are invalid source sizes for x86_64

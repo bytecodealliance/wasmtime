@@ -2,6 +2,7 @@ test run
 target x86_64 has_avx has_fma
 target x86_64 has_avx=false has_fma=false
 target aarch64
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
 

@@ -6,6 +6,7 @@ target x86_64
 target x86_64 ssse3
 target x86_64 sse42
 target x86_64 sse42 has_avx has_avx512vl has_avx512bitalg
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
 

@@ -2,6 +2,7 @@
 ; If you change this file, you should most likely update
 ; simd-arithmetic-nondeterministic*.clif as well.
 test run
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
 
