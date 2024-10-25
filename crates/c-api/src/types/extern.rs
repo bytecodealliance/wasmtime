@@ -15,7 +15,6 @@ pub(crate) enum CExternType {
     Func(CFuncType),
     Global(CGlobalType),
     Memory(CMemoryType),
-    SharedMemory(CMemoryType),
     Table(CTableType),
 }
 
@@ -25,7 +24,6 @@ impl CExternType {
             ExternType::Func(f) => CExternType::Func(CFuncType::new(f)),
             ExternType::Global(f) => CExternType::Global(CGlobalType::new(f)),
             ExternType::Memory(f) => CExternType::Memory(CMemoryType::new(f)),
-            ExternType::SharedMemory(f) => CExternType::SharedMemory(CMemoryType::new(f)),
             ExternType::Table(f) => CExternType::Table(CTableType::new(f)),
         }
     }
@@ -37,7 +35,6 @@ pub const WASM_EXTERN_FUNC: wasm_externkind_t = 0;
 pub const WASM_EXTERN_GLOBAL: wasm_externkind_t = 1;
 pub const WASM_EXTERN_TABLE: wasm_externkind_t = 2;
 pub const WASM_EXTERN_MEMORY: wasm_externkind_t = 3;
-pub const WASM_EXTERN_SHAREDMEMORY: wasm_externkind_t = 4;
 
 impl wasm_externtype_t {
     pub(crate) fn from_extern_type(ty: ExternType) -> wasm_externtype_t {
@@ -58,7 +55,6 @@ pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkin
         CExternType::Table(_) => WASM_EXTERN_TABLE,
         CExternType::Global(_) => WASM_EXTERN_GLOBAL,
         CExternType::Memory(_) => WASM_EXTERN_MEMORY,
-        CExternType::SharedMemory(_) => WASM_EXTERN_SHAREDMEMORY,
     }
 }
 
