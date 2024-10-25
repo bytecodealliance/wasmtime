@@ -25,7 +25,8 @@ extern "C" {
 WASM_API_EXTERN wasm_memorytype_t *wasmtime_memorytype_new(uint64_t min,
                                                            bool max_present,
                                                            uint64_t max,
-                                                           bool is_64);
+                                                           bool is_64,
+                                                           bool shared);
 
 /**
  * \brief Returns the minimum size, in pages, of the specified memory type.
