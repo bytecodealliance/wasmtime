@@ -1,7 +1,7 @@
 use crate::{
-    EngineOrModuleTypeIndex, EntityRef, Module, ModuleInternedRecGroupIndex,
-    ModuleInternedTypeIndex, ModuleTypes, TypeConvert, TypeIndex, WasmCompositeType, WasmFuncType,
-    WasmHeapType, WasmResult, WasmSubType,
+    EngineOrModuleTypeIndex, EntityRef, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex,
+    ModuleTypes, TypeConvert, TypeIndex, WasmCompositeType, WasmFuncType, WasmHeapType, WasmResult,
+    WasmSubType,
 };
 use std::{borrow::Cow, collections::HashMap, ops::Index};
 use wasmparser::{UnpackedIndex, Validator, ValidatorId};
@@ -82,7 +82,6 @@ impl ModuleTypesBuilder {
     /// builder is associated with.
     pub fn intern_rec_group(
         &mut self,
-        module: &Module,
         validator_types: wasmparser::types::TypesRef<'_>,
         rec_group_id: wasmparser::types::RecGroupId,
     ) -> WasmResult<ModuleInternedRecGroupIndex> {
@@ -92,13 +91,12 @@ impl ModuleTypesBuilder {
             return Ok(*interned);
         }
 
-        self.define_new_rec_group(module, validator_types, rec_group_id)
+        self.define_new_rec_group(validator_types, rec_group_id)
     }
 
     /// Define a new recursion group that we haven't already interned.
     fn define_new_rec_group(
         &mut self,
-        module: &Module,
         validator_types: wasmparser::types::TypesRef<'_>,
         rec_group_id: wasmparser::types::RecGroupId,
     ) -> WasmResult<ModuleInternedRecGroupIndex> {
@@ -111,9 +109,11 @@ impl ModuleTypesBuilder {
 
         for id in validator_types.rec_group_elements(rec_group_id) {
             let ty = &validator_types[id];
-            let wasm_ty = WasmparserTypeConverter::new(self, module)
-                .with_rec_group(validator_types, rec_group_id)
-                .convert_sub_type(ty);
+            let wasm_ty = WasmparserTypeConverter::new(self, |_| {
+                unreachable!("no need to lookup indexes; we already have core type IDs")
+            })
+            .with_rec_group(validator_types, rec_group_id)
+            .convert_sub_type(ty);
             self.wasm_sub_type_in_rec_group(id, wasm_ty);
         }
 
@@ -252,7 +252,6 @@ impl ModuleTypesBuilder {
     /// and then look up the Wasmtime index for the original type themselves.
     pub fn intern_type(
         &mut self,
-        module: &Module,
         validator_types: wasmparser::types::TypesRef<'_>,
         id: wasmparser::types::CoreTypeId,
     ) -> WasmResult<ModuleInternedTypeIndex> {
@@ -264,7 +263,7 @@ impl ModuleTypesBuilder {
             .rec_group_elements(rec_group_id)
             .any(|e| e == id));
 
-        let interned_rec_group = self.intern_rec_group(module, validator_types, rec_group_id)?;
+        let interned_rec_group = self.intern_rec_group(validator_types, rec_group_id)?;
 
         let interned_type = self.wasmparser_to_wasmtime[&id];
         debug_assert!(self
@@ -341,21 +340,21 @@ where
 }
 
 /// A convert from `wasmparser` types to Wasmtime types.
-pub struct WasmparserTypeConverter<'a> {
+pub struct WasmparserTypeConverter<'a, F> {
     types: &'a ModuleTypesBuilder,
-    module: &'a Module,
+    lookup_type_idx: F,
     rec_group_context: Option<(
         wasmparser::types::TypesRef<'a>,
         wasmparser::types::RecGroupId,
     )>,
 }
 
-impl<'a> WasmparserTypeConverter<'a> {
+impl<'a, F> WasmparserTypeConverter<'a, F> {
     /// Construct a new type converter from `wasmparser` types to Wasmtime types.
-    pub fn new(types: &'a ModuleTypesBuilder, module: &'a Module) -> Self {
+    pub fn new(types: &'a ModuleTypesBuilder, lookup_type_idx: F) -> Self {
         Self {
             types,
-            module,
+            lookup_type_idx,
             rec_group_context: None,
         }
     }
@@ -372,7 +371,10 @@ impl<'a> WasmparserTypeConverter<'a> {
     }
 }
 
-impl TypeConvert for WasmparserTypeConverter<'_> {
+impl<F> TypeConvert for WasmparserTypeConverter<'_, F>
+where
+    F: Fn(TypeIndex) -> ModuleInternedTypeIndex,
+{
     fn lookup_heap_type(&self, index: UnpackedIndex) -> WasmHeapType {
         match index {
             UnpackedIndex::Id(id) => {
@@ -415,7 +417,7 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
 
             UnpackedIndex::Module(module_index) => {
                 let module_index = TypeIndex::from_u32(module_index);
-                let interned = self.module.types[module_index];
+                let interned = (self.lookup_type_idx)(module_index);
                 let index = EngineOrModuleTypeIndex::Module(interned);
 
                 // See comment above about `wasm_types` maybe not having the
@@ -468,7 +470,7 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
             }
             UnpackedIndex::Module(module_index) => {
                 let module_index = TypeIndex::from_u32(module_index);
-                let interned = self.module.types[module_index];
+                let interned = (self.lookup_type_idx)(module_index);
                 EngineOrModuleTypeIndex::Module(interned)
             }
             UnpackedIndex::RecGroup(_) => unreachable!(),

@@ -397,16 +397,20 @@ pub(crate) struct TypeConverter<'a, 'data: 'a> {
 
 impl TypeConvert for TypeConverter<'_, '_> {
     fn lookup_heap_type(&self, idx: wasmparser::UnpackedIndex) -> WasmHeapType {
-        wasmtime_environ::WasmparserTypeConverter::new(self.types, &self.translation.module)
-            .lookup_heap_type(idx)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| {
+            self.translation.module.types[idx]
+        })
+        .lookup_heap_type(idx)
     }
 
     fn lookup_type_index(
         &self,
         index: wasmparser::UnpackedIndex,
     ) -> wasmtime_environ::EngineOrModuleTypeIndex {
-        wasmtime_environ::WasmparserTypeConverter::new(self.types, &self.translation.module)
-            .lookup_type_index(index)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| {
+            self.translation.module.types[idx]
+        })
+        .lookup_type_index(index)
     }
 }
 

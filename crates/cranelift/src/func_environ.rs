@@ -1671,11 +1671,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
 impl TypeConvert for FuncEnvironment<'_> {
     fn lookup_heap_type(&self, ty: wasmparser::UnpackedIndex) -> WasmHeapType {
-        wasmtime_environ::WasmparserTypeConverter::new(self.types, self.module).lookup_heap_type(ty)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| self.module.types[idx])
+            .lookup_heap_type(ty)
     }
 
     fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
-        wasmtime_environ::WasmparserTypeConverter::new(self.types, self.module)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| self.module.types[idx])
             .lookup_type_index(index)
     }
 }
