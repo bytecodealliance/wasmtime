@@ -277,11 +277,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
                     // Intern the rec group and then fill in this module's types
                     // index space.
-                    let interned = self.types.intern_rec_group(
-                        &self.result.module,
-                        validator_types,
-                        rec_group_id,
-                    )?;
+                    let interned = self.types.intern_rec_group(validator_types, rec_group_id)?;
                     let elems = self.types.rec_group_elements(interned);
                     let len = elems.len();
                     self.result.module.types.reserve(len);
@@ -868,11 +864,13 @@ and for re-adding support for interface types you can see this issue:
 
 impl TypeConvert for ModuleEnvironment<'_, '_> {
     fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
-        WasmparserTypeConverter::new(&self.types, &self.result.module).lookup_heap_type(index)
+        WasmparserTypeConverter::new(&self.types, |idx| self.result.module.types[idx])
+            .lookup_heap_type(index)
     }
 
     fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
-        WasmparserTypeConverter::new(&self.types, &self.result.module).lookup_type_index(index)
+        WasmparserTypeConverter::new(&self.types, |idx| self.result.module.types[idx])
+            .lookup_type_index(index)
     }
 }
 

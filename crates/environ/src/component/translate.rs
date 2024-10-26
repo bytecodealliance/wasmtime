@@ -1,6 +1,5 @@
 use crate::component::*;
 use crate::prelude::*;
-use crate::Module;
 use crate::ScopeVec;
 use crate::{
     EngineOrModuleTypeIndex, EntityIndex, ModuleEnvironment, ModuleInternedTypeIndex,
@@ -931,10 +930,7 @@ impl<'a, 'data> Translator<'a, 'data> {
     fn core_func_signature(&mut self, index: u32) -> WasmResult<ModuleInternedTypeIndex> {
         let types = self.validator.types(0).unwrap();
         let id = types.core_function_at(index);
-        let module = Module::default();
-        self.types
-            .module_types_builder()
-            .intern_type(&module, types, id)
+        self.types.module_types_builder().intern_type(types, id)
     }
 }
 

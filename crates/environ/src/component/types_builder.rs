@@ -1,8 +1,8 @@
 use crate::component::*;
 use crate::prelude::*;
 use crate::{
-    EngineOrModuleTypeIndex, EntityType, Module, ModuleInternedTypeIndex, ModuleTypes,
-    ModuleTypesBuilder, PrimaryMap, TypeConvert, WasmHeapType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, ModuleInternedTypeIndex, ModuleTypes, ModuleTypesBuilder,
+    PrimaryMap, TypeConvert, WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -343,9 +343,8 @@ impl ComponentTypesBuilder {
         assert_eq!(types.id(), self.module_types.validator_id());
         Ok(match ty {
             Func(id) => EntityType::Function({
-                let module = Module::default();
                 self.module_types_builder_mut()
-                    .intern_type(&module, types, *id)?
+                    .intern_type(types, *id)?
                     .into()
             }),
             Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
