@@ -4,6 +4,7 @@ set bb_padding_log2_minus_one=21
 target aarch64
 target s390x
 target x86_64
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
 
