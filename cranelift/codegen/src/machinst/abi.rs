@@ -862,6 +862,9 @@ impl SigSet {
             /* extra ret-area ptr = */ false,
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
+        if !flags.enable_multi_ret_implicit_sret() {
+            assert_eq!(sized_stack_ret_space, 0);
+        }
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
 
         // To avoid overflow issues, limit the return size to something reasonable.

@@ -6,6 +6,7 @@ set unwind_info=false
 set preserve_frame_pointers=true
 set machine_code_cfg_info=true
 set enable_table_access_spectre_mitigation=false
+set enable_multi_ret_implicit_sret
 target aarch64
 target x86_64
 target riscv64

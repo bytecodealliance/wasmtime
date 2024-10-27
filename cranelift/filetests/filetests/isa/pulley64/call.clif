@@ -1,4 +1,5 @@
 test compile precise-output
+set enable_multi_ret_implicit_sret
 target pulley64
 
 function %colocated_args_i64_rets_i64() -> i64 {

@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 ; x86_64 considers the case `i64x2 -> i32x4` to be 'unreachable'
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
 

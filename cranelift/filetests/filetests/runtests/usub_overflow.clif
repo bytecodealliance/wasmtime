@@ -1,8 +1,9 @@
 test interpret
 test run
 set enable_llvm_abi_extensions=true
-target x86_64
 target aarch64
+set enable_multi_ret_implicit_sret
+target x86_64
 
 function %usubof_i128(i128, i128) -> i128, i8 {
 block0(v0: i128,v1: i128):

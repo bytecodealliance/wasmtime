@@ -470,14 +470,6 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
-        fn abi_sized_stack_arg_space(&mut self, abi: Sig) -> i64 {
-            self.lower_ctx.sigs()[abi].sized_stack_arg_space()
-        }
-
-        fn abi_sized_stack_ret_space(&mut self, abi: Sig) -> i64 {
-            self.lower_ctx.sigs()[abi].sized_stack_ret_space()
-        }
-
         fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
             match arg {
                 &ABIArg::Slots { ref slots, .. } => {

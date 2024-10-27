@@ -1,5 +1,6 @@
 test compile precise-output
-set enable_nan_canonicalization=true 
+set enable_multi_ret_implicit_sret
+set enable_nan_canonicalization=true
 target riscv64
 
 function %f1(f64, f64) -> f64 {

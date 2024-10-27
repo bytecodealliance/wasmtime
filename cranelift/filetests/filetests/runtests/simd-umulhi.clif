@@ -1,5 +1,6 @@
 test interpret
 test run
+set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
 ; x86_64 only supports `i16`, `i32`, and `i64`

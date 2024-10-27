@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the Riscv64 ABI from the callee side (within a function body).
@@ -88,7 +89,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn compute_arg_locs(
         call_conv: isa::CallConv,
-        _flags: &settings::Flags,
+        flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
@@ -154,6 +155,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         extension: param.extension,
                     });
                 } else {
+                    if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
+                        return Err(crate::CodegenError::Unsupported(
+                            "Too many return values to fit in registers. \
+                            Use a StructReturn argument instead. (#9510)"
+                                .to_owned(),
+                        ));
+                    }
+
                     // Compute size and 16-byte stack alignment happens
                     // separately after all args.
                     let size = reg_ty.bits() / 8;

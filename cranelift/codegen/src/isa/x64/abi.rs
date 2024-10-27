@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use args::*;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
+use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
@@ -337,6 +338,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
+                    if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
+                        return Err(crate::CodegenError::Unsupported(
+                            "Too many return values to fit in registers. \
+                            Use a StructReturn argument instead. (#9510)"
+                                .to_owned(),
+                        ));
+                    }
+
                     let size = reg_ty.bytes();
                     let size = if call_conv == CallConv::Winch
                         && args_or_rets == ArgsOrRets::Rets

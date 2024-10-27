@@ -1,5 +1,6 @@
 test interpret
 test run
+set enable_multi_ret_implicit_sret
 target riscv64 has_v has_c has_zbkb has_zba has_zbb has_zbc has_zbs
 target aarch64
 target s390x

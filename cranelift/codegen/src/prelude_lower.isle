@@ -314,7 +314,7 @@
 
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
-(spec (i32_from_iconst arg) 
+(spec (i32_from_iconst arg)
       (provide (= arg (extract 31 0 (sign_ext 64 result))))
       (require (= result (sign_ext (widthof result) arg))))
 (decl i32_from_iconst (i32) Value)
@@ -1043,14 +1043,6 @@
 ;; Succeeds if no implicit return-value area pointer is required.
 (decl abi_no_ret_arg () Sig)
 (extern extractor abi_no_ret_arg abi_no_ret_arg)
-
-;; Size of the argument area.
-(decl abi_sized_stack_arg_space (Sig) i64)
-(extern constructor abi_sized_stack_arg_space abi_sized_stack_arg_space)
-
-;; Size of the return-value area.
-(decl abi_sized_stack_ret_space (Sig) i64)
-(extern constructor abi_sized_stack_ret_space abi_sized_stack_ret_space)
 
 ;; Incoming return area pointer (must be present).
 (decl abi_unwrap_ret_area_ptr () Reg)
