@@ -37,3 +37,4 @@ wat = { workspace = true }
 [features]
 default = ["shuffling-allocator", "wasi-nn"]
 wasi-nn = ["wasmtime-wasi-nn"]
+winch = ["wasmtime/winch"]
