@@ -22,7 +22,7 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
     IndexType, Memory, MemoryIndex, MemoryPlan, MemoryStyle, Module, ModuleInternedTypeIndex,
     ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TableStyle, Tunables,
-    TypeConvert, TypeIndex, VMOffsets, WasmCompositeType, WasmFuncType, WasmHeapTopType,
+    TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType,
     WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
@@ -1932,8 +1932,8 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
     fn struct_fields_len(&mut self, struct_type_index: TypeIndex) -> WasmResult<usize> {
         let ty = self.module.types[struct_type_index];
-        match &self.types[ty].composite_type {
-            WasmCompositeType::Struct(s) => Ok(s.fields.len()),
+        match &self.types[ty].composite_type.inner {
+            WasmCompositeInnerType::Struct(s) => Ok(s.fields.len()),
             _ => unreachable!(),
         }
     }

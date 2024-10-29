@@ -14,7 +14,7 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
     drc::DrcTypeLayouts, GcArrayLayout, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex,
-    VMGcKind, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    VMGcKind, WasmCompositeInnerType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
     WasmStorageType, WasmValType,
 };
 
@@ -415,6 +415,7 @@ impl GcCompiler for DrcCompiler {
 
         let array_ty = func_env.types[interned_type_index]
             .composite_type
+            .inner
             .unwrap_array();
         let elem_ty = array_ty.0.element_type;
 
@@ -493,8 +494,8 @@ impl GcCompiler for DrcCompiler {
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), struct_ref);
         let struct_addr = builder.ins().iadd(base, extended_struct_ref);
 
-        let struct_ty = match &func_env.types[interned_type_index].composite_type {
-            WasmCompositeType::Struct(s) => s,
+        let struct_ty = match &func_env.types[interned_type_index].composite_type.inner {
+            WasmCompositeInnerType::Struct(s) => s,
             _ => unreachable!(),
         };
         let field_types: SmallVec<[_; 8]> = struct_ty.fields.iter().cloned().collect();

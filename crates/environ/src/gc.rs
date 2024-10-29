@@ -13,7 +13,10 @@
 pub mod drc;
 
 use crate::prelude::*;
-use crate::{WasmArrayType, WasmCompositeType, WasmStorageType, WasmStructType, WasmValType};
+use crate::{
+    WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmStorageType, WasmStructType,
+    WasmValType,
+};
 use core::alloc::Layout;
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
@@ -63,10 +66,10 @@ pub trait GcTypeLayouts {
     /// Returns `None` if the type is a function type, as functions are not
     /// managed by the GC.
     fn gc_layout(&self, ty: &WasmCompositeType) -> Option<GcLayout> {
-        match ty {
-            WasmCompositeType::Array(ty) => Some(self.array_layout(ty).into()),
-            WasmCompositeType::Struct(ty) => Some(self.struct_layout(ty).into()),
-            WasmCompositeType::Func(_) => None,
+        match &ty.inner {
+            WasmCompositeInnerType::Array(ty) => Some(self.array_layout(ty).into()),
+            WasmCompositeInnerType::Struct(ty) => Some(self.struct_layout(ty).into()),
+            WasmCompositeInnerType::Func(_) => None,
         }
     }
 

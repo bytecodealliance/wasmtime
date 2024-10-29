@@ -1,7 +1,7 @@
 use crate::{
     EngineOrModuleTypeIndex, EntityRef, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex,
-    ModuleTypes, TypeConvert, TypeIndex, WasmCompositeType, WasmFuncType, WasmHeapType, WasmResult,
-    WasmSubType,
+    ModuleTypes, TypeConvert, TypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmFuncType,
+    WasmHeapType, WasmResult, WasmSubType,
 };
 use std::{borrow::Cow, collections::HashMap, ops::Index};
 use wasmparser::{UnpackedIndex, Validator, ValidatorId};
@@ -163,7 +163,10 @@ impl ModuleTypesBuilder {
                     let idx = self.types.push(WasmSubType {
                         is_final: true,
                         supertype: None,
-                        composite_type: WasmCompositeType::Func(f.clone()),
+                        composite_type: WasmCompositeType {
+                            inner: WasmCompositeInnerType::Func(f.clone()),
+                            shared: false, // TODO: handle shared
+                        },
                     });
 
                     // The trampoline type is its own trampoline type.
@@ -388,14 +391,13 @@ where
                 // array vs struct vs func reference. In this case, we can use
                 // the validator's type context.
                 if let Some(ty) = self.types.types.get(interned) {
-                    match &ty.composite_type {
-                        WasmCompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
-                        WasmCompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
-                        WasmCompositeType::Struct(_) => WasmHeapType::ConcreteStruct(index),
+                    match &ty.composite_type.inner {
+                        WasmCompositeInnerType::Array(_) => WasmHeapType::ConcreteArray(index),
+                        WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
+                        WasmCompositeInnerType::Struct(_) => WasmHeapType::ConcreteStruct(index),
                     }
                 } else if let Some((wasmparser_types, _)) = self.rec_group_context.as_ref() {
                     let wasmparser_ty = &wasmparser_types[id].composite_type;
-                    assert!(!wasmparser_ty.shared);
                     match &wasmparser_ty.inner {
                         wasmparser::CompositeInnerType::Array(_) => {
                             WasmHeapType::ConcreteArray(index)
@@ -426,10 +428,10 @@ where
                 // indirectly get one by looking it up inside the current rec
                 // group.
                 if let Some(ty) = self.types.types.get(interned) {
-                    match &ty.composite_type {
-                        WasmCompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
-                        WasmCompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
-                        WasmCompositeType::Struct(_) => WasmHeapType::ConcreteStruct(index),
+                    match &ty.composite_type.inner {
+                        WasmCompositeInnerType::Array(_) => WasmHeapType::ConcreteArray(index),
+                        WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
+                        WasmCompositeInnerType::Struct(_) => WasmHeapType::ConcreteStruct(index),
                     }
                 } else if let Some((parser_types, rec_group)) = self.rec_group_context.as_ref() {
                     let rec_group_index = interned.index() - self.types.types.len_types();
@@ -438,7 +440,6 @@ where
                         .nth(rec_group_index)
                         .unwrap();
                     let wasmparser_ty = &parser_types[id].composite_type;
-                    assert!(!wasmparser_ty.shared);
                     match &wasmparser_ty.inner {
                         wasmparser::CompositeInnerType::Array(_) => {
                             WasmHeapType::ConcreteArray(index)

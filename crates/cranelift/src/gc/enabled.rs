@@ -11,8 +11,8 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::{
     GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind,
-    WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType,
-    WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    WasmCompositeInnerType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
 };
 
 mod drc;
@@ -252,8 +252,8 @@ pub fn translate_struct_new_default(
     struct_type_index: TypeIndex,
 ) -> WasmResult<ir::Value> {
     let interned_ty = func_env.module.types[struct_type_index];
-    let struct_ty = match &func_env.types[interned_ty].composite_type {
-        WasmCompositeType::Struct(s) => s,
+    let struct_ty = match &func_env.types[interned_ty].composite_type.inner {
+        WasmCompositeInnerType::Struct(s) => s,
         _ => unreachable!(),
     };
     let fields = struct_ty
@@ -285,8 +285,8 @@ pub fn translate_struct_get(
 
     let field_offset = struct_layout.fields[field_index];
 
-    let field_ty = match &func_env.types[interned_type_index].composite_type {
-        WasmCompositeType::Struct(s) => &s.fields[field_index],
+    let field_ty = match &func_env.types[interned_type_index].composite_type.inner {
+        WasmCompositeInnerType::Struct(s) => &s.fields[field_index],
         _ => unreachable!(),
     };
 
@@ -323,8 +323,8 @@ fn translate_struct_get_and_extend(
 
     let field_offset = struct_layout.fields[field_index];
 
-    let field_ty = match &func_env.types[interned_type_index].composite_type {
-        WasmCompositeType::Struct(s) => &s.fields[field_index],
+    let field_ty = match &func_env.types[interned_type_index].composite_type.inner {
+        WasmCompositeInnerType::Struct(s) => &s.fields[field_index],
         _ => unreachable!(),
     };
 
@@ -401,8 +401,8 @@ pub fn translate_struct_set(
 
     let field_offset = struct_layout.fields[field_index];
 
-    let field_ty = match &func_env.types[interned_type_index].composite_type {
-        WasmCompositeType::Struct(s) => &s.fields[field_index],
+    let field_ty = match &func_env.types[interned_type_index].composite_type.inner {
+        WasmCompositeInnerType::Struct(s) => &s.fields[field_index],
         _ => unreachable!(),
     };
 
@@ -447,7 +447,8 @@ pub fn translate_array_new_default(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     let interned_ty = func_env.module.types[array_type_index];
-    let WasmCompositeType::Array(array_ty) = &func_env.types[interned_ty].composite_type else {
+    let WasmCompositeInnerType::Array(array_ty) = &func_env.types[interned_ty].composite_type.inner
+    else {
         unreachable!()
     };
     let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
@@ -598,6 +599,7 @@ pub fn translate_array_fill(
         |func_env, builder, elem_addr| {
             let elem_ty = func_env.types[interned_type_index]
                 .composite_type
+                .inner
                 .unwrap_array()
                 .0
                 .element_type;
@@ -765,6 +767,7 @@ pub fn translate_array_get(
 
     let array_ty = func_env.types[array_type_index]
         .composite_type
+        .inner
         .unwrap_array();
     let elem_ty = array_ty.0.element_type;
 
@@ -783,6 +786,7 @@ pub fn translate_array_get_s(
 
     let array_ty = func_env.types[array_type_index]
         .composite_type
+        .inner
         .unwrap_array();
     let elem_ty = array_ty.0.element_type;
 
@@ -801,6 +805,7 @@ pub fn translate_array_get_u(
 
     let array_ty = func_env.types[array_type_index]
         .composite_type
+        .inner
         .unwrap_array();
     let elem_ty = array_ty.0.element_type;
 
@@ -820,6 +825,7 @@ pub fn translate_array_set(
 
     let array_ty = func_env.types[array_type_index]
         .composite_type
+        .inner
         .unwrap_array();
     let elem_ty = array_ty.0.element_type;
 

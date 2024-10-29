@@ -737,9 +737,12 @@ impl TypeRegistryInner {
                             WasmSubType {
                                 is_final: true,
                                 supertype: None,
-                                composite_type: wasmtime_environ::WasmCompositeType::Func(
-                                    trampoline.into_owned(),
-                                ),
+                                composite_type: wasmtime_environ::WasmCompositeType {
+                                    shared: false, // TODO: handle shared
+                                    inner: wasmtime_environ::WasmCompositeInnerType::Func(
+                                        trampoline.into_owned(),
+                                    ),
+                                },
                             },
                         );
                         let trampoline_index = trampoline_entry.0.shared_type_indices[0];
@@ -806,12 +809,12 @@ impl TypeRegistryInner {
             "type is not canonicalized for runtime usage: {ty:?}"
         );
 
-        let gc_layout = match &ty.composite_type {
-            wasmtime_environ::WasmCompositeType::Func(_) => None,
-            wasmtime_environ::WasmCompositeType::Array(a) => {
+        let gc_layout = match &ty.composite_type.inner {
+            wasmtime_environ::WasmCompositeInnerType::Func(_) => None,
+            wasmtime_environ::WasmCompositeInnerType::Array(a) => {
                 Some(gc_runtime.layouts().array_layout(a).into())
             }
-            wasmtime_environ::WasmCompositeType::Struct(s) => {
+            wasmtime_environ::WasmCompositeInnerType::Struct(s) => {
                 Some(gc_runtime.layouts().struct_layout(s).into())
             }
         };

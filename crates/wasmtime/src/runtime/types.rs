@@ -2,8 +2,9 @@ use crate::prelude::*;
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
-    TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeType, WasmFieldType, WasmFuncType,
-    WasmHeapType, WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
+    TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
+    WasmFieldType, WasmFuncType, WasmHeapType, WasmRefType, WasmStorageType, WasmStructType,
+    WasmSubType, WasmValType,
 };
 
 use crate::{type_registry::RegisteredType, Engine};
@@ -1617,6 +1618,7 @@ impl StructType {
         Self::from_wasm_struct_type(
             engine,
             finality.is_final(),
+            false, // TODO: handle shared
             supertype.map(|ty| ty.type_index().into()),
             WasmStructType { fields },
         )
@@ -1733,6 +1735,7 @@ impl StructType {
     pub(crate) fn from_wasm_struct_type(
         engine: &Engine,
         is_final: bool,
+        is_shared: bool,
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmStructType,
     ) -> Result<StructType> {
@@ -1750,7 +1753,10 @@ impl StructType {
             WasmSubType {
                 is_final,
                 supertype,
-                composite_type: WasmCompositeType::Struct(ty),
+                composite_type: WasmCompositeType {
+                    shared: is_shared,
+                    inner: WasmCompositeInnerType::Struct(ty),
+                },
             },
         );
         Ok(Self {
@@ -1994,7 +2000,10 @@ impl ArrayType {
             WasmSubType {
                 is_final,
                 supertype,
-                composite_type: WasmCompositeType::Array(ty),
+                composite_type: WasmCompositeType {
+                    shared: false, // TODO: handle shared
+                    inner: WasmCompositeInnerType::Array(ty),
+                },
             },
         );
         Self {
@@ -2350,7 +2359,10 @@ impl FuncType {
             WasmSubType {
                 is_final,
                 supertype,
-                composite_type: WasmCompositeType::Func(ty),
+                composite_type: WasmCompositeType {
+                    shared: false, // TODO: handle shared
+                    inner: WasmCompositeInnerType::Func(ty),
+                },
             },
         );
         Self {
