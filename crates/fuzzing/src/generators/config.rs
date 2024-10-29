@@ -493,7 +493,6 @@ impl WasmtimeConfig {
             self.signals_based_traps = true;
             self.table_lazy_init = true;
             self.epoch_interruption = false;
-            self.consume_fuel = false;
             self.debug_info = false;
         }
 
