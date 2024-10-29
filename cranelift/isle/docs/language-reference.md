@@ -1438,22 +1438,29 @@ newline). The grammar accepted by the parser is as follows:
 
 <ISLE> ::= <def>*
 
-<def> ::= "(" "type" <typedecl> ")"
+<def> ::= "(" "pragma" <pragma> ")"
+        | "(" "type" <typedecl> ")"
         | "(" "decl" <decl> ")"
         | "(" "rule" <rule> ")"
         | "(" "extractor" <etor> ")"
         | "(" "extern" <extern> ")"
+        | "(" "convert" <converter> ")"
 
-<typedecl> ::= <ident> [ "extern" ] <typevalue>
+// No pragmas are defined yet
+<pragma> ::= <ident>
 
-<ident> ::= ( "A".."Z" | "a".."z" | "_" | "$" )
-            ( "A".."Z" | "a".."z" | "_" | "$" | "0".."9" | "." )*
-<const-ident> ::= "$" ( "A".."Z" | "a".."z" | "_" | "$" | "0".."9" | "." )*
+<typedecl> ::= <ident> [ "extern" | "nodebug" ] <typevalue>
 
-<int> ::= [ "-" ] ( "0".."9" )+
-        | [ "-" ] "0x" ( "0".."9" "A".."F" "a".."f" )+
-        | [ "-" ] "0o" ( "0".."7" )+
-        | [ "-" ] "0b" ( "0".."1" )+
+<ident> ::= <ident-start> <ident-cont>*
+<const-ident> ::= "$" <ident-cont>*
+
+<ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")" or ";">
+<ident-cont>  ::= <any non-whitespace character other than "(", ")", ";" or "@">
+
+<int> ::= [ "-" ] ( "0".."9" | "_" )+
+        | [ "-" ] "0x" ( "0".."9" | "A".."F" | "a".."f" | "_" )+
+        | [ "-" ] "0o" ( "0".."7" | "_" )+
+        | [ "-" ] "0b" ( "0".."1" | "_" )+
 
 <typevalue> ::= "(" "primitive" <ident> ")"
               | "(" "enum" <enumvariant>* ")"
@@ -1465,11 +1472,9 @@ newline). The grammar accepted by the parser is as follows:
 
 <ty> ::= <ident>
 
-<decl> ::= <ident> "(" <ty>* ")" <ty>
+<decl> ::= [ "pure" ] [ "multi" ] [ "partial" ] <ident> "(" <ty>* ")" <ty>
 
-<rule> ::= <pattern> <expr>
-         | <prio> <pattern> <expr>
-
+<rule> ::= [ <ident> ] [ <prio> ] <pattern> <stmt>* <expr>
 <prio> ::= <int>
 
 <etor> ::= "(" <ident> <ident>* ")" <pattern>
@@ -1485,6 +1490,9 @@ newline). The grammar accepted by the parser is as follows:
 <pattern-arg> ::= <pattern>
                 | "<" <expr>  ;; in-argument to an extractor
 
+<stmt> ::= "(" "if-let" <pattern> <expr> ")"
+         | "(" "if" <expr> ")"
+
 <expr> ::= <int>
          | <const-ident>
          | "#t"               ;; Scheme-like "true": shorthand for 1
@@ -1498,4 +1506,67 @@ newline). The grammar accepted by the parser is as follows:
 <extern> ::= "constructor" <ident> <ident>
            | "extractor" [ "infallible" ] <ident> <ident>
            | "const" <const-ident> <ident> <ty>
+
+<converter> ::= <ty> <ty> <ident>
+```
+
+## Reference: ISLE Language Grammar verification extensions
+```bnf
+<def> += "(" "spec" <spec> ")"
+       | "(" "model" <model> ")"
+       | "(" "form" <form> ")"
+       | "(" "instantiate" <instantiation> ")"
+
+<spec> ::= "(" <ident> <ident>* <provide> [ <require> ] ")"
+<provide> ::= "(" "provide" <spec-expr>* ")"
+<require> ::= "(" "require" <spec-expr>* ")"
+
+<model> ::= <ty> "(" "type" <model-ty> ")"
+          | <ty> "(" "enum" <model-variant>* ")"
+
+<model-ty> ::= "Bool"
+             | "Int"
+             | "Unit"
+             | "(" "bv" <int> ")"
+
+<model-variant> ::= "(" <ident> [ <spec-expr> ]  ")"
+
+<form> ::= <ident> <signature>*
+
+<instantiation> ::= <ident> "(" <signature>* ")"
+                  | <ident> <ident>
+
+<spec-expr> ::= <int>
+              | <spec-bv>
+              | <spec-bool>
+              | <ident>
+              | "(" "switch" <spec-expr> <spec-pair>* ")"
+              | "(" <spec-op> <spec-expr>* ")"
+              | "(" <ident> ")"
+              | "(" ")"
+
+<spec-pair> ::= "(" <spec-expr> <spec-expr> ")"
+
+<spec-op> ::= "and" | "not" | "or" | "=>"
+            | "=" | "<=" | "<" | ">=" | ">"
+            | "bvnot" | "bvand" | "bvor" | "bvxor"
+            | "bvneg" | "bvadd" | "bvsub" | "bvmul"
+            | "bvudiv" | "bvurem" | "bvsdiv" | "bvsrem"
+            | "bvshl" | "bvlshr| | "bvashr"
+            | "bvsaddo" | "subs"
+            | "bvule" | "bvult" | "bvugt" | "bvuge"
+            | "bvsle" | "bvslt" | "bvsgt" | "bvsge"
+            | "rotr" | "rotl"
+            | "extract" | "concat" | "conv_to"
+            | "zero_ext" | "sign_ext"
+            | "int2bv" | "bv2int"
+            | "widthof"
+            | "if" | "switch"
+            | "popcnt" | "rev" | "cls" | "clz"
+            | "load_effect" | "store_effect"
+
+<signature>  ::= "(" <sig-args> <sig-ret> <sig-canon> ")"
+<sig-args>   ::= "(" "args" <model-ty>* ")"
+<sig-ret>    ::= "(" "ret" <model-ty>* ")"
+<sig-canon>  ::= "(" "canon" <model-ty>* ")"
 ```
