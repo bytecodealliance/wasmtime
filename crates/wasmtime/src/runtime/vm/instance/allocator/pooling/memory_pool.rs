@@ -547,11 +547,11 @@ impl SlabConstraints {
         // static memory slot (see `Config::memory_reservation`); even
         // if the memory never grows to this size (e.g., it has a lower memory
         // maximum), codegen will assume that this unused memory is mapped
-        // `PROT_NONE`. Typically `static_memory_bound` is 4GiB which helps
+        // `PROT_NONE`. Typically `memory_reservation` is 4GiB which helps
         // elide most bounds checks. `MemoryPool` must respect this bound,
         // though not explicitly: if we can achieve the same effect via
         // MPK-protected stripes, the slot size can be lower than the
-        // `static_memory_bound`.
+        // `memory_reservation`.
         let expected_slot_bytes: usize = tunables
             .memory_reservation
             .try_into()

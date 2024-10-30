@@ -1048,16 +1048,9 @@ mod tests {
         let ty = MemoryType::new(1, None);
         let mem = Memory::new(&mut store, ty).unwrap();
         let store = store.as_context();
-        let style = wasmtime_environ::MemoryStyle::for_memory(
-            store[mem.0].memory,
-            store.engine().tunables(),
-        );
-
-        assert_eq!(store.engine().tunables().memory_guard_size, 0);
-        match style {
-            wasmtime_environ::MemoryStyle::Dynamic { .. } => {}
-            other => panic!("unexpected style {other:?}"),
-        }
+        let tunables = store.engine().tunables();
+        assert_eq!(tunables.guard_size, 0);
+        assert!(!store[mem.0].memory.can_elide_bounds_check(tunables, 12));
     }
 
     #[test]
