@@ -7,8 +7,8 @@ use crate::runtime::Uninhabited;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
 use crate::{
-    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, Ref,
-    StoreContext, StoreContextMut, Val, ValRaw, ValType,
+    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, ModuleExport,
+    Ref, StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
 use alloc::sync::Arc;
 use core::ffi::c_void;
@@ -2107,6 +2107,78 @@ impl<T> Caller<'_, T> {
             .host_state()
             .downcast_ref::<Instance>()?
             .get_export(&mut self.store, name)
+    }
+
+    /// Looks up an exported [`Extern`] value by a [`ModuleExport`] value.
+    ///
+    /// This is similar to [`Self::get_export`] but uses a [`ModuleExport`] value to avoid
+    /// string lookups where possible. [`ModuleExport`]s can be obtained by calling
+    /// [`Module::get_export_index`] on the [`Module`] that an instance was instantiated with.
+    ///
+    /// This method will search the module for an export with a matching entity index and return
+    /// the value, if found.
+    ///
+    /// Returns `None` if there was no export with a matching entity index.
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    ///
+    /// # Usage
+    /// ```
+    /// use std::str;
+    ///
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let mut store = Store::default();
+    ///
+    /// let module = Module::new(
+    ///     store.engine(),
+    ///     r#"
+    ///         (module
+    ///             (import "" "" (func $log_str (param i32 i32)))
+    ///             (func (export "foo")
+    ///                 i32.const 4   ;; ptr
+    ///                 i32.const 13  ;; len
+    ///                 call $log_str)
+    ///             (memory (export "memory") 1)
+    ///             (data (i32.const 4) "Hello, world!"))
+    ///     "#,
+    /// )?;
+    ///
+    /// let Some(module_export) = module.get_export_index("memory") else {
+    ///    anyhow::bail!("failed to find `memory` export in module");
+    /// };
+    ///
+    /// let log_str = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>, ptr: i32, len: i32| {
+    ///     let mem = match caller.get_module_export(&module_export) {
+    ///         Some(Extern::Memory(mem)) => mem,
+    ///         _ => anyhow::bail!("failed to find host memory"),
+    ///     };
+    ///     let data = mem.data(&caller)
+    ///         .get(ptr as u32 as usize..)
+    ///         .and_then(|arr| arr.get(..len as u32 as usize));
+    ///     let string = match data {
+    ///         Some(data) => match str::from_utf8(data) {
+    ///             Ok(s) => s,
+    ///             Err(_) => anyhow::bail!("invalid utf-8"),
+    ///         },
+    ///         None => anyhow::bail!("pointer/length out of bounds"),
+    ///     };
+    ///     assert_eq!(string, "Hello, world!");
+    ///     println!("{}", string);
+    ///     Ok(())
+    /// });
+    /// let instance = Instance::new(&mut store, &module, &[log_str.into()])?;
+    /// let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
+    /// foo.call(&mut store, ())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_module_export(&mut self, export: &ModuleExport) -> Option<Extern> {
+        self.caller
+            .host_state()
+            .downcast_ref::<Instance>()?
+            .get_module_export(&mut self.store, export)
     }
 
     /// Access the underlying data owned by this `Store`.
