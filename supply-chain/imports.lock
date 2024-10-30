@@ -1464,6 +1464,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.io-extras]]
+version = "0.18.2"
+when = "2024-03-29"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.io-lifetimes]]
 version = "1.0.11"
 when = "2023-05-24"
