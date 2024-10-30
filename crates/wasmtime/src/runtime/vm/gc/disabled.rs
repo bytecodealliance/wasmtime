@@ -23,6 +23,21 @@ unsafe impl GcRuntime for DisabledCollector {
     }
 
     fn layouts(&self) -> &dyn GcTypeLayouts {
+        &DisabledLayouts
+    }
+}
+
+struct DisabledLayouts;
+impl GcTypeLayouts for DisabledLayouts {
+    fn array_length_field_offset(&self) -> u32 {
+        unreachable!()
+    }
+
+    fn array_layout(&self, _: &WasmArrayType) -> GcArrayLayout {
+        unreachable!()
+    }
+
+    fn struct_layout(&self, _: &WasmStructType) -> GcStructLayout {
         unreachable!()
     }
 }
