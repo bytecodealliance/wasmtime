@@ -1,7 +1,8 @@
 use crate::{
-    EngineOrModuleTypeIndex, EntityRef, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex,
-    ModuleTypes, TypeConvert, TypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmFuncType,
-    WasmHeapType, WasmResult, WasmSubType,
+    wasm_unsupported, EngineOrModuleTypeIndex, EntityRef, ModuleInternedRecGroupIndex,
+    ModuleInternedTypeIndex, ModuleTypes, TypeConvert, TypeIndex, WasmArrayType,
+    WasmCompositeInnerType, WasmCompositeType, WasmFuncType, WasmHeapType, WasmResult,
+    WasmStructType, WasmSubType,
 };
 use std::{borrow::Cow, collections::HashMap, ops::Index};
 use wasmparser::{UnpackedIndex, Validator, ValidatorId};
@@ -327,6 +328,46 @@ impl ModuleTypesBuilder {
     /// Get the associated trampoline type for the given function type.
     pub fn trampoline_type(&self, ty: ModuleInternedTypeIndex) -> ModuleInternedTypeIndex {
         self.types.trampoline_type(ty)
+    }
+
+    /// Get and unwrap a [`WasmStructType`] for the given struct index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the unwrapped type is not a struct.
+    ///
+    /// # Errors
+    ///
+    /// For now, fails with an unsupported error if the type is shared.
+    pub fn unwrap_struct(&self, ty: ModuleInternedTypeIndex) -> WasmResult<&WasmStructType> {
+        let composite_type = &self.types[ty].composite_type;
+        if composite_type.shared {
+            return Err(wasm_unsupported!("shared structs are not yet implemented"));
+        }
+        match &composite_type.inner {
+            WasmCompositeInnerType::Struct(s) => Ok(s),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Get and unwrap a [`WasmArrayType`] for the given array index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the unwrapped type is not an array.
+    ///
+    /// # Errors
+    ///
+    /// For now, fails with an unsupported error if the type is shared.
+    pub fn unwrap_array(&self, interned_ty: ModuleInternedTypeIndex) -> WasmResult<&WasmArrayType> {
+        let composite_type = &self.types[interned_ty].composite_type;
+        if composite_type.shared {
+            return Err(wasm_unsupported!("shared arrays are not yet implemented"));
+        }
+        match &composite_type.inner {
+            WasmCompositeInnerType::Array(a) => Ok(a),
+            _ => unreachable!(),
+        }
     }
 }
 

@@ -14,8 +14,7 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
     drc::DrcTypeLayouts, GcArrayLayout, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex,
-    VMGcKind, WasmCompositeInnerType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType,
+    VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
 };
 
 #[derive(Default)]
@@ -413,10 +412,7 @@ impl GcCompiler for DrcCompiler {
 
         // Finally, initialize each of the newly-allocated array's elements.
 
-        let array_ty = func_env.types[interned_type_index]
-            .composite_type
-            .inner
-            .unwrap_array();
+        let array_ty = func_env.types.unwrap_array(interned_type_index)?;
         let elem_ty = array_ty.0.element_type;
 
         let pointer_type = func_env.pointer_type();
@@ -494,10 +490,7 @@ impl GcCompiler for DrcCompiler {
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), struct_ref);
         let struct_addr = builder.ins().iadd(base, extended_struct_ref);
 
-        let struct_ty = match &func_env.types[interned_type_index].composite_type.inner {
-            WasmCompositeInnerType::Struct(s) => s,
-            _ => unreachable!(),
-        };
+        let struct_ty = func_env.types.unwrap_struct(interned_type_index)?;
         let field_types: SmallVec<[_; 8]> = struct_ty.fields.iter().cloned().collect();
         assert_eq!(field_vals.len(), field_types.len());
 
