@@ -738,7 +738,7 @@ impl TypeRegistryInner {
                                 is_final: true,
                                 supertype: None,
                                 composite_type: wasmtime_environ::WasmCompositeType {
-                                    shared: false, // TODO: handle shared
+                                    shared: sub_ty.composite_type.shared,
                                     inner: wasmtime_environ::WasmCompositeInnerType::Func(
                                         trampoline.into_owned(),
                                     ),
