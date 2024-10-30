@@ -1,6 +1,7 @@
 use anyhow::{bail, Context};
 use bstr::ByteSlice;
 use libtest_mimic::{Arguments, FormatSetting, Trial};
+use rustix::path::Arg;
 use std::path::Path;
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
