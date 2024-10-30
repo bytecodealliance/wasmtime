@@ -120,7 +120,7 @@ impl<'a> ConstEvalContext<'a> {
         let WasmSubType {
             composite_type:
                 WasmCompositeType {
-                    shared: false, // TODO: handle shared
+                    shared: false,
                     inner: WasmCompositeInnerType::Struct(struct_ty),
                 },
             ..
