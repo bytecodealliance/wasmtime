@@ -809,15 +809,7 @@ impl TypeRegistryInner {
             "type is not canonicalized for runtime usage: {ty:?}"
         );
 
-        let gc_layout = match &ty.composite_type.inner {
-            wasmtime_environ::WasmCompositeInnerType::Func(_) => None,
-            wasmtime_environ::WasmCompositeInnerType::Array(a) => {
-                Some(gc_runtime.layouts().array_layout(a).into())
-            }
-            wasmtime_environ::WasmCompositeInnerType::Struct(s) => {
-                Some(gc_runtime.layouts().struct_layout(s).into())
-            }
-        };
+        let gc_layout = gc_runtime.layouts().gc_layout(&ty.composite_type);
 
         // Add the type to our slab.
         let id = self.types.alloc(Arc::new(ty));
