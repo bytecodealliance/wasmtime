@@ -141,7 +141,8 @@ impl ModuleTypesBuilder {
         &mut self,
         for_func_ty: ModuleInternedTypeIndex,
     ) -> ModuleInternedTypeIndex {
-        let trampoline = self.types[for_func_ty].unwrap_func().trampoline_type();
+        let sub_ty = &self.types[for_func_ty];
+        let trampoline = sub_ty.unwrap_func().trampoline_type();
 
         if let Some(idx) = self.trampoline_types.get(&trampoline) {
             // We've already interned this trampoline type; reuse it.
@@ -166,7 +167,7 @@ impl ModuleTypesBuilder {
                         supertype: None,
                         composite_type: WasmCompositeType {
                             inner: WasmCompositeInnerType::Func(f.clone()),
-                            shared: false, // TODO: handle shared
+                            shared: sub_ty.composite_type.shared,
                         },
                     });
 
