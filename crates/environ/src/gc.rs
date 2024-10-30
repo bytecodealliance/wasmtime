@@ -66,6 +66,7 @@ pub trait GcTypeLayouts {
     /// Returns `None` if the type is a function type, as functions are not
     /// managed by the GC.
     fn gc_layout(&self, ty: &WasmCompositeType) -> Option<GcLayout> {
+        assert!(!ty.shared);
         match &ty.inner {
             WasmCompositeInnerType::Array(ty) => Some(self.array_layout(ty).into()),
             WasmCompositeInnerType::Struct(ty) => Some(self.struct_layout(ty).into()),

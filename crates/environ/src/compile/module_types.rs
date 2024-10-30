@@ -433,6 +433,7 @@ where
                 // array vs struct vs func reference. In this case, we can use
                 // the validator's type context.
                 if let Some(ty) = self.types.types.get(interned) {
+                    assert!(!ty.composite_type.shared);
                     match &ty.composite_type.inner {
                         WasmCompositeInnerType::Array(_) => WasmHeapType::ConcreteArray(index),
                         WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
@@ -440,6 +441,7 @@ where
                     }
                 } else if let Some((wasmparser_types, _)) = self.rec_group_context.as_ref() {
                     let wasmparser_ty = &wasmparser_types[id].composite_type;
+                    assert!(!wasmparser_ty.shared);
                     match &wasmparser_ty.inner {
                         wasmparser::CompositeInnerType::Array(_) => {
                             WasmHeapType::ConcreteArray(index)
@@ -470,6 +472,7 @@ where
                 // indirectly get one by looking it up inside the current rec
                 // group.
                 if let Some(ty) = self.types.types.get(interned) {
+                    assert!(!ty.composite_type.shared);
                     match &ty.composite_type.inner {
                         WasmCompositeInnerType::Array(_) => WasmHeapType::ConcreteArray(index),
                         WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
@@ -482,6 +485,7 @@ where
                         .nth(rec_group_index)
                         .unwrap();
                     let wasmparser_ty = &parser_types[id].composite_type;
+                    assert!(!wasmparser_ty.shared);
                     match &wasmparser_ty.inner {
                         wasmparser::CompositeInnerType::Array(_) => {
                             WasmHeapType::ConcreteArray(index)
