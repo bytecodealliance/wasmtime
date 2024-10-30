@@ -890,10 +890,6 @@ impl<'a> Parser<'a> {
             let ret = self.parse_expr_inner_parens(pos)?;
             self.expect_rparen()?;
             Ok(ret)
-        } else if self.eat_sym_str("#t")? {
-            Ok(Expr::ConstInt { val: 1, pos })
-        } else if self.eat_sym_str("#f")? {
-            Ok(Expr::ConstInt { val: 0, pos })
         } else if self.is_const() {
             let val = self.parse_const()?;
             Ok(Expr::ConstPrim { val, pos })

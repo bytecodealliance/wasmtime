@@ -495,10 +495,10 @@ operators:
 
 * Wildcards (`_`).
 * Integer constants (decimal/hex/binary/octal, positive/negative: `1`, `-1`,
-  `0x80`, `-0x80`) and boolean constants (`#t`, `#f`). Hex constants can
-  start with either `0x` or `0X`. Binary constants start with `0b`. Octal
-  constants start with `0o`. Integers can also be interspersed with `_` as a
-  separator, for example `1_000` or `0x1234_5678`, for readability.
+  `0x80`, `-0x80`). Hex constants can start with either `0x` or `0X`.
+  Binary constants start with `0b`. Octal constants start with `0o`.
+  Integers can also be interspersed with `_` as a separator, for example
+  `1_000` or `0x1234_5678`, for readability.
 * constants imported from the embedding, of arbitrary type
   (`$MyConst`).
 * Variable captures and matches (bare identifiers like `x`; an
@@ -523,7 +523,6 @@ The expression (right-hand side) is made up of the following
 expression operators:
 
 * Integer and symbolic constants, as above.
-* Boolean constants `#t` and `#f` (following Scheme syntax).
 * Variable uses (bare `x` identifier).
 * Term constructors (`(term EXPR1 EXPR2 ...)`, where each
   subexpression is evaluated first and then the term is constructed).
@@ -1487,8 +1486,6 @@ newline). The grammar accepted by the parser is as follows:
 
 <expr> ::= <int>
          | <const-ident>
-         | "#t"               ;; Scheme-like "true": shorthand for 1
-         | "#f"               ;; Scheme-like "false": shorthand for 0
          | <ident>
          | "(" "let" "(" <let-binding>* ")" <expr> ")"
          | "(" <ident> <expr>* ")"
