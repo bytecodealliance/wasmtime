@@ -56,6 +56,12 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // do that most of the time.
         config.disallow_traps = u.ratio(9, 10)?;
 
+        // FIXME(#9523) this `if` should ideally be deleted, requires some
+        // refactoring internally.
+        if config.custom_page_sizes_enabled && config.threads_enabled {
+            config.custom_page_sizes_enabled = false;
+        }
+
         Ok(ModuleConfig { config })
     }
 }
