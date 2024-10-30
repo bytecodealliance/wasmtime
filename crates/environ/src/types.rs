@@ -1039,50 +1039,68 @@ impl fmt::Display for WasmSubType {
     }
 }
 
+/// Implicitly define all of these helper functions to handle only unshared
+/// types; essentially, these act like `is_unshared_*` functions until shared
+/// support is implemented.
 #[allow(missing_docs)]
 impl WasmSubType {
     #[inline]
     pub fn is_func(&self) -> bool {
-        self.composite_type.inner.is_func()
+        self.composite_type.inner.is_func() && !self.composite_type.shared
     }
 
     #[inline]
     pub fn as_func(&self) -> Option<&WasmFuncType> {
-        self.composite_type.inner.as_func()
+        if self.composite_type.shared {
+            None
+        } else {
+            self.composite_type.inner.as_func()
+        }
     }
 
     #[inline]
     pub fn unwrap_func(&self) -> &WasmFuncType {
+        assert!(!self.composite_type.shared);
         self.composite_type.inner.unwrap_func()
     }
 
     #[inline]
     pub fn is_array(&self) -> bool {
-        self.composite_type.inner.is_array()
+        self.composite_type.inner.is_array() && !self.composite_type.shared
     }
 
     #[inline]
     pub fn as_array(&self) -> Option<&WasmArrayType> {
-        self.composite_type.inner.as_array()
+        if self.composite_type.shared {
+            None
+        } else {
+            self.composite_type.inner.as_array()
+        }
     }
 
     #[inline]
     pub fn unwrap_array(&self) -> &WasmArrayType {
+        assert!(!self.composite_type.shared);
         self.composite_type.inner.unwrap_array()
     }
 
     #[inline]
     pub fn is_struct(&self) -> bool {
-        self.composite_type.inner.is_struct()
+        self.composite_type.inner.is_struct() && !self.composite_type.shared
     }
 
     #[inline]
     pub fn as_struct(&self) -> Option<&WasmStructType> {
-        self.composite_type.inner.as_struct()
+        if self.composite_type.shared {
+            None
+        } else {
+            self.composite_type.inner.as_struct()
+        }
     }
 
     #[inline]
     pub fn unwrap_struct(&self) -> &WasmStructType {
+        assert!(!self.composite_type.shared);
         self.composite_type.inner.unwrap_struct()
     }
 }
