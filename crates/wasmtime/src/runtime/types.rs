@@ -1618,7 +1618,7 @@ impl StructType {
         Self::from_wasm_struct_type(
             engine,
             finality.is_final(),
-            false, // TODO: handle shared
+            false,
             supertype.map(|ty| ty.type_index().into()),
             WasmStructType { fields },
         )
@@ -2001,7 +2001,7 @@ impl ArrayType {
                 is_final,
                 supertype,
                 composite_type: WasmCompositeType {
-                    shared: false, // TODO: handle shared
+                    shared: false,
                     inner: WasmCompositeInnerType::Array(ty),
                 },
             },
@@ -2360,7 +2360,7 @@ impl FuncType {
                 is_final,
                 supertype,
                 composite_type: WasmCompositeType {
-                    shared: false, // TODO: handle shared
+                    shared: false,
                     inner: WasmCompositeInnerType::Func(ty),
                 },
             },
