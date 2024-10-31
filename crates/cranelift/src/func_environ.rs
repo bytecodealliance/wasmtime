@@ -952,7 +952,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .name_section
             .func_names
             .get(&func_index)
-            .map(|s| *s)
+            .copied()
     }
 
     /// Proof-carrying code: create a memtype describing an empty

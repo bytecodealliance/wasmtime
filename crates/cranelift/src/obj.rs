@@ -26,7 +26,7 @@ use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
 use std::ops::Range;
 use wasmtime_environ::obj::LibCall;
-use wasmtime_environ::Compiler;
+use wasmtime_environ::{Compiler, Unsigned};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -341,9 +341,9 @@ impl<'a> UnwindInfoBuilder<'a> {
                 let requires_extended_counts = code_words > (1 << 5);
                 let encoded_function_len = function_len / 4;
                 assert!(encoded_function_len < (1 << 18), "function too large");
-                let mut word1 = encoded_function_len as u32;
+                let mut word1 = u32::try_from(encoded_function_len).unwrap();
                 if !requires_extended_counts {
-                    word1 |= (code_words as u32) << 27;
+                    word1 |= u32::from(code_words) << 27;
                 }
                 let unwind_address = self.windows_xdata.len();
                 self.windows_xdata.extend_from_slice(&word1.to_le_bytes());
@@ -548,7 +548,7 @@ impl<'a> UnwindInfoBuilder<'a> {
             // unwinders just use this constant for a relative addition with the
             // address of the FDE, which means that the sign doesn't actually
             // matter.
-            let fde = unwind_info.to_fde(Address::Constant(actual_offset as u64));
+            let fde = unwind_info.to_fde(Address::Constant(actual_offset.unsigned()));
             table.add_fde(cie_id, fde);
         }
         let endian = match compiler.triple().endianness().unwrap() {
