@@ -15,7 +15,6 @@ pub struct CompileUnitSummary<'a> {
 }
 
 impl<'a> fmt::Debug for CompileUnitSummary<'a> {
-    // Sample output: '[#0: OneModule, #1: TwoModule, #3]'.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let unit = self.unit;
         let offs: usize = unit.header.offset().as_debug_info_offset().unwrap().0;
