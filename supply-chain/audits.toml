@@ -1120,11 +1120,21 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.2.0 -> 3.3.0"
 
+[[audits.cap-fs-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.4.0"
+
 [[audits.cap-net-ext]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.2.0 -> 3.3.0"
 
+[[audits.cap-net-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.4.0"
+
 [[audits.cap-primitives]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1153,6 +1163,11 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.2.0 -> 3.3.0"
+
+[[audits.cap-primitives]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.4.0"
 
 [[audits.cap-rand]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1177,6 +1192,11 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.2.0 -> 3.3.0"
 
+[[audits.cap-rand]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.4.0"
+
 [[audits.cap-std]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1205,6 +1225,11 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.2.0 -> 3.3.0"
+
+[[audits.cap-std]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.4.0"
 
 [[audits.cap-tempfile]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -1252,6 +1277,11 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.2.0 -> 3.3.0"
+
+[[audits.cap-time-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.4.0"
 
 [[audits.cargo-platform]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -1880,6 +1910,11 @@ criteria = "safe-to-deploy"
 delta = "0.17.2 -> 0.17.4"
 notes = "Just a dependency version bump"
 
+[[audits.io-extras]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.18.2 -> 0.18.3"
+
 [[audits.io-lifetimes]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -2022,6 +2057,11 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.153 -> 0.2.158"
 notes = "More platforms, more definitions, more headers, it's still just `libc`"
+
+[[audits.libc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.2.158 -> 0.2.161"
 
 [[audits.libfuzzer-sys]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -2589,6 +2629,11 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "0.38.34 -> 0.38.37"
+
+[[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.38.37 -> 0.38.38"
 
 [[audits.rustls]]
 who = "Pat Hickey <phickey@fastly.com>"
