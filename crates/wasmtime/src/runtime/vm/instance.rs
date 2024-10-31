@@ -27,9 +27,9 @@ use sptr::Strict;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    HostPtr, MemoryIndex, MemoryPlan, Module, ModuleInternedTypeIndex, PrimaryMap, PtrSize,
-    TableIndex, TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex,
-    WasmHeapTopType, VMCONTEXT_MAGIC,
+    HostPtr, MemoryIndex, Module, ModuleInternedTypeIndex, PrimaryMap, PtrSize, TableIndex,
+    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
+    VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -162,7 +162,7 @@ impl Instance {
         req: InstanceAllocationRequest,
         memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
         tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
-        memory_plans: &PrimaryMap<MemoryIndex, MemoryPlan>,
+        memory_tys: &PrimaryMap<MemoryIndex, wasmtime_environ::Memory>,
     ) -> InstanceHandle {
         // The allocation must be *at least* the size required of `Instance`.
         let layout = Self::alloc_layout(req.runtime_info.offsets());
@@ -177,7 +177,7 @@ impl Instance {
         let dropped_data = EntitySet::with_capacity(module.passive_data_map.len());
 
         #[cfg(not(feature = "wmemcheck"))]
-        let _ = memory_plans;
+        let _ = memory_tys;
 
         ptr::write(
             ptr,
@@ -195,10 +195,10 @@ impl Instance {
                 #[cfg(feature = "wmemcheck")]
                 wmemcheck_state: {
                     if req.wmemcheck {
-                        let size = memory_plans
+                        let size = memory_tys
                             .iter()
                             .next()
-                            .map(|plan| plan.1.memory.limits.min)
+                            .map(|memory| memory.1.limits.min)
                             .unwrap_or(0)
                             * 64
                             * 1024;
@@ -588,7 +588,7 @@ impl Instance {
         ExportMemory {
             definition,
             vmctx,
-            memory: self.env_module().memory_plans[index].clone(),
+            memory: self.env_module().memories[index],
             index: def_index,
         }
     }
@@ -635,7 +635,7 @@ impl Instance {
 
     /// Get the given memory's page size, in bytes.
     pub(crate) fn memory_page_size(&self, index: MemoryIndex) -> usize {
-        usize::try_from(self.env_module().memory_plans[index].memory.page_size()).unwrap()
+        usize::try_from(self.env_module().memories[index].page_size()).unwrap()
     }
 
     /// Grow memory by the specified amount of pages.
@@ -1295,10 +1295,10 @@ impl Instance {
         // definitions of memories owned (not shared) in the module.
         let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_memories_begin());
         let mut owned_ptr = self.vmctx_plus_offset_mut(offsets.vmctx_owned_memories_begin());
-        for i in 0..module.memory_plans.len() - module.num_imported_memories {
+        for i in 0..module.num_defined_memories() {
             let defined_memory_index = DefinedMemoryIndex::new(i);
             let memory_index = module.memory_index(defined_memory_index);
-            if module.memory_plans[memory_index].memory.shared {
+            if module.memories[memory_index].shared {
                 let def_ptr = self.memories[defined_memory_index]
                     .1
                     .as_shared_memory()
@@ -1458,7 +1458,7 @@ impl InstanceHandle {
     pub fn all_memories<'a>(
         &'a mut self,
     ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + 'a {
-        let indices = (0..self.module().memory_plans.len())
+        let indices = (0..self.module().memories.len())
             .map(|i| MemoryIndex::new(i))
             .collect::<Vec<_>>();
         indices

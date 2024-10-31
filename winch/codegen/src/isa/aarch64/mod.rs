@@ -104,6 +104,7 @@ impl TargetIsa for Aarch64 {
             translation,
             types,
             builtins,
+            tunables,
             self,
             abi::Aarch64ABI::ptr_type(),
         );

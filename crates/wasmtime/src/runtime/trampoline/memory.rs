@@ -12,8 +12,8 @@ use crate::MemoryType;
 use alloc::sync::Arc;
 use core::ops::Range;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
-    Tunables, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryStyle, Module, Tunables,
+    VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -34,14 +34,10 @@ pub fn create_memory(
 ) -> Result<InstanceId> {
     let mut module = Module::new();
 
-    // Create a memory plan for the memory, though it will never be used for
-    // constructing a memory with an allocator: instead the memories are either
-    // preallocated (i.e., shared memory) or allocated manually below.
-    let plan = wasmtime_environ::MemoryPlan::for_memory(
-        *memory_ty.wasmtime_memory(),
-        store.engine().tunables(),
-    );
-    let memory_id = module.memory_plans.push(plan.clone());
+    // Create a memory, though it will never be used for constructing a memory
+    // with an allocator: instead the memories are either preallocated (i.e.,
+    // shared memory) or allocated manually below.
+    let memory_id = module.memories.push(*memory_ty.wasmtime_memory());
 
     // Since we have only associated a single memory with the "frankenstein"
     // instance, it will be exported at index 0.
@@ -126,13 +122,14 @@ pub(crate) struct MemoryCreatorProxy(pub Arc<dyn MemoryCreator>);
 impl RuntimeMemoryCreator for MemoryCreatorProxy {
     fn new_memory(
         &self,
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
         _: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        let ty = MemoryType::from_wasmtime_memory(&plan.memory);
-        let reserved_size_in_bytes = match plan.style {
+        let (style, offset_guard_size) = MemoryStyle::for_memory(*ty, tunables);
+        let reserved_size_in_bytes = match style {
             MemoryStyle::Static { byte_reservation } => {
                 Some(usize::try_from(byte_reservation).unwrap())
             }
@@ -140,16 +137,16 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
         };
         self.0
             .new_memory(
-                ty,
+                MemoryType::from_wasmtime_memory(ty),
                 minimum,
                 maximum,
                 reserved_size_in_bytes,
-                usize::try_from(plan.offset_guard_size).unwrap(),
+                usize::try_from(offset_guard_size).unwrap(),
             )
             .map(|mem| {
                 Box::new(LinearMemoryProxy {
                     mem,
-                    page_size_log2: plan.memory.page_size_log2,
+                    page_size_log2: ty.page_size_log2,
                 }) as Box<dyn RuntimeLinearMemory>
             })
             .map_err(|e| anyhow!(e))
@@ -174,7 +171,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
 
     fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
         anyhow::ensure!(
-            module.memory_plans.len() == 1,
+            module.memories.len() == 1,
             "`SingleMemoryInstance` allocator can only be used for modules with a single memory"
         );
         self.ondemand.validate_module_impl(module, offsets)?;
@@ -200,7 +197,8 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     unsafe fn allocate_memory(
         &self,
         request: &mut InstanceAllocationRequest,
-        memory_plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         memory_index: DefinedMemoryIndex,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         #[cfg(debug_assertions)]
@@ -218,7 +216,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
             )),
             None => self
                 .ondemand
-                .allocate_memory(request, memory_plan, memory_index),
+                .allocate_memory(request, ty, tunables, memory_index),
         }
     }
 

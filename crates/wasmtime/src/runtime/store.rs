@@ -1292,7 +1292,7 @@ impl StoreOpaque {
         }
 
         let module = module.env_module();
-        let memories = module.memory_plans.len() - module.num_imported_memories;
+        let memories = module.num_defined_memories();
         let tables = module.num_defined_tables();
 
         bump(&mut self.instance_count, self.instance_limit, 1, "instance")?;
