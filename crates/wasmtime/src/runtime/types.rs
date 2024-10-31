@@ -2545,7 +2545,7 @@ impl TableType {
 /// # fn foo() -> wasmtime::Result<()> {
 /// use wasmtime::MemoryTypeBuilder;
 ///
-/// let memory_type = MemoryTypeBuilder::default()
+/// let memory_type = MemoryTypeBuilder::new()
 ///     // Set the minimum size, in pages.
 ///     .min(4096)
 ///     // Set the maximum size, in pages.
@@ -2575,6 +2575,21 @@ impl Default for MemoryTypeBuilder {
 }
 
 impl MemoryTypeBuilder {
+    /// Create a new builder for a [`MemoryType`] with the default settings.
+    ///
+    /// By default memory types have the following properties:
+    ///
+    /// * The minimum memory size is 0 pages.
+    /// * The maximum memory size is unspecified.
+    /// * Memories use 32-bit indexes.
+    /// * The page size is 64KiB.
+    ///
+    /// Each option can be configued through the methods on the returned
+    /// builder.
+    pub fn new() -> MemoryTypeBuilder {
+        MemoryTypeBuilder::default()
+    }
+
     fn validate(&self) -> Result<()> {
         if self
             .ty
@@ -2782,6 +2797,14 @@ impl MemoryType {
             .max(Some(maximum.into()))
             .build()
             .unwrap()
+    }
+
+    /// Creates a new [`MemoryTypeBuilder`] to configure all the various knobs
+    /// of the final memory type being created.
+    ///
+    /// This is a convenience function for [`MemoryTypeBuilder::new`].
+    pub fn builder() -> MemoryTypeBuilder {
+        MemoryTypeBuilder::new()
     }
 
     /// Returns whether this is a 64-bit memory or not.
