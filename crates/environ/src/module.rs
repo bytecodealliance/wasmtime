@@ -58,7 +58,7 @@ impl MemoryStyle {
                 Self::Static {
                     byte_reservation: tunables.static_memory_reservation,
                 },
-                tunables.static_memory_offset_guard_size,
+                tunables.memory_guard_size,
             );
         }
 
@@ -67,7 +67,7 @@ impl MemoryStyle {
             Self::Dynamic {
                 reserve: tunables.dynamic_memory_growth_reserve,
             },
-            tunables.dynamic_memory_offset_guard_size,
+            tunables.memory_guard_size,
         )
     }
 }

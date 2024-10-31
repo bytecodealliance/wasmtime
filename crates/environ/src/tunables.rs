@@ -15,11 +15,8 @@ pub struct Tunables {
     /// the heap.
     pub static_memory_reservation: u64,
 
-    /// The size in bytes of the offset guard for static heaps.
-    pub static_memory_offset_guard_size: u64,
-
-    /// The size in bytes of the offset guard for dynamic heaps.
-    pub dynamic_memory_offset_guard_size: u64,
+    /// The size, in bytes, of the guard page region for linear memories.
+    pub memory_guard_size: u64,
 
     /// The size, in bytes, of reserved memory at the end of a "dynamic" memory,
     /// before the guard page, that memory can grow into. This is intended to
@@ -108,8 +105,7 @@ impl Tunables {
             // No virtual memory tricks are available on miri so make these
             // limits quite conservative.
             static_memory_reservation: 1 << 20,
-            static_memory_offset_guard_size: 0,
-            dynamic_memory_offset_guard_size: 0,
+            memory_guard_size: 0,
             dynamic_memory_growth_reserve: 0,
 
             // General options which have the same defaults regardless of
@@ -136,8 +132,7 @@ impl Tunables {
             // impacts performance severely but allows us to have more than a
             // few instances running around.
             static_memory_reservation: 10 * (1 << 20),
-            static_memory_offset_guard_size: 0x1_0000,
-            dynamic_memory_offset_guard_size: 0x1_0000,
+            memory_guard_size: 0x1_0000,
             dynamic_memory_growth_reserve: 1 << 20, // 1MB
 
             ..Tunables::default_miri()
@@ -154,13 +149,7 @@ impl Tunables {
             // Coupled with a 2 GiB address space guard it lets us translate
             // wasm offsets into x86 offsets as aggressively as we can.
             static_memory_reservation: 1 << 32,
-            static_memory_offset_guard_size: 0x8000_0000,
-
-            // Size in bytes of the offset guard for dynamic memories.
-            //
-            // Allocate a small guard to optimize common cases but without
-            // wasting too much memory.
-            dynamic_memory_offset_guard_size: 0x1_0000,
+            memory_guard_size: 0x8000_0000,
 
             // We've got lots of address space on 64-bit so use a larger
             // grow-into-this area, but on 32-bit we aren't as lucky. Miri is

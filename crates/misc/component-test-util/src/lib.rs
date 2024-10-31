@@ -56,7 +56,7 @@ pub fn config() -> Config {
     // try to cut down on virtual memory usage by avoiding 4G reservations.
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         config.static_memory_maximum_size(0);
-        config.dynamic_memory_guard_size(0);
+        config.memory_guard_size(0);
     }
     config
 }

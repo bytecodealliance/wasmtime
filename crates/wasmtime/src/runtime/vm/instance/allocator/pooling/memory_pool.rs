@@ -577,7 +577,7 @@ impl SlabConstraints {
         let expected_slot_bytes = round_usize_up_to_host_pages(expected_slot_bytes)?;
 
         let guard_bytes: usize = tunables
-            .static_memory_offset_guard_size
+            .memory_guard_size
             .try_into()
             .context("guard region is too large")?;
         let guard_bytes = round_usize_up_to_host_pages(guard_bytes)?;
@@ -608,7 +608,7 @@ struct SlabLayout {
     /// guard region after the memory to catch OOB access. On these guard
     /// regions, note that:
     /// - users can configure how aggressively (or not) to elide bounds checks
-    ///   via `Config::static_memory_guard_size` (see also:
+    ///   via `Config::memory_guard_size` (see also:
     ///   `memory_and_guard_size`)
     /// - memory protection keys can compress the size of the guard region by
     ///   placing slots from a different key (i.e., a stripe) in the guard
@@ -786,7 +786,7 @@ mod tests {
             },
             &Tunables {
                 static_memory_reservation: WASM_PAGE_SIZE as u64,
-                static_memory_offset_guard_size: 0,
+                memory_guard_size: 0,
                 ..Tunables::default_host()
             },
         )?;

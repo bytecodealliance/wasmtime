@@ -148,8 +148,7 @@ pub struct Config {
 #[derive(Default, Clone)]
 struct ConfigTunables {
     static_memory_reservation: Option<u64>,
-    static_memory_offset_guard_size: Option<u64>,
-    dynamic_memory_offset_guard_size: Option<u64>,
+    memory_guard_size: Option<u64>,
     dynamic_memory_growth_reserve: Option<u64>,
     generate_native_debuginfo: Option<bool>,
     parse_wasm_debuginfo: Option<bool>,
@@ -1305,7 +1304,7 @@ impl Config {
     /// When using the pooling instance allocation strategy, all linear memories
     /// will be created as "static" and the
     /// [`Config::static_memory_maximum_size`] and
-    /// [`Config::static_memory_guard_size`] options will be used to configure
+    /// [`Config::memory_guard_size`] options will be used to configure
     /// the virtual memory allocations of linear memories.
     pub fn allocation_strategy(&mut self, strategy: InstanceAllocationStrategy) -> &mut Self {
         self.allocation_strategy = strategy;
@@ -1426,7 +1425,7 @@ impl Config {
     }
 
     /// Configures the size, in bytes, of the guard region used at the end of a
-    /// static memory's address space reservation.
+    /// linear memory's address space reservation.
     ///
     /// > Note: this value has important performance ramifications, be sure to
     /// > understand what this value does before tweaking it and benchmarking.
@@ -1437,16 +1436,12 @@ impl Config {
     /// Accelerating these memory accesses is the motivation for a guard after a
     /// memory allocation.
     ///
-    /// Memories (both static and dynamic) can be configured with a guard at the
-    /// end of them which consists of unmapped virtual memory. This unmapped
-    /// memory will trigger a memory access violation (e.g. segfault) if
-    /// accessed. This allows JIT code to elide bounds checks if it can prove
-    /// that an access, if out of bounds, would hit the guard region. This means
-    /// that having such a guard of unmapped memory can remove the need for
-    /// bounds checks in JIT code.
-    ///
-    /// For the difference between static and dynamic memories, see the
-    /// [`Config::static_memory_maximum_size`].
+    /// Memories can be configured with a guard at the end of them which
+    /// consists of unmapped virtual memory. This unmapped memory will trigger
+    /// a memory access violation (e.g. segfault) if accessed. This allows JIT
+    /// code to elide bounds checks if it can prove that an access, if out of
+    /// bounds, would hit the guard region. This means that having such a guard
+    /// of unmapped memory can remove the need for bounds checks in JIT code.
     ///
     /// ## How big should the guard be?
     ///
@@ -1470,45 +1465,8 @@ impl Config {
     /// allows eliminating almost all bounds checks on loads/stores with an
     /// immediate offset of less than 2GB. On 32-bit platforms this defaults to
     /// 64KB.
-    ///
-    /// ## Errors
-    ///
-    /// The `Engine::new` method will return an error if this option is smaller
-    /// than the value configured for [`Config::dynamic_memory_guard_size`].
-    pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
-        self.tunables.static_memory_offset_guard_size = Some(guard_size);
-        self
-    }
-
-    /// Configures the size, in bytes, of the guard region used at the end of a
-    /// dynamic memory's address space reservation.
-    ///
-    /// For the difference between static and dynamic memories, see the
-    /// [`Config::static_memory_maximum_size`]
-    ///
-    /// For more information about what a guard is, see the documentation on
-    /// [`Config::static_memory_guard_size`].
-    ///
-    /// Note that the size of the guard region for dynamic memories is not super
-    /// critical for performance. Making it reasonably-sized can improve
-    /// generated code slightly, but for maximum performance you'll want to lean
-    /// towards static memories rather than dynamic anyway.
-    ///
-    /// Also note that the dynamic memory guard size must be smaller than the
-    /// static memory guard size, so if a large dynamic memory guard is
-    /// specified then the static memory guard size will also be automatically
-    /// increased.
-    ///
-    /// ## Default
-    ///
-    /// This value defaults to 64KB.
-    ///
-    /// ## Errors
-    ///
-    /// The `Engine::new` method will return an error if this option is larger
-    /// than the value configured for [`Config::static_memory_guard_size`].
-    pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
-        self.tunables.dynamic_memory_offset_guard_size = Some(guard_size);
+    pub fn memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
+        self.tunables.memory_guard_size = Some(guard_size);
         self
     }
 
@@ -1974,8 +1932,7 @@ impl Config {
 
         set_fields! {
             static_memory_reservation
-            static_memory_offset_guard_size
-            dynamic_memory_offset_guard_size
+            memory_guard_size
             dynamic_memory_growth_reserve
             generate_native_debuginfo
             parse_wasm_debuginfo
@@ -2011,10 +1968,6 @@ impl Config {
         } else {
             None
         };
-
-        if tunables.static_memory_offset_guard_size < tunables.dynamic_memory_offset_guard_size {
-            bail!("static memory guard size cannot be smaller than dynamic memory guard size");
-        }
 
         Ok((tunables, features))
     }
@@ -2392,11 +2345,8 @@ impl fmt::Debug for Config {
         if let Some(size) = self.tunables.static_memory_reservation {
             f.field("static_memory_maximum_reservation", &size);
         }
-        if let Some(size) = self.tunables.static_memory_offset_guard_size {
-            f.field("static_memory_guard_size", &size);
-        }
-        if let Some(size) = self.tunables.dynamic_memory_offset_guard_size {
-            f.field("dynamic_memory_guard_size", &size);
+        if let Some(size) = self.tunables.memory_guard_size {
+            f.field("memory_guard_size", &size);
         }
         if let Some(enable) = self.tunables.guard_before_linear_memory {
             f.field("guard_before_linear_memory", &enable);

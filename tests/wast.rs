@@ -367,8 +367,7 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         cfg.dynamic_memory_reserved_for_growth(0);
 
         let small_guard = 64 * 1024;
-        cfg.static_memory_guard_size(small_guard);
-        cfg.dynamic_memory_guard_size(small_guard);
+        cfg.memory_guard_size(small_guard);
     }
 
     let _pooling_lock = if config.pooling {
@@ -393,8 +392,7 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         if multi_memory {
             cfg.static_memory_maximum_size(max_memory_size as u64);
             cfg.dynamic_memory_reserved_for_growth(0);
-            cfg.static_memory_guard_size(0);
-            cfg.dynamic_memory_guard_size(0);
+            cfg.memory_guard_size(0);
         }
 
         // The limits here are crafted such that the wast tests should pass.
