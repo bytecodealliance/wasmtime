@@ -2586,7 +2586,8 @@
 
 (decl gen_float_round (FRM FReg Type) FReg)
 (rule 0 (gen_float_round frm rs ty)
-  (let (;; if rs is NaN/+-Infinity/+-Zero or if the exponent is larger than # of bits
+  (let (
+        ;; if rs is NaN/+-Infinity/+-Zero or if the exponent is larger than # of bits
         ;; in mantissa, the result is the same as src, check for these cases first.
         (max FReg (imm ty (float_int_max ty)))
         (abs FReg (rv_fabs ty rs))
@@ -2745,8 +2746,8 @@
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
 (rule
   (i128_sub x y )
-  (let
-    (;; low part.
+  (let (
+      ;; low part.
       (low XReg (rv_sub (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute borrow.
       (borrow XReg (rv_sltu (value_regs_get x 0) low))

@@ -537,7 +537,8 @@
 
 ;; Implement `udiv`.
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
-      (let (;; Look at the divisor to determine whether we need to generate
+      (let (
+            ;; Look at the divisor to determine whether we need to generate
             ;; an explicit division-by zero check.
             ;; Load up the dividend, by loading the input (possibly zero-
             ;; extended) input into the low half of the register pair,
@@ -581,7 +582,8 @@
 
 ;; Implement `sdiv`.
 (rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
-      (let (;; Look at the divisor to determine whether we need to generate
+      (let (
+            ;; Look at the divisor to determine whether we need to generate
             ;; explicit division-by-zero and/or integer-overflow checks.
             (OFcheck bool (div_overflow_check_needed y))
             ;; Load up the dividend (sign-extended to 64-bit)

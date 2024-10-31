@@ -3392,7 +3392,8 @@
 ;; subword loops) to "casloop_rotate_result".
 (decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) PReg)
 (rule (casloop_emit ib ty flags aligned_addr val)
-      (let (;; Construct a memory argument for the aligned word.
+      (let (
+            ;; Construct a memory argument for the aligned word.
             (aligned_mem MemArg (memarg_reg_plus_off aligned_addr 0 0 flags))
             ;; Add the compare-and-swap instruction to the builder.
             (result Reg (push_atomic_cas ib (ty_ext32 ty)

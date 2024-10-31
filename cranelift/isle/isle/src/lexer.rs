@@ -78,7 +78,11 @@ impl<'src> Lexer<'src> {
     }
 
     fn advance_pos(&mut self) {
-        self.pos.offset += 1;
+        self.advance_by(1)
+    }
+
+    fn advance_by(&mut self, n: usize) {
+        self.pos.offset += n;
     }
 
     fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
@@ -113,6 +117,28 @@ impl<'src> Lexer<'src> {
                         match c {
                             b'\n' => break,
                             _ => self.advance_pos(),
+                        }
+                    }
+                }
+                b'(' if self.lookahead_byte(1) == Some(b';') => {
+                    let pos = self.pos();
+                    self.advance_by(2);
+                    let mut depth = 1usize;
+                    loop {
+                        match self.peek_byte() {
+                            None => return Err(self.error(pos, "unterminated block comment")),
+                            Some(b'(') if self.lookahead_byte(1) == Some(b';') => {
+                                self.advance_by(2);
+                                depth += 1;
+                            }
+                            Some(b';') if self.lookahead_byte(1) == Some(b')') => {
+                                self.advance_by(2);
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            Some(_) => self.advance_pos(),
                         }
                     }
                 }
@@ -167,18 +193,15 @@ impl<'src> Lexer<'src> {
                     self.src.as_bytes().get(self.pos.offset + 1),
                 ) {
                     (Some(b'0'), Some(b'x' | b'X')) => {
-                        self.advance_pos();
-                        self.advance_pos();
+                        self.advance_by(2);
                         radix = 16;
                     }
                     (Some(b'0'), Some(b'o' | b'O')) => {
-                        self.advance_pos();
-                        self.advance_pos();
+                        self.advance_by(2);
                         radix = 8;
                     }
                     (Some(b'0'), Some(b'b' | b'B')) => {
-                        self.advance_pos();
-                        self.advance_pos();
+                        self.advance_by(2);
                         radix = 2;
                     }
                     _ => {}
@@ -249,7 +272,11 @@ impl<'src> Lexer<'src> {
     }
 
     fn peek_byte(&self) -> Option<u8> {
-        self.src.as_bytes().get(self.pos.offset).copied()
+        self.lookahead_byte(0)
+    }
+
+    fn lookahead_byte(&self, n: usize) -> Option<u8> {
+        self.src.as_bytes().get(self.pos.offset + n).copied()
     }
 }
 
@@ -282,7 +309,7 @@ mod test {
     #[test]
     fn lexer_basic() {
         assert_eq!(
-            lex(";; comment\n; another\r\n   \t(one two three 23 -568  )\n"),
+            lex(";; comment\n; another\r\n   \t(one two three (; block comment ;) 23 (; nested (; block ;) comment ;) -568  )\n"),
             [
                 Token::LParen,
                 Token::Symbol("one".to_string()),
