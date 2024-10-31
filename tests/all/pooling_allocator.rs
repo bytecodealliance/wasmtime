@@ -1257,3 +1257,48 @@ fn tricky_empty_table_with_empty_virtual_memory_alloc() -> Result<()> {
     Instance::new(&mut store, &module, &[])?;
     Ok(())
 }
+
+#[test]
+fn custom_page_sizes_resuing_same_slot() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_custom_page_sizes(true);
+    let mut cfg = PoolingAllocationConfig::default();
+    // force the memories below to collide in the same memory slot
+    cfg.total_memories(1);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
+    let engine = Engine::new(&config)?;
+
+    // Instantiate one module, leaving the slot 5 bytes big (but one page
+    // accessible)
+    {
+        let m1 = Module::new(
+            &engine,
+            r#"
+                (module
+                    (memory 5 (pagesize 1))
+
+                    (data (i32.const 0) "a")
+                )
+            "#,
+        )?;
+        let mut store = Store::new(&engine, ());
+        Instance::new(&mut store, &m1, &[])?;
+    }
+
+    // Instantiate a second module, which should work
+    {
+        let m2 = Module::new(
+            &engine,
+            r#"
+                (module
+                    (memory 6 (pagesize 1))
+
+                    (data (i32.const 0) "a")
+                )
+            "#,
+        )?;
+        let mut store = Store::new(&engine, ());
+        Instance::new(&mut store, &m2, &[])?;
+    }
+    Ok(())
+}
