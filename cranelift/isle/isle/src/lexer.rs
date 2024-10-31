@@ -111,11 +111,11 @@ impl<'src> Lexer<'src> {
         // Skip any whitespace and any comments.
         while let Some(c) = self.peek_byte() {
             match c {
-                c if c.is_ascii_whitespace() => self.advance_pos(),
+                b' ' | b'\t' | b'\n' | b'\r' => self.advance_pos(),
                 b';' => {
                     while let Some(c) = self.peek_byte() {
                         match c {
-                            b'\n' => break,
+                            b'\n' | b'\r' => break,
                             _ => self.advance_pos(),
                         }
                     }

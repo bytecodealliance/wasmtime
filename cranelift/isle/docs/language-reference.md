@@ -1436,11 +1436,18 @@ newline, or nested block-comments with `(;` and `;)`).
 The grammar accepted by the parser is as follows:
 
 ```bnf
+<skip> ::= <whitespace> | <comment>
+
+<whitespace> ::= " "
+               | "\t"
+               | "\n"
+               | "\r"
+
 <comment> ::= <line-comment> | <block-comment>
 
 <line-comment> ::= ";" <line-char>* (<newline> | eof)
-<newline> ::= "\n"
-<line-char> ::= <any character other than "\n">
+<newline> ::= "\n" | "\r"
+<line-char> ::= <any character other than "\n" or "\r">
 
 <block-comment> ::= "(;" <block-char>* ";)"
 <block-char> ::= <any character other than ";" or "(">
