@@ -37,6 +37,7 @@ itertools = "0.12"
 all-arch = ["cranelift-codegen/all-arch"]
 host-arch = ["cranelift-codegen/host-arch"]
 pulley = ["cranelift-codegen/pulley"]
+trace-log = ["cranelift-codegen/trace-log"]
 component-model = ["wasmtime-environ/component-model"]
 incremental-cache = ["cranelift-codegen/incremental-cache"]
 wmemcheck = ["wasmtime-environ/wmemcheck"]
