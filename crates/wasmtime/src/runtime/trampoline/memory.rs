@@ -13,13 +13,13 @@ use alloc::sync::Arc;
 use core::ops::Range;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
-    VMOffsets,
+    Tunables, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
     component::{Component, VMComponentOffsets},
-    StaticModuleIndex, Tunables,
+    StaticModuleIndex,
 };
 
 /// Create a "frankenstein" instance with a single memory.
